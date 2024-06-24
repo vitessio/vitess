@@ -2135,12 +2135,16 @@ func (cached *JSONObjectAgg) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(48)
 	}
-	// field Key *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.Key.CachedSize(true)
-	// field Value *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.Value.CachedSize(true)
+	// field Key vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Key.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Value vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Value.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
 	size += cached.OverClause.CachedSize(true)
 	return size

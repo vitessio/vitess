@@ -6090,7 +6090,7 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONArrayAgg{Expr: $3, OverClause: $5}
   }
-| JSON_OBJECTAGG openb column_name ',' column_name closeb over_clause_opt
+| JSON_OBJECTAGG openb expression ',' expression closeb over_clause_opt
   {
     $$ = &JSONObjectAgg{Key: $3, Value: $5, OverClause: $7}
   }

@@ -6062,8 +6062,8 @@ var (
 		input:  "select count(1) from user where x_id = 'abc' group by n_id having json_arrayagg(x, y) = '[]'",
 		output: "syntax error at position 83",
 	}, {
-		input:  "select count(1) from user where x_id = 'abc' group by n_id having json_objectagg(x + 1, y) = '[]'",
-		output: "syntax error at position 85",
+		input:  "select count(1) from user where x_id = 'abc' group by n_id having json_objectagg(x, y, z) = '[]'",
+		output: "syntax error at position 87",
 	}, {
 		input:  "select next 1+1 values from a",
 		output: "syntax error at position 15",

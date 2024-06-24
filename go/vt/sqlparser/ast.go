@@ -2584,8 +2584,8 @@ type (
 	// JSONObjectAgg is an aggregation expression that creates a JSON Object.
 	// For more information, visit https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-objectagg
 	JSONObjectAgg struct {
-		Key        *ColName
-		Value      *ColName
+		Key        Expr
+		Value      Expr
 		OverClause *OverClause
 	}
 
@@ -3448,9 +3448,7 @@ func (varS *VarSamp) SetArg(expr Expr)              { varS.Arg = expr }
 func (variance *Variance) SetArg(expr Expr)         { variance.Arg = expr }
 func (av *AnyValue) SetArg(expr Expr)               { av.Arg = expr }
 func (jaa *JSONArrayAgg) SetArg(expr Expr)          { jaa.Expr = expr }
-func (joa *JSONObjectAgg) SetArg(expr Expr) {
-	joa.Key = getColNameForExpression(expr, "JSONObjectAgg")
-}
+func (joa *JSONObjectAgg) SetArg(expr Expr)         { joa.Key = expr }
 
 func (min *Min) SetArgs(exprs Exprs) error           { return setFuncArgs(min, exprs, "MIN") }
 func (sum *Sum) SetArgs(exprs Exprs) error           { return setFuncArgs(sum, exprs, "SUM") }
@@ -3473,8 +3471,8 @@ func (joa *JSONObjectAgg) SetArgs(exprs Exprs) error {
 	if len(exprs) != 2 {
 		return vterrors.VT13001("JSONObjectAgg takes in 2 expressions")
 	}
-	joa.Key = getColNameForExpression(exprs[0], "JSONObjectAgg")
-	joa.Value = getColNameForExpression(exprs[1], "JSONObjectAgg")
+	joa.Key = exprs[0]
+	joa.Value = exprs[1]
 	return nil
 }
 

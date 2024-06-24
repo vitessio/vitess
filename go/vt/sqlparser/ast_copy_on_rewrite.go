@@ -3170,13 +3170,13 @@ func (c *cow) copyOnRewriteRefOfJSONObjectAgg(n *JSONObjectAgg, parent SQLNode) 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Key, changedKey := c.copyOnRewriteRefOfColName(n.Key, n)
-		_Value, changedValue := c.copyOnRewriteRefOfColName(n.Value, n)
+		_Key, changedKey := c.copyOnRewriteExpr(n.Key, n)
+		_Value, changedValue := c.copyOnRewriteExpr(n.Value, n)
 		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
 		if changedKey || changedValue || changedOverClause {
 			res := *n
-			res.Key, _ = _Key.(*ColName)
-			res.Value, _ = _Value.(*ColName)
+			res.Key, _ = _Key.(Expr)
+			res.Value, _ = _Value.(Expr)
 			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {

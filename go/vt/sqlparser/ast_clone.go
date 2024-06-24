@@ -1780,8 +1780,8 @@ func CloneRefOfJSONObjectAgg(n *JSONObjectAgg) *JSONObjectAgg {
 		return nil
 	}
 	out := *n
-	out.Key = CloneRefOfColName(n.Key)
-	out.Value = CloneRefOfColName(n.Value)
+	out.Key = CloneExpr(n.Key)
+	out.Value = CloneExpr(n.Value)
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }

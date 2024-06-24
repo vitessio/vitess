@@ -4401,13 +4401,13 @@ func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObject
 			return true
 		}
 	}
-	if !a.rewriteRefOfColName(node, node.Key, func(newNode, parent SQLNode) {
-		parent.(*JSONObjectAgg).Key = newNode.(*ColName)
+	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
+		parent.(*JSONObjectAgg).Key = newNode.(Expr)
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfColName(node, node.Value, func(newNode, parent SQLNode) {
-		parent.(*JSONObjectAgg).Value = newNode.(*ColName)
+	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
+		parent.(*JSONObjectAgg).Value = newNode.(Expr)
 	}) {
 		return false
 	}

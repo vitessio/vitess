@@ -2211,10 +2211,10 @@ func VisitRefOfJSONObjectAgg(in *JSONObjectAgg, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitRefOfColName(in.Key, f); err != nil {
+	if err := VisitExpr(in.Key, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfColName(in.Value, f); err != nil {
+	if err := VisitExpr(in.Value, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {

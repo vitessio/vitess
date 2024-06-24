@@ -3072,8 +3072,8 @@ func (cmp *Comparator) RefOfJSONObjectAgg(a, b *JSONObjectAgg) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.RefOfColName(a.Key, b.Key) &&
-		cmp.RefOfColName(a.Value, b.Value) &&
+	return cmp.Expr(a.Key, b.Key) &&
+		cmp.Expr(a.Value, b.Value) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
