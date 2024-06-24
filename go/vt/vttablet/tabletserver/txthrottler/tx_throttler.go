@@ -240,12 +240,16 @@ func (t *txThrottler) Close() {
 	log.Info("txThrottler: closed")
 }
 
+// MakePrimary performs a transition to a primary tablet. This will enable healthchecks to
+// enable live replication lag state.
 func (t *txThrottler) MakePrimary() {
 	if t.state != nil {
 		t.state.makePrimary()
 	}
 }
 
+// MakePrimary performs a transition to a non-primary tablet. This disables healthchecks
+// (for replication state) if they exist.
 func (t *txThrottler) MakeNonPrimary() {
 	if t.state != nil {
 		t.state.makeNonPrimary()
