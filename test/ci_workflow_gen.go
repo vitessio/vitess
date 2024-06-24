@@ -39,7 +39,6 @@ type mysqlVersions []mysqlVersion
 
 var (
 	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
-	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
 )
 
 var (
@@ -54,6 +53,8 @@ const (
 	// An empty string will cause the default non platform specific template
 	// to be used.
 	clusterTestTemplate = "templates/cluster_endtoend_test%s.tpl"
+
+	clusterVitessTesterTemplate = "templates/cluster_vitess_tester.tpl"
 
 	clusterTestDockerTemplate = "templates/cluster_endtoend_test_docker.tpl"
 )
@@ -121,6 +122,10 @@ var (
 		"vttablet_prscomplex",
 	}
 
+	vitessTesterMap = map[string]string{
+		"vtgate": "./go/test/endtoend/vtgate/vitess_tester",
+	}
+
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
@@ -162,8 +167,14 @@ type clusterTest struct {
 	Cores16                            bool
 }
 
+type vitessTesterTest struct {
+	FileName string
+	Name     string
+	Path     string
+}
+
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
-func clusterMySQLVersions(clusterName string) mysqlVersions {
+func clusterMySQLVersions() mysqlVersions {
 	switch {
 	// Add any specific clusters, or groups of clusters, here,
 	// that require allMySQLVersions to be tested against.
@@ -197,6 +208,7 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 
 func main() {
 	generateUnitTestWorkflows()
+	generateVitessTesterWorkflows(vitessTesterMap, clusterVitessTesterTemplate)
 	generateClusterWorkflows(clusterList, clusterTestTemplate)
 	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
 }
@@ -211,10 +223,27 @@ func canonnizeList(list []string) []string {
 	return output
 }
 
+func generateVitessTesterWorkflows(mp map[string]string, tpl string) {
+	for test, testPath := range mp {
+		tt := &vitessTesterTest{
+			Name: fmt.Sprintf("Vitess Tester (%v)", test),
+			Path: testPath,
+		}
+
+		templateFileName := tpl
+		tt.FileName = fmt.Sprintf("vitess_tester_%s.yml", test)
+		workflowPath := fmt.Sprintf("%s/%s", workflowConfigDir, tt.FileName)
+		err := writeFileFromTemplate(templateFileName, workflowPath, tt)
+		if err != nil {
+			log.Print(err)
+		}
+	}
+}
+
 func generateClusterWorkflows(list []string, tpl string) {
 	clusters := canonnizeList(list)
 	for _, cluster := range clusters {
-		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
+		for _, mysqlVersion := range clusterMySQLVersions() {
 			test := &clusterTest{
 				Name:  fmt.Sprintf("Cluster (%s)", cluster),
 				Shard: cluster,
@@ -257,7 +286,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 				test.EnableBinlogTransactionCompression = true
 			}
 			mysqlVersionIndicator := ""
-			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
+			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions()) > 1 {
 				mysqlVersionIndicator = "_" + string(mysqlVersion)
 				test.Name = test.Name + " " + string(mysqlVersion)
 			}
