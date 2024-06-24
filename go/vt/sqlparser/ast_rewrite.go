@@ -9737,6 +9737,10 @@ func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer re
 		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *JSONArrayAgg:
+		return a.rewriteRefOfJSONArrayAgg(parent, node, replacer)
+	case *JSONObjectAgg:
+		return a.rewriteRefOfJSONObjectAgg(parent, node, replacer)
 	case *Max:
 		return a.rewriteRefOfMax(parent, node, replacer)
 	case *Min:

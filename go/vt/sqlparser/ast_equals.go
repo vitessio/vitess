@@ -5046,6 +5046,18 @@ func (cmp *Comparator) AggrFunc(inA, inB AggrFunc) bool {
 			return false
 		}
 		return cmp.RefOfGroupConcatExpr(a, b)
+	case *JSONArrayAgg:
+		b, ok := inB.(*JSONArrayAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONArrayAgg(a, b)
+	case *JSONObjectAgg:
+		b, ok := inB.(*JSONObjectAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONObjectAgg(a, b)
 	case *Max:
 		b, ok := inB.(*Max)
 		if !ok {

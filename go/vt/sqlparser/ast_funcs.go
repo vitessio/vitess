@@ -2184,6 +2184,15 @@ func ContainsAggregation(e SQLNode) bool {
 	return hasAggregates
 }
 
+// getColNameForExpression gets the column name for the given expression.
+func getColNameForExpression(expr Expr, name string) *ColName {
+	colName, isColName := expr.(*ColName)
+	if !isColName {
+		panic(vterrors.VT13001(fmt.Sprintf("Column name required in %v", name)))
+	}
+	return colName
+}
+
 // setFuncArgs sets the arguments for the aggregation function, while checking that there is only one argument
 func setFuncArgs(aggr AggrFunc, exprs Exprs, name string) error {
 	if len(exprs) != 1 {

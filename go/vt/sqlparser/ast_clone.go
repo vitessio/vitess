@@ -3487,6 +3487,10 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 		return CloneRefOfCountStar(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *JSONArrayAgg:
+		return CloneRefOfJSONArrayAgg(in)
+	case *JSONObjectAgg:
+		return CloneRefOfJSONObjectAgg(in)
 	case *Max:
 		return CloneRefOfMax(in)
 	case *Min:

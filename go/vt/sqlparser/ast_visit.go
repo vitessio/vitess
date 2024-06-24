@@ -4494,6 +4494,10 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return VisitRefOfCountStar(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *JSONArrayAgg:
+		return VisitRefOfJSONArrayAgg(in, f)
+	case *JSONObjectAgg:
+		return VisitRefOfJSONObjectAgg(in, f)
 	case *Max:
 		return VisitRefOfMax(in, f)
 	case *Min:

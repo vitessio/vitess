@@ -6760,6 +6760,10 @@ func (c *cow) copyOnRewriteAggrFunc(n AggrFunc, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfCountStar(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
+	case *JSONArrayAgg:
+		return c.copyOnRewriteRefOfJSONArrayAgg(n, parent)
+	case *JSONObjectAgg:
+		return c.copyOnRewriteRefOfJSONObjectAgg(n, parent)
 	case *Max:
 		return c.copyOnRewriteRefOfMax(n, parent)
 	case *Min:
