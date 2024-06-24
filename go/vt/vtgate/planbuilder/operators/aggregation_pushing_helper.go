@@ -135,7 +135,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 	case opcode.AggregateGroupConcat:
 		f := aggr.Func.(*sqlparser.GroupConcatExpr)
 		if f.Distinct || len(f.OrderBy) > 0 || f.Separator != "" {
-			panic("fail here")
+			panic(vterrors.VT12001("cannot evaluate group concat with distinct, order by or a separator"))
 		}
 		// this needs special handling, currently aborting the push of function
 		// and later will try pushing the column instead.
