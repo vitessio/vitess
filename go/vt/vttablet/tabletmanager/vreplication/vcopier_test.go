@@ -610,7 +610,7 @@ func testPlayerCopyTables(t *testing.T) {
 
 	expectDBClientQueries(t, qh.Expect(
 		// Filters should be lexicographically ordered by name.
-		regexp.QuoteMeta("/insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, options) values ('test', 'keyspace:\\\"vttest\\\" shard:\\\"0\\\" filter:{rules:{match:\\\"ast1\\\" filter:\\\"select * from ast1\\\"} rules:{match:\\\"dst1\\\" filter:\\\"select id, val, val as val2, d, j from src1\\\"} rules:{match:\\\"/yes\\\"}}'"),
+		regexp.QuoteMeta("/insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, options) values ('test', 'keyspace:\"vttest\" shard:\"0\" filter:{rules:{match:\"ast1\" filter:\"select * from ast1\"} rules:{match:\"dst1\" filter:\"select id, val, val as val2, d, j from src1\"} rules:{match:\"/yes\"}}'"),
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
