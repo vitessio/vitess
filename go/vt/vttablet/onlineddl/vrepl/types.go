@@ -30,9 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/schemadiff"
 )
 
-// ColumnType indicated some MySQL data types
-type ColumnType int
-
 // Column represents a table column
 type Column struct {
 	Name   string
@@ -60,15 +57,9 @@ func ParseColumns(names string) []Column {
 // ColumnsMap maps a column name onto its ordinal position
 type ColumnsMap map[string]int
 
-// NewEmptyColumnsMap creates an empty map
-func NewEmptyColumnsMap() ColumnsMap {
-	columnsMap := make(map[string]int)
-	return ColumnsMap(columnsMap)
-}
-
 // NewColumnsMap creates a column map based on ordered list of columns
 func NewColumnsMap(orderedColumns []Column) ColumnsMap {
-	columnsMap := NewEmptyColumnsMap()
+	columnsMap := make(ColumnsMap, len(orderedColumns))
 	for i, column := range orderedColumns {
 		columnsMap[column.Name] = i
 	}

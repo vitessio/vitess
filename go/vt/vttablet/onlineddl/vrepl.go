@@ -107,8 +107,8 @@ type VRepl struct {
 	alterQuery *sqlparser.AlterTable
 	tableRows  int64
 
-	sourceCreateTable *sqlparser.CreateTable
-	targetCreateTable *sqlparser.CreateTable
+	sourceCreateTableEntity *schemadiff.CreateTableEntity
+	targetCreateTableEntity *schemadiff.CreateTableEntity
 
 	analyzeTable bool
 
@@ -150,21 +150,30 @@ func NewVRepl(
 	targetCreateTable *sqlparser.CreateTable,
 	alterQuery *sqlparser.AlterTable,
 	analyzeTable bool,
-) *VRepl {
-	return &VRepl{
-		env:               env,
-		workflow:          workflow,
-		keyspace:          keyspace,
-		shard:             shard,
-		dbName:            dbName,
-		sourceCreateTable: sourceCreateTable,
-		targetCreateTable: targetCreateTable,
-		alterQuery:        alterQuery,
-		analyzeTable:      analyzeTable,
-		parser:            vrepl.NewAlterTableParser(),
-		intToEnumMap:      map[string]bool{},
-		convertCharset:    map[string](*binlogdatapb.CharsetConversion){},
+) (*VRepl, error) {
+	v := &VRepl{
+		env:            env,
+		workflow:       workflow,
+		keyspace:       keyspace,
+		shard:          shard,
+		dbName:         dbName,
+		alterQuery:     alterQuery,
+		analyzeTable:   analyzeTable,
+		parser:         vrepl.NewAlterTableParser(),
+		intToEnumMap:   map[string]bool{},
+		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
 	}
+	senv := schemadiff.NewEnv(v.env, v.env.CollationEnv().DefaultConnectionCharset())
+	var err error
+	v.sourceCreateTableEntity, err = schemadiff.NewCreateTableEntity(senv, sourceCreateTable)
+	if err != nil {
+		return nil, err
+	}
+	v.targetCreateTableEntity, err = schemadiff.NewCreateTableEntity(senv, targetCreateTable)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 
 // readTableColumns reads column list from given table
@@ -199,15 +208,15 @@ func readTableColumns(createTableEntity *schemadiff.CreateTableEntity) (
 }
 
 func (v *VRepl) sourceTableName() string {
-	return v.sourceCreateTable.Table.Name.String()
+	return v.sourceCreateTableEntity.Name()
 }
 
 func (v *VRepl) targetTableName() string {
-	return v.targetCreateTable.Table.Name.String()
+	return v.targetCreateTableEntity.Name()
 }
 
 // readTableUniqueKeys reads all unique keys from a given table, by order of usefulness/performance: PRIMARY first, integers are better, non-null are better
-func (v *VRepl) readTableUniqueKeys(ctx context.Context, createTableEntity *schemadiff.CreateTableEntity) (uniqueKeys []*vrepl.UniqueKey, err error) {
+func (v *VRepl) readTableUniqueKeys(createTableEntity *schemadiff.CreateTableEntity) (uniqueKeys []*vrepl.UniqueKey, err error) {
 	colMap := createTableEntity.ColumnDefinitionEntitiesMap()
 	keys := createTableEntity.CreateTable.TableSpec.Indexes
 	keysMap := map[string]*sqlparser.IndexDefinition{}
@@ -329,7 +338,7 @@ func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnecti
 }
 
 // applyColumnTypes
-func (v *VRepl) applyColumnTypes(createTableEntity *schemadiff.CreateTableEntity, columnsLists ...*vrepl.ColumnList) error {
+func applyColumnTypes(createTableEntity *schemadiff.CreateTableEntity, columnsLists ...*vrepl.ColumnList) error {
 	for _, col := range createTableEntity.ColumnDefinitionEntities() {
 		col = col.Clone()
 		col.SetExplicitDefaultAndNull()
@@ -350,7 +359,7 @@ func (v *VRepl) applyColumnTypes(createTableEntity *schemadiff.CreateTableEntity
 	return nil
 }
 
-func (v *VRepl) analyzeAlter(ctx context.Context) error {
+func (v *VRepl) analyzeAlter() error {
 	if v.alterQuery == nil {
 		// Happens for REVERT
 		return nil
@@ -362,37 +371,27 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 	return nil
 }
 
-func (v *VRepl) analyzeTables(ctx context.Context) (err error) {
-	senv := schemadiff.NewEnv(v.env, v.env.CollationEnv().DefaultConnectionCharset())
-	sourceCreateTableEntity, err := schemadiff.NewCreateTableEntity(senv, v.sourceCreateTable)
-	if err != nil {
-		return err
-	}
-	targetCreateTableEntity, err := schemadiff.NewCreateTableEntity(senv, v.targetCreateTable)
-	if err != nil {
-		return err
-	}
-
+func (v *VRepl) analyzeTables() (err error) {
 	// columns:
-	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := readTableColumns(sourceCreateTableEntity)
+	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := readTableColumns(v.sourceCreateTableEntity)
 	if err != nil {
 		return err
 	}
-	targetColumns, targetVirtualColumns, targetPKColumns, err := readTableColumns(targetCreateTableEntity)
+	targetColumns, targetVirtualColumns, targetPKColumns, err := readTableColumns(v.targetCreateTableEntity)
 	if err != nil {
 		return err
 	}
 	v.sourceSharedColumns, v.targetSharedColumns, v.droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser)
 
 	// unique keys
-	sourceUniqueKeys, err := v.readTableUniqueKeys(ctx, sourceCreateTableEntity)
+	sourceUniqueKeys, err := v.readTableUniqueKeys(v.sourceCreateTableEntity)
 	if err != nil {
 		return err
 	}
 	if len(sourceUniqueKeys) == 0 {
 		return fmt.Errorf("found no possible unique key on `%s`", v.sourceTableName())
 	}
-	targetUniqueKeys, err := v.readTableUniqueKeys(ctx, targetCreateTableEntity)
+	targetUniqueKeys, err := v.readTableUniqueKeys(v.targetCreateTableEntity)
 	if err != nil {
 		return err
 	}
@@ -419,7 +418,7 @@ func (v *VRepl) analyzeTables(ctx context.Context) (err error) {
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.env, v.sourceCreateTable, v.targetCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.env, v.sourceCreateTableEntity.CreateTable, v.targetCreateTableEntity.CreateTable)
 	if err != nil {
 		return err
 	}
@@ -427,10 +426,10 @@ func (v *VRepl) analyzeTables(ctx context.Context) (err error) {
 	// chosen source & target unique keys have exact columns in same order
 	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
 
-	if err := v.applyColumnTypes(sourceCreateTableEntity, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, v.droppedSourceNonGeneratedColumns); err != nil {
+	if err := applyColumnTypes(v.sourceCreateTableEntity, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, v.droppedSourceNonGeneratedColumns); err != nil {
 		return err
 	}
-	if err := v.applyColumnTypes(targetCreateTableEntity, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
+	if err := applyColumnTypes(v.targetCreateTableEntity, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
 		return err
 	}
 
@@ -447,7 +446,7 @@ func (v *VRepl) analyzeTables(ctx context.Context) (err error) {
 	var expandedDescriptions map[string]string
 	v.expandedColumnNames, expandedDescriptions = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
 
-	v.sourceAutoIncrement, err = sourceCreateTableEntity.AutoIncrementValue()
+	v.sourceAutoIncrement, err = v.sourceCreateTableEntity.AutoIncrementValue()
 
 	notes := []string{}
 	for _, uk := range v.removedUniqueKeys {
@@ -590,10 +589,10 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 }
 
 func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) error {
-	if err := v.analyzeAlter(ctx); err != nil {
+	if err := v.analyzeAlter(); err != nil {
 		return err
 	}
-	if err := v.analyzeTables(ctx); err != nil {
+	if err := v.analyzeTables(); err != nil {
 		return err
 	}
 	if err := v.generateFilterQuery(ctx); err != nil {

@@ -1518,7 +1518,10 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, originalCreateTable, vreplCreateTable, alterTable, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
+	v, err = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, originalCreateTable, vreplCreateTable, alterTable, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
+	if err != nil {
+		return v, err
+	}
 	return v, nil
 }
 
@@ -1580,7 +1583,10 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if err != nil {
 		return v, err
 	}
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, originalCreateTable, vreplCreateTable, nil, false)
+	v, err = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, originalCreateTable, vreplCreateTable, nil, false)
+	if err != nil {
+		return v, err
+	}
 	v.pos = revertStream.pos
 	return v, nil
 }
