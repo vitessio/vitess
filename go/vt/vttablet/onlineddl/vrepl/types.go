@@ -168,12 +168,10 @@ func (l *ColumnList) IsEnumToTextConversion(columnName string) bool {
 
 // UniqueKey is the combination of a key's name and columns
 type UniqueKey struct {
-	Name            string
-	Columns         ColumnList
-	HasNullable     bool
-	HasSubpart      bool
-	HasFloat        bool
-	IsAutoIncrement bool
+	Name    string
+	Columns ColumnList
+
+	HasNullable bool
 }
 
 // IsPrimary checks if this unique key is primary
@@ -188,9 +186,5 @@ func (k *UniqueKey) Len() int {
 
 // String returns a visual representation of this key
 func (k *UniqueKey) String() string {
-	description := k.Name
-	if k.IsAutoIncrement {
-		description = fmt.Sprintf("%s (auto_increment)", description)
-	}
-	return fmt.Sprintf("%s: %s; has nullable: %+v", description, k.Columns.Names(), k.HasNullable)
+	return fmt.Sprintf("%s: %s", k.Name, k.Columns.Names())
 }

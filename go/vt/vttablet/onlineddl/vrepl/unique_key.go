@@ -27,22 +27,9 @@ import (
 // UniqueKeyValidForIteration returns 'false' if we should not use this unique key as the main
 // iteration key in vreplication.
 func UniqueKeyValidForIteration(uniqueKey *UniqueKey) bool {
-	if uniqueKey.HasNullable {
-		// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
-		// Thus, we cannot use this unique key for iteration.
-		return false
-	}
-	if uniqueKey.HasSubpart {
-		// vreplication does not fully support indexes on column prefixes such as:
-		//   UNIQUE KEY `name_idx` (`name`(15))
-		// "HasSubpart" means some column covered by the index has a key length spec.
-		return false
-	}
-	if uniqueKey.HasFloat {
-		// float & double data types are imprecise and we cannot use them while iterating unique keys
-		return false
-	}
-	return true // good to go!
+	// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
+	// Thus, we cannot use this unique key for iteration.
+	return !uniqueKey.HasNullable
 }
 
 // GetSharedUniqueKeys returns the unique keys shared between the source & target tables

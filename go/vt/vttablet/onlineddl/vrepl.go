@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -169,7 +170,12 @@ func NewVRepl(
 }
 
 // readTableColumns reads column list from given table
-func readTableColumns(createTableEntity *schemadiff.CreateTableEntity) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
+func readTableColumns(createTableEntity *schemadiff.CreateTableEntity) (
+	columns *vrepl.ColumnList,
+	virtualColumns *vrepl.ColumnList,
+	pkColumns *vrepl.ColumnList,
+	err error,
+) {
 	columnNames := []string{}
 	virtualColumnNames := []string{}
 	pkColumnNames := []string{}
@@ -203,31 +209,72 @@ func (v *VRepl) targetTableName() string {
 }
 
 // readTableUniqueKeys reads all unique keys from a given table, by order of usefulness/performance: PRIMARY first, integers are better, non-null are better
-func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (uniqueKeys []*vrepl.UniqueKey, err error) {
-	query, err := sqlparser.ParseAndBind(sqlSelectUniqueKeys,
-		sqltypes.StringBindVariable(v.dbName),
-		sqltypes.StringBindVariable(tableName),
-		sqltypes.StringBindVariable(v.dbName),
-		sqltypes.StringBindVariable(tableName),
-	)
-	if err != nil {
-		return nil, err
+func (v *VRepl) readTableUniqueKeys(ctx context.Context, createTableEntity *schemadiff.CreateTableEntity) (uniqueKeys []*vrepl.UniqueKey, err error) {
+	m := createTableEntity.ColumnDefinitionEntitiesMap()
+	keys := createTableEntity.CreateTable.TableSpec.Indexes
+	keysMap := map[string]*sqlparser.IndexDefinition{}
+	for _, key := range keys {
+		keysMap[key.Info.Name.String()] = key
 	}
-	rs, err := conn.ExecuteFetch(query, -1, true)
-	if err != nil {
-		return nil, err
+	for _, key := range keys {
+		func() {
+			if !key.Info.IsUnique() {
+				return
+			}
+			hasNullable := false
+			columnNames := []string{}
+			for _, col := range key.Columns {
+				columnNames = append(columnNames, col.Column.String())
+				colName := col.Column.Lowered()
+				if m[colName].IsNullable() {
+					hasNullable = true
+				}
+				// Conditions to make this unique key non-eligible:
+				if col.Length != nil {
+					// e.g. KEY (name(7))
+					return
+				}
+				if m[colName].IsFloatingPointType() {
+					return
+				}
+			}
+			// OK, this unique key is good to go!
+			uniqueKey := &vrepl.UniqueKey{
+				Name:        key.Info.Name.String(),
+				Columns:     *vrepl.NewColumnList(columnNames),
+				HasNullable: hasNullable,
+			}
+			uniqueKeys = append(uniqueKeys, uniqueKey)
+		}()
 	}
-	for _, row := range rs.Named().Rows {
-		uniqueKey := &vrepl.UniqueKey{
-			Name:            row.AsString("index_name", ""),
-			Columns:         *vrepl.ParseColumnList(row.AsString("column_names", "")),
-			HasNullable:     row.AsBool("has_nullable", false),
-			HasSubpart:      row.AsBool("has_subpart", false),
-			HasFloat:        row.AsBool("is_float", false),
-			IsAutoIncrement: row.AsBool("is_auto_increment", false),
+	sort.Slice(uniqueKeys, func(i, j int) bool {
+		// PRIMARY is always first
+		if uniqueKeys[i].Name == "PRIMARY" {
+			return true
 		}
-		uniqueKeys = append(uniqueKeys, uniqueKey)
-	}
+		if uniqueKeys[j].HasNullable {
+			return true
+		}
+		iKey := keysMap[uniqueKeys[i].Name]
+		jKey := keysMap[uniqueKeys[j].Name]
+		iFirstColName := iKey.Columns[0].Column.Lowered()
+		jFirstColName := jKey.Columns[0].Column.Lowered()
+		iFirstCol := m[iFirstColName]
+		jFirstCol := m[jFirstColName]
+		if iFirstCol.IsIntegralType() && !jFirstCol.IsIntegralType() {
+			return true
+		}
+		if jFirstCol.HasBlobTypeStorage() {
+			return true
+		}
+		if !iFirstCol.IsTextual() && jFirstCol.IsTextual() {
+			return true
+		}
+		if schemadiff.IntegralTypeStorage(iFirstCol.Type()) < schemadiff.IntegralTypeStorage(jFirstCol.Type()) {
+			return true
+		}
+		return false
+	})
 	return uniqueKeys, nil
 }
 
@@ -284,16 +331,18 @@ func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnecti
 }
 
 // applyColumnTypes
-func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnection, tableName string, createTableEntity *schemadiff.CreateTableEntity, columnsLists ...*vrepl.ColumnList) error {
+func (v *VRepl) applyColumnTypes(createTableEntity *schemadiff.CreateTableEntity, columnsLists ...*vrepl.ColumnList) error {
 	for _, col := range createTableEntity.ColumnDefinitionEntities() {
 		col = col.Clone()
 		col.SetExplicitDefaultAndNull()
 		if err := col.SetExplicitCharsetCollate(); err != nil {
 			return err
 		}
-		columnName := col.Name()
 		for _, columnsList := range columnsLists {
-			column := columnsList.GetColumn(columnName)
+			column := columnsList.GetColumn(col.Name())
+			if column == nil {
+				column = columnsList.GetColumn(col.NameLowered())
+			}
 			if column == nil {
 				continue
 			}
@@ -310,7 +359,7 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 	}
 	v.parser.AnalyzeAlter(v.alterQuery)
 	if v.parser.IsRenameTable() {
-		return fmt.Errorf("Renaming the table is not supported in ALTER TABLE: %s", sqlparser.CanonicalString(v.alterQuery))
+		return fmt.Errorf("renaming the table is not supported in ALTER TABLE: %s", sqlparser.CanonicalString(v.alterQuery))
 	}
 	return nil
 }
@@ -347,19 +396,19 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	v.sourceSharedColumns, v.targetSharedColumns, v.droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser)
 
 	// unique keys
-	sourceUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.sourceTableName())
+	sourceUniqueKeys, err := v.readTableUniqueKeys(ctx, sourceCreateTableEntity)
 	if err != nil {
 		return err
 	}
 	if len(sourceUniqueKeys) == 0 {
-		return fmt.Errorf("Found no possible unique key on `%s`", v.sourceTableName())
+		return fmt.Errorf("found no possible unique key on `%s`", v.sourceTableName())
 	}
-	targetUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.targetTableName())
+	targetUniqueKeys, err := v.readTableUniqueKeys(ctx, targetCreateTableEntity)
 	if err != nil {
 		return err
 	}
 	if len(targetUniqueKeys) == 0 {
-		return fmt.Errorf("Found no possible unique key on `%s`", v.targetTableName())
+		return fmt.Errorf("found no possible unique key on `%s`", v.targetTableName())
 	}
 	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = vrepl.GetSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	if v.chosenSourceUniqueKey == nil {
@@ -369,7 +418,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		v.chosenSourceUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
 		if v.chosenSourceUniqueKey == nil {
 			// Still no luck.
-			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTableName(), v.targetTableName())
+			return fmt.Errorf("found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTableName(), v.targetTableName())
 		}
 	}
 	if v.chosenTargetUniqueKey == nil {
@@ -379,11 +428,11 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		v.chosenTargetUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(targetUniqueKeys, v.targetSharedColumns)
 		if v.chosenTargetUniqueKey == nil {
 			// Still no luck.
-			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTableName(), v.sourceTableName())
+			return fmt.Errorf("found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTableName(), v.sourceTableName())
 		}
 	}
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
-		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTableName(), v.targetTableName())
+		return fmt.Errorf("found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTableName(), v.targetTableName())
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
@@ -395,15 +444,23 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	// chosen source & target unique keys have exact columns in same order
 	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
 
-	if err := v.applyColumnTypes(ctx, conn, v.sourceTableName(), sourceCreateTableEntity, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, v.droppedSourceNonGeneratedColumns); err != nil {
+	if err := v.applyColumnTypes(sourceCreateTableEntity, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, v.droppedSourceNonGeneratedColumns); err != nil {
 		return err
 	}
-	if err := v.applyColumnTypes(ctx, conn, v.targetTableName(), targetCreateTableEntity, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
+	if err := v.applyColumnTypes(targetCreateTableEntity, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
 		return err
 	}
 
 	for _, sourcePKColumn := range sharedPKColumns.Columns() {
-		mappedColumn := v.targetSharedColumns.GetColumn(sourcePKColumn.Name)
+		mappedColumn := v.targetSharedColumns.GetColumn(sourcePKColumn.Entity.NameLowered())
+		if mappedColumn == nil {
+			mappedColumn = v.targetSharedColumns.GetColumn(sourcePKColumn.Entity.Name())
+		}
+		if mappedColumn == nil {
+			// This can happen if the target column is virtual
+			continue
+		}
+
 		if sourcePKColumn.Entity.Type() == "enum" && mappedColumn.Entity.Type() == "enum" {
 			// An ENUM as part of PRIMARY KEY. We must convert it to text because OMG that's complicated.
 			// There's a scenario where a query may modify the enum value (and it's bad practice, seeing

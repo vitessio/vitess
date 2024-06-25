@@ -133,18 +133,6 @@ func TestGetSharedUniqueKeys(t *testing.T) {
 			expectTargetUK: nil,
 		},
 		{
-			name: "single identical, source has FLOAT",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1, HasFloat: true},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: nil,
-			expectTargetUK: nil,
-		},
-		{
 			name: "exact match",
 			sourceUKs: []*UniqueKey{
 				{Name: "uidx", Columns: *columns1},
