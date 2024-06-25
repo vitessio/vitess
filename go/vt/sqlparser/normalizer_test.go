@@ -82,16 +82,23 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// datetime val
 		in:      "select * from t where foobar = timestamp'2012-02-29 12:34:56.123456'",
-		outstmt: "select * from t where foobar = CAST(:foobar AS DATE)",
+		outstmt: "select * from t where foobar = CAST(:foobar AS DATE(6))",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.ValueBindVariable(sqltypes.NewDatetime("2012-02-29 12:34:56.123456")),
 		},
 	}, {
 		// time val
 		in:      "select * from t where foobar = time'12:34:56.123456'",
-		outstmt: "select * from t where foobar = CAST(:foobar AS TIME)",
+		outstmt: "select * from t where foobar = CAST(:foobar AS TIME(6))",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.ValueBindVariable(sqltypes.NewTime("12:34:56.123456")),
+		},
+	}, {
+		// time val
+		in:      "select * from t where foobar = time'12:34:56'",
+		outstmt: "select * from t where foobar = CAST(:foobar AS TIME)",
+		outbv: map[string]*querypb.BindVariable{
+			"foobar": sqltypes.ValueBindVariable(sqltypes.NewTime("12:34:56")),
 		},
 	}, {
 		// multiple vals

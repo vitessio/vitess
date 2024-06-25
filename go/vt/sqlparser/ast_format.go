@@ -1384,13 +1384,27 @@ func (node *Argument) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "CAST(:%#s AS FLOAT)", node.Name)
 		return
 	case sqltypes.IsDate(node.Type):
-		buf.astPrintf(node, "CAST(:%#s AS DATE)", node.Name)
+		if node.Size == 0 {
+			buf.astPrintf(node, "CAST(:%#s AS DATE)", node.Name)
+			return
+		}
+		buf.astPrintf(node, "CAST(:%#s AS DATE(%d))", node.Name, node.Size)
 		return
 	case node.Type == sqltypes.Time:
-		buf.astPrintf(node, "CAST(:%#s AS TIME)", node.Name)
+		if node.Size == 0 {
+			buf.astPrintf(node, "CAST(:%#s AS TIME)", node.Name)
+			return
+		}
+
+		buf.astPrintf(node, "CAST(:%#s AS TIME(%d))", node.Name, node.Size)
 		return
 	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
-		buf.astPrintf(node, "CAST(:%#s AS TIMESTAMP)", node.Name)
+		if node.Size == 0 {
+			buf.astPrintf(node, "CAST(:%#s AS TIMESTAMP)", node.Name)
+			return
+		}
+
+		buf.astPrintf(node, "CAST(:%#s AS TIMESTAMP(%d))", node.Name, node.Size)
 		return
 	}
 	// Nothing special to do, the default literal will be correct.

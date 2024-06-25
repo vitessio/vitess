@@ -1815,19 +1815,45 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString(" AS FLOAT)")
 		return
 	case sqltypes.IsDate(node.Type):
+		if node.Size == 0 {
+			buf.WriteString("CAST(:")
+			buf.WriteString(node.Name)
+			buf.WriteString(" AS DATE)")
+			return
+		}
 		buf.WriteString("CAST(:")
 		buf.WriteString(node.Name)
-		buf.WriteString(" AS DATE)")
+		buf.WriteString(" AS DATE(")
+		buf.WriteString(fmt.Sprintf("%d", node.Size))
+		buf.WriteString("))")
 		return
 	case node.Type == sqltypes.Time:
+		if node.Size == 0 {
+			buf.WriteString("CAST(:")
+			buf.WriteString(node.Name)
+			buf.WriteString(" AS TIME)")
+			return
+		}
+
 		buf.WriteString("CAST(:")
 		buf.WriteString(node.Name)
-		buf.WriteString(" AS TIME)")
+		buf.WriteString(" AS TIME(")
+		buf.WriteString(fmt.Sprintf("%d", node.Size))
+		buf.WriteString("))")
 		return
 	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
+		if node.Size == 0 {
+			buf.WriteString("CAST(:")
+			buf.WriteString(node.Name)
+			buf.WriteString(" AS TIMESTAMP)")
+			return
+		}
+
 		buf.WriteString("CAST(:")
 		buf.WriteString(node.Name)
-		buf.WriteString(" AS TIMESTAMP)")
+		buf.WriteString(" AS TIMESTAMP(")
+		buf.WriteString(fmt.Sprintf("%d", node.Size))
+		buf.WriteString("))")
 		return
 	}
 	// Nothing special to do, the default literal will be correct.
