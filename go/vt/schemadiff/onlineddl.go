@@ -92,6 +92,7 @@ func ColumnChangeExpandsDataRange(source *ColumnDefinitionEntity, target *Column
 	return false, ""
 }
 
+// KeyValidForIteration returns true if the key is eligible for Online DDL iteration.
 func KeyValidForIteration(key *IndexDefinitionEntity) bool {
 	if key == nil {
 		return false
@@ -111,20 +112,13 @@ func KeyValidForIteration(key *IndexDefinitionEntity) bool {
 	return true
 }
 
-// UniqueKeysForOnlineDDL returns any unique keys on given table that can be used in Online DDL.
-// These may include nullable unique keys.
-// The subset of the returned keys, that are not nullable, can be used as iteration keys.
-// The keys are sorted as "best first"
-func UniqueKeysForOnlineDDL(createTableEntity *CreateTableEntity) []*IndexDefinitionEntity {
+// PrioritizedUniqueKeys returns all unique keys on given table, ordered from "best" to "worst",
+// for Online DDL purposes. The list of keys includes some that are not eligible for Online DDL
+// iteration.
+func PrioritizedUniqueKeys(createTableEntity *CreateTableEntity) []*IndexDefinitionEntity {
 	uniqueKeys := []*IndexDefinitionEntity{}
 	for _, key := range createTableEntity.IndexDefinitionEntities() {
 		if !key.IsUnique() {
-			continue
-		}
-		if key.HasFloat() {
-			continue
-		}
-		if key.HasColumnPrefix() {
 			continue
 		}
 		uniqueKeys = append(uniqueKeys, key)
@@ -144,6 +138,14 @@ func UniqueKeysForOnlineDDL(createTableEntity *CreateTableEntity) []*IndexDefini
 		}
 		if uniqueKeys[i].HasNullable() && !uniqueKeys[j].HasNullable() {
 			// NULLable come last
+			return false
+		}
+		if !uniqueKeys[i].HasColumnPrefix() && uniqueKeys[j].HasColumnPrefix() {
+			// Non prefix comes first
+			return true
+		}
+		if uniqueKeys[i].HasColumnPrefix() && !uniqueKeys[j].HasColumnPrefix() {
+			// Prefix comes last
 			return false
 		}
 		iFirstColEntity := uniqueKeys[i].ColumnDefinitionEntities[0]

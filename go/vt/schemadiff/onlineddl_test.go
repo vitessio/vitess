@@ -55,7 +55,7 @@ func TestUniqueKeysForOnlineDDL(t *testing.T) {
 	err = createTableEntity.validate()
 	require.NoError(t, err)
 
-	keys := UniqueKeysForOnlineDDL(createTableEntity)
+	keys := PrioritizedUniqueKeys(createTableEntity)
 	require.NotEmpty(t, keys)
 	names := make([]string, 0, len(keys))
 	for _, key := range keys {
@@ -68,8 +68,11 @@ func TestUniqueKeysForOnlineDDL(t *testing.T) {
 		"uk3",
 		"ukidsha",
 		"ukv",
+		"uk2vprefix",
+		"ukvprefix",
 		"uk41",
 		"uk1",
+		"uk1f",
 	}
 	assert.Equal(t, expect, names)
 }
