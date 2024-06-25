@@ -472,7 +472,7 @@ func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity
 	entities := make([]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
 	for i := range c.CreateTable.TableSpec.Columns {
 		col := c.CreateTable.TableSpec.Columns[i]
-		_, inPK := pkColumnsMaps[col.Name.String()]
+		_, inPK := pkColumnsMaps[col.Name.Lowered()]
 		entities[i] = NewColumnDefinitionEntity(c.Env, col, inPK, cc)
 	}
 	return entities
@@ -481,7 +481,7 @@ func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity
 func (c *CreateTableEntity) ColumnDefinitionEntitiesMap() map[string]*ColumnDefinitionEntity {
 	entities := make(map[string]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
 	for _, entity := range c.ColumnDefinitionEntities() {
-		entities[entity.Name()] = entity
+		entities[entity.NameLowered()] = entity
 	}
 	return entities
 }
@@ -1919,7 +1919,7 @@ func (c *CreateTableEntity) primaryKeyColumnsMap() map[string]*sqlparser.IndexCo
 	columns := c.primaryKeyColumns()
 	m := make(map[string]*sqlparser.IndexColumn, len(columns))
 	for _, col := range columns {
-		m[col.Column.String()] = col
+		m[col.Column.Lowered()] = col
 	}
 	return m
 }
