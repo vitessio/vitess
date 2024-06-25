@@ -332,6 +332,10 @@ func (c *ColumnDefinitionEntity) EnumValues() []string {
 	return c.ColumnDefinition.Type.EnumValues
 }
 
+func (c *ColumnDefinitionEntity) HasEnumValues() bool {
+	return len(c.EnumValues()) > 0
+}
+
 func (c *ColumnDefinitionEntity) EnumValuesOrdinals() map[string]int {
 	m := make(map[string]int, len(c.ColumnDefinition.Type.EnumValues))
 	for i, enumValue := range c.ColumnDefinition.Type.EnumValues {
