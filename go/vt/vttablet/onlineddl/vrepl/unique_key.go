@@ -24,40 +24,13 @@ import (
 	"strings"
 )
 
-// UniqueKeyValidForIteration returns 'false' if we should not use this unique key as the main
-// iteration key in vreplication.
-func UniqueKeyValidForIteration(uniqueKey *UniqueKey) bool {
-	if uniqueKey.HasNullable {
-		// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
-		// Thus, we cannot use this unique key for iteration.
-		return false
-	}
-	if uniqueKey.HasSubpart {
-		// vreplication does not fully support indexes on column prefixes such as:
-		//   UNIQUE KEY `name_idx` (`name`(15))
-		// "HasSubpart" means some column covered by the index has a key length spec.
-		return false
-	}
-	if uniqueKey.HasFloat {
-		// float & double data types are imprecise and we cannot use them while iterating unique keys
-		return false
-	}
-	return true // good to go!
-}
-
 // GetSharedUniqueKeys returns the unique keys shared between the source & target tables
 func GetSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*UniqueKey), columnRenameMap map[string]string) (chosenSourceUniqueKey, chosenTargetUniqueKey *UniqueKey) {
 	type ukPair struct{ source, target *UniqueKey }
 	var sharedUKPairs []*ukPair
 
 	for _, sourceUniqueKey := range sourceUniqueKeys {
-		if !UniqueKeyValidForIteration(sourceUniqueKey) {
-			continue
-		}
 		for _, targetUniqueKey := range targetUniqueKeys {
-			if !UniqueKeyValidForIteration(targetUniqueKey) {
-				continue
-			}
 			uniqueKeyMatches := func() bool {
 				// Compare two unique keys
 				if sourceUniqueKey.Columns.Len() != targetUniqueKey.Columns.Len() {
@@ -88,12 +61,6 @@ func GetSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*UniqueKey), colu
 	// Source and target unique keys can have different name, even though they cover the exact same
 	// columns and in same order.
 	for _, pair := range sharedUKPairs {
-		if pair.source.HasNullable {
-			continue
-		}
-		if pair.target.HasNullable {
-			continue
-		}
 		return pair.source, pair.target
 	}
 	return nil, nil
@@ -173,9 +140,6 @@ func RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*UniqueKey), column
 // in given column list.
 func GetUniqueKeyCoveredByColumns(uniqueKeys [](*UniqueKey), columns *ColumnList) (chosenUniqueKey *UniqueKey) {
 	for _, uniqueKey := range uniqueKeys {
-		if !UniqueKeyValidForIteration(uniqueKey) {
-			continue
-		}
 		if uniqueKey.Columns.IsSubsetOf(columns) {
 			return uniqueKey
 		}
