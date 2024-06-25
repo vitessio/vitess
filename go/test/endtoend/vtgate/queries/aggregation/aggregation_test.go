@@ -777,3 +777,15 @@ func TestHavingQueries(t *testing.T) {
 		})
 	}
 }
+
+// TestJsonAggregation tests that json aggregation works for single sharded queries.
+func TestJsonAggregation(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t3(id5, id6, id7) values(1,2,1), (2,2,4), (3,2,4), (4,1,2), (5,2,1), (6,2,6), (7,1,7)")
+
+	mcmp.Exec("select count(1) from t3 where id6 = 2 group by id7 having json_arrayagg(id5+1) = json_array(2, 6)")
+	mcmp.Exec(`select count(1) from t3 where id6 = 2 group by id7 having json_objectagg(id5+1, id7) = json_object("2",1,"6",1)`)
+}

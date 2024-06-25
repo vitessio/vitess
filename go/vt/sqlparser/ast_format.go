@@ -2567,6 +2567,22 @@ func (node *JSONArrayExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *JSONArrayAgg) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_arrayagg(%v)", node.Expr)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
+}
+
+// Format formats the node.
+func (node *JSONObjectAgg) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_objectagg(%v, %v)", node.Key, node.Value)
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
+}
+
+// Format formats the node.
 func (node *JSONObjectExpr) Format(buf *TrackedBuffer) {
 	buf.literal("json_object(")
 	if len(node.Params) > 0 {

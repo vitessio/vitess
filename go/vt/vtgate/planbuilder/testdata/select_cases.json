@@ -467,6 +467,63 @@
     }
   },
   {
+    "comment": "json_arrayagg in single sharded query",
+    "query": "select count(1) from user where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(1) from user where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(1) from `user` where 1 != 1 group by n_id",
+        "Query": "select count(1) from `user` where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+        "Table": "`user`",
+        "Values": [
+          "'abc'"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_objectagg in single sharded query",
+    "query": "select count(1) from user where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(1) from user where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(1) from `user` where 1 != 1 group by n_id",
+        "Query": "select count(1) from `user` where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
+        "Table": "`user`",
+        "Values": [
+          "'abc'"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "unsupported json aggregation expressions in scatter query",
+    "query": "select count(1) from user where cola = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+    "plan": "VT12001: unsupported: in scatter query: aggregation function 'json_arrayagg(a_id)'"
+  },
+  {
     "comment": "Cannot auto-resolve for cross-shard joins",
     "query": "select col from user join user_extra",
     "plan": "Column 'col' in field list is ambiguous"
