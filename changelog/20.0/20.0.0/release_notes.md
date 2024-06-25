@@ -371,7 +371,7 @@ The vtadmin-web UI no longer has a dependency on highcharts for licensing reason
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/20.0/20.0.0/changelog.md).
 
-The release includes 420 merged Pull Requests.
+The release includes 419 merged Pull Requests.
 
 Thanks to all our contributors: @Aoang, @Ari1009, @GuptaManan100, @Its-Maniaco, @Maniktherana, @VaibhavMalik4187, @ajm188, @aparajon, @app/dependabot, @app/github-actions, @app/vitess-bot, @arthurschreiber, @bddicken, @beingnoble03, @brendar, @crazeteam, @dbussink, @deepthi, @demmer, @derekperkins, @ejortegau, @frouioui, @harshit-gangal, @mattlord, @maxenglander, @mdlayher, @notfelineit, @pavedroad, @rafer, @rohit-nayak-ps, @rvrangel, @shlomi-noach, @systay, @timvaillancourt, @tycol7, @vitess-bot, @vmg, @wangweicugw, @whuang8, @yoheimuta
 
