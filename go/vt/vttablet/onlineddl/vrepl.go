@@ -129,7 +129,6 @@ type VRepl struct {
 
 	revertibleNotes string
 	filterQuery     string
-	enumToTextMap   map[string]string
 	intToEnumMap    map[string]bool
 	bls             *binlogdatapb.BinlogSource
 
@@ -163,7 +162,6 @@ func NewVRepl(
 		alterQuery:        alterQuery,
 		analyzeTable:      analyzeTable,
 		parser:            vrepl.NewAlterTableParser(),
-		enumToTextMap:     map[string]string{},
 		intToEnumMap:      map[string]bool{},
 		convertCharset:    map[string](*binlogdatapb.CharsetConversion){},
 	}
@@ -461,7 +459,6 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 			// that it's part of the PK, but it's still valid), and in that case we must have the string value
 			// to be able to DELETE the old row
 			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourcePKColumn.EnumValues)
-			v.enumToTextMap[sourcePKColumn.Name] = sourcePKColumn.EnumValues
 		}
 	}
 
@@ -481,9 +478,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 			// - from `('red', 'green', 'blue')` to `('red', 'blue')`
 			// - from `('red', 'green', 'blue')` to `('blue', 'red', 'green')`
 			case mappedColumn.Entity.Type() == "enum":
-				v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
 			case mappedColumn.Entity.Charset() != "":
-				v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
 				v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
 			}
 		}
@@ -615,9 +610,6 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset
-	}
-	if len(v.enumToTextMap) > 0 {
-		rule.ConvertEnumToText = v.enumToTextMap
 	}
 	if len(v.intToEnumMap) > 0 {
 		rule.ConvertIntToEnum = v.intToEnumMap
