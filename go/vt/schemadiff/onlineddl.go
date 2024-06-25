@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"sort"
 	"strings"
 )
 
@@ -98,8 +99,69 @@ func KeyValidForIteration(key *IndexDefinitionEntity) bool {
 	if !key.IsUnique() {
 		return false
 	}
+	if key.HasFloat() {
+		return false
+	}
+	if key.HasColumnPrefix() {
+		return false
+	}
 	if key.HasNullable() {
 		return false
 	}
 	return true
+}
+
+// UniqueKeysForOnlineDDL returns any unique keys on given table that can be used in Online DDL.
+// These may include nullable unique keys.
+// The subset of the returned keys, that are not nullable, can be used as iteration keys.
+// The keys are sorted as "best first"
+func UniqueKeysForOnlineDDL(createTableEntity *CreateTableEntity) []*IndexDefinitionEntity {
+	uniqueKeys := []*IndexDefinitionEntity{}
+	for _, key := range createTableEntity.IndexDefinitionEntities() {
+		if !key.IsUnique() {
+			continue
+		}
+		if key.HasFloat() {
+			continue
+		}
+		if key.HasColumnPrefix() {
+			continue
+		}
+		uniqueKeys = append(uniqueKeys, key)
+	}
+	sort.SliceStable(uniqueKeys, func(i, j int) bool {
+		if uniqueKeys[i].IsPrimary() {
+			// PRIMARY is always first
+			return true
+		}
+		if uniqueKeys[j].IsPrimary() {
+			// PRIMARY is always first
+			return false
+		}
+		if !uniqueKeys[i].HasNullable() && uniqueKeys[j].HasNullable() {
+			// Non NULLable comes first
+			return true
+		}
+		if uniqueKeys[i].HasNullable() && !uniqueKeys[j].HasNullable() {
+			// NULLable come last
+			return false
+		}
+		iFirstColEntity := uniqueKeys[i].ColumnDefinitionEntities[0]
+		jFirstColEntity := uniqueKeys[j].ColumnDefinitionEntities[0]
+		if iFirstColEntity.IsIntegralType() && !jFirstColEntity.IsIntegralType() {
+			// Prioritize integers
+			return true
+		}
+		if !iFirstColEntity.HasBlobTypeStorage() && jFirstColEntity.HasBlobTypeStorage() {
+			return true
+		}
+		if !iFirstColEntity.IsTextual() && jFirstColEntity.IsTextual() {
+			return true
+		}
+		if storageDiff := IntegralTypeStorage(iFirstColEntity.Type()) - IntegralTypeStorage(jFirstColEntity.Type()); storageDiff != 0 {
+			return storageDiff < 0
+		}
+		return false
+	})
+	return uniqueKeys
 }
