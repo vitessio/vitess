@@ -176,6 +176,14 @@ func NewVRepl(
 	return v, nil
 }
 
+func (v *VRepl) sourceTableName() string {
+	return v.sourceCreateTableEntity.Name()
+}
+
+func (v *VRepl) targetTableName() string {
+	return v.targetCreateTableEntity.Name()
+}
+
 // readTableColumns reads column list from given table
 func readTableColumns(createTableEntity *schemadiff.CreateTableEntity) (
 	columns *vrepl.ColumnList,
@@ -205,14 +213,6 @@ func readTableColumns(createTableEntity *schemadiff.CreateTableEntity) (
 		}
 	}
 	return vrepl.NewColumnList(columnNames), vrepl.NewColumnList(virtualColumnNames), vrepl.NewColumnList(pkColumnNames), nil
-}
-
-func (v *VRepl) sourceTableName() string {
-	return v.sourceCreateTableEntity.Name()
-}
-
-func (v *VRepl) targetTableName() string {
-	return v.targetCreateTableEntity.Name()
 }
 
 // readTableUniqueKeys reads all unique keys from a given table, by order of usefulness/performance: PRIMARY first, integers are better, non-null are better
@@ -485,9 +485,9 @@ func (v *VRepl) analyzeTableStatus(ctx context.Context, conn *dbconnpool.DBConne
 
 // generateFilterQuery creates a SELECT query used by vreplication as a filter. It SELECTs all
 // non-generated columns between source & target tables, and takes care of column renames.
-func (v *VRepl) generateFilterQuery(ctx context.Context) error {
+func (v *VRepl) generateFilterQuery() error {
 	if v.sourceSharedColumns.Len() == 0 {
-		return fmt.Errorf("Empty column list")
+		return fmt.Errorf("empty column list")
 	}
 	var sb strings.Builder
 	sb.WriteString("select ")
@@ -595,7 +595,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 	if err := v.analyzeTables(); err != nil {
 		return err
 	}
-	if err := v.generateFilterQuery(ctx); err != nil {
+	if err := v.generateFilterQuery(); err != nil {
 		return err
 	}
 	if err := v.analyzeTableStatus(ctx, conn); err != nil {
@@ -606,7 +606,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 }
 
 // generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
-func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
+func (v *VRepl) generateInsertStatement() (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
 		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false)
@@ -615,7 +615,7 @@ func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 }
 
 // generateStartStatement Generates the statement to start VReplication running on the workflow
-func (v *VRepl) generateStartStatement(ctx context.Context) (string, error) {
+func (v *VRepl) generateStartStatement() (string, error) {
 	return sqlparser.ParseAndBind(sqlStartVReplStream,
 		sqltypes.StringBindVariable(v.dbName),
 		sqltypes.StringBindVariable(v.workflow),

@@ -1668,7 +1668,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		}
 
 		// create vreplication entry
-		insertVReplicationQuery, err := v.generateInsertStatement(ctx)
+		insertVReplicationQuery, err := v.generateInsertStatement()
 		if err != nil {
 			return err
 		}
@@ -1685,7 +1685,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 			}
 		}
 		// start stream!
-		startVReplicationQuery, err := v.generateStartStatement(ctx)
+		startVReplicationQuery, err := v.generateStartStatement()
 		if err != nil {
 			return err
 		}
