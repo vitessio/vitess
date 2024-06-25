@@ -208,7 +208,7 @@ func (v *VRepl) targetTableName() string {
 
 // readTableUniqueKeys reads all unique keys from a given table, by order of usefulness/performance: PRIMARY first, integers are better, non-null are better
 func (v *VRepl) readTableUniqueKeys(ctx context.Context, createTableEntity *schemadiff.CreateTableEntity) (uniqueKeys []*vrepl.UniqueKey, err error) {
-	m := createTableEntity.ColumnDefinitionEntitiesMap()
+	colMap := createTableEntity.ColumnDefinitionEntitiesMap()
 	keys := createTableEntity.CreateTable.TableSpec.Indexes
 	keysMap := map[string]*sqlparser.IndexDefinition{}
 	for _, key := range keys {
@@ -224,7 +224,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, createTableEntity *sche
 			for _, col := range key.Columns {
 				columnNames = append(columnNames, col.Column.String())
 				colName := col.Column.Lowered()
-				if m[colName].IsNullable() {
+				if colMap[colName].IsNullable() {
 					hasNullable = true
 				}
 				// Conditions to make this unique key non-eligible:
@@ -232,7 +232,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, createTableEntity *sche
 					// e.g. KEY (name(7))
 					return
 				}
-				if m[colName].IsFloatingPointType() {
+				if colMap[colName].IsFloatingPointType() {
 					return
 				}
 			}
@@ -257,8 +257,8 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, createTableEntity *sche
 		jKey := keysMap[uniqueKeys[j].Name]
 		iFirstColName := iKey.Columns[0].Column.Lowered()
 		jFirstColName := jKey.Columns[0].Column.Lowered()
-		iFirstCol := m[iFirstColName]
-		jFirstCol := m[jFirstColName]
+		iFirstCol := colMap[iFirstColName]
+		jFirstCol := colMap[jFirstColName]
 		if iFirstCol.IsIntegralType() && !jFirstCol.IsIntegralType() {
 			return true
 		}

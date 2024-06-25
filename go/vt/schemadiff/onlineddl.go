@@ -20,53 +20,53 @@ import (
 	"strings"
 )
 
-// isExpandedColumn sees if target column has any value set/range that is impossible in source column. See GetExpandedColumns comment for examples
-func (c *ColumnDefinitionEntity) Expands(source *ColumnDefinitionEntity) (bool, string) {
-	if c.IsNullable() && !source.IsNullable() {
+// ColumnChangeExpandsDataRange sees if target column has any value set/range that is impossible in source column.
+func ColumnChangeExpandsDataRange(source *ColumnDefinitionEntity, target *ColumnDefinitionEntity) (bool, string) {
+	if target.IsNullable() && !source.IsNullable() {
 		return true, "target is NULL-able, source is not"
 	}
-	if c.Length() > source.Length() {
+	if target.Length() > source.Length() {
 		return true, "increased length"
 	}
-	if c.Scale() > source.Scale() {
+	if target.Scale() > source.Scale() {
 		return true, "increased scale"
 	}
-	if source.IsUnsigned() && !c.IsUnsigned() {
+	if source.IsUnsigned() && !target.IsUnsigned() {
 		return true, "source is unsigned, target is signed"
 	}
-	if IntegralTypeStorage(c.Type()) > IntegralTypeStorage(source.Type()) && IntegralTypeStorage(source.Type()) != 0 {
+	if IntegralTypeStorage(target.Type()) > IntegralTypeStorage(source.Type()) && IntegralTypeStorage(source.Type()) != 0 {
 		return true, "increased integer range"
 	}
-	if IntegralTypeStorage(source.Type()) <= IntegralTypeStorage(c.Type()) &&
-		!source.IsUnsigned() && c.IsUnsigned() {
+	if IntegralTypeStorage(source.Type()) <= IntegralTypeStorage(target.Type()) &&
+		!source.IsUnsigned() && target.IsUnsigned() {
 		// e.g. INT SIGNED => INT UNSIGNED, INT SIGNED => BIGINT UNSIGNED
 		return true, "target unsigned value exceeds source unsigned value"
 	}
-	if FloatingPointTypeStorage(c.Type()) > FloatingPointTypeStorage(source.Type()) && FloatingPointTypeStorage(source.Type()) != 0 {
+	if FloatingPointTypeStorage(target.Type()) > FloatingPointTypeStorage(source.Type()) && FloatingPointTypeStorage(source.Type()) != 0 {
 		return true, "increased floating point range"
 	}
-	if c.IsFloatingPointType() && !source.IsFloatingPointType() {
+	if target.IsFloatingPointType() && !source.IsFloatingPointType() {
 		return true, "target is floating point, source is not"
 	}
-	if c.IsDecimalType() && !source.IsDecimalType() {
+	if target.IsDecimalType() && !source.IsDecimalType() {
 		return true, "target is decimal, source is not"
 	}
-	if c.IsDecimalType() && source.IsDecimalType() {
-		if c.Length()-c.Scale() > source.Length()-source.Scale() {
+	if target.IsDecimalType() && source.IsDecimalType() {
+		if target.Length()-target.Scale() > source.Length()-source.Scale() {
 			return true, "increased decimal range"
 		}
 	}
-	if IsExpandingDataType(source.Type(), c.Type()) {
+	if IsExpandingDataType(source.Type(), target.Type()) {
 		return true, "target is expanded data type of source"
 	}
-	if BlobTypeStorage(c.Type()) > BlobTypeStorage(source.Type()) && BlobTypeStorage(source.Type()) != 0 {
+	if BlobTypeStorage(target.Type()) > BlobTypeStorage(source.Type()) && BlobTypeStorage(source.Type()) != 0 {
 		return true, "increased blob range"
 	}
-	if source.Charset() != c.Charset() {
-		if c.Charset() == "utf8mb4" {
+	if source.Charset() != target.Charset() {
+		if target.Charset() == "utf8mb4" {
 			return true, "expand character set to utf8mb4"
 		}
-		if strings.HasPrefix(c.Charset(), "utf8") && !strings.HasPrefix(source.Charset(), "utf8") {
+		if strings.HasPrefix(target.Charset(), "utf8") && !strings.HasPrefix(source.Charset(), "utf8") {
 			// not utf to utf
 			return true, "expand character set to utf8"
 		}
@@ -75,12 +75,12 @@ func (c *ColumnDefinitionEntity) Expands(source *ColumnDefinitionEntity) (bool, 
 		// enums and sets have very similar properties, and are practically identical in our analysis
 		if source.Type() == colType {
 			// this is an enum or a set
-			if c.Type() != colType {
+			if target.Type() != colType {
 				return true, "conversion from enum/set to non-enum/set adds potential values"
 			}
 			// target is an enum or a set. See if all values on target exist in source
 			sourceEnumTokensMap := source.EnumOrdinalValues()
-			targetEnumTokensMap := c.EnumOrdinalValues()
+			targetEnumTokensMap := target.EnumOrdinalValues()
 			for k, v := range targetEnumTokensMap {
 				if sourceEnumTokensMap[k] != v {
 					return true, "target enum/set expands or reorders source enum/set"
@@ -89,4 +89,17 @@ func (c *ColumnDefinitionEntity) Expands(source *ColumnDefinitionEntity) (bool, 
 		}
 	}
 	return false, ""
+}
+
+func KeyValidForIteration(key *IndexDefinitionEntity) bool {
+	if key == nil {
+		return false
+	}
+	if !key.IsUnique() {
+		return false
+	}
+	if key.HasNullable() {
+		return false
+	}
+	return true
 }

@@ -71,6 +71,24 @@ func (i *IndexDefinitionEntity) HasNullable() bool {
 	return false
 }
 
+func (i *IndexDefinitionEntity) HasFloat() bool {
+	for _, col := range i.ColumnDefinitionEntities {
+		if col.IsFloatingPointType() {
+			return true
+		}
+	}
+	return false
+}
+
+func (i *IndexDefinitionEntity) HasColumnPrefix() bool {
+	for _, col := range i.IndexDefinition.Columns {
+		if col.Length != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (i *IndexDefinitionEntity) ColumnNames() []string {
 	var names []string
 	for _, col := range i.IndexDefinition.Columns {

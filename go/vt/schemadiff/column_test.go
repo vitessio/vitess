@@ -397,7 +397,7 @@ func TestExpands(t *testing.T) {
 			require.Len(t, to.ColumnDefinitionEntities(), 1)
 			toCol := to.ColumnDefinitionEntities()[0]
 
-			expands, message := toCol.Expands(fromCol)
+			expands, message := ColumnChangeExpandsDataRange(fromCol, toCol)
 			assert.Equal(t, tcase.expands, expands, message)
 			if expands {
 				require.NotEmpty(t, tcase.msg, message)

@@ -22,6 +22,8 @@ package vrepl
 
 import (
 	"strings"
+
+	"vitess.io/vitess/go/vt/schemadiff"
 )
 
 // expandedDataTypes maps some known and difficult-to-compute by INFORMATION_SCHEMA data types which expand other data types.
@@ -119,7 +121,7 @@ func GetExpandedColumnNames(
 		sourceColumn := sourceSharedColumns.Columns()[i]
 		targetColumn := targetSharedColumns.Columns()[i]
 
-		if isExpanded, description := targetColumn.Entity.Expands(sourceColumn.Entity); isExpanded {
+		if isExpanded, description := schemadiff.ColumnChangeExpandsDataRange(sourceColumn.Entity, targetColumn.Entity); isExpanded {
 			expandedColumnNames = append(expandedColumnNames, sourceColumn.Name)
 			expandedDescriptions[sourceColumn.Name] = description
 		}

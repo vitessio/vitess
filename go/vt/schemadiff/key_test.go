@@ -30,6 +30,8 @@ func TestIndexDefinitionEntityMap(t *testing.T) {
 		col1 int,
 		Col2 int not null,
 		col3 int not null default 3,
+		f float not null,
+		v varchar(32),
 		primary key (id),
 		unique key ukid (id),
 		unique key uk1 (col1),
@@ -38,6 +40,11 @@ func TestIndexDefinitionEntityMap(t *testing.T) {
 		key k1 (col1),
 		key k2 (Col2),
 		key k3 (col3),
+		key kf (f),
+		key kf2 (f, Col2),
+		key kv (v),
+		key kv1 (v, col1),
+		key kv2 (v(10), Col2),
 		unique key uk12 (col1, Col2),
 		unique key uk21 (col2, Col1),
 		unique key uk23 (col2, col3),
@@ -48,6 +55,8 @@ func TestIndexDefinitionEntityMap(t *testing.T) {
 		unique   bool
 		columns  []string
 		nullable bool
+		float    bool
+		prefix   bool
 	}{
 		{
 			key:      "primary",
@@ -98,6 +107,39 @@ func TestIndexDefinitionEntityMap(t *testing.T) {
 			nullable: false,
 		},
 		{
+			key:      "kf",
+			unique:   false,
+			columns:  []string{"f"},
+			nullable: false,
+			float:    true,
+		},
+		{
+			key:      "kf2",
+			unique:   false,
+			columns:  []string{"f", "Col2"},
+			nullable: false,
+			float:    true,
+		},
+		{
+			key:      "kv",
+			unique:   false,
+			columns:  []string{"v"},
+			nullable: true,
+		},
+		{
+			key:      "kv1",
+			unique:   false,
+			columns:  []string{"v", "col1"},
+			nullable: true,
+		},
+		{
+			key:      "kv2",
+			unique:   false,
+			columns:  []string{"v", "Col2"},
+			nullable: true,
+			prefix:   true,
+		},
+		{
 			key:      "uk12",
 			unique:   true,
 			columns:  []string{"col1", "Col2"},
@@ -125,6 +167,8 @@ func TestIndexDefinitionEntityMap(t *testing.T) {
 	env := NewTestEnv()
 	createTableEntity, err := NewCreateTableEntityFromSQL(env, table)
 	require.NoError(t, err)
+	err = createTableEntity.validate()
+	require.NoError(t, err)
 	m := createTableEntity.IndexDefinitionEntitiesMap()
 	require.NotEmpty(t, m)
 	for _, tcase := range tcases {
@@ -134,6 +178,8 @@ func TestIndexDefinitionEntityMap(t *testing.T) {
 			assert.Equal(t, tcase.unique, key.IsUnique())
 			assert.Equal(t, tcase.columns, key.ColumnNames())
 			assert.Equal(t, tcase.nullable, key.HasNullable())
+			assert.Equal(t, tcase.float, key.HasFloat())
+			assert.Equal(t, tcase.prefix, key.HasColumnPrefix())
 		})
 	}
 }
