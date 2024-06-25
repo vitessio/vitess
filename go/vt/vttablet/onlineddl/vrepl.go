@@ -443,45 +443,9 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return err
 	}
 
-	for _, sourcePKColumn := range sharedPKColumns.Columns() {
-		mappedColumn := v.targetSharedColumns.GetColumn(sourcePKColumn.Entity.NameLowered())
-		if mappedColumn == nil {
-			mappedColumn = v.targetSharedColumns.GetColumn(sourcePKColumn.Entity.Name())
-		}
-		if mappedColumn == nil {
-			// This can happen if the target column is virtual
-			continue
-		}
-
-		if sourcePKColumn.Entity.Type() == "enum" && mappedColumn.Entity.Type() == "enum" {
-			// An ENUM as part of PRIMARY KEY. We must convert it to text because OMG that's complicated.
-			// There's a scenario where a query may modify the enum value (and it's bad practice, seeing
-			// that it's part of the PK, but it's still valid), and in that case we must have the string value
-			// to be able to DELETE the old row
-			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourcePKColumn.EnumValues)
-		}
-	}
-
 	for i := range v.sourceSharedColumns.Columns() {
 		sourceColumn := v.sourceSharedColumns.Columns()[i]
 		mappedColumn := v.targetSharedColumns.Columns()[i]
-		if sourceColumn.Entity.Type() == "enum" {
-			switch {
-			// Either this is an ENUM column that stays an ENUM, or it is converted to a textual type.
-			// We take note of the enum values, and make it available in vreplication's Filter.Rule.ConvertEnumToText.
-			// This, in turn, will be used by vplayer (in TablePlan) like so:
-			// - In the binary log, enum values are integers.
-			// - Upon seeing this map, PlanBuilder will convert said int to the enum's logical string value.
-			// - And will apply the value as a string (`StringBindVariable`) in the query.
-			// What this allows is for enum values to have different ordering in the before/after table schema,
-			// so that for example you could modify an enum column:
-			// - from `('red', 'green', 'blue')` to `('red', 'blue')`
-			// - from `('red', 'green', 'blue')` to `('blue', 'red', 'green')`
-			case mappedColumn.Entity.Type() == "enum":
-			case mappedColumn.Entity.Charset() != "":
-				v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
-			}
-		}
 
 		if sourceColumn.Entity.IsIntegralType() && mappedColumn.Entity.Type() == "enum" {
 			v.intToEnumMap[sourceColumn.Name] = true
@@ -537,7 +501,8 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			sb.WriteString(", ")
 		}
 		switch {
-		case sourceCol.EnumToTextConversion:
+		case sourceCol.Entity.HasEnumValues():
+			// Source is `enum` or `set`. We always take the textual represenation rather than the numeric one.
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
 		case v.intToEnumMap[name]:
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))

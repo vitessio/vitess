@@ -37,9 +37,6 @@ type ColumnType int
 type Column struct {
 	Name   string
 	Entity *schemadiff.ColumnDefinitionEntity
-
-	EnumValues           string
-	EnumToTextConversion bool
 }
 
 // NewColumns creates a new column array from non empty names
@@ -162,17 +159,6 @@ func (l *ColumnList) MappedNamesColumnList(columnNamesMap map[string]string) *Co
 		}
 	}
 	return NewColumnList(names)
-}
-
-// SetEnumToTextConversion tells this column list that an enum is converted to text
-func (l *ColumnList) SetEnumToTextConversion(columnName string, enumValues string) {
-	l.GetColumn(columnName).EnumToTextConversion = true
-	l.GetColumn(columnName).EnumValues = enumValues
-}
-
-// IsEnumToTextConversion tells whether an enum was converted to text
-func (l *ColumnList) IsEnumToTextConversion(columnName string) bool {
-	return l.GetColumn(columnName).EnumToTextConversion
 }
 
 // UniqueKey is the combination of a key's name and columns
