@@ -825,6 +825,66 @@
     }
   },
   {
+    "comment": "group concat with a separator needing evaluation on vtgate",
+    "query": "select group_concat(music.name SEPARATOR ', ') as `Group Name` from user join user_extra on user.id = user_extra.user_id left join music on user.id = music.id group by user.id;",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select group_concat(music.name SEPARATOR ', ') as `Group Name` from user join user_extra on user.id = user_extra.user_id left join music on user.id = music.id group by user.id;",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "group_concat(0) AS Group Name",
+        "GroupBy": "(1|2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "R:0,L:0,L:1",
+            "JoinVars": {
+              "user_id": 0
+            },
+            "TableName": "`user`, user_extra_music",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, weight_string(`user`.id) from `user`, user_extra where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select `user`.id, weight_string(`user`.id) from `user`, user_extra where `user`.id = user_extra.user_id order by `user`.id asc",
+                "Table": "`user`, user_extra"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.`name` from music where 1 != 1",
+                "Query": "select music.`name` from music where music.id = :user_id",
+                "Table": "music",
+                "Values": [
+                  ":user_id"
+                ],
+                "Vindex": "music_user_map"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "scatter aggregate group by column number",
     "query": "select col from user group by 1",
     "plan": {

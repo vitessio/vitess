@@ -952,15 +952,15 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		out: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"unicode_loose_md5": {
-					Type: "unicode_loose_md5",
+				"unicode_loose_xxhash": {
+					Type: "unicode_loose_xxhash",
 				},
 			},
 			Tables: map[string]*vschemapb.Table{
 				"lkp": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
 						Column: "c1",
-						Name:   "unicode_loose_md5",
+						Name:   "unicode_loose_xxhash",
 					}},
 				},
 			},
@@ -1002,7 +1002,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			Vindexes: map[string]*vschemapb.Vindex{
 				// Create a misleading vindex name.
 				"xxhash": {
-					Type: "unicode_loose_md5",
+					Type: "unicode_loose_xxhash",
 				},
 			},
 		},
