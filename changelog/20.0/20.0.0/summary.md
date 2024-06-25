@@ -349,7 +349,7 @@ the VSchema of the target keyspace.
 
 #### <a id="vdiff-online-ddl"/> VDiff support for OnlineDDL migrations
 
-You can now run `VDiff`s on an OnlineDDL schema change migration in progress.
+You can now run `VDiff`s on OnlineDDL schema change migrations, which are not yet cut over.
 
 ## <a id="minor-changes"/>Minor Changes
 
