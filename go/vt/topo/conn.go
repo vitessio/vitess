@@ -120,6 +120,14 @@ type Conn interface {
 	// Returns ErrInterrupted if ctx is canceled.
 	Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
 
+	// LockName is similar to `Lock` but the difference is that it does not require
+	// the path to exist and have children in order to lock it. This is because with
+	// named locks you are NOT locking an actual topo entity such as a Keyspace record.
+	// Because this lock is not blocking any Vitess operations OTHER than another
+	// caller that is trying to get the same named lock, there is a static 24 hour
+	// TTL on them to ensure that they are eventually cleaned up.
+	LockName(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
+
 	// TryLock takes lock on the given directory with a fail-fast approach.
 	// It is similar to `Lock` but the difference is it attempts to acquire the lock
 	// if it is likely to succeed. If there is already a lock on given path, then unlike `Lock`

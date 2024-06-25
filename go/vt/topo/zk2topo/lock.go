@@ -42,6 +42,11 @@ func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.Lock
 	return zs.lock(ctx, dirPath, contents)
 }
 
+// LockName is part of the topo.Conn interface.
+func (zs *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return zs.lock(ctx, dirPath, contents)
+}
+
 // TryLock is part of the topo.Conn interface.
 func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list all the entries under dirPath

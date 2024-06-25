@@ -46,6 +46,10 @@ var (
 	RemoteOperationTimeout = 15 * time.Second
 )
 
+// How long named locks are kept in the topo server.
+// This ensures that orphaned named locks are not kept around.
+const NamedLockTTL = 24 * time.Hour
+
 // Lock describes a long-running lock on a keyspace or a shard.
 // It needs to be public as we JSON-serialize it.
 type Lock struct {
@@ -120,6 +124,28 @@ type locksKeyType int
 
 var locksKey locksKeyType
 
+// Support different lock types.
+type LockType int
+
+const (
+	Blocking LockType = iota
+	NonBlocking
+	Named
+)
+
+func (lt LockType) String() string {
+	switch lt {
+	case Blocking:
+		return "blocking"
+	case NonBlocking:
+		return "non blocking"
+	case Named:
+		return "named"
+	default:
+		return "unknown"
+	}
+}
+
 // iTopoLock is the interface for knowing the resource that is being locked.
 // It allows for better controlling nuances for different lock types and log messages.
 type iTopoLock interface {
@@ -129,7 +155,7 @@ type iTopoLock interface {
 }
 
 // perform the topo lock operation
-func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, isBlocking bool) (LockDescriptor, error) {
+func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, lockType LockType) (LockDescriptor, error) {
 	log.Infof("Locking %v %v for action %v", lt.Type(), lt.ResourceName(), l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, LockTimeout)
@@ -143,10 +169,16 @@ func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, isBlocking bo
 	if err != nil {
 		return nil, err
 	}
-	if isBlocking {
+	switch lockType {
+	case Blocking:
 		return ts.globalCell.Lock(ctx, lt.Path(), j)
+	case NonBlocking:
+		return ts.globalCell.TryLock(ctx, lt.Path(), j)
+	case Named:
+		return ts.globalCell.LockName(ctx, lt.Path(), j)
+	default:
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown lock type %s", lockType)
 	}
-	return ts.globalCell.TryLock(ctx, lt.Path(), j)
 }
 
 // unlock unlocks a previously locked key.
@@ -174,7 +206,7 @@ func (l *Lock) unlock(ctx context.Context, lt iTopoLock, lockDescriptor LockDesc
 	return lockDescriptor.Unlock(ctx)
 }
 
-func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string, isBlocking bool) (context.Context, func(*error), error) {
+func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string, lockType LockType) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -191,7 +223,7 @@ func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string,
 
 	// lock it
 	l := newLock(action)
-	lockDescriptor, err := l.lock(ctx, ts, lt, isBlocking)
+	lockDescriptor, err := l.lock(ctx, ts, lt, lockType)
 	if err != nil {
 		return nil, nil, err
 	}

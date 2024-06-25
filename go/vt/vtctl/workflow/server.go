@@ -1460,13 +1460,21 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 	sw := &switcher{s: s, ts: ts}
-	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "MoveTablesCreate")
+
+	// When creating the workflow, locking the workflow and its target keyspace is sufficient.
+	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "SwitchWrites")
+	if lockErr != nil {
+		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return nil, lockErr
+	}
+	defer workflowUnlock(&err)
+	ctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "MoveTablesCreate")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking target keyspace %s failed: %v", ts.TargetKeyspaceName(), lockErr)
 		return nil, lockErr
 	}
 	defer targetUnlock(&err)
-	ctx = lockCtx
 
 	// If we get an error after this point, where the vreplication streams/records
 	// have been created, then we clean up the workflow's artifacts.
@@ -2571,24 +2579,30 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 	} else {
 		sw = &switcher{s: s, ts: ts}
 	}
-	var tctx context.Context
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
+
+	// Lock the workflow along with its source and target keyspaces.
+	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "SwitchWrites")
+	if lockErr != nil {
+		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+	}
+	defer workflowUnlock(&err)
+	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
 	if lockErr != nil {
 		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer sourceUnlock(&err)
-	ctx = tctx
-
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
+		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
 		if lockErr != nil {
 			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 			return nil, lockErr
 		}
 		defer targetUnlock(&err)
-		ctx = tctx
+		ctx = lockCtx
 	}
+
 	if !keepData {
 		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
@@ -2763,23 +2777,30 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 	} else {
 		sw = &switcher{ts: ts, s: s}
 	}
-	var tctx context.Context
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
+
+	// Lock the workflow and its source and target keyspaces.
+	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "SwitchWrites")
+	if lockErr != nil {
+		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+	}
+	defer workflowUnlock(&err)
+	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
 	if lockErr != nil {
 		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer sourceUnlock(&err)
-	ctx = tctx
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
+		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
 		if lockErr != nil {
 			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 			return nil, lockErr
 		}
 		defer targetUnlock(&err)
-		ctx = tctx
+		ctx = lockCtx
 	}
+
 	if !force {
 		if err := sw.validateWorkflowHasCompleted(ctx); err != nil {
 			ts.Logger().Errorf("Workflow has not completed, cannot DropSources: %v", err)
@@ -2997,14 +3018,21 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 	} else {
 		sw = &switcher{s: s, ts: ts}
 	}
-	var tctx context.Context
-	tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow")
+
+	// Lock the workflow and its target keyspace.
+	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "SwitchWrites")
+	if lockErr != nil {
+		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+	}
+	defer workflowUnlock(&err)
+	ctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow")
 	if lockErr != nil {
 		ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer targetUnlock(&err)
-	ctx = tctx
+
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return nil, err
 	}
@@ -3238,7 +3266,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return handleError("workflow validation failed", err)
 	}
 
-	// For reads, locking the source keyspace is sufficient.
+	// For switching reads, locking the source keyspace is sufficient.
 	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads")
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
@@ -3310,19 +3338,24 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	}
 
-	// Need to lock both source and target keyspaces.
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites")
+	// Lock the workflow and its source and target keyspaces.
+	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "SwitchWrites")
+	if lockErr != nil {
+		return handleError(fmt.Sprintf("failed to lock the %s workflow", lockName), lockErr)
+	}
+	defer workflowUnlock(&err)
+	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites")
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
-	ctx = tctx
 	defer sourceUnlock(&err)
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites")
+		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites")
 		if lockErr != nil {
 			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}
-		ctx = tctx
+		ctx = lockCtx
 		defer targetUnlock(&err)
 	}
 

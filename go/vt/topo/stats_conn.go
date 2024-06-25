@@ -159,16 +159,21 @@ func (st *StatsConn) Delete(ctx context.Context, filePath string, version Versio
 
 // Lock is part of the Conn interface
 func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	return st.internalLock(ctx, dirPath, contents, true)
+	return st.internalLock(ctx, dirPath, contents, Blocking)
+}
+
+// LockName is part of the Conn interface
+func (st *StatsConn) LockName(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
+	return st.internalLock(ctx, dirPath, contents, Named)
 }
 
 // TryLock is part of the topo.Conn interface. Its implementation is same as Lock
 func (st *StatsConn) TryLock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	return st.internalLock(ctx, dirPath, contents, false)
+	return st.internalLock(ctx, dirPath, contents, NonBlocking)
 }
 
 // TryLock is part of the topo.Conn interface. Its implementation is same as Lock
-func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string, isBlocking bool) (LockDescriptor, error) {
+func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string, lockType LockType) (LockDescriptor, error) {
 	statsKey := []string{"Lock", st.cell}
 	if st.readOnly {
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], dirPath)
@@ -177,10 +182,15 @@ func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string,
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	var res LockDescriptor
 	var err error
-	if isBlocking {
+	switch lockType {
+	case Blocking:
 		res, err = st.conn.Lock(ctx, dirPath, contents)
-	} else {
+	case NonBlocking:
 		res, err = st.conn.TryLock(ctx, dirPath, contents)
+	case Named:
+		res, err = st.conn.LockName(ctx, dirPath, contents)
+	default:
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown lock type %s", lockType)
 	}
 	if err != nil {
 		topoStatsConnErrors.Add(statsKey, int64(1))

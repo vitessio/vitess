@@ -63,7 +63,7 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 	return ts.internalLock(ctx, &shardLock{
 		keyspace: keyspace,
 		shard:    shard,
-	}, action, true)
+	}, action, Blocking)
 }
 
 // TryLockShard will lock the shard, and return:
@@ -85,7 +85,7 @@ func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action stri
 	return ts.internalLock(ctx, &shardLock{
 		keyspace: keyspace,
 		shard:    shard,
-	}, action, false)
+	}, action, NonBlocking)
 }
 
 // CheckShardLocked can be called on a context to make sure we have the lock

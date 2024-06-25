@@ -38,7 +38,7 @@ func (s *routingRules) Path() string {
 
 // LockRoutingRules acquires a lock for routing rules.
 func (ts *Server) LockRoutingRules(ctx context.Context, action string) (context.Context, func(*error), error) {
-	return ts.internalLock(ctx, &routingRules{}, action, true)
+	return ts.internalLock(ctx, &routingRules{}, action, Blocking)
 }
 
 // CheckRoutingRulesLocked checks if a lock for routing rules is still possessed.

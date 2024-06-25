@@ -49,7 +49,12 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents)
+	return s.lock(ctx, dirPath, contents, s.lockTTL)
+}
+
+// LockName is part of the topo.Conn interface.
+func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return s.lock(ctx, dirPath, contents, topo.NamedLockTTL.String())
 }
 
 // TryLock is part of the topo.Conn interface.
@@ -74,11 +79,11 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	}
 
 	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents)
+	return s.lock(ctx, dirPath, contents, s.lockTTL)
 }
 
 // Lock is part of the topo.Conn interface.
-func (s *Server) lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string) (topo.LockDescriptor, error) {
 	lockPath := path.Join(s.root, dirPath, locksFilename)
 
 	lockOpts := &api.LockOptions{
@@ -86,16 +91,14 @@ func (s *Server) lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		Value: []byte(contents),
 		SessionOpts: &api.SessionEntry{
 			Name: api.DefaultLockSessionName,
-			TTL:  api.DefaultLockSessionTTL,
+			TTL:  ttl,
 		},
 	}
 	lockOpts.SessionOpts.Checks = s.lockChecks
 	if s.lockDelay > 0 {
 		lockOpts.SessionOpts.LockDelay = s.lockDelay
 	}
-	if s.lockTTL != "" {
-		lockOpts.SessionOpts.TTL = s.lockTTL
-	}
+	lockOpts.SessionOpts.TTL = ttl
 	// Build the lock structure.
 	l, err := s.client.LockOpts(lockOpts)
 	if err != nil {

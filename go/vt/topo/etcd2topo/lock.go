@@ -153,7 +153,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	}
 
 	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents)
+	return s.lock(ctx, dirPath, contents, leaseTTL)
 }
 
 // Lock is part of the topo.Conn interface.
@@ -168,15 +168,20 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents)
+	return s.lock(ctx, dirPath, contents, leaseTTL)
+}
+
+// LockName is part of the topo.Conn interface.
+func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()))
 }
 
 // lock is used by both Lock() and primary election.
-func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.LockDescriptor, error) {
+func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (topo.LockDescriptor, error) {
 	nodePath = path.Join(s.root, nodePath, locksPath)
 
 	// Get a lease, set its KeepAlive.
-	lease, err := s.cli.Grant(ctx, int64(leaseTTL))
+	lease, err := s.cli.Grant(ctx, int64(ttl))
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}

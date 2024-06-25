@@ -46,7 +46,7 @@ func (s *keyspaceLock) Path() string {
 func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
 	return ts.internalLock(ctx, &keyspaceLock{
 		keyspace: keyspace,
-	}, action, true)
+	}, action, Blocking)
 }
 
 // CheckKeyspaceLocked can be called on a context to make sure we have the lock

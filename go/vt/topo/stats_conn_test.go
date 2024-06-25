@@ -108,7 +108,17 @@ func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock Lo
 	}
 	if dirPath == "error" {
 		return lock, fmt.Errorf("dummy error")
+	}
+	return lock, err
+}
 
+// LockName is part of the Conn interface
+func (st *fakeConn) LockName(ctx context.Context, dirPath, contents string) (lock LockDescriptor, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
+	if dirPath == "error" {
+		return lock, fmt.Errorf("dummy error")
 	}
 	return lock, err
 }
@@ -121,7 +131,6 @@ func (st *fakeConn) TryLock(ctx context.Context, dirPath, contents string) (lock
 	}
 	if dirPath == "error" {
 		return lock, fmt.Errorf("dummy error")
-
 	}
 	return lock, err
 }
@@ -140,7 +149,6 @@ func (st *fakeConn) WatchRecursive(ctx context.Context, path string) (current []
 func (st *fakeConn) NewLeaderParticipation(name, id string) (mp LeaderParticipation, err error) {
 	if name == "error" {
 		return mp, fmt.Errorf("dummy error")
-
 	}
 	return mp, err
 }
