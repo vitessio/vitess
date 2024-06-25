@@ -35,237 +35,237 @@ var (
 	columns12A = ParseColumnList("c1,c2,ca")
 )
 
-func TestGetSharedUniqueKeys(t *testing.T) {
-	tt := []struct {
-		name                           string
-		sourceUKs, targetUKs           [](*UniqueKey)
-		renameMap                      map[string]string
-		expectSourceUK, expectTargetUK *UniqueKey
-	}{
-		{
-			name:           "empty",
-			sourceUKs:      []*UniqueKey{},
-			targetUKs:      []*UniqueKey{},
-			renameMap:      map[string]string{},
-			expectSourceUK: nil,
-			expectTargetUK: nil,
-		},
-		{
-			name: "half empty",
-			sourceUKs: []*UniqueKey{
-				{Name: "PRIMARY", Columns: *columns1},
-			},
-			targetUKs:      []*UniqueKey{},
-			renameMap:      map[string]string{},
-			expectSourceUK: nil,
-			expectTargetUK: nil,
-		},
-		{
-			name: "single identical",
-			sourceUKs: []*UniqueKey{
-				{Name: "PRIMARY", Columns: *columns1},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "PRIMARY", Columns: *columns1},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: &UniqueKey{Name: "PRIMARY", Columns: *columns1},
-			expectTargetUK: &UniqueKey{Name: "PRIMARY", Columns: *columns1},
-		},
-		{
-			name: "single identical non pk",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: &UniqueKey{Name: "uidx", Columns: *columns1},
-			expectTargetUK: &UniqueKey{Name: "uidx", Columns: *columns1},
-		},
-		{
-			name: "single identical, source is nullable",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1, HasNullable: true},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: nil,
-			expectTargetUK: nil,
-		},
-		{
-			name: "single identical, target is nullable",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1, HasNullable: true},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: nil,
-			expectTargetUK: nil,
-		},
-		{
-			name: "single no shared",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns12},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: nil,
-			expectTargetUK: nil,
-		},
-		{
-			name: "single no shared different order",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns12},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns21},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: nil,
-			expectTargetUK: nil,
-		},
-		{
-			name: "exact match",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns12},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
-			expectTargetUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
-		},
-		{
-			name: "exact match from multiple options",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns1},
-				{Name: "uidx123", Columns: *columns123},
-				{Name: "uidx12", Columns: *columns12},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx12", Columns: *columns12},
-				{Name: "uidx", Columns: *columns12},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
-			expectTargetUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
-		},
-		{
-			name: "exact match from multiple options reorder",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx12", Columns: *columns12},
-				{Name: "uidx", Columns: *columns1},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx", Columns: *columns21},
-				{Name: "uidx123", Columns: *columns123},
-				{Name: "uidx12", Columns: *columns12},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: &UniqueKey{Name: "uidx12", Columns: *columns12},
-			expectTargetUK: &UniqueKey{Name: "uidx12", Columns: *columns12},
-		},
-		{
-			name: "match different names",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx1", Columns: *columns1},
-				{Name: "uidx12", Columns: *columns12},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx21", Columns: *columns21},
-				{Name: "uidx123", Columns: *columns123},
-				{Name: "uidxother", Columns: *columns12},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: &UniqueKey{Name: "uidx12", Columns: *columns12},
-			expectTargetUK: &UniqueKey{Name: "uidxother", Columns: *columns12},
-		},
-		{
-			name: "match different names, nullable",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx1", Columns: *columns1},
-				{Name: "uidx12", Columns: *columns12},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx21", Columns: *columns21},
-				{Name: "uidx123other", Columns: *columns123},
-				{Name: "uidx12", Columns: *columns12, HasNullable: true},
-			},
-			renameMap:      map[string]string{},
-			expectSourceUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
-			expectTargetUK: &UniqueKey{Name: "uidx123other", Columns: *columns123},
-		},
-		{
-			name: "match different column names",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx1", Columns: *columns1},
-				{Name: "uidx12", Columns: *columns12},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx21", Columns: *columns21},
-				{Name: "uidx12A", Columns: *columns12A},
-			},
-			renameMap:      map[string]string{"c3": "ca"},
-			expectSourceUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
-			expectTargetUK: &UniqueKey{Name: "uidx12A", Columns: *columns12A},
-		},
-		{
-			// enforce mapping from c3 to ca; will not match c3<->c3
-			name: "no match identical column names",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx1", Columns: *columns1},
-				{Name: "uidx12", Columns: *columns12},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx21", Columns: *columns21},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			renameMap:      map[string]string{"c3": "ca"},
-			expectSourceUK: nil,
-			expectTargetUK: nil,
-		},
-		{
-			name: "no match different column names",
-			sourceUKs: []*UniqueKey{
-				{Name: "uidx1", Columns: *columns1},
-				{Name: "uidx12", Columns: *columns12},
-				{Name: "uidx123", Columns: *columns123},
-			},
-			targetUKs: []*UniqueKey{
-				{Name: "uidx21", Columns: *columns21},
-				{Name: "uidx12A", Columns: *columns12A},
-			},
-			renameMap:      map[string]string{"c3": "cx"},
-			expectSourceUK: nil,
-			expectTargetUK: nil,
-		},
-	}
+// func TestGetSharedUniqueKeys(t *testing.T) {
+// 	tt := []struct {
+// 		name                           string
+// 		sourceUKs, targetUKs           [](*UniqueKey)
+// 		renameMap                      map[string]string
+// 		expectSourceUK, expectTargetUK *UniqueKey
+// 	}{
+// 		{
+// 			name:           "empty",
+// 			sourceUKs:      []*UniqueKey{},
+// 			targetUKs:      []*UniqueKey{},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: nil,
+// 			expectTargetUK: nil,
+// 		},
+// 		{
+// 			name: "half empty",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "PRIMARY", Columns: *columns1},
+// 			},
+// 			targetUKs:      []*UniqueKey{},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: nil,
+// 			expectTargetUK: nil,
+// 		},
+// 		{
+// 			name: "single identical",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "PRIMARY", Columns: *columns1},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "PRIMARY", Columns: *columns1},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: &UniqueKey{Name: "PRIMARY", Columns: *columns1},
+// 			expectTargetUK: &UniqueKey{Name: "PRIMARY", Columns: *columns1},
+// 		},
+// 		{
+// 			name: "single identical non pk",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns1},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns1},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: &UniqueKey{Name: "uidx", Columns: *columns1},
+// 			expectTargetUK: &UniqueKey{Name: "uidx", Columns: *columns1},
+// 		},
+// 		{
+// 			name: "single identical, source is nullable",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns1, HasNullable: true},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns1},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: nil,
+// 			expectTargetUK: nil,
+// 		},
+// 		{
+// 			name: "single identical, target is nullable",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns1},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns1, HasNullable: true},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: nil,
+// 			expectTargetUK: nil,
+// 		},
+// 		{
+// 			name: "single no shared",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns1},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns12},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: nil,
+// 			expectTargetUK: nil,
+// 		},
+// 		{
+// 			name: "single no shared different order",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns12},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns21},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: nil,
+// 			expectTargetUK: nil,
+// 		},
+// 		{
+// 			name: "exact match",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns1},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns12},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
+// 			expectTargetUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
+// 		},
+// 		{
+// 			name: "exact match from multiple options",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns1},
+// 				{Name: "uidx123", Columns: *columns123},
+// 				{Name: "uidx12", Columns: *columns12},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx12", Columns: *columns12},
+// 				{Name: "uidx", Columns: *columns12},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
+// 			expectTargetUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
+// 		},
+// 		{
+// 			name: "exact match from multiple options reorder",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx12", Columns: *columns12},
+// 				{Name: "uidx", Columns: *columns1},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx", Columns: *columns21},
+// 				{Name: "uidx123", Columns: *columns123},
+// 				{Name: "uidx12", Columns: *columns12},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: &UniqueKey{Name: "uidx12", Columns: *columns12},
+// 			expectTargetUK: &UniqueKey{Name: "uidx12", Columns: *columns12},
+// 		},
+// 		{
+// 			name: "match different names",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx1", Columns: *columns1},
+// 				{Name: "uidx12", Columns: *columns12},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx21", Columns: *columns21},
+// 				{Name: "uidx123", Columns: *columns123},
+// 				{Name: "uidxother", Columns: *columns12},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: &UniqueKey{Name: "uidx12", Columns: *columns12},
+// 			expectTargetUK: &UniqueKey{Name: "uidxother", Columns: *columns12},
+// 		},
+// 		{
+// 			name: "match different names, nullable",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx1", Columns: *columns1},
+// 				{Name: "uidx12", Columns: *columns12},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx21", Columns: *columns21},
+// 				{Name: "uidx123other", Columns: *columns123},
+// 				{Name: "uidx12", Columns: *columns12, HasNullable: true},
+// 			},
+// 			renameMap:      map[string]string{},
+// 			expectSourceUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
+// 			expectTargetUK: &UniqueKey{Name: "uidx123other", Columns: *columns123},
+// 		},
+// 		{
+// 			name: "match different column names",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx1", Columns: *columns1},
+// 				{Name: "uidx12", Columns: *columns12},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx21", Columns: *columns21},
+// 				{Name: "uidx12A", Columns: *columns12A},
+// 			},
+// 			renameMap:      map[string]string{"c3": "ca"},
+// 			expectSourceUK: &UniqueKey{Name: "uidx123", Columns: *columns123},
+// 			expectTargetUK: &UniqueKey{Name: "uidx12A", Columns: *columns12A},
+// 		},
+// 		{
+// 			// enforce mapping from c3 to ca; will not match c3<->c3
+// 			name: "no match identical column names",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx1", Columns: *columns1},
+// 				{Name: "uidx12", Columns: *columns12},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx21", Columns: *columns21},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			renameMap:      map[string]string{"c3": "ca"},
+// 			expectSourceUK: nil,
+// 			expectTargetUK: nil,
+// 		},
+// 		{
+// 			name: "no match different column names",
+// 			sourceUKs: []*UniqueKey{
+// 				{Name: "uidx1", Columns: *columns1},
+// 				{Name: "uidx12", Columns: *columns12},
+// 				{Name: "uidx123", Columns: *columns123},
+// 			},
+// 			targetUKs: []*UniqueKey{
+// 				{Name: "uidx21", Columns: *columns21},
+// 				{Name: "uidx12A", Columns: *columns12A},
+// 			},
+// 			renameMap:      map[string]string{"c3": "cx"},
+// 			expectSourceUK: nil,
+// 			expectTargetUK: nil,
+// 		},
+// 	}
 
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			sourceUK, targetUK := GetSharedUniqueKeys(tc.sourceUKs, tc.targetUKs, tc.renameMap)
-			assert.Equal(t, tc.expectSourceUK, sourceUK)
-			assert.Equal(t, tc.expectTargetUK, targetUK)
-		})
-	}
-}
+// 	for _, tc := range tt {
+// 		t.Run(tc.name, func(t *testing.T) {
+// 			sourceUK, targetUK := GetSharedUniqueKeys(tc.sourceUKs, tc.targetUKs, tc.renameMap)
+// 			assert.Equal(t, tc.expectSourceUK, sourceUK)
+// 			assert.Equal(t, tc.expectTargetUK, targetUK)
+// 		})
+// 	}
+// }
 
 func TestAddedUniqueKeys(t *testing.T) {
 	emptyUniqueKeys := []*UniqueKey{}

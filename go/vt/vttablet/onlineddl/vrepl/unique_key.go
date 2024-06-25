@@ -32,60 +32,6 @@ func UniqueKeyValidForIteration(uniqueKey *UniqueKey) bool {
 	return !uniqueKey.HasNullable
 }
 
-// GetSharedUniqueKeys returns the unique keys shared between the source & target tables
-func GetSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*UniqueKey), columnRenameMap map[string]string) (chosenSourceUniqueKey, chosenTargetUniqueKey *UniqueKey) {
-	type ukPair struct{ source, target *UniqueKey }
-	var sharedUKPairs []*ukPair
-
-	for _, sourceUniqueKey := range sourceUniqueKeys {
-		if !UniqueKeyValidForIteration(sourceUniqueKey) {
-			continue
-		}
-		for _, targetUniqueKey := range targetUniqueKeys {
-			if !UniqueKeyValidForIteration(targetUniqueKey) {
-				continue
-			}
-			uniqueKeyMatches := func() bool {
-				// Compare two unique keys
-				if sourceUniqueKey.Columns.Len() != targetUniqueKey.Columns.Len() {
-					return false
-				}
-				// Expect same columns, same order, potentially column name mapping
-				sourceUniqueKeyNames := sourceUniqueKey.Columns.Names()
-				targetUniqueKeyNames := targetUniqueKey.Columns.Names()
-				for i := range sourceUniqueKeyNames {
-					sourceColumnName := sourceUniqueKeyNames[i]
-					targetColumnName := targetUniqueKeyNames[i]
-					mappedSourceColumnName := sourceColumnName
-					if mapped, ok := columnRenameMap[sourceColumnName]; ok {
-						mappedSourceColumnName = mapped
-					}
-					if !strings.EqualFold(mappedSourceColumnName, targetColumnName) {
-						return false
-					}
-				}
-				return true
-			}
-			if uniqueKeyMatches() {
-				sharedUKPairs = append(sharedUKPairs, &ukPair{source: sourceUniqueKey, target: targetUniqueKey})
-			}
-		}
-	}
-	// Now that we know what the shared unique keys are, let's find the "best" shared one.
-	// Source and target unique keys can have different name, even though they cover the exact same
-	// columns and in same order.
-	for _, pair := range sharedUKPairs {
-		if pair.source.HasNullable {
-			continue
-		}
-		if pair.target.HasNullable {
-			continue
-		}
-		return pair.source, pair.target
-	}
-	return nil, nil
-}
-
 // SourceUniqueKeyAsOrMoreConstrainedThanTarget returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.
 // "More constrained" means the uniqueness constraint is "stronger". Thus, if sourceUniqueKey is as-or-more constrained than targetUniqueKey, then
 // rows valid under sourceUniqueKey must also be valid in targetUniqueKey. The opposite is not necessarily so: rows that are valid in targetUniqueKey

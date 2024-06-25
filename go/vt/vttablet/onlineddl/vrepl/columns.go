@@ -48,6 +48,7 @@ func GetSharedColumns(
 	sharedColumnsMap map[string]string,
 ) {
 	sharedColumnNames := []string{}
+	sharedColumnsMap = map[string]string{}
 	droppedSourceNonGeneratedColumnsNames := []string{}
 	for _, sourceColumn := range sourceColumns.Names() {
 		isSharedColumn := false
@@ -56,11 +57,13 @@ func GetSharedColumns(
 			if strings.EqualFold(sourceColumn, targetColumn) {
 				// both tables have this column. Good start.
 				isSharedColumn = true
+				sharedColumnsMap[sourceColumn] = targetColumn
 				break
 			}
 			if strings.EqualFold(parser.columnRenameMap[sourceColumn], targetColumn) {
 				// column in source is renamed in target
 				isSharedColumn = true
+				sharedColumnsMap[sourceColumn] = targetColumn
 				break
 			}
 		}
@@ -87,14 +90,6 @@ func GetSharedColumns(
 			sharedColumnNames = append(sharedColumnNames, sourceColumn)
 		} else if !isVirtualColumnOnSource {
 			droppedSourceNonGeneratedColumnsNames = append(droppedSourceNonGeneratedColumnsNames, sourceColumn)
-		}
-	}
-	sharedColumnsMap = map[string]string{}
-	for _, columnName := range sharedColumnNames {
-		if mapped, ok := parser.columnRenameMap[columnName]; ok {
-			sharedColumnsMap[columnName] = mapped
-		} else {
-			sharedColumnsMap[columnName] = columnName
 		}
 	}
 	mappedSharedColumnNames := []string{}

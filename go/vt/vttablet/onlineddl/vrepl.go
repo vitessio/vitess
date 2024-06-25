@@ -410,29 +410,23 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if len(targetUniqueKeys) == 0 {
 		return fmt.Errorf("found no possible unique key on `%s`", v.targetTableName())
 	}
-	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = vrepl.GetSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	// VReplication supports completely different unique keys on source and target, covering
+	// some/completely different columns. The condition is that the key on source
+	// must use columns which all exist on target table.
+	eligibleSourceColumnsForUniqueKey := v.sourceSharedColumns.Union(sourceVirtualColumns)
+	v.chosenSourceUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(sourceUniqueKeys, eligibleSourceColumnsForUniqueKey)
 	if v.chosenSourceUniqueKey == nil {
-		// VReplication supports completely different unique keys on source and target, covering
-		// some/completely different columns. The condition is that the key on source
-		// must use columns which all exist on target table.
-		v.chosenSourceUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
-		if v.chosenSourceUniqueKey == nil {
-			// Still no luck.
-			return fmt.Errorf("found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTableName(), v.targetTableName())
-		}
+		// Still no luck.
+		return fmt.Errorf("found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTableName(), v.targetTableName())
 	}
+	// VReplication supports completely different unique keys on source and target, covering
+	// some/completely different columns. The condition is that the key on target
+	// must use columns which all exist on source table.
+	eligibleTargetColumnsForUniqueKey := v.targetSharedColumns.Union(targetVirtualColumns).MappedNamesColumnList(v.sharedColumnsMap)
+	v.chosenTargetUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(targetUniqueKeys, eligibleTargetColumnsForUniqueKey)
 	if v.chosenTargetUniqueKey == nil {
-		// VReplication supports completely different unique keys on source and target, covering
-		// some/completely different columns. The condition is that the key on target
-		// must use columns which all exist on source table.
-		v.chosenTargetUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(targetUniqueKeys, v.targetSharedColumns)
-		if v.chosenTargetUniqueKey == nil {
-			// Still no luck.
-			return fmt.Errorf("found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTableName(), v.sourceTableName())
-		}
-	}
-	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
-		return fmt.Errorf("found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTableName(), v.targetTableName())
+		// Still no luck.
+		return fmt.Errorf("found no possible unique key on `%s` whose columns are in source table `%s`; col names=%v, v.sharedColumnsMap=%v", v.targetTableName(), v.sourceTableName(), eligibleTargetColumnsForUniqueKey, v.sharedColumnsMap)
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())

@@ -102,6 +102,15 @@ func ParseColumnList(names string) *ColumnList {
 }
 
 // Columns returns the list of columns
+func (l *ColumnList) Union(other *ColumnList) *ColumnList {
+	result := &ColumnList{
+		columns: append(l.columns, other.columns...),
+	}
+	result.Ordinals = NewColumnsMap(result.columns)
+	return result
+}
+
+// Columns returns the list of columns
 func (l *ColumnList) Columns() []Column {
 	return l.columns
 }
