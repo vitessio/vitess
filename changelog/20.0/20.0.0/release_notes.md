@@ -238,7 +238,8 @@ Support is added for sharded update with limit.
 
 Example: `update t1 set t1.foo = 'abc', t1.bar = 23 where t1.baz > 5 limit 1`
 
-More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
+The support is built on performing a selection of primary keys and then performing an update with those primary keys. 
+For query syntax, refer to the [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
 
 #### <a id="multi-table-update"/> Update with Multi Table Support
 
@@ -246,7 +247,8 @@ Support is added for sharded multi-table update with column update on single tar
 
 Example: `update t1 join t2 on t1.id = t2.id join t3 on t1.col = t3.col set t1.baz = 'abc', t1.apa = 23 where t3.foo = 5 and t2.bar = 7`
 
-More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
+The support is built on performing a selection of primary keys and then performing an update with those primary keys.
+For query syntax, refer to the [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
 
 #### <a id="update-multi-target"/> Update with Multi Target Support
 
@@ -254,7 +256,9 @@ Support is added for sharded multi table target update.
 
 Example: `update t1 join t2 on t1.id = t2.id set t1.foo = 'abc', t2.bar = 23`
 
-More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
+The support is built on performing a selection of primary keys from all target tables and 
+then performing an update for each table with their selected primary keys. 
+For query syntax, refer to the [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
 
 #### <a id="delete-subquery"/> Delete with Subquery Support
 
@@ -262,13 +266,17 @@ Support is added for sharded table delete with subquery
 
 Example: `delete from t1 where id in (select col from t2 where foo = 32 and bar = 43)`
 
+The support is built by performing the uncorrelated subquery first and then providing the value for deletion.
+
 #### <a id="delete-multi-target"/> Delete with Multi Target Support
 
 Support is added for sharded multi table target delete.
 
 Example: `delete t1, t3 from t1 join t2 on t1.id = t2.id join t3 on t1.col = t3.col`
 
-More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/delete.html)
+The support is built on performing a selection of primary keys from all target tables and 
+then performing a delete operation for each table with their selected primary keys. 
+For query syntax, refer to the [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/delete.html)
 
 #### <a id="udf-support"/> User Defined Functions Support
 
@@ -289,7 +297,7 @@ Example:
 - `insert into user(id, name, email) valies (100, 'Alice', 'alice@mail.com') as new on duplicate key update name = new.name, email = new.email`
 - `insert into user(id, name, email) valies (100, 'Alice', 'alice@mail.com') as new(m, n, p) on duplicate key update name = n, email = p`
 
-More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/insert-on-duplicate.html)
+For query syntax, refer to the [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/insert-on-duplicate.html)
 
 ### <a id="query-timeout"/>Query Timeout
 On a query timeout, Vitess closed the connection using the `kill connection` statement. This leads to connection churn 
@@ -363,7 +371,7 @@ The vtadmin-web UI no longer has a dependency on highcharts for licensing reason
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/20.0/20.0.0/changelog.md).
 
-The release includes 441 merged Pull Requests.
+The release includes 447 merged Pull Requests.
 
 Thanks to all our contributors: @Aoang, @Ari1009, @GuptaManan100, @Its-Maniaco, @Maniktherana, @VaibhavMalik4187, @ajm188, @aparajon, @app/dependabot, @app/github-actions, @app/vitess-bot, @arthurschreiber, @bddicken, @beingnoble03, @brendar, @crazeteam, @dbussink, @deepthi, @demmer, @derekperkins, @ejortegau, @frouioui, @harshit-gangal, @mattlord, @maxenglander, @mdlayher, @notfelineit, @pavedroad, @rafer, @rohit-nayak-ps, @rvrangel, @shlomi-noach, @systay, @timvaillancourt, @tycol7, @vitess-bot, @vmg, @wangweicugw, @whuang8, @yoheimuta
 

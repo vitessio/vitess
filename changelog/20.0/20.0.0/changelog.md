@@ -85,7 +85,8 @@
  * [release-20.0-rc] fix: rows affected count for multi table update for non-literal column value (#16181) [#16182](https://github.com/vitessio/vitess/pull/16182)
  * [release-20.0] fix: rows affected count for multi table update for non-literal column value (#16181) [#16183](https://github.com/vitessio/vitess/pull/16183)
  * [release-20.0-rc] Handle Nullability for Columns from Outer Tables (#16174) [#16186](https://github.com/vitessio/vitess/pull/16186)
- * [release-20.0] Handle Nullability for Columns from Outer Tables (#16174) [#16187](https://github.com/vitessio/vitess/pull/16187) 
+ * [release-20.0] Handle Nullability for Columns from Outer Tables (#16174) [#16187](https://github.com/vitessio/vitess/pull/16187)
+ * [release-20.0] Fix vtgate crash in group concat [#16252](https://github.com/vitessio/vitess/pull/16252) 
 #### TabletManager
  * mysqlctl: Improve handling of the lock file [#15404](https://github.com/vitessio/vitess/pull/15404)
  * Fix possible race in MySQL startup and vttablet in parallel [#15538](https://github.com/vitessio/vitess/pull/15538)
@@ -204,7 +205,9 @@
  * [release-20.0-rc] Changelog 20.0: Fix broken links (#16048) [#16075](https://github.com/vitessio/vitess/pull/16075)
  * [release-20.0] Changelog 20.0: Fix broken links (#16048) [#16076](https://github.com/vitessio/vitess/pull/16076) 
 #### General
- * Add Shopify to `ADOPTERS.md` [#15853](https://github.com/vitessio/vitess/pull/15853) 
+ * Add Shopify to `ADOPTERS.md` [#15853](https://github.com/vitessio/vitess/pull/15853)
+ * [release-20.0-rc] release notes: update dml related release notes (#16241) [#16246](https://github.com/vitessio/vitess/pull/16246)
+ * [release-20.0] release notes: update dml related release notes (#16241) [#16247](https://github.com/vitessio/vitess/pull/16247) 
 #### Governance
  * amend contributing guide to ban trivial contributions [#15618](https://github.com/vitessio/vitess/pull/15618)
  * remove koz from active maintainer list [#15733](https://github.com/vitessio/vitess/pull/15733) 
@@ -488,6 +491,9 @@
  * [release-20.0] Copy `v20.0.0-RC1` release notes [#16141](https://github.com/vitessio/vitess/pull/16141)
  * [release-20.0-rc] Bump to `v20.0.0-SNAPSHOT` after the `v20.0.0-RC1` release [#16142](https://github.com/vitessio/vitess/pull/16142)
  * [release-20.0-rc] Bump to `v20.0.0-SNAPSHOT` after the `v20.0.0-RC1` release [#16146](https://github.com/vitessio/vitess/pull/16146)
+ * [release-20.0-rc] Release of `v20.0.0-RC2` [#16225](https://github.com/vitessio/vitess/pull/16225)
+ * [release-20.0] Copy `v20.0.0-RC2` release notes [#16235](https://github.com/vitessio/vitess/pull/16235)
+ * [release-20.0-rc] Bump to `v20.0.0-SNAPSHOT` after the `v20.0.0-RC2` release [#16236](https://github.com/vitessio/vitess/pull/16236)
 ### Testing 
 #### Build/CI
  * Rewrite _many_ tests to use vtctldclient invocations, mostly non-output related stuff [#15270](https://github.com/vitessio/vitess/pull/15270)
