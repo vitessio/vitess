@@ -362,12 +362,7 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 	return nil
 }
 
-func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) (err error) {
-	if v.analyzeTable {
-		if err := v.executeAnalyzeTable(ctx, conn, v.sourceTableName()); err != nil {
-			return err
-		}
-	}
+func (v *VRepl) analyzeTables(ctx context.Context) (err error) {
 	senv := schemadiff.NewEnv(v.env, v.env.CollationEnv().DefaultConnectionCharset())
 	sourceCreateTableEntity, err := schemadiff.NewCreateTableEntity(senv, v.sourceCreateTable)
 	if err != nil {
@@ -378,10 +373,6 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return err
 	}
 
-	v.tableRows, err = v.readTableStatus(ctx, conn, v.sourceTableName())
-	if err != nil {
-		return err
-	}
 	// columns:
 	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := readTableColumns(sourceCreateTableEntity)
 	if err != nil {
@@ -476,6 +467,20 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return err
 	}
 
+	return nil
+}
+
+// analyzeTableStatus reads information from SHOW TABLE STATUS
+func (v *VRepl) analyzeTableStatus(ctx context.Context, conn *dbconnpool.DBConnection) (err error) {
+	if v.analyzeTable {
+		if err := v.executeAnalyzeTable(ctx, conn, v.sourceTableName()); err != nil {
+			return err
+		}
+	}
+	v.tableRows, err = v.readTableStatus(ctx, conn, v.sourceTableName())
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -588,10 +593,13 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 	if err := v.analyzeAlter(ctx); err != nil {
 		return err
 	}
-	if err := v.analyzeTables(ctx, conn); err != nil {
+	if err := v.analyzeTables(ctx); err != nil {
 		return err
 	}
 	if err := v.generateFilterQuery(ctx); err != nil {
+		return err
+	}
+	if err := v.analyzeTableStatus(ctx, conn); err != nil {
 		return err
 	}
 	v.analyzeBinlogSource(ctx)
