@@ -1372,39 +1372,50 @@ func (node *Argument) Format(buf *TrackedBuffer) {
 		// the type as a bitmask for the further tests.
 		// do nothing, the default literal will be correct.
 	case sqltypes.IsDecimal(node.Type):
-		buf.astPrintf(node, "CAST(:%#s AS DECIMAL(%d, %d))", node.Name, node.Size, node.Scale)
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.astPrintf(node, " AS DECIMAL(%d, %d))", node.Size, node.Scale)
 		return
 	case sqltypes.IsUnsigned(node.Type):
-		buf.astPrintf(node, "CAST(:%#s AS UNSIGNED)", node.Name)
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS UNSIGNED)")
 		return
 	case node.Type == sqltypes.Float64:
-		buf.astPrintf(node, "CAST(:%#s AS DOUBLE)", node.Name)
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS DOUBLE)")
 		return
 	case node.Type == sqltypes.Float32:
-		buf.astPrintf(node, "CAST(:%#s AS FLOAT)", node.Name)
-		return
-	case sqltypes.IsDate(node.Type):
-		if node.Size == 0 {
-			buf.astPrintf(node, "CAST(:%#s AS DATE)", node.Name)
-			return
-		}
-		buf.astPrintf(node, "CAST(:%#s AS DATE(%d))", node.Name, node.Size)
-		return
-	case node.Type == sqltypes.Time:
-		if node.Size == 0 {
-			buf.astPrintf(node, "CAST(:%#s AS TIME)", node.Name)
-			return
-		}
-
-		buf.astPrintf(node, "CAST(:%#s AS TIME(%d))", node.Name, node.Size)
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS FLOAT)")
 		return
 	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS DATETIME")
 		if node.Size == 0 {
-			buf.astPrintf(node, "CAST(:%#s AS TIMESTAMP)", node.Name)
+			buf.WriteString(")")
 			return
 		}
-
-		buf.astPrintf(node, "CAST(:%#s AS TIMESTAMP(%d))", node.Name, node.Size)
+		buf.astPrintf(node, "(%d))", node.Size)
+		return
+	case sqltypes.IsDate(node.Type):
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS DATE")
+		buf.WriteString(")")
+		return
+	case node.Type == sqltypes.Time:
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS TIME")
+		if node.Size == 0 {
+			buf.WriteString(")")
+			return
+		}
+		buf.astPrintf(node, "(%d))", node.Size)
 		return
 	}
 	// Nothing special to do, the default literal will be correct.

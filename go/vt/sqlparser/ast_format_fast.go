@@ -1791,8 +1791,8 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 		// the type as a bitmask for the further tests.
 		// do nothing, the default literal will be correct.
 	case sqltypes.IsDecimal(node.Type):
-		buf.WriteString("CAST(:")
-		buf.WriteString(node.Name)
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
 		buf.WriteString(" AS DECIMAL(")
 		buf.WriteString(fmt.Sprintf("%d", node.Size))
 		buf.WriteString(", ")
@@ -1800,58 +1800,47 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString("))")
 		return
 	case sqltypes.IsUnsigned(node.Type):
-		buf.WriteString("CAST(:")
-		buf.WriteString(node.Name)
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
 		buf.WriteString(" AS UNSIGNED)")
 		return
 	case node.Type == sqltypes.Float64:
-		buf.WriteString("CAST(:")
-		buf.WriteString(node.Name)
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
 		buf.WriteString(" AS DOUBLE)")
 		return
 	case node.Type == sqltypes.Float32:
-		buf.WriteString("CAST(:")
-		buf.WriteString(node.Name)
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
 		buf.WriteString(" AS FLOAT)")
 		return
-	case sqltypes.IsDate(node.Type):
+	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS DATETIME")
 		if node.Size == 0 {
-			buf.WriteString("CAST(:")
-			buf.WriteString(node.Name)
-			buf.WriteString(" AS DATE)")
+			buf.WriteString(")")
 			return
 		}
-		buf.WriteString("CAST(:")
-		buf.WriteString(node.Name)
-		buf.WriteString(" AS DATE(")
+		buf.WriteByte('(')
 		buf.WriteString(fmt.Sprintf("%d", node.Size))
 		buf.WriteString("))")
+		return
+	case sqltypes.IsDate(node.Type):
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS DATE")
+		buf.WriteString(")")
 		return
 	case node.Type == sqltypes.Time:
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS TIME")
 		if node.Size == 0 {
-			buf.WriteString("CAST(:")
-			buf.WriteString(node.Name)
-			buf.WriteString(" AS TIME)")
+			buf.WriteString(")")
 			return
 		}
-
-		buf.WriteString("CAST(:")
-		buf.WriteString(node.Name)
-		buf.WriteString(" AS TIME(")
-		buf.WriteString(fmt.Sprintf("%d", node.Size))
-		buf.WriteString("))")
-		return
-	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
-		if node.Size == 0 {
-			buf.WriteString("CAST(:")
-			buf.WriteString(node.Name)
-			buf.WriteString(" AS TIMESTAMP)")
-			return
-		}
-
-		buf.WriteString("CAST(:")
-		buf.WriteString(node.Name)
-		buf.WriteString(" AS TIMESTAMP(")
+		buf.WriteByte('(')
 		buf.WriteString(fmt.Sprintf("%d", node.Size))
 		buf.WriteString("))")
 		return
