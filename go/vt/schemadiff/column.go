@@ -72,7 +72,7 @@ func NewModifyColumnDiffByDefinition(definition *sqlparser.ColumnDefinition) *Mo
 }
 
 type ColumnDefinitionEntity struct {
-	columnDefinition    *sqlparser.ColumnDefinition
+	ColumnDefinition    *sqlparser.ColumnDefinition
 	inPK                bool // Does this column appear in the primary key?
 	tableCharsetCollate *charsetCollate
 	Env                 *Environment
@@ -80,7 +80,7 @@ type ColumnDefinitionEntity struct {
 
 func NewColumnDefinitionEntity(env *Environment, c *sqlparser.ColumnDefinition, inPK bool, tableCharsetCollate *charsetCollate) *ColumnDefinitionEntity {
 	return &ColumnDefinitionEntity{
-		columnDefinition:    c,
+		ColumnDefinition:    c,
 		inPK:                inPK,
 		tableCharsetCollate: tableCharsetCollate,
 		Env:                 env,
@@ -88,12 +88,16 @@ func NewColumnDefinitionEntity(env *Environment, c *sqlparser.ColumnDefinition, 
 }
 
 func (c *ColumnDefinitionEntity) Name() string {
-	return c.columnDefinition.Name.String()
+	return c.ColumnDefinition.Name.String()
+}
+
+func (c *ColumnDefinitionEntity) NameLowered() string {
+	return c.ColumnDefinition.Name.Lowered()
 }
 
 func (c *ColumnDefinitionEntity) Clone() *ColumnDefinitionEntity {
 	clone := &ColumnDefinitionEntity{
-		columnDefinition:    sqlparser.Clone(c.columnDefinition),
+		ColumnDefinition:    sqlparser.Clone(c.ColumnDefinition),
 		inPK:                c.inPK,
 		tableCharsetCollate: c.tableCharsetCollate,
 		Env:                 c.Env,
@@ -110,13 +114,13 @@ func (c *ColumnDefinitionEntity) Clone() *ColumnDefinitionEntity {
 func (c *ColumnDefinitionEntity) SetExplicitDefaultAndNull() {
 	if c.inPK {
 		// Any column in the primary key is implicitly NOT NULL.
-		c.columnDefinition.Type.Options.Null = ptr.Of(false)
+		c.ColumnDefinition.Type.Options.Null = ptr.Of(false)
 	}
-	if c.columnDefinition.Type.Options.Null == nil || *c.columnDefinition.Type.Options.Null {
+	if c.ColumnDefinition.Type.Options.Null == nil || *c.ColumnDefinition.Type.Options.Null {
 		// Nullable column, let'se see if there's already a DEFAULT.
-		if c.columnDefinition.Type.Options.Default == nil {
+		if c.ColumnDefinition.Type.Options.Default == nil {
 			// nope, let's add a DEFAULT NULL
-			c.columnDefinition.Type.Options.Default = &sqlparser.NullVal{}
+			c.ColumnDefinition.Type.Options.Default = &sqlparser.NullVal{}
 		}
 	}
 }
@@ -133,35 +137,35 @@ func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate() error {
 	}
 	// We will now denormalize the columns charset & collate as needed (if empty, populate from table.)
 	// Normalizing _this_ column definition:
-	if c.columnDefinition.Type.Charset.Name != "" && c.columnDefinition.Type.Options.Collate == "" {
+	if c.ColumnDefinition.Type.Charset.Name != "" && c.ColumnDefinition.Type.Options.Collate == "" {
 		// Charset defined without collation. Assign the default collation for that charset.
-		collation := c.Env.CollationEnv().DefaultCollationForCharset(c.columnDefinition.Type.Charset.Name)
+		collation := c.Env.CollationEnv().DefaultCollationForCharset(c.ColumnDefinition.Type.Charset.Name)
 		if collation == collations.Unknown {
-			return &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
+			return &UnknownColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
 		}
-		c.columnDefinition.Type.Options.Collate = c.Env.CollationEnv().LookupName(collation)
+		c.ColumnDefinition.Type.Options.Collate = c.Env.CollationEnv().LookupName(collation)
 	}
-	if c.columnDefinition.Type.Charset.Name == "" && c.columnDefinition.Type.Options.Collate != "" {
+	if c.ColumnDefinition.Type.Charset.Name == "" && c.ColumnDefinition.Type.Options.Collate != "" {
 		// Column has explicit collation but no charset. We can infer the charset from the collation.
-		collationID := c.Env.CollationEnv().LookupByName(c.columnDefinition.Type.Options.Collate)
+		collationID := c.Env.CollationEnv().LookupByName(c.ColumnDefinition.Type.Options.Collate)
 		charset := c.Env.CollationEnv().LookupCharsetName(collationID)
 		if charset == "" {
-			return &UnknownColumnCollationCharsetError{Column: c.columnDefinition.Name.String(), Collation: c.columnDefinition.Type.Options.Collate}
+			return &UnknownColumnCollationCharsetError{Column: c.ColumnDefinition.Name.String(), Collation: c.ColumnDefinition.Type.Options.Collate}
 		}
-		c.columnDefinition.Type.Charset.Name = charset
+		c.ColumnDefinition.Type.Charset.Name = charset
 	}
-	if c.columnDefinition.Type.Charset.Name == "" {
+	if c.ColumnDefinition.Type.Charset.Name == "" {
 		// Still nothing? Assign the table's charset/collation.
-		c.columnDefinition.Type.Charset.Name = c.tableCharsetCollate.charset
-		if c.columnDefinition.Type.Options.Collate == "" {
-			c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate
+		c.ColumnDefinition.Type.Charset.Name = c.tableCharsetCollate.charset
+		if c.ColumnDefinition.Type.Options.Collate == "" {
+			c.ColumnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate
 		}
-		if c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate; c.columnDefinition.Type.Options.Collate == "" {
+		if c.ColumnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate; c.ColumnDefinition.Type.Options.Collate == "" {
 			collation := c.Env.CollationEnv().DefaultCollationForCharset(c.tableCharsetCollate.charset)
 			if collation == collations.Unknown {
-				return &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
+				return &UnknownColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
 			}
-			c.columnDefinition.Type.Options.Collate = c.Env.CollationEnv().LookupName(collation)
+			c.ColumnDefinition.Type.Options.Collate = c.Env.CollationEnv().LookupName(collation)
 		}
 	}
 	return nil
@@ -202,7 +206,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 		}
 	}
 
-	if sqlparser.Equals.RefOfColumnDefinition(cClone.columnDefinition, otherClone.columnDefinition) {
+	if sqlparser.Equals.RefOfColumnDefinition(cClone.ColumnDefinition, otherClone.ColumnDefinition) {
 		return nil, nil
 	}
 
@@ -215,21 +219,21 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 	}
 	switch hints.EnumReorderStrategy {
 	case EnumReorderStrategyReject:
-		otherEnumValuesMap := getEnumValuesMap(otherClone.columnDefinition.Type.EnumValues)
-		for ordinal, enumValue := range cClone.columnDefinition.Type.EnumValues {
+		otherEnumValuesMap := getEnumValuesMap(otherClone.ColumnDefinition.Type.EnumValues)
+		for ordinal, enumValue := range cClone.ColumnDefinition.Type.EnumValues {
 			if otherOrdinal, ok := otherEnumValuesMap[enumValue]; ok {
 				if ordinal != otherOrdinal {
-					return nil, &EnumValueOrdinalChangedError{Table: tableName, Column: cClone.columnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
+					return nil, &EnumValueOrdinalChangedError{Table: tableName, Column: cClone.ColumnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
 				}
 			}
 		}
 	}
-	return NewModifyColumnDiffByDefinition(other.columnDefinition), nil
+	return NewModifyColumnDiffByDefinition(other.ColumnDefinition), nil
 }
 
 // Type returns the column's type
 func (c *ColumnDefinitionEntity) Type() string {
-	return c.columnDefinition.Type.Type
+	return c.ColumnDefinition.Type.Type
 }
 
 // IsTextual returns true when this column is of textual type, and is capable of having a character set property
@@ -253,12 +257,12 @@ func IsGeneratedColumn(col *sqlparser.ColumnDefinition) (bool, sqlparser.ColumnS
 
 // IsGenerated returns true when this column is generated, and indicates the storage type (virtual/stored)
 func (c *ColumnDefinitionEntity) IsGenerated() (bool, sqlparser.ColumnStorage) {
-	return IsGeneratedColumn(c.columnDefinition)
+	return IsGeneratedColumn(c.ColumnDefinition)
 }
 
 // IsNullable returns true when this column is NULLable
 func (c *ColumnDefinitionEntity) IsNullable() bool {
-	return c.columnDefinition.Type.Options.Null == nil || *c.columnDefinition.Type.Options.Null
+	return c.ColumnDefinition.Type.Options.Null == nil || *c.ColumnDefinition.Type.Options.Null
 }
 
 // IsDefaultNull returns true when this column has DEFAULT NULL
@@ -266,13 +270,13 @@ func (c *ColumnDefinitionEntity) IsDefaultNull() bool {
 	if !c.IsNullable() {
 		return false
 	}
-	_, ok := c.columnDefinition.Type.Options.Default.(*sqlparser.NullVal)
+	_, ok := c.ColumnDefinition.Type.Options.Default.(*sqlparser.NullVal)
 	return ok
 }
 
 // IsDefaultNull returns true when this column has DEFAULT NULL
 func (c *ColumnDefinitionEntity) HasDefault() bool {
-	if c.columnDefinition.Type.Options.Default == nil {
+	if c.ColumnDefinition.Type.Options.Default == nil {
 		return false
 	}
 	if c.IsDefaultNull() {
@@ -281,9 +285,14 @@ func (c *ColumnDefinitionEntity) HasDefault() bool {
 	return true
 }
 
+// IsAutoIncrement returns true when this column is AUTO_INCREMENT
+func (c *ColumnDefinitionEntity) IsAutoIncrement() bool {
+	return c.ColumnDefinition.Type.Options.Autoincrement
+}
+
 // IsUnsigned returns true when this column is UNSIGNED
 func (c *ColumnDefinitionEntity) IsUnsigned() bool {
-	return c.columnDefinition.Type.Unsigned
+	return c.ColumnDefinition.Type.Unsigned
 }
 
 // IsNumeric returns true when this column is a numeric type
@@ -301,31 +310,36 @@ func (c *ColumnDefinitionEntity) IsDecimalType() bool {
 	return IsDecimalType(c.Type())
 }
 
+// HasBlobTypeStorage returns true when this column is a text/blob type
+func (c *ColumnDefinitionEntity) HasBlobTypeStorage() bool {
+	return BlobTypeStorage(c.Type()) != 0
+}
+
 // Charset returns the column's charset
 func (c *ColumnDefinitionEntity) Charset() string {
-	return c.columnDefinition.Type.Charset.Name
+	return c.ColumnDefinition.Type.Charset.Name
 }
 
 // Collate returns the column's collation
 func (c *ColumnDefinitionEntity) Collate() string {
-	return c.columnDefinition.Type.Options.Collate
+	return c.ColumnDefinition.Type.Options.Collate
 }
 
 func (c *ColumnDefinitionEntity) EnumValues() []string {
-	return c.columnDefinition.Type.EnumValues
+	return c.ColumnDefinition.Type.EnumValues
 }
 
 func (c *ColumnDefinitionEntity) EnumValuesOrdinals() map[string]int {
-	m := make(map[string]int, len(c.columnDefinition.Type.EnumValues))
-	for i, enumValue := range c.columnDefinition.Type.EnumValues {
+	m := make(map[string]int, len(c.ColumnDefinition.Type.EnumValues))
+	for i, enumValue := range c.ColumnDefinition.Type.EnumValues {
 		m[enumValue] = i
 	}
 	return m
 }
 
 func (c *ColumnDefinitionEntity) EnumOrdinalValues() map[int]string {
-	m := make(map[int]string, len(c.columnDefinition.Type.EnumValues))
-	for i, enumValue := range c.columnDefinition.Type.EnumValues {
+	m := make(map[int]string, len(c.ColumnDefinition.Type.EnumValues))
+	for i, enumValue := range c.ColumnDefinition.Type.EnumValues {
 		// SET and ENUM values are 1 indexed.
 		m[i+1] = enumValue
 	}
@@ -334,87 +348,46 @@ func (c *ColumnDefinitionEntity) EnumOrdinalValues() map[int]string {
 
 // Length returns the type length (e.g. 17 for VARCHAR(17), 10 for DECIMAL(10,2), 6 for TIMESTAMP(6), etc.)
 func (c *ColumnDefinitionEntity) Length() int {
-	if c.columnDefinition.Type.Length == nil {
+	if c.ColumnDefinition.Type.Length == nil {
 		return 0
 	}
-	return *c.columnDefinition.Type.Length
+	return *c.ColumnDefinition.Type.Length
 }
 
 // Scale returns the type scale (e.g. 2 for DECIMAL(10,2))
 func (c *ColumnDefinitionEntity) Scale() int {
-	if c.columnDefinition.Type.Scale == nil {
+	if c.ColumnDefinition.Type.Scale == nil {
 		return 0
 	}
-	return *c.columnDefinition.Type.Scale
+	return *c.ColumnDefinition.Type.Scale
 }
 
-// isExpandedColumn sees if target column has any value set/range that is impossible in source column. See GetExpandedColumns comment for examples
-func (c *ColumnDefinitionEntity) Expands(source *ColumnDefinitionEntity) (bool, string) {
-	if c.IsNullable() && !source.IsNullable() {
-		return true, "target is NULL-able, source is not"
+type ColumnDefinitionEntityList struct {
+	Entities []*ColumnDefinitionEntity
+	m        map[string]*ColumnDefinitionEntity
+}
+
+func NewColumnDefinitionEntityList(entities []*ColumnDefinitionEntity) *ColumnDefinitionEntityList {
+	list := &ColumnDefinitionEntityList{
+		Entities: entities,
+		m:        make(map[string]*ColumnDefinitionEntity),
 	}
-	if c.Length() > source.Length() {
-		return true, "increased length"
+	for _, entity := range entities {
+		list.m[entity.Name()] = entity
+		list.m[entity.NameLowered()] = entity
 	}
-	if c.Scale() > source.Scale() {
-		return true, "increased scale"
-	}
-	if source.IsUnsigned() && !c.IsUnsigned() {
-		return true, "source is unsigned, target is signed"
-	}
-	if IntegralTypeStorage(c.Type()) > IntegralTypeStorage(source.Type()) && IntegralTypeStorage(source.Type()) != 0 {
-		return true, "increased integer range"
-	}
-	if IntegralTypeStorage(source.Type()) <= IntegralTypeStorage(c.Type()) &&
-		!source.IsUnsigned() && c.IsUnsigned() {
-		// e.g. INT SIGNED => INT UNSIGNED, INT SIGNED => BIGINT UNSIGNED
-		return true, "target unsigned value exceeds source unsigned value"
-	}
-	if FloatingPointTypeStorage(c.Type()) > FloatingPointTypeStorage(source.Type()) && FloatingPointTypeStorage(source.Type()) != 0 {
-		return true, "increased floating point range"
-	}
-	if c.IsFloatingPointType() && !source.IsFloatingPointType() {
-		return true, "target is floating point, source is not"
-	}
-	if c.IsDecimalType() && !source.IsDecimalType() {
-		return true, "target is decimal, source is not"
-	}
-	if c.IsDecimalType() && source.IsDecimalType() {
-		if c.Length()-c.Scale() > source.Length()-source.Scale() {
-			return true, "increased decimal range"
+	return list
+}
+
+func (l *ColumnDefinitionEntityList) GetColumn(name string) *ColumnDefinitionEntity {
+	return l.m[name]
+}
+
+func (l *ColumnDefinitionEntityList) IsSubset(of *ColumnDefinitionEntityList) bool {
+	for _, entity := range l.Entities {
+		if of.GetColumn(entity.NameLowered()) == nil {
+			return false
 		}
 	}
-	if IsExpandingDataType(source.Type(), c.Type()) {
-		return true, "target is expanded data type of source"
-	}
-	if BlobTypeStorage(c.Type()) > BlobTypeStorage(source.Type()) && BlobTypeStorage(source.Type()) != 0 {
-		return true, "increased blob range"
-	}
-	if source.Charset() != c.Charset() {
-		if c.Charset() == "utf8mb4" {
-			return true, "expand character set to utf8mb4"
-		}
-		if strings.HasPrefix(c.Charset(), "utf8") && !strings.HasPrefix(source.Charset(), "utf8") {
-			// not utf to utf
-			return true, "expand character set to utf8"
-		}
-	}
-	for _, colType := range []string{"enum", "set"} {
-		// enums and sets have very similar properties, and are practically identical in our analysis
-		if source.Type() == colType {
-			// this is an enum or a set
-			if c.Type() != colType {
-				return true, "conversion from enum/set to non-enum/set adds potential values"
-			}
-			// target is an enum or a set. See if all values on target exist in source
-			sourceEnumTokensMap := source.EnumOrdinalValues()
-			targetEnumTokensMap := c.EnumOrdinalValues()
-			for k, v := range targetEnumTokensMap {
-				if sourceEnumTokensMap[k] != v {
-					return true, "target enum/set expands or reorders source enum/set"
-				}
-			}
-		}
-	}
-	return false, ""
+	return true
 }

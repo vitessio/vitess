@@ -32,6 +32,7 @@ func TestColumnFunctions(t *testing.T) {
 		col2 int not null,
 		col3 int default null,
 		col4 int default 1,
+		COL5 int default 1,
 		ts1 timestamp,
 		ts2 timestamp(3) null,
 		ts3 timestamp(6) not null,
@@ -53,6 +54,7 @@ func TestColumnFunctions(t *testing.T) {
 		assert.False(t, m["col2"].IsNullable())
 		assert.True(t, m["col3"].IsNullable())
 		assert.True(t, m["col4"].IsNullable())
+		assert.True(t, m["col5"].IsNullable())
 		assert.True(t, m["ts1"].IsNullable())
 		assert.True(t, m["ts2"].IsNullable())
 		assert.False(t, m["ts3"].IsNullable())
@@ -63,6 +65,7 @@ func TestColumnFunctions(t *testing.T) {
 		assert.False(t, m["col2"].IsDefaultNull())
 		assert.True(t, m["col3"].IsDefaultNull())
 		assert.False(t, m["col4"].IsDefaultNull())
+		assert.False(t, m["col5"].IsDefaultNull())
 		assert.True(t, m["ts1"].IsDefaultNull())
 		assert.True(t, m["ts2"].IsDefaultNull())
 		assert.False(t, m["ts3"].IsDefaultNull())
@@ -72,6 +75,8 @@ func TestColumnFunctions(t *testing.T) {
 		assert.True(t, m["col1"].HasDefault())
 		assert.False(t, m["col2"].HasDefault())
 		assert.True(t, m["col3"].HasDefault())
+		assert.True(t, m["col4"].HasDefault())
+		assert.True(t, m["col5"].HasDefault())
 		assert.True(t, m["ts1"].HasDefault())
 		assert.True(t, m["ts2"].HasDefault())
 		assert.False(t, m["ts3"].HasDefault())
@@ -400,4 +405,59 @@ func TestExpands(t *testing.T) {
 			assert.Contains(t, message, tcase.msg)
 		})
 	}
+}
+
+func TestColumnDefinitionEntityList(t *testing.T) {
+	table := `
+	create table t (
+		id int,
+		col1 int,
+		Col2 int not null,
+		primary key (id)
+	)`
+	env := NewTestEnv()
+	createTableEntity, err := NewCreateTableEntityFromSQL(env, table)
+	require.NoError(t, err)
+	entities := createTableEntity.ColumnDefinitionEntities()
+	require.NotEmpty(t, entities)
+	list := NewColumnDefinitionEntityList(entities)
+	assert.NotNil(t, list.GetColumn("id"))
+	assert.NotNil(t, list.GetColumn("col1"))
+	assert.NotNil(t, list.GetColumn("Col2"))
+	assert.NotNil(t, list.GetColumn("col2")) // we also allow lower case
+	assert.Nil(t, list.GetColumn("COL2"))
+	assert.Nil(t, list.GetColumn("ID"))
+	assert.Nil(t, list.GetColumn("Col1"))
+	assert.Nil(t, list.GetColumn("col3"))
+}
+
+func TestColumnDefinitionEntityListSubset(t *testing.T) {
+	table1 := `
+	create table t (
+		ID int,
+		col1 int,
+		Col2 int not null,
+		primary key (id)
+	)`
+	table2 := `
+	create table t (
+		id int,
+		Col1 int,
+		primary key (id)
+	)`
+	env := NewTestEnv()
+	createTableEntity1, err := NewCreateTableEntityFromSQL(env, table1)
+	require.NoError(t, err)
+	entities1 := createTableEntity1.ColumnDefinitionEntities()
+	require.NotEmpty(t, entities1)
+	list1 := NewColumnDefinitionEntityList(entities1)
+
+	createTableEntity2, err := NewCreateTableEntityFromSQL(env, table2)
+	require.NoError(t, err)
+	entities2 := createTableEntity2.ColumnDefinitionEntities()
+	require.NotEmpty(t, entities2)
+	list2 := NewColumnDefinitionEntityList(entities2)
+
+	assert.True(t, list2.IsSubset(list1))
+	assert.False(t, list1.IsSubset(list2))
 }
