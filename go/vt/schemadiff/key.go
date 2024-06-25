@@ -21,14 +21,16 @@ import (
 )
 
 type IndexDefinitionEntity struct {
-	IndexDefinition *sqlparser.IndexDefinition
-	Env             *Environment
+	IndexDefinition          *sqlparser.IndexDefinition
+	ColumnDefinitionEntities []*ColumnDefinitionEntity
+	Env                      *Environment
 }
 
-func NewIndexDefinitionEntity(env *Environment, i *sqlparser.IndexDefinition) *IndexDefinitionEntity {
+func NewIndexDefinitionEntity(env *Environment, indexDefinition *sqlparser.IndexDefinition, columnDefinitionEntities []*ColumnDefinitionEntity) *IndexDefinitionEntity {
 	return &IndexDefinitionEntity{
-		IndexDefinition: i,
-		Env:             env,
+		IndexDefinition:          indexDefinition,
+		ColumnDefinitionEntities: columnDefinitionEntities,
+		Env:                      env,
 	}
 }
 
@@ -58,4 +60,21 @@ func (i *IndexDefinitionEntity) IsPrimary() bool {
 
 func (i *IndexDefinitionEntity) IsUnique() bool {
 	return i.IndexDefinition.Info.IsUnique()
+}
+
+func (i *IndexDefinitionEntity) HasNullable() bool {
+	for _, col := range i.ColumnDefinitionEntities {
+		if col.IsNullable() {
+			return true
+		}
+	}
+	return false
+}
+
+func (i *IndexDefinitionEntity) ColumnNames() []string {
+	var names []string
+	for _, col := range i.IndexDefinition.Columns {
+		names = append(names, col.Column.String())
+	}
+	return names
 }

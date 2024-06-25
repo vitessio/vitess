@@ -466,6 +466,7 @@ func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTa
 	return entity, nil
 }
 
+// ColumnDefinitionEntities returns the list of column entities for the table.
 func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity {
 	cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
 	pkColumnsMaps := c.primaryKeyColumnsMap()
@@ -478,12 +479,39 @@ func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity
 	return entities
 }
 
+// ColumnDefinitionEntities returns column entities mapped by their lower cased name
 func (c *CreateTableEntity) ColumnDefinitionEntitiesMap() map[string]*ColumnDefinitionEntity {
-	entities := make(map[string]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
-	for _, entity := range c.ColumnDefinitionEntities() {
-		entities[entity.NameLowered()] = entity
+	entities := c.ColumnDefinitionEntities()
+	m := make(map[string]*ColumnDefinitionEntity, len(entities))
+	for _, entity := range entities {
+		m[entity.NameLowered()] = entity
+	}
+	return m
+}
+
+// IndexDefinitionEntities returns the list of index entities for the table.
+func (c *CreateTableEntity) IndexDefinitionEntities() []*IndexDefinitionEntity {
+	colMap := c.ColumnDefinitionEntitiesMap()
+	keys := c.CreateTable.TableSpec.Indexes
+	entities := make([]*IndexDefinitionEntity, len(keys))
+	for i, key := range keys {
+		colEntities := make([]*ColumnDefinitionEntity, len(key.Columns))
+		for i, keyCol := range key.Columns {
+			colEntities[i] = colMap[keyCol.Column.Lowered()]
+		}
+		entities[i] = NewIndexDefinitionEntity(c.Env, key, colEntities)
 	}
 	return entities
+}
+
+// IndexDefinitionEntitiesMap returns index entities mapped by their lower cased name.
+func (c *CreateTableEntity) IndexDefinitionEntitiesMap() map[string]*IndexDefinitionEntity {
+	entities := c.IndexDefinitionEntities()
+	m := make(map[string]*IndexDefinitionEntity, len(entities))
+	for _, entity := range entities {
+		m[entity.NameLowered()] = entity
+	}
+	return m
 }
 
 // normalize cleans up the table definition:

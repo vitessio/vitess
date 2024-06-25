@@ -262,6 +262,9 @@ func (c *ColumnDefinitionEntity) IsGenerated() (bool, sqlparser.ColumnStorage) {
 
 // IsNullable returns true when this column is NULLable
 func (c *ColumnDefinitionEntity) IsNullable() bool {
+	if c.inPK {
+		return false
+	}
 	return c.ColumnDefinition.Type.Options.Null == nil || *c.ColumnDefinition.Type.Options.Null
 }
 
