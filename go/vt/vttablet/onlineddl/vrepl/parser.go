@@ -43,13 +43,6 @@ func NewAlterTableParser() *AlterTableParser {
 	}
 }
 
-// NewParserFromAlterStatement creates a new parser with a ALTER TABLE statement
-func NewParserFromAlterStatement(alterTable *sqlparser.AlterTable) *AlterTableParser {
-	parser := NewAlterTableParser()
-	parser.AnalyzeAlter(alterTable)
-	return parser
-}
-
 // AnalyzeAlter looks for specific changes in the AlterTable statement, that are relevant
 // to OnlineDDL/VReplication
 func (p *AlterTableParser) AnalyzeAlter(alterTable *sqlparser.AlterTable) {
@@ -73,22 +66,6 @@ func (p *AlterTableParser) AnalyzeAlter(alterTable *sqlparser.AlterTable) {
 			}
 		}
 	}
-}
-
-// GetNonTrivialRenames gets a list of renamed column
-func (p *AlterTableParser) GetNonTrivialRenames() map[string]string {
-	result := make(map[string]string)
-	for column, renamed := range p.columnRenameMap {
-		if column != renamed {
-			result[column] = renamed
-		}
-	}
-	return result
-}
-
-// HasNonTrivialRenames is true when columns have been renamed
-func (p *AlterTableParser) HasNonTrivialRenames() bool {
-	return len(p.GetNonTrivialRenames()) > 0
 }
 
 // DroppedColumnsMap returns list of dropped columns

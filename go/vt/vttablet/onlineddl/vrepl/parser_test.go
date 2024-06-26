@@ -42,7 +42,7 @@ func TestParseAlterStatement(t *testing.T) {
 	alterStatement := alterTableStatement(t, statement)
 	parser := NewAlterTableParser()
 	parser.AnalyzeAlter(alterStatement)
-	assert.False(t, parser.HasNonTrivialRenames())
+	assert.Empty(t, parser.ColumnRenameMap())
 	assert.False(t, parser.IsAutoIncrementChangeRequested())
 }
 
@@ -51,9 +51,8 @@ func TestParseAlterStatementTrivialRename(t *testing.T) {
 	alterStatement := alterTableStatement(t, statement)
 	parser := NewAlterTableParser()
 	parser.AnalyzeAlter(alterStatement)
-	assert.False(t, parser.HasNonTrivialRenames())
 	assert.False(t, parser.IsAutoIncrementChangeRequested())
-	assert.Equal(t, len(parser.columnRenameMap), 1)
+	assert.Len(t, parser.columnRenameMap, 1)
 	assert.Equal(t, parser.columnRenameMap["ts"], "ts")
 }
 
@@ -88,11 +87,10 @@ func TestParseAlterStatementTrivialRenames(t *testing.T) {
 	alterStatement := alterTableStatement(t, statement)
 	parser := NewAlterTableParser()
 	parser.AnalyzeAlter(alterStatement)
-	assert.False(t, parser.HasNonTrivialRenames())
 	assert.False(t, parser.IsAutoIncrementChangeRequested())
-	assert.Equal(t, len(parser.columnRenameMap), 2)
-	assert.Equal(t, parser.columnRenameMap["ts"], "ts")
-	assert.Equal(t, parser.columnRenameMap["f"], "f")
+	assert.Len(t, parser.columnRenameMap, 2)
+	assert.Equal(t, "ts", parser.columnRenameMap["ts"])
+	assert.Equal(t, "f", parser.columnRenameMap["f"])
 }
 
 func TestParseAlterStatementNonTrivial(t *testing.T) {
@@ -112,10 +110,11 @@ func TestParseAlterStatementNonTrivial(t *testing.T) {
 		parser := NewAlterTableParser()
 		parser.AnalyzeAlter(alterStatement)
 		assert.False(t, parser.IsAutoIncrementChangeRequested())
-		renames := parser.GetNonTrivialRenames()
-		assert.Equal(t, len(renames), 2)
-		assert.Equal(t, renames["i"], "count")
-		assert.Equal(t, renames["f"], "fl")
+		assert.Equal(t, "count", parser.columnRenameMap["i"])
+		assert.Equal(t, "fl", parser.columnRenameMap["f"])
+		if mapped, ok := parser.columnRenameMap["ts"]; ok {
+			assert.Equal(t, "ts", mapped)
+		}
 	}
 }
 
