@@ -152,7 +152,7 @@ func TestEnabledThrottler(t *testing.T) {
 
 	// Stop the lag/healthcheck go routines that keeps updating the cached  shard's max lag to prevent it from changing the value in a
 	// way that will interfere with how we manipulate that value in our tests to evaluate different cases:
-	throttlerStateImpl.lagChecksCancelFunc()
+	throttlerStateImpl.healthCheckCancel()
 
 	// 1 should not throttle due to return value of underlying Throttle(), despite high lag
 	atomic.StoreInt64(&throttlerStateImpl.maxLag, 20)

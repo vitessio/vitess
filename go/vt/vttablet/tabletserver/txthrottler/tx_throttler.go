@@ -166,13 +166,13 @@ type txThrottlerStateImpl struct {
 	throttleMu sync.Mutex
 	throttler  ThrottlerInterface
 
-	cellsFromTopo       bool
-	healthCheck         discovery.HealthCheck
-	healthCheckCells    []string
-	healthCheckChan     chan *discovery.TabletHealth
-	lagChecksCancelFunc context.CancelFunc
-	maxLag              int64
-	wg                  sync.WaitGroup
+	cellsFromTopo     bool
+	healthCheck       discovery.HealthCheck
+	healthCheckCancel context.CancelFunc
+	healthCheckCells  []string
+	healthCheckChan   chan *discovery.TabletHealth
+	maxLag            int64
+	wg                sync.WaitGroup
 
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
@@ -241,7 +241,7 @@ func (t *txThrottler) Close() {
 }
 
 // MakePrimary performs a transition to a primary tablet. This will enable healthchecks to
-// enable live replication lag state.
+// watch the replication lag state of other tablets.
 func (t *txThrottler) MakePrimary() {
 	if t.state != nil {
 		t.state.makePrimary()
@@ -249,7 +249,7 @@ func (t *txThrottler) MakePrimary() {
 }
 
 // MakePrimary performs a transition to a non-primary tablet. This disables healthchecks
-// (for replication state) if they exist.
+// for replication lag state if we were primary.
 func (t *txThrottler) MakeNonPrimary() {
 	if t.state != nil {
 		t.state.makeNonPrimary()
@@ -333,10 +333,11 @@ func (ts *txThrottlerStateImpl) closeHealthCheck() {
 	if ts.healthCheck == nil {
 		return
 	}
-	ts.lagChecksCancelFunc()
+	ts.healthCheckCancel()
 	ts.wg.Wait()
 	ts.healthCheck.Close()
 	ts.healthCheck = nil
+	ts.maxLag = 0
 }
 
 func (ts *txThrottlerStateImpl) updateHealthCheckCells(ctx context.Context) {
@@ -375,7 +376,7 @@ func (ts *txThrottlerStateImpl) healthCheckProcessor(ctx context.Context) {
 func (ts *txThrottlerStateImpl) makePrimary() {
 	ts.initHealthCheck()
 	var ctx context.Context
-	ctx, ts.lagChecksCancelFunc = context.WithCancel(context.Background())
+	ctx, ts.healthCheckCancel = context.WithCancel(context.Background())
 
 	ts.wg.Add(1)
 	go ts.healthCheckProcessor(ctx)
@@ -386,7 +387,6 @@ func (ts *txThrottlerStateImpl) makePrimary() {
 
 func (ts *txThrottlerStateImpl) makeNonPrimary() {
 	ts.closeHealthCheck()
-	ts.maxLag = 0
 }
 
 func (ts *txThrottlerStateImpl) throttle() bool {
