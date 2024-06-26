@@ -236,6 +236,8 @@ func TestSubqueries(t *testing.T) {
 }
 
 func TestProperTypesOfPullOutValue(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+
 	query := "select (select sum(id) from user) from user_extra"
 
 	mcmp, closer := start(t)
