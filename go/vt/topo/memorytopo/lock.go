@@ -19,6 +19,7 @@ package memorytopo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -57,6 +58,21 @@ func (c *Conn) TryLock(ctx context.Context, dirPath, contents string) (topo.Lock
 // Lock is part of the topo.Conn interface.
 func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	c.factory.callstats.Add([]string{"Lock"}, 1)
+
+	c.factory.mu.Lock()
+	err := c.factory.getOperationError(Lock, dirPath)
+	c.factory.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.lock(ctx, dirPath, contents, false)
+}
+
+// LockWithTTL is part of the topo.Conn interface. It behaves the same as Lock
+// as TTLs are not supported in memorytopo.
+func (c *Conn) LockWithTTL(ctx context.Context, dirPath, contents string, _ time.Duration) (topo.LockDescriptor, error) {
+	c.factory.callstats.Add([]string{"LockWithTTL"}, 1)
 
 	c.factory.mu.Lock()
 	err := c.factory.getOperationError(Lock, dirPath)

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -169,6 +170,21 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 	}
 
 	return s.lock(ctx, dirPath, contents, leaseTTL)
+}
+
+// LockWithTTL is part of the topo.Conn interface.
+func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (topo.LockDescriptor, error) {
+	// We list the directory first to make sure it exists.
+	if _, err := s.ListDir(ctx, dirPath, false /*full*/); err != nil {
+		// We need to return the right error codes, like
+		// topo.ErrNoNode and topo.ErrInterrupted, and the
+		// easiest way to do this is to return convertError(err).
+		// It may lose some of the context, if this is an issue,
+		// maybe logging the error would work here.
+		return nil, convertError(err, dirPath)
+	}
+
+	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()))
 }
 
 // LockName is part of the topo.Conn interface.

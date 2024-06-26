@@ -159,21 +159,26 @@ func (st *StatsConn) Delete(ctx context.Context, filePath string, version Versio
 
 // Lock is part of the Conn interface
 func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	return st.internalLock(ctx, dirPath, contents, Blocking)
+	return st.internalLock(ctx, dirPath, contents, Blocking, 0)
+}
+
+// LockWithTTL is part of the Conn interface
+func (st *StatsConn) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (LockDescriptor, error) {
+	return st.internalLock(ctx, dirPath, contents, Blocking, 0)
 }
 
 // LockName is part of the Conn interface
 func (st *StatsConn) LockName(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	return st.internalLock(ctx, dirPath, contents, Named)
+	return st.internalLock(ctx, dirPath, contents, Named, 0)
 }
 
 // TryLock is part of the topo.Conn interface. Its implementation is same as Lock
 func (st *StatsConn) TryLock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	return st.internalLock(ctx, dirPath, contents, NonBlocking)
+	return st.internalLock(ctx, dirPath, contents, NonBlocking, 0)
 }
 
 // TryLock is part of the topo.Conn interface. Its implementation is same as Lock
-func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string, lockType LockType) (LockDescriptor, error) {
+func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string, lockType LockType, ttl time.Duration) (LockDescriptor, error) {
 	statsKey := []string{"Lock", st.cell}
 	if st.readOnly {
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], dirPath)
@@ -183,14 +188,16 @@ func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string,
 	var res LockDescriptor
 	var err error
 	switch lockType {
-	case Blocking:
-		res, err = st.conn.Lock(ctx, dirPath, contents)
 	case NonBlocking:
 		res, err = st.conn.TryLock(ctx, dirPath, contents)
 	case Named:
 		res, err = st.conn.LockName(ctx, dirPath, contents)
 	default:
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown lock type %s", lockType)
+		if ttl != 0 {
+			res, err = st.conn.LockWithTTL(ctx, dirPath, contents, ttl)
+		} else {
+			res, err = st.conn.Lock(ctx, dirPath, contents)
+		}
 	}
 	if err != nil {
 		topoStatsConnErrors.Add(statsKey, int64(1))

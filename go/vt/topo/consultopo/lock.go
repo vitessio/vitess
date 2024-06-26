@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/hashicorp/consul/api"
 
@@ -50,6 +51,21 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 	}
 
 	return s.lock(ctx, dirPath, contents, s.lockTTL)
+}
+
+// LockWithTTL is part of the topo.Conn interface.
+func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (topo.LockDescriptor, error) {
+	// We list the directory first to make sure it exists.
+	if _, err := s.ListDir(ctx, dirPath, false /*full*/); err != nil {
+		// We need to return the right error codes, like
+		// topo.ErrNoNode and topo.ErrInterrupted, and the
+		// easiest way to do this is to return convertError(err).
+		// It may lose some of the context, if this is an issue,
+		// maybe logging the error would work here.
+		return nil, convertError(err, dirPath)
+	}
+
+	return s.lock(ctx, dirPath, contents, ttl.String())
 }
 
 // LockName is part of the topo.Conn interface.
@@ -91,14 +107,23 @@ func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string) (topo.
 		Value: []byte(contents),
 		SessionOpts: &api.SessionEntry{
 			Name: api.DefaultLockSessionName,
-			TTL:  ttl,
+			TTL:  api.DefaultLockSessionTTL,
 		},
 	}
 	lockOpts.SessionOpts.Checks = s.lockChecks
+	if s.lockTTL != "" {
+		// Override the API default with the global default from
+		// --topo_consul_lock_session_ttl.
+		lockOpts.SessionOpts.TTL = s.lockTTL
+	}
+	if ttl != "" {
+		// Override the global default with the one provided by the
+		// caller.
+		lockOpts.SessionOpts.TTL = ttl
+	}
 	if s.lockDelay > 0 {
 		lockOpts.SessionOpts.LockDelay = s.lockDelay
 	}
-	lockOpts.SessionOpts.TTL = ttl
 	// Build the lock structure.
 	l, err := s.client.LockOpts(lockOpts)
 	if err != nil {

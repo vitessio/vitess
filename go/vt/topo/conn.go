@@ -19,6 +19,7 @@ package topo
 import (
 	"context"
 	"sort"
+	"time"
 )
 
 // Conn defines the interface that must be implemented by topology
@@ -119,6 +120,13 @@ type Conn interface {
 	// Returns ErrTimeout if ctx expires.
 	// Returns ErrInterrupted if ctx is canceled.
 	Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
+
+	// LockWithTTL is similar to `Lock` but the difference is that it allows
+	// you to override the global default TTL that is configured for the
+	// implementation (--topo_etcd_lease_ttl and --topo_consul_lock_session_ttl).
+	// Note: this is no different than `Lock` for ZooKeeper as it does not
+	// support lock TTLs and they exist until released or the session ends.
+	LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (LockDescriptor, error)
 
 	// LockName is similar to `Lock` but the difference is that it does not require
 	// the path to exist and have children in order to lock it. This is because with

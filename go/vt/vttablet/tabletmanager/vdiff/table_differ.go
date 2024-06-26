@@ -119,7 +119,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	log.Infof("Locking workflow %s", lockName)
 	ctx, unlock, lockErr := td.wd.ct.ts.LockName(ctx, lockName, "vdiff")
 	if lockErr != nil {
-		log.Errorf("LockName failed: %v", lockErr)
+		log.Errorf("Locking workfkow %s failed: %v", lockName, lockErr)
 		return lockErr
 	}
 

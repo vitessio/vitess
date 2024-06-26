@@ -46,7 +46,7 @@ func (s *namedLock) Path() string {
 func (ts *Server) LockName(ctx context.Context, name, action string) (context.Context, func(*error), error) {
 	return ts.internalLock(ctx, &namedLock{
 		name: name,
-	}, action, Named)
+	}, action, WithType(Named))
 }
 
 // CheckNamedLocked can be called on a context to make sure we have the lock

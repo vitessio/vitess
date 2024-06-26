@@ -20,6 +20,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -291,7 +292,14 @@ func (f *FakeConn) Lock(ctx context.Context, dirPath, contents string) (topo.Loc
 	return &fakeLockDescriptor{}, nil
 }
 
-// LockName implements the Conn interface
+// LockWithTTL implements the Conn interface.
+func (f *FakeConn) LockWithTTL(ctx context.Context, dirPath, contents string, _ time.Duration) (topo.LockDescriptor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return &fakeLockDescriptor{}, nil
+}
+
+// LockName implements the Conn interface.
 func (f *FakeConn) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

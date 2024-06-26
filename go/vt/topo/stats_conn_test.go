@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -112,7 +113,18 @@ func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock Lo
 	return lock, err
 }
 
-// LockName is part of the Conn interface
+// LockWithTTL is part of the Conn interface.
+func (st *fakeConn) LockWithTTL(ctx context.Context, dirPath, contents string, _ time.Duration) (lock LockDescriptor, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
+	if dirPath == "error" {
+		return lock, fmt.Errorf("dummy error")
+	}
+	return lock, err
+}
+
+// LockName is part of the Conn interface.
 func (st *fakeConn) LockName(ctx context.Context, dirPath, contents string) (lock LockDescriptor, err error) {
 	if st.readOnly {
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")

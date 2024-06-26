@@ -3267,7 +3267,13 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	}
 
 	// For switching reads, locking the source keyspace is sufficient.
-	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads")
+	// We need to hold the keyspace locks longer than the command timeout.
+	cmdTimeout := req.GetTimeout()
+	if cmdTimeout == nil {
+		cmdTimeout = &vttimepb.Duration{Seconds: 30}
+	}
+	ksLockTimeout := time.Duration(int64(time.Second) * (cmdTimeout.Seconds * 2))
+	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTimeToLive(ksLockTimeout))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
@@ -3345,13 +3351,19 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		return handleError(fmt.Sprintf("failed to lock the %s workflow", lockName), lockErr)
 	}
 	defer workflowUnlock(&err)
-	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites")
+	// We need to hold the keyspace locks longer than the command timeout.
+	cmdTimeout := req.GetTimeout()
+	if cmdTimeout == nil {
+		cmdTimeout = &vttimepb.Duration{Seconds: 30}
+	}
+	ksLockTimeout := time.Duration(int64(time.Second) * (cmdTimeout.Seconds * 2))
+	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTimeToLive(ksLockTimeout))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer sourceUnlock(&err)
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites")
+		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites", topo.WithTimeToLive(ksLockTimeout))
 		if lockErr != nil {
 			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}
