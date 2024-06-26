@@ -24,8 +24,6 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -99,7 +97,7 @@ func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
 
 func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.Type {
 	if aggr.Func == nil {
-		return evalengine.NewType(sqltypes.Unknown, collations.Unknown)
+		return evalengine.NewUnknownType()
 	}
 	switch aggr.OpCode {
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
