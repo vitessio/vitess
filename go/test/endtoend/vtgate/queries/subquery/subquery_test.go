@@ -235,7 +235,7 @@ func TestSubqueries(t *testing.T) {
 	}
 }
 
-func TestToto(t *testing.T) {
+func TestProperTypesOfPullOutValue(t *testing.T) {
 	query := "select (select sum(id) from user) from user_extra"
 
 	mcmp, closer := start(t)
