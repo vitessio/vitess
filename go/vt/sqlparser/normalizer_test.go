@@ -82,7 +82,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// datetime val
 		in:      "select * from t where foobar = timestamp'2012-02-29 12:34:56.123456'",
-		outstmt: "select * from t where foobar = CAST(:foobar AS DATE(6))",
+		outstmt: "select * from t where foobar = CAST(:foobar AS DATETIME(6))",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.ValueBindVariable(sqltypes.NewDatetime("2012-02-29 12:34:56.123456")),
 		},
@@ -355,7 +355,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// TimestampVal should also be normalized
 		in:      `select timestamp'2022-08-06 17:05:12'`,
-		outstmt: `select CAST(:bv1 AS DATE) from dual`,
+		outstmt: `select CAST(:bv1 AS DATETIME) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
 		},
