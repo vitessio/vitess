@@ -29,10 +29,10 @@ import (
 // AlterTableParser is a parser tool for ALTER TABLE statements
 // This is imported from gh-ost. In the future, we should replace that with Vitess parsing.
 type AlterTableParser struct {
-	columnRenameMap        map[string]string
-	droppedColumns         map[string]bool
-	isRenameTable          bool
-	isAutoIncrementDefined bool
+	columnRenameMap                map[string]string
+	droppedColumns                 map[string]bool
+	isRenameTable                  bool
+	isAutoIncrementChangeRequested bool
 }
 
 // NewAlterTableParser creates a new parser
@@ -68,7 +68,7 @@ func (p *AlterTableParser) AnalyzeAlter(alterTable *sqlparser.AlterTable) {
 		case sqlparser.TableOptions:
 			for _, tableOption := range opt {
 				if strings.ToUpper(tableOption.Name) == "AUTO_INCREMENT" {
-					p.isAutoIncrementDefined = true
+					p.isAutoIncrementChangeRequested = true
 				}
 			}
 		}
@@ -101,9 +101,9 @@ func (p *AlterTableParser) IsRenameTable() bool {
 	return p.isRenameTable
 }
 
-// IsAutoIncrementDefined returns true when alter options include an explicit AUTO_INCREMENT value
-func (p *AlterTableParser) IsAutoIncrementDefined() bool {
-	return p.isAutoIncrementDefined
+// IsAutoIncrementChangeRequested returns true when alter options include an explicit AUTO_INCREMENT value
+func (p *AlterTableParser) IsAutoIncrementChangeRequested() bool {
+	return p.isAutoIncrementChangeRequested
 }
 
 // ColumnRenameMap returns the renamed column mapping

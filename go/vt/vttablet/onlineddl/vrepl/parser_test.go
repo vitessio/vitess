@@ -43,7 +43,7 @@ func TestParseAlterStatement(t *testing.T) {
 	parser := NewAlterTableParser()
 	parser.AnalyzeAlter(alterStatement)
 	assert.False(t, parser.HasNonTrivialRenames())
-	assert.False(t, parser.IsAutoIncrementDefined())
+	assert.False(t, parser.IsAutoIncrementChangeRequested())
 }
 
 func TestParseAlterStatementTrivialRename(t *testing.T) {
@@ -52,7 +52,7 @@ func TestParseAlterStatementTrivialRename(t *testing.T) {
 	parser := NewAlterTableParser()
 	parser.AnalyzeAlter(alterStatement)
 	assert.False(t, parser.HasNonTrivialRenames())
-	assert.False(t, parser.IsAutoIncrementDefined())
+	assert.False(t, parser.IsAutoIncrementChangeRequested())
 	assert.Equal(t, len(parser.columnRenameMap), 1)
 	assert.Equal(t, parser.columnRenameMap["ts"], "ts")
 }
@@ -79,7 +79,7 @@ func TestParseAlterStatementWithAutoIncrement(t *testing.T) {
 		statement := "alter table t " + statement
 		alterStatement := alterTableStatement(t, statement)
 		parser.AnalyzeAlter(alterStatement)
-		assert.True(t, parser.IsAutoIncrementDefined())
+		assert.True(t, parser.IsAutoIncrementChangeRequested())
 	}
 }
 
@@ -89,7 +89,7 @@ func TestParseAlterStatementTrivialRenames(t *testing.T) {
 	parser := NewAlterTableParser()
 	parser.AnalyzeAlter(alterStatement)
 	assert.False(t, parser.HasNonTrivialRenames())
-	assert.False(t, parser.IsAutoIncrementDefined())
+	assert.False(t, parser.IsAutoIncrementChangeRequested())
 	assert.Equal(t, len(parser.columnRenameMap), 2)
 	assert.Equal(t, parser.columnRenameMap["ts"], "ts")
 	assert.Equal(t, parser.columnRenameMap["f"], "f")
@@ -111,7 +111,7 @@ func TestParseAlterStatementNonTrivial(t *testing.T) {
 		alterStatement := alterTableStatement(t, statement)
 		parser := NewAlterTableParser()
 		parser.AnalyzeAlter(alterStatement)
-		assert.False(t, parser.IsAutoIncrementDefined())
+		assert.False(t, parser.IsAutoIncrementChangeRequested())
 		renames := parser.GetNonTrivialRenames()
 		assert.Equal(t, len(renames), 2)
 		assert.Equal(t, renames["i"], "count")
