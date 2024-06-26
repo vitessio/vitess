@@ -147,7 +147,7 @@
                     },
                     "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
                     "OrderBy": "(0|3) ASC",
-                    "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc limit :__upper_limit",
+                    "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
                     "Table": "`user`"
                   }
                 ]
