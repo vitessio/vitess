@@ -1790,7 +1790,7 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 		// Ensure we handle unknown first as we don't want to treat
 		// the type as a bitmask for the further tests.
 		// do nothing, the default literal will be correct.
-	case sqltypes.IsDecimal(node.Type):
+	case sqltypes.IsDecimal(node.Type) && node.Scale == 0:
 		buf.WriteString("CAST(")
 		buf.WriteArg(":", node.Name)
 		buf.WriteString(" AS DECIMAL(")

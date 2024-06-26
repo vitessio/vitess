@@ -75,7 +75,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// float val
 		in:      "select * from t where foobar = 1.2",
-		outstmt: "select * from t where foobar = CAST(:foobar AS DECIMAL(2, 1))",
+		outstmt: "select * from t where foobar = :foobar /* DECIMAL(2,1) */",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.DecimalBindVariable("1.2"),
 		},
@@ -103,7 +103,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// multiple vals
 		in:      "select * from t where foo = 1.2 and bar = 2",
-		outstmt: "select * from t where foo = CAST(:foo AS DECIMAL(2, 1)) and bar = :bar /* INT64 */",
+		outstmt: "select * from t where foo = :foo /* DECIMAL(2,1) */ and bar = :bar /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.DecimalBindVariable("1.2"),
 			"bar": sqltypes.Int64BindVariable(2),
