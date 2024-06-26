@@ -518,6 +518,11 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 		case *Join, *ApplyJoin, *SubQueryContainer, *SubQuery:
 			// we can't push limits down on either side
 			return rewrite.SkipChildren
+		case *Aggregator:
+			if len(op.Grouping) > 0 {
+				// we can't push limits down if we have a group by
+				return rewrite.SkipChildren
+			}
 		case *Route:
 			newSrc := &Limit{
 				Source: op.Source,
@@ -527,9 +532,8 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 			op.Source = newSrc
 			result = result.Merge(rewrite.NewTree("push limit under route", newSrc))
 			return rewrite.SkipChildren
-		default:
-			return rewrite.VisitChildren
 		}
+		return rewrite.VisitChildren
 	}
 
 	_, err := rewrite.TopDown(in.Source, TableID, visitor, shouldVisit)

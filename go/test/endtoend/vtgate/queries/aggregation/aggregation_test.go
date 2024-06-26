@@ -18,6 +18,7 @@ package aggregation
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"sort"
 	"strings"
@@ -64,6 +65,18 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		mcmp.Close()
 		cluster.PanicHandler(t)
 	}
+}
+
+func TestAggrWithLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	for i := 0; i < 1000; i++ {
+		r := rand.IntN(10)
+		mcmp.Exec(fmt.Sprintf("insert into aggr_test(id, val1, val2) values(%d, 'a', %d)", i, r))
+	}
+	mcmp.Exec("select val2, count(*) from aggr_test group by val2 order by count(*), val2 limit 10")
 }
 
 func TestAggregateTypes(t *testing.T) {
