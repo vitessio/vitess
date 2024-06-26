@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestUniqueKeysForOnlineDDL(t *testing.T) {
@@ -131,6 +133,91 @@ func TestRemovedForeignKeyNames(t *testing.T) {
 			names, err := RemovedForeignKeyNames(before, after)
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.names, names)
+		})
+	}
+}
+
+func TestGetAlterTableAnalysis(t *testing.T) {
+	tcases := []struct {
+		alter    string
+		renames  map[string]string
+		drops    map[string]bool
+		isrename bool
+		autoinc  bool
+	}{
+		{
+			alter: "alter table t add column t int, engine=innodb",
+		},
+		{
+			alter:   "alter table t add column t int, change ts ts timestamp, engine=innodb",
+			renames: map[string]string{"ts": "ts"},
+		},
+		{
+			alter:   "alter table t AUTO_INCREMENT=7",
+			autoinc: true,
+		},
+		{
+			alter:   "alter table t add column t int, change ts ts timestamp, auto_increment=7 engine=innodb",
+			renames: map[string]string{"ts": "ts"},
+			autoinc: true,
+		},
+		{
+			alter:   "alter table t  add column t int, change ts ts timestamp, CHANGE f `f` float, engine=innodb",
+			renames: map[string]string{"ts": "ts", "f": "f"},
+		},
+		{
+			alter:   `alter table t add column b bigint, change f fl float, change i count int, engine=innodb`,
+			renames: map[string]string{"f": "fl", "i": "count"},
+		},
+		{
+			alter:   "alter table t add column b bigint, change column `f` fl float, change `i` `count` int, engine=innodb",
+			renames: map[string]string{"f": "fl", "i": "count"},
+		},
+		{
+			alter:   "alter table t add column b bigint, change column `f` fl float, change `i` `count` int, change ts ts timestamp, engine=innodb",
+			renames: map[string]string{"f": "fl", "i": "count", "ts": "ts"},
+		},
+		{
+			alter: "alter table t drop column b",
+			drops: map[string]bool{"b": true},
+		},
+		{
+			alter: "alter table t drop column b, drop key c_idx, drop column `d`",
+			drops: map[string]bool{"b": true, "d": true},
+		},
+		{
+			alter: "alter table t drop column b, drop key c_idx, drop column `d`, drop `e`, drop primary key, drop foreign key fk_1",
+			drops: map[string]bool{"b": true, "d": true, "e": true},
+		},
+		{
+			alter:    "alter table t rename as something_else",
+			isrename: true,
+		},
+		{
+			alter:    "alter table t drop column b, rename as something_else",
+			isrename: true,
+			drops:    map[string]bool{"b": true},
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.alter, func(t *testing.T) {
+			if tcase.renames == nil {
+				tcase.renames = make(map[string]string)
+			}
+			if tcase.drops == nil {
+				tcase.drops = make(map[string]bool)
+			}
+			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(tcase.alter)
+			require.NoError(t, err)
+			alter, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+
+			analysis := GetAlterTableAnalysis(alter)
+			require.NotNil(t, analysis)
+			assert.Equal(t, tcase.isrename, analysis.IsRenameTable)
+			assert.Equal(t, tcase.autoinc, analysis.IsAutoIncrementChangeRequested)
+			assert.Equal(t, tcase.renames, analysis.ColumnRenameMap)
+			assert.Equal(t, tcase.drops, analysis.DroppedColumnsMap)
 		})
 	}
 }

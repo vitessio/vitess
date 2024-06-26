@@ -194,3 +194,44 @@ func RemovedForeignKeyNames(source *CreateTableEntity, target *CreateTableEntity
 	_ = sqlparser.Walk(validateWalk, diff.Statement()) // We never return an error
 	return names, nil
 }
+
+// AlterTableAnalysis contains useful Online DDL information about an AlterTable statement
+type AlterTableAnalysis struct {
+	ColumnRenameMap                map[string]string
+	DroppedColumnsMap              map[string]bool
+	IsRenameTable                  bool
+	IsAutoIncrementChangeRequested bool
+}
+
+// AnalyzeAlter looks for specific changes in the AlterTable statement, that are relevant
+// to OnlineDDL/VReplication
+func GetAlterTableAnalysis(alterTable *sqlparser.AlterTable) *AlterTableAnalysis {
+	analysis := &AlterTableAnalysis{
+		ColumnRenameMap:   make(map[string]string),
+		DroppedColumnsMap: make(map[string]bool),
+	}
+	if alterTable == nil {
+		return analysis
+	}
+	for _, opt := range alterTable.AlterOptions {
+		switch opt := opt.(type) {
+		case *sqlparser.RenameTableName:
+			analysis.IsRenameTable = true
+		case *sqlparser.DropColumn:
+			analysis.DroppedColumnsMap[opt.Name.Name.String()] = true
+		case *sqlparser.ChangeColumn:
+			if opt.OldColumn != nil && opt.NewColDefinition != nil {
+				oldName := opt.OldColumn.Name.String()
+				newName := opt.NewColDefinition.Name.String()
+				analysis.ColumnRenameMap[oldName] = newName
+			}
+		case sqlparser.TableOptions:
+			for _, tableOption := range opt {
+				if strings.ToUpper(tableOption.Name) == "AUTO_INCREMENT" {
+					analysis.IsAutoIncrementChangeRequested = true
+				}
+			}
+		}
+	}
+	return analysis
+}
