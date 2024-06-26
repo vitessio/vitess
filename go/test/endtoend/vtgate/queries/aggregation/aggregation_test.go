@@ -18,7 +18,7 @@ package aggregation
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"sort"
 	"strings"
@@ -71,11 +71,12 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestAggrWithLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
 	for i := range 1000 {
-		r := rand.Intn(50)
+		r := rand.IntN(10)
 		mcmp.Exec(fmt.Sprintf("insert into aggr_test(id, val1, val2) values(%d, 'a', %d)", i, r))
 	}
 	mcmp.Exec("select val2, count(*) from aggr_test group by val2 order by count(*), val2 limit 10")
