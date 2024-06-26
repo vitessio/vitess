@@ -19,6 +19,8 @@ package schemadiff
 import (
 	"sort"
 	"strings"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // ColumnChangeExpandsDataRange sees if target column has any value set/range that is impossible in source column.
@@ -166,4 +168,29 @@ func PrioritizedUniqueKeys(createTableEntity *CreateTableEntity) []*IndexDefinit
 		return false
 	})
 	return uniqueKeys
+}
+
+// RemovedForeignKeyNames returns the names of removed foreign keys, ignoring mere name changes
+func RemovedForeignKeyNames(source *CreateTableEntity, target *CreateTableEntity) (names []string, err error) {
+	if source == nil || target == nil {
+		return nil, nil
+	}
+	diffHints := DiffHints{
+		ConstraintNamesStrategy: ConstraintNamesIgnoreAll,
+	}
+	diff, err := source.Diff(target, &diffHints)
+	if err != nil {
+		return nil, err
+	}
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.DropKey:
+			if node.Type == sqlparser.ForeignKeyType {
+				names = append(names, node.Name.String())
+			}
+		}
+		return true, nil
+	}
+	_ = sqlparser.Walk(validateWalk, diff.Statement()) // We never return an error
+	return names, nil
 }

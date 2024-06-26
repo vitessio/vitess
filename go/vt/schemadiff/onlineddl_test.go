@@ -76,3 +76,61 @@ func TestUniqueKeysForOnlineDDL(t *testing.T) {
 	}
 	assert.Equal(t, expect, names)
 }
+
+func TestRemovedForeignKeyNames(t *testing.T) {
+	env := NewTestEnv()
+
+	tcases := []struct {
+		before string
+		after  string
+		names  []string
+	}{
+		{
+			before: "create table t (id int primary key)",
+			after:  "create table t (id2 int primary key, i int)",
+		},
+		{
+			before: "create table t (id int primary key)",
+			after:  "create table t2 (id2 int primary key, i int)",
+		},
+		{
+			before: "create table t (id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade)",
+			after:  "create table t (id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade)",
+		},
+		{
+			before: "create table t (id int primary key, i int, constraint f1 foreign key (i) references parent (id) on delete cascade)",
+			after:  "create table t (id int primary key, i int, constraint f2 foreign key (i) references parent (id) on delete cascade)",
+		},
+		{
+			before: "create table t (id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade)",
+			after:  "create table t (id int primary key, i int)",
+			names:  []string{"f"},
+		},
+		{
+			before: "create table t (id int primary key, i int, i2 int, constraint f1 foreign key (i) references parent (id) on delete cascade, constraint fi2 foreign key (i2) references parent (id) on delete cascade)",
+			after:  "create table t (id int primary key, i int, i2 int, constraint f2 foreign key (i) references parent (id) on delete cascade)",
+			names:  []string{"fi2"},
+		},
+		{
+			before: "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			after:  "create table t2 (id int primary key, i int)",
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.before, func(t *testing.T) {
+			before, err := NewCreateTableEntityFromSQL(env, tcase.before)
+			require.NoError(t, err)
+			err = before.validate()
+			require.NoError(t, err)
+
+			after, err := NewCreateTableEntityFromSQL(env, tcase.after)
+			require.NoError(t, err)
+			err = after.validate()
+			require.NoError(t, err)
+
+			names, err := RemovedForeignKeyNames(before, after)
+			assert.NoError(t, err)
+			assert.Equal(t, tcase.names, names)
+		})
+	}
+}
