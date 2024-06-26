@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"reflect"
@@ -84,7 +85,7 @@ func TestComInitDB(t *testing.T) {
 	if err := cConn.writeComInitDB("my_db"); err != nil {
 		t.Fatalf("writeComInitDB failed: %v", err)
 	}
-	data, err := sConn.ReadPacket()
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 || data[0] != ComInitDB {
 		t.Fatalf("sConn.ReadPacket - ComInitDB failed: %v %v", data, err)
 	}
@@ -106,7 +107,7 @@ func TestComSetOption(t *testing.T) {
 	if err := cConn.writeComSetOption(1); err != nil {
 		t.Fatalf("writeComSetOption failed: %v", err)
 	}
-	data, err := sConn.ReadPacket()
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 || data[0] != ComSetOption {
 		t.Fatalf("sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
 	}
@@ -134,7 +135,7 @@ func TestComStmtPrepare(t *testing.T) {
 		t.Fatalf("writePacket failed: %v", err)
 	}
 
-	data, err := sConn.ReadPacket()
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil {
 		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v", err)
 	}
@@ -149,11 +150,11 @@ func TestComStmtPrepare(t *testing.T) {
 	sConn.PrepareData[prepare.StatementID] = prepare
 
 	// write the response to the client
-	if err := sConn.writePrepare(result.Fields, prepare); err != nil {
+	if err := sConn.writePrepare(context.Background(), result.Fields, prepare); err != nil {
 		t.Fatalf("sConn.writePrepare failed: %v", err)
 	}
 
-	resp, err := cConn.ReadPacket()
+	resp, err := cConn.ReadPacket(context.Background())
 	if err != nil {
 		t.Fatalf("cConn.ReadPacket failed: %v", err)
 	}
@@ -173,12 +174,12 @@ func TestComStmtSendLongData(t *testing.T) {
 	prepare, result := MockPrepareData(t)
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
-	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
+	if err := cConn.writePrepare(context.Background(), result.Fields, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
 
 	// Since there's no writeComStmtSendLongData, we'll write a prepareStmt and check if we can read the StatementID
-	data, err := sConn.ReadPacket()
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 {
 		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
 	}
@@ -297,37 +298,37 @@ func TestComStmtExecuteNewParams(t *testing.T) {
 		StatementID: 123,
 		ParamsCount: paramsCount, // TODO: figure out total number of param types
 		ParamsType:  make([]int32, paramsCount),
-		BindVars: make(map[string]*querypb.BindVariable),
+		BindVars:    make(map[string]*querypb.BindVariable),
 	}
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
 
 	data := []byte{
-		23,                     // status
-		123, 0, 0, 0,           // statement_id
-		1,                      // flags
-		1, 0, 0, 0,             // iteration_count
+		23,           // status
+		123, 0, 0, 0, // statement_id
+		1,          // flags
+		1, 0, 0, 0, // iteration_count
 		0, 0, 0, 0, 0, 0, 0, 0, // null_bitmap
-		1,                      // new_params_bind_flag
+		1, // new_params_bind_flag
 
-		0, 0,   // parameter[0] DECIMAL, UNSIGNED
-		1, 0,   // parameter[1] INT8, UNSIGNED
-		2, 0,   // parameter[2] INT16, UNSIGNED
-		3, 0,   // parameter[3] INT32, UNSIGNED
-		4, 0,   // parameter[4] FLOAT32, UNSIGNED
-		5, 0,   // parameter[5] FLOAT64, UNSIGNED
-		7, 0,   // parameter[6] TIMESTAMP, UNSIGNED
-		8, 0,   // parameter[7] INT64, UNSIGNED
-		9, 0,   // parameter[8] INT24, UNSIGNED
-		10, 0,  // parameter[9] DATE, UNSIGNED
-		11, 0,  // parameter[10] TIME, UNSIGNED
-		12, 0,  // parameter[11] DATETIME, UNSIGNED
-		13, 0,  // parameter[12] YEAR, UNSIGNED
-		15, 0,  // parameter[13] VARCHAR, UNSIGNED
-		16, 0,  // parameter[14] BIT, UNSIGNED
-		17, 0,  // parameter[15] TIMESTAMP2, UNSIGNED
-		18, 0,  // parameter[16] DATETIME2, UNSIGNED
-		19, 0,  // parameter[17] TIME2, UNSIGNED
+		0, 0, // parameter[0] DECIMAL, UNSIGNED
+		1, 0, // parameter[1] INT8, UNSIGNED
+		2, 0, // parameter[2] INT16, UNSIGNED
+		3, 0, // parameter[3] INT32, UNSIGNED
+		4, 0, // parameter[4] FLOAT32, UNSIGNED
+		5, 0, // parameter[5] FLOAT64, UNSIGNED
+		7, 0, // parameter[6] TIMESTAMP, UNSIGNED
+		8, 0, // parameter[7] INT64, UNSIGNED
+		9, 0, // parameter[8] INT24, UNSIGNED
+		10, 0, // parameter[9] DATE, UNSIGNED
+		11, 0, // parameter[10] TIME, UNSIGNED
+		12, 0, // parameter[11] DATETIME, UNSIGNED
+		13, 0, // parameter[12] YEAR, UNSIGNED
+		15, 0, // parameter[13] VARCHAR, UNSIGNED
+		16, 0, // parameter[14] BIT, UNSIGNED
+		17, 0, // parameter[15] TIMESTAMP2, UNSIGNED
+		18, 0, // parameter[16] DATETIME2, UNSIGNED
+		19, 0, // parameter[17] TIME2, UNSIGNED
 		245, 0, // parameter[18] JSON, UNSIGNED
 		246, 0, // parameter[19] DECIMAL, UNSIGNED
 		247, 0, // parameter[20] ENUM, UNSIGNED
@@ -340,24 +341,24 @@ func TestComStmtExecuteNewParams(t *testing.T) {
 		254, 0, // parameter[27] CHAR, UNSIGNED
 		255, 0, // parameter[28] GEOMETRY, UNSIGNED
 
-		0, 128,   // parameter[29] DECIMAL, SIGNED
-		1, 128,   // parameter[30] INT8, SIGNED
-		2, 128,   // parameter[31] INT16, SIGNED
-		3, 128,   // parameter[32] INT32, SIGNED
-		4, 128,   // parameter[33] FLOAT32, SIGNED
-		5, 128,   // parameter[34] FLOAT64, SIGNED
-		7, 128,   // parameter[35] TIMESTAMP, SIGNED
-		8, 128,   // parameter[36] INT64, SIGNED
-		9, 128,   // parameter[37] INT24, SIGNED
-		10, 128,  // parameter[38] DATE, SIGNED
-		11, 128,  // parameter[39] TIME, SIGNED
-		12, 128,  // parameter[40] DATETIME, SIGNED
-		13, 128,  // parameter[41] YEAR, SIGNED
-		15, 128,  // parameter[42] VARCHAR, SIGNED
-		16, 128,  // parameter[43] BIT, SIGNED
-		17, 128,  // parameter[44] TIMESTAMP2, SIGNED
-		18, 128,  // parameter[45] DATETIME2, SIGNED
-		19, 128,  // parameter[46] TIME2, SIGNED
+		0, 128, // parameter[29] DECIMAL, SIGNED
+		1, 128, // parameter[30] INT8, SIGNED
+		2, 128, // parameter[31] INT16, SIGNED
+		3, 128, // parameter[32] INT32, SIGNED
+		4, 128, // parameter[33] FLOAT32, SIGNED
+		5, 128, // parameter[34] FLOAT64, SIGNED
+		7, 128, // parameter[35] TIMESTAMP, SIGNED
+		8, 128, // parameter[36] INT64, SIGNED
+		9, 128, // parameter[37] INT24, SIGNED
+		10, 128, // parameter[38] DATE, SIGNED
+		11, 128, // parameter[39] TIME, SIGNED
+		12, 128, // parameter[40] DATETIME, SIGNED
+		13, 128, // parameter[41] YEAR, SIGNED
+		15, 128, // parameter[42] VARCHAR, SIGNED
+		16, 128, // parameter[43] BIT, SIGNED
+		17, 128, // parameter[44] TIMESTAMP2, SIGNED
+		18, 128, // parameter[45] DATETIME2, SIGNED
+		19, 128, // parameter[46] TIME2, SIGNED
 		245, 128, // parameter[47] JSON, SIGNED
 		246, 128, // parameter[48] DECIMAL, SIGNED
 		247, 128, // parameter[49] ENUM, SIGNED
@@ -370,65 +371,65 @@ func TestComStmtExecuteNewParams(t *testing.T) {
 		254, 128, // parameter[56] CHAR, SIGNED
 		255, 128, // parameter[57] GEOMETRY, SIGNED
 
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[0]  DECIMAL
-		0x00,                                                                   // parameter[1]  INT8
-		0x00, 0x00,                                                             // parameter[2]  INT16
-		0x00, 0x00, 0x00, 0x00,                                                 // parameter[3]  INT32
-		0x00, 0x00, 0x00, 0x00,                                                 // parameter[4]  FLOAT32
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,                         // parameter[5]  FLOAT64
+		0x03, 0x66, 0x6f, 0x6f, // parameter[0]  DECIMAL
+		0x00,       // parameter[1]  INT8
+		0x00, 0x00, // parameter[2]  INT16
+		0x00, 0x00, 0x00, 0x00, // parameter[3]  INT32
+		0x00, 0x00, 0x00, 0x00, // parameter[4]  FLOAT32
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // parameter[5]  FLOAT64
 		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[6]  TIMESTAMP
-		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e,                         // parameter[7]  INT64
-		0x0b, 0xda, 0x07, 0x0a,                                                 // parameter[8]  INT24
-		0x04, 0xda, 0x07, 0x0a, 0x11,                                           // parameter[9]  DATE
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, // parameter[7]  INT64
+		0x0b, 0xda, 0x07, 0x0a, // parameter[8]  INT24
+		0x04, 0xda, 0x07, 0x0a, 0x11, // parameter[9]  DATE
 		0x00,                                                                   // parameter[10] TIME
 		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[11] DATETIME
-		0x01, 0x00,                                                             // parameter[12] YEAR
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[13] VARCHAR
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[14] BIT
+		0x01, 0x00, // parameter[12] YEAR
+		0x03, 0x66, 0x6f, 0x6f, // parameter[13] VARCHAR
+		0x03, 0x66, 0x6f, 0x6f, // parameter[14] BIT
 		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[15] TIMESTAMP2
 		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[16] DATETIME2
-		0x00,                                                                   // parameter[17] TIME2
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[18] JSON
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[19] DECIMAL
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[20] ENUM
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[21] SET
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[22] TINY_BLOB
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[23] MEDIUM_BLOB
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[24] LONG_BLOB
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[25] BLOB
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[26] VAR_CHAR
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[27] CHAR
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[28] GEOMETRY
+		0x00,                   // parameter[17] TIME2
+		0x03, 0x66, 0x6f, 0x6f, // parameter[18] JSON
+		0x03, 0x66, 0x6f, 0x6f, // parameter[19] DECIMAL
+		0x03, 0x66, 0x6f, 0x6f, // parameter[20] ENUM
+		0x03, 0x66, 0x6f, 0x6f, // parameter[21] SET
+		0x03, 0x66, 0x6f, 0x6f, // parameter[22] TINY_BLOB
+		0x03, 0x66, 0x6f, 0x6f, // parameter[23] MEDIUM_BLOB
+		0x03, 0x66, 0x6f, 0x6f, // parameter[24] LONG_BLOB
+		0x03, 0x66, 0x6f, 0x6f, // parameter[25] BLOB
+		0x03, 0x66, 0x6f, 0x6f, // parameter[26] VAR_CHAR
+		0x03, 0x66, 0x6f, 0x6f, // parameter[27] CHAR
+		0x03, 0x66, 0x6f, 0x6f, // parameter[28] GEOMETRY
 
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[29] DECIMAL
-		0x00,                                                                   // parameter[30] INT8
-		0x00, 0x00,                                                             // parameter[31] INT16
-		0x00, 0x00, 0x00, 0x00,                                                 // parameter[32] INT32
-		0x00, 0x00, 0x00, 0x00,                                                 // parameter[33] FLOAT32
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,                         // parameter[34] FLOAT64
+		0x03, 0x66, 0x6f, 0x6f, // parameter[29] DECIMAL
+		0x00,       // parameter[30] INT8
+		0x00, 0x00, // parameter[31] INT16
+		0x00, 0x00, 0x00, 0x00, // parameter[32] INT32
+		0x00, 0x00, 0x00, 0x00, // parameter[33] FLOAT32
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // parameter[34] FLOAT64
 		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[35] TIMESTAMP
-		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e,                         // parameter[36] INT64
-		0x0b, 0xda, 0x07, 0x0a,                                                 // parameter[37] INT24
-		0x04, 0xda, 0x07, 0x0a, 0x11,                                           // parameter[38] DATE
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, // parameter[36] INT64
+		0x0b, 0xda, 0x07, 0x0a, // parameter[37] INT24
+		0x04, 0xda, 0x07, 0x0a, 0x11, // parameter[38] DATE
 		0x00,                                                                   // parameter[39] TIME
 		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[40] DATETIME
-		0x01, 0x00,                                                             // parameter[41] YEAR
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[42] VARCHAR
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[43] BIT
+		0x01, 0x00, // parameter[41] YEAR
+		0x03, 0x66, 0x6f, 0x6f, // parameter[42] VARCHAR
+		0x03, 0x66, 0x6f, 0x6f, // parameter[43] BIT
 		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[44] TIMESTAMP2
 		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[45] DATETIME2
-		0x00,                                                                   // parameter[46] TIME2
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[47] JSON
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[48] DECIMAL
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[49] ENUM
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[50] SET
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[51] TINY_BLOB
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[52] MEDIUM_BLOB
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[53] LONG_BLOB
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[54] BLOB
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[55] VAR_CHAR
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[56] CHAR
-		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[57] GEOMETRY
+		0x00,                   // parameter[46] TIME2
+		0x03, 0x66, 0x6f, 0x6f, // parameter[47] JSON
+		0x03, 0x66, 0x6f, 0x6f, // parameter[48] DECIMAL
+		0x03, 0x66, 0x6f, 0x6f, // parameter[49] ENUM
+		0x03, 0x66, 0x6f, 0x6f, // parameter[50] SET
+		0x03, 0x66, 0x6f, 0x6f, // parameter[51] TINY_BLOB
+		0x03, 0x66, 0x6f, 0x6f, // parameter[52] MEDIUM_BLOB
+		0x03, 0x66, 0x6f, 0x6f, // parameter[53] LONG_BLOB
+		0x03, 0x66, 0x6f, 0x6f, // parameter[54] BLOB
+		0x03, 0x66, 0x6f, 0x6f, // parameter[55] VAR_CHAR
+		0x03, 0x66, 0x6f, 0x6f, // parameter[56] CHAR
+		0x03, 0x66, 0x6f, 0x6f, // parameter[57] GEOMETRY
 	}
 
 	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
@@ -438,7 +439,6 @@ func TestComStmtExecuteNewParams(t *testing.T) {
 	if stmtID != 123 {
 		t.Fatalf("Parsed incorrect values")
 	}
-
 
 	for i, pt := range paramTypes {
 		if cConn.PrepareData[123].ParamsType[i] != int32(pt) {
@@ -485,12 +485,12 @@ func TestComStmtClose(t *testing.T) {
 	prepare, result := MockPrepareData(t)
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
-	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
+	if err := cConn.writePrepare(context.Background(), result.Fields, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
 
 	// Since there's no writeComStmtClose, we'll write a prepareStmt and check if we can read the StatementID
-	data, err := sConn.ReadPacket()
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 {
 		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
 	}
@@ -878,8 +878,9 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		warnings: warningCount,
 	}
 
+	ctx := context.Background()
 	for i := 0; i < count; i++ {
-		err := sConn.handleNextCommand(&handler)
+		err := sConn.handleNextCommand(ctx, &handler)
 		if err != nil {
 			t.Fatalf("error handling command: %v", err)
 		}
@@ -923,11 +924,11 @@ func writeRawPacketToConn(c *Conn, packet []byte) error {
 }
 
 type testExec struct {
-	query string
-	useCursor byte
+	query             string
+	useCursor         byte
 	expectedNumFields int
-	expectedNumRows int
-	maxRows int
+	expectedNumRows   int
+	maxRows           int
 }
 
 func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sqltypes.Result, serverStatus) {
@@ -944,7 +945,7 @@ func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sql
 		t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
 	}
 
-	qr, status, _, err := cConn.ReadQueryResult(maxRows, true)
+	qr, status, _, err := cConn.ReadQueryResult(context.Background(), maxRows, true)
 	if err != nil {
 		t.Fatalf("ReadQueryResult failed with error: %v", err)
 	}
@@ -960,7 +961,7 @@ func clientFetch(t *testing.T, cConn *Conn, useCursor byte, maxRows int, fields 
 		t.Fatalf("WriteMockDataToConn failed with error: %v", err)
 	}
 
-	qr, status, _, err := cConn.FetchQueryResult(maxRows, fields)
+	qr, status, _, err := cConn.FetchQueryResult(context.Background(), maxRows, fields)
 	if err != nil && err != io.EOF {
 		t.Fatalf("FetchQueryResult failed with error: %v", err)
 	}
@@ -987,8 +988,9 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		qr, status = clientExecute(t, cConn, test.useCursor, test.maxRows)
 	}()
 
+	ctx := context.Background()
 	// handle a single client command
-	if err := sConn.handleNextCommand(&testHandler{}); err != nil {
+	if err := sConn.handleNextCommand(ctx, &testHandler{}); err != nil {
 		t.Fatalf("handleNextComamnd failed with error: %v", err)
 	}
 
@@ -1022,7 +1024,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	}()
 
 	// handle a single client command
-	if err := sConn.handleNextCommand(&testHandler{}); err != nil {
+	if err := sConn.handleNextCommand(ctx, &testHandler{}); err != nil {
 		t.Fatalf("handleNextComamnd failed with error: %v", err)
 	}
 
@@ -1051,52 +1053,52 @@ func TestExecuteQueries(t *testing.T) {
 
 	tests := []testExec{
 		{
-			query: "empty result",
-			useCursor: 0,
+			query:             "empty result",
+			useCursor:         0,
 			expectedNumFields: 3,
-			expectedNumRows: 0,
-			maxRows: 100,
+			expectedNumRows:   0,
+			maxRows:           100,
 		},
 		{
-			query: "select rows",
-			useCursor: 0,
+			query:             "select rows",
+			useCursor:         0,
 			expectedNumFields: 2,
-			expectedNumRows: 2,
-			maxRows: 100,
+			expectedNumRows:   2,
+			maxRows:           100,
 		},
 		{
-			query: "large batch",
-			useCursor: 0,
+			query:             "large batch",
+			useCursor:         0,
 			expectedNumFields: 2,
-			expectedNumRows: 256,
-			maxRows: 1000,
+			expectedNumRows:   256,
+			maxRows:           1000,
 		},
 		{
-			query: "empty result",
-			useCursor: 1,
+			query:             "empty result",
+			useCursor:         1,
 			expectedNumFields: 3,
-			expectedNumRows: 0,
-			maxRows: 100,
+			expectedNumRows:   0,
+			maxRows:           100,
 		},
 		{
-			query: "select rows",
-			useCursor: 1,
+			query:             "select rows",
+			useCursor:         1,
 			expectedNumFields: 2,
-			expectedNumRows: 2,
-			maxRows: 100,
+			expectedNumRows:   2,
+			maxRows:           100,
 		},
 		{
-			query: "large batch",
-			useCursor: 1,
+			query:             "large batch",
+			useCursor:         1,
 			expectedNumFields: 2,
-			expectedNumRows: 256,
-			maxRows: 1000,
+			expectedNumRows:   256,
+			maxRows:           1000,
 		},
 	}
 
 	t.Run("WithoutDeprecateEOF", func(t *testing.T) {
 		for _, test := range tests {
-			t.Run(test.query, func (t *testing.T) {
+			t.Run(test.query, func(t *testing.T) {
 				checkExecute(t, sConn, cConn, test)
 			})
 		}
@@ -1106,7 +1108,7 @@ func TestExecuteQueries(t *testing.T) {
 	cConn.Capabilities = CapabilityClientDeprecateEOF
 	t.Run("WithDeprecateEOF", func(t *testing.T) {
 		for _, test := range tests {
-			t.Run(test.query, func (t *testing.T) {
+			t.Run(test.query, func(t *testing.T) {
 				checkExecute(t, sConn, cConn, test)
 			})
 		}

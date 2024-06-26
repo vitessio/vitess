@@ -17,7 +17,9 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"github.com/dolthub/vitess/go/sqltypes"
+	"runtime/trace"
 
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
@@ -36,6 +38,9 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		}
 	}()
 
+	ctx, task := trace.NewTask(context.Background(), "ExecuteStreamFetch")
+	defer task.End()
+
 	// Sanity check.
 	if c.fields != nil {
 		return NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "streaming query already in progress")
@@ -47,7 +52,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	}
 
 	// Get the result.
-	_, _, colNumber, _, _, err := c.readComQueryResponse()
+	_, _, colNumber, _, _, err := c.readComQueryResponse(ctx)
 	if err != nil {
 		return err
 	}
@@ -65,7 +70,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	// Build the fields.
 	for i := 0; i < colNumber; i++ {
 		fieldsPointers[i] = &fields[i]
-		if err := c.readColumnDefinition(fieldsPointers[i], i); err != nil {
+		if err := c.readColumnDefinition(ctx, fieldsPointers[i], i); err != nil {
 			return err
 		}
 	}
@@ -73,7 +78,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	// Read the EOF after the fields if necessary.
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err := c.readEphemeralPacket()
+		data, err := c.readEphemeralPacket(ctx)
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
@@ -118,7 +123,7 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 		return nil, nil
 	}
 
-	data, err := c.ReadPacket()
+	data, err := c.ReadPacket(context.Background())
 	if err != nil {
 		return nil, err
 	}

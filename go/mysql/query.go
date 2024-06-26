@@ -17,8 +17,10 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"math"
+	"runtime/trace"
 	"strconv"
 	"strings"
 
@@ -78,8 +80,8 @@ func (c *Conn) writeComSetOption(operation uint16) error {
 
 // readColumnDefinition reads the next Column Definition packet.
 // Returns a SQLError.
-func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
-	colDef, err := c.readEphemeralPacket()
+func (c *Conn) readColumnDefinition(ctx context.Context, field *querypb.Field, index int) error {
+	colDef, err := c.readEphemeralPacket(ctx)
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
@@ -176,8 +178,8 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 // readColumnDefinitionType is a faster version of
 // readColumnDefinition that only fills in the Type.
 // Returns a SQLError.
-func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
-	colDef, err := c.readEphemeralPacket()
+func (c *Conn) readColumnDefinitionType(ctx context.Context, field *querypb.Field, index int) error {
+	colDef, err := c.readEphemeralPacket(ctx)
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
@@ -276,32 +278,34 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 //
 // 1. if the server closes the connection when no command is in flight:
 //
-//   1.1 unix: WriteComQuery will fail with a 'broken pipe', and we'll
-//       return CRServerGone(2006).
+//		1.1 unix: WriteComQuery will fail with a 'broken pipe', and we'll
+//		    return CRServerGone(2006).
 //
-//   1.2 tcp: WriteComQuery will most likely work, but readComQueryResponse
-//       will fail, and we'll return CRServerLost(2013).
+//		1.2 tcp: WriteComQuery will most likely work, but readComQueryResponse
+//		    will fail, and we'll return CRServerLost(2013).
 //
-//       This is because closing a TCP socket on the server side sends
-//       a FIN to the client (telling the client the server is done
-//       writing), but on most platforms doesn't send a RST.  So the
-//       client has no idea it can't write. So it succeeds writing data, which
-//       *then* triggers the server to send a RST back, received a bit
-//       later. By then, the client has already started waiting for
-//       the response, and will just return a CRServerLost(2013).
-//       So CRServerGone(2006) will almost never be seen with TCP.
+//		    This is because closing a TCP socket on the server side sends
+//		    a FIN to the client (telling the client the server is done
+//		    writing), but on most platforms doesn't send a RST.  So the
+//		    client has no idea it can't write. So it succeeds writing data, which
+//		    *then* triggers the server to send a RST back, received a bit
+//		    later. By then, the client has already started waiting for
+//		    the response, and will just return a CRServerLost(2013).
+//		    So CRServerGone(2006) will almost never be seen with TCP.
 //
-// 2. if the server closes the connection when a command is in flight,
-//    readComQueryResponse will fail, and we'll return CRServerLost(2013).
+//	 2. if the server closes the connection when a command is in flight,
+//	    readComQueryResponse will fail, and we'll return CRServerLost(2013).
 func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
-	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
+	ctx, task := trace.NewTask(context.Background(), "ExecuteFetch")
+	defer task.End()
+	result, _, err = c.ExecuteFetchMulti(ctx, query, maxrows, wantfields)
 	return result, err
 }
 
 // ExecuteFetchMulti is for fetching multiple results from a multi-statement result.
 // It returns an additional 'more' flag. If it is set, you must fetch the additional
 // results using ReadQueryResult.
-func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (result *sqltypes.Result, status serverStatus, err error) {
+func (c *Conn) ExecuteFetchMulti(ctx context.Context, query string, maxrows int, wantfields bool) (result *sqltypes.Result, status serverStatus, err error) {
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*SQLError); ok {
@@ -315,7 +319,7 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 		return nil, 0, err
 	}
 
-	res, status, _, err := c.ReadQueryResult(maxrows, wantfields)
+	res, status, _, err := c.ReadQueryResult(ctx, maxrows, wantfields)
 	return res, status, err
 }
 
@@ -323,6 +327,9 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 // Note: In a future iteration this should be abolished and merged into the
 // ExecuteFetch API.
 func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfields bool) (result *sqltypes.Result, warnings uint16, err error) {
+	ctx, task := trace.NewTask(context.Background(), "ExecuteFetch")
+	defer task.End()
+
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*SQLError); ok {
@@ -336,14 +343,14 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 		return nil, 0, err
 	}
 
-	res, _, warnings, err := c.ReadQueryResult(maxrows, wantfields)
+	res, _, warnings, err := c.ReadQueryResult(ctx, maxrows, wantfields)
 	return res, warnings, err
 }
 
 // ReadQueryResult gets the result from the last written query.
-func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.Result, status serverStatus, warnings uint16, err error) {
+func (c *Conn) ReadQueryResult(ctx context.Context, maxrows int, wantfields bool) (result *sqltypes.Result, status serverStatus, warnings uint16, err error) {
 	// Get the result.
-	affectedRows, lastInsertID, numCols, status, warnings, err := c.readComQueryResponse()
+	affectedRows, lastInsertID, numCols, status, warnings, err := c.readComQueryResponse(ctx)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -366,11 +373,11 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 	for i := 0; i < numCols; i++ {
 		result.Fields[i] = &fields[i]
 		if wantfields {
-			if err := c.readColumnDefinition(result.Fields[i], i); err != nil {
+			if err := c.readColumnDefinition(ctx, result.Fields[i], i); err != nil {
 				return nil, 0, 0, err
 			}
 		} else {
-			if err := c.readColumnDefinitionType(result.Fields[i], i); err != nil {
+			if err := c.readColumnDefinitionType(ctx, result.Fields[i], i); err != nil {
 				return nil, 0, 0, err
 			}
 		}
@@ -378,7 +385,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err := c.readEphemeralPacket()
+		data, err := c.readEphemeralPacket(ctx)
 		if err != nil {
 			return nil, 0, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
@@ -404,7 +411,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 
 	// read each row until EOF or OK packet.
 	for {
-		data, err := c.ReadPacket()
+		data, err := c.ReadPacket(ctx)
 		if err != nil {
 			return nil, 0, 0, err
 		}
@@ -436,7 +443,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 
 		// Check we're not over the limit before we add more.
 		if len(result.Rows) == maxrows {
-			if err := c.drainResults(); err != nil {
+			if err := c.drainResults(ctx); err != nil {
 				return nil, 0, 0, err
 			}
 			return nil, 0, 0, NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded %d", maxrows)
@@ -452,12 +459,12 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 }
 
 // FetchQueryResult gets the reset set from the last executed query.
-func (c *Conn) FetchQueryResult(maxrows int, fields []*querypb.Field) (result *sqltypes.Result, status serverStatus, warnings uint16, err error) {
+func (c *Conn) FetchQueryResult(ctx context.Context, maxrows int, fields []*querypb.Field) (result *sqltypes.Result, status serverStatus, warnings uint16, err error) {
 	result = &sqltypes.Result{}
 
 	// read each row until EOF or OK packet.
 	for {
-		data, err := c.ReadPacket()
+		data, err := c.ReadPacket(ctx)
 		if err != nil {
 			return nil, 0, 0, err
 		}
@@ -485,7 +492,7 @@ func (c *Conn) FetchQueryResult(maxrows int, fields []*querypb.Field) (result *s
 
 		// Check we're not over the limit before we add more.
 		if len(result.Rows) == maxrows {
-			if err := c.drainResults(); err != nil {
+			if err := c.drainResults(ctx); err != nil {
 				return nil, 0, 0, err
 			}
 			return nil, 0, 0, NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded %d", maxrows)
@@ -501,9 +508,9 @@ func (c *Conn) FetchQueryResult(maxrows int, fields []*querypb.Field) (result *s
 }
 
 // drainResults will read all packets for a result set and ignore them.
-func (c *Conn) drainResults() error {
+func (c *Conn) drainResults(ctx context.Context) error {
 	for {
-		data, err := c.readEphemeralPacket()
+		data, err := c.readEphemeralPacket(ctx)
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
@@ -532,8 +539,8 @@ func (s serverStatus) cursorLastRowSent() bool {
 	return (s & ServerCursorLastRowSent) != 0
 }
 
-func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64, numCols int, status serverStatus, warnings uint16, err error) {
-	data, err := c.readEphemeralPacket()
+func (c *Conn) readComQueryResponse(ctx context.Context) (affectedRows uint64, lastInsertID uint64, numCols int, status serverStatus, warnings uint16, err error) {
+	data, err := c.readEphemeralPacket(ctx)
 	if err != nil {
 		return 0, 0, 0, 0, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
@@ -654,7 +661,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 			// as a result, we need to shift the flag to the right by 2 bits
 			// while this flag may conflict with the mysqlBinary constant, it doesn't matter;
 			// the format for BLOB and TEXT parameters is the same for both binary and non-binary
-			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags) >> 2)
+			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags)>>2)
 			if err != nil {
 				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
 			}
@@ -1120,7 +1127,7 @@ func (c *Conn) writeEndResult(more bool, affectedRows, lastInsertID uint64, warn
 }
 
 // writePrepare writes a prepare query response to the wire.
-func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
+func (c *Conn) writePrepare(ctx context.Context, fld []*querypb.Field, prepare *PrepareData) error {
 	paramsCount := prepare.ParamsCount
 	columnCount := 0
 	if len(fld) != 0 {
@@ -1181,7 +1188,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 		}
 	}
 
-	return c.flush()
+	return c.flush(ctx)
 }
 
 func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) error {

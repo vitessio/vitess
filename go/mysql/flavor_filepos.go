@@ -102,7 +102,7 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	}
 
 	for {
-		result, err := c.ReadPacket()
+		result, err := c.ReadPacket(context.Background())
 		if err != nil {
 			return nil, err
 		}

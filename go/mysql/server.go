@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -105,21 +106,21 @@ type Handler interface {
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
-	ComQuery(c *Conn, query string, callback ResultSpoolFn) error
-	
+	ComQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) error
+
 	// ComMultiQuery is called when a connection receives a query and the
 	// client supports MULTI_STATEMENT. It should process the first
 	// statement in |query| and return the remainder. It will be called
 	// multiple times until the remainder is |""|.
-	ComMultiQuery(c *Conn, query string, callback ResultSpoolFn) (string, error)
+	ComMultiQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) (string, error)
 
 	// ComPrepare is called when a connection receives a prepared
 	// statement query.
-	ComPrepare(c *Conn, query string, prepare *PrepareData) ([]*querypb.Field, error)
+	ComPrepare(ctx context.Context, c *Conn, query string, prepare *PrepareData) ([]*querypb.Field, error)
 
 	// ComStmtExecute is called when a connection receives a statement
 	// execute query.
-	ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
+	ComStmtExecute(ctx context.Context, c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.
@@ -157,20 +158,20 @@ type ResultSpoolFn func(res *sqltypes.Result, more bool) error
 
 // ExtendedHandler is an extension to Handler to support additional protocols on top of MySQL.
 type ExtendedHandler interface {
-	// ComParsedQuery is called when a connection receives a query that has already been parsed. Note the contents 
-	// of the query slice may change after the first call to callback. So the Handler should not hang on to the byte 
+	// ComParsedQuery is called when a connection receives a query that has already been parsed. Note the contents
+	// of the query slice may change after the first call to callback. So the Handler should not hang on to the byte
 	// slice.
-	ComParsedQuery(c *Conn, query string, parsed sqlparser.Statement, callback ResultSpoolFn) error
+	ComParsedQuery(ctx context.Context, c *Conn, query string, parsed sqlparser.Statement, callback ResultSpoolFn) error
 
 	// ComPrepareParsed is called when a connection receives a prepared statement query that has already been parsed.
-	ComPrepareParsed(c *Conn, query string, parsed sqlparser.Statement, prepare *PrepareData) (ParsedQuery, []*querypb.Field, error)
+	ComPrepareParsed(ctx context.Context, c *Conn, query string, parsed sqlparser.Statement, prepare *PrepareData) (ParsedQuery, []*querypb.Field, error)
 
 	// ComBind is called when a connection receives a request to bind a prepared statement to a set of values.
-	ComBind(c *Conn, query string, parsedQuery ParsedQuery, prepare *PrepareData) (BoundQuery, []*querypb.Field, error)
+	ComBind(ctx context.Context, c *Conn, query string, parsedQuery ParsedQuery, prepare *PrepareData) (BoundQuery, []*querypb.Field, error)
 
 	// ComExecuteBound is called when a connection receives a request to execute a prepared statement that has already
 	// bound to a set of values.
-	ComExecuteBound(c *Conn, query string, boundQuery BoundQuery, callback ResultSpoolFn) error
+	ComExecuteBound(ctx context.Context, c *Conn, query string, boundQuery BoundQuery, callback ResultSpoolFn) error
 }
 
 // ParsedQuery is a marker type for communication between the ExtendedHandler interface and integrators, representing a
@@ -330,13 +331,13 @@ func (l *Listener) Accept() {
 
 		connCount.Add(1)
 		connAccept.Add(1)
-		go l.handle(conn, connectionID, acceptTime)
+		go l.handle(context.Background(), conn, connectionID, acceptTime)
 	}
 }
 
 // handle is called in a go routine for each client connection.
 // FIXME(alainjobart) handle per-connection logs in a way that makes sense.
-func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Time) {
+func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint32, acceptTime time.Time) {
 	if l.connReadTimeout != 0 || l.connWriteTimeout != 0 {
 		conn = netutil.NewConnWithTimeouts(conn, l.connReadTimeout, l.connWriteTimeout)
 	}
@@ -351,7 +352,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 		// We call flush here in case there's a premature return after
 		// startWriterBuffering is called
-		c.flush()
+		c.flush(ctx)
 
 		conn.Close()
 	}()
@@ -376,7 +377,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Wait for the client response. This has to be a direct read,
 	// so we don't buffer the TLS negotiation packets.
-	response, err := c.readEphemeralPacketDirect()
+	response, err := c.readEphemeralPacketDirect(ctx)
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam, same as main read loop.
 		if err != io.EOF {
@@ -397,7 +398,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	if c.Capabilities&CapabilityClientSSL > 0 {
 		// SSL was enabled. We need to re-read the auth packet.
-		response, err = c.readEphemeralPacket()
+		response, err = c.readEphemeralPacket(ctx)
 		if err != nil {
 			l.handleConnectionError(c, fmt.Sprintf(
 				"Cannot read post-SSL client handshake response from %s: %v", c, err))
@@ -469,7 +470,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			return
 		}
 
-		response, err := c.readEphemeralPacket()
+		response, err := c.readEphemeralPacket(ctx)
 		if err != nil {
 			l.handleConnectionError(c, fmt.Sprintf(
 				"Error reading auth switch response for %s: %v", c, err))
@@ -553,7 +554,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 
 	for {
-		err := c.handleNextCommand(l.handler)
+		err := c.handleNextCommand(ctx, l.handler)
 		if err != nil {
 			return
 		}

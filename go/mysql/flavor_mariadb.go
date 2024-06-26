@@ -169,7 +169,7 @@ func (mariadbFlavor) waitUntilPositionCommand(ctx context.Context, pos Position)
 
 // readBinlogEvent is part of the Flavor interface.
 func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
-	result, err := c.ReadPacket()
+	result, err := c.ReadPacket(context.Background())
 	if err != nil {
 		return nil, err
 	}

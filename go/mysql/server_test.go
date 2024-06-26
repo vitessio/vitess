@@ -126,12 +126,12 @@ func (th *testHandler) ComInitDB(c *Conn, schemaName string) error {
 	return nil
 }
 
-func (th *testHandler) ComMultiQuery(c *Conn, query string, callback ResultSpoolFn) (string, error) {
-	err := th.ComQuery(c, query, callback)
+func (th *testHandler) ComMultiQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) (string, error) {
+	err := th.ComQuery(ctx, c, query, callback)
 	return "", err
 }
 
-func (th *testHandler) ComQuery(c *Conn, query string, callback ResultSpoolFn) error {
+func (th *testHandler) ComQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) error {
 	if result := th.Result(); result != nil {
 		callback(th.result, false)
 		return nil
@@ -225,15 +225,15 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback ResultSpoolFn) e
 	return nil
 }
 
-func (th *testHandler) ComParsedQuery(c *Conn, query string, parsed sqlparser.Statement, callback func(res *sqltypes.Result, more bool) error) error {
-	return th.ComQuery(c, query, callback)
+func (th *testHandler) ComParsedQuery(ctx context.Context, c *Conn, query string, parsed sqlparser.Statement, callback func(res *sqltypes.Result, more bool) error) error {
+	return th.ComQuery(ctx, c, query, callback)
 }
 
-func (th *testHandler) ComPrepare(c *Conn, query string, prepare *PrepareData) ([]*querypb.Field, error) {
+func (th *testHandler) ComPrepare(ctx context.Context, c *Conn, query string, prepare *PrepareData) ([]*querypb.Field, error) {
 	return nil, nil
 }
 
-func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComStmtExecute(ctx context.Context, c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	switch prepare.PrepareStmt {
 	case "empty result":
 		res := &sqltypes.Result{
@@ -251,7 +251,7 @@ func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback fu
 					Type: querypb.Type_VARCHAR,
 				},
 			},
-			Rows: [][]sqltypes.Value{},
+			Rows:         [][]sqltypes.Value{},
 			RowsAffected: 0,
 		}
 		return callback(res)
@@ -300,7 +300,7 @@ func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback fu
 					Type: querypb.Type_VARCHAR,
 				},
 			},
-			Rows: rows,
+			Rows:         rows,
 			RowsAffected: uint64(n),
 		}
 		return callback(res)
