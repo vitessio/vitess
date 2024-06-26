@@ -71,7 +71,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestAggrWithLimit(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
