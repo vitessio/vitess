@@ -29,7 +29,16 @@ import (
 func UniqueKeyValidForIteration(uniqueKey *UniqueKey) bool {
 	// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
 	// Thus, we cannot use this unique key for iteration.
-	return !uniqueKey.HasNullable
+	switch {
+	case uniqueKey.HasNullable:
+		return false
+	case uniqueKey.HasFloat:
+		return false
+	case uniqueKey.HasPrefix:
+		return false
+	default:
+		return true
+	}
 }
 
 // SourceUniqueKeyAsOrMoreConstrainedThanTarget returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.

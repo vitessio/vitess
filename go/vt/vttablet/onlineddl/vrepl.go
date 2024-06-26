@@ -229,6 +229,8 @@ func (v *VRepl) readTableUniqueKeys(createTableEntity *schemadiff.CreateTableEnt
 				return
 			}
 			hasNullable := false
+			hasFloat := false
+			hasPrefix := false
 			columnNames := []string{}
 			for _, col := range key.Columns {
 				columnNames = append(columnNames, col.Column.String())
@@ -236,13 +238,12 @@ func (v *VRepl) readTableUniqueKeys(createTableEntity *schemadiff.CreateTableEnt
 				if colMap[colName].IsNullable() {
 					hasNullable = true
 				}
-				// Conditions to make this unique key non-eligible:
 				if col.Length != nil {
 					// e.g. KEY (name(7))
-					return
+					hasPrefix = true
 				}
 				if colMap[colName].IsFloatingPointType() {
-					return
+					hasFloat = true
 				}
 			}
 			// OK, this unique key is good to go!
@@ -250,6 +251,8 @@ func (v *VRepl) readTableUniqueKeys(createTableEntity *schemadiff.CreateTableEnt
 				Name:        key.Info.Name.String(),
 				Columns:     *vrepl.NewColumnList(columnNames),
 				HasNullable: hasNullable,
+				HasFloat:    hasFloat,
+				HasPrefix:   hasPrefix,
 			}
 			uniqueKeys = append(uniqueKeys, uniqueKey)
 		}()

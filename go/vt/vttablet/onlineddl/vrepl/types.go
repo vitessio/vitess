@@ -158,6 +158,8 @@ type UniqueKey struct {
 	Columns ColumnList
 
 	HasNullable bool
+	HasFloat    bool
+	HasPrefix   bool
 }
 
 // IsPrimary checks if this unique key is primary
