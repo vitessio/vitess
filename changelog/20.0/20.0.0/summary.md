@@ -29,7 +29,7 @@
     - [User Defined Functions Support](#udf-support)
     - [Insert Row Alias Support](#insert-row-alias-support)
   - **[VReplication](#vreplication)**
-    - [Multi-tenant Migrations](#multi-tenant)
+    - [Multi-tenant Imports](#multi-tenant)
     - [VDiff Support For OnlineDDL Migrations](#vdiff-online-ddl)
   - **[Query Timeout](#query-timeout)**
   - **[Flag changes](#flag-changes)**
@@ -340,7 +340,7 @@ The new flag `--tablet-filter-tags StringMap` adds support to VTGate for filteri
 
 ### <a id="vreplication"/>VReplication
 
-#### <a id="multi-tenant"/> Multi-tenant migrations
+#### <a id="multi-tenant"/> Multi-tenant Imports
 
 Support for multi-tenant imports has been added to `MoveTables`. If you have a multi-tenant architecture where each
 tenant has their own database, you can import the tenants using multiple `MoveTables` workfows, one per tenant.
