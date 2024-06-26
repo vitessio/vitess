@@ -2233,7 +2233,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user` where `user`.col = :t_title and `user`.id <= 4",
+            "Query": "select `user`.col from `user` where `user`.col = :t_title /* VARCHAR */ and `user`.id <= 4",
             "Table": "`user`"
           }
         ]
@@ -2967,7 +2967,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                    "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col limit 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u1_col /* INT16 */ and ue.col = :u2_col /* INT16 */ limit 1",
                     "Table": "user_extra"
                   }
                 ]
@@ -3024,7 +3024,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                    "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col limit 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u_col /* INT16 */ and ue.col2 = :u_col /* INT16 */ limit 1",
                     "Table": "user_extra"
                   }
                 ]
@@ -3163,8 +3163,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where 1 != 1",
-            "Query": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where `user`.id = :user_extra_id",
+            "FieldQuery": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + ``user``.col` from `user` where 1 != 1",
+            "Query": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + ``user``.col` from `user` where `user`.id = :user_extra_id",
             "Table": "`user`",
             "Values": [
               ":user_extra_id"
@@ -3741,7 +3741,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_metadata.user_id from user_extra, user_metadata where 1 != 1",
-            "Query": "select user_metadata.user_id from user_extra, user_metadata where user_extra.col = :user_col and user_extra.user_id = user_metadata.user_id",
+            "Query": "select user_metadata.user_id from user_extra, user_metadata where user_extra.col = :user_col /* INT16 */ and user_extra.user_id = user_metadata.user_id",
             "Table": "user_extra, user_metadata"
           }
         ]

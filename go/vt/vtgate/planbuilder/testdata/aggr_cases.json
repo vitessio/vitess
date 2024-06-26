@@ -3372,7 +3372,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
-                "Query": "select 1 from user_extra where user_extra.col = :user_col group by .0",
+                "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */ group by .0",
                 "Table": "user_extra"
               }
             ]
@@ -3862,7 +3862,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra as ue where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra as ue where ue.col = :u_col group by .0",
+                    "Query": "select count(*) from user_extra as ue where ue.col = :u_col /* INT16 */ group by .0",
                     "Table": "user_extra"
                   }
                 ]
@@ -3922,7 +3922,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(ue.id) from user_extra as ue where 1 != 1 group by .0",
-                    "Query": "select count(ue.id) from user_extra as ue where ue.col = :u_col group by .0",
+                    "Query": "select count(ue.id) from user_extra as ue where ue.col = :u_col /* INT16 */ group by .0",
                     "Table": "user_extra"
                   }
                 ]
@@ -5153,7 +5153,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select min(user_extra.foo), max(user_extra.bar), weight_string(user_extra.foo), weight_string(user_extra.bar) from user_extra where 1 != 1 group by .0, weight_string(user_extra.foo), weight_string(user_extra.bar)",
-                "Query": "select min(user_extra.foo), max(user_extra.bar), weight_string(user_extra.foo), weight_string(user_extra.bar) from user_extra where user_extra.bar = :user_col group by .0, weight_string(user_extra.foo), weight_string(user_extra.bar)",
+                "Query": "select min(user_extra.foo), max(user_extra.bar), weight_string(user_extra.foo), weight_string(user_extra.bar) from user_extra where user_extra.bar = :user_col /* INT16 */ group by .0, weight_string(user_extra.foo), weight_string(user_extra.bar)",
                 "Table": "user_extra"
               }
             ]
@@ -5431,7 +5431,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), sum(user_extra.bar) from user_extra where 1 != 1 group by .0",
-                        "Query": "select count(*), sum(user_extra.bar) from user_extra where user_extra.col = :user_col group by .0",
+                        "Query": "select count(*), sum(user_extra.bar) from user_extra where user_extra.col = :user_col /* INT16 */ group by .0",
                         "Table": "user_extra"
                       }
                     ]
@@ -5781,7 +5781,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from music as m where 1 != 1",
-                    "Query": "select 1 from music as m where m.col = :u_col",
+                    "Query": "select 1 from music as m where m.col = :u_col /* INT16 */",
                     "Table": "music"
                   }
                 ]

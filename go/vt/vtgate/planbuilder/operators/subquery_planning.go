@@ -365,7 +365,7 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 		// need to find the argument name for it and use that instead
 		// we can't use the column name directly, because we're in the RHS of the join
 		name := outer.findOrAddColNameBindVarName(ctx, col)
-		cursor.Replace(sqlparser.NewArgument(name))
+		cursor.Replace(sqlparser.NewTypedArgument(name, ctx.SQLTypeForExpr(col)))
 	}, nil)
 	return result.(sqlparser.Expr)
 }
@@ -403,10 +403,7 @@ func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Exp
 			argType := sqltypes.Unknown
 			ae, isAe := sq2.originalSubquery.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
 			if isAe {
-				evalType, found := ctx.TypeForExpr(ae.Expr)
-				if found {
-					argType = evalType.Type()
-				}
+				argType = ctx.SQLTypeForExpr(ae.Expr)
 			}
 			return sqlparser.NewTypedArgument(s, argType)
 		}

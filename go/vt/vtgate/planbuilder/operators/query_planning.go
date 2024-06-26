@@ -532,24 +532,8 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 		return pushOrderingUnderAggr(ctx, in, src)
 	case *SubQueryContainer:
 		return pushOrderingToOuterOfSubqueryContainer(ctx, in, src)
-	case *SubQuery:
-		return pushOrderingToOuterOfSubquery(ctx, in, src)
 	}
 	return in, NoRewrite
-}
-
-func pushOrderingToOuterOfSubquery(ctx *plancontext.PlanningContext, in *Ordering, sq *SubQuery) (Operator, *ApplyResult) {
-	outerTableID := TableID(sq.Outer)
-	for idx, order := range in.Order {
-		deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
-		if !deps.IsSolvedBy(outerTableID) {
-			return in, NoRewrite
-		}
-		in.Order[idx].SimplifiedExpr = sq.rewriteColNameToArgument(order.SimplifiedExpr)
-		in.Order[idx].Inner.Expr = sq.rewriteColNameToArgument(order.Inner.Expr)
-	}
-	sq.Outer, in.Source = in, sq.Outer
-	return sq, Rewrote("push ordering into outer side of subquery")
 }
 
 func pushOrderingToOuterOfSubqueryContainer(ctx *plancontext.PlanningContext, in *Ordering, subq *SubQueryContainer) (Operator, *ApplyResult) {

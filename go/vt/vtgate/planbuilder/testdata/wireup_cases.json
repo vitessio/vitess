@@ -148,7 +148,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-                "Query": "select 1 from `user` as u3 where u3.col = :u1_col",
+                "Query": "select 1 from `user` as u3 where u3.col = :u1_col /* INT16 */",
                 "Table": "`user`"
               }
             ]
@@ -210,7 +210,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-                "Query": "select 1 from `user` as u3 where u3.col = :u2_col",
+                "Query": "select 1 from `user` as u3 where u3.col = :u2_col /* INT16 */",
                 "Table": "`user`"
               }
             ]
@@ -265,7 +265,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
-                "Query": "select u1.id, u1.col from `user` as u1 where u1.col = :u3_col",
+                "Query": "select u1.id, u1.col from `user` as u1 where u1.col = :u3_col /* INT16 */",
                 "Table": "`user`"
               },
               {
@@ -276,7 +276,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-                "Query": "select 1 from `user` as u2 where u2.col = :u1_col",
+                "Query": "select 1 from `user` as u2 where u2.col = :u1_col /* INT16 */",
                 "Table": "`user`"
               }
             ]
@@ -348,7 +348,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
-                    "Query": "select u1.id, u1.col from `user` as u1 where u1.col = :u4_col",
+                    "Query": "select u1.id, u1.col from `user` as u1 where u1.col = :u4_col /* INT16 */",
                     "Table": "`user`"
                   },
                   {
@@ -359,7 +359,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-                    "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
+                    "Query": "select 1 from `user` as u3 where u3.id = :u1_col /* INT16 */",
                     "Table": "`user`",
                     "Values": [
                       ":u1_col"
@@ -420,7 +420,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-                "Query": "select 1 from `user` as u2 where u2.id = :u1_col",
+                "Query": "select 1 from `user` as u2 where u2.id = :u1_col /* INT16 */",
                 "Table": "`user`",
                 "Values": [
                   ":u1_col"
@@ -437,7 +437,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-            "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
+            "Query": "select 1 from `user` as u3 where u3.id = :u1_col /* INT16 */",
             "Table": "`user`",
             "Values": [
               ":u1_col"
@@ -591,7 +591,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-                    "Query": "select e.id from user_extra as e where e.id = :u_col limit 10",
+                    "Query": "select e.id from user_extra as e where e.id = :u_col /* INT16 */ limit 10",
                     "Table": "user_extra"
                   }
                 ]
@@ -658,7 +658,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select :u_id + e.id as `u.id + e.id` from user_extra as e where 1 != 1",
-                        "Query": "select :u_id + e.id as `u.id + e.id` from user_extra as e where e.id = :u_col limit 10",
+                        "Query": "select :u_id + e.id as `u.id + e.id` from user_extra as e where e.id = :u_col /* INT16 */ limit 10",
                         "Table": "user_extra"
                       }
                     ]
@@ -751,7 +751,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-                "Query": "select e.id from user_extra as e where e.id = :u_col",
+                "Query": "select e.id from user_extra as e where e.id = :u_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
