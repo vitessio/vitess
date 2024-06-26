@@ -344,9 +344,9 @@ func (ts *txThrottlerStateImpl) updateHealthCheckCells(ctx context.Context, topo
 		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
 		ts.healthCheckCells = knownCells
 		ts.closeHealthCheckStream()
-		err = ts.initHealthCheckStream(topoServer, target)
+		return ts.initHealthCheckStream(topoServer, target)
 	}
-	return err
+	return nil
 }
 
 func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
