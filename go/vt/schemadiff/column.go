@@ -398,3 +398,8 @@ func (l *ColumnDefinitionEntityList) IsSubset(of *ColumnDefinitionEntityList) bo
 	}
 	return true
 }
+
+func (l *ColumnDefinitionEntityList) Union(other *ColumnDefinitionEntityList) *ColumnDefinitionEntityList {
+	entities := append(l.Entities, other.Entities...)
+	return NewColumnDefinitionEntityList(entities)
+}

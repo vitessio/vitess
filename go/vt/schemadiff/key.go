@@ -50,6 +50,10 @@ func (i *IndexDefinitionEntity) Clone() *IndexDefinitionEntity {
 	return clone
 }
 
+func (i *IndexDefinitionEntity) ColumnDefinitionEntitiesList() *ColumnDefinitionEntityList {
+	return NewColumnDefinitionEntityList(i.ColumnDefinitionEntities)
+}
+
 func (i *IndexDefinitionEntity) Len() int {
 	return len(i.IndexDefinition.Columns)
 }
