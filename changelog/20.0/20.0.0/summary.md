@@ -28,6 +28,9 @@
     - [Delete with Multi Target Support](#delete-multi-target)
     - [User Defined Functions Support](#udf-support)
     - [Insert Row Alias Support](#insert-row-alias-support)
+  - **[VReplication](#vreplication)**
+    - [Multi-tenant Imports](#multi-tenant)
+    - [VDiff Support For OnlineDDL Migrations](#vdiff-online-ddl)
   - **[Query Timeout](#query-timeout)**
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
@@ -334,6 +337,19 @@ The new flag `--querylog-sample-rate float` adds support for sampling queries ba
 #### <a id="tablet-filter-tags-flag"/>New `--tablet-filter-tags` flag
 
 The new flag `--tablet-filter-tags StringMap` adds support to VTGate for filtering tablets by tablet tag key/values, specified as comma-separated list of key:values. The tags of a tablet are defined by the VTTablet flag `--init_tags`, which is also defined as a comma-separated list of key:values.
+
+### <a id="vreplication"/>VReplication
+
+#### <a id="multi-tenant"/> Multi-tenant Imports
+
+Support for multi-tenant imports has been added to `MoveTables`. If you have a multi-tenant architecture where each
+tenant has their own database, you can import the tenants using multiple `MoveTables` workfows, one per tenant.
+Each import is initiated with the new `--tenant-id` flag. The column name (and data type) need to be specified in
+the VSchema of the target keyspace.
+
+#### <a id="vdiff-online-ddl"/> VDiff support for OnlineDDL migrations
+
+You can now run `VDiff`s on OnlineDDL schema change migrations, which are not yet cut over.
 
 ## <a id="minor-changes"/>Minor Changes
 
