@@ -99,13 +99,12 @@ func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
 type VRepl struct {
-	workflow   string
-	keyspace   string
-	shard      string
-	dbName     string
-	pos        string
-	alterQuery *sqlparser.AlterTable
-	tableRows  int64
+	workflow  string
+	keyspace  string
+	shard     string
+	dbName    string
+	pos       string
+	tableRows int64
 
 	sourceCreateTableEntity *schemadiff.CreateTableEntity
 	targetCreateTableEntity *schemadiff.CreateTableEntity
@@ -131,7 +130,7 @@ type VRepl struct {
 	intToEnumMap    map[string]bool
 	bls             *binlogdatapb.BinlogSource
 
-	parser *vrepl.AlterTableParser
+	alterTableAnalysis *schemadiff.AlterTableAnalysis
 
 	convertCharset map[string](*binlogdatapb.CharsetConversion)
 
@@ -151,16 +150,15 @@ func NewVRepl(
 	analyzeTable bool,
 ) (*VRepl, error) {
 	v := &VRepl{
-		env:            env,
-		workflow:       workflow,
-		keyspace:       keyspace,
-		shard:          shard,
-		dbName:         dbName,
-		alterQuery:     alterQuery,
-		analyzeTable:   analyzeTable,
-		parser:         vrepl.NewAlterTableParser(),
-		intToEnumMap:   map[string]bool{},
-		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
+		env:                env,
+		workflow:           workflow,
+		keyspace:           keyspace,
+		shard:              shard,
+		dbName:             dbName,
+		alterTableAnalysis: schemadiff.GetAlterTableAnalysis(alterQuery),
+		analyzeTable:       analyzeTable,
+		intToEnumMap:       map[string]bool{},
+		convertCharset:     map[string](*binlogdatapb.CharsetConversion){},
 	}
 	senv := schemadiff.NewEnv(v.env, v.env.CollationEnv().DefaultConnectionCharset())
 	var err error
@@ -362,13 +360,8 @@ func applyColumnTypes(createTableEntity *schemadiff.CreateTableEntity, columnsLi
 }
 
 func (v *VRepl) analyzeAlter() error {
-	if v.alterQuery == nil {
-		// Happens for REVERT
-		return nil
-	}
-	v.parser.AnalyzeAlter(v.alterQuery)
-	if v.parser.IsRenameTable() {
-		return fmt.Errorf("renaming the table is not supported in ALTER TABLE: %s", sqlparser.CanonicalString(v.alterQuery))
+	if v.alterTableAnalysis.IsRenameTable {
+		return fmt.Errorf("renaming the table is not supported in ALTER TABLE")
 	}
 	return nil
 }
@@ -384,7 +377,7 @@ func (v *VRepl) analyzeTables() (err error) {
 		return err
 	}
 	var droppedSourceNonGeneratedColumns *vrepl.ColumnList
-	v.sourceSharedColumns, v.targetSharedColumns, droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser)
+	v.sourceSharedColumns, v.targetSharedColumns, droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.alterTableAnalysis)
 
 	// unique keys
 	sourceUniqueKeys, err := v.readTableUniqueKeys(v.sourceCreateTableEntity)
@@ -419,8 +412,8 @@ func (v *VRepl) analyzeTables() (err error) {
 		// Still no luck.
 		return fmt.Errorf("found no possible unique key on `%s` whose columns are in source table `%s`; col names=%v, v.sharedColumnsMap=%v", v.targetTableName(), v.sourceTableName(), eligibleTargetColumnsForUniqueKey, v.sharedColumnsMap)
 	}
-	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.alterTableAnalysis.ColumnRenameMap)
+	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.alterTableAnalysis.ColumnRenameMap)
 	v.removedForeignKeyNames, err = schemadiff.RemovedForeignKeyNames(v.sourceCreateTableEntity, v.targetCreateTableEntity)
 	if err != nil {
 		return err

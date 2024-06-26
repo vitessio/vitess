@@ -1529,7 +1529,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 // This function is called after both source and target tables have been analyzed, so there's more information
 // about the two, and about the transition between the two.
 func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
-	if v.sourceAutoIncrement > 0 && !v.parser.IsAutoIncrementChangeRequested() {
+	if v.sourceAutoIncrement > 0 && !v.alterTableAnalysis.IsAutoIncrementChangeRequested {
 		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
 		if err != nil {

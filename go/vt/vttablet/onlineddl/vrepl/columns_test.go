@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/schemadiff"
 )
 
 var (
@@ -112,14 +114,14 @@ func TestGetSharedColumns(t *testing.T) {
 		},
 	}
 
-	parser := NewAlterTableParser()
+	alterTableAnalysis := &schemadiff.AlterTableAnalysis{}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			parser.columnRenameMap = tc.renameMap
+			alterTableAnalysis.ColumnRenameMap = tc.renameMap
 			sourceSharedCols, targetSharedCols, droppedNonGeneratedCols, _ := GetSharedColumns(
 				tc.sourceCols, tc.targetCols,
 				columnsVirtual, columnsVirtual,
-				parser,
+				alterTableAnalysis,
 			)
 			assert.Equal(t, tc.expectSourceSharedColNames, sourceSharedCols.Names())
 			assert.Equal(t, tc.expectTargetSharedColNames, targetSharedCols.Names())

@@ -42,7 +42,7 @@ var expandedDataTypes = map[string]bool{
 func GetSharedColumns(
 	sourceColumns, targetColumns *ColumnList,
 	sourceVirtualColumns, targetVirtualColumns *ColumnList,
-	parser *AlterTableParser,
+	alterTableAnalysis *schemadiff.AlterTableAnalysis,
 ) (
 	sourceSharedColumns *ColumnList,
 	targetSharedColumns *ColumnList,
@@ -62,14 +62,14 @@ func GetSharedColumns(
 				sharedColumnsMap[sourceColumn] = targetColumn
 				break
 			}
-			if strings.EqualFold(parser.columnRenameMap[sourceColumn], targetColumn) {
+			if strings.EqualFold(alterTableAnalysis.ColumnRenameMap[sourceColumn], targetColumn) {
 				// column in source is renamed in target
 				isSharedColumn = true
 				sharedColumnsMap[sourceColumn] = targetColumn
 				break
 			}
 		}
-		for droppedColumn := range parser.DroppedColumnsMap() {
+		for droppedColumn := range alterTableAnalysis.DroppedColumnsMap {
 			if strings.EqualFold(sourceColumn, droppedColumn) {
 				isSharedColumn = false
 				break
