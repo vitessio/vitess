@@ -221,3 +221,95 @@ func TestGetAlterTableAnalysis(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyzeSharedColumns(t *testing.T) {
+	sourceTable := `
+		create table t (
+			id int,
+			cint int,
+			cgen1 int generated always as (cint + 1) stored,
+			cgen2 int generated always as (cint + 2) stored,
+			cchar char(1),
+			cremoved int not null default 7,
+			cnullable int,
+			cnodefault int not null,
+			extra1 int,
+			primary key (id)
+		)
+	`
+	targetTable := `
+		create table t (
+			id int,
+			cint int,
+			cgen1 int generated always as (cint + 1) stored,
+			cchar_alternate char(1),
+			cnullable int,
+			cnodefault int not null,
+			extra2 int,
+			primary key (id)
+		)
+	`
+	tcases := []struct {
+		name                                    string
+		sourceTable                             string
+		targetTable                             string
+		renameMap                               map[string]string
+		expectSourceSharedColNames              []string
+		expectTargetSharedColNames              []string
+		expectDroppedSourceNonGeneratedColNames []string
+		expectSharedColumnsMap                  map[string]string
+	}{
+		{
+			name:                                    "rename map empty",
+			renameMap:                               map[string]string{},
+			expectSourceSharedColNames:              []string{"id", "cint", "cnullable", "cnodefault"},
+			expectTargetSharedColNames:              []string{"id", "cint", "cnullable", "cnodefault"},
+			expectDroppedSourceNonGeneratedColNames: []string{"cchar", "cremoved", "extra1"},
+			expectSharedColumnsMap:                  map[string]string{"id": "id", "cint": "cint", "cnullable": "cnullable", "cnodefault": "cnodefault"},
+		},
+		{
+			name:                                    "renamed column",
+			renameMap:                               map[string]string{"cchar": "cchar_alternate"},
+			expectSourceSharedColNames:              []string{"id", "cint", "cchar", "cnullable", "cnodefault"},
+			expectTargetSharedColNames:              []string{"id", "cint", "cchar_alternate", "cnullable", "cnodefault"},
+			expectDroppedSourceNonGeneratedColNames: []string{"cremoved", "extra1"},
+			expectSharedColumnsMap:                  map[string]string{"id": "id", "cint": "cint", "cchar": "cchar_alternate", "cnullable": "cnullable", "cnodefault": "cnodefault"},
+		},
+	}
+
+	env := NewTestEnv()
+	alterTableAnalysis := GetAlterTableAnalysis(nil) // empty
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			if tcase.sourceTable == "" {
+				tcase.sourceTable = sourceTable
+			}
+			if tcase.targetTable == "" {
+				tcase.targetTable = targetTable
+			}
+			if tcase.renameMap != nil {
+				alterTableAnalysis.ColumnRenameMap = tcase.renameMap
+			}
+
+			sourceEntity, err := NewCreateTableEntityFromSQL(env, tcase.sourceTable)
+			require.NoError(t, err)
+			err = sourceEntity.validate()
+			require.NoError(t, err)
+
+			targetEntity, err := NewCreateTableEntityFromSQL(env, tcase.targetTable)
+			require.NoError(t, err)
+			err = targetEntity.validate()
+			require.NoError(t, err)
+
+			sourceSharedCols, targetSharedCols, droppedNonGeneratedCols, sharedColumnsMap := AnalyzeSharedColumns(
+				NewColumnDefinitionEntityList(sourceEntity.ColumnDefinitionEntities()),
+				NewColumnDefinitionEntityList(targetEntity.ColumnDefinitionEntities()),
+				alterTableAnalysis,
+			)
+			assert.Equal(t, tcase.expectSourceSharedColNames, sourceSharedCols.Names())
+			assert.Equal(t, tcase.expectTargetSharedColNames, targetSharedCols.Names())
+			assert.Equal(t, tcase.expectDroppedSourceNonGeneratedColNames, droppedNonGeneratedCols.Names())
+			assert.Equal(t, tcase.expectSharedColumnsMap, sharedColumnsMap)
+		})
+	}
+}

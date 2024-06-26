@@ -235,3 +235,95 @@ func GetAlterTableAnalysis(alterTable *sqlparser.AlterTable) *AlterTableAnalysis
 	}
 	return analysis
 }
+
+// GetExpandedColumnNames is given source and target shared columns, and returns the list of columns whose data type is expanded.
+// An expanded data type is one where the target can have a value which the source does not. Examples:
+// - any NOT NULL to NULLable (a NULL in the target cannot appear on source)
+// - INT -> BIGINT (obvious)
+// - BIGINT UNSIGNED -> INT SIGNED (negative values)
+// - TIMESTAMP -> TIMESTAMP(3)
+// etc.
+func GetExpandedColumns(
+	sourceColumns *ColumnDefinitionEntityList,
+	targetColumns *ColumnDefinitionEntityList,
+) (
+	expandedColumns *ColumnDefinitionEntityList,
+	expandedDescriptions map[string]string,
+) {
+	expandedEntities := []*ColumnDefinitionEntity{}
+	expandedDescriptions = map[string]string{}
+	for i := range sourceColumns.Entities {
+		// source and target columns assumed to be mapped 1:1, same length
+		sourceColumn := sourceColumns.Entities[i]
+		targetColumn := targetColumns.Entities[i]
+
+		if isExpanded, description := ColumnChangeExpandsDataRange(sourceColumn, targetColumn); isExpanded {
+			expandedEntities = append(expandedEntities, sourceColumn)
+			expandedDescriptions[sourceColumn.Name()] = description
+		}
+	}
+	return NewColumnDefinitionEntityList(expandedEntities), expandedDescriptions
+}
+
+func GetNoDefaultColumns(columns *ColumnDefinitionEntityList) (noDefault *ColumnDefinitionEntityList) {
+	subset := []*ColumnDefinitionEntity{}
+	for _, col := range columns.Entities {
+		if !col.HasDefault() {
+			subset = append(subset, col)
+		}
+	}
+	return NewColumnDefinitionEntityList(subset)
+}
+
+// AnalyzeSharedColumns returns the intersection of two lists of columns in same order as the first list
+func AnalyzeSharedColumns(
+	sourceColumns, targetColumns *ColumnDefinitionEntityList,
+	alterTableAnalysis *AlterTableAnalysis,
+) (
+	sourceSharedColumns *ColumnDefinitionEntityList,
+	targetSharedColumns *ColumnDefinitionEntityList,
+	droppedSourceNonGeneratedColumns *ColumnDefinitionEntityList,
+	sharedColumnsMap map[string]string,
+) {
+	sharedColumnsMap = map[string]string{}
+
+	sourceShared := []*ColumnDefinitionEntity{}
+	targetShared := []*ColumnDefinitionEntity{}
+	droppedNonGenerated := []*ColumnDefinitionEntity{}
+
+	for _, sourceColumn := range sourceColumns.Entities {
+		if isGeneratedOnSource, _ := sourceColumn.IsGenerated(); isGeneratedOnSource {
+			continue
+		}
+		isDroppedFromSource := false
+		for droppedColumn := range alterTableAnalysis.DroppedColumnsMap {
+			if strings.EqualFold(sourceColumn.Name(), droppedColumn) {
+				isDroppedFromSource = true
+				break
+			}
+		}
+		if isDroppedFromSource {
+			droppedNonGenerated = append(droppedNonGenerated, sourceColumn)
+			// Column was dropped, hence cannot be a shared column
+			continue
+		}
+		expectedTargetName := sourceColumn.NameLowered()
+		if mappedName := alterTableAnalysis.ColumnRenameMap[sourceColumn.Name()]; mappedName != "" {
+			expectedTargetName = mappedName
+		}
+		targetColumn := targetColumns.GetColumn(expectedTargetName)
+		if targetColumn == nil {
+			// Column not found in target
+			droppedNonGenerated = append(droppedNonGenerated, sourceColumn)
+			continue
+		}
+		if isGeneratedOnTarget, _ := targetColumn.IsGenerated(); isGeneratedOnTarget {
+			// virtual/generated columns are silently skipped.
+			continue
+		}
+		sharedColumnsMap[sourceColumn.Name()] = targetColumn.Name()
+		sourceShared = append(sourceShared, sourceColumn)
+		targetShared = append(targetShared, targetColumn)
+	}
+	return NewColumnDefinitionEntityList(sourceShared), NewColumnDefinitionEntityList(targetShared), NewColumnDefinitionEntityList(droppedNonGenerated), sharedColumnsMap
+}
