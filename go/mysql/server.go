@@ -19,6 +19,7 @@ package mysql
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -90,6 +91,12 @@ type Handler interface {
 
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
+
+	// ConnectionAborted is called when a new connection cannot be fully established. For
+	// example, if a client connects to the server, but fails authentication, or can't
+	// negotiate an authentication handshake, this method will be called to let integrators
+	// know about the failed connection attempt.
+	ConnectionAborted(c *Conn, reason string) error
 
 	// ComInitDB is called once at the beginning to set db name,
 	// and subsequently for every ComInitDB event.
@@ -363,7 +370,7 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
 	if err != nil {
 		if err != io.EOF {
-			log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf("Cannot send HandshakeV10 packet: %v", err))
 		}
 		return
 	}
@@ -374,13 +381,16 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam, same as main read loop.
 		if err != io.EOF {
-			log.Infof("Cannot read client handshake response from %s: %v, it may not be a valid MySQL client", c, err)
+			l.handleConnectionWarning(c, fmt.Sprintf(
+				"Cannot read client handshake response from %s: %v, " +
+					"it may not be a valid MySQL client", c, err))
 		}
 		return
 	}
 	user, authMethod, authResponse, err := l.parseClientHandshakePacket(c, true, response)
 	if err != nil {
-		log.Errorf("Cannot parse client handshake response from %s: %v", c, err)
+		l.handleConnectionError(c, fmt.Sprintf(
+			"Cannot parse client handshake response from %s: %v", c, err))
 		return
 	}
 
@@ -390,14 +400,16 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 		// SSL was enabled. We need to re-read the auth packet.
 		response, err = c.readEphemeralPacket(ctx)
 		if err != nil {
-			log.Errorf("Cannot read post-SSL client handshake response from %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf(
+				"Cannot read post-SSL client handshake response from %s: %v", c, err))
 			return
 		}
 
 		// Returns copies of the data, so we can recycle the buffer.
 		user, authMethod, authResponse, err = l.parseClientHandshakePacket(c, false, response)
 		if err != nil {
-			log.Errorf("Cannot parse post-SSL client handshake response from %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf(
+				"Cannot parse post-SSL client handshake response from %s: %v", c, err))
 			return
 		}
 		c.recycleReadPacket()
@@ -421,6 +433,7 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 	// See what auth method the AuthServer wants to use for that user.
 	authServerMethod, err := l.authServer.AuthMethod(user, conn.RemoteAddr().String())
 	if err != nil {
+		l.handleConnectionError(c, "auth server failed to determine auth method")
 		c.writeErrorPacketFromError(err)
 		return
 	}
@@ -433,7 +446,8 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 		// ValidateHash() method.
 		userData, err := l.authServer.ValidateHash(salt, user, authResponse, conn.RemoteAddr())
 		if err != nil {
-			log.Warningf("Error authenticating user using MySQL native password: %v", err)
+			l.handleConnectionWarning(c, fmt.Sprintf(
+				"Error authenticating user using MySQL native password: %v", err))
 			c.writeErrorPacketFromError(err)
 			return
 		}
@@ -452,20 +466,22 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 		data := make([]byte, 21)
 		data = append(salt, byte(0x00))
 		if err := c.writeAuthSwitchRequest(MysqlNativePassword, data); err != nil {
-			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf("Error writing auth switch packet for %s: %v", c, err))
 			return
 		}
 
 		response, err := c.readEphemeralPacket(ctx)
 		if err != nil {
-			log.Errorf("Error reading auth switch response for %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf(
+				"Error reading auth switch response for %s: %v", c, err))
 			return
 		}
 		c.recycleReadPacket()
 
 		userData, err := l.authServer.ValidateHash(salt, user, response, conn.RemoteAddr())
 		if err != nil {
-			log.Warningf("Error authenticating user using MySQL native password: %v", err)
+			l.handleConnectionWarning(c, fmt.Sprintf(
+				"Error authenticating user using MySQL native password: %v", err))
 			c.writeErrorPacketFromError(err)
 			return
 		}
@@ -477,6 +493,8 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 
 		// The negotiation happens in clear text. Let's check we can.
 		if !l.AllowClearTextWithoutTLS.Get() && c.Capabilities&CapabilityClientSSL == 0 {
+			l.handleConnectionWarning(c, fmt.Sprintf(
+				"Cannot use clear text authentication over non-SSL connections."))
 			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
 			return
 		}
@@ -488,7 +506,8 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 			data = authServerDialogSwitchData()
 		}
 		if err := c.writeAuthSwitchRequest(authServerMethod, data); err != nil {
-			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf(
+				"Error writing auth switch packet for %s: %v", c, err))
 			return
 		}
 
@@ -496,6 +515,8 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 		// auth server.
 		userData, err := l.authServer.Negotiate(c, user, conn.RemoteAddr())
 		if err != nil {
+			l.handleConnectionWarning(c, fmt.Sprintf(
+				"Unable to negotiate authentication: %v", err))
 			c.writeErrorPacketFromError(err)
 			return
 		}
@@ -539,6 +560,23 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 		}
 	}
 }
+
+// handleConnectionError logs |reason| as an error and notifies the handler that a connection has been aborted.
+func (l *Listener) handleConnectionError(c *Conn, reason string) {
+	log.Error(reason)
+	if err := l.handler.ConnectionAborted(c, reason); err != nil {
+		log.Errorf("unable to report connection aborted to handler: %s", err)
+	}
+}
+
+// handleConnectionWarning logs |reason| as a warning and notifies the handler that a connection has been aborted.
+func (l *Listener) handleConnectionWarning(c *Conn, reason string) {
+	log.Warning(reason)
+	if err := l.handler.ConnectionAborted(c, reason); err != nil {
+		log.Errorf("unable to report connection aborted to handler: %s", err)
+	}
+}
+
 
 // Close stops the listener, which prevents accept of any new connections. Existing connections won't be closed.
 func (l *Listener) Close() {

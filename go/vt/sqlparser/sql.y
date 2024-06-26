@@ -432,7 +432,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt> create_query_expression create_query_select_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into
+%type <selStmt> create_query_expression create_query_select_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into values_select_statement
 %type <selStmt> set_op intersect_stmt union_except_lhs union_except_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
@@ -678,6 +678,10 @@ command:
   {
     $$ = $1
   }
+| values_select_statement
+  {
+    $$ = $1
+  }
 | stream_statement
 | insert_statement
 | update_statement
@@ -744,6 +748,21 @@ select_statement:
     	SelectExprs: SelectExprs{Nextval{Expr: $5}},
     	From: TableExprs{&AliasedTableExpr{Expr: $7}},
     }
+  }
+
+values_select_statement:
+  values_statement order_by_opt limit_opt
+  {
+    $$ = &Select{
+    	SelectExprs: SelectExprs{&StarExpr{}},
+    	From: TableExprs{&AliasedTableExpr{Expr: $1}},
+    	OrderBy: $2,
+    	Limit: $3,
+    }
+  }
+| openb values_select_statement closeb
+  {
+    $$ = $2
   }
 
 select_statement_with_no_trailing_into:
@@ -4090,6 +4109,10 @@ foreign_key_definition:
   CONSTRAINT id_or_non_reserved foreign_key_details
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+  }
+| CONSTRAINT foreign_key_details
+  {
+    $$ = &ConstraintDefinition{Details: $2}
   }
 | foreign_key_details
   {

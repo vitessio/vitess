@@ -17,8 +17,11 @@ limitations under the License.
 package mysql
 
 import (
+	"encoding/binary"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	binlogdatapb "github.com/dolthub/vitess/go/vt/proto/binlogdata"
 )
@@ -139,6 +142,52 @@ func TestIntVarEvent(t *testing.T) {
 	if err == nil {
 		t.Fatalf("IntVar(invalid) returned %v/%v/%v", name, value, err)
 	}
+}
+
+func TestUpdateChecksum(t *testing.T) {
+	f := NewMySQL56BinlogFormat()
+	m := NewTestBinlogMetadata()
+
+	q := Query{
+		Database: "my database",
+		SQL:      "my query",
+		Charset: &binlogdatapb.Charset{
+			Client: 0x1234,
+			Conn:   0x5678,
+			Server: 0x9abc,
+		},
+	}
+	event := NewQueryEvent(f, m, q)
+	bytes := event.Bytes()
+
+	// Calling UpdateChecksum without changing the event should not change the checksum
+	oldChecksum := append([]byte{}, bytes[len(bytes)-4:]...)
+	UpdateChecksum(f, event)
+	newChecksum := append([]byte{}, bytes[len(bytes)-4:]...)
+	require.Equal(t, oldChecksum, newChecksum)
+	require.Equal(t, []byte{0x65, 0xaa, 0x33, 0x0e}, newChecksum)
+
+	// Calling UpdateChecksum after changing the event should generate a new checksum
+	binary.LittleEndian.PutUint32(bytes[13:13+4], uint32(420))
+	UpdateChecksum(f, event)
+	newChecksum = append([]byte{}, bytes[len(bytes)-4:]...)
+	require.NotEqual(t, oldChecksum, newChecksum)
+	require.Equal(t, []byte{0x26, 0xD0, 0xa4, 0x05}, newChecksum)
+}
+
+func TestPreviousGtidsEvent(t *testing.T) {
+	f := NewMySQL56BinlogFormat()
+	m := NewTestBinlogMetadata()
+
+	gtidSetString := "32a5b8c9-4716-40f5-9a9b-3d7be0cb33d7:1-42"
+	gtidSet, err := ParseMysql56GTIDSet(gtidSetString)
+	require.NoError(t, err)
+
+	event := NewPreviousGtidsEvent(f, m, gtidSet.(Mysql56GTIDSet))
+	require.True(t, event.IsPreviousGTIDs())
+	position, err := event.PreviousGTIDs(f)
+	require.NoError(t, err)
+	require.Equal(t, gtidSetString, position.String())
 }
 
 func TestInvalidEvents(t *testing.T) {

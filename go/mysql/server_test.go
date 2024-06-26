@@ -114,6 +114,10 @@ func (th *testHandler) NewConnection(c *Conn) {
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
+func (th *testHandler) ConnectionAborted(c *Conn, reason string) error {
+	return nil
+}
+
 func (th *testHandler) ParserOptionsForConnection(c *Conn) (sqlparser.ParserOptions, error) {
 	return sqlparser.ParserOptions{}, nil
 }

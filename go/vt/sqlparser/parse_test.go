@@ -407,6 +407,42 @@ var (
 			input: "select a from (values row(1, 2), row('a', 'b')) as t1 (w, x) join lateral (values row(3, 4), row('c', 'd')) as t2 (y, z)",
 		},
 		{
+			input:  "values row(1, 3), row(2, 2), row(3, 1)",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1))",
+		},
+		{
+			input:  "values (1, 3), (2, 2), (3, 1)",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1))",
+		},
+		{
+			input:  "values (1, 3), row(2, 2), (3, 1)",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1))",
+		},
+		{
+			input:  "values (1, 3), (2, 2), (3, 1) order by 1",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1)) order by 1 asc",
+		},
+		{
+			input:  "values (1, 3), (2, 2), (3, 1) order by 1 asc",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1)) order by 1 asc",
+		},
+		{
+			input:  "values (1, 3), (2, 2), (3, 1) order by 1 desc",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1)) order by 1 desc",
+		},
+		{
+			input:  "values (1, 3), (2, 2), (3, 1) limit 1",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1)) limit 1",
+		},
+		{
+			input:  "values (1, 3), (2, 2), (3, 1) order by 2 limit 2",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1)) order by 2 asc limit 2",
+		},
+		{
+			input:  "(((values (1, 3), (2, 2), (3, 1) order by 2 limit 2)))",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1)) order by 2 asc limit 2",
+		},
+		{
 			input: "select a from t1, lateral (select b from t2) as sq",
 		},
 		{
@@ -1407,76 +1443,146 @@ var (
 			input: "set #simple\n b = 4",
 		}, {
 			input: "set character_set_results = utf8",
-		}, {
+		},
+		{
+			input:  "set @@`version` = true",
+			output: "set session version = true",
+		},
+		{
+			input:  "select @@`version` = true",
+			output: "select @@`version` = true",
+		},
+		{
 			input:  "set @@session.autocommit = true",
 			output: "set session autocommit = true",
-		}, {
+		},
+		{
 			input:  "set @@session.`autocommit` = true",
-			output: "set session `autocommit` = true",
-		}, {
+			output: "set session autocommit = true",
+		},
+		{
+			input:  "select @@session.`autocommit` = true",
+			output: "select @@session.`autocommit` = true",
+		},
+		{
 			input:  "set @@session.autocommit = ON",
 			output: "set session autocommit = 'ON'",
-		}, {
+		},
+		{
 			input:  "set @@session.autocommit= OFF",
 			output: "set session autocommit = 'OFF'",
-		}, {
+		},
+		{
 			input:  "set session autocommit = ON",
 			output: "set session autocommit = 'ON'",
-		}, {
+		},
+		{
 			input:  "set session autocommit := ON",
 			output: "set session autocommit = 'ON'",
-		}, {
+		},
+		{
 			input:  "set global autocommit = OFF",
 			output: "set global autocommit = 'OFF'",
-		}, {
+		},
+		{
 			input:  "set @@global.optimizer_prune_level = 1",
 			output: "set global optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set global optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@persist.optimizer_prune_level = 1",
 			output: "set persist optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set persist optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@persist_only.optimizer_prune_level = 1",
 			output: "set persist_only optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set persist_only optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@local.optimizer_prune_level = 1",
 			output: "set session optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set local optimizer_prune_level = 1",
 			output: "set session optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@optimizer_prune_level = 1",
 			output: "set session optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set session optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@optimizer_prune_level = 1, @@global.optimizer_search_depth = 62",
 			output: "set session optimizer_prune_level = 1, global optimizer_search_depth = 62",
-		}, {
+		},
+		{
 			input:  "set @@GlObAl.optimizer_prune_level = 1",
 			output: "set global optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set @user.var = 1",
-		}, {
+		},
+		{
 			input: "set @user.var.name = 1",
-		}, {
+		},
+		{
 			input:  "set @user.var.name := 1",
 			output: "set @user.var.name = 1",
-		}, {
+		},
+		{
+			input:  "set @`user var` = 1",
+			output: "set @user var = 1",
+		},
+		{
+			input:  "select @`user var`",
+			output: "select @`user var`",
+		},
+		{
+			input:  "set @user.`var` = 1",
+			output: "set @user.var = 1",
+		},
+		{
+			input:  "select @user.`var`",
+			output: "select @user.var",
+		},
+		{
+			input:  "set @`user`.`var` = 1",
+			output: "set @`user`.var = 1",
+		},
+		{
+			input:  "select @`user`.`var`",
+			output: "select @`user`.var",
+		},
+		{
+			input:  "set @abc.def.`ghi` = 300",
+			output: "set @abc.def.ghi = 300",
+		},
+		{
+			input:  "select @abc.def.`ghi`",
+			output: "select @abc.def.ghi",
+		},
+		{
 			input:  "set autocommit = on",
 			output: "set autocommit = 'on'",
-		}, {
+		},
+		{
 			input:  "set autocommit = off",
 			output: "set autocommit = 'off'",
-		}, {
+		},
+		{
 			input:  "set autocommit = off, foo = 1",
 			output: "set autocommit = 'off', foo = 1",
-		}, {
+		},
+		{
 			input:  "set names utf8 collate foo",
 			output: "set names 'utf8'",
 		}, {
@@ -1696,6 +1802,9 @@ var (
 			input: "alter table a add spatial index idx (id)",
 		}, {
 			input:  "alter table a add foreign key (x) references y(z)",
+			output: "alter table a add foreign key (x) references y (z)",
+		}, {
+			input:  "alter table a add constraint foreign key (x) references y(z)",
 			output: "alter table a add foreign key (x) references y (z)",
 		}, {
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code)",
@@ -4401,6 +4510,20 @@ end`,
 		},
 	}
 )
+
+// TestSingleSQL is a helper function to test a single SQL statement.
+func TestSingleSQL(t *testing.T) {
+	t.Skip()
+	tests := []parseTest{
+		{
+			input:  "select @`user var`",
+			output: "select @`user var`",
+		},
+	}
+	for _, tcase := range tests {
+		runParseTestCase(t, tcase)
+	}
+}
 
 func TestValid(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
