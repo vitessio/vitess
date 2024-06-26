@@ -372,37 +372,44 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 
 func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
 	rewriteIt := func(s string) sqlparser.SQLNode {
-		for _, sq1 := range se {
-			if sq1.ArgName != s && sq1.HasValuesName != s {
-				continue
-			}
-
-			for _, sq2 := range subqueries {
-				if s == sq2.ArgName {
-					switch {
-					case sq1.FilterType.NeedsListArg():
-						return sqlparser.NewListArg(s)
-					case sq1.FilterType == opcode.PulloutExists:
-						if sq1.HasValuesName == "" {
-							sq1.HasValuesName = ctx.ReservedVars.ReserveHasValuesSubQuery()
-							sq2.HasValuesName = sq1.HasValuesName
-						}
-						return sqlparser.NewArgument(sq1.HasValuesName)
-					default:
-						argType := sqltypes.Unknown
-						ae, isAe := sq2.originalSubquery.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
-						if isAe {
-							evalType, found := ctx.TypeForExpr(ae.Expr)
-							if found {
-								argType = evalType.Type()
-							}
-						}
-						return sqlparser.NewTypedArgument(s, argType)
-					}
-				}
+		var sq1, sq2 *SubQuery
+		for _, sq := range se {
+			if sq.ArgName == s || sq.HasValuesName == s {
+				sq1 = sq
+				break
 			}
 		}
-		return nil
+		for _, sq := range subqueries {
+			if s == sq.ArgName {
+				sq2 = sq
+				break
+			}
+		}
+
+		if sq1 == nil || sq2 == nil {
+			return nil
+		}
+
+		switch {
+		case sq1.FilterType.NeedsListArg():
+			return sqlparser.NewListArg(s)
+		case sq1.FilterType == opcode.PulloutExists:
+			if sq1.HasValuesName == "" {
+				sq1.HasValuesName = ctx.ReservedVars.ReserveHasValuesSubQuery()
+				sq2.HasValuesName = sq1.HasValuesName
+			}
+			return sqlparser.NewArgument(sq1.HasValuesName)
+		default:
+			argType := sqltypes.Unknown
+			ae, isAe := sq2.originalSubquery.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
+			if isAe {
+				evalType, found := ctx.TypeForExpr(ae.Expr)
+				if found {
+					argType = evalType.Type()
+				}
+			}
+			return sqlparser.NewTypedArgument(s, argType)
+		}
 	}
 
 	// replace the ColNames with Argument inside the subquery
