@@ -112,13 +112,12 @@ type VRepl struct {
 
 	analyzeTable bool
 
-	sourceSharedColumns              *vrepl.ColumnList
-	targetSharedColumns              *vrepl.ColumnList
-	droppedSourceNonGeneratedColumns *vrepl.ColumnList
-	droppedNoDefaultColumnNames      []string
-	expandedColumnNames              []string
-	sharedColumnsMap                 map[string]string
-	sourceAutoIncrement              uint64
+	sourceSharedColumns         *vrepl.ColumnList
+	targetSharedColumns         *vrepl.ColumnList
+	droppedNoDefaultColumnNames []string
+	expandedColumnNames         []string
+	sharedColumnsMap            map[string]string
+	sourceAutoIncrement         uint64
 
 	chosenSourceUniqueKey *vrepl.UniqueKey
 	chosenTargetUniqueKey *vrepl.UniqueKey
@@ -384,7 +383,8 @@ func (v *VRepl) analyzeTables() (err error) {
 	if err != nil {
 		return err
 	}
-	v.sourceSharedColumns, v.targetSharedColumns, v.droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser)
+	var droppedSourceNonGeneratedColumns *vrepl.ColumnList
+	v.sourceSharedColumns, v.targetSharedColumns, droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser)
 
 	// unique keys
 	sourceUniqueKeys, err := v.readTableUniqueKeys(v.sourceCreateTableEntity)
@@ -421,7 +421,7 @@ func (v *VRepl) analyzeTables() (err error) {
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.env, v.sourceCreateTableEntity.CreateTable, v.targetCreateTableEntity.CreateTable)
+	v.removedForeignKeyNames, err = schemadiff.RemovedForeignKeyNames(v.sourceCreateTableEntity, v.targetCreateTableEntity)
 	if err != nil {
 		return err
 	}
@@ -429,7 +429,7 @@ func (v *VRepl) analyzeTables() (err error) {
 	// chosen source & target unique keys have exact columns in same order
 	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
 
-	if err := applyColumnTypes(v.sourceCreateTableEntity, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, v.droppedSourceNonGeneratedColumns); err != nil {
+	if err := applyColumnTypes(v.sourceCreateTableEntity, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, droppedSourceNonGeneratedColumns); err != nil {
 		return err
 	}
 	if err := applyColumnTypes(v.targetCreateTableEntity, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
@@ -445,7 +445,7 @@ func (v *VRepl) analyzeTables() (err error) {
 		}
 	}
 
-	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(v.droppedSourceNonGeneratedColumns)
+	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(droppedSourceNonGeneratedColumns)
 	var expandedDescriptions map[string]string
 	v.expandedColumnNames, expandedDescriptions = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
 
