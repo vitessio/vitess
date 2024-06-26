@@ -6114,8 +6114,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select :__sq1 + :__sq2 as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual where 1 != 1",
-                "Query": "select :__sq1 + :__sq2 as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual",
+                "FieldQuery": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual where 1 != 1",
+                "Query": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual",
                 "Table": "dual"
               }
             ]
@@ -6764,8 +6764,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
-                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 2 group by weight_string(:__sq1)",
+                "FieldQuery": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where 1 != 1 group by weight_string(:__sq1 /* INT16 */)",
+                "Query": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where id = 2 group by weight_string(:__sq1 /* INT16 */)",
                 "Table": "`user`",
                 "Values": [
                   "2"

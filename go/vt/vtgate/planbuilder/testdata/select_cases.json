@@ -1418,8 +1418,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, :__sq1 as `(select col from ``user``)` from unsharded where 1 != 1",
-            "Query": "select a, :__sq1 as `(select col from ``user``)` from unsharded",
+            "FieldQuery": "select a, :__sq1 /* INT16 */ as `(select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, :__sq1 /* INT16 */ as `(select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -1463,8 +1463,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded where 1 != 1",
-            "Query": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded",
+            "FieldQuery": "select a, 1 + :__sq1 /* INT16 */ as `1 + (select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, 1 + :__sq1 /* INT16 */ as `1 + (select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -2510,8 +2510,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select t.a from (select :__sq1 as a from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select t.a from (select :__sq1 as a from `user`) as t",
+                "FieldQuery": "select t.a from (select :__sq1 /* INT16 */ as a from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.a from (select :__sq1 /* INT16 */ as a from `user`) as t",
                 "Table": "`user`"
               }
             ]
@@ -2580,8 +2580,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
-                "Query": "select :__sq1 as a from `user`",
+                "FieldQuery": "select :__sq1 /* INT16 */ as a from `user` where 1 != 1",
+                "Query": "select :__sq1 /* INT16 */ as a from `user`",
                 "Table": "`user`"
               }
             ]
@@ -2707,6 +2707,58 @@
             },
             "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
             "Query": "select user_extra.user_id from user_extra where user_extra.foo = :user_id",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "PullOut subquery with an aggregation that should be typed in the final output",
+    "query": "select (select sum(col) from user) from user_extra",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select (select sum(col) from user) from user_extra",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS sum(col)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(col) from `user` where 1 != 1",
+                "Query": "select sum(col) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from ``user``)` from user_extra where 1 != 1",
+            "Query": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from ``user``)` from user_extra",
             "Table": "user_extra"
           }
         ]

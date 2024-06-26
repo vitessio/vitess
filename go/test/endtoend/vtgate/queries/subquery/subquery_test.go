@@ -236,8 +236,6 @@ func TestSubqueries(t *testing.T) {
 }
 
 func TestToto(t *testing.T) {
-	t.Skip("WIP - does not work")
-
 	query := "select (select sum(id) from user) from user_extra"
 
 	mcmp, closer := start(t)

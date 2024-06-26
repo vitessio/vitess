@@ -23,6 +23,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -388,7 +389,15 @@ func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Exp
 						}
 						return sqlparser.NewArgument(sq1.HasValuesName)
 					default:
-						return sqlparser.NewArgument(s)
+						argType := sqltypes.Unknown
+						ae, isAe := sq2.originalSubquery.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
+						if isAe {
+							evalType, found := ctx.TypeForExpr(ae.Expr)
+							if found {
+								argType = evalType.Type()
+							}
+						}
+						return sqlparser.NewTypedArgument(s, argType)
 					}
 				}
 			}
