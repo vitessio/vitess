@@ -371,23 +371,31 @@ func (c *ColumnDefinitionEntity) Scale() int {
 
 type ColumnDefinitionEntityList struct {
 	Entities []*ColumnDefinitionEntity
-	m        map[string]*ColumnDefinitionEntity
+	byName   map[string]*ColumnDefinitionEntity
 }
 
 func NewColumnDefinitionEntityList(entities []*ColumnDefinitionEntity) *ColumnDefinitionEntityList {
 	list := &ColumnDefinitionEntityList{
 		Entities: entities,
-		m:        make(map[string]*ColumnDefinitionEntity),
+		byName:   make(map[string]*ColumnDefinitionEntity),
 	}
 	for _, entity := range entities {
-		list.m[entity.Name()] = entity
-		list.m[entity.NameLowered()] = entity
+		list.byName[entity.Name()] = entity
+		list.byName[entity.NameLowered()] = entity
 	}
 	return list
 }
 
+func (l *ColumnDefinitionEntityList) Names() []string {
+	names := make([]string, len(l.Entities))
+	for i, entity := range l.Entities {
+		names[i] = entity.Name()
+	}
+	return names
+}
+
 func (l *ColumnDefinitionEntityList) GetColumn(name string) *ColumnDefinitionEntity {
-	return l.m[name]
+	return l.byName[name]
 }
 
 func (l *ColumnDefinitionEntityList) IsSubset(of *ColumnDefinitionEntityList) bool {
