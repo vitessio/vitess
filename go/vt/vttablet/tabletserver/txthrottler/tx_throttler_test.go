@@ -18,7 +18,7 @@ package txthrottler
 
 // Commands to generate the mocks for this test.
 //go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler -mock_names "HealthCheck=MockHealthCheck" vitess.io/vitess/go/vt/discovery HealthCheck
-//go:generate mockgen -destination mock_throttler_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler ThrottlerInterface
+//go:generate mockgen -destination mock_throttler_test.go -package txthrottler vitess.io/vitess/go/vt/throttler Throttler
 
 import (
 	"context"
@@ -69,14 +69,17 @@ func TestEnabledThrottler(t *testing.T) {
 	mockHealthCheck := NewMockHealthCheck(mockCtrl)
 	hcCall1 := mockHealthCheck.EXPECT().Subscribe()
 	hcCall1.Do(func() {})
-	hcCall2 := mockHealthCheck.EXPECT().Close()
+	hcCall2 := mockHealthCheck.EXPECT().RegisterStats()
+	hcCall2.Do(func() {})
 	hcCall2.After(hcCall1)
+	hcCall3 := mockHealthCheck.EXPECT().Close()
+	hcCall3.After(hcCall2)
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return mockHealthCheck
 	}
 
-	mockThrottler := NewMockThrottlerInterface(mockCtrl)
-	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
+	mockThrottler := NewMockThrottler(mockCtrl)
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error) {
 		assert.Equal(t, 1, threadCount)
 		return mockThrottler, nil
 	}
