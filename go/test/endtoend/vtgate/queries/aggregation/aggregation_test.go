@@ -68,7 +68,11 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestAggrWithLimit(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
+	version, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if version != 18 {
+		t.Skip("Test requires VTGate version 18")
+	}
 	mcmp, closer := start(t)
 	defer closer()
 
