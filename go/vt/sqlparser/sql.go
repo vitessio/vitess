@@ -18842,7 +18842,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5990
 		{
-			yyLOCAL = &CountStar{OverClause: yyDollar[5].overClauseUnion()}
+			yyLOCAL = &CountStar{Name: yyDollar[1].str, OverClause: yyDollar[5].overClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1163:

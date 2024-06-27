@@ -2912,7 +2912,8 @@ type (
 	}
 
 	CountStar struct {
-		_ bool
+		Name string
+		_    bool
 		// TL;DR; This makes sure that reference equality checks works as expected
 		//
 		// You're correct that this might seem a bit strange at first glance.
