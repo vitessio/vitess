@@ -95,8 +95,8 @@ func ColumnChangeExpandsDataRange(source *ColumnDefinitionEntity, target *Column
 	return false, ""
 }
 
-// KeyValidForIteration returns true if the key is eligible for Online DDL iteration.
-func KeyValidForIteration(key *IndexDefinitionEntity) bool {
+// IsValidIterationKey returns true if the key is eligible for Online DDL iteration.
+func IsValidIterationKey(key *IndexDefinitionEntity) bool {
 	if key == nil {
 		return false
 	}
@@ -118,7 +118,7 @@ func KeyValidForIteration(key *IndexDefinitionEntity) bool {
 // PrioritizedUniqueKeys returns all unique keys on given table, ordered from "best" to "worst",
 // for Online DDL purposes. The list of keys includes some that are not eligible for Online DDL
 // iteration.
-func PrioritizedUniqueKeys(createTableEntity *CreateTableEntity) []*IndexDefinitionEntity {
+func PrioritizedUniqueKeys(createTableEntity *CreateTableEntity) *IndexDefinitionEntityList {
 	uniqueKeys := []*IndexDefinitionEntity{}
 	for _, key := range createTableEntity.IndexDefinitionEntities() {
 		if !key.IsUnique() {
@@ -151,24 +151,37 @@ func PrioritizedUniqueKeys(createTableEntity *CreateTableEntity) []*IndexDefinit
 			// Prefix comes last
 			return false
 		}
-		iFirstColEntity := uniqueKeys[i].ColumnDefinitionEntities[0]
-		jFirstColEntity := uniqueKeys[j].ColumnDefinitionEntities[0]
+		iFirstColEntity := uniqueKeys[i].ColumnList.Entities[0]
+		jFirstColEntity := uniqueKeys[j].ColumnList.Entities[0]
 		if iFirstColEntity.IsIntegralType() && !jFirstColEntity.IsIntegralType() {
 			// Prioritize integers
 			return true
 		}
+		if !iFirstColEntity.IsIntegralType() && jFirstColEntity.IsIntegralType() {
+			// Prioritize integers
+			return false
+		}
 		if !iFirstColEntity.HasBlobTypeStorage() && jFirstColEntity.HasBlobTypeStorage() {
 			return true
+		}
+		if iFirstColEntity.HasBlobTypeStorage() && !jFirstColEntity.HasBlobTypeStorage() {
+			return false
 		}
 		if !iFirstColEntity.IsTextual() && jFirstColEntity.IsTextual() {
 			return true
 		}
+		if iFirstColEntity.IsTextual() && !jFirstColEntity.IsTextual() {
+			return false
+		}
 		if storageDiff := IntegralTypeStorage(iFirstColEntity.Type()) - IntegralTypeStorage(jFirstColEntity.Type()); storageDiff != 0 {
 			return storageDiff < 0
 		}
+		if lenDiff := len(uniqueKeys[i].ColumnList.Entities) - len(uniqueKeys[j].ColumnList.Entities); lenDiff != 0 {
+			return lenDiff < 0
+		}
 		return false
 	})
-	return uniqueKeys
+	return NewIndexDefinitionEntityList(uniqueKeys)
 }
 
 // RemovedForeignKeyNames returns the names of removed foreign keys, ignoring mere name changes
@@ -360,14 +373,13 @@ func KeyAtLeastConstrainedAs(
 			targetKeyLengths[col.Column.Lowered()] = *col.Length
 		}
 	}
-	targetColsList := targetUniqueKey.ColumnDefinitionEntitiesList()
 	// source is more constrained than target if every column in source is also in target, order is immaterial
-	for _, sourceCol := range sourceUniqueKey.ColumnDefinitionEntities {
+	for _, sourceCol := range sourceUniqueKey.ColumnList.Entities {
 		mappedColName, ok := columnRenameMap[sourceCol.Name()]
 		if !ok {
 			mappedColName = sourceCol.NameLowered()
 		}
-		targetCol := targetColsList.GetColumn(mappedColName)
+		targetCol := targetUniqueKey.ColumnList.GetColumn(mappedColName)
 		if targetCol == nil {
 			// source can't be more constrained if it covers *more* columns
 			return false
@@ -392,11 +404,11 @@ func KeyAtLeastConstrainedAs(
 //	Synopsis: the constraint on (c1, c2) is new; and `other_key` in target table is considered a new key
 //
 // Order of columns is immaterial to uniqueness of column combination.
-func IntroducedUniqueConstraints(sourceUniqueKeys []*IndexDefinitionEntity, targetUniqueKeys []*IndexDefinitionEntity, columnRenameMap map[string]string) []*IndexDefinitionEntity {
+func IntroducedUniqueConstraints(sourceUniqueKeys *IndexDefinitionEntityList, targetUniqueKeys *IndexDefinitionEntityList, columnRenameMap map[string]string) *IndexDefinitionEntityList {
 	introducedUniqueConstraints := []*IndexDefinitionEntity{}
-	for _, targetUniqueKey := range targetUniqueKeys {
+	for _, targetUniqueKey := range targetUniqueKeys.Entities {
 		foundSourceKeyAtLeastAsConstrained := func() bool {
-			for _, sourceUniqueKey := range sourceUniqueKeys {
+			for _, sourceUniqueKey := range sourceUniqueKeys.Entities {
 				if KeyAtLeastConstrainedAs(sourceUniqueKey, targetUniqueKey, columnRenameMap) {
 					// target key does not add a new constraint
 					return true
@@ -408,14 +420,26 @@ func IntroducedUniqueConstraints(sourceUniqueKeys []*IndexDefinitionEntity, targ
 			introducedUniqueConstraints = append(introducedUniqueConstraints, targetUniqueKey)
 		}
 	}
-	return introducedUniqueConstraints
+	return NewIndexDefinitionEntityList(introducedUniqueConstraints)
 }
 
 // RemovedUniqueKeys returns the list of unique key constraints _removed_ going from source to target.
-func RemovedUniqueConstraints(sourceUniqueKeys []*IndexDefinitionEntity, targetUniqueKeys []*IndexDefinitionEntity, columnRenameMap map[string]string) []*IndexDefinitionEntity {
+func RemovedUniqueConstraints(sourceUniqueKeys *IndexDefinitionEntityList, targetUniqueKeys *IndexDefinitionEntityList, columnRenameMap map[string]string) *IndexDefinitionEntityList {
 	reverseColumnRenameMap := map[string]string{}
 	for k, v := range columnRenameMap {
 		reverseColumnRenameMap[v] = k
 	}
 	return IntroducedUniqueConstraints(targetUniqueKeys, sourceUniqueKeys, reverseColumnRenameMap)
+}
+
+// UniqueKeyCoveredByColumns returns the first Online DDL compliant unique key from given list,
+// whose columns all appear in given column list.
+func IterationKeysByColumns(keys *IndexDefinitionEntityList, columns *ColumnDefinitionEntityList) *IndexDefinitionEntityList {
+	subset := []*IndexDefinitionEntity{}
+	for _, key := range keys.SubsetCoveredByColumns(columns).Entities {
+		if IsValidIterationKey(key) {
+			subset = append(subset, key)
+		}
+	}
+	return NewIndexDefinitionEntityList(subset)
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,8 +60,8 @@ func TestPrioritizedUniqueKeys(t *testing.T) {
 
 	keys := PrioritizedUniqueKeys(createTableEntity)
 	require.NotEmpty(t, keys)
-	names := make([]string, 0, len(keys))
-	for _, key := range keys {
+	names := make([]string, 0, len(keys.Entities))
+	for _, key := range keys.Entities {
 		names = append(names, key.Name())
 	}
 	expect := []string{
@@ -302,8 +303,8 @@ func TestAnalyzeSharedColumns(t *testing.T) {
 			require.NoError(t, err)
 
 			sourceSharedCols, targetSharedCols, droppedNonGeneratedCols, sharedColumnsMap := AnalyzeSharedColumns(
-				NewColumnDefinitionEntityList(sourceEntity.ColumnDefinitionEntities()),
-				NewColumnDefinitionEntityList(targetEntity.ColumnDefinitionEntities()),
+				sourceEntity.ColumnDefinitionEntitiesList(),
+				targetEntity.ColumnDefinitionEntitiesList(),
 				alterTableAnalysis,
 			)
 			assert.Equal(t, tcase.expectSourceSharedColNames, sourceSharedCols.Names())
@@ -645,11 +646,118 @@ func TestIntroducedUniqueConstraints(t *testing.T) {
 			targetUniqueKeys := PrioritizedUniqueKeys(targetEntity)
 
 			introduced := IntroducedUniqueConstraints(sourceUniqueKeys, targetUniqueKeys, nil)
-			introducedNames := make([]string, 0, len(introduced))
-			for _, key := range introduced {
-				introducedNames = append(introducedNames, key.Name())
-			}
-			assert.Equal(t, tcase.expectIntroduced, introducedNames)
+			assert.Equal(t, tcase.expectIntroduced, introduced.Names())
 		})
 	}
+}
+
+func TestUniqueKeysCoveredByColumns(t *testing.T) {
+	env := NewTestEnv()
+	table := `
+		create table t (
+			id int,
+			c1 int not null,
+			c2 int not null,
+			c3 int not null,
+			c9 int,
+			v varchar(32) not null,
+			primary key (id),
+			unique key uk1 (c1),
+			unique key uk3 (c3),
+			unique key uk9 (c9),
+			key k3 (c3),
+			unique key uk12 (c1, c2),
+			unique key uk13 (c1, c3),
+			unique key uk23 (c2, c3),
+			unique key uk123 (c1, c2, c3),
+			unique key uk21 (c2, c1),
+			unique key ukv (v),
+			unique key ukv3 (v(3)),
+			unique key uk2v5 (c2, v(5)),
+			unique key uk3v (c3, v)
+		)
+	`
+	tcases := []struct {
+		columns []string
+		expect  []string
+	}{
+		{
+			columns: []string{"id"},
+			expect:  []string{"PRIMARY"},
+		},
+		{
+			columns: []string{"c1"},
+			expect:  []string{"uk1"},
+		},
+		{
+			columns: []string{"id", "c1"},
+			expect:  []string{"PRIMARY", "uk1"},
+		},
+		{
+			columns: []string{"c1", "id"},
+			expect:  []string{"PRIMARY", "uk1"},
+		},
+		{
+			columns: []string{"c9"},
+			expect:  []string{}, // nullable column
+		},
+		{
+			columns: []string{"v"},
+			expect:  []string{"ukv"},
+		},
+		{
+			columns: []string{"v", "c9"},
+			expect:  []string{"ukv"},
+		},
+		{
+			columns: []string{"v", "c2"},
+			expect:  []string{"ukv"},
+		},
+		{
+			columns: []string{"v", "c2", "c3"},
+			expect:  []string{"uk3", "uk23", "uk3v", "ukv"},
+		},
+		{
+			columns: []string{"id", "c1", "c2", "c3", "v"},
+			expect:  []string{"PRIMARY", "uk1", "uk3", "uk12", "uk13", "uk23", "uk21", "uk3v", "uk123", "ukv"},
+		},
+	}
+
+	entity, err := NewCreateTableEntityFromSQL(env, table)
+	require.NoError(t, err)
+	err = entity.validate()
+	require.NoError(t, err)
+	tableColumns := entity.ColumnDefinitionEntitiesList()
+	tableKeys := PrioritizedUniqueKeys(entity)
+	assert.Equal(t, []string{
+		"PRIMARY",
+		"uk1",
+		"uk3",
+		"uk12",
+		"uk13",
+		"uk23",
+		"uk21",
+		"uk3v",
+		"uk123",
+		"ukv",
+		"uk2v5",
+		"ukv3",
+		"uk9",
+	}, tableKeys.Names())
+
+	for _, tcase := range tcases {
+		t.Run(strings.Join(tcase.columns, ","), func(t *testing.T) {
+			columns := []*ColumnDefinitionEntity{}
+			for _, tcaseCol := range tcase.columns {
+				col := tableColumns.GetColumn(tcaseCol)
+				require.NotNil(t, col)
+				columns = append(columns, col)
+			}
+			columnsList := NewColumnDefinitionEntityList(columns)
+
+			covered := IterationKeysByColumns(tableKeys, columnsList)
+			assert.Equal(t, tcase.expect, covered.Names())
+		})
+	}
+
 }

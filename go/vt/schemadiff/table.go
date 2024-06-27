@@ -479,6 +479,11 @@ func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity
 	return entities
 }
 
+// ColumnDefinitionEntities returns the list of column entities for the table.
+func (c *CreateTableEntity) ColumnDefinitionEntitiesList() *ColumnDefinitionEntityList {
+	return NewColumnDefinitionEntityList(c.ColumnDefinitionEntities())
+}
+
 // ColumnDefinitionEntities returns column entities mapped by their lower cased name
 func (c *CreateTableEntity) ColumnDefinitionEntitiesMap() map[string]*ColumnDefinitionEntity {
 	entities := c.ColumnDefinitionEntities()
@@ -499,9 +504,14 @@ func (c *CreateTableEntity) IndexDefinitionEntities() []*IndexDefinitionEntity {
 		for i, keyCol := range key.Columns {
 			colEntities[i] = colMap[keyCol.Column.Lowered()]
 		}
-		entities[i] = NewIndexDefinitionEntity(c.Env, key, colEntities)
+		entities[i] = NewIndexDefinitionEntity(c.Env, key, NewColumnDefinitionEntityList(colEntities))
 	}
 	return entities
+}
+
+// IndexDefinitionEntityList returns the list of index entities for the table.
+func (c *CreateTableEntity) IndexDefinitionEntitiesList() *IndexDefinitionEntityList {
+	return NewIndexDefinitionEntityList(c.IndexDefinitionEntities())
 }
 
 // IndexDefinitionEntitiesMap returns index entities mapped by their lower cased name.

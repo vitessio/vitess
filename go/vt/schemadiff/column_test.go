@@ -458,6 +458,6 @@ func TestColumnDefinitionEntityListSubset(t *testing.T) {
 	require.NotEmpty(t, entities2)
 	list2 := NewColumnDefinitionEntityList(entities2)
 
-	assert.True(t, list2.IsSubset(list1))
-	assert.False(t, list1.IsSubset(list2))
+	assert.True(t, list1.Contains(list2))
+	assert.False(t, list2.Contains(list1))
 }

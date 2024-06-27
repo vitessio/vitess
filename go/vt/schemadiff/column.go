@@ -398,9 +398,9 @@ func (l *ColumnDefinitionEntityList) GetColumn(name string) *ColumnDefinitionEnt
 	return l.byName[name]
 }
 
-func (l *ColumnDefinitionEntityList) IsSubset(of *ColumnDefinitionEntityList) bool {
-	for _, entity := range l.Entities {
-		if of.GetColumn(entity.NameLowered()) == nil {
+func (l *ColumnDefinitionEntityList) Contains(other *ColumnDefinitionEntityList) bool {
+	for _, entity := range other.Entities {
+		if l.GetColumn(entity.NameLowered()) == nil {
 			return false
 		}
 	}

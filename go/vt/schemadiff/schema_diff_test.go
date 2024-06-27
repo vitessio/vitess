@@ -1319,6 +1319,5 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability := schemaDiff.InstantDDLCapability()
 			assert.Equal(t, tc.instantCapability, instantCapability, "for instant capability")
 		})
-
 	}
 }

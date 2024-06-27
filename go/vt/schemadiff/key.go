@@ -21,16 +21,16 @@ import (
 )
 
 type IndexDefinitionEntity struct {
-	IndexDefinition          *sqlparser.IndexDefinition
-	ColumnDefinitionEntities []*ColumnDefinitionEntity
-	Env                      *Environment
+	IndexDefinition *sqlparser.IndexDefinition
+	ColumnList      *ColumnDefinitionEntityList
+	Env             *Environment
 }
 
-func NewIndexDefinitionEntity(env *Environment, indexDefinition *sqlparser.IndexDefinition, columnDefinitionEntities []*ColumnDefinitionEntity) *IndexDefinitionEntity {
+func NewIndexDefinitionEntity(env *Environment, indexDefinition *sqlparser.IndexDefinition, columnDefinitionEntitiesList *ColumnDefinitionEntityList) *IndexDefinitionEntity {
 	return &IndexDefinitionEntity{
-		IndexDefinition:          indexDefinition,
-		ColumnDefinitionEntities: columnDefinitionEntities,
-		Env:                      env,
+		IndexDefinition: indexDefinition,
+		ColumnList:      columnDefinitionEntitiesList,
+		Env:             env,
 	}
 }
 
@@ -50,10 +50,6 @@ func (i *IndexDefinitionEntity) Clone() *IndexDefinitionEntity {
 	return clone
 }
 
-func (i *IndexDefinitionEntity) ColumnDefinitionEntitiesList() *ColumnDefinitionEntityList {
-	return NewColumnDefinitionEntityList(i.ColumnDefinitionEntities)
-}
-
 func (i *IndexDefinitionEntity) Len() int {
 	return len(i.IndexDefinition.Columns)
 }
@@ -67,7 +63,7 @@ func (i *IndexDefinitionEntity) IsUnique() bool {
 }
 
 func (i *IndexDefinitionEntity) HasNullable() bool {
-	for _, col := range i.ColumnDefinitionEntities {
+	for _, col := range i.ColumnList.Entities {
 		if col.IsNullable() {
 			return true
 		}
@@ -76,7 +72,7 @@ func (i *IndexDefinitionEntity) HasNullable() bool {
 }
 
 func (i *IndexDefinitionEntity) HasFloat() bool {
-	for _, col := range i.ColumnDefinitionEntities {
+	for _, col := range i.ColumnList.Entities {
 		if col.IsFloatingPointType() {
 			return true
 		}
@@ -99,4 +95,40 @@ func (i *IndexDefinitionEntity) ColumnNames() []string {
 		names = append(names, col.Column.String())
 	}
 	return names
+}
+
+func (i *IndexDefinitionEntity) ContainsColumns(columns *ColumnDefinitionEntityList) bool {
+	return i.ColumnList.Contains(columns)
+}
+
+func (i *IndexDefinitionEntity) CoveredByColumns(columns *ColumnDefinitionEntityList) bool {
+	return columns.Contains(i.ColumnList)
+}
+
+type IndexDefinitionEntityList struct {
+	Entities []*IndexDefinitionEntity
+}
+
+func NewIndexDefinitionEntityList(entities []*IndexDefinitionEntity) *IndexDefinitionEntityList {
+	return &IndexDefinitionEntityList{
+		Entities: entities,
+	}
+}
+
+func (l *IndexDefinitionEntityList) Names() []string {
+	names := make([]string, len(l.Entities))
+	for i, entity := range l.Entities {
+		names[i] = entity.Name()
+	}
+	return names
+}
+
+func (l *IndexDefinitionEntityList) SubsetCoveredByColumns(columns *ColumnDefinitionEntityList) *IndexDefinitionEntityList {
+	var subset []*IndexDefinitionEntity
+	for _, entity := range l.Entities {
+		if entity.CoveredByColumns(columns) {
+			subset = append(subset, entity)
+		}
+	}
+	return NewIndexDefinitionEntityList(subset)
 }
