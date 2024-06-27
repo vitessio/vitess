@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -141,6 +142,7 @@ func initSrvKeyspace(t *testing.T, topo *topo.Server, keyspace string, sources, 
 	}
 	srvKeyspace.Partitions = append(srvKeyspace.Partitions, getPartition(t, sources))
 	srvKeyspace.Partitions = append(srvKeyspace.Partitions, getPartition(t, targets))
+	log.Errorf("initSrvKeyspace: %v", srvKeyspace)
 	for _, cell := range cells {
 		err := topo.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
 		require.NoError(t, err)

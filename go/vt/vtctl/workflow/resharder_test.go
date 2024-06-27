@@ -25,10 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const eol = "$"
@@ -63,7 +65,7 @@ func TestReshardCreate(t *testing.T) {
 		sourceKeyspace, targetKeyspace *testKeyspace
 		preFunc                        func(env *testEnv)
 		want                           *vtctldatapb.WorkflowStatusResponse
-		wantErr                        bool
+		wantErr                        string
 	}{
 		{
 			name: "basic",
@@ -74,6 +76,29 @@ func TestReshardCreate(t *testing.T) {
 			targetKeyspace: &testKeyspace{
 				KeyspaceName: targetKeyspaceName,
 				ShardNames:   []string{"-80", "80-"},
+			},
+			want: &vtctldatapb.WorkflowStatusResponse{
+				ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
+					"targetks/-80": {
+						Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+							{
+								Id:          1,
+								Tablet:      &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
+								SourceShard: "targetks/0", Position: position, Status: "Running", Info: "VStream Lag: 0s",
+							},
+						},
+					},
+					"targetks/80-": {
+						Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+							{
+								Id:          1,
+								Tablet:      &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
+								SourceShard: "targetks/0", Position: position, Status: "Running", Info: "VStream Lag: 0s",
+							},
+						},
+					},
+				},
+				TrafficState: "Reads Not Switched. Writes Not Switched",
 			},
 		},
 		{
@@ -87,11 +112,13 @@ func TestReshardCreate(t *testing.T) {
 				ShardNames:   []string{"-80", "80-"},
 			},
 			preFunc: func(env *testEnv) {
-				//err := env.ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
-				srv, err := env.ts.GetSrvKeyspace(ctx, env.cell, targetKeyspaceName)
+				_, err := env.ts.UpdateShardFields(ctx, targetKeyspaceName, "-80", func(si *topo.ShardInfo) error {
+					si.PrimaryAlias = nil
+					return nil
+				})
 				require.NoError(t, err)
-				t.Logf("srv: %+v", srv)
 			},
+			wantErr: "buildResharder: target shard -80 has no primary tablet",
 		},
 	}
 	for _, tc := range testcases {
@@ -112,16 +139,29 @@ func TestReshardCreate(t *testing.T) {
 				Cells:        []string{env.cell},
 			}
 
-			for _, tabletUID := range []int{100, 200, 210} {
+			for i := range tc.sourceKeyspace.ShardNames {
+				tabletUID := startingSourceTabletUID + (tabletUIDStep * i)
 				env.tmc.expectVRQuery(
 					tabletUID,
-					insertPrefix+
-						`\('`+workflowName+`', 'keyspace:"`+targetKeyspaceName+`" shard:"0" filter:{rules:{match:"/.*" filter:"-80"}}', '', [0-9]*, [0-9]*, '`+
-						env.cell+`', '`+tabletTypesStr+`', [0-9]*, 0, 'Stopped', 'vt_`+targetKeyspaceName+`', 4, 0, false, '{}'\)`+eol,
+					"select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1",
+					&sqltypes.Result{},
+				)
+				env.tmc.expectVRQuery(
+					tabletUID,
+					"select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)",
 					&sqltypes.Result{},
 				)
 			}
-			for _, tabletUID := range []int{100, 200, 210} {
+
+			for i, target := range tc.targetKeyspace.ShardNames {
+				tabletUID := startingTargetTabletUID + (tabletUIDStep * i)
+				env.tmc.expectVRQuery(
+					tabletUID,
+					insertPrefix+
+						`\('`+workflowName+`', 'keyspace:"`+targetKeyspaceName+`" shard:"0" filter:{rules:{match:"/.*" filter:"`+target+`"}}', '', [0-9]*, [0-9]*, '`+
+						env.cell+`', '`+tabletTypesStr+`', [0-9]*, 0, 'Stopped', 'vt_`+targetKeyspaceName+`', 4, 0, false, '{}'\)`+eol,
+					&sqltypes.Result{},
+				)
 				env.tmc.expectVRQuery(
 					tabletUID,
 					"select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1",
@@ -139,8 +179,14 @@ func TestReshardCreate(t *testing.T) {
 			}
 
 			res, err := env.ws.ReshardCreate(ctx, req)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+				return
+			}
 			require.NoError(t, err)
-			t.Logf("ReshardCreate response: %+v", res)
+			if tc.want != nil {
+				require.Equal(t, tc.want, res)
+			}
 		})
 	}
 }
