@@ -18,6 +18,7 @@ package aggregation
 
 import (
 	"fmt"
+	"math/rand"
 	"slices"
 	"sort"
 	"strings"
@@ -64,6 +65,22 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		mcmp.Close()
 		cluster.PanicHandler(t)
 	}
+}
+
+func TestAggrWithLimit(t *testing.T) {
+	version, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if version != 18 {
+		t.Skip("Test requires VTGate version 18")
+	}
+	mcmp, closer := start(t)
+	defer closer()
+
+	for i := 0; i < 1000; i++ {
+		r := rand.Intn(50)
+		mcmp.Exec(fmt.Sprintf("insert into aggr_test(id, val1, val2) values(%d, 'a', %d)", i, r))
+	}
+	mcmp.Exec("select val2, count(*) from aggr_test group by val2 order by count(*), val2 limit 10")
 }
 
 func TestAggregateTypes(t *testing.T) {
