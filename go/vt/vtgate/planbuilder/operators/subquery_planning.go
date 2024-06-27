@@ -22,8 +22,9 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/slice"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -365,7 +366,11 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 		// need to find the argument name for it and use that instead
 		// we can't use the column name directly, because we're in the RHS of the join
 		name := outer.findOrAddColNameBindVarName(ctx, col)
-		cursor.Replace(sqlparser.NewTypedArgument(name, ctx.SQLTypeForExpr(col)))
+		typ, _ := ctx.TypeForExpr(col)
+		arg := sqlparser.NewTypedArgument(name, typ.Type())
+		arg.Scale = typ.Scale()
+		arg.Size = typ.Size()
+		cursor.Replace(arg)
 	}, nil)
 	return result.(sqlparser.Expr)
 }
@@ -400,12 +405,15 @@ func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Exp
 			}
 			return sqlparser.NewArgument(sq1.HasValuesName)
 		default:
-			argType := sqltypes.Unknown
+			argType := evalengine.NewUnknownType()
 			ae, isAe := sq2.originalSubquery.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
 			if isAe {
-				argType = ctx.SQLTypeForExpr(ae.Expr)
+				argType, _ = ctx.TypeForExpr(ae.Expr)
 			}
-			return sqlparser.NewTypedArgument(s, argType)
+			arg := sqlparser.NewTypedArgument(s, argType.Type())
+			arg.Scale = argType.Scale()
+			arg.Size = argType.Size()
+			return arg
 		}
 	}
 

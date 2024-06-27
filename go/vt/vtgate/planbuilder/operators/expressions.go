@@ -44,7 +44,11 @@ func breakExpressionInLHSandRHS(
 			Name: bvName,
 			Expr: nodeExpr,
 		})
-		arg := sqlparser.NewTypedArgument(bvName, ctx.SQLTypeForExpr(nodeExpr))
+		typeForExpr, _ := ctx.TypeForExpr(nodeExpr)
+		arg := sqlparser.NewTypedArgument(bvName, typeForExpr.Type())
+		arg.Scale = typeForExpr.Scale()
+		arg.Size = typeForExpr.Size()
+
 		// we are replacing one of the sides of the comparison with an argument,
 		// but we don't want to lose the type information we have, so we copy it over
 		ctx.SemTable.CopyExprInfo(nodeExpr, arg)

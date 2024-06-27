@@ -319,7 +319,7 @@
               "Sharded": false
             },
             "FieldQuery": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where 1 != 1",
-            "Query": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where rc.constraint_schema = :__vtschemaname /* VARCHAR */ and rc.constraint_name = :kcu_constraint_name /* VARCHAR */",
+            "Query": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where rc.constraint_schema = :__vtschemaname /* VARCHAR */ and rc.constraint_name = :kcu_constraint_name /* VARCHAR(64) */",
             "SysTableTableSchema": "[:v2]",
             "Table": "information_schema.referential_constraints"
           }
@@ -445,7 +445,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
-            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name /* VARCHAR */ and tc.constraint_schema = :__vtschemaname /* VARCHAR */",
+            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name /* VARCHAR(64) */ and tc.constraint_schema = :__vtschemaname /* VARCHAR */",
             "SysTableTableName": "[tc_table_name:'table_name']",
             "SysTableTableSchema": "['table_schema', :cc_constraint_schema]",
             "Table": "information_schema.table_constraints"
@@ -788,7 +788,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where `user`.id = :x_COLUMN_NAME /* VARCHAR */",
+            "Query": "select 1 from `user` where `user`.id = :x_COLUMN_NAME /* VARCHAR(64) */",
             "Table": "`user`",
             "Values": [
               ":x_COLUMN_NAME"
