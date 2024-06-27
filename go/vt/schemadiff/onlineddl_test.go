@@ -627,7 +627,7 @@ func TestIntroducedUniqueConstraints(t *testing.T) {
 					unique key ukv3 (v(3)),
 					key k2 (c2)
 				)`,
-			expectIntroduced: []string{"ukv3", "uk1v2"},
+			expectIntroduced: []string{"uk1v2", "ukv3"},
 			expectRemoved:    []string{"uk12"},
 		},
 	}
