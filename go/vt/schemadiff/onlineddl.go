@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"math"
 	"sort"
 	"strings"
 
@@ -326,4 +327,53 @@ func AnalyzeSharedColumns(
 		targetShared = append(targetShared, targetColumn)
 	}
 	return NewColumnDefinitionEntityList(sourceShared), NewColumnDefinitionEntityList(targetShared), NewColumnDefinitionEntityList(droppedNonGenerated), sharedColumnsMap
+}
+
+// SourceUniqueKeyAsOrMoreConstrainedThanTarget returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.
+// "More constrained" means the uniqueness constraint is "stronger". Thus, if sourceUniqueKey is as-or-more constrained than targetUniqueKey, then
+// rows valid under sourceUniqueKey must also be valid in targetUniqueKey. The opposite is not necessarily so: rows that are valid in targetUniqueKey
+// may cause a unique key violation under sourceUniqueKey
+func SourceUniqueKeyAsOrMoreConstrainedThanTarget(
+	sourceUniqueKey *IndexDefinitionEntity,
+	targetUniqueKey *IndexDefinitionEntity,
+	columnRenameMap map[string]string,
+) bool {
+	if !sourceUniqueKey.IsUnique() || !targetUniqueKey.IsUnique() {
+		return false
+	}
+	sourceKeyLengths := map[string]int{}
+	for _, col := range sourceUniqueKey.IndexDefinition.Columns {
+		if col.Length == nil {
+			sourceKeyLengths[col.Column.Lowered()] = math.MaxInt64
+		} else {
+			sourceKeyLengths[col.Column.Lowered()] = *col.Length
+		}
+	}
+	targetKeyLengths := map[string]int{}
+	for _, col := range targetUniqueKey.IndexDefinition.Columns {
+		if col.Length == nil {
+			targetKeyLengths[col.Column.Lowered()] = math.MaxInt64
+		} else {
+			targetKeyLengths[col.Column.Lowered()] = *col.Length
+		}
+	}
+	targetColsList := targetUniqueKey.ColumnDefinitionEntitiesList()
+	// source is more constrained than target if every column in source is also in target, order is immaterial
+	for _, sourceCol := range sourceUniqueKey.ColumnDefinitionEntities {
+		mappedColName, ok := columnRenameMap[sourceCol.Name()]
+		if !ok {
+			mappedColName = sourceCol.NameLowered()
+		}
+		targetCol := targetColsList.GetColumn(mappedColName)
+		if targetCol == nil {
+			// source can't be more constrained if it covers *more* columns
+			return false
+		}
+		// We now know that sourceCol maps to targetCol
+		if sourceKeyLengths[sourceCol.NameLowered()] > targetKeyLengths[targetCol.NameLowered()] {
+			// source column covers a larger prefix than target column. It is therefore less constrained.
+			return false
+		}
+	}
+	return true
 }

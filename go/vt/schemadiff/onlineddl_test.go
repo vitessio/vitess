@@ -313,3 +313,228 @@ func TestAnalyzeSharedColumns(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceUniqueKeyAsOrMoreConstrainedThanTarget(t *testing.T) {
+	env := NewTestEnv()
+	sourceTable := `
+		create table source_table (
+			id int,
+			c1 int,
+			c2 int,
+			c3 int,
+			c9 int,
+			v varchar(32),
+			primary key (id),
+			unique key uk1 (c1),
+			unique key uk2 (c2),
+			unique key uk3 (c3),
+			unique key uk9 (c9),
+			unique key uk12 (c1, c2),
+			unique key uk13 (c1, c3),
+			unique key uk23 (c2, c3),
+			unique key uk123 (c1, c2, c3),
+			unique key uk21 (c2, c1),
+			unique key ukv (v),
+			unique key ukv3 (v(3)),
+			unique key ukv5 (v(5)),
+			unique key uk2v5 (c2, v(5))
+		)`
+	targetTable := `
+		create table target_table (
+			id int,
+			c1 int,
+			c2 int,
+			c3_renamed int,
+			v varchar(32),
+			primary key (id),
+			unique key uk1 (c1),
+			unique key uk2 (c2),
+			unique key uk3 (c3_renamed),
+			unique key uk12 (c1, c2),
+			unique key uk13 (c1, c3_renamed),
+			unique key uk23 (c2, c3_renamed),
+			unique key uk123 (c1, c2, c3_renamed),
+			unique key uk21 (c2, c1),
+			unique key ukv (v),
+			unique key ukv3 (v(3)),
+			unique key ukv5 (v(5)),
+			unique key uk2v5 (c2, v(5))
+		)`
+	renameMap := map[string]string{
+		"c3": "c3_renamed",
+	}
+	tcases := []struct {
+		sourceKey string
+		targetKey string
+		renameMap map[string]string
+		expect    bool
+	}{
+		{
+			sourceKey: "uk1",
+			targetKey: "uk1",
+			expect:    true,
+		},
+		{
+			sourceKey: "uk2",
+			targetKey: "uk2",
+			expect:    true,
+		},
+		{
+			sourceKey: "uk3",
+			targetKey: "uk3",
+			expect:    false, // c3 is renamed
+		},
+		{
+			sourceKey: "uk2",
+			targetKey: "uk1",
+			expect:    false,
+		},
+		{
+			sourceKey: "uk12",
+			targetKey: "uk1",
+			expect:    false,
+		},
+		{
+			sourceKey: "uk1",
+			targetKey: "uk12",
+			expect:    true,
+		},
+		{
+			sourceKey: "uk1",
+			targetKey: "uk21",
+			expect:    true,
+		},
+		{
+			sourceKey: "uk12",
+			targetKey: "uk21",
+			expect:    true,
+		},
+		{
+			sourceKey: "uk123",
+			targetKey: "uk21",
+			expect:    false,
+		},
+		{
+			sourceKey: "uk123",
+			targetKey: "uk123",
+			expect:    false, // c3 is renamed
+		},
+		{
+			sourceKey: "uk1",
+			targetKey: "uk123",
+			expect:    true, // c3 is renamed but not referenced
+		},
+		{
+			sourceKey: "uk21",
+			targetKey: "uk123",
+			expect:    true, // c3 is renamed but not referenced
+		},
+		{
+			sourceKey: "uk9",
+			targetKey: "uk123",
+			expect:    false, // c9 not in target
+		},
+		{
+			sourceKey: "uk3",
+			targetKey: "uk3",
+			renameMap: renameMap,
+			expect:    true,
+		},
+		{
+			sourceKey: "uk123",
+			targetKey: "uk123",
+			renameMap: renameMap,
+			expect:    true,
+		},
+		{
+			sourceKey: "uk3",
+			targetKey: "uk123",
+			renameMap: renameMap,
+			expect:    true,
+		},
+		{
+			sourceKey: "ukv",
+			targetKey: "ukv",
+			expect:    true,
+		},
+		{
+			sourceKey: "ukv3",
+			targetKey: "ukv3",
+			expect:    true,
+		},
+		{
+			sourceKey: "ukv",
+			targetKey: "ukv3",
+			expect:    false,
+		},
+		{
+			sourceKey: "ukv5",
+			targetKey: "ukv3",
+			expect:    false,
+		},
+		{
+			sourceKey: "ukv3",
+			targetKey: "ukv5",
+			expect:    true,
+		},
+		{
+			sourceKey: "ukv3",
+			targetKey: "ukv",
+			expect:    true,
+		},
+		{
+			sourceKey: "uk2",
+			targetKey: "uk2v5",
+			expect:    true,
+		},
+		{
+			sourceKey: "ukv5",
+			targetKey: "uk2v5",
+			expect:    true,
+		},
+		{
+			sourceKey: "ukv3",
+			targetKey: "uk2v5",
+			expect:    true,
+		},
+		{
+			sourceKey: "ukv",
+			targetKey: "uk2v5",
+			expect:    false,
+		},
+		{
+			sourceKey: "uk2v5",
+			targetKey: "ukv5",
+			expect:    false,
+		},
+	}
+
+	sourceEntity, err := NewCreateTableEntityFromSQL(env, sourceTable)
+	require.NoError(t, err)
+	err = sourceEntity.validate()
+	require.NoError(t, err)
+	sourceKeys := sourceEntity.IndexDefinitionEntitiesMap()
+
+	targetEntity, err := NewCreateTableEntityFromSQL(env, targetTable)
+	require.NoError(t, err)
+	err = targetEntity.validate()
+	require.NoError(t, err)
+	targetKeys := targetEntity.IndexDefinitionEntitiesMap()
+
+	for _, tcase := range tcases {
+		t.Run(tcase.sourceKey+"/"+tcase.targetKey, func(t *testing.T) {
+			if tcase.renameMap == nil {
+				tcase.renameMap = make(map[string]string)
+			}
+			sourceKey := sourceKeys[tcase.sourceKey]
+			require.NotNil(t, sourceKey)
+
+			targetKey := targetKeys[tcase.targetKey]
+			require.NotNil(t, targetKey)
+
+			result := SourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceKey, targetKey, tcase.renameMap)
+			assert.Equal(t, tcase.expect, result)
+		})
+	}
+
+}
