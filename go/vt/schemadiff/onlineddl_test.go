@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func TestUniqueKeysForOnlineDDL(t *testing.T) {
+func TestPrioritizedUniqueKeys(t *testing.T) {
 	table := `
 	create table t (
 		idsha varchar(64),
@@ -536,5 +536,120 @@ func TestKeyAtLeastConstrainedAs(t *testing.T) {
 			assert.Equal(t, tcase.expect, result)
 		})
 	}
+}
 
+func TestIntroducedUniqueConstraints(t *testing.T) {
+	env := NewTestEnv()
+	tcases := []struct {
+		sourceTable      string
+		targetTable      string
+		expectIntroduced []string
+		expectRemoved    []string
+	}{
+		{
+			sourceTable: `
+				create table source_table (
+					id int,
+					c1 int,
+					c2 int,
+					c3 int,
+					primary key (id),
+					unique key uk1 (c1),
+					unique key uk2 (c2),
+					unique key uk31 (c3, c1),
+					key k1 (c1)
+				)`,
+			targetTable: `
+				create table source_table (
+					id int,
+					c1 int,
+					c2 int,
+					c3 int,
+					primary key (id),
+					unique key uk1 (c1),
+					unique key uk3 (c3),
+					unique key uk31_alias (c3, c1),
+					key k2 (c2)
+				)`,
+			expectIntroduced: []string{"uk3"},
+			expectRemoved:    []string{"uk2"},
+		},
+		{
+			sourceTable: `
+				create table source_table (
+					id int,
+					c1 int,
+					c2 int,
+					c3 int,
+					primary key (id),
+					unique key uk1 (c1),
+					unique key uk2 (c2),
+					unique key uk31 (c3, c1),
+					key k1 (c1)
+				)`,
+			targetTable: `
+				create table source_table (
+					id int,
+					c1 int,
+					c2 int,
+					c3 int,
+					primary key (id),
+					unique key uk1 (c1),
+					unique key uk3 (c3),
+					key k2 (c2)
+				)`,
+			expectIntroduced: []string{"uk3"}, // uk31 (c3, c1) not considered removed because the new "uk3" is even more constrained
+			expectRemoved:    []string{"uk2"},
+		},
+		{
+			sourceTable: `
+				create table source_table (
+					id int,
+					c1 int,
+					c2 int,
+					v varchar(128),
+					primary key (id),
+					unique key uk12 (c1, c2),
+					unique key ukv5 (v(5)),
+					key k1 (c1)
+				)`,
+			targetTable: `
+				create table source_table (
+					id int,
+					c1 int,
+					c2 int,
+					c3 int,
+					v varchar(128),
+					primary key (id),
+					unique key uk1v2 (c1, v(2)),
+					unique key uk1v7 (c1, v(7)),
+					unique key ukv3 (v(3)),
+					key k2 (c2)
+				)`,
+			expectIntroduced: []string{"ukv3", "uk1v2"},
+			expectRemoved:    []string{"uk12"},
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run("", func(t *testing.T) {
+			sourceEntity, err := NewCreateTableEntityFromSQL(env, tcase.sourceTable)
+			require.NoError(t, err)
+			err = sourceEntity.validate()
+			require.NoError(t, err)
+			sourceUniqueKeys := PrioritizedUniqueKeys(sourceEntity)
+
+			targetEntity, err := NewCreateTableEntityFromSQL(env, tcase.targetTable)
+			require.NoError(t, err)
+			err = targetEntity.validate()
+			require.NoError(t, err)
+			targetUniqueKeys := PrioritizedUniqueKeys(targetEntity)
+
+			introduced := IntroducedUniqueConstraints(sourceUniqueKeys, targetUniqueKeys, nil)
+			introducedNames := make([]string, 0, len(introduced))
+			for _, key := range introduced {
+				introducedNames = append(introducedNames, key.Name())
+			}
+			assert.Equal(t, tcase.expectIntroduced, introducedNames)
+		})
+	}
 }

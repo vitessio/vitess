@@ -380,3 +380,42 @@ func KeyAtLeastConstrainedAs(
 	}
 	return true
 }
+
+// IntroducedUniqueConstraints returns the unique key constraints added in target.
+// This does not necessarily mean that the unique key itself is new,
+// rather that there's a new, stricter constraint on a set of columns, that didn't exist before. Example:
+//
+//	before:
+//		unique key my_key (c1, c2, c3)
+//	after:
+//		unique key `other_key`(c1, c2)
+//	Synopsis: the constraint on (c1, c2) is new; and `other_key` in target table is considered a new key
+//
+// Order of columns is immaterial to uniqueness of column combination.
+func IntroducedUniqueConstraints(sourceUniqueKeys []*IndexDefinitionEntity, targetUniqueKeys []*IndexDefinitionEntity, columnRenameMap map[string]string) []*IndexDefinitionEntity {
+	introducedUniqueConstraints := []*IndexDefinitionEntity{}
+	for _, targetUniqueKey := range targetUniqueKeys {
+		foundSourceKeyAtLeastAsConstrained := func() bool {
+			for _, sourceUniqueKey := range sourceUniqueKeys {
+				if KeyAtLeastConstrainedAs(sourceUniqueKey, targetUniqueKey, columnRenameMap) {
+					// target key does not add a new constraint
+					return true
+				}
+			}
+			return false
+		}
+		if !foundSourceKeyAtLeastAsConstrained() {
+			introducedUniqueConstraints = append(introducedUniqueConstraints, targetUniqueKey)
+		}
+	}
+	return introducedUniqueConstraints
+}
+
+// RemovedUniqueKeys returns the list of unique key constraints _removed_ going from source to target.
+func RemovedUniqueConstraints(sourceUniqueKeys []*IndexDefinitionEntity, targetUniqueKeys []*IndexDefinitionEntity, columnRenameMap map[string]string) []*IndexDefinitionEntity {
+	reverseColumnRenameMap := map[string]string{}
+	for k, v := range columnRenameMap {
+		reverseColumnRenameMap[v] = k
+	}
+	return IntroducedUniqueConstraints(targetUniqueKeys, sourceUniqueKeys, reverseColumnRenameMap)
+}
