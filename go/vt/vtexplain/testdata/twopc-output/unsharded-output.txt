@@ -12,7 +12,7 @@ select * from t1
 insert into t1 (id,intval,floatval) values (1,2,3.14)
 
 1 ks_unsharded/-: begin
-1 ks_unsharded/-: insert into t1(id, intval, floatval) values (1, 2, cast(3.14 as DECIMAL(3, 2)))
+1 ks_unsharded/-: insert into t1(id, intval, floatval) values (1, 2, 3.14)
 2 ks_unsharded/-: commit
 
 ----------------------------------------------------------------------
@@ -42,7 +42,7 @@ delete from t1 where id = 100
 insert into t1 (id,intval,floatval) values (1,2,3.14) on duplicate key update intval=3, floatval=3.14
 
 1 ks_unsharded/-: begin
-1 ks_unsharded/-: insert into t1(id, intval, floatval) values (1, 2, cast(3.14 as DECIMAL(3, 2))) on duplicate key update intval = 3, floatval = cast(3.14 as DECIMAL(3, 2))
+1 ks_unsharded/-: insert into t1(id, intval, floatval) values (1, 2, 3.14) on duplicate key update intval = 3, floatval = 3.14
 2 ks_unsharded/-: commit
 
 ----------------------------------------------------------------------
