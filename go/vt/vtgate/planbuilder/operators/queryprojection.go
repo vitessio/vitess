@@ -68,26 +68,22 @@ type (
 
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
-		Original *sqlparser.AliasedExpr
-		Func     sqlparser.AggrFunc // if we are missing a Func, it means this is a AggregateAnyValue
-		OpCode   opcode.AggregateOpcode
+		Original *sqlparser.AliasedExpr // The original SQL expression for the aggregation
+		Func     sqlparser.AggrFunc     // The aggregation function (e.g., COUNT, SUM). If nil, it means AggregateAnyValue is used
+		OpCode   opcode.AggregateOpcode // The opcode representing the type of aggregation being performed
 
-		// OriginalOpCode will contain opcode.AggregateUnassigned unless we are changing opcode while pushing them down
+		// OriginalOpCode will contain opcode.AggregateUnassigned unless we are changing the opcode while pushing them down
 		OriginalOpCode opcode.AggregateOpcode
 
-		Alias string
+		Alias string // The alias name for the aggregation result
 
-		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
-		// Only used in the old Horizon Planner
-		Index *int
+		Distinct bool // Whether the aggregation function is DISTINCT
 
-		Distinct bool
+		// Offsets pointing to columns within the same aggregator
+		ColOffset int // Offset for the column being aggregated
+		WSOffset  int // Offset for the weight string of the column
 
-		// the offsets point to columns on the same aggregator
-		ColOffset int
-		WSOffset  int
-
-		SubQueryExpression []*SubQuery
+		SubQueryExpression []*SubQuery // Subqueries associated with this aggregation
 	}
 )
 
@@ -442,13 +438,11 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 	// Here we go over the expressions we are returning. Since we know we are aggregating,
 	// all expressions have to be either grouping expressions or aggregate expressions.
 	// If we find an expression that is neither, we treat is as a special aggregation function AggrRandom
-	for idx, expr := range qp.SelectExprs {
+	for _, expr := range qp.SelectExprs {
 		aliasedExpr, err := expr.GetAliasedExpr()
 		if err != nil {
 			panic(err)
 		}
-
-		idxCopy := idx
 
 		if !ContainsAggr(ctx, expr.Col) {
 			getExpr, err := expr.GetExpr()
@@ -457,7 +451,6 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 			}
 			if !qp.isExprInGroupByExprs(ctx, getExpr) {
 				aggr := NewAggr(opcode.AggregateAnyValue, nil, aliasedExpr, aliasedExpr.ColumnName())
-				aggr.Index = &idxCopy
 				out = append(out, aggr)
 			}
 			continue
@@ -466,14 +459,13 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 			panic(vterrors.VT12001("in scatter query: complex aggregate expression"))
 		}
 
-		sqlparser.CopyOnRewrite(aliasedExpr.Expr, qp.extractAggr(ctx, idx, aliasedExpr, addAggr, makeComplex), nil, nil)
+		sqlparser.CopyOnRewrite(aliasedExpr.Expr, qp.extractAggr(ctx, aliasedExpr, addAggr, makeComplex), nil, nil)
 	}
 	return
 }
 
 func (qp *QueryProjection) extractAggr(
 	ctx *plancontext.PlanningContext,
-	idx int,
 	aliasedExpr *sqlparser.AliasedExpr,
 	addAggr func(a Aggr),
 	makeComplex func(),
@@ -489,7 +481,6 @@ func (qp *QueryProjection) extractAggr(
 				ae = aliasedExpr
 			}
 			aggrFunc := createAggrFromAggrFunc(aggr, ae)
-			aggrFunc.Index = &idx
 			addAggr(aggrFunc)
 			return false
 		}
@@ -497,7 +488,6 @@ func (qp *QueryProjection) extractAggr(
 			// If we are here, we have a function that is an aggregation but not parsed into an AggrFunc.
 			// This is the case for UDFs - we have to be careful with these because we can't evaluate them in VTGate.
 			aggr := NewAggr(opcode.AggregateUDF, nil, aeWrap(ex), "")
-			aggr.Index = &idx
 			addAggr(aggr)
 			return false
 		}
@@ -507,7 +497,6 @@ func (qp *QueryProjection) extractAggr(
 		}
 		if !qp.isExprInGroupByExprs(ctx, ex) {
 			aggr := NewAggr(opcode.AggregateAnyValue, nil, aeWrap(ex), "")
-			aggr.Index = &idx
 			addAggr(aggr)
 		}
 		return false

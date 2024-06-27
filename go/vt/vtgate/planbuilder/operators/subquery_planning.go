@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -374,7 +373,17 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 	return result.(sqlparser.Expr)
 }
 
-func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
+// rewriteColNameToArgument rewrites the column names in the expression to use the argument names instead
+// this is used when we push an operator from above the subquery into the outer side of the subquery
+func rewriteColNameToArgument(
+	ctx *plancontext.PlanningContext,
+	in sqlparser.Expr, // the expression to rewrite
+	se SubQueryExpression, // the subquery expression we are rewriting
+	subqueries ...*SubQuery, // the inner subquery operators
+) sqlparser.Expr {
+	// the visitor function that will rewrite the expression tree
+	// it will be invoked on unqualified column names, and replace them with arguments
+	// when the column is representing a subquery
 	rewriteIt := func(s string) sqlparser.SQLNode {
 		var sq1, sq2 *SubQuery
 		for _, sq := range se {
@@ -404,11 +413,18 @@ func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Exp
 			}
 			return sqlparser.NewArgument(sq1.HasValuesName)
 		default:
-			argType := evalengine.NewUnknownType()
+			// for scalar value subqueries, the argument is typed based on the first expression in the subquery
+			// so here we make an attempt at figuring out the type of the argument
 			ae, isAe := sq2.originalSubquery.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
-			if isAe {
-				argType, _ = ctx.TypeForExpr(ae.Expr)
+			if !isAe {
+				return sqlparser.NewArgument(s)
 			}
+
+			argType, found := ctx.TypeForExpr(ae.Expr)
+			if !found {
+				return sqlparser.NewArgument(s)
+			}
+
 			arg := sqlparser.NewTypedArgument(s, argType.Type())
 			arg.Scale = argType.Scale()
 			arg.Size = argType.Size()
