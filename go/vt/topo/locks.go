@@ -158,7 +158,10 @@ type iTopoLock interface {
 
 // perform the topo lock operation
 func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, opts ...LockOption) (LockDescriptor, error) {
-	log.Infof("Locking %v %v for action %v", lt.Type(), lt.ResourceName(), l.Action)
+	for _, o := range opts {
+		o.apply(&l.Options)
+	}
+	log.Infof("Locking %v %v for action %v with options: %+v", lt.Type(), lt.ResourceName(), l.Action, l.Options)
 
 	ctx, cancel := context.WithTimeout(ctx, LockTimeout)
 	defer cancel()
@@ -170,10 +173,6 @@ func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, opts ...LockO
 	j, err := l.ToJSON()
 	if err != nil {
 		return nil, err
-	}
-
-	for _, o := range opts {
-		o.apply(&l.Options)
 	}
 
 	switch l.Options.lockType {

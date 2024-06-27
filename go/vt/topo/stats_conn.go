@@ -164,7 +164,7 @@ func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDe
 
 // LockWithTTL is part of the Conn interface
 func (st *StatsConn) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (LockDescriptor, error) {
-	return st.internalLock(ctx, dirPath, contents, Blocking, 0)
+	return st.internalLock(ctx, dirPath, contents, Blocking, ttl)
 }
 
 // LockName is part of the Conn interface
@@ -179,7 +179,13 @@ func (st *StatsConn) TryLock(ctx context.Context, dirPath, contents string) (Loc
 
 // TryLock is part of the topo.Conn interface. Its implementation is same as Lock
 func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string, lockType LockType, ttl time.Duration) (LockDescriptor, error) {
-	statsKey := []string{"Lock", st.cell}
+	statsKey := []string{"Lock", st.cell} // Also used for NonBlocking / TryLock
+	switch {
+	case lockType == Named:
+		statsKey[0] = "LockName"
+	case ttl != 0:
+		statsKey[0] = "LockWithTTL"
+	}
 	if st.readOnly {
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], dirPath)
 	}

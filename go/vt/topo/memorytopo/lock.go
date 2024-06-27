@@ -86,6 +86,7 @@ func (c *Conn) LockWithTTL(ctx context.Context, dirPath, contents string, _ time
 
 // LockName is part of the topo.Conn interface.
 func (c *Conn) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	c.factory.callstats.Add([]string{"LockName"}, 1)
 	return c.lock(ctx, dirPath, contents, true)
 }
 

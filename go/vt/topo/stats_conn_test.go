@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -322,23 +324,25 @@ func TestStatsConnTopoLock(t *testing.T) {
 
 	statsConn.Lock(ctx, "", "")
 	timingCounts := topoStatsConnTimings.Counts()["Lock.global"]
-	if got, want := timingCounts, int64(1); got != want {
-		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
-	}
+	require.Equal(t, timingCounts, int64(1))
 
-	// error is zero before getting an error
+	statsConn.LockWithTTL(ctx, "", "", time.Second)
+	timingCounts = topoStatsConnTimings.Counts()["LockWithTTL.global"]
+	require.Equal(t, timingCounts, int64(1))
+
+	statsConn.LockName(ctx, "", "")
+	timingCounts = topoStatsConnTimings.Counts()["LockName.global"]
+	require.Equal(t, timingCounts, int64(1))
+
+	// Error is zero before getting an error.
 	errorCount := topoStatsConnErrors.Counts()["Lock.global"]
-	if got, want := errorCount, int64(0); got != want {
-		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
-	}
+	require.Equal(t, errorCount, int64(0))
 
 	statsConn.Lock(ctx, "error", "")
 
-	// error stats gets emitted
+	// Error stats gets emitted.
 	errorCount = topoStatsConnErrors.Counts()["Lock.global"]
-	if got, want := errorCount, int64(1); got != want {
-		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
-	}
+	require.Equal(t, errorCount, int64(1))
 }
 
 // TestStatsConnTopoWatch emits stats on Watch
