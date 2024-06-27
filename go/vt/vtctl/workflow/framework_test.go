@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -94,22 +95,58 @@ func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, 
 	env.tmc = newTestTMClient(env)
 	env.ws = NewServer(venv, env.ts, env.tmc)
 
+	serving := true
 	tabletID := startingSourceTabletUID
 	for _, shardName := range sourceKeyspace.ShardNames {
-		_ = env.addTablet(t, ctx, tabletID, sourceKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
+		_ = env.addTablet(t, ctx, tabletID, sourceKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY, serving)
 		tabletID += tabletUIDStep
 	}
-	if sourceKeyspace.KeyspaceName != targetKeyspace.KeyspaceName {
-		tabletID = startingTargetTabletUID
-		for _, shardName := range targetKeyspace.ShardNames {
-			_ = env.addTablet(t, ctx, tabletID, targetKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
-			tabletID += tabletUIDStep
-		}
+
+	if sourceKeyspace.KeyspaceName == targetKeyspace.KeyspaceName {
+		serving = false
 	}
+	tabletID = startingTargetTabletUID
+	for _, shardName := range targetKeyspace.ShardNames {
+		_ = env.addTablet(t, ctx, tabletID, targetKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY, serving)
+		tabletID += tabletUIDStep
+	}
+
+	initSrvKeyspace(t, env.ts, targetKeyspace.KeyspaceName, sourceKeyspace.ShardNames, targetKeyspace.ShardNames, []string{cell})
 	err := env.ts.RebuildSrvVSchema(ctx, nil)
 	require.NoError(t, err)
 
 	return env
+}
+
+func initSrvKeyspace(t *testing.T, topo *topo.Server, keyspace string, sources, targets, cells []string) {
+	ctx := context.Background()
+	srvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{},
+	}
+	getPartition := func(t *testing.T, shards []string) *topodatapb.SrvKeyspace_KeyspacePartition {
+		partition := &topodatapb.SrvKeyspace_KeyspacePartition{
+			ServedType:      topodatapb.TabletType_PRIMARY,
+			ShardReferences: []*topodatapb.ShardReference{},
+		}
+		for _, shard := range shards {
+			keyRange, err := key.ParseShardingSpec(shard)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(keyRange))
+			partition.ShardReferences = append(partition.ShardReferences, &topodatapb.ShardReference{
+				Name:     shard,
+				KeyRange: keyRange[0],
+			})
+		}
+		return partition
+	}
+	srvKeyspace.Partitions = append(srvKeyspace.Partitions, getPartition(t, sources))
+	srvKeyspace.Partitions = append(srvKeyspace.Partitions, getPartition(t, targets))
+	for _, cell := range cells {
+		err := topo.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
+		require.NoError(t, err)
+	}
+	err := topo.ValidateSrvKeyspace(ctx, keyspace, strings.Join(cells, ","))
+	require.NoError(t, err)
 }
 
 func (env *testEnv) close() {
@@ -120,7 +157,7 @@ func (env *testEnv) close() {
 	}
 }
 
-func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspace, shard string, tabletType topodatapb.TabletType) *topodatapb.Tablet {
+func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspace, shard string, tabletType topodatapb.TabletType, serving bool) *topodatapb.Tablet {
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: env.cell,
@@ -143,7 +180,7 @@ func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspac
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		_, err = env.ws.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 			si.PrimaryAlias = tablet.Alias
-			si.IsPrimaryServing = true
+			si.IsPrimaryServing = serving
 			return nil
 		})
 		require.NoError(t, err)
