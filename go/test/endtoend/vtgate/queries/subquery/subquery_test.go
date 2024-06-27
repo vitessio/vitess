@@ -80,9 +80,7 @@ func TestNotINQueries(t *testing.T) {
 
 }
 
-// Test only supported in >= v16.0.0
 func TestSubqueriesExists(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
