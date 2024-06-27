@@ -329,17 +329,20 @@ func AnalyzeSharedColumns(
 	return NewColumnDefinitionEntityList(sourceShared), NewColumnDefinitionEntityList(targetShared), NewColumnDefinitionEntityList(droppedNonGenerated), sharedColumnsMap
 }
 
-// SourceUniqueKeyAsOrMoreConstrainedThanTarget returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.
+// KeyAtLeastConstrainedAs returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.
 // "More constrained" means the uniqueness constraint is "stronger". Thus, if sourceUniqueKey is as-or-more constrained than targetUniqueKey, then
 // rows valid under sourceUniqueKey must also be valid in targetUniqueKey. The opposite is not necessarily so: rows that are valid in targetUniqueKey
 // may cause a unique key violation under sourceUniqueKey
-func SourceUniqueKeyAsOrMoreConstrainedThanTarget(
+func KeyAtLeastConstrainedAs(
 	sourceUniqueKey *IndexDefinitionEntity,
 	targetUniqueKey *IndexDefinitionEntity,
 	columnRenameMap map[string]string,
 ) bool {
-	if !sourceUniqueKey.IsUnique() || !targetUniqueKey.IsUnique() {
+	if !sourceUniqueKey.IsUnique() {
 		return false
+	}
+	if !targetUniqueKey.IsUnique() {
+		return true
 	}
 	sourceKeyLengths := map[string]int{}
 	for _, col := range sourceUniqueKey.IndexDefinition.Columns {

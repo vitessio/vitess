@@ -314,7 +314,7 @@ func TestAnalyzeSharedColumns(t *testing.T) {
 	}
 }
 
-func TestSourceUniqueKeyAsOrMoreConstrainedThanTarget(t *testing.T) {
+func TestKeyAtLeastConstrainedAs(t *testing.T) {
 	env := NewTestEnv()
 	sourceTable := `
 		create table source_table (
@@ -532,7 +532,7 @@ func TestSourceUniqueKeyAsOrMoreConstrainedThanTarget(t *testing.T) {
 			targetKey := targetKeys[tcase.targetKey]
 			require.NotNil(t, targetKey)
 
-			result := SourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceKey, targetKey, tcase.renameMap)
+			result := KeyAtLeastConstrainedAs(sourceKey, targetKey, tcase.renameMap)
 			assert.Equal(t, tcase.expect, result)
 		})
 	}
