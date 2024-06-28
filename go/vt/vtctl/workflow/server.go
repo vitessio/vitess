@@ -1723,7 +1723,7 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 
 	if err := s.ts.ValidateSrvKeyspace(ctx, keyspace, strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "SrvKeyspace for keyspace %s is corrupt for cell(s) %s", keyspace, cells)
-		log.Errorf("%w", err2)
+		log.Errorf("%v", err2)
 		return nil, err
 	}
 	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
@@ -1753,6 +1753,7 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 	return s.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
 		Keyspace: req.Keyspace,
 		Workflow: req.Workflow,
+		Shards:   req.TargetShards,
 	})
 }
 
@@ -3821,7 +3822,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		targetVSchema.Tables = make(map[string]*vschemapb.Table)
 	}
 	if existing, ok := sourceVSchema.Vindexes[vindexName]; ok {
-		if !proto.Equal(existing, vindex) {
+		if !proto.Equal(existing, vindex) { // If the exact same vindex already exists then we can re-use it
 			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a conflicting vindex named %s already exists in the %s keyspace", vindexName, keyspace)
 		}
 	}
@@ -3834,13 +3835,18 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		if colVindex.Name != vindexName {
 			continue
 		}
-		colName := colVindex.Column
-		if len(colVindex.Columns) != 0 {
-			colName = colVindex.Columns[0]
+		var colNames []string
+		if len(colVindex.Columns) == 0 {
+			colNames = []string{colVindex.Column}
+		} else {
+			colNames = colVindex.Columns
 		}
-		if colName == sourceVindexColumns[0] {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column %s in table %s already exists in the %s keyspace",
-				colName, sourceTableName, keyspace)
+		// If this is the exact same definition then we can use the existing one. If they
+		// are not the same then they are two distinct conflicting vindexes and we should
+		// not proceed.
+		if !slices.Equal(colNames, sourceVindexColumns) {
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column(s) %s in table %s already exists in the %s keyspace",
+				strings.Join(colNames, ","), sourceTableName, keyspace)
 		}
 	}
 
@@ -3894,6 +3900,10 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	modified = append(modified, buf.String())
 	modified = append(modified, ")")
 	createDDL = strings.Join(modified, "\n")
+	// Confirm that our DDL is valid before we create anything.
+	if _, err = s.env.Parser().ParseStrictDDL(createDDL); err != nil {
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error: %v; invalid lookup table definition generated: %s", err, createDDL)
+	}
 
 	// Generate vreplication query.
 	buf = sqlparser.NewTrackedBuffer(nil)
@@ -4009,6 +4019,13 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 			line = strings.Replace(line, source, target, 1)
 			line = strings.Replace(line, " AUTO_INCREMENT", "", 1)
 			line = strings.Replace(line, " DEFAULT NULL", "", 1)
+			// Ensure that the column definition ends with a comma as we will
+			// be appending the TO column and PRIMARY KEY definitions. If the
+			// souce column here was the last entity defined in the source
+			// table's definition then it will not already have the comma.
+			if !strings.HasSuffix(strings.TrimSpace(line), ",") {
+				line += ","
+			}
 			return line, nil
 		}
 	}

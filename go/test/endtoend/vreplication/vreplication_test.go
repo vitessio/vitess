@@ -1563,17 +1563,16 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	}
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
 	ensureCanSwitch(t, workflowType, "", ksWorkflow)
-	// Use vtctldclient for MoveTables SwitchTraffic ~ 50% of the time.
-	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() && time.Now().Second()%2 == 0 {
-		parts := strings.Split(ksWorkflow, ".")
-		require.Equal(t, 2, len(parts))
-		moveTablesAction(t, command, defaultCellName, parts[1], sourceKs, parts[0], "", "--timeout="+SwitchWritesTimeout, "--tablet-types=primary")
+	targetKs, workflow, found := strings.Cut(ksWorkflow, ".")
+	require.True(t, found)
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() {
+		moveTablesAction(t, command, defaultCellName, workflow, sourceKs, targetKs, "", "--timeout="+SwitchWritesTimeout, "--tablet-types=primary")
 		return
 	}
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--tablet_types=primary",
-		"--timeout="+SwitchWritesTimeout, "--initialize-target-sequences", command, ksWorkflow)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--tablet-types=primary", "--workflow", workflow,
+		"--target-keyspace", targetKs, command, "--timeout="+SwitchWritesTimeout, "--initialize-target-sequences")
 	if output != "" {
-		fmt.Printf("Output of switching writes with vtctlclient for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
+		fmt.Printf("Output of switching writes with vtctldclient for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
 	// printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
 	_ = printSwitchWritesExtraDebug
