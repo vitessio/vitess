@@ -269,22 +269,22 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Load)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Load)
 
-	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", func() int64 {
+	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query plan cache length", func() int64 {
 		return int64(qe.plans.Len())
 	})
-	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", func() int64 {
+	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query plan cache size", func() int64 {
 		return int64(qe.plans.UsedCapacity())
 	})
-	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", func() int64 {
+	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query plan cache capacity", func() int64 {
 		return int64(qe.plans.MaxCapacity())
 	})
-	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", func() int64 {
+	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query plan cache evictions", func() int64 {
 		return qe.plans.Metrics.Evicted()
 	})
-	qe.queryCacheHits = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query cache hits", func() int64 {
+	qe.queryCacheHits = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query plan cache hits", func() int64 {
 		return qe.plans.Metrics.Hits()
 	})
-	qe.queryCacheMisses = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query cache misses", func() int64 {
+	qe.queryCacheMisses = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query plan cache misses", func() int64 {
 		return qe.plans.Metrics.Misses()
 	})
 
