@@ -97,6 +97,9 @@ func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, 
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
 		}
+		if si.PrimaryAlias == nil {
+			return nil, fmt.Errorf("target shard %v has no primary tablet", shard)
+		}
 		if si.IsPrimaryServing {
 			return nil, fmt.Errorf("target shard %v is in serving state", shard)
 		}

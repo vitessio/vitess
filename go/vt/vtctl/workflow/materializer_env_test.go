@@ -19,7 +19,6 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -36,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -44,11 +42,6 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-type queryResult struct {
-	query  string
-	result *querypb.QueryResult
-}
 
 type testMaterializerEnv struct {
 	ws      *Server
@@ -65,11 +58,6 @@ type testMaterializerEnv struct {
 
 //----------------------------------------------
 // testMaterializerEnv
-
-func TestMain(m *testing.M) {
-	_flag.ParseFlagsForTest()
-	os.Exit(m.Run())
-}
 
 func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.MaterializeSettings, sources, targets []string) *testMaterializerEnv {
 	t.Helper()
