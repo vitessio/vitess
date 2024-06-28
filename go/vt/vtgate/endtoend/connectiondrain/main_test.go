@@ -1,0 +1,153 @@
+/*
+Copyright 2024 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package connectiondrain
+
+import (
+	"context"
+	_ "embed"
+	"flag"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+)
+
+var (
+	clusterInstance *cluster.LocalProcessCluster
+	vtParams        mysql.ConnParams
+	keyspaceName    = "ks"
+	cell            = "zone-1"
+
+	//go:embed schema.sql
+	schemaSQL string
+)
+
+func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
+	flag.Parse()
+
+	exitCode := func() int {
+		clusterInstance = cluster.NewCluster(cell, "localhost")
+		defer clusterInstance.Teardown()
+
+		// Start topo server
+		err := clusterInstance.StartTopo()
+		if err != nil {
+			return 1
+		}
+
+		// Start keyspace
+		keyspace := &cluster.Keyspace{
+			Name:      keyspaceName,
+			SchemaSQL: schemaSQL,
+		}
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+		if err != nil {
+			return 1
+		}
+
+		// Start vtgate
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql_server_drain_onterm", "--onterm_timeout", "30s")
+		err = clusterInstance.StartVtgate()
+		if err != nil {
+			return 1
+		}
+
+		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		return m.Run()
+	}()
+	os.Exit(exitCode)
+}
+
+func start(t *testing.T) (*mysql.Conn, func()) {
+	vtConn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+
+	deleteAll := func() {
+		_, _ = utils.ExecAllowError(t, vtConn, "set workload = oltp")
+
+		tables := []string{"t1"}
+		for _, table := range tables {
+			_, _ = utils.ExecAllowError(t, vtConn, "delete from "+table)
+		}
+	}
+
+	deleteAll()
+
+	return vtConn, func() {
+		deleteAll()
+		vtConn.Close()
+		cluster.PanicHandler(t)
+	}
+}
+
+func TestConnectionDrain(t *testing.T) {
+	vtConn, closer := start(t)
+	defer closer()
+
+	// Create a second connection, this connection will be used to create a transaction.
+	vtConn2, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+
+	// Start the transaction with the second connection
+	_, err = vtConn2.ExecuteFetch("BEGIN", 1, false)
+	require.NoError(t, err)
+	_, err = vtConn2.ExecuteFetch("select id1 from t1", 1, false)
+	require.NoError(t, err)
+
+	_, err = vtConn.ExecuteFetch("select id1 from t1", 1, false)
+	require.NoError(t, err)
+
+	// Tearing down vtgate here, from there on vtConn should still be able to conclude in-flight transaction and
+	// execute queries with idle connections. However, no new connections are allowed.
+	err = clusterInstance.VtgateProcess.Terminate()
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	// Create a third connection, this connection should not be allowed.
+	// Set a connection timeout to 1s otherwise the connection will take a while.
+	vtParams.ConnectTimeoutMs = 1000
+	_, err = mysql.Connect(context.Background(), &vtParams)
+	require.Error(t, err)
+
+	// Idle connections should be allowed to execute queries until they are drained
+	_, err = vtConn.ExecuteFetch("select id1 from t1", 1, false)
+	require.NoError(t, err)
+
+	// Finish the transaction
+	_, err = vtConn2.ExecuteFetch("select id1 from t1", 1, false)
+	require.NoError(t, err)
+	_, err = vtConn2.ExecuteFetch("COMMIT", 1, false)
+	require.NoError(t, err)
+	vtConn2.Close()
+
+	// This connection should still be allowed
+	_, err = vtConn.ExecuteFetch("select id1 from t1", 1, false)
+	require.NoError(t, err)
+	vtConn.Close()
+
+	time.Sleep(10 * time.Second)
+
+	// By now the vtgate should have shutdown
+	require.True(t, clusterInstance.VtgateProcess.IsShutdown())
+}
