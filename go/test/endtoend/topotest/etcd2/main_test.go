@@ -267,7 +267,6 @@ func TestNamedLocking(t *testing.T) {
 	require.ErrorContains(t, err, fmt.Sprintf("named %s is not locked (no lockInfo in map)", lockName))
 
 	// Wait to see that the second goroutine WAS now able to acquire the named lock.
-	time.Sleep(100 * time.Millisecond)
 	topoutils.WaitForBoolValue(t, &secondCallerAcquired, true)
 }
 
