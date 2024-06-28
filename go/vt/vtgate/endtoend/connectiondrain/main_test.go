@@ -126,8 +126,12 @@ func TestConnectionDrain(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Create a third connection, this connection should not be allowed.
-	// Set a connection timeout to 1s otherwise the connection will take a while.
+	// Set a connection timeout to 1s otherwise the connection will take forever
+	// and eventually vtgate will reach the --onterm_timeout.
 	vtParams.ConnectTimeoutMs = 1000
+	defer func() {
+		vtParams.ConnectTimeoutMs = 0
+	}()
 	_, err = mysql.Connect(context.Background(), &vtParams)
 	require.Error(t, err)
 
