@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/balancer"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -53,6 +55,11 @@ var (
 	// retryCount is the number of times a query will be retried on error
 	retryCount           = 2
 	routeReplicaToRdonly bool
+
+	// configuration flags for the tablet balancer
+	balancerEnabled     bool
+	balancerVtgateCells []string
+	balancerKeyspaces   []string
 )
 
 func init() {
@@ -62,6 +69,9 @@ func init() {
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
 		fs.BoolVar(&routeReplicaToRdonly, "gateway_route_replica_to_rdonly", false, "route REPLICA queries to RDONLY tablets as well as REPLICA tablets")
+		fs.BoolVar(&balancerEnabled, "balancer_enabled", false, "Whether to enable the tablet balancer to evenly spread query load")
+		fs.StringSliceVar(&balancerVtgateCells, "balancer_vtgate_cells", []string{}, "When in balanced mode, a comma-separated list of cells that contain vtgates (required)")
+		fs.StringSliceVar(&balancerKeyspaces, "balancer_keyspaces", []string{}, "When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)")
 	})
 }
 
@@ -84,6 +94,9 @@ type TabletGateway struct {
 
 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
+
+	// balancer used for routing to tablets
+	balancer balancer.TabletBalancer
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
@@ -112,6 +125,9 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
+	if balancerEnabled {
+		gw.setupBalancer(ctx)
+	}
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
@@ -169,6 +185,13 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 	default:
 		log.Exitf("unknown buffering implementation for TabletGateway: %q", bufferImplementation)
 	}
+}
+
+func (gw *TabletGateway) setupBalancer(ctx context.Context) {
+	if len(balancerVtgateCells) == 0 {
+		log.Exitf("balancer_vtgate_cells is required for balanced mode")
+	}
+	gw.balancer = balancer.NewTabletBalancer(gw.localCell, balancerVtgateCells)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -234,6 +257,15 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 	gw.mu.Unlock()
 	sort.Sort(res)
 	return res
+}
+
+func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Request) {
+	if balancerEnabled {
+		gw.balancer.DebugHandler(w, r)
+	} else {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("not enabled"))
+	}
 }
 
 // withRetry gets available connections and executes the action. If there are retryable errors,
@@ -327,7 +359,27 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no healthy tablet available for '%s'", target.String())
 			break
 		}
-		gw.shuffleTablets(gw.localCell, tablets)
+
+		// Determine whether or not to use the balancer or the standard affinity-based shuffle
+		useBalancer := false
+		if balancerEnabled {
+			if len(balancerKeyspaces) != 0 {
+				for _, keyspace := range balancerKeyspaces {
+					if keyspace == target.Keyspace {
+						useBalancer = true
+						break
+					}
+				}
+			} else {
+				useBalancer = true
+			}
+		}
+
+		if useBalancer {
+			gw.balancer.ShuffleTablets(target, tablets)
+		} else {
+			gw.shuffleTablets(gw.localCell, tablets)
+		}
 
 		var th *discovery.TabletHealth
 		// skip tablets we tried before
