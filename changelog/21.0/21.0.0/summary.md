@@ -18,14 +18,14 @@
 
 The following metrics are now deprecated, if provided please use their replacement.
 
-| Component  |      Metric Name      |        Replaced By        |
-|------------|:---------------------:|:-------------------------:|
-| `vttablet` |  `QueryCacheLength`   |  `QueryPlanCacheLength`   |
-| `vttablet` |   `QueryCacheSize`    |   `QueryPlanCacheSize`    |
-| `vttablet` | `QueryCacheCapacity`  | `QueryPlanCacheCapacity`  |
-| `vttablet` | `QueryCacheEvictions` | `QueryPlanCacheEvictions` |
-| `vttablet` |   `QueryCacheHits`    |   `QueryPlanCacheHits`    |
-| `vttablet` |  `QueryCacheMisses`   |  `QueryPlanCacheMisses`   |
+| Component  |      Metric Name      |           Replaced By           |
+|------------|:---------------------:|:-------------------------------:|
+| `vttablet` |  `QueryCacheLength`   |  `TabletQueryPlanCacheLength`   |
+| `vttablet` |   `QueryCacheSize`    |   `TabletQueryPlanCacheSize`    |
+| `vttablet` | `QueryCacheCapacity`  | `TabletQueryPlanCacheCapacity`  |
+| `vttablet` | `QueryCacheEvictions` | `TabletQueryPlanCacheEvictions` |
+| `vttablet` |   `QueryCacheHits`    |   `TabletQueryPlanCacheHits`    |
+| `vttablet` |  `QueryCacheMisses`   |  `TabletQueryPlanCacheMisses`   |
 
 
 ### <a id="deletions"/>Deletions

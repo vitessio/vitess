@@ -152,8 +152,8 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	vars = addVar(vars, "PoolSize", tsv.PoolSize)
 	vars = addVar(vars, "StreamPoolSize", tsv.StreamPoolSize)
 	vars = addVar(vars, "TxPoolSize", tsv.TxPoolSize)
-	vars = addVar(vars, "QueryCacheCapacity", tsv.QueryPlanCacheCap) // QueryCacheCapacity is deprecated in v21, it is replaced by QueryPlanCacheCapacity
-	vars = addVar(vars, "QueryPlanCacheCapacity", tsv.QueryPlanCacheCap)
+	vars = addVar(vars, "QueryCacheCapacity", tsv.QueryPlanCacheCap) // QueryCacheCapacity is deprecated in v21, it is replaced by TabletQueryPlanCacheCapacity
+	vars = addVar(vars, "TabletQueryPlanCacheCapacity", tsv.QueryPlanCacheCap)
 	vars = addVar(vars, "MaxResultSize", tsv.MaxResultSize)
 	vars = addVar(vars, "WarnResultSize", tsv.WarnResultSize)
 	vars = addVar(vars, "RowStreamerMaxInnoDBTrxHistLen", func() int64 { return tsv.Config().RowStreamer.MaxInnoDBTrxHistLen })

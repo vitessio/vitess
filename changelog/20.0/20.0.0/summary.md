@@ -364,7 +364,7 @@ VTTablet exposes two new counter stats:
 
 > [!NOTE]
 > `QueryCache` does not refer to a query cache, but to a query plan cache.
-> In v21, these metrics will be deprecated and replaced by `QueryPlanCacheHits` and `QueryPlanCacheMisses`.
+> In v21, these metrics will be deprecated and replaced by `TabletQueryPlanCacheHits` and `TabletQueryPlanCacheMisses`.
 
 ### <a id="vttablet-query-text-characters-processed"/>VTTablet Query Text Characters Processed
 

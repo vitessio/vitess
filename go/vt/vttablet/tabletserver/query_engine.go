@@ -269,51 +269,51 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Load)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Load)
 
-	// QueryCacheLength is deprecated in v21 and will be removed in >v22. This metric is replaced by QueryPlanCacheLength.
-	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query plan cache length (deprecated: please use QueryPlanCacheLength)", func() int64 {
+	// QueryCacheLength is deprecated in v21 and will be removed in >=v22. This metric is replaced by TabletQueryPlanCacheLength.
+	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query plan cache length (deprecated: please use TabletQueryPlanCacheLength)", func() int64 {
 		return int64(qe.plans.Len())
 	})
-	env.Exporter().NewGaugeFunc("QueryPlanCacheLength", "Query engine query plan cache length", func() int64 {
+	env.Exporter().NewGaugeFunc("TabletQueryPlanCacheLength", "Query engine query plan cache length", func() int64 {
 		return int64(qe.plans.Len())
 	})
 
-	// QueryCacheSize is deprecated in v21 and will be removed in >v22. This metric is replaced QueryPlanCacheSizeQueryPlanCacheLength.
-	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query plan cache size (deprecated: please use QueryPlanCacheSize)", func() int64 {
+	// QueryCacheSize is deprecated in v21 and will be removed in >=v22. This metric is replaced TabletQueryPlanCacheSize.
+	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query plan cache size (deprecated: please use TabletQueryPlanCacheSize)", func() int64 {
 		return int64(qe.plans.UsedCapacity())
 	})
-	env.Exporter().NewGaugeFunc("QueryPlanCacheSize", "Query engine query plan cache size", func() int64 {
+	env.Exporter().NewGaugeFunc("TabletQueryPlanCacheSize", "Query engine query plan cache size", func() int64 {
 		return int64(qe.plans.UsedCapacity())
 	})
 
-	// QueryCacheCapacity is deprecated in v21 and will be removed in >v22. This metric is replaced by QueryPlanCacheCapacity.
-	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query plan cache capacity (deprecated: please use QueryPlanCacheCapacity)", func() int64 {
+	// QueryCacheCapacity is deprecated in v21 and will be removed in >=v22. This metric is replaced by TabletQueryPlanCacheCapacity.
+	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query plan cache capacity (deprecated: please use TabletQueryPlanCacheCapacity)", func() int64 {
 		return int64(qe.plans.MaxCapacity())
 	})
-	env.Exporter().NewGaugeFunc("QueryPlanCacheCapacity", "Query engine query plan cache capacity", func() int64 {
+	env.Exporter().NewGaugeFunc("TabletQueryPlanCacheCapacity", "Query engine query plan cache capacity", func() int64 {
 		return int64(qe.plans.MaxCapacity())
 	})
 
-	// QueryCacheEvictions is deprecated in v21 and will be removed in >v22. This metric is replaced by QueryPlanCacheEvictions.
-	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query plan cache evictions (deprecated: please use QueryPlanCacheEvictions)", func() int64 {
+	// QueryCacheEvictions is deprecated in v21 and will be removed in >=v22. This metric is replaced by TabletQueryPlanCacheEvictions.
+	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query plan cache evictions (deprecated: please use TabletQueryPlanCacheEvictions)", func() int64 {
 		return qe.plans.Metrics.Evicted()
 	})
-	env.Exporter().NewCounterFunc("QueryPlanCacheEvictions", "Query engine query plan cache evictions", func() int64 {
+	env.Exporter().NewCounterFunc("TabletQueryPlanCacheEvictions", "Query engine query plan cache evictions", func() int64 {
 		return qe.plans.Metrics.Evicted()
 	})
 
-	// QueryCacheHits is deprecated in v21 and will be removed in >v22. This metric is replaced by QueryPlanCacheHits.
-	_ = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query plan cache hits (deprecated: please use QueryPlanCacheHits)", func() int64 {
+	// QueryCacheHits is deprecated in v21 and will be removed in >=v22. This metric is replaced by TabletQueryPlanCacheHits.
+	_ = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query plan cache hits (deprecated: please use TabletQueryPlanCacheHits)", func() int64 {
 		return qe.plans.Metrics.Hits()
 	})
-	qe.queryPlanCacheHits = env.Exporter().NewCounterFunc("QueryPlanCacheHits", "Query engine query plan cache hits", func() int64 {
+	qe.queryPlanCacheHits = env.Exporter().NewCounterFunc("TabletQueryPlanCacheHits", "Query engine query plan cache hits", func() int64 {
 		return qe.plans.Metrics.Hits()
 	})
 
-	// QueryCacheMisses is deprecated in v21 and will be removed in >v22. This metric is replaced by QueryPlanCacheMisses.
-	_ = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query plan cache misses (deprecated: please use QueryPlanCacheMisses)", func() int64 {
+	// QueryCacheMisses is deprecated in v21 and will be removed in >=v22. This metric is replaced by TabletQueryPlanCacheMisses.
+	_ = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query plan cache misses (deprecated: please use TabletQueryPlanCacheMisses)", func() int64 {
 		return qe.plans.Metrics.Misses()
 	})
-	qe.queryPlanCacheMisses = env.Exporter().NewCounterFunc("QueryPlanCacheMisses", "Query engine query plan cache misses", func() int64 {
+	qe.queryPlanCacheMisses = env.Exporter().NewCounterFunc("TabletQueryPlanCacheMisses", "Query engine query plan cache misses", func() int64 {
 		return qe.plans.Metrics.Misses()
 	})
 
