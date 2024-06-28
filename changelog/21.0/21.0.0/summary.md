@@ -4,13 +4,31 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+  - **[Deprecations](#deprecations)**
+    - [Metrics](#deprecations-metrics) 
   - **[Deletions](#deletions)** 
     - [Deletion of deprecated metrics](#metric-deletion)
   - **[Breaking changes](#breaking-changes)**
 
 ## <a id="major-changes"/>Major Changes
 
-### <a id="deletions"/>Deletion
+### <a id="deprecations"/>Deprecations
+
+#### <a id="deprecations-metrics"/>Metrics
+
+The following metrics are now deprecated, if provided please use their replacement.
+
+| Component  |      Metric Name      |        Replaced By        |
+|------------|:---------------------:|:-------------------------:|
+| `vttablet` |  `QueryCacheLength`   |  `QueryPlanCacheLength`   |
+| `vttablet` |   `QueryCacheSize`    |   `QueryPlanCacheSize`    |
+| `vttablet` | `QueryCacheCapacity`  | `QueryPlanCacheCapacity`  |
+| `vttablet` | `QueryCacheEvictions` | `QueryPlanCacheEvictions` |
+| `vttablet` |   `QueryCacheHits`    |   `QueryPlanCacheHits`    |
+| `vttablet` |  `QueryCacheMisses`   |  `QueryPlanCacheMisses`   |
+
+
+### <a id="deletions"/>Deletions
 
 #### <a id="metric-deletion"/>Deletion of deprecated metrics
 

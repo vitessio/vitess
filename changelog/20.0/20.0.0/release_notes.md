@@ -360,8 +360,12 @@ You can now run `VDiff`s on OnlineDDL schema change migrations, which are not ye
 
 VTTablet exposes two new counter stats:
 
- * `QueryCacheHits`: Query engine query cache hits
- * `QueryCacheMisses`: Query engine query cache misses
+ * `QueryCacheHits`: Query engine query plan cache hits
+ * `QueryCacheMisses`: Query engine query plan cache misses
+
+> [!NOTE]
+> `QueryCache` does not refer to a query cache, but to a query plan cache.
+> In v21, these metrics will be deprecated and replaced by `QueryPlanCacheHits` and `QueryPlanCacheMisses`.
 
 ### <a id="vttablet-query-text-characters-processed"/>VTTablet Query Text Characters Processed
 
