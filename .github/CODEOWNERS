@@ -33,7 +33,7 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /go/test/endtoend/vtorc @deepthi @shlomi-noach @GuptaManan100 @timvaillancourt
 /go/tools/ @frouioui @systay
 /go/vt/dbconnpool @harshit-gangal @mattlord
-/go/vt/discovery @deepthi @frouioui
+/go/vt/discovery @deepthi @frouioui @timvaillancourt
 /go/vt/discovery/*tablet_picker* @rohit-nayak-ps @mattlord
 /go/vt/mysqlctl @deepthi @mattlord
 /go/vt/proto @deepthi @harshit-gangal @mattlord
