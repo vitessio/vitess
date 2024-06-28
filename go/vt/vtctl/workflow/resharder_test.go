@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -57,6 +58,17 @@ func TestReshardCreate(t *testing.T) {
 					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
 				},
 			},
+		},
+	}
+
+	var binlogSource = &binlogdatapb.BinlogSource{
+		Keyspace: sourceKeyspaceName,
+		Shard:    "0",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select * from t1",
+			}},
 		},
 	}
 
@@ -143,7 +155,18 @@ func TestReshardCreate(t *testing.T) {
 				tabletUID := startingSourceTabletUID + (tabletUIDStep * i)
 				env.tmc.expectVRQuery(
 					tabletUID,
+					fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", targetKeyspaceName),
+					&sqltypes.Result{},
+				)
+				env.tmc.expectVRQuery(
+					tabletUID,
 					"select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1",
+					&sqltypes.Result{},
+				)
+				env.tmc.expectVRQuery(
+					tabletUID,
+					fmt.Sprintf("select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type, time_heartbeat, defer_secondary_keys, component_throttled, time_throttled, rows_copied from _vt.vreplication where workflow = '%s' and db_name = 'vt_%s'",
+						workflowName, targetKeyspaceName),
 					&sqltypes.Result{},
 				)
 				env.tmc.expectVRQuery(
@@ -157,9 +180,14 @@ func TestReshardCreate(t *testing.T) {
 				tabletUID := startingTargetTabletUID + (tabletUIDStep * i)
 				env.tmc.expectVRQuery(
 					tabletUID,
+					fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", targetKeyspaceName),
+					&sqltypes.Result{},
+				)
+				env.tmc.expectVRQuery(
+					tabletUID,
 					insertPrefix+
-						`\('`+workflowName+`', 'keyspace:"`+targetKeyspaceName+`" shard:"0" filter:{rules:{match:"/.*" filter:"`+target+`"}}', '', [0-9]*, [0-9]*, '`+
-						env.cell+`', '`+tabletTypesStr+`', [0-9]*, 0, 'Stopped', 'vt_`+targetKeyspaceName+`', 4, 0, false, '{}'\)`+eol,
+						`\('`+workflowName+`', 'keyspace:\\"`+targetKeyspaceName+`\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"`+target+`\\"}}', '', [0-9]*, [0-9]*, '`+
+						env.cell+`', '`+tabletTypesStr+`', [0-9]*, 0, 'Stopped', 'vt_`+targetKeyspaceName+`', 4, 0, false\)`+eol,
 					&sqltypes.Result{},
 				)
 				env.tmc.expectVRQuery(
@@ -169,7 +197,19 @@ func TestReshardCreate(t *testing.T) {
 				)
 				env.tmc.expectVRQuery(
 					tabletUID,
-					"select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)",
+					fmt.Sprintf("select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type, time_heartbeat, defer_secondary_keys, component_throttled, time_throttled, rows_copied from _vt.vreplication where workflow = '%s' and db_name = 'vt_%s'",
+						workflowName, targetKeyspaceName),
+					sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(
+							"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type|time_heartbeat|defer_secondary_keys|component_throttled|time_throttled|rows_copied",
+							"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|int64|int64",
+						),
+						fmt.Sprintf("1|%s|%s|MySQL56/%s|NULL|0|Running|vt_%s|1686577659|0|||1|0|0|0||0|10", workflowName, binlogSource, position, sourceKeyspaceName),
+					),
+				)
+				env.tmc.expectVRQuery(
+					tabletUID,
+					"select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
 					&sqltypes.Result{},
 				)
 			}

@@ -1611,7 +1611,6 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 	return s.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
 		Keyspace: keyspace,
 		Workflow: req.Workflow,
-		Shards:   req.TargetShards,
 	})
 }
 

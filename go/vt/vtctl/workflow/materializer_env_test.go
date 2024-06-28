@@ -19,14 +19,12 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -40,11 +38,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
-
-type queryResult struct {
-	query  string
-	result *querypb.QueryResult
-}
 
 type testMaterializerEnv struct {
 	ws      *Server
@@ -61,11 +54,6 @@ type testMaterializerEnv struct {
 
 //----------------------------------------------
 // testMaterializerEnv
-
-func TestMain(m *testing.M) {
-	_flag.ParseFlagsForTest()
-	os.Exit(m.Run())
-}
 
 func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.MaterializeSettings, sources, targets []string) *testMaterializerEnv {
 	t.Helper()

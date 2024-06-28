@@ -26,20 +26,17 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -92,9 +89,8 @@ func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, 
 		tablets:        make(map[string]map[int]*topodatapb.Tablet),
 		cell:           cell,
 	}
-	venv := vtenv.NewTestEnv()
 	env.tmc = newTestTMClient(env)
-	env.ws = NewServer(venv, env.ts, env.tmc)
+	env.ws = NewServer(env.ts, env.tmc)
 
 	serving := true
 	tabletID := startingSourceTabletUID
@@ -427,60 +423,6 @@ func (tmc *testTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 			RowsAffected: 1,
 		},
 	}, nil
-}
-
-func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
-	return &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{
-		Has: false,
-	}, nil
-}
-
-func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
-	tmc.mu.Lock()
-	defer tmc.mu.Unlock()
-
-	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
-	if len(req.IncludeWorkflows) > 0 {
-		for _, wf := range req.IncludeWorkflows {
-			if strings.Contains(wf, "lookup") {
-				workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
-			}
-		}
-		ks := tmc.env.sourceKeyspace
-		if tmc.reverse.Load() {
-			ks = tmc.env.targetKeyspace
-		}
-		return &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
-			Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-				{
-					Workflow:     req.IncludeWorkflows[0],
-					WorkflowType: workflowType,
-					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
-						{
-							Id:    1,
-							State: binlogdatapb.VReplicationWorkflowState_Running,
-							Bls: &binlogdatapb.BinlogSource{
-								Keyspace: ks.KeyspaceName,
-								Shard:    ks.ShardNames[0],
-								Filter: &binlogdatapb.Filter{
-									Rules: []*binlogdatapb.Rule{
-										{
-											Match: "/.*/",
-										},
-									},
-								},
-							},
-							Pos:           "MySQL56/" + position,
-							TimeUpdated:   protoutil.TimeToProto(time.Now()),
-							TimeHeartbeat: protoutil.TimeToProto(time.Now()),
-						},
-					},
-				},
-			},
-		}, nil
-	} else {
-		return &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{}, nil
-	}
 }
 
 func (tmc *testTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
