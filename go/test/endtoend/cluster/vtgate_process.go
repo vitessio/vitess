@@ -62,8 +62,9 @@ type VtgateProcess struct {
 	// Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
-	proc *exec.Cmd
-	exit chan error
+	isShutdown bool
+	proc       *exec.Cmd
+	exit       chan error
 }
 
 const defaultVtGatePlannerVersion = planbuilder.Gen4
@@ -150,6 +151,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	go func() {
 		if vtgate.proc != nil {
 			vtgate.exit <- vtgate.proc.Wait()
+			vtgate.isShutdown = true
 			close(vtgate.exit)
 		}
 	}()
@@ -239,7 +241,7 @@ func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPoints
 
 // IsShutdown checks if the vtgate process is shutdown
 func (vtgate *VtgateProcess) IsShutdown() bool {
-	return vtgate.proc.ProcessState.Exited()
+	return vtgate.isShutdown
 }
 
 // Terminate sends a SIGTERM to vtgate

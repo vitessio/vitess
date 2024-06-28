@@ -231,6 +231,7 @@ Flags:
       --mysql_default_workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
       --mysql_port int                                                   mysql port (default 3306)
       --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
+      --mysql_server_drain_onterm                                        If set, the server waits for --onterm_timeout for connected clients to drain
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
       --mysql_server_query_timeout duration                              mysql query timeout
