@@ -1463,7 +1463,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	// When creating the workflow, locking the workflow and its target keyspace is sufficient.
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
-	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "SwitchWrites")
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "MoveTablesCreate")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
 		return nil, lockErr
@@ -2582,7 +2582,7 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 
 	// Lock the workflow along with its source and target keyspaces.
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
-	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "SwitchWrites")
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DropTargets")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
 	}
@@ -2780,7 +2780,7 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 
 	// Lock the workflow and its source and target keyspaces.
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
-	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "SwitchWrites")
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DropSources")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
 	}
@@ -3021,7 +3021,7 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 
 	// Lock the workflow and its target keyspace.
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
-	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "SwitchWrites")
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "completeMigrateWorkflow")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
 	}
