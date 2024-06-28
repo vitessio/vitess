@@ -122,6 +122,7 @@ func TestConnectionDrain(t *testing.T) {
 	err = clusterInstance.VtgateProcess.Terminate()
 	require.NoError(t, err)
 
+	// Give enough time to vtgate to receive and start processing the SIGTERM signal
 	time.Sleep(2 * time.Second)
 
 	// Create a third connection, this connection should not be allowed.
@@ -141,13 +142,17 @@ func TestConnectionDrain(t *testing.T) {
 	require.NoError(t, err)
 	vtConn2.Close()
 
+	// vtgate should still be running
+	require.False(t, clusterInstance.VtgateProcess.IsShutdown())
+
 	// This connection should still be allowed
 	_, err = vtConn.ExecuteFetch("select id1 from t1", 1, false)
 	require.NoError(t, err)
 	vtConn.Close()
 
+	// Give enough time for vtgate to finish all the onterm hooks without reaching the 30s of --onterm_timeout
 	time.Sleep(10 * time.Second)
 
-	// By now the vtgate should have shutdown
+	// By now the vtgate should have shutdown on its own and without reaching --onterm_timeout
 	require.True(t, clusterInstance.VtgateProcess.IsShutdown())
 }

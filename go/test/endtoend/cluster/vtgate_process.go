@@ -241,7 +241,7 @@ func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPoints
 
 // IsShutdown checks if the vtgate process is shutdown
 func (vtgate *VtgateProcess) IsShutdown() bool {
-	return vtgate.isShutdown
+	return !vtgate.WaitForStatus()
 }
 
 // Terminate sends a SIGTERM to vtgate
