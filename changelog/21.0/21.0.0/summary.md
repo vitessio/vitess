@@ -35,6 +35,6 @@ The following metrics that were deprecated in the previous release, have now bee
 
 #### <a id="vttablet-flags"/>VTTablet Flags
 
-- `queryserver-enable-settings-pool` flag was added in v15 have been default on from v17. 
+- `queryserver-enable-settings-pool` flag, added in v15, has been on by default since v17. 
 It is now deprecated and will be removed in a future release.
 
