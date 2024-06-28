@@ -3273,7 +3273,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		cmdTimeout = &vttimepb.Duration{Seconds: 30}
 	}
 	ksLockTimeout := time.Duration(int64(time.Second) * (cmdTimeout.Seconds * 2))
-	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTimeToLive(ksLockTimeout))
+	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTimeout))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
@@ -3357,13 +3357,13 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		cmdTimeout = &vttimepb.Duration{Seconds: 30}
 	}
 	ksLockTimeout := time.Duration(int64(time.Second) * (cmdTimeout.Seconds * 2))
-	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTimeToLive(ksLockTimeout))
+	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTimeout))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer sourceUnlock(&err)
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites", topo.WithTimeToLive(ksLockTimeout))
+		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTimeout))
 		if lockErr != nil {
 			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}

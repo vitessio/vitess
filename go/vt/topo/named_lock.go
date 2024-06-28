@@ -49,7 +49,7 @@ func (ts *Server) LockName(ctx context.Context, name, action string) (context.Co
 	}, action, WithType(Named))
 }
 
-// CheckNamedLocked can be called on a context to make sure we have the lock
+// CheckNameLocked can be called on a context to make sure we have the lock
 // for a given opaque identifier.
 func CheckNameLocked(ctx context.Context, name string) error {
 	return checkLocked(ctx, &namedLock{

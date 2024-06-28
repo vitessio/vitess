@@ -59,7 +59,7 @@ func TestTopoNamedLock(t *testing.T) {
 	err = topo.CheckNameLocked(ctx, lockName)
 	require.NoError(t, err)
 
-	// Check we can acquire a different named lock.
+	// Confirm that we can acquire a different named lock.
 	lockName2 := "testy2"
 	ctx, unlock2, err := ts.LockName(ctx, lockName2, action)
 	require.NoError(t, err)
@@ -69,6 +69,7 @@ func TestTopoNamedLock(t *testing.T) {
 	// Unlock the first name.
 	unlock(&err)
 
+	// Confirm that we no longer have the first named lock.
 	err = topo.CheckNameLocked(ctx, lockName)
 	require.ErrorContains(t, err, fmt.Sprintf("%s is not locked", lockName))
 	err = topo.CheckNameLocked(ctx, lockName2)

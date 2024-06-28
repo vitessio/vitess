@@ -47,8 +47,8 @@ var (
 )
 
 // How long named locks are kept in the topo server.
-// This ensures that orphaned named locks are not kept around. This
-// should never happen, but it provides a final safety net.
+// This ensures that orphaned named locks are not kept around forever.
+// This should never happen, but it provides a final safety net.
 const NamedLockTTL = 24 * time.Hour
 
 // Lock describes a long-running lock on a keyspace or a shard.
@@ -161,7 +161,7 @@ func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, opts ...LockO
 	for _, o := range opts {
 		o.apply(&l.Options)
 	}
-	log.Infof("Locking %v %v for action %v with options: %+v", lt.Type(), lt.ResourceName(), l.Action, l.Options)
+	log.Infof("Locking %s %s for action %s with options: %+v", lt.Type(), lt.ResourceName(), l.Action, l.Options)
 
 	ctx, cancel := context.WithTimeout(ctx, LockTimeout)
 	defer cancel()
@@ -314,14 +314,14 @@ func newFuncLockOption(f func(*lockOptions)) *funcLockOption {
 	}
 }
 
-// WithTimeToLive allows you to specify how long the underlying topo server
+// WithTTL allows you to specify how long the underlying topo server
 // implementation should hold the lock before releasing it — even if the caller
 // has not explicitly released it. This provides a way to override the global
 // ttl values that are set via --topo_consul_lock_session_ttl and
 // --topo_etcd_lease_ttl.
 // Note: This option is ignored by the ZooKeeper implementation as it does not
 // support TTLs.
-func WithTimeToLive(ttl time.Duration) LockOption {
+func WithTTL(ttl time.Duration) LockOption {
 	return newFuncLockOption(func(o *lockOptions) {
 		o.ttl = ttl
 	})

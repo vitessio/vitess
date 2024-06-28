@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	leaseTTL = 30
+	leaseTTL = 30 // This is the default used for all locks
 )
 
 func init() {

@@ -103,7 +103,7 @@ func TestTopoKeyspaceLockWithTTL(t *testing.T) {
 	err := ts.CreateKeyspace(ctx, ks1, &topodatapb.Keyspace{})
 	require.NoError(t, err)
 
-	ctx, unlock, err := ts.LockKeyspace(ctx, ks1, "ks1", topo.WithTimeToLive(ttl))
+	ctx, unlock, err := ts.LockKeyspace(ctx, ks1, ks1, topo.WithTTL(ttl))
 	require.NoError(t, err)
 	defer unlock(&err)
 
