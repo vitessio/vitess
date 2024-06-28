@@ -158,7 +158,7 @@ func TestReshardCreate(t *testing.T) {
 				env.tmc.expectVRQuery(
 					tabletUID,
 					insertPrefix+
-						`\('`+workflowName+`', 'keyspace:"`+targetKeyspaceName+`" shard:"0" filter:{rules:{match:"/.*" filter:"`+target+`"}}', '', [0-9]*, [0-9]*, '`+
+						`\('`+workflowName+`', 'keyspace:\\"`+targetKeyspaceName+`\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"`+target+`\\"}}', '', [0-9]*, [0-9]*, '`+
 						env.cell+`', '`+tabletTypesStr+`', [0-9]*, 0, 'Stopped', 'vt_`+targetKeyspaceName+`', 4, 0, false, '{}'\)`+eol,
 					&sqltypes.Result{},
 				)
