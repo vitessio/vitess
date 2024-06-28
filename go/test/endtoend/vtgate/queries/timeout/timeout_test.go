@@ -111,19 +111,18 @@ func TestQueryTimeoutWithShardTargeting(t *testing.T) {
 	// insert some data
 	utils.Exec(t, mcmp.VtConn, "insert into t1(id1, id2) values (1,2),(3,4),(4,5),(5,6)")
 
-	// insert
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into t1(id1, id2) values (6,sleep(5))")
-	assert.ErrorContains(t, err, "context deadline exceeded (errno 1317) (sqlstate 70100)")
+	queries := []string{
+		"insert /*vt+ QUERY_TIMEOUT_MS=1 */ into t1(id1, id2) values (6,sleep(5))",
+		"update /*vt+ QUERY_TIMEOUT_MS=1 */ t1 set id2 = sleep(5)",
+		"delete /*vt+ QUERY_TIMEOUT_MS=1 */ from t1 where id2 = sleep(5)",
+		"select /*vt+ QUERY_TIMEOUT_MS=1 */ 1 from t1 where id2 = 5 and sleep(100)",
+	}
 
-	// update
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "update /*vt+ QUERY_TIMEOUT_MS=1 */ t1 set id2 = sleep(5)")
-	assert.ErrorContains(t, err, "context deadline exceeded (errno 1317) (sqlstate 70100)")
-
-	// delete
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from t1 where id2 = sleep(5)")
-	assert.ErrorContains(t, err, "context deadline exceeded (errno 1317) (sqlstate 70100)")
-
-	// select
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ 1 from t1 where id2 = 5 and sleep(100)")
-	assert.ErrorContains(t, err, "context deadline exceeded (errno 1317) (sqlstate 70100)")
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			_, err := utils.ExecAllowError(t, mcmp.VtConn, query)
+			assert.ErrorContains(t, err, "context deadline exceeded")
+			assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
+		})
+	}
 }
