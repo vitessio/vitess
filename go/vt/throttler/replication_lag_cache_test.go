@@ -84,3 +84,10 @@ func TestReplicationLagCache_SortByLag(t *testing.T) {
 
 	require.True(t, c.slowReplicas[r1Key], "r1 should be tracked as a slow replica")
 }
+
+func TestReplicationLagCache_MaxLag(t *testing.T) {
+	c := newReplicationLagCache(2)
+	c.add(lagRecord(sinceZero(1*time.Second), r1, 30))
+	c.add(lagRecord(sinceZero(1*time.Second), r2, 1))
+	require.Equal(t, uint32(30), c.maxLag())
+}

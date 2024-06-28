@@ -229,22 +229,10 @@ func (t *Throttler) Throttle(threadID int) time.Duration {
 // the provided type, excluding ignored tablets.
 func (t *Throttler) MaxLag(tabletType topodata.TabletType) uint32 {
 	cache := t.maxReplicationLagModule.lagCacheByType(tabletType)
-
-	var maxLag uint32
-	cacheEntries := cache.entries
-
-	for key := range cacheEntries {
-		if cache.isIgnored(key) {
-			continue
-		}
-
-		lag := cache.latest(key).Stats.ReplicationLagSeconds
-		if lag > maxLag {
-			maxLag = lag
-		}
+	if cache == nil {
+		return 0
 	}
-
-	return maxLag
+	return cache.maxLag()
 }
 
 // ThreadFinished marks threadID as finished and redistributes the thread's
