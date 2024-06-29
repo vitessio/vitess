@@ -3288,6 +3288,15 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer unlock(&err)
+	confirmKeyspaceLocksHeld := func() error {
+		if req.DryRun { // We don't actually take locks
+			return nil
+		}
+		if err := topo.CheckKeyspaceLocked(ctx, ts.SourceKeyspaceName()); err != nil {
+			return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.SourceKeyspaceName())
+		}
+		return nil
+	}
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		switch {
@@ -3307,11 +3316,18 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 		return sw.logs(), nil
 	}
+
+	if err := confirmKeyspaceLocksHeld(); err != nil {
+		return handleError("locks were lost", err)
+	}
 	ts.Logger().Infof("About to switchShardReads: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
 	if err := sw.switchShardReads(ctx, req.Cells, roTabletTypes, direction); err != nil {
 		return handleError("failed to switch read traffic for the shards", err)
 	}
 
+	if err := confirmKeyspaceLocksHeld(); err != nil {
+		return handleError("locks were lost", err)
+	}
 	ts.Logger().Infof("switchShardReads Completed: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
 	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
@@ -3389,6 +3405,18 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 		ctx = lockCtx
 		defer targetUnlock(&err)
+	}
+	confirmKeyspaceLocksHeld := func() error {
+		if req.DryRun { // We don't actually take locks
+			return nil
+		}
+		if err := topo.CheckKeyspaceLocked(ctx, ts.SourceKeyspaceName()); err != nil {
+			return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.SourceKeyspaceName())
+		}
+		if err := topo.CheckKeyspaceLocked(ctx, ts.TargetKeyspaceName()); err != nil {
+			return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.TargetKeyspaceName())
+		}
+		return nil
 	}
 
 	// Find out if the target is using any sequence tables for auto_increment
@@ -3468,30 +3496,45 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			}
 		}
 
+		if err := confirmKeyspaceLocksHeld(); err != nil {
+			return handleError("locks were lost", err)
+		}
 		ts.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, timeout); err != nil {
 			sw.cancelMigration(ctx, sm)
 			return handleError("failed to sync up replication between the source and target", err)
 		}
 
+		if err := confirmKeyspaceLocksHeld(); err != nil {
+			return handleError("locks were lost", err)
+		}
 		ts.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
 			sw.cancelMigration(ctx, sm)
 			return handleError("failed to migrate the workflow streams", err)
 		}
 
+		if err := confirmKeyspaceLocksHeld(); err != nil {
+			return handleError("locks were lost", err)
+		}
 		ts.Logger().Infof("Resetting sequences")
 		if err := sw.resetSequences(ctx); err != nil {
 			sw.cancelMigration(ctx, sm)
 			return handleError("failed to reset the sequences", err)
 		}
 
+		if err := confirmKeyspaceLocksHeld(); err != nil {
+			return handleError("locks were lost", err)
+		}
 		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
 			sw.cancelMigration(ctx, sm)
 			return handleError("failed to create the reverse vreplication streams", err)
 		}
 
+		if err := confirmKeyspaceLocksHeld(); err != nil {
+			return handleError("locks were lost", err)
+		}
 		// Initialize any target sequences, if there are any, before allowing new writes.
 		if req.InitializeTargetSequences && len(sequenceMetadata) > 0 {
 			ts.Logger().Infof("Initializing target sequences")
