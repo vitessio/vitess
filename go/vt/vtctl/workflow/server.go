@@ -80,6 +80,8 @@ const (
 	rdonlyTabletSuffix  = "@rdonly"
 	// Globally routable tables don't have a keyspace prefix.
 	globalTableQualifier = ""
+	// Default duration used for lag, timeout, etc.
+	DefaultTimeout = 30 * time.Second
 )
 
 var tabletTypeSuffixes = []string{primaryTabletSuffix, replicaTabletSuffix, rdonlyTabletSuffix}
@@ -129,9 +131,6 @@ const (
 	lockTablesCycles = 2
 	// Time to wait between LOCK TABLES cycles on the sources during SwitchWrites.
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
-
-	// Default duration used for lag, timeout, etc.
-	defaultDuration = 30 * time.Second
 )
 
 var (
@@ -2543,7 +2542,7 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 				s.sem.Release(1)
 			}
 		}()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
 		defer cancel()
 		sqlOptimizeTable := "optimize table _vt.copy_state"
 		if _, err := s.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
@@ -3060,13 +3059,13 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		rdDryRunResults, wrDryRunResults  *[]string
 		hasReplica, hasRdonly, hasPrimary bool
 	)
-	timeout, set, err := protoutil.DurationFromProto(req.Timeout)
+	timeout, set, err := protoutil.DurationFromProto(req.GetTimeout())
 	if err != nil {
 		err = vterrors.Wrapf(err, "unable to parse Timeout into a valid duration")
 		return nil, err
 	}
 	if !set {
-		timeout = defaultDuration
+		timeout = DefaultTimeout
 	}
 	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
@@ -3083,7 +3082,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, err
 	}
 	if !set {
-		maxReplicationLagAllowed = defaultDuration
+		maxReplicationLagAllowed = DefaultTimeout
 	}
 	direction := TrafficSwitchDirection(req.Direction)
 	if direction == DirectionBackward {
@@ -3268,11 +3267,22 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	// For switching reads, locking the source keyspace is sufficient.
 	// We need to hold the keyspace locks longer than the command timeout.
-	cmdTimeout := req.GetTimeout()
-	if cmdTimeout == nil {
-		cmdTimeout = &vttimepb.Duration{Seconds: 30}
+	// We need to hold the keyspace locks longer than the command timeout.
+	cmdTimeout, set, err := protoutil.DurationFromProto(req.GetTimeout())
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "unable to parse Timeout into a valid duration")
 	}
-	ksLockTimeout := time.Duration(int64(time.Second) * (cmdTimeout.Seconds * 2))
+	if !set {
+		cmdTimeout = DefaultTimeout
+	}
+	// We enforce the 1 second minimum as Etcd only takes a seconds value so
+	// you'd get unexpected behavior if you e.g. set the timeout to 500ms as
+	// Etcd would get a value of 0 or a never-ending TTL.
+	if cmdTimeout.Seconds() < 1 {
+		return nil, vterrors.Wrapf(err, "Timeout must be at least 1 second")
+	}
+	// Give ourselves extra time to be sure the lock is not lost.
+	ksLockTimeout := cmdTimeout * 2
 	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTimeout))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
@@ -3352,11 +3362,21 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 	defer workflowUnlock(&err)
 	// We need to hold the keyspace locks longer than the command timeout.
-	cmdTimeout := req.GetTimeout()
-	if cmdTimeout == nil {
-		cmdTimeout = &vttimepb.Duration{Seconds: 30}
+	cmdTimeout, set, err := protoutil.DurationFromProto(req.GetTimeout())
+	if err != nil {
+		return handleError("unable to parse Timeout into a valid duration", err)
 	}
-	ksLockTimeout := time.Duration(int64(time.Second) * (cmdTimeout.Seconds * 2))
+	if !set {
+		cmdTimeout = DefaultTimeout
+	}
+	// We enforce the 1 second minimum as Etcd only takes a seconds value so
+	// you'd get unexpected behavior if you e.g. set the timeout to 500ms as
+	// Etcd would get a value of 0 or a never-ending TTL.
+	if cmdTimeout.Seconds() < 1 {
+		return handleError("Timeout must be at least 1 second", err)
+	}
+	// Give ourselves extra time to be sure the lock is not lost.
+	ksLockTimeout := cmdTimeout * 2
 	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTimeout))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
@@ -3679,7 +3699,7 @@ func (s *Server) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo,
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "fillStringTemplate failed: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, DefaultTimeout)
 	defer cancel()
 	// Need to make sure that replication is enabled since we're only applying
 	// the statement on primaries.
