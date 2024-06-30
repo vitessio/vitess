@@ -236,7 +236,7 @@ func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []s
 	}
 }
 
-//--------------------------------------
+// --------------------------------------
 // Topos and tablets
 
 func addTablet(id int) *topodatapb.Tablet {
@@ -348,7 +348,7 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 	})
 }
 
-//--------------------------------------
+// --------------------------------------
 // Binlog Client to TabletManager
 
 // fakeBinlogClient satisfies binlogplayer.Client.
@@ -425,7 +425,7 @@ func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, table
 	}
 }
 
-//--------------------------------------
+// --------------------------------------
 // DBCLient wrapper
 
 func realDBClientFactory() binlogplayer.DBClient {
@@ -486,7 +486,7 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		globalDBQueries <- query
 	} else if testSetForeignKeyQueries && strings.Contains(query, "set foreign_key_checks") {
 		globalDBQueries <- query
-	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
+	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { // allow select/set for foreign_key_checks
 		globalDBQueries <- query
 	}
 	return qr, err
@@ -581,6 +581,7 @@ func shouldIgnoreQuery(query string) bool {
 		// This is only executed if the table has no defined Primary Key, which we don't know in the lower level
 		// code.
 		"SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS",
+		"select @@global.foreign_key_checks",
 	}
 	if sidecardb.MatchesInitQuery(query) {
 		return true

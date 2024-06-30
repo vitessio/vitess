@@ -334,7 +334,7 @@ func TestCharPK(t *testing.T) {
 		output string
 		table  string
 		data   [][]string
-	}{{ //binary(2)
+	}{{ // binary(2)
 		input:  "insert into t1 values(1, 'a')",
 		output: "insert into t1(id,val) values (1,'a\\0')",
 		table:  "t1",
@@ -348,7 +348,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a\000"},
 		},
-	}, { //char(2)
+	}, { // char(2)
 		input:  "insert into t2 values(1, 'a')",
 		output: "insert into t2(id,val) values (1,'a')",
 		table:  "t2",
@@ -362,7 +362,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varbinary(2)
+	}, { // varbinary(2)
 		input:  "insert into t3 values(1, 'a')",
 		output: "insert into t3(id,val) values (1,'a')",
 		table:  "t3",
@@ -376,7 +376,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varchar(2)
+	}, { // varchar(2)
 		input:  "insert into t4 values(1, 'a')",
 		output: "insert into t4(id,val) values (1,'a')",
 		table:  "t4",
@@ -518,6 +518,61 @@ func TestPlayerSavepoint(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
+	cancel()
+}
+
+// TestPlayerForeignKeyCheckSourceChecksOff validates the scenario where foreign key checks are disabled on the source,
+// we insert a row into the child which violates the foreign key constraint, and the row is inserted into the parent table
+// because the foreign key checks are disabled globally on the target.
+func TestPlayerForeignKeyCheckSourceChecksOff(t *testing.T) {
+	doNotLogDBQueries = true
+	defer func() { doNotLogDBQueries = false }()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table parent(id int, name varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.parent(id int, name varchar(128), primary key(id))", vrepldb),
+		"create table child(id int, parent_id int, name varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade)", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table child",
+		fmt.Sprintf("drop table %s.child", vrepldb),
+		"drop table parent",
+		fmt.Sprintf("drop table %s.parent", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	testSetForeignKeyQueries = true
+	defer func() {
+		testSetForeignKeyQueries = false
+	}()
+	pos1 := primaryPosition(t)
+	execStatements(t, []string{
+		"insert into parent values(1, 'parent1')",
+		"insert into child values(1, 1, 'child1')",
+		"insert into child values (2, 100, 'child100')",
+		"set @@global.foreign_key_checks=0",
+	})
+	cancel, _ := startVReplication(t, bls, pos1)
+	expectData(t, "parent", [][]string{
+		{"1", "parent1"},
+	})
+	expectData(t, "child", [][]string{
+		{"1", "1", "child1"},
+		{"2", "100", "child100"},
+	})
 	cancel()
 }
 
@@ -1709,7 +1764,7 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) //For debugging only
+	pos0 := primaryPosition(t) // For debugging only
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	pos1 := primaryPosition(t)
 	// The stop position must be the GTID of the first DDL
@@ -1723,7 +1778,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
 	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) //For debugging only: to check what are the positions when test works and if/when it fails
+		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
