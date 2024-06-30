@@ -36,33 +36,60 @@ import (
 
 const testWorkflowFlavor = workflowFlavorVtctld
 
-// TestFKWorkflow runs a MoveTables workflow with atomic copy for a db with foreign key constraints.
-// It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
-// i.e. with foreign_key_checks=0.
-func TestFKWorkflow(t *testing.T) {
+type fkTestConfig struct {
+	sourceKeyspace  string
+	targetKeyspace  string
+	targetPrimaryId int
+	cell            string
+}
+
+func initTestFKWorkflow(t *testing.T) (*fkTestConfig, func()) {
+	config := &fkTestConfig{
+		sourceKeyspace:  "fksource",
+		targetKeyspace:  "fktarget",
+		cell:            "zone1",
+		targetPrimaryId: 200,
+	}
 	extraVTTabletArgs = []string{
 		// Ensure that there are multiple copy phase cycles per table.
 		"--vstream_packet_size=256",
 		// Test VPlayer batching mode.
 		fmt.Sprintf("--vreplication_experimental_flags=%d",
-			vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
+			vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|
+				vttablet.VReplicationExperimentalFlagOptimizeInserts|
+				vttablet.VReplicationExperimentalFlagVPlayerBatching),
 	}
-	defer func() { extraVTTabletArgs = nil }()
 
-	cellName := "zone1"
+	cellName := config.cell
 	vc = NewVitessCluster(t, nil)
 
-	sourceKeyspace := "fksource"
 	shardName := "0"
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
-
-	defer vc.TearDown()
-
 	cell := vc.Cells[cellName]
-	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell}, config.sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, sourceKsOpts)
+
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	execVtgateQuery(t, vtgateConn, "", createParentView)
 
 	verifyClusterHealth(t, vc)
-	insertInitialFKData(t)
+	insertInitialFKData(t, config)
+
+	vc.AddKeyspace(t, []*Cell{cell}, config.targetKeyspace, shardName, initialFKTargetVSchema, initialFKSchema, 0, 0, config.targetPrimaryId, sourceKsOpts)
+
+	deferFunc := func() {
+		vc.TearDown()
+		extraVTTabletArgs = nil
+	}
+	return config, deferFunc
+}
+
+// TestFKWorkflow runs a MoveTables workflow with atomic copy for a db with foreign key constraints.
+// It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
+// i.e. with foreign_key_checks=0.
+func TestFKWorkflowBasic(t *testing.T) {
+	config, deferFunc := initTestFKWorkflow(t)
+	defer deferFunc()
 
 	var ls *fkLoadSimulator
 	withLoad := true // Set it to false to skip load simulation, while debugging
@@ -81,36 +108,32 @@ func TestFKWorkflow(t *testing.T) {
 		go ls.simulateLoad()
 	}
 
-	targetKeyspace := "fktarget"
-	targetTabletId := 200
-	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, sourceKsOpts)
-
 	testFKCancel(t, vc)
 
 	workflowName := "fk"
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
+	ksWorkflow := fmt.Sprintf("%s.%s", config.targetKeyspace, workflowName)
 
 	mt := newMoveTables(vc, &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
 			workflowName:   workflowName,
-			targetKeyspace: targetKeyspace,
+			targetKeyspace: config.targetKeyspace,
 		},
-		sourceKeyspace: sourceKeyspace,
+		sourceKeyspace: config.sourceKeyspace,
 		atomicCopy:     true,
 	}, testWorkflowFlavor)
 	mt.Create()
 
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	targetKs := vc.Cells[cellName].Keyspaces[targetKeyspace]
-	targetTab := targetKs.Shards["0"].Tablets[fmt.Sprintf("%s-%d", cellName, targetTabletId)].Vttablet
+	targetKs := vc.Cells[config.cell].Keyspaces[config.targetKeyspace]
+	targetTab := targetKs.Shards["0"].Tablets[fmt.Sprintf("%s-%d", config.cell, config.targetPrimaryId)].Vttablet
 	require.NotNil(t, targetTab)
 	catchup(t, targetTab, workflowName, "MoveTables")
-	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
+	vdiff(t, config.targetKeyspace, workflowName, config.cell, true, false, nil)
 	if withLoad {
 		ls.waitForAdditionalRows(200)
 	}
-	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
+	vdiff(t, config.targetKeyspace, workflowName, config.cell, true, false, nil)
 	if withLoad {
 		cancel()
 		<-ch
@@ -139,13 +162,12 @@ func TestFKWorkflow(t *testing.T) {
 	require.Equal(t, t11Count, t12Count)
 }
 
-func insertInitialFKData(t *testing.T) {
+func insertInitialFKData(t *testing.T, config *fkTestConfig) {
 	t.Run("insertInitialFKData", func(t *testing.T) {
 		vtgateConn, closeConn := getVTGateConn()
 		defer closeConn()
-		sourceKeyspace := "fksource"
 		shard := "0"
-		db := fmt.Sprintf("%s:%s", sourceKeyspace, shard)
+		db := fmt.Sprintf("%s:%s", config.sourceKeyspace, shard)
 		log.Infof("Inserting initial FK data")
 		execMultipleQueries(t, vtgateConn, db, initialFKData)
 		log.Infof("Done inserting initial FK data")
@@ -321,4 +343,63 @@ func testFKCancel(t *testing.T, vc *VitessCluster) {
 	mt.Create()
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	mt.Cancel()
+}
+
+func dropTargetConstraints(t *testing.T, targetKeyspace string) {
+	query := "alter table %s.%s drop foreign key %s"
+	queries := []string{
+		fmt.Sprintf(query, targetKeyspace, "t11", "f11"),
+		fmt.Sprintf(query, targetKeyspace, "t12", "f12"),
+	}
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	for _, q := range queries {
+		execVtgateQuery(t, vtgateConn, targetKeyspace, q)
+	}
+}
+
+// TestFKWorkflowConstraintsOnlyOnSource runs a MoveTables workflow with atomic copy. It deletes some constraints on the
+// target and sets the global foreign_key_checks=0 on the source. It then inserts data into the target which will violate
+// the original foreign key constraints. The workflow should complete successfully, since the global foreign_key_checks
+// is set to 0 on the source and it should behave the same as on the target where the constraints are dropped.
+func TestFKWorkflowConstraintsOnlyOnSource(t *testing.T) {
+	config, deferFunc := initTestFKWorkflow(t)
+	defer deferFunc()
+	_ = config
+	dropTargetConstraints(t, config.targetKeyspace)
+	workflowName := "wf"
+	ksWorkflow := fmt.Sprintf("%s.%s", config.targetKeyspace, workflowName)
+	mt := newMoveTables(vc, &moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: config.targetKeyspace,
+		},
+		sourceKeyspace: config.sourceKeyspace,
+		atomicCopy:     true,
+	}, testWorkflowFlavor)
+	mt.Create()
+
+	sourcePrimary := vc.getPrimaryTablet(t, config.sourceKeyspace, "0")
+	_, err := sourcePrimary.QueryTablet("set global foreign_key_checks=0", config.sourceKeyspace, false)
+	require.NoError(t, err)
+
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	mt.SwitchReadsAndWrites()
+
+	reverseWorkflowName := fmt.Sprintf("%s_reverse", workflowName)
+	reverseKsWorkflow := fmt.Sprintf("%s.%s", config.sourceKeyspace, reverseWorkflowName)
+	waitForWorkflowState(t, vc, reverseKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+
+	table := "t11"
+	numRows := getNumRows(t, vtgateConn, config.targetKeyspace, table)
+
+	// This query violates the foreign key constraint because there is no parent row with id 200 in t12.
+	query := "insert into t11 values(200, 200)"
+	execVtgateQuery(t, vtgateConn, config.targetKeyspace, query)
+	waitForRowCountInTablet(t, sourcePrimary, config.sourceKeyspace, table, numRows+1)
+	mt.Complete()
 }
