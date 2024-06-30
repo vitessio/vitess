@@ -1628,18 +1628,14 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	if err := e.updateMigrationTableRows(ctx, onlineDDL.UUID, v.tableRows); err != nil {
 		return err
 	}
-	removedUniqueKeyNames := []string{}
-	for _, uniqueKey := range v.removedUniqueKeys {
-		removedUniqueKeyNames = append(removedUniqueKeyNames, uniqueKey.Name)
-	}
 
 	if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
-		len(v.addedUniqueKeys),
-		len(v.removedUniqueKeys),
-		strings.Join(sqlescape.EscapeIDs(removedUniqueKeyNames), ","),
+		v.addedUniqueKeys.Len(),
+		v.removedUniqueKeys.Len(),
+		strings.Join(sqlescape.EscapeIDs(v.removedUniqueKeys.Names()), ","),
 		strings.Join(sqlescape.EscapeIDs(v.removedForeignKeyNames), ","),
-		strings.Join(sqlescape.EscapeIDs(v.droppedNoDefaultColumnNames), ","),
-		strings.Join(sqlescape.EscapeIDs(v.expandedColumnNames), ","),
+		strings.Join(sqlescape.EscapeIDs(v.droppedNoDefaultColumns.Names()), ","),
+		strings.Join(sqlescape.EscapeIDs(v.expandedColumns.Names()), ","),
 		v.revertibleNotes,
 	); err != nil {
 		return err

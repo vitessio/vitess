@@ -56,7 +56,7 @@ func TestReadTableColumns(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(env, tcase.create)
 			require.NoError(t, err)
-			cols, virtual, pk, err := readTableColumns(createTableEntity)
+			cols, virtual, pk, err := getTableColumns(createTableEntity)
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.cols, cols.Names())
 			assert.Equal(t, tcase.generated, virtual.Names())

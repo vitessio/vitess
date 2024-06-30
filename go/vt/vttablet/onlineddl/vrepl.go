@@ -28,7 +28,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -43,7 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -111,18 +109,18 @@ type VRepl struct {
 
 	analyzeTable bool
 
-	sourceSharedColumns         *vrepl.ColumnList
-	targetSharedColumns         *vrepl.ColumnList
-	droppedNoDefaultColumnNames []string
-	expandedColumnNames         []string
-	sharedColumnsMap            map[string]string
-	sourceAutoIncrement         uint64
+	sourceSharedColumns     *schemadiff.ColumnDefinitionEntityList
+	targetSharedColumns     *schemadiff.ColumnDefinitionEntityList
+	droppedNoDefaultColumns *schemadiff.ColumnDefinitionEntityList
+	expandedColumns         *schemadiff.ColumnDefinitionEntityList
+	sharedColumnsMap        map[string]string
+	sourceAutoIncrement     uint64
 
-	chosenSourceUniqueKey *vrepl.UniqueKey
-	chosenTargetUniqueKey *vrepl.UniqueKey
+	chosenSourceUniqueKey *schemadiff.IndexDefinitionEntity
+	chosenTargetUniqueKey *schemadiff.IndexDefinitionEntity
 
-	addedUniqueKeys        []*vrepl.UniqueKey
-	removedUniqueKeys      []*vrepl.UniqueKey
+	addedUniqueKeys        *schemadiff.IndexDefinitionEntityList
+	removedUniqueKeys      *schemadiff.IndexDefinitionEntityList
 	removedForeignKeyNames []string
 
 	revertibleNotes string
@@ -181,108 +179,31 @@ func (v *VRepl) targetTableName() string {
 	return v.targetCreateTableEntity.Name()
 }
 
-// readTableColumns reads column list from given table
-func readTableColumns(createTableEntity *schemadiff.CreateTableEntity) (
-	columns *vrepl.ColumnList,
-	virtualColumns *vrepl.ColumnList,
-	pkColumns *vrepl.ColumnList,
+// getTableColumns returns column lists from given table
+func getTableColumns(createTableEntity *schemadiff.CreateTableEntity) (
+	columns *schemadiff.ColumnDefinitionEntityList,
+	virtualColumns *schemadiff.ColumnDefinitionEntityList,
+	pkColumns *schemadiff.ColumnDefinitionEntityList,
 	err error,
 ) {
-	columnNames := []string{}
-	virtualColumnNames := []string{}
-	pkColumnNames := []string{}
-
-	for _, col := range createTableEntity.ColumnDefinitionEntities() {
-		columnName := col.Name()
-		columnNames = append(columnNames, columnName)
-		if isGenerated, _ := col.IsGenerated(); isGenerated {
-			virtualColumnNames = append(virtualColumnNames, columnName)
+	pkColumns = schemadiff.NewColumnDefinitionEntityList(nil)
+	columns = createTableEntity.ColumnDefinitionEntitiesList()
+	var virutalCols []*schemadiff.ColumnDefinitionEntity
+	for _, col := range columns.Entities {
+		if col.IsGenerated() {
+			virutalCols = append(virutalCols, col)
 		}
 	}
-	if len(columnNames) == 0 {
+	if columns.Len() == 0 {
 		return nil, nil, nil, fmt.Errorf("found 0 columns on `%s`", createTableEntity.Name())
 	}
-	for _, key := range createTableEntity.CreateTable.TableSpec.Indexes {
-		if key.Info.Type == sqlparser.IndexTypePrimary {
-			for _, col := range key.Columns {
-				pkColumnNames = append(pkColumnNames, col.Column.String())
-			}
+	for _, key := range createTableEntity.IndexDefinitionEntities() {
+		if key.IsPrimary() {
+			pkColumns = key.ColumnList
+			break
 		}
 	}
-	return vrepl.NewColumnList(columnNames), vrepl.NewColumnList(virtualColumnNames), vrepl.NewColumnList(pkColumnNames), nil
-}
-
-// readTableUniqueKeys reads all unique keys from a given table, by order of usefulness/performance: PRIMARY first, integers are better, non-null are better
-func (v *VRepl) readTableUniqueKeys(createTableEntity *schemadiff.CreateTableEntity) (uniqueKeys []*vrepl.UniqueKey, err error) {
-	colMap := createTableEntity.ColumnDefinitionEntitiesMap()
-	keys := createTableEntity.CreateTable.TableSpec.Indexes
-	keysMap := map[string]*sqlparser.IndexDefinition{}
-	for _, key := range keys {
-		keysMap[key.Info.Name.String()] = key
-	}
-	for _, key := range keys {
-		func() {
-			if !key.Info.IsUnique() {
-				return
-			}
-			hasNullable := false
-			hasFloat := false
-			hasPrefix := false
-			columnNames := []string{}
-			for _, col := range key.Columns {
-				columnNames = append(columnNames, col.Column.String())
-				colName := col.Column.Lowered()
-				if colMap[colName].IsNullable() {
-					hasNullable = true
-				}
-				if col.Length != nil {
-					// e.g. KEY (name(7))
-					hasPrefix = true
-				}
-				if colMap[colName].IsFloatingPointType() {
-					hasFloat = true
-				}
-			}
-			// OK, this unique key is good to go!
-			uniqueKey := &vrepl.UniqueKey{
-				Name:        key.Info.Name.String(),
-				Columns:     *vrepl.NewColumnList(columnNames),
-				HasNullable: hasNullable,
-				HasFloat:    hasFloat,
-				HasPrefix:   hasPrefix,
-			}
-			uniqueKeys = append(uniqueKeys, uniqueKey)
-		}()
-	}
-	sort.Slice(uniqueKeys, func(i, j int) bool {
-		// PRIMARY is always first
-		if uniqueKeys[i].Name == "PRIMARY" {
-			return true
-		}
-		if uniqueKeys[j].HasNullable {
-			return true
-		}
-		iKey := keysMap[uniqueKeys[i].Name]
-		jKey := keysMap[uniqueKeys[j].Name]
-		iFirstColName := iKey.Columns[0].Column.Lowered()
-		jFirstColName := jKey.Columns[0].Column.Lowered()
-		iFirstCol := colMap[iFirstColName]
-		jFirstCol := colMap[jFirstColName]
-		if iFirstCol.IsIntegralType() && !jFirstCol.IsIntegralType() {
-			return true
-		}
-		if jFirstCol.HasBlobTypeStorage() {
-			return true
-		}
-		if !iFirstCol.IsTextual() && jFirstCol.IsTextual() {
-			return true
-		}
-		if schemadiff.IntegralTypeStorage(iFirstCol.Type()) < schemadiff.IntegralTypeStorage(jFirstCol.Type()) {
-			return true
-		}
-		return false
-	})
-	return uniqueKeys, nil
+	return columns, schemadiff.NewColumnDefinitionEntityList(virutalCols), pkColumns, nil
 }
 
 // isFastAnalyzeTableSupported checks if the underlying MySQL server supports 'fast_analyze_table',
@@ -337,23 +258,14 @@ func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnecti
 	return tableRows, err
 }
 
-// applyColumnTypes
-func applyColumnTypes(createTableEntity *schemadiff.CreateTableEntity, columnsLists ...*vrepl.ColumnList) error {
-	for _, col := range createTableEntity.ColumnDefinitionEntities() {
-		col = col.Clone()
-		col.SetExplicitDefaultAndNull()
-		if err := col.SetExplicitCharsetCollate(); err != nil {
-			return err
-		}
-		for _, columnsList := range columnsLists {
-			column := columnsList.GetColumn(col.Name())
-			if column == nil {
-				column = columnsList.GetColumn(col.NameLowered())
+// formalizeColumns
+func formalizeColumns(columnsLists ...*schemadiff.ColumnDefinitionEntityList) error {
+	for _, colList := range columnsLists {
+		for _, col := range colList.Entities {
+			col.SetExplicitDefaultAndNull()
+			if err := col.SetExplicitCharsetCollate(); err != nil {
+				return err
 			}
-			if column == nil {
-				continue
-			}
-			column.Entity = col
 		}
 	}
 	return nil
@@ -367,102 +279,94 @@ func (v *VRepl) analyzeAlter() error {
 }
 
 func (v *VRepl) analyzeTables() (err error) {
-	// columns:
-	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := readTableColumns(v.sourceCreateTableEntity)
-	if err != nil {
-		return err
-	}
-	targetColumns, targetVirtualColumns, targetPKColumns, err := readTableColumns(v.targetCreateTableEntity)
-	if err != nil {
-		return err
-	}
-	var droppedSourceNonGeneratedColumns *vrepl.ColumnList
-	v.sourceSharedColumns, v.targetSharedColumns, droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.alterTableAnalysis)
-
-	// unique keys
-	sourceUniqueKeys, err := v.readTableUniqueKeys(v.sourceCreateTableEntity)
-	if err != nil {
-		return err
-	}
-	if len(sourceUniqueKeys) == 0 {
-		return fmt.Errorf("found no possible unique key on `%s`", v.sourceTableName())
-	}
-	targetUniqueKeys, err := v.readTableUniqueKeys(v.targetCreateTableEntity)
-	if err != nil {
-		return err
-	}
-	if len(targetUniqueKeys) == 0 {
-		return fmt.Errorf("found no possible unique key on `%s`", v.targetTableName())
-	}
-	// VReplication supports completely different unique keys on source and target, covering
-	// some/completely different columns. The condition is that the key on source
-	// must use columns which all exist on target table.
-	eligibleSourceColumnsForUniqueKey := v.sourceSharedColumns.Union(sourceVirtualColumns)
-	v.chosenSourceUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(sourceUniqueKeys, eligibleSourceColumnsForUniqueKey)
-	if v.chosenSourceUniqueKey == nil {
-		// Still no luck.
-		return fmt.Errorf("found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTableName(), v.targetTableName())
-	}
-	// VReplication supports completely different unique keys on source and target, covering
-	// some/completely different columns. The condition is that the key on target
-	// must use columns which all exist on source table.
-	eligibleTargetColumnsForUniqueKey := v.targetSharedColumns.Union(targetVirtualColumns).MappedNamesColumnList(v.sharedColumnsMap)
-	v.chosenTargetUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(targetUniqueKeys, eligibleTargetColumnsForUniqueKey)
-	if v.chosenTargetUniqueKey == nil {
-		// Still no luck.
-		return fmt.Errorf("found no possible unique key on `%s` whose columns are in source table `%s`; col names=%v, v.sharedColumnsMap=%v", v.targetTableName(), v.sourceTableName(), eligibleTargetColumnsForUniqueKey, v.sharedColumnsMap)
-	}
-	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.alterTableAnalysis.ColumnRenameMap)
-	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.alterTableAnalysis.ColumnRenameMap)
-	v.removedForeignKeyNames, err = schemadiff.RemovedForeignKeyNames(v.sourceCreateTableEntity, v.targetCreateTableEntity)
-	if err != nil {
-		return err
-	}
-
-	// chosen source & target unique keys have exact columns in same order
-	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
-
-	if err := applyColumnTypes(v.sourceCreateTableEntity, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, droppedSourceNonGeneratedColumns); err != nil {
-		return err
-	}
-	if err := applyColumnTypes(v.targetCreateTableEntity, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
-		return err
-	}
-
-	for i := range v.sourceSharedColumns.Columns() {
-		sourceColumn := v.sourceSharedColumns.Columns()[i]
-		mappedColumn := v.targetSharedColumns.Columns()[i]
-
-		if sourceColumn.Entity.IsIntegralType() && mappedColumn.Entity.Type() == "enum" {
-			v.intToEnumMap[sourceColumn.Name] = true
+	{
+		// columns:
+		sourceColumns, sourceVirtualColumns, sourcePKColumns, err := getTableColumns(v.sourceCreateTableEntity)
+		if err != nil {
+			return err
 		}
-	}
+		targetColumns, targetVirtualColumns, targetPKColumns, err := getTableColumns(v.targetCreateTableEntity)
+		if err != nil {
+			return err
+		}
 
-	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(droppedSourceNonGeneratedColumns)
-	var expandedDescriptions map[string]string
-	v.expandedColumnNames, expandedDescriptions = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
+		var droppedSourceNonGeneratedColumns *schemadiff.ColumnDefinitionEntityList
+		v.sourceSharedColumns, v.targetSharedColumns, droppedSourceNonGeneratedColumns, v.sharedColumnsMap = schemadiff.AnalyzeSharedColumns(sourceColumns, targetColumns, v.alterTableAnalysis)
 
-	v.sourceAutoIncrement, err = v.sourceCreateTableEntity.AutoIncrementValue()
+		// unique keys
+		sourceUniqueKeys := schemadiff.PrioritizedUniqueKeys(v.sourceCreateTableEntity)
+		if sourceUniqueKeys.Len() == 0 {
+			return fmt.Errorf("found no possible unique key on `%s`", v.sourceTableName())
+		}
 
-	notes := []string{}
-	for _, uk := range v.removedUniqueKeys {
-		notes = append(notes, fmt.Sprintf("unique constraint removed: %s", uk.Name))
-	}
-	for _, name := range v.droppedNoDefaultColumnNames {
-		notes = append(notes, fmt.Sprintf("column %s dropped, and had no default value", name))
-	}
-	for _, name := range v.expandedColumnNames {
-		notes = append(notes, fmt.Sprintf("column %s: %s", name, expandedDescriptions[name]))
-	}
-	for _, name := range v.removedForeignKeyNames {
-		notes = append(notes, fmt.Sprintf("foreign key %s dropped", name))
-	}
-	v.revertibleNotes = strings.Join(notes, "\n")
-	if err != nil {
-		return err
-	}
+		targetUniqueKeys := schemadiff.PrioritizedUniqueKeys(v.targetCreateTableEntity)
+		if targetUniqueKeys.Len() == 0 {
+			return fmt.Errorf("found no possible unique key on `%s`", v.targetTableName())
+		}
+		// VReplication supports completely different unique keys on source and target, covering
+		// some/completely different columns. The condition is that the key on source
+		// must use columns which all exist on target table.
+		eligibleSourceColumnsForUniqueKey := v.sourceSharedColumns.Union(sourceVirtualColumns)
+		v.chosenSourceUniqueKey = schemadiff.IterationKeysByColumns(sourceUniqueKeys, eligibleSourceColumnsForUniqueKey).First()
+		if v.chosenSourceUniqueKey == nil {
+			return fmt.Errorf("found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTableName(), v.targetTableName())
+		}
 
-	return nil
+		eligibleTargetColumnsForUniqueKey := v.targetSharedColumns.Union(targetVirtualColumns)
+		v.chosenTargetUniqueKey = schemadiff.IterationKeysByColumns(targetUniqueKeys, eligibleTargetColumnsForUniqueKey).First()
+		if v.chosenTargetUniqueKey == nil {
+			return fmt.Errorf("found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTableName(), v.sourceTableName())
+		}
+
+		v.addedUniqueKeys = schemadiff.IntroducedUniqueConstraints(sourceUniqueKeys, targetUniqueKeys, v.alterTableAnalysis.ColumnRenameMap)
+		v.removedUniqueKeys = schemadiff.RemovedUniqueConstraints(sourceUniqueKeys, targetUniqueKeys, v.alterTableAnalysis.ColumnRenameMap)
+		v.removedForeignKeyNames, err = schemadiff.RemovedForeignKeyNames(v.sourceCreateTableEntity, v.targetCreateTableEntity)
+		if err != nil {
+			return err
+		}
+
+		if err := formalizeColumns(sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, droppedSourceNonGeneratedColumns); err != nil {
+			return err
+		}
+		if err := formalizeColumns(targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
+			return err
+		}
+
+		for i := range v.sourceSharedColumns.Entities {
+			sourceColumn := v.sourceSharedColumns.Entities[i]
+			mappedColumn := v.targetSharedColumns.Entities[i]
+
+			if sourceColumn.IsIntegralType() && mappedColumn.Type() == "enum" {
+				v.intToEnumMap[sourceColumn.Name()] = true
+			}
+		}
+
+		v.droppedNoDefaultColumns = schemadiff.GetNoDefaultColumns(droppedSourceNonGeneratedColumns)
+		var expandedDescriptions map[string]string
+		v.expandedColumns, expandedDescriptions = schemadiff.GetExpandedColumns(v.sourceSharedColumns, v.targetSharedColumns)
+
+		v.sourceAutoIncrement, err = v.sourceCreateTableEntity.AutoIncrementValue()
+
+		notes := []string{}
+		for _, uk := range v.removedUniqueKeys.Names() {
+			notes = append(notes, fmt.Sprintf("unique constraint removed: %s", uk))
+		}
+		for _, name := range v.droppedNoDefaultColumns.Names() {
+			notes = append(notes, fmt.Sprintf("column %s dropped, and had no default value", name))
+		}
+		for _, name := range v.expandedColumns.Names() {
+			notes = append(notes, fmt.Sprintf("column %s: %s", name, expandedDescriptions[name]))
+		}
+		for _, name := range v.removedForeignKeyNames {
+			notes = append(notes, fmt.Sprintf("foreign key %s dropped", name))
+		}
+		v.revertibleNotes = strings.Join(notes, "\n")
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
 }
 
 // analyzeTableStatus reads information from SHOW TABLE STATUS
@@ -488,8 +392,8 @@ func (v *VRepl) generateFilterQuery() error {
 	var sb strings.Builder
 	sb.WriteString("select ")
 
-	for i, sourceCol := range v.sourceSharedColumns.Columns() {
-		name := sourceCol.Name
+	for i, sourceCol := range v.sourceSharedColumns.Entities {
+		name := sourceCol.Name()
 		targetName := v.sharedColumnsMap[name]
 
 		targetCol := v.targetSharedColumns.GetColumn(targetName)
@@ -501,36 +405,36 @@ func (v *VRepl) generateFilterQuery() error {
 			sb.WriteString(", ")
 		}
 		switch {
-		case sourceCol.Entity.HasEnumValues():
+		case sourceCol.HasEnumValues():
 			// Source is `enum` or `set`. We always take the textual represenation rather than the numeric one.
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
 		case v.intToEnumMap[name]:
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
-		case sourceCol.Entity.Type() == "json":
+		case sourceCol.Type() == "json":
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
-		case sourceCol.Entity.IsTextual():
+		case sourceCol.IsTextual():
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
-			fromCollation := v.env.CollationEnv().DefaultCollationForCharset(sourceCol.Entity.Charset())
+			fromCollation := v.env.CollationEnv().DefaultCollationForCharset(sourceCol.Charset())
 			if fromCollation == collations.Unknown {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Entity.Charset(), sourceCol.Name)
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset(), sourceCol.Name())
 			}
-			toCollation := v.env.CollationEnv().DefaultCollationForCharset(targetCol.Entity.Charset())
+			toCollation := v.env.CollationEnv().DefaultCollationForCharset(targetCol.Charset())
 			// Let's see if target col is at all textual
-			if targetCol.Entity.IsTextual() && toCollation == collations.Unknown {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Entity.Charset(), targetCol.Name)
+			if targetCol.IsTextual() && toCollation == collations.Unknown {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset(), targetCol.Name())
 			}
 
-			if trivialCharset(fromCollation) && trivialCharset(toCollation) && targetCol.Entity.Type() != "json" {
+			if trivialCharset(fromCollation) && trivialCharset(toCollation) && targetCol.Type() != "json" {
 				sb.WriteString(escapeName(name))
 			} else {
 				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
-					FromCharset: sourceCol.Entity.Charset(),
-					ToCharset:   targetCol.Entity.Charset(),
+					FromCharset: sourceCol.Charset(),
+					ToCharset:   targetCol.Charset(),
 				}
 				sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 			}
-		case targetCol.Entity.Type() == "json" && sourceCol.Entity.Type() != "json":
+		case targetCol.Type() == "json" && sourceCol.Type() != "json":
 			// Convert any type to JSON: encode the type as utf8mb4 text
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
@@ -562,16 +466,16 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		StopAfterCopy: false,
 	}
 
-	encodeColumns := func(columns *vrepl.ColumnList) string {
-		return textutil.EscapeJoin(columns.Names(), ",")
+	encodeColumns := func(names []string) string {
+		return textutil.EscapeJoin(names, ",")
 	}
 	rule := &binlogdatapb.Rule{
 		Match:                        v.targetTableName(),
 		Filter:                       v.filterQuery,
-		SourceUniqueKeyColumns:       encodeColumns(&v.chosenSourceUniqueKey.Columns),
-		TargetUniqueKeyColumns:       encodeColumns(&v.chosenTargetUniqueKey.Columns),
-		SourceUniqueKeyTargetColumns: encodeColumns(v.chosenSourceUniqueKey.Columns.MappedNamesColumnList(v.sharedColumnsMap)),
-		ForceUniqueKey:               url.QueryEscape(v.chosenSourceUniqueKey.Name),
+		SourceUniqueKeyColumns:       encodeColumns(v.chosenSourceUniqueKey.ColumnList.Names()),
+		TargetUniqueKeyColumns:       encodeColumns(v.chosenTargetUniqueKey.ColumnList.Names()),
+		SourceUniqueKeyTargetColumns: encodeColumns(schemadiff.MappedColumnNames(v.chosenSourceUniqueKey.ColumnList, v.sharedColumnsMap)),
+		ForceUniqueKey:               url.QueryEscape(v.chosenSourceUniqueKey.Name()),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset
