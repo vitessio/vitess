@@ -3067,6 +3067,12 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if !set {
 		timeout = DefaultTimeout
 	}
+	// We enforce the 1 second minimum as some things that use it, such as Etcd, only takes
+	// a seconds value so you'd get unexpected behavior if you e.g. set the timeout to
+	// 500ms as Etcd would get a value of 0 or a never-ending TTL.
+	if timeout.Seconds() < 1 {
+		return nil, vterrors.Wrap(err, "Timeout must be at least 1 second")
+	}
 	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
 		return nil, err
@@ -3267,22 +3273,13 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	// For switching reads, locking the source keyspace is sufficient.
 	// We need to hold the keyspace locks longer than the command timeout.
-	// We need to hold the keyspace locks longer than the command timeout.
-	cmdTimeout, set, err := protoutil.DurationFromProto(req.GetTimeout())
+	ksLockTimeout, set, err := protoutil.DurationFromProto(req.GetTimeout())
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "unable to parse Timeout into a valid duration")
 	}
 	if !set {
-		cmdTimeout = DefaultTimeout
+		ksLockTimeout = DefaultTimeout
 	}
-	// We enforce the 1 second minimum as Etcd only takes a seconds value so
-	// you'd get unexpected behavior if you e.g. set the timeout to 500ms as
-	// Etcd would get a value of 0 or a never-ending TTL.
-	if cmdTimeout.Seconds() < 1 {
-		return nil, vterrors.Wrapf(err, "Timeout must be at least 1 second")
-	}
-	// Give ourselves extra time to be sure the lock is not lost.
-	ksLockTimeout := cmdTimeout * 2
 	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTimeout))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
@@ -3338,7 +3335,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 }
 
 // switchWrites is a generic way of migrating write traffic for a workflow.
-func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, timeout time.Duration,
+func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, waitTimeout time.Duration,
 	cancel bool,
 ) (journalID int64, dryRunResults *[]string, err error) {
 	var sw iswitcher
@@ -3377,22 +3374,12 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		return handleError(fmt.Sprintf("failed to lock the %s workflow", lockName), lockErr)
 	}
 	defer workflowUnlock(&err)
-	// We need to hold the keyspace locks longer than the command timeout.
-	cmdTimeout, set, err := protoutil.DurationFromProto(req.GetTimeout())
-	if err != nil {
-		return handleError("unable to parse Timeout into a valid duration", err)
-	}
-	if !set {
-		cmdTimeout = DefaultTimeout
-	}
-	// We enforce the 1 second minimum as Etcd only takes a seconds value so
-	// you'd get unexpected behavior if you e.g. set the timeout to 500ms as
-	// Etcd would get a value of 0 or a never-ending TTL.
-	if cmdTimeout.Seconds() < 1 {
-		return handleError("Timeout must be at least 1 second", err)
-	}
-	// Give ourselves extra time to be sure the lock is not lost.
-	ksLockTimeout := cmdTimeout * 2
+
+	// We need to hold the keyspace locks longer than waitTimeout*X -- where X
+	// is the number of sub-steps where the waitTimeout value is used: stopping
+	// existing streams, waiting for replication to catch up, and initializing
+	// the target sequences -- to be sure the lock is not lost.
+	ksLockTimeout := waitTimeout * 3
 	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTimeout))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
@@ -3468,7 +3455,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		// materializations then we have to wait for them to catchup before switching traffic for the
 		// Reshard workflow. We use the the same timeout value here that is used for VReplication catchup
 		// with the inter-keyspace workflows.
-		stopCtx, stopCancel := context.WithTimeout(ctx, timeout)
+		stopCtx, stopCancel := context.WithTimeout(ctx, waitTimeout)
 		defer stopCancel()
 		sourceWorkflows, err = sw.stopStreams(stopCtx, sm)
 		if err != nil {
@@ -3500,7 +3487,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return handleError("locks were lost", err)
 		}
 		ts.Logger().Infof("Waiting for streams to catchup")
-		if err := sw.waitForCatchup(ctx, timeout); err != nil {
+		if err := sw.waitForCatchup(ctx, waitTimeout); err != nil {
 			sw.cancelMigration(ctx, sm)
 			return handleError("failed to sync up replication between the source and target", err)
 		}
@@ -3541,7 +3528,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			// Writes are blocked so we can safely initialize the sequence tables but
 			// we also want to use a shorter timeout than the parent context.
 			// We use at most half of the overall timeout.
-			initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
+			initSeqCtx, cancel := context.WithTimeout(ctx, waitTimeout/2)
 			defer cancel()
 			if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
 				sw.cancelMigration(ctx, sm)
@@ -3561,6 +3548,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 	// This is the point of no return. Once a journal is created,
 	// traffic can be redirected to target shards.
+	if err := confirmKeyspaceLocksHeld(); err != nil {
+		return handleError("locks were lost", err)
+	}
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
 		return handleError("failed to create the journal", err)
 	}
