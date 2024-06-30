@@ -3273,14 +3273,14 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	// For switching reads, locking the source keyspace is sufficient.
 	// We need to hold the keyspace locks longer than the command timeout.
-	ksLockTimeout, set, err := protoutil.DurationFromProto(req.GetTimeout())
+	ksLockTTL, set, err := protoutil.DurationFromProto(req.GetTimeout())
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "unable to parse Timeout into a valid duration")
 	}
 	if !set {
-		ksLockTimeout = DefaultTimeout
+		ksLockTTL = DefaultTimeout
 	}
-	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTimeout))
+	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
@@ -3379,14 +3379,14 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	// is the number of sub-steps where the waitTimeout value is used: stopping
 	// existing streams, waiting for replication to catch up, and initializing
 	// the target sequences -- to be sure the lock is not lost.
-	ksLockTimeout := waitTimeout * 3
-	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTimeout))
+	ksLockTTL := waitTimeout * 3
+	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTTL))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer sourceUnlock(&err)
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTimeout))
+		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTTL))
 		if lockErr != nil {
 			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}
@@ -3526,8 +3526,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		if req.InitializeTargetSequences && len(sequenceMetadata) > 0 {
 			ts.Logger().Infof("Initializing target sequences")
 			// Writes are blocked so we can safely initialize the sequence tables but
-			// we also want to use a shorter timeout than the parent context.
-			// We use at most half of the overall timeout.
+			// we also want to use a shorter timeout than the the default.
 			initSeqCtx, cancel := context.WithTimeout(ctx, waitTimeout/2)
 			defer cancel()
 			if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
