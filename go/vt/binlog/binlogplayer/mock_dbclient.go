@@ -191,7 +191,7 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	if dc.Tag != "" {
 		msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
 	}
-	dc.t.Logf(msg, query)
+	dc.t.Logf(msg, LimitString(query, 256))
 
 	for q, result := range dc.invariants {
 		if strings.Contains(strings.ToLower(query), strings.ToLower(q)) {
