@@ -256,8 +256,9 @@ func IsGeneratedColumn(col *sqlparser.ColumnDefinition) (bool, sqlparser.ColumnS
 }
 
 // IsGenerated returns true when this column is generated, and indicates the storage type (virtual/stored)
-func (c *ColumnDefinitionEntity) IsGenerated() (bool, sqlparser.ColumnStorage) {
-	return IsGeneratedColumn(c.ColumnDefinition)
+func (c *ColumnDefinitionEntity) IsGenerated() bool {
+	isGenerated, _ := IsGeneratedColumn(c.ColumnDefinition)
+	return isGenerated
 }
 
 // IsNullable returns true when this column is NULLable
@@ -386,6 +387,10 @@ func NewColumnDefinitionEntityList(entities []*ColumnDefinitionEntity) *ColumnDe
 	return list
 }
 
+func (l *ColumnDefinitionEntityList) Len() int {
+	return len(l.Entities)
+}
+
 func (l *ColumnDefinitionEntityList) Names() []string {
 	names := make([]string, len(l.Entities))
 	for i, entity := range l.Entities {
@@ -409,5 +414,13 @@ func (l *ColumnDefinitionEntityList) Contains(other *ColumnDefinitionEntityList)
 
 func (l *ColumnDefinitionEntityList) Union(other *ColumnDefinitionEntityList) *ColumnDefinitionEntityList {
 	entities := append(l.Entities, other.Entities...)
+	return NewColumnDefinitionEntityList(entities)
+}
+
+func (l *ColumnDefinitionEntityList) Clone() *ColumnDefinitionEntityList {
+	entities := make([]*ColumnDefinitionEntity, len(l.Entities))
+	for i, entity := range l.Entities {
+		entities[i] = entity.Clone()
+	}
 	return NewColumnDefinitionEntityList(entities)
 }

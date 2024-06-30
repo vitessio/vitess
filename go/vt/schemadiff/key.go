@@ -115,6 +115,10 @@ func NewIndexDefinitionEntityList(entities []*IndexDefinitionEntity) *IndexDefin
 	}
 }
 
+func (l *IndexDefinitionEntityList) Len() int {
+	return len(l.Entities)
+}
+
 func (l *IndexDefinitionEntityList) Names() []string {
 	names := make([]string, len(l.Entities))
 	for i, entity := range l.Entities {
@@ -131,4 +135,11 @@ func (l *IndexDefinitionEntityList) SubsetCoveredByColumns(columns *ColumnDefini
 		}
 	}
 	return NewIndexDefinitionEntityList(subset)
+}
+
+func (l *IndexDefinitionEntityList) First() *IndexDefinitionEntity {
+	if len(l.Entities) == 0 {
+		return nil
+	}
+	return l.Entities[0]
 }

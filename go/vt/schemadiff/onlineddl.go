@@ -306,7 +306,7 @@ func AnalyzeSharedColumns(
 	droppedNonGenerated := []*ColumnDefinitionEntity{}
 
 	for _, sourceColumn := range sourceColumns.Entities {
-		if isGeneratedOnSource, _ := sourceColumn.IsGenerated(); isGeneratedOnSource {
+		if sourceColumn.IsGenerated() {
 			continue
 		}
 		isDroppedFromSource := false
@@ -331,7 +331,7 @@ func AnalyzeSharedColumns(
 			droppedNonGenerated = append(droppedNonGenerated, sourceColumn)
 			continue
 		}
-		if isGeneratedOnTarget, _ := targetColumn.IsGenerated(); isGeneratedOnTarget {
+		if targetColumn.IsGenerated() {
 			// virtual/generated columns are silently skipped.
 			continue
 		}
@@ -442,4 +442,15 @@ func IterationKeysByColumns(keys *IndexDefinitionEntityList, columns *ColumnDefi
 		}
 	}
 	return NewIndexDefinitionEntityList(subset)
+}
+
+// MappedColumnNames
+func MappedColumnNames(columnsList *ColumnDefinitionEntityList, columnNamesMap map[string]string) []string {
+	names := columnsList.Names()
+	for i := range names {
+		if mappedName, ok := columnNamesMap[names[i]]; ok {
+			names[i] = mappedName
+		}
+	}
+	return names
 }
