@@ -359,9 +359,9 @@ func dropTargetConstraints(t *testing.T, targetKeyspace string) {
 }
 
 // TestFKWorkflowConstraintsOnlyOnSource runs a MoveTables workflow with atomic copy. It deletes some constraints on the
-// target and sets the global foreign_key_checks=0 on the source. It then inserts data into the target which will violate
-// the original foreign key constraints. The workflow should complete successfully, since the global foreign_key_checks
-// is set to 0 on the source and it should behave the same as on the target where the constraints are dropped.
+// target and sets the global foreign_key_checks=0 on the source. After SwitchTraffic, it  inserts data into the target
+// which would otherwise violate foreign key constraints on the source. The insert should not fail in the reverse
+// workflow on the source, since the global foreign_key_checks are off on the source.
 func TestFKWorkflowConstraintsOnlyOnSource(t *testing.T) {
 	config, deferFunc := initTestFKWorkflow(t)
 	defer deferFunc()
