@@ -68,6 +68,10 @@ function checkPodStatusWithTimeout() {
     sleep 1
   done
   echo -e "ERROR: checkPodStatusWithTimeout timeout to find pod matching:\ngot:\n$out\nfor regex: $regex"
+  vttabletPod=$(kubectl get pods | grep -E "vttablet" | head -n 1 | awk '{print $1}')
+  kubectl describe pod $vttabletPod
+  kubectl logs $vttabletPod -c vttablet
+  kubectl logs $vttabletPod -c mysqld
   exit 1
 }
 
@@ -486,7 +490,7 @@ EOF
 # Build the docker image for vitess/lite using the local code
 docker build -f docker/lite/Dockerfile -t vitess/lite:pr .
 # Build the docker image for vitess/vtadmin using the local code
-docker build -f docker/binaries/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr .
+docker build -f docker/binaries/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr ./docker/binaries/vtadmin
 
 # Print the docker images available
 docker image ls
