@@ -61,11 +61,11 @@ export const WorkflowStreams = ({clusterID, keyspace, name}: Props) => {
 
             const source = getStreamSource(row);
             const target = getStreamTarget(row, keyspace);
-
+            const rowState = row?.throttler_status?.component_throttled ? 'Throttled' : row.state;
             return (
                 <tr key={row.key}>
                     <DataCell>
-                        <StreamStatePip state={row?.throttler_status?.component_throttled ? 'Throttled' : row.state}/>{' '}
+                        <StreamStatePip state={rowState}/>{' '}
                         <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
