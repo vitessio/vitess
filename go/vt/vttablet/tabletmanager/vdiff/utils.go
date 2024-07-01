@@ -92,7 +92,7 @@ func stringListContains(lst []string, item string) bool {
 }
 
 // copyNonKeyRangeExpressions copies all expressions from the input WHERE clause
-// to the output WHERE clause except for the in_keyrange() expressions.
+// to the output WHERE clause except for any in_keyrange() expressions.
 func copyNonKeyRangeExpressions(where *sqlparser.Where) *sqlparser.Where {
 	if where == nil {
 		return nil
