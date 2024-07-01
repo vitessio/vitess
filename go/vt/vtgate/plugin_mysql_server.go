@@ -671,6 +671,7 @@ func stopListener(listener *mysql.Listener, shutdown bool) {
 	} else {
 		listener.Close()
 	}
+	listener = nil
 }
 
 func (srv *mysqlServer) rollbackAtShutdown() {

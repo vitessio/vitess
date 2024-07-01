@@ -62,9 +62,8 @@ type VtgateProcess struct {
 	// Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
-	isShutdown bool
-	proc       *exec.Cmd
-	exit       chan error
+	proc *exec.Cmd
+	exit chan error
 }
 
 const defaultVtGatePlannerVersion = planbuilder.Gen4
@@ -151,7 +150,6 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	go func() {
 		if vtgate.proc != nil {
 			vtgate.exit <- vtgate.proc.Wait()
-			vtgate.isShutdown = true
 			close(vtgate.exit)
 		}
 	}()
