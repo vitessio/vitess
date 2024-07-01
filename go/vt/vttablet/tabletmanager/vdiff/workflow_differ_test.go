@@ -364,7 +364,6 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 	}, {
 		// in_keyrange on RHS of AND.
-		// This is currently not a valid construct, but will be supported in the future.
 		input: &binlogdatapb.Rule{
 			Match:  "t1",
 			Filter: "select * from t1 where c2 = 2 and in_keyrange('-80')",
@@ -374,7 +373,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and in_keyrange('-80') order by c1 asc",
-			targetQuery: "select c1, c2 from t1 order by c1 asc",
+			targetQuery: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
 			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
@@ -386,7 +385,6 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 	}, {
 		// in_keyrange on LHS of AND.
-		// This is currently not a valid construct, but will be supported in the future.
 		input: &binlogdatapb.Rule{
 			Match:  "t1",
 			Filter: "select * from t1 where in_keyrange('-80') and c2 = 2",
@@ -396,7 +394,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') and c2 = 2 order by c1 asc",
-			targetQuery: "select c1, c2 from t1 order by c1 asc",
+			targetQuery: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
 			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
@@ -408,7 +406,6 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 	}, {
 		// in_keyrange on cascaded AND expression.
-		// This is currently not a valid construct, but will be supported in the future.
 		input: &binlogdatapb.Rule{
 			Match:  "t1",
 			Filter: "select * from t1 where c2 = 2 and c1 = 1 and in_keyrange('-80')",
@@ -418,7 +415,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and c1 = 1 and in_keyrange('-80') order by c1 asc",
-			targetQuery: "select c1, c2 from t1 order by c1 asc",
+			targetQuery: "select c1, c2 from t1 where c2 = 2 and c1 = 1 order by c1 asc",
 			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
 			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
@@ -430,7 +427,6 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 	}, {
 		// in_keyrange parenthesized.
-		// This is currently not a valid construct, but will be supported in the future.
 		input: &binlogdatapb.Rule{
 			Match:  "t1",
 			Filter: "select * from t1 where (c2 = 2 and in_keyrange('-80'))",
@@ -440,7 +436,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and in_keyrange('-80') order by c1 asc",
-			targetQuery: "select c1, c2 from t1 order by c1 asc",
+			targetQuery: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
 			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
