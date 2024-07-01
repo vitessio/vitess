@@ -17,6 +17,7 @@ limitations under the License.
 package timer
 
 import (
+	"context"
 	"sync/atomic"
 	"time"
 )
@@ -29,19 +30,22 @@ type SuspendableTicker struct {
 	C chan time.Time
 
 	suspended atomic.Bool
+	cancel    context.CancelFunc
 }
 
 // NewSuspendableTicker creates a new suspendable ticker, indicating whether the ticker should start
 // suspendable or running
 func NewSuspendableTicker(d time.Duration, initiallySuspended bool) *SuspendableTicker {
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &SuspendableTicker{
 		ticker: time.NewTicker(d),
 		C:      make(chan time.Time),
+		cancel: cancel,
 	}
 	if initiallySuspended {
 		s.suspended.Store(true)
 	}
-	go s.loop()
+	go s.loop(ctx)
 	return s
 }
 
@@ -58,7 +62,7 @@ func (s *SuspendableTicker) Resume() {
 
 // Stop completely stops the timer, like time.Timer
 func (s *SuspendableTicker) Stop() {
-	s.ticker.Stop()
+	s.cancel()
 }
 
 // TickNow generates a tick at this point in time. It may block
@@ -78,11 +82,22 @@ func (s *SuspendableTicker) TickAfter(d time.Duration) {
 	})
 }
 
-func (s *SuspendableTicker) loop() {
-	for t := range s.ticker.C {
-		if !s.suspended.Load() {
-			// not suspended
-			s.C <- t
+func (s *SuspendableTicker) loop(ctx context.Context) {
+	defer s.ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case t := <-s.ticker.C:
+			if !s.suspended.Load() {
+				// not suspended
+				select {
+				case <-ctx.Done():
+					return
+				case s.C <- t:
+				}
+			}
 		}
 	}
 }

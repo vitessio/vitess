@@ -371,6 +371,10 @@ func (client *FakeTabletManagerClient) CheckThrottler(ctx context.Context, table
 	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
 }
 
+func (client *FakeTabletManagerClient) GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	return &tabletmanagerdatapb.GetThrottlerStatusResponse{}, nil
+}
+
 //
 // Management related methods
 //

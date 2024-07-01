@@ -1352,6 +1352,15 @@ func (fra *fakeRPCTM) CheckThrottler(ctx context.Context, req *tabletmanagerdata
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) GetThrottlerStatus(ctx context.Context, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+
+	//TODO implement me
+	panic("implement me")
+}
+
 func tmRPCTestRestoreFromBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.RestoreFromBackupRequest) {
 	stream, err := client.RestoreFromBackup(ctx, tablet, req)
 	if err != nil {

@@ -3656,7 +3656,7 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		req.ThrottledApp = &topodatapb.ThrottledAppRule{
 			Name:      *unthrottledApp,
 			Ratio:     0,
-			ExpiresAt: protoutil.TimeToProto(time.Now()),
+			ExpiresAt: &vttime.Time{}, // zero
 		}
 	}
 	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, req)

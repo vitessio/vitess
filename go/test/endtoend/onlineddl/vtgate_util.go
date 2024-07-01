@@ -341,7 +341,7 @@ func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 }
 
 // CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
-func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) {
+func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) bool {
 
 	ctx, cancel := context.WithTimeout(context.Background(), ThrottledAppsTimeout)
 	defer cancel()
@@ -361,13 +361,13 @@ func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp t
 		}
 		if appFound == expectFind {
 			// we're all good
-			return
+			return true
 		}
 
 		select {
 		case <-ctx.Done():
-			assert.Failf(t, "CheckThrottledApps timed out waiting for %v to be in throttled status '%v'", throttlerApp.String(), expectFind)
-			return
+			assert.Fail(t, "CheckThrottledApps timed out", "waiting for '%v' to be in throttled status '%v'", throttlerApp.String(), expectFind)
+			return false
 		case <-ticker.C:
 		}
 	}

@@ -51,8 +51,7 @@ import (
 
 func aggregateMySQLProbes(
 	ctx context.Context,
-	probes mysql.Probes,
-	clusterName string,
+	metricName base.MetricName,
 	tabletResultsMap mysql.TabletResultMap,
 	ignoreHostsCount int,
 	IgnoreDialTCPErrors bool,
@@ -61,12 +60,14 @@ func aggregateMySQLProbes(
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
 	probeValues := []float64{}
-	for _, probe := range probes {
-		tabletMetricResult, ok := tabletResultsMap[mysql.GetClusterTablet(clusterName, probe.Alias)]
+	for _, tabletMetricResults := range tabletResultsMap {
+		tabletMetricResult, ok := tabletMetricResults[metricName]
 		if !ok {
+			return base.NoSuchMetric
+		}
+		if tabletMetricResult == nil {
 			return base.NoMetricResultYet
 		}
-
 		value, err := tabletMetricResult.Get()
 		if err != nil {
 			if IgnoreDialTCPErrors && base.IsDialTCPError(err) {

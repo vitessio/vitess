@@ -1225,7 +1225,16 @@ func (vc *vcursorImpl) ThrottleApp(ctx context.Context, throttledAppRule *topoda
 		if throttlerConfig.ThrottledApps == nil {
 			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
 		}
-		throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			// TODO(shlomi) in v22: replace the following line with the commented out block
+			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// timeNow := time.Now()
+			// if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+			// 	throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// } else {
+			// 	delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			// }
+		}
 		return throttlerConfig
 	}
 

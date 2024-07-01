@@ -51,3 +51,21 @@ func TestConcatenate(t *testing.T) {
 	assert.Equal(t, Name("vreplication:rowstreamer"), rowstreamerName)
 	assert.Equal(t, "vreplication:rowstreamer", rowstreamerName.String())
 }
+
+func TestSplit(t *testing.T) {
+	{
+		n := Name("vreplication:vcopier")
+		parts := n.SplitStrings()
+		assert.Equal(t, []string{"vreplication", "vcopier"}, parts)
+	}
+	{
+		n := VReplicationName
+		parts := n.SplitStrings()
+		assert.Equal(t, []string{"vreplication"}, parts)
+	}
+	{
+		n := Name("")
+		parts := n.SplitStrings()
+		assert.Equal(t, []string{""}, parts)
+	}
+}

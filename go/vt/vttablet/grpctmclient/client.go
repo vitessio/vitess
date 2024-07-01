@@ -1205,6 +1205,24 @@ func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tab
 	return response, nil
 }
 
+// GetThrottlerStatus is part of the tmclient.TabletManagerClient interface.
+// It always tries to use a cached client via the dialer pool as this is
+// called very frequently between tablets when the throttler is enabled in
+// a keyspace and the overhead of creating a new gRPC connection/channel
+// and dialing the other tablet every time is not practical.
+func (client *Client) GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.GetThrottlerStatus(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 type restoreFromBackupStreamAdapter struct {
 	stream tabletmanagerservicepb.TabletManager_RestoreFromBackupClient
 	closer io.Closer

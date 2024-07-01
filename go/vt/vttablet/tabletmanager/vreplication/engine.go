@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -139,7 +140,7 @@ func NewEngine(env *vtenv.Environment, config *tabletenv.TabletConfig, ts *topo.
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
 		ec:              newExternalConnector(env, config.ExternalConnections),
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, throttle.ThrottleCheckPrimaryWrite),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, base.UndefinedScope),
 	}
 
 	return vre

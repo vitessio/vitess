@@ -596,6 +596,13 @@ func (s *server) CheckThrottler(ctx context.Context, request *tabletmanagerdatap
 	return response, err
 }
 
+func (s *server) GetThrottlerStatus(ctx context.Context, request *tabletmanagerdatapb.GetThrottlerStatusRequest) (response *tabletmanagerdatapb.GetThrottlerStatusResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetThrottlerStatus", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response, err = s.tm.GetThrottlerStatus(ctx, request)
+	return response, err
+}
+
 // registration glue
 
 func init() {
