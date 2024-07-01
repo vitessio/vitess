@@ -180,6 +180,7 @@ func TestConnectionDrainOnTermTimeout(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		var err error
 		_, err = vtConn.ExecuteFetch("select sleep(40)", 1, false)
 		require.Error(t, err)
 	}()
