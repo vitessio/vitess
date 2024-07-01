@@ -232,6 +232,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfIntroducerExpr(n, parent)
 	case *IsExpr:
 		return c.copyOnRewriteRefOfIsExpr(n, parent)
+	case *JSONArrayAgg:
+		return c.copyOnRewriteRefOfJSONArrayAgg(n, parent)
 	case *JSONArrayExpr:
 		return c.copyOnRewriteRefOfJSONArrayExpr(n, parent)
 	case *JSONAttributesExpr:
@@ -244,6 +246,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfJSONExtractExpr(n, parent)
 	case *JSONKeysExpr:
 		return c.copyOnRewriteRefOfJSONKeysExpr(n, parent)
+	case *JSONObjectAgg:
+		return c.copyOnRewriteRefOfJSONObjectAgg(n, parent)
 	case *JSONObjectExpr:
 		return c.copyOnRewriteRefOfJSONObjectExpr(n, parent)
 	case *JSONObjectParam:
@@ -2966,6 +2970,30 @@ func (c *cow) copyOnRewriteRefOfIsExpr(n *IsExpr, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfJSONArrayAgg(n *JSONArrayAgg, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedExpr || changedOverClause {
+			res := *n
+			res.Expr, _ = _Expr.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfJSONArrayExpr(n *JSONArrayExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3124,6 +3152,32 @@ func (c *cow) copyOnRewriteRefOfJSONKeysExpr(n *JSONKeysExpr, parent SQLNode) (o
 			res := *n
 			res.JSONDoc, _ = _JSONDoc.(Expr)
 			res.Path, _ = _Path.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfJSONObjectAgg(n *JSONObjectAgg, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Key, changedKey := c.copyOnRewriteExpr(n.Key, n)
+		_Value, changedValue := c.copyOnRewriteExpr(n.Value, n)
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedKey || changedValue || changedOverClause {
+			res := *n
+			res.Key, _ = _Key.(Expr)
+			res.Value, _ = _Value.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6706,6 +6760,10 @@ func (c *cow) copyOnRewriteAggrFunc(n AggrFunc, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfCountStar(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
+	case *JSONArrayAgg:
+		return c.copyOnRewriteRefOfJSONArrayAgg(n, parent)
+	case *JSONObjectAgg:
+		return c.copyOnRewriteRefOfJSONObjectAgg(n, parent)
 	case *Max:
 		return c.copyOnRewriteRefOfMax(n, parent)
 	case *Min:
@@ -7134,6 +7192,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfIntroducerExpr(n, parent)
 	case *IsExpr:
 		return c.copyOnRewriteRefOfIsExpr(n, parent)
+	case *JSONArrayAgg:
+		return c.copyOnRewriteRefOfJSONArrayAgg(n, parent)
 	case *JSONArrayExpr:
 		return c.copyOnRewriteRefOfJSONArrayExpr(n, parent)
 	case *JSONAttributesExpr:
@@ -7146,6 +7206,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfJSONExtractExpr(n, parent)
 	case *JSONKeysExpr:
 		return c.copyOnRewriteRefOfJSONKeysExpr(n, parent)
+	case *JSONObjectAgg:
+		return c.copyOnRewriteRefOfJSONObjectAgg(n, parent)
 	case *JSONObjectExpr:
 		return c.copyOnRewriteRefOfJSONObjectExpr(n, parent)
 	case *JSONOverlapsExpr:

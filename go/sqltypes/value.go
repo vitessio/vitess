@@ -861,7 +861,25 @@ var SQLEncodeMap [256]byte
 // SQLDecodeMap is the reverse of SQLEncodeMap
 var SQLDecodeMap [256]byte
 
+// encodeRef is a map of characters we use for escaping.
+// This doesn't include double quotes since we don't need
+// to escape that, as we always generate single quoted strings.
 var encodeRef = map[byte]byte{
+	'\x00': '0',
+	'\'':   '\'',
+	'\b':   'b',
+	'\n':   'n',
+	'\r':   'r',
+	'\t':   't',
+	26:     'Z', // ctl-Z
+	'\\':   '\\',
+}
+
+// decodeRef is a map of characters we use for unescaping.
+// We do need all characters here, since we do accept
+// escaped double quotes in single quote strings and
+// double quoted strings.
+var decodeRef = map[byte]byte{
 	'\x00': '0',
 	'\'':   '\'',
 	'"':    '"',
@@ -931,6 +949,11 @@ func init() {
 	for i := range SQLEncodeMap {
 		if to, ok := encodeRef[byte(i)]; ok {
 			SQLEncodeMap[byte(i)] = to
+		}
+	}
+
+	for i := range SQLDecodeMap {
+		if to, ok := decodeRef[byte(i)]; ok {
 			SQLDecodeMap[to] = byte(i)
 		}
 	}

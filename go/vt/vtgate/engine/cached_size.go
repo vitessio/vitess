@@ -41,8 +41,8 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	size += cached.Type.CachedSize(false)
 	// field Alias string
 	size += hack.RuntimeAllocSize(int64(len(cached.Alias)))
-	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Expr.(cachedObject); ok {
+	// field Func vitess.io/vitess/go/vt/sqlparser.AggrFunc
+	if cc, ok := cached.Func.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Original *vitess.io/vitess/go/vt/sqlparser.AliasedExpr

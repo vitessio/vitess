@@ -18,6 +18,7 @@ package aggregation
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"sort"
 	"strings"
@@ -67,6 +68,18 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		mcmp.Close()
 		cluster.PanicHandler(t)
 	}
+}
+
+func TestAggrWithLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	for i := range 1000 {
+		r := rand.IntN(50)
+		mcmp.Exec(fmt.Sprintf("insert into aggr_test(id, val1, val2) values(%d, 'a', %d)", i, r))
+	}
+	mcmp.Exec("select val2, count(*) from aggr_test group by val2 order by count(*), val2 limit 10")
 }
 
 func TestAggregateTypes(t *testing.T) {
@@ -776,4 +789,16 @@ func TestHavingQueries(t *testing.T) {
 			mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
 		})
 	}
+}
+
+// TestJsonAggregation tests that json aggregation works for single sharded queries.
+func TestJsonAggregation(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t3(id5, id6, id7) values(1,2,1), (2,2,4), (3,2,4), (4,1,2), (5,2,1), (6,2,6), (7,1,7)")
+
+	mcmp.Exec("select count(1) from t3 where id6 = 2 group by id7 having json_arrayagg(id5+1) = json_array(2, 6)")
+	mcmp.Exec(`select count(1) from t3 where id6 = 2 group by id7 having json_objectagg(id5+1, id7) = json_object("2",1,"6",1)`)
 }

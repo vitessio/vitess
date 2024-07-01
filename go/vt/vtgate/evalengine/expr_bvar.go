@@ -83,9 +83,6 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' cannot be a tuple", bv.Key)
 		}
 		typ := bvar.Type
-		if bv.typed() {
-			typ = bv.Type
-		}
 		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), typedCoercionCollation(typ, collations.CollationForType(typ, bv.Collation)), nil)
 	}
 }

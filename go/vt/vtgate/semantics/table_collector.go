@@ -19,8 +19,6 @@ package semantics
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -234,7 +232,7 @@ for2:
 				continue for2
 			}
 		}
-		types = append(types, evalengine.NewType(sqltypes.Unknown, collations.Unknown))
+		types = append(types, evalengine.NewUnknownType())
 	}
 	return colNames, types
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"sync"
@@ -103,7 +103,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 func update(t *testing.T, ts *topo.Server, id int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	s := fmt.Sprintf("%d_%d", id, rand.Intn(math.MaxInt))
+	s := fmt.Sprintf("%d_%d", id, rand.IntN(math.MaxInt))
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)

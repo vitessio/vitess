@@ -17,6 +17,7 @@ limitations under the License.
 package plancontext
 
 import (
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -221,4 +222,13 @@ func (ctx *PlanningContext) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool
 		t.SetNullability(true)
 	}
 	return t, true
+}
+
+// SQLTypeForExpr returns the sql type of the given expression, with nullable set if the expression is from an outer table.
+func (ctx *PlanningContext) SQLTypeForExpr(e sqlparser.Expr) sqltypes.Type {
+	t, found := ctx.TypeForExpr(e)
+	if !found {
+		return sqltypes.Unknown
+	}
+	return t.Type()
 }

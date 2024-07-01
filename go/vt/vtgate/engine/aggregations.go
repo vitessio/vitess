@@ -43,7 +43,7 @@ type AggregateParams struct {
 	Type   evalengine.Type
 
 	Alias    string `json:",omitempty"`
-	Expr     sqlparser.Expr
+	Func     sqlparser.AggrFunc
 	Original *sqlparser.AliasedExpr
 
 	// This is based on the function passed in the select expression and
@@ -255,8 +255,9 @@ func (a *aggregatorScalar) reset() {
 }
 
 type aggregatorGroupConcat struct {
-	from  int
-	type_ sqltypes.Type
+	from      int
+	type_     sqltypes.Type
+	separator []byte
 
 	concat []byte
 	n      int
@@ -267,7 +268,7 @@ func (a *aggregatorGroupConcat) add(row []sqltypes.Value) error {
 		return nil
 	}
 	if a.n > 0 {
-		a.concat = append(a.concat, ',')
+		a.concat = append(a.concat, a.separator...)
 	}
 	a.concat = append(a.concat, row[a.from].Raw()...)
 	a.n++
@@ -434,7 +435,13 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			ag = &aggregatorScalar{from: aggr.Col}
 
 		case AggregateGroupConcat:
-			ag = &aggregatorGroupConcat{from: aggr.Col, type_: targetType}
+			gcFunc := aggr.Func.(*sqlparser.GroupConcatExpr)
+			separator := []byte(gcFunc.Separator)
+			ag = &aggregatorGroupConcat{
+				from:      aggr.Col,
+				type_:     targetType,
+				separator: separator,
+			}
 
 		default:
 			panic("BUG: unexpected Aggregation opcode")

@@ -380,7 +380,7 @@ func TestEncode(t *testing.T) {
 		outASCII: "'Zm9v'",
 	}, {
 		in:       TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
-		outSQL:   "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+		outSQL:   "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 		outASCII: "'ACciCAoNCRpc'",
 	}, {
 		in:       TestValue(Bit, "a"),
@@ -442,7 +442,7 @@ func TestEncodeStringSQL(t *testing.T) {
 		},
 		{
 			in:  "\x00'\"\b\n\r\t\x1A\\",
-			out: "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+			out: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 		},
 	}
 	for _, tcase := range testcases {
@@ -632,7 +632,7 @@ func TestEncodeSQLStringBuilder(t *testing.T) {
 		outSQL: "'foo'",
 	}, {
 		in:     TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
-		outSQL: "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+		outSQL: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 	}, {
 		in:     TestValue(Bit, "a"),
 		outSQL: "b'01100001'",
@@ -663,7 +663,7 @@ func TestEncodeSQLBytes2(t *testing.T) {
 		outSQL: "'foo'",
 	}, {
 		in:     TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
-		outSQL: "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+		outSQL: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 	}, {
 		in:     TestValue(Bit, "a"),
 		outSQL: "b'01100001'",

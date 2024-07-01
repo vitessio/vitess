@@ -169,7 +169,7 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 			continue
 		}
 		ts := b.org.tableSetFor(table.GetAliasedTableExpr())
-		c := createCertain(ts, ts, evalengine.Type{})
+		c := createCertain(ts, ts, evalengine.NewUnknownType())
 		deps = deps.merge(c, false)
 	}
 	finalDep, err := deps.get(nil)

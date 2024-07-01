@@ -5165,7 +5165,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from music as m where 1 != 1",
-                "Query": "select 1 from music as m where m.col = :u_col",
+                "Query": "select 1 from music as m where m.col = :u_col /* INT16 */",
                 "Table": "music"
               }
             ]
@@ -5335,7 +5335,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from music as m, user_extra as ue where 1 != 1",
-                "Query": "select 1 from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col and ue.foo = 20 and m.user_id = ue.user_id",
+                "Query": "select 1 from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col /* INT16 */ and ue.foo = 20 and m.user_id = ue.user_id",
                 "Table": "music, user_extra"
               }
             ]
@@ -5408,7 +5408,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select m.id from music as m, user_extra as ue where 1 != 1",
-                "Query": "select m.id from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col and ue.foo = 20 and m.user_id = ue.user_id",
+                "Query": "select m.id from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col /* INT16 */ and ue.foo = 20 and m.user_id = ue.user_id",
                 "Table": "music, user_extra"
               }
             ]
@@ -5880,7 +5880,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update `user` as u set u.col = :ue_col where u.id in ::dml_vals",
+            "Query": "update `user` as u set u.col = :ue_col /* INT16 */ where u.id in ::dml_vals",
             "Table": "user",
             "Values": [
               "::dml_vals"
@@ -6483,7 +6483,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select m.id from music as m where 1 != 1",
-                "Query": "select m.id from music as m where m.baz = 21 and m.bar = :u_foo and m.col = :u_col for update",
+                "Query": "select m.id from music as m where m.baz = 21 and m.bar = :u_foo and m.col = :u_col /* INT16 */ for update",
                 "Table": "music"
               }
             ]
@@ -6738,7 +6738,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select m.id from music as m where 1 != 1",
-                "Query": "select m.id from music as m where m.col = :u_col for update",
+                "Query": "select m.id from music as m where m.col = :u_col /* INT16 */ for update",
                 "Table": "music"
               }
             ]
@@ -6961,7 +6961,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select m.id from music as m where 1 != 1",
-                "Query": "select m.id from music as m where m.col = :u_col for update",
+                "Query": "select m.id from music as m where m.col = :u_col /* INT16 */ for update",
                 "Table": "music"
               }
             ]

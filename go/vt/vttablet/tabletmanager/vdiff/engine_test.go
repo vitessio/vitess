@@ -187,8 +187,8 @@ func TestVDiff(t *testing.T) {
 	),
 		`fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}|0|{}`,
 	), nil)
-	vdenv.dbClient.ExpectRequest(`update _vt.vdiff_table set rows_compared = 0, report = '{\"TableName\":\"t1\",\"ProcessedRows\":0,\"MatchingRows\":0,\"MismatchedRows\":0,\"ExtraRowsSource\":0,\"ExtraRowsTarget\":0}' where vdiff_id = 1 and table_name = 't1'`, singleRowAffected, nil)
-	vdenv.dbClient.ExpectRequest(`update _vt.vdiff_table set state = 'completed', rows_compared = 0, report = '{\"TableName\":\"t1\",\"ProcessedRows\":0,\"MatchingRows\":0,\"MismatchedRows\":0,\"ExtraRowsSource\":0,\"ExtraRowsTarget\":0}' where vdiff_id = 1 and table_name = 't1'`, singleRowAffected, nil)
+	vdenv.dbClient.ExpectRequest(`update _vt.vdiff_table set rows_compared = 0, report = '{"TableName":"t1","ProcessedRows":0,"MatchingRows":0,"MismatchedRows":0,"ExtraRowsSource":0,"ExtraRowsTarget":0}' where vdiff_id = 1 and table_name = 't1'`, singleRowAffected, nil)
+	vdenv.dbClient.ExpectRequest(`update _vt.vdiff_table set state = 'completed', rows_compared = 0, report = '{"TableName":"t1","ProcessedRows":0,"MatchingRows":0,"MismatchedRows":0,"ExtraRowsSource":0,"ExtraRowsTarget":0}' where vdiff_id = 1 and table_name = 't1'`, singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest(`insert into _vt.vdiff_log(vdiff_id, message) values (1, 'completed: table \'t1\'')`, singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest("update _vt.vdiff_table set state = 'completed' where vdiff_id = 1 and table_name = 't1'", singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest(`insert into _vt.vdiff_log(vdiff_id, message) values (1, 'completed: table \'t1\'')`, singleRowAffected, nil)

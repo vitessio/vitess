@@ -3,6 +3,13 @@ run:
   timeout: 10m
 
 linters-settings:
+  depguard:
+    rules:
+      use_modern_packages:
+        list-mode: lax
+        deny:
+          - pkg: "math/rand$"
+            desc: Please use math/rand/v2
   errcheck:
     exclude: ./misc/errcheck_excludes.txt
   goimports:
@@ -17,6 +24,7 @@ linters:
   disable-all: true
   enable:
     # Defaults
+    - depguard
     - errcheck
     - govet
     - ineffassign

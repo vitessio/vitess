@@ -308,7 +308,10 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		}
 		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias, ctx.VSchema.Environment().CollationEnv())
-		aggrParam.Expr = aggr.Func
+		aggrParam.Func = aggr.Func
+		if gcFunc, isGc := aggrParam.Func.(*sqlparser.GroupConcatExpr); isGc && gcFunc.Separator == "" {
+			gcFunc.Separator = sqlparser.GroupConcatDefaultSeparator
+		}
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
 		aggrParam.WCol = aggr.WSOffset

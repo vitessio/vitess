@@ -265,7 +265,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id /* VARBINARY */",
             "Table": "unsharded"
           }
         ]
@@ -313,7 +313,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id /* VARBINARY */",
             "Table": "unsharded"
           }
         ]
@@ -361,7 +361,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id /* VARBINARY */",
             "Table": "unsharded"
           }
         ]
@@ -409,7 +409,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id",
+            "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id /* VARBINARY */",
             "Table": "unsharded"
           }
         ]
