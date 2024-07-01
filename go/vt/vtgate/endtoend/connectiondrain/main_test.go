@@ -172,6 +172,11 @@ func TestConnectionDrainOnTermTimeout(t *testing.T) {
 	vtConn2, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 
+	defer func() {
+		vtConn.Close()
+		vtConn2.Close()
+	}()
+
 	// Tearing down vtgate here, we want to reach the onterm_timeout of 30s
 	err = clusterInstance.VtgateProcess.Terminate()
 	require.NoError(t, err)
@@ -183,7 +188,6 @@ func TestConnectionDrainOnTermTimeout(t *testing.T) {
 		defer wg.Done()
 		_, err = vtConn.ExecuteFetch("select sleep(40)", 1, false)
 		require.Error(t, err)
-		vtConn.Close()
 	}()
 
 	// Sleeping 40 seconds here is already plenty of time, and we will for sure reach the onterm_timeout of 30s
