@@ -66,7 +66,7 @@ func TestFindReplicationPositionFromXtrabackupInfo(t *testing.T) {
 	tmp, err := os.MkdirTemp(t.TempDir(), "test")
 	assert.NoError(t, err)
 
-	f, err := os.Create(path.Join(tmp, "xtrabackup_info"))
+	f, err := os.Create(path.Join(tmp, xtrabackupInfoFile))
 	assert.NoError(t, err)
 	_, err = f.WriteString(input)
 	assert.NoError(t, err)

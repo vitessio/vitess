@@ -71,6 +71,7 @@ const (
 	writerBufferSize     = 2 * 1024 * 1024 /*2 MiB*/
 	xtrabackupBinaryName = "xtrabackup"
 	xtrabackupEngineName = "xtrabackup"
+	xtrabackupInfoFile   = "xtrabackup_info"
 	xbstream             = "xbstream"
 )
 
@@ -293,7 +294,7 @@ func (be *XtrabackupEngine) backupFiles(
 	flavor string,
 ) (replicationPosition replication.Position, finalErr error) {
 	// we create a temporary directory so that xtrabackup can create a copy of xtrabackup_info we can read from later.
-	tempDir, err := os.MkdirTemp("", "xbstream_vitess_")
+	tempDir, err := os.MkdirTemp("", "xtrabackup_vitess_")
 	if err != nil {
 		return replicationPosition, vterrors.Wrap(err, "unable to create temporary directory")
 	}
@@ -750,10 +751,10 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 }
 
 func findReplicationPositionFromXtrabackupInfo(directory, flavor string, logger logutil.Logger) (replication.Position, error) {
-	f, err := os.Open(path.Join(directory, "xtrabackup_info"))
+	f, err := os.Open(path.Join(directory, xtrabackupInfoFile))
 	if err != nil {
 		return replication.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT,
-			"couldn't open %q to read GTID position", path.Join(directory, "xtrabackup_info"))
+			"couldn't open %q to read GTID position", path.Join(directory, xtrabackupInfoFile))
 	}
 	defer f.Close()
 
