@@ -337,6 +337,7 @@ func (c *ColumnDefinitionEntity) HasEnumValues() bool {
 	return len(c.EnumValues()) > 0
 }
 
+// EnumValuesOrdinals returns a map of enum values to their ordinals
 func (c *ColumnDefinitionEntity) EnumValuesOrdinals() map[string]int {
 	m := make(map[string]int, len(c.ColumnDefinition.Type.EnumValues))
 	for i, enumValue := range c.ColumnDefinition.Type.EnumValues {
@@ -345,6 +346,7 @@ func (c *ColumnDefinitionEntity) EnumValuesOrdinals() map[string]int {
 	return m
 }
 
+// EnumOrdinalValues returns a map of enum ordinals to their values
 func (c *ColumnDefinitionEntity) EnumOrdinalValues() map[int]string {
 	m := make(map[int]string, len(c.ColumnDefinition.Type.EnumValues))
 	for i, enumValue := range c.ColumnDefinition.Type.EnumValues {
@@ -370,6 +372,8 @@ func (c *ColumnDefinitionEntity) Scale() int {
 	return *c.ColumnDefinition.Type.Scale
 }
 
+// ColumnDefinitionEntityList is a formalized list of ColumnDefinitionEntity, with some
+// utility functions.
 type ColumnDefinitionEntityList struct {
 	Entities []*ColumnDefinitionEntity
 	byName   map[string]*ColumnDefinitionEntity
@@ -391,6 +395,7 @@ func (l *ColumnDefinitionEntityList) Len() int {
 	return len(l.Entities)
 }
 
+// Names returns the names of all the columns in this list
 func (l *ColumnDefinitionEntityList) Names() []string {
 	names := make([]string, len(l.Entities))
 	for i, entity := range l.Entities {
@@ -399,10 +404,12 @@ func (l *ColumnDefinitionEntityList) Names() []string {
 	return names
 }
 
+// GetColumn returns the column with the given name, or nil if not found
 func (l *ColumnDefinitionEntityList) GetColumn(name string) *ColumnDefinitionEntity {
 	return l.byName[name]
 }
 
+// Contains returns true when this list contains all the entities from the other list
 func (l *ColumnDefinitionEntityList) Contains(other *ColumnDefinitionEntityList) bool {
 	for _, entity := range other.Entities {
 		if l.GetColumn(entity.NameLowered()) == nil {
@@ -412,15 +419,28 @@ func (l *ColumnDefinitionEntityList) Contains(other *ColumnDefinitionEntityList)
 	return true
 }
 
+// Union returns a new ColumnDefinitionEntityList with all the entities from this list and the other list
 func (l *ColumnDefinitionEntityList) Union(other *ColumnDefinitionEntityList) *ColumnDefinitionEntityList {
 	entities := append(l.Entities, other.Entities...)
 	return NewColumnDefinitionEntityList(entities)
 }
 
+// Clone creates a copy of this list, with copies of the entities
 func (l *ColumnDefinitionEntityList) Clone() *ColumnDefinitionEntityList {
 	entities := make([]*ColumnDefinitionEntity, len(l.Entities))
 	for i, entity := range l.Entities {
 		entities[i] = entity.Clone()
+	}
+	return NewColumnDefinitionEntityList(entities)
+}
+
+// Filter returns a new subset ColumnDefinitionEntityList with only the entities that pass the filter
+func (l *ColumnDefinitionEntityList) Filter(include func(entity *ColumnDefinitionEntity) bool) *ColumnDefinitionEntityList {
+	var entities []*ColumnDefinitionEntity
+	for _, entity := range l.Entities {
+		if include(entity) {
+			entities = append(entities, entity)
+		}
 	}
 	return NewColumnDefinitionEntityList(entities)
 }

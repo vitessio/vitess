@@ -133,6 +133,9 @@ func TestRemovedForeignKeyNames(t *testing.T) {
 
 			names, err := RemovedForeignKeyNames(before, after)
 			assert.NoError(t, err)
+			if tcase.names == nil {
+				tcase.names = []string{}
+			}
 			assert.Equal(t, tcase.names, names)
 		})
 	}
@@ -759,5 +762,4 @@ func TestUniqueKeysCoveredByColumns(t *testing.T) {
 			assert.Equal(t, tcase.expect, covered.Names())
 		})
 	}
-
 }

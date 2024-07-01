@@ -20,6 +20,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// IndexDefinitionEntity represents an index definition in a CREATE TABLE statement,
+// and includes the list of columns that are part of the index.
 type IndexDefinitionEntity struct {
 	IndexDefinition *sqlparser.IndexDefinition
 	ColumnList      *ColumnDefinitionEntityList
@@ -42,9 +44,11 @@ func (i *IndexDefinitionEntity) NameLowered() string {
 	return i.IndexDefinition.Info.Name.Lowered()
 }
 
+// Clone returns a copy of this list, with copies of all the entities.
 func (i *IndexDefinitionEntity) Clone() *IndexDefinitionEntity {
 	clone := &IndexDefinitionEntity{
 		IndexDefinition: sqlparser.Clone(i.IndexDefinition),
+		ColumnList:      i.ColumnList.Clone(),
 		Env:             i.Env,
 	}
 	return clone
@@ -54,14 +58,17 @@ func (i *IndexDefinitionEntity) Len() int {
 	return len(i.IndexDefinition.Columns)
 }
 
+// IsPrimary returns true if the index is a primary key.
 func (i *IndexDefinitionEntity) IsPrimary() bool {
 	return i.IndexDefinition.Info.Type == sqlparser.IndexTypePrimary
 }
 
+// IsUnique returns true if the index is a unique key.
 func (i *IndexDefinitionEntity) IsUnique() bool {
 	return i.IndexDefinition.Info.IsUnique()
 }
 
+// HasNullable returns true if any of the columns in the index are nullable.
 func (i *IndexDefinitionEntity) HasNullable() bool {
 	for _, col := range i.ColumnList.Entities {
 		if col.IsNullable() {
@@ -71,6 +78,7 @@ func (i *IndexDefinitionEntity) HasNullable() bool {
 	return false
 }
 
+// HasFloat returns true if any of the columns in the index are floating point types.
 func (i *IndexDefinitionEntity) HasFloat() bool {
 	for _, col := range i.ColumnList.Entities {
 		if col.IsFloatingPointType() {
@@ -80,6 +88,7 @@ func (i *IndexDefinitionEntity) HasFloat() bool {
 	return false
 }
 
+// HasColumnPrefix returns true if any of the columns in the index have a length prefix.
 func (i *IndexDefinitionEntity) HasColumnPrefix() bool {
 	for _, col := range i.IndexDefinition.Columns {
 		if col.Length != nil {
@@ -89,6 +98,7 @@ func (i *IndexDefinitionEntity) HasColumnPrefix() bool {
 	return false
 }
 
+// ColumnNames returns the names of the columns in the index.
 func (i *IndexDefinitionEntity) ColumnNames() []string {
 	var names []string
 	for _, col := range i.IndexDefinition.Columns {
@@ -97,14 +107,18 @@ func (i *IndexDefinitionEntity) ColumnNames() []string {
 	return names
 }
 
+// ContainsColumns returns true if the index contains all the columns in the given list.
 func (i *IndexDefinitionEntity) ContainsColumns(columns *ColumnDefinitionEntityList) bool {
 	return i.ColumnList.Contains(columns)
 }
 
+// CoveredByColumns returns true if the index is covered by the given list of columns.
 func (i *IndexDefinitionEntity) CoveredByColumns(columns *ColumnDefinitionEntityList) bool {
 	return columns.Contains(i.ColumnList)
 }
 
+// IndexDefinitionEntityList is a formalized list of IndexDefinitionEntity objects with a few
+// utility methods.
 type IndexDefinitionEntityList struct {
 	Entities []*IndexDefinitionEntity
 }
@@ -119,6 +133,7 @@ func (l *IndexDefinitionEntityList) Len() int {
 	return len(l.Entities)
 }
 
+// Names returns the names of the indexes in the list.
 func (l *IndexDefinitionEntityList) Names() []string {
 	names := make([]string, len(l.Entities))
 	for i, entity := range l.Entities {
@@ -127,6 +142,7 @@ func (l *IndexDefinitionEntityList) Names() []string {
 	return names
 }
 
+// SubsetCoveredByColumns returns a new list of indexes that are covered by the given list of columns.
 func (l *IndexDefinitionEntityList) SubsetCoveredByColumns(columns *ColumnDefinitionEntityList) *IndexDefinitionEntityList {
 	var subset []*IndexDefinitionEntity
 	for _, entity := range l.Entities {
@@ -137,6 +153,7 @@ func (l *IndexDefinitionEntityList) SubsetCoveredByColumns(columns *ColumnDefini
 	return NewIndexDefinitionEntityList(subset)
 }
 
+// First returns the first index in the list, or nil if the list is empty.
 func (l *IndexDefinitionEntityList) First() *IndexDefinitionEntity {
 	if len(l.Entities) == 0 {
 		return nil

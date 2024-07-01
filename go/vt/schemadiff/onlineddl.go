@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -196,6 +197,7 @@ func RemovedForeignKeyNames(source *CreateTableEntity, target *CreateTableEntity
 	if err != nil {
 		return nil, err
 	}
+	names = []string{}
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
@@ -263,7 +265,12 @@ func GetExpandedColumns(
 ) (
 	expandedColumns *ColumnDefinitionEntityList,
 	expandedDescriptions map[string]string,
+	err error,
 ) {
+	if len(sourceColumns.Entities) != len(targetColumns.Entities) {
+		return nil, nil, fmt.Errorf("source and target columns must be of same length")
+	}
+
 	expandedEntities := []*ColumnDefinitionEntity{}
 	expandedDescriptions = map[string]string{}
 	for i := range sourceColumns.Entities {
@@ -276,17 +283,7 @@ func GetExpandedColumns(
 			expandedDescriptions[sourceColumn.Name()] = description
 		}
 	}
-	return NewColumnDefinitionEntityList(expandedEntities), expandedDescriptions
-}
-
-func GetNoDefaultColumns(columns *ColumnDefinitionEntityList) (noDefault *ColumnDefinitionEntityList) {
-	subset := []*ColumnDefinitionEntity{}
-	for _, col := range columns.Entities {
-		if !col.HasDefault() {
-			subset = append(subset, col)
-		}
-	}
-	return NewColumnDefinitionEntityList(subset)
+	return NewColumnDefinitionEntityList(expandedEntities), expandedDescriptions, nil
 }
 
 // AnalyzeSharedColumns returns the intersection of two lists of columns in same order as the first list
@@ -300,7 +297,6 @@ func AnalyzeSharedColumns(
 	sharedColumnsMap map[string]string,
 ) {
 	sharedColumnsMap = map[string]string{}
-
 	sourceShared := []*ColumnDefinitionEntity{}
 	targetShared := []*ColumnDefinitionEntity{}
 	droppedNonGenerated := []*ColumnDefinitionEntity{}
@@ -310,6 +306,12 @@ func AnalyzeSharedColumns(
 			continue
 		}
 		isDroppedFromSource := false
+		// Note to a future engineer: you may be tempted to remove this loop based on the
+		// assumption that the later `targetColumn := targetColumns.GetColumn(expectedTargetName)`
+		// check is sufficient. It is not. It is possible that a columns was explicitly dropped
+		// and added (`DROP COLUMN c, ADD COLUMN c INT`) in the same ALTER TABLE statement.
+		// Without checking the ALTER TABLE statement, we would be folled to believe that column
+		// `c` is unchanged in the target, when in fact it was dropped and re-added.
 		for droppedColumn := range alterTableAnalysis.DroppedColumnsMap {
 			if strings.EqualFold(sourceColumn.Name(), droppedColumn) {
 				isDroppedFromSource = true
@@ -335,11 +337,15 @@ func AnalyzeSharedColumns(
 			// virtual/generated columns are silently skipped.
 			continue
 		}
+		// OK, the column is shared (possibly renamed) between source and target.
 		sharedColumnsMap[sourceColumn.Name()] = targetColumn.Name()
 		sourceShared = append(sourceShared, sourceColumn)
 		targetShared = append(targetShared, targetColumn)
 	}
-	return NewColumnDefinitionEntityList(sourceShared), NewColumnDefinitionEntityList(targetShared), NewColumnDefinitionEntityList(droppedNonGenerated), sharedColumnsMap
+	return NewColumnDefinitionEntityList(sourceShared),
+		NewColumnDefinitionEntityList(targetShared),
+		NewColumnDefinitionEntityList(droppedNonGenerated),
+		sharedColumnsMap
 }
 
 // KeyAtLeastConstrainedAs returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.
@@ -423,7 +429,7 @@ func IntroducedUniqueConstraints(sourceUniqueKeys *IndexDefinitionEntityList, ta
 	return NewIndexDefinitionEntityList(introducedUniqueConstraints)
 }
 
-// RemovedUniqueKeys returns the list of unique key constraints _removed_ going from source to target.
+// RemovedUniqueConstraints returns the list of unique key constraints _removed_ going from source to target.
 func RemovedUniqueConstraints(sourceUniqueKeys *IndexDefinitionEntityList, targetUniqueKeys *IndexDefinitionEntityList, columnRenameMap map[string]string) *IndexDefinitionEntityList {
 	reverseColumnRenameMap := map[string]string{}
 	for k, v := range columnRenameMap {
@@ -432,8 +438,8 @@ func RemovedUniqueConstraints(sourceUniqueKeys *IndexDefinitionEntityList, targe
 	return IntroducedUniqueConstraints(targetUniqueKeys, sourceUniqueKeys, reverseColumnRenameMap)
 }
 
-// UniqueKeyCoveredByColumns returns the first Online DDL compliant unique key from given list,
-// whose columns all appear in given column list.
+// IterationKeysByColumns returns the Online DDL compliant unique keys from given list,
+// whose columns are all covered by the given column list.
 func IterationKeysByColumns(keys *IndexDefinitionEntityList, columns *ColumnDefinitionEntityList) *IndexDefinitionEntityList {
 	subset := []*IndexDefinitionEntity{}
 	for _, key := range keys.SubsetCoveredByColumns(columns).Entities {
