@@ -202,10 +202,6 @@ func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return aj.LHS.GetOrdering(ctx)
 }
 
-func joinColumnToExpr(column applyJoinColumn) sqlparser.Expr {
-	return column.Original
-}
-
 func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col applyJoinColumn) {
 	defer func() {
 		col.Original = orig.Expr
@@ -224,7 +220,7 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	case deps.IsSolvedBy(both):
 		col = breakExpressionInLHSandRHS(ctx, e, TableID(aj.LHS))
 	default:
-		panic(vterrors.VT13002(sqlparser.String(e)))
+		panic(vterrors.VT13001(fmt.Sprintf("expression depends on tables outside this join: %s", sqlparser.String(e))))
 	}
 
 	return
@@ -443,17 +439,17 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 	return bvName
 }
 
-func (a *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed sqlparser.Exprs) {
+func (aj *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed sqlparser.Exprs) {
 	f := func(from BindVarExpr) sqlparser.Expr {
 		return from.Expr
 	}
-	for _, jc := range a.JoinColumns.columns {
+	for _, jc := range aj.JoinColumns.columns {
 		needed = append(needed, slice.Map(jc.LHSExprs, f)...)
 	}
-	for _, jc := range a.JoinPredicates.columns {
+	for _, jc := range aj.JoinPredicates.columns {
 		needed = append(needed, slice.Map(jc.LHSExprs, f)...)
 	}
-	needed = append(needed, slice.Map(a.ExtraLHSVars, f)...)
+	needed = append(needed, slice.Map(aj.ExtraLHSVars, f)...)
 	return ctx.SemTable.Uniquify(needed)
 }
 
@@ -462,7 +458,11 @@ func (jc applyJoinColumn) String() string {
 	lhs := slice.Map(jc.LHSExprs, func(e BindVarExpr) string {
 		return sqlparser.String(e.Expr)
 	})
-	return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
+	if jc.DTColName == nil {
+		return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
+	}
+
+	return fmt.Sprintf("[%s | %s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original), sqlparser.String(jc.DTColName))
 }
 
 func (jc applyJoinColumn) IsPureLeft() bool {
