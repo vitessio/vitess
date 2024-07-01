@@ -179,33 +179,6 @@ func (v *VRepl) targetTableName() string {
 	return v.targetCreateTableEntity.Name()
 }
 
-// getTableColumns returns column lists from given table
-func getTableColumns(createTableEntity *schemadiff.CreateTableEntity) (
-	columns *schemadiff.ColumnDefinitionEntityList,
-	virtualColumns *schemadiff.ColumnDefinitionEntityList,
-	pkColumns *schemadiff.ColumnDefinitionEntityList,
-	err error,
-) {
-	pkColumns = schemadiff.NewColumnDefinitionEntityList(nil)
-	columns = createTableEntity.ColumnDefinitionEntitiesList()
-	var virutalCols []*schemadiff.ColumnDefinitionEntity
-	for _, col := range columns.Entities {
-		if col.IsGenerated() {
-			virutalCols = append(virutalCols, col)
-		}
-	}
-	if columns.Len() == 0 {
-		return nil, nil, nil, fmt.Errorf("found 0 columns on `%s`", createTableEntity.Name())
-	}
-	for _, key := range createTableEntity.IndexDefinitionEntities() {
-		if key.IsPrimary() {
-			pkColumns = key.ColumnList
-			break
-		}
-	}
-	return columns, schemadiff.NewColumnDefinitionEntityList(virutalCols), pkColumns, nil
-}
-
 // isFastAnalyzeTableSupported checks if the underlying MySQL server supports 'fast_analyze_table',
 // introduced by a fork of MySQL: https://github.com/planetscale/mysql-server/commit/c8a9d93686358dabfba8f3dc5cc0621e3149fe78
 // When `fast_analyze_table=1`, an `ANALYZE TABLE` command only analyzes the clustering index (normally the `PRIMARY KEY`).
@@ -281,14 +254,18 @@ func (v *VRepl) analyzeAlter() error {
 func (v *VRepl) analyzeTables() (err error) {
 	{
 		// columns:
-		sourceColumns, sourceVirtualColumns, sourcePKColumns, err := getTableColumns(v.sourceCreateTableEntity)
-		if err != nil {
-			return err
+		generatedColumns := func(columns *schemadiff.ColumnDefinitionEntityList) *schemadiff.ColumnDefinitionEntityList {
+			return columns.Filter(func(col *schemadiff.ColumnDefinitionEntity) bool {
+				return col.IsGenerated()
+			})
 		}
-		targetColumns, targetVirtualColumns, targetPKColumns, err := getTableColumns(v.targetCreateTableEntity)
-		if err != nil {
-			return err
+		noDefaultColumns := func(columns *schemadiff.ColumnDefinitionEntityList) *schemadiff.ColumnDefinitionEntityList {
+			return columns.Filter(func(col *schemadiff.ColumnDefinitionEntity) bool {
+				return !col.HasDefault()
+			})
 		}
+		sourceColumns := v.sourceCreateTableEntity.ColumnDefinitionEntitiesList()
+		targetColumns := v.targetCreateTableEntity.ColumnDefinitionEntitiesList()
 
 		var droppedSourceNonGeneratedColumns *schemadiff.ColumnDefinitionEntityList
 		v.sourceSharedColumns, v.targetSharedColumns, droppedSourceNonGeneratedColumns, v.sharedColumnsMap = schemadiff.AnalyzeSharedColumns(sourceColumns, targetColumns, v.alterTableAnalysis)
@@ -306,13 +283,13 @@ func (v *VRepl) analyzeTables() (err error) {
 		// VReplication supports completely different unique keys on source and target, covering
 		// some/completely different columns. The condition is that the key on source
 		// must use columns which all exist on target table.
-		eligibleSourceColumnsForUniqueKey := v.sourceSharedColumns.Union(sourceVirtualColumns)
+		eligibleSourceColumnsForUniqueKey := v.sourceSharedColumns.Union(generatedColumns(sourceColumns))
 		v.chosenSourceUniqueKey = schemadiff.IterationKeysByColumns(sourceUniqueKeys, eligibleSourceColumnsForUniqueKey).First()
 		if v.chosenSourceUniqueKey == nil {
 			return fmt.Errorf("found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTableName(), v.targetTableName())
 		}
 
-		eligibleTargetColumnsForUniqueKey := v.targetSharedColumns.Union(targetVirtualColumns)
+		eligibleTargetColumnsForUniqueKey := v.targetSharedColumns.Union(generatedColumns(targetColumns))
 		v.chosenTargetUniqueKey = schemadiff.IterationKeysByColumns(targetUniqueKeys, eligibleTargetColumnsForUniqueKey).First()
 		if v.chosenTargetUniqueKey == nil {
 			return fmt.Errorf("found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTableName(), v.sourceTableName())
@@ -325,10 +302,7 @@ func (v *VRepl) analyzeTables() (err error) {
 			return err
 		}
 
-		if err := formalizeColumns(sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, droppedSourceNonGeneratedColumns); err != nil {
-			return err
-		}
-		if err := formalizeColumns(targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
+		if err := formalizeColumns(v.sourceSharedColumns, v.targetSharedColumns, droppedSourceNonGeneratedColumns); err != nil {
 			return err
 		}
 
@@ -341,9 +315,12 @@ func (v *VRepl) analyzeTables() (err error) {
 			}
 		}
 
-		v.droppedNoDefaultColumns = schemadiff.GetNoDefaultColumns(droppedSourceNonGeneratedColumns)
+		v.droppedNoDefaultColumns = noDefaultColumns(droppedSourceNonGeneratedColumns)
 		var expandedDescriptions map[string]string
-		v.expandedColumns, expandedDescriptions = schemadiff.GetExpandedColumns(v.sourceSharedColumns, v.targetSharedColumns)
+		v.expandedColumns, expandedDescriptions, err = schemadiff.GetExpandedColumns(v.sourceSharedColumns, v.targetSharedColumns)
+		if err != nil {
+			return err
+		}
 
 		v.sourceAutoIncrement, err = v.sourceCreateTableEntity.AutoIncrementValue()
 
