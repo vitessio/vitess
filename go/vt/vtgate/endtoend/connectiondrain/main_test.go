@@ -33,10 +33,8 @@ import (
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
-	cell            = "zone-1"
+	keyspaceName = "ks"
+	cell         = "zone-1"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -48,8 +46,8 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func setupCluster(t *testing.T) {
-	clusterInstance = cluster.NewCluster(cell, "localhost")
+func setupCluster(t *testing.T) (*cluster.LocalProcessCluster, mysql.ConnParams) {
+	clusterInstance := cluster.NewCluster(cell, "localhost")
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -68,15 +66,11 @@ func setupCluster(t *testing.T) {
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
-	vtParams = clusterInstance.GetVTParams(keyspaceName)
+	vtParams := clusterInstance.GetVTParams(keyspaceName)
+	return clusterInstance, vtParams
 }
 
-func cleanupCluster() {
-	clusterInstance.Teardown()
-	clusterInstance = nil
-}
-
-func start(t *testing.T) (*mysql.Conn, func()) {
+func start(t *testing.T, vtParams mysql.ConnParams) (*mysql.Conn, func()) {
 	vtConn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 
@@ -99,10 +93,10 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func TestConnectionDrainCloseConnections(t *testing.T) {
-	setupCluster(t)
-	defer cleanupCluster()
+	clusterInstance, vtParams := setupCluster(t)
+	defer clusterInstance.Teardown()
 
-	vtConn, closer := start(t)
+	vtConn, closer := start(t, vtParams)
 	defer closer()
 
 	// Create a second connection, this connection will be used to create a transaction.
@@ -163,8 +157,8 @@ func TestConnectionDrainCloseConnections(t *testing.T) {
 }
 
 func TestConnectionDrainOnTermTimeout(t *testing.T) {
-	setupCluster(t)
-	defer cleanupCluster()
+	clusterInstance, vtParams := setupCluster(t)
+	defer clusterInstance.Teardown()
 
 	// Connect to vtgate again, this should work
 	vtConn, err := mysql.Connect(context.Background(), &vtParams)
