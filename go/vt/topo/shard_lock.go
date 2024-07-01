@@ -59,11 +59,11 @@ func (s *shardLock) Path() string {
 //
 // * operations that we don't want to conflict with re-parenting:
 //   - DeleteTablet when it's the shard's current primary
-func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
+func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string, opts ...LockOption) (context.Context, func(*error), error) {
 	return ts.internalLock(ctx, &shardLock{
 		keyspace: keyspace,
 		shard:    shard,
-	}, action, true)
+	}, action, opts...)
 }
 
 // TryLockShard will lock the shard, and return:
@@ -85,7 +85,7 @@ func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action stri
 	return ts.internalLock(ctx, &shardLock{
 		keyspace: keyspace,
 		shard:    shard,
-	}, action, false)
+	}, action, WithType(NonBlocking))
 }
 
 // CheckShardLocked can be called on a context to make sure we have the lock

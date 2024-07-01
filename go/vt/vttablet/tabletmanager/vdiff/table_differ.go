@@ -115,10 +115,11 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer dbClient.Close()
 
 	targetKeyspace := td.wd.ct.vde.thisTablet.Keyspace
-	log.Infof("Locking target keyspace %s", targetKeyspace)
-	ctx, unlock, lockErr := td.wd.ct.ts.LockKeyspace(ctx, targetKeyspace, "vdiff")
+	lockName := fmt.Sprintf("%s/%s", targetKeyspace, td.wd.ct.workflow)
+	log.Infof("Locking workflow %s", lockName)
+	ctx, unlock, lockErr := td.wd.ct.ts.LockName(ctx, lockName, "vdiff")
 	if lockErr != nil {
-		log.Errorf("LockKeyspace failed: %v", lockErr)
+		log.Errorf("Locking workfkow %s failed: %v", lockName, lockErr)
 		return lockErr
 	}
 
@@ -126,7 +127,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, err)
+			log.Errorf("Unlocking workflow %s failed: %v", lockName, err)
 		}
 	}()
 

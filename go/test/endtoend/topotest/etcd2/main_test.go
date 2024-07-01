@@ -19,6 +19,7 @@ package ectd2
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -199,6 +200,74 @@ func TestKeyspaceLocking(t *testing.T) {
 
 	// Wait to see that the second thread was able to acquire the shard lock.
 	topoutils.WaitForBoolValue(t, &secondThreadLockAcquired, true)
+}
+
+// TestLockingWithTTL tests that locking with the TTL override works as intended.
+func TestLockingWithTTL(t *testing.T) {
+	// Create the topo server connection.
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// Acquire a keyspace lock with a short custom TTL.
+	ttl := 1 * time.Second
+	ctx, unlock, err := ts.LockKeyspace(ctx, KeyspaceName, "TestLockingWithTTL", topo.WithTTL(ttl))
+	require.NoError(t, err)
+	defer unlock(&err)
+
+	// Check that CheckKeyspaceLocked DOES return an error after waiting more than
+	// the specified TTL as we should have lost our lock.
+	time.Sleep(ttl * 2)
+	err = topo.CheckKeyspaceLocked(ctx, KeyspaceName)
+	require.Error(t, err)
+}
+
+// TestNamedLocking tests that named locking works as intended.
+func TestNamedLocking(t *testing.T) {
+	// Create topo server connection.
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	lockName := "TestNamedLocking"
+	action := "Testing"
+
+	// Acquire a named lock.
+	ctx, unlock, err := ts.LockName(ctx, lockName, action)
+	require.NoError(t, err)
+
+	// Check that we can't reacquire it from the same context.
+	_, _, err = ts.LockName(ctx, lockName, action)
+	require.ErrorContains(t, err, fmt.Sprintf("lock for named %s is already held", lockName))
+
+	// Check that CheckNameLocked doesn't return an error as we should still be
+	// holding the lock.
+	err = topo.CheckNameLocked(ctx, lockName)
+	require.NoError(t, err)
+
+	// We'll now try to acquire the lock from a different goroutine.
+	secondCallerAcquired := false
+	go func() {
+		_, unlock, err := ts.LockName(context.Background(), lockName, action)
+		defer unlock(&err)
+		require.NoError(t, err)
+		secondCallerAcquired = true
+	}()
+
+	// Wait for some time and ensure that the second attempt at acquiring the lock
+	// is blocked.
+	time.Sleep(100 * time.Millisecond)
+	require.False(t, secondCallerAcquired)
+
+	// Unlock the name.
+	unlock(&err)
+	// Check that we no longer have the named lock.
+	err = topo.CheckNameLocked(ctx, lockName)
+	require.ErrorContains(t, err, fmt.Sprintf("named %s is not locked (no lockInfo in map)", lockName))
+
+	// Wait to see that the second goroutine WAS now able to acquire the named lock.
+	topoutils.WaitForBoolValue(t, &secondCallerAcquired, true)
 }
 
 func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result {

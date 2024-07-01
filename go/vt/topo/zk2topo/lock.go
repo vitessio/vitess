@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/z-division/go-zookeeper/zk"
 
@@ -39,6 +40,17 @@ type zkLockDescriptor struct {
 
 // Lock is part of the topo.Conn interface.
 func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return zs.lock(ctx, dirPath, contents)
+}
+
+// LockWithTTL is part of the topo.Conn interface. It behaves the same as Lock
+// as TTLs are not supported in Zookeeper.
+func (zs *Server) LockWithTTL(ctx context.Context, dirPath, contents string, _ time.Duration) (topo.LockDescriptor, error) {
+	return zs.lock(ctx, dirPath, contents)
+}
+
+// LockName is part of the topo.Conn interface.
+func (zs *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	return zs.lock(ctx, dirPath, contents)
 }
 
