@@ -18,7 +18,7 @@ package engine
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"

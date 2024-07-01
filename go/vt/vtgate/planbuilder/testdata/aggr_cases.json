@@ -689,13 +689,13 @@
         "OperatorType": "Sort",
         "Variant": "Memory",
         "OrderBy": "1 ASC",
-        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "count_distinct(1|3) AS k",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -821,6 +821,66 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "group concat with a separator needing evaluation on vtgate",
+    "query": "select group_concat(music.name SEPARATOR ', ') as `Group Name` from user join user_extra on user.id = user_extra.user_id left join music on user.id = music.id group by user.id;",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select group_concat(music.name SEPARATOR ', ') as `Group Name` from user join user_extra on user.id = user_extra.user_id left join music on user.id = music.id group by user.id;",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "group_concat(0) AS Group Name",
+        "GroupBy": "(1|2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "R:0,L:0,L:1",
+            "JoinVars": {
+              "user_id": 0
+            },
+            "TableName": "`user`, user_extra_music",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, weight_string(`user`.id) from `user`, user_extra where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select `user`.id, weight_string(`user`.id) from `user`, user_extra where `user`.id = user_extra.user_id order by `user`.id asc",
+                "Table": "`user`, user_extra"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.`name` from music where 1 != 1",
+                "Query": "select music.`name` from music where music.id = :user_id",
+                "Table": "music",
+                "Values": [
+                  ":user_id"
+                ],
+                "Vindex": "music_user_map"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
       ]
     }
   },
@@ -2039,13 +2099,13 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) <= 10",
-        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum_count_star(1) AS a",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2077,13 +2137,13 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = 1.00",
-        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum_count_star(0) AS a",
             "GroupBy": "(1|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2939,13 +2999,13 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = 3",
-        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum_count_star(1) AS count(*)",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2977,13 +3037,13 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "sum(foo) + sum(bar) = 42",
-        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum(1) AS sum(foo), sum(2) AS sum(bar)",
             "GroupBy": "(0|3)",
+            "ResultColumns": 3,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3015,13 +3075,13 @@
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "sum(`user`.foo) + sum(bar) = 42",
-        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum(1) AS fooSum, sum(2) AS barSum",
             "GroupBy": "(0|3)",
+            "ResultColumns": 3,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3060,6 +3120,7 @@
             "Variant": "Ordered",
             "Aggregates": "sum_count_star(1) AS count(*)",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3098,6 +3159,7 @@
             "Variant": "Ordered",
             "Aggregates": "sum_count(1) AS count(u.`name`)",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Projection",
@@ -3202,6 +3264,7 @@
             "Variant": "Ordered",
             "Aggregates": "sum_count_star(1) AS count(*)",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Projection",
@@ -3309,7 +3372,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
-                "Query": "select 1 from user_extra where user_extra.col = :user_col group by .0",
+                "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */ group by .0",
                 "Table": "user_extra"
               }
             ]
@@ -3799,7 +3862,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra as ue where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra as ue where ue.col = :u_col group by .0",
+                    "Query": "select count(*) from user_extra as ue where ue.col = :u_col /* INT16 */ group by .0",
                     "Table": "user_extra"
                   }
                 ]
@@ -3859,7 +3922,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(ue.id) from user_extra as ue where 1 != 1 group by .0",
-                    "Query": "select count(ue.id) from user_extra as ue where ue.col = :u_col group by .0",
+                    "Query": "select count(ue.id) from user_extra as ue where ue.col = :u_col /* INT16 */ group by .0",
                     "Table": "user_extra"
                   }
                 ]
@@ -3951,6 +4014,7 @@
             "Variant": "Ordered",
             "Aggregates": "max(1|3) AS bazo",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3989,6 +4053,7 @@
             "Variant": "Ordered",
             "Aggregates": "sum_count(1) AS bazo",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4836,13 +4901,13 @@
         "Collations": [
           "0"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum_count_star(0) AS count(*)",
             "GroupBy": "1",
+            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5088,7 +5153,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select min(user_extra.foo), max(user_extra.bar), weight_string(user_extra.foo), weight_string(user_extra.bar) from user_extra where 1 != 1 group by .0, weight_string(user_extra.foo), weight_string(user_extra.bar)",
-                "Query": "select min(user_extra.foo), max(user_extra.bar), weight_string(user_extra.foo), weight_string(user_extra.bar) from user_extra where user_extra.bar = :user_col group by .0, weight_string(user_extra.foo), weight_string(user_extra.bar)",
+                "Query": "select min(user_extra.foo), max(user_extra.bar), weight_string(user_extra.foo), weight_string(user_extra.bar) from user_extra where user_extra.bar = :user_col /* INT16 */ group by .0, weight_string(user_extra.foo), weight_string(user_extra.bar)",
                 "Table": "user_extra"
               }
             ]
@@ -5366,7 +5431,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), sum(user_extra.bar) from user_extra where 1 != 1 group by .0",
-                        "Query": "select count(*), sum(user_extra.bar) from user_extra where user_extra.col = :user_col group by .0",
+                        "Query": "select count(*), sum(user_extra.bar) from user_extra where user_extra.col = :user_col /* INT16 */ group by .0",
                         "Table": "user_extra"
                       }
                     ]
@@ -5518,6 +5583,7 @@
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "GroupBy": "0, (1|2)",
+                "ResultColumns": 2,
                 "Inputs": [
                   {
                     "OperatorType": "SimpleProjection",
@@ -5684,6 +5750,7 @@
             "Variant": "Ordered",
             "Aggregates": "group_concat(1) AS group_concat(u.bar), any_value(2) AS baz, any_value(4)",
             "GroupBy": "(0|3)",
+            "ResultColumns": 5,
             "Inputs": [
               {
                 "OperatorType": "Join",
@@ -5714,7 +5781,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from music as m where 1 != 1",
-                    "Query": "select 1 from music as m where m.col = :u_col",
+                    "Query": "select 1 from music as m where m.col = :u_col /* INT16 */",
                     "Table": "music"
                   }
                 ]
@@ -5939,6 +6006,7 @@
                     "Variant": "Ordered",
                     "Aggregates": "count_star(0)",
                     "GroupBy": "1",
+                    "ResultColumns": 1,
                     "Inputs": [
                       {
                         "OperatorType": "SimpleProjection",
@@ -5949,6 +6017,7 @@
                             "Variant": "Ordered",
                             "Aggregates": "sum_count_star(0) AS count(*), any_value(2)",
                             "GroupBy": "1",
+                            "ResultColumns": 3,
                             "Inputs": [
                               {
                                 "OperatorType": "Route",
@@ -6045,8 +6114,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select :__sq1 + :__sq2 as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual where 1 != 1",
-                "Query": "select :__sq1 + :__sq2 as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual",
+                "FieldQuery": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual where 1 != 1",
+                "Query": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual",
                 "Table": "dual"
               }
             ]
@@ -6122,6 +6191,7 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
                 "GroupBy": "(0|4)",
+                "ResultColumns": 4,
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -6171,6 +6241,7 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
                 "GroupBy": "(0|4)",
+                "ResultColumns": 4,
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -6354,6 +6425,7 @@
                         "OperatorType": "Aggregate",
                         "Variant": "Scalar",
                         "Aggregates": "min(0|2) AS min_id, max(1|2) AS max_id",
+                        "ResultColumns": 2,
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -6517,6 +6589,7 @@
                         "Variant": "Ordered",
                         "Aggregates": "count_star(0)",
                         "GroupBy": "1, (2|3)",
+                        "ResultColumns": 3,
                         "Inputs": [
                           {
                             "OperatorType": "SimpleProjection",
@@ -6691,8 +6764,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
-                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 2 group by weight_string(:__sq1)",
+                "FieldQuery": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where 1 != 1 group by weight_string(:__sq1 /* INT16 */)",
+                "Query": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where id = 2 group by weight_string(:__sq1 /* INT16 */)",
                 "Table": "`user`",
                 "Values": [
                   "2"

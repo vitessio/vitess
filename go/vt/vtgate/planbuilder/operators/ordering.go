@@ -70,11 +70,11 @@ func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr
 }
 
 func (o *Ordering) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return o.Source.GetColumns(ctx)
+	return truncate(o, o.Source.GetColumns(ctx))
 }
 
 func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return o.Source.GetSelectExprs(ctx)
+	return truncate(o, o.Source.GetSelectExprs(ctx))
 }
 
 func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []OrderBy {
@@ -107,4 +107,8 @@ func (o *Ordering) ShortDescription() string {
 
 func (o *Ordering) setTruncateColumnCount(offset int) {
 	o.ResultColumns = offset
+}
+
+func (o *Ordering) getTruncateColumnCount() int {
+	return o.ResultColumns
 }
