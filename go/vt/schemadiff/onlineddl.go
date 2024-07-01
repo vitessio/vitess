@@ -221,7 +221,7 @@ type AlterTableAnalysis struct {
 
 // AnalyzeAlter looks for specific changes in the AlterTable statement, that are relevant
 // to OnlineDDL/VReplication
-func GetAlterTableAnalysis(alterTable *sqlparser.AlterTable) *AlterTableAnalysis {
+func OnlineDDLAlterTableAnalysis(alterTable *sqlparser.AlterTable) *AlterTableAnalysis {
 	analysis := &AlterTableAnalysis{
 		ColumnRenameMap:   make(map[string]string),
 		DroppedColumnsMap: make(map[string]bool),
@@ -459,4 +459,132 @@ func MappedColumnNames(columnsList *ColumnDefinitionEntityList, columnNamesMap m
 		}
 	}
 	return names
+}
+
+// AlterTableAnalysis contains useful Online DDL information about an AlterTable statement
+type MigrationTablesAnalysis struct {
+	SourceSharedColumns     *ColumnDefinitionEntityList
+	TargetSharedColumns     *ColumnDefinitionEntityList
+	DroppedNoDefaultColumns *ColumnDefinitionEntityList
+	ExpandedColumns         *ColumnDefinitionEntityList
+	SharedColumnsMap        map[string]string
+	ChosenSourceUniqueKey   *IndexDefinitionEntity
+	ChosenTargetUniqueKey   *IndexDefinitionEntity
+	AddedUniqueKeys         *IndexDefinitionEntityList
+	RemovedUniqueKeys       *IndexDefinitionEntityList
+	RemovedForeignKeyNames  []string
+	IntToEnumMap            map[string]bool
+	SourceAutoIncrement     uint64
+	RevertibleNotes         []string
+}
+
+func OnlineDDLMigrationTablesAnalysis(
+	sourceCreateTableEntity *CreateTableEntity,
+	targetCreateTableEntity *CreateTableEntity,
+	alterTableAnalysis *AlterTableAnalysis,
+) (analysis *MigrationTablesAnalysis, err error) {
+	analysis = &MigrationTablesAnalysis{
+		IntToEnumMap:    make(map[string]bool),
+		RevertibleNotes: []string{},
+	}
+	// columns:
+	generatedColumns := func(columns *ColumnDefinitionEntityList) *ColumnDefinitionEntityList {
+		return columns.Filter(func(col *ColumnDefinitionEntity) bool {
+			return col.IsGenerated()
+		})
+	}
+	noDefaultColumns := func(columns *ColumnDefinitionEntityList) *ColumnDefinitionEntityList {
+		return columns.Filter(func(col *ColumnDefinitionEntity) bool {
+			return !col.HasDefault()
+		})
+	}
+	sourceColumns := sourceCreateTableEntity.ColumnDefinitionEntitiesList()
+	targetColumns := targetCreateTableEntity.ColumnDefinitionEntitiesList()
+
+	var droppedSourceNonGeneratedColumns *ColumnDefinitionEntityList
+	analysis.SourceSharedColumns, analysis.TargetSharedColumns, droppedSourceNonGeneratedColumns, analysis.SharedColumnsMap = AnalyzeSharedColumns(sourceColumns, targetColumns, alterTableAnalysis)
+
+	// unique keys
+	sourceUniqueKeys := PrioritizedUniqueKeys(sourceCreateTableEntity)
+	if sourceUniqueKeys.Len() == 0 {
+		return nil, fmt.Errorf("found no possible unique key on `%s`", sourceCreateTableEntity.Name())
+	}
+
+	targetUniqueKeys := PrioritizedUniqueKeys(targetCreateTableEntity)
+	if targetUniqueKeys.Len() == 0 {
+		return nil, fmt.Errorf("found no possible unique key on `%s`", targetCreateTableEntity.Name())
+	}
+	// VReplication supports completely different unique keys on source and target, covering
+	// some/completely different columns. The condition is that the key on source
+	// must use columns which all exist on target table.
+	eligibleSourceColumnsForUniqueKey := analysis.SourceSharedColumns.Union(generatedColumns(sourceColumns))
+	analysis.ChosenSourceUniqueKey = IterationKeysByColumns(sourceUniqueKeys, eligibleSourceColumnsForUniqueKey).First()
+	if analysis.ChosenSourceUniqueKey == nil {
+		return nil, fmt.Errorf("found no possible unique key on `%s` whose columns are in target table `%s`", sourceCreateTableEntity.Name(), targetCreateTableEntity.Name())
+	}
+
+	eligibleTargetColumnsForUniqueKey := analysis.TargetSharedColumns.Union(generatedColumns(targetColumns))
+	analysis.ChosenTargetUniqueKey = IterationKeysByColumns(targetUniqueKeys, eligibleTargetColumnsForUniqueKey).First()
+	if analysis.ChosenTargetUniqueKey == nil {
+		return nil, fmt.Errorf("found no possible unique key on `%s` whose columns are in source table `%s`", targetCreateTableEntity.Name(), sourceCreateTableEntity.Name())
+	}
+
+	analysis.AddedUniqueKeys = IntroducedUniqueConstraints(sourceUniqueKeys, targetUniqueKeys, alterTableAnalysis.ColumnRenameMap)
+	analysis.RemovedUniqueKeys = RemovedUniqueConstraints(sourceUniqueKeys, targetUniqueKeys, alterTableAnalysis.ColumnRenameMap)
+	analysis.RemovedForeignKeyNames, err = RemovedForeignKeyNames(sourceCreateTableEntity, targetCreateTableEntity)
+	if err != nil {
+		return nil, err
+	}
+
+	formalizeColumns := func(columnsLists ...*ColumnDefinitionEntityList) error {
+		for _, colList := range columnsLists {
+			for _, col := range colList.Entities {
+				col.SetExplicitDefaultAndNull()
+				if err := col.SetExplicitCharsetCollate(); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+
+	if err := formalizeColumns(analysis.SourceSharedColumns, analysis.TargetSharedColumns, droppedSourceNonGeneratedColumns); err != nil {
+		return nil, err
+	}
+
+	for i := range analysis.SourceSharedColumns.Entities {
+		sourceColumn := analysis.SourceSharedColumns.Entities[i]
+		mappedColumn := analysis.TargetSharedColumns.Entities[i]
+
+		if sourceColumn.IsIntegralType() && mappedColumn.Type() == "enum" {
+			analysis.IntToEnumMap[sourceColumn.Name()] = true
+		}
+	}
+
+	analysis.DroppedNoDefaultColumns = noDefaultColumns(droppedSourceNonGeneratedColumns)
+	var expandedDescriptions map[string]string
+	analysis.ExpandedColumns, expandedDescriptions, err = GetExpandedColumns(analysis.SourceSharedColumns, analysis.TargetSharedColumns)
+	if err != nil {
+		return nil, err
+	}
+
+	analysis.SourceAutoIncrement, err = sourceCreateTableEntity.AutoIncrementValue()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, uk := range analysis.RemovedUniqueKeys.Names() {
+		analysis.RevertibleNotes = append(analysis.RevertibleNotes, fmt.Sprintf("unique constraint removed: %s", uk))
+	}
+	for _, name := range analysis.DroppedNoDefaultColumns.Names() {
+		analysis.RevertibleNotes = append(analysis.RevertibleNotes, fmt.Sprintf("column %s dropped, and had no default value", name))
+	}
+	for _, name := range analysis.ExpandedColumns.Names() {
+		analysis.RevertibleNotes = append(analysis.RevertibleNotes, fmt.Sprintf("column %s: %s", name, expandedDescriptions[name]))
+	}
+	for _, name := range analysis.RemovedForeignKeyNames {
+		analysis.RevertibleNotes = append(analysis.RevertibleNotes, fmt.Sprintf("foreign key %s dropped", name))
+	}
+
+	return analysis, nil
 }
