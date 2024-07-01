@@ -153,7 +153,7 @@ func NewVRepl(
 		keyspace:           keyspace,
 		shard:              shard,
 		dbName:             dbName,
-		alterTableAnalysis: schemadiff.GetAlterTableAnalysis(alterQuery),
+		alterTableAnalysis: schemadiff.OnlineDDLAlterTableAnalysis(alterQuery),
 		analyzeTable:       analyzeTable,
 		intToEnumMap:       map[string]bool{},
 		convertCharset:     map[string](*binlogdatapb.CharsetConversion){},
@@ -252,98 +252,24 @@ func (v *VRepl) analyzeAlter() error {
 }
 
 func (v *VRepl) analyzeTables() (err error) {
-	{
-		// columns:
-		generatedColumns := func(columns *schemadiff.ColumnDefinitionEntityList) *schemadiff.ColumnDefinitionEntityList {
-			return columns.Filter(func(col *schemadiff.ColumnDefinitionEntity) bool {
-				return col.IsGenerated()
-			})
-		}
-		noDefaultColumns := func(columns *schemadiff.ColumnDefinitionEntityList) *schemadiff.ColumnDefinitionEntityList {
-			return columns.Filter(func(col *schemadiff.ColumnDefinitionEntity) bool {
-				return !col.HasDefault()
-			})
-		}
-		sourceColumns := v.sourceCreateTableEntity.ColumnDefinitionEntitiesList()
-		targetColumns := v.targetCreateTableEntity.ColumnDefinitionEntitiesList()
-
-		var droppedSourceNonGeneratedColumns *schemadiff.ColumnDefinitionEntityList
-		v.sourceSharedColumns, v.targetSharedColumns, droppedSourceNonGeneratedColumns, v.sharedColumnsMap = schemadiff.AnalyzeSharedColumns(sourceColumns, targetColumns, v.alterTableAnalysis)
-
-		// unique keys
-		sourceUniqueKeys := schemadiff.PrioritizedUniqueKeys(v.sourceCreateTableEntity)
-		if sourceUniqueKeys.Len() == 0 {
-			return fmt.Errorf("found no possible unique key on `%s`", v.sourceTableName())
-		}
-
-		targetUniqueKeys := schemadiff.PrioritizedUniqueKeys(v.targetCreateTableEntity)
-		if targetUniqueKeys.Len() == 0 {
-			return fmt.Errorf("found no possible unique key on `%s`", v.targetTableName())
-		}
-		// VReplication supports completely different unique keys on source and target, covering
-		// some/completely different columns. The condition is that the key on source
-		// must use columns which all exist on target table.
-		eligibleSourceColumnsForUniqueKey := v.sourceSharedColumns.Union(generatedColumns(sourceColumns))
-		v.chosenSourceUniqueKey = schemadiff.IterationKeysByColumns(sourceUniqueKeys, eligibleSourceColumnsForUniqueKey).First()
-		if v.chosenSourceUniqueKey == nil {
-			return fmt.Errorf("found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTableName(), v.targetTableName())
-		}
-
-		eligibleTargetColumnsForUniqueKey := v.targetSharedColumns.Union(generatedColumns(targetColumns))
-		v.chosenTargetUniqueKey = schemadiff.IterationKeysByColumns(targetUniqueKeys, eligibleTargetColumnsForUniqueKey).First()
-		if v.chosenTargetUniqueKey == nil {
-			return fmt.Errorf("found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTableName(), v.sourceTableName())
-		}
-
-		v.addedUniqueKeys = schemadiff.IntroducedUniqueConstraints(sourceUniqueKeys, targetUniqueKeys, v.alterTableAnalysis.ColumnRenameMap)
-		v.removedUniqueKeys = schemadiff.RemovedUniqueConstraints(sourceUniqueKeys, targetUniqueKeys, v.alterTableAnalysis.ColumnRenameMap)
-		v.removedForeignKeyNames, err = schemadiff.RemovedForeignKeyNames(v.sourceCreateTableEntity, v.targetCreateTableEntity)
-		if err != nil {
-			return err
-		}
-
-		if err := formalizeColumns(v.sourceSharedColumns, v.targetSharedColumns, droppedSourceNonGeneratedColumns); err != nil {
-			return err
-		}
-
-		for i := range v.sourceSharedColumns.Entities {
-			sourceColumn := v.sourceSharedColumns.Entities[i]
-			mappedColumn := v.targetSharedColumns.Entities[i]
-
-			if sourceColumn.IsIntegralType() && mappedColumn.Type() == "enum" {
-				v.intToEnumMap[sourceColumn.Name()] = true
-			}
-		}
-
-		v.droppedNoDefaultColumns = noDefaultColumns(droppedSourceNonGeneratedColumns)
-		var expandedDescriptions map[string]string
-		v.expandedColumns, expandedDescriptions, err = schemadiff.GetExpandedColumns(v.sourceSharedColumns, v.targetSharedColumns)
-		if err != nil {
-			return err
-		}
-
-		v.sourceAutoIncrement, err = v.sourceCreateTableEntity.AutoIncrementValue()
-
-		notes := []string{}
-		for _, uk := range v.removedUniqueKeys.Names() {
-			notes = append(notes, fmt.Sprintf("unique constraint removed: %s", uk))
-		}
-		for _, name := range v.droppedNoDefaultColumns.Names() {
-			notes = append(notes, fmt.Sprintf("column %s dropped, and had no default value", name))
-		}
-		for _, name := range v.expandedColumns.Names() {
-			notes = append(notes, fmt.Sprintf("column %s: %s", name, expandedDescriptions[name]))
-		}
-		for _, name := range v.removedForeignKeyNames {
-			notes = append(notes, fmt.Sprintf("foreign key %s dropped", name))
-		}
-		v.revertibleNotes = strings.Join(notes, "\n")
-		if err != nil {
-			return err
-		}
-
-		return nil
+	analysis, err := schemadiff.OnlineDDLMigrationTablesAnalysis(v.sourceCreateTableEntity, v.targetCreateTableEntity, v.alterTableAnalysis)
+	if err != nil {
+		return err
 	}
+	v.sourceSharedColumns = analysis.SourceSharedColumns
+	v.targetSharedColumns = analysis.TargetSharedColumns
+	v.droppedNoDefaultColumns = analysis.DroppedNoDefaultColumns
+	v.expandedColumns = analysis.ExpandedColumns
+	v.sharedColumnsMap = analysis.SharedColumnsMap
+	v.chosenSourceUniqueKey = analysis.ChosenSourceUniqueKey
+	v.chosenTargetUniqueKey = analysis.ChosenTargetUniqueKey
+	v.addedUniqueKeys = analysis.AddedUniqueKeys
+	v.removedUniqueKeys = analysis.RemovedUniqueKeys
+	v.removedForeignKeyNames = analysis.RemovedForeignKeyNames
+	v.sourceAutoIncrement = analysis.SourceAutoIncrement
+	v.revertibleNotes = strings.Join(analysis.RevertibleNotes, "\n")
+
+	return nil
 }
 
 // analyzeTableStatus reads information from SHOW TABLE STATUS
