@@ -32,3 +32,11 @@
         content: none;
     }
 }
+
+.headingMetaContainer div {
+    width: '100%';
+    display: 'flex';
+    justifyContent: 'space-between';
+    paddingTop: '0px';
+    paddingBottom: '0px';
+ }

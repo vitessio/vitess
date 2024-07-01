@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-import { orderBy, groupBy } from 'lodash-es';
-import React, { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import {groupBy, orderBy} from 'lodash-es';
+import React, {useMemo} from 'react';
+import {Link} from 'react-router-dom';
 
-import { useWorkflow } from '../../../hooks/api';
-import { formatAlias } from '../../../util/tablets';
-import { formatDateTime } from '../../../util/time';
-import { getStreams, formatStreamKey, getStreamSource, getStreamTarget } from '../../../util/workflows';
-import { DataCell } from '../../dataTable/DataCell';
-import { DataTable } from '../../dataTable/DataTable';
-import { TabletLink } from '../../links/TabletLink';
-import { StreamStatePip } from '../../pips/StreamStatePip';
-import { WorkflowStreamsLagChart } from '../../charts/WorkflowStreamsLagChart';
-import { ShardLink } from '../../links/ShardLink';
-import { env } from '../../../util/env';
+import {useWorkflow} from '../../../hooks/api';
+import {formatAlias} from '../../../util/tablets';
+import {formatDateTime, formatRelativeTime} from '../../../util/time';
+import {formatStreamKey, getStreams, getStreamSource, getStreamTarget} from '../../../util/workflows';
+import {DataCell} from '../../dataTable/DataCell';
+import {DataTable} from '../../dataTable/DataTable';
+import {TabletLink} from '../../links/TabletLink';
+import {StreamStatePip} from '../../pips/StreamStatePip';
+import {WorkflowStreamsLagChart} from '../../charts/WorkflowStreamsLagChart';
+import {ShardLink} from '../../links/ShardLink';
+import {env} from '../../../util/env';
 
 interface Props {
     clusterID: string;
@@ -38,8 +38,8 @@ interface Props {
 
 const COLUMNS = ['Stream', 'Source', 'Target', 'Tablet'];
 
-export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
-    const { data } = useWorkflow({ clusterID, keyspace, name });
+export const WorkflowStreams = ({clusterID, keyspace, name}: Props) => {
+    const {data} = useWorkflow({clusterID, keyspace, name});
 
     const streams = useMemo(() => {
         const rows = getStreams(data).map((stream) => ({
@@ -65,13 +65,24 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
             return (
                 <tr key={row.key}>
                     <DataCell>
-                        <StreamStatePip state={row.state} />{' '}
+                        <StreamStatePip state={row?.throttler_status?.component_throttled ? 'Throttled' : row.state}/>{' '}
                         <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
                         <div className="text-sm text-secondary">
                             Updated {formatDateTime(row.time_updated?.seconds)}
                         </div>
+                        {row?.throttler_status?.component_throttled ? (
+                            <div
+                                className="text-sm text-secondary">
+                                <span className="font-bold text-danger">
+                                    Throttled:
+                                </span>
+                                {row.throttler_status?.component_throttled}
+                                ({formatRelativeTime(row.throttler_status?.time_throttled?.seconds)})
+                            </div>
+                        ) : null
+                        }
                     </DataCell>
                     <DataCell>
                         {source ? (
@@ -110,11 +121,11 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
             {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                 <>
                     <h3 className="my-8">Stream VReplication Lag</h3>
-                    <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />
+                    <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name}/>
                 </>
             )}
 
-            <h3 className="mt-24 mb-8">Streams</h3>
+            <h3 className="mt-24 mb-8" id="workflowStreams">Streams</h3>
             {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
             {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
                 if (!Array.isArray(streamsByState[streamState])) {

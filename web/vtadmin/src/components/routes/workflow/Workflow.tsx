@@ -13,22 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
+import {Link, Redirect, Route, Switch, useParams, useRouteMatch} from 'react-router-dom';
 
 import style from './Workflow.module.scss';
 
-import { useWorkflow } from '../../../hooks/api';
-import { NavCrumbs } from '../../layout/NavCrumbs';
-import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
-import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
-import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
-import { KeyspaceLink } from '../../links/KeyspaceLink';
-import { WorkflowStreams } from './WorkflowStreams';
-import { ContentContainer } from '../../layout/ContentContainer';
-import { TabContainer } from '../../tabs/TabContainer';
-import { Tab } from '../../tabs/Tab';
-import { getStreams } from '../../../util/workflows';
-import { Code } from '../../Code';
+import {useWorkflow} from '../../../hooks/api';
+import {NavCrumbs} from '../../layout/NavCrumbs';
+import {WorkspaceHeader} from '../../layout/WorkspaceHeader';
+import {WorkspaceTitle} from '../../layout/WorkspaceTitle';
+import {useDocumentTitle} from '../../../hooks/useDocumentTitle';
+import {KeyspaceLink} from '../../links/KeyspaceLink';
+import {WorkflowStreams} from './WorkflowStreams';
+import {ContentContainer} from '../../layout/ContentContainer';
+import {TabContainer} from '../../tabs/TabContainer';
+import {Tab} from '../../tabs/Tab';
+import {getStreams} from '../../../util/workflows';
+import {Code} from '../../Code';
 
 interface RouteParams {
     clusterID: string;
@@ -37,12 +37,12 @@ interface RouteParams {
 }
 
 export const Workflow = () => {
-    const { clusterID, keyspace, name } = useParams<RouteParams>();
-    const { path, url } = useRouteMatch();
+    const {clusterID, keyspace, name} = useParams<RouteParams>();
+    const {path, url} = useRouteMatch();
 
     useDocumentTitle(`${name} (${keyspace})`);
 
-    const { data } = useWorkflow({ clusterID, keyspace, name });
+    const {data} = useWorkflow({clusterID, keyspace, name});
     const streams = getStreams(data);
 
     return (
@@ -53,35 +53,40 @@ export const Workflow = () => {
                 </NavCrumbs>
 
                 <WorkspaceTitle className="font-mono">{name}</WorkspaceTitle>
-                <div className={style.headingMeta}>
-                    <span>
-                        Cluster: <code>{clusterID}</code>
-                    </span>
-                    <span>
-                        Target keyspace:{' '}
-                        <KeyspaceLink clusterID={clusterID} name={keyspace}>
-                            <code>{keyspace}</code>
-                        </KeyspaceLink>
-                    </span>
+                <div className={style.headingMetaContainer}>
+                    <div className={style.headingMeta} style={{float: 'left'}}>
+                        <span>
+                            Cluster: <code>{clusterID}</code>
+                        </span>
+                        <span>
+                            Target keyspace:{' '}
+                            <KeyspaceLink clusterID={clusterID} name={keyspace}>
+                                <code>{keyspace}</code>
+                            </KeyspaceLink>
+                        </span>
+                    </div>
+                    <div style={{float: 'right'}}>
+                        <a href={`#workflowStreams`}>Streams</a>
+                    </div>
                 </div>
             </WorkspaceHeader>
 
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="Streams" to={`${url}/streams`} count={streams.length} />
-                    <Tab text="JSON" to={`${url}/json`} />
+                    <Tab text="Streams" to={`${url}/streams`} count={streams.length}/>
+                    <Tab text="JSON" to={`${url}/json`}/>
                 </TabContainer>
 
                 <Switch>
                     <Route path={`${path}/streams`}>
-                        <WorkflowStreams clusterID={clusterID} keyspace={keyspace} name={name} />
+                        <WorkflowStreams clusterID={clusterID} keyspace={keyspace} name={name}/>
                     </Route>
 
                     <Route path={`${path}/json`}>
-                        <Code code={JSON.stringify(data, null, 2)} />
+                        <Code code={JSON.stringify(data, null, 2)}/>
                     </Route>
 
-                    <Redirect exact from={path} to={`${path}/streams`} />
+                    <Redirect exact from={path} to={`${path}/streams`}/>
                 </Switch>
             </ContentContainer>
         </div>
