@@ -218,10 +218,10 @@ func TestRevertible(t *testing.T) {
 				}
 				return strings.Split(s, ",")
 			}
-			assert.Equal(t, toStringSlice(tcase.removedForeignKeyNames), v.removedForeignKeyNames)
-			assert.Equal(t, toStringSlice(tcase.removedUniqueKeyNames), v.removedUniqueKeys.Names())
-			assert.Equal(t, toStringSlice(tcase.droppedNoDefaultColumnNames), v.droppedNoDefaultColumns.Names())
-			assert.Equal(t, toStringSlice(tcase.expandedColumnNames), v.expandedColumns.Names())
+			assert.Equal(t, toStringSlice(tcase.removedForeignKeyNames), v.analysis.RemovedForeignKeyNames)
+			assert.Equal(t, toStringSlice(tcase.removedUniqueKeyNames), v.analysis.RemovedUniqueKeys.Names())
+			assert.Equal(t, toStringSlice(tcase.droppedNoDefaultColumnNames), v.analysis.DroppedNoDefaultColumns.Names())
+			assert.Equal(t, toStringSlice(tcase.expandedColumnNames), v.analysis.ExpandedColumns.Names())
 		})
 	}
 }

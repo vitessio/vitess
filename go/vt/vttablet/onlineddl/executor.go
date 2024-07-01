@@ -1529,7 +1529,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 // This function is called after both source and target tables have been analyzed, so there's more information
 // about the two, and about the transition between the two.
 func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
-	if v.sourceAutoIncrement > 0 && !v.alterTableAnalysis.IsAutoIncrementChangeRequested {
+	if v.analysis.SourceAutoIncrement > 0 && !v.alterTableAnalysis.IsAutoIncrementChangeRequested {
 		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
 		if err != nil {
@@ -1539,7 +1539,7 @@ func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, on
 		// Apply ALTER TABLE AUTO_INCREMENT=?
 		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTableName(), ":auto_increment")
 		bindVars := map[string]*querypb.BindVariable{
-			"auto_increment": sqltypes.Uint64BindVariable(v.sourceAutoIncrement),
+			"auto_increment": sqltypes.Uint64BindVariable(v.analysis.SourceAutoIncrement),
 		}
 		bound, err := parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
@@ -1630,13 +1630,13 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	}
 
 	if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
-		v.addedUniqueKeys.Len(),
-		v.removedUniqueKeys.Len(),
-		strings.Join(sqlescape.EscapeIDs(v.removedUniqueKeys.Names()), ","),
-		strings.Join(sqlescape.EscapeIDs(v.removedForeignKeyNames), ","),
-		strings.Join(sqlescape.EscapeIDs(v.droppedNoDefaultColumns.Names()), ","),
-		strings.Join(sqlescape.EscapeIDs(v.expandedColumns.Names()), ","),
-		v.revertibleNotes,
+		v.analysis.AddedUniqueKeys.Len(),
+		v.analysis.RemovedUniqueKeys.Len(),
+		strings.Join(sqlescape.EscapeIDs(v.analysis.RemovedUniqueKeys.Names()), ","),
+		strings.Join(sqlescape.EscapeIDs(v.analysis.RemovedForeignKeyNames), ","),
+		strings.Join(sqlescape.EscapeIDs(v.analysis.DroppedNoDefaultColumns.Names()), ","),
+		strings.Join(sqlescape.EscapeIDs(v.analysis.ExpandedColumns.Names()), ","),
+		v.analysis.RevertibleNotes,
 	); err != nil {
 		return err
 	}
@@ -2977,7 +2977,7 @@ func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL 
 		// Write analysis:
 	}
 	if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
-		0, 0, "", strings.Join(sqlescape.EscapeIDs(removedForeignKeyNames), ","), "", "", "",
+		0, 0, "", strings.Join(sqlescape.EscapeIDs(removedForeignKeyNames), ","), "", "", nil,
 	); err != nil {
 		return err
 	}
@@ -4499,7 +4499,8 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 	addedUniqueKeys, removedUniqueKeys int, removedUniqueKeyNames string,
 	removedForeignKeyNames string,
 	droppedNoDefaultColumnNames string, expandedColumnNames string,
-	revertibleNotes string) error {
+	revertibleNotes []string) error {
+	notes := strings.Join(revertibleNotes, "\n")
 	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
 		sqltypes.Int64BindVariable(int64(removedUniqueKeys)),
@@ -4507,7 +4508,7 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 		sqltypes.StringBindVariable(removedForeignKeyNames),
 		sqltypes.StringBindVariable(droppedNoDefaultColumnNames),
 		sqltypes.StringBindVariable(expandedColumnNames),
-		sqltypes.StringBindVariable(revertibleNotes),
+		sqltypes.StringBindVariable(notes),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

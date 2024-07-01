@@ -106,27 +106,12 @@ type VRepl struct {
 
 	sourceCreateTableEntity *schemadiff.CreateTableEntity
 	targetCreateTableEntity *schemadiff.CreateTableEntity
+	analysis                *schemadiff.MigrationTablesAnalysis
 
 	analyzeTable bool
 
-	sourceSharedColumns     *schemadiff.ColumnDefinitionEntityList
-	targetSharedColumns     *schemadiff.ColumnDefinitionEntityList
-	droppedNoDefaultColumns *schemadiff.ColumnDefinitionEntityList
-	expandedColumns         *schemadiff.ColumnDefinitionEntityList
-	sharedColumnsMap        map[string]string
-	sourceAutoIncrement     uint64
-
-	chosenSourceUniqueKey *schemadiff.IndexDefinitionEntity
-	chosenTargetUniqueKey *schemadiff.IndexDefinitionEntity
-
-	addedUniqueKeys        *schemadiff.IndexDefinitionEntityList
-	removedUniqueKeys      *schemadiff.IndexDefinitionEntityList
-	removedForeignKeyNames []string
-
-	revertibleNotes string
-	filterQuery     string
-	intToEnumMap    map[string]bool
-	bls             *binlogdatapb.BinlogSource
+	filterQuery string
+	bls         *binlogdatapb.BinlogSource
 
 	alterTableAnalysis *schemadiff.AlterTableAnalysis
 
@@ -155,7 +140,6 @@ func NewVRepl(
 		dbName:             dbName,
 		alterTableAnalysis: schemadiff.OnlineDDLAlterTableAnalysis(alterQuery),
 		analyzeTable:       analyzeTable,
-		intToEnumMap:       map[string]bool{},
 		convertCharset:     map[string](*binlogdatapb.CharsetConversion){},
 	}
 	senv := schemadiff.NewEnv(v.env, v.env.CollationEnv().DefaultConnectionCharset())
@@ -256,18 +240,7 @@ func (v *VRepl) analyzeTables() (err error) {
 	if err != nil {
 		return err
 	}
-	v.sourceSharedColumns = analysis.SourceSharedColumns
-	v.targetSharedColumns = analysis.TargetSharedColumns
-	v.droppedNoDefaultColumns = analysis.DroppedNoDefaultColumns
-	v.expandedColumns = analysis.ExpandedColumns
-	v.sharedColumnsMap = analysis.SharedColumnsMap
-	v.chosenSourceUniqueKey = analysis.ChosenSourceUniqueKey
-	v.chosenTargetUniqueKey = analysis.ChosenTargetUniqueKey
-	v.addedUniqueKeys = analysis.AddedUniqueKeys
-	v.removedUniqueKeys = analysis.RemovedUniqueKeys
-	v.removedForeignKeyNames = analysis.RemovedForeignKeyNames
-	v.sourceAutoIncrement = analysis.SourceAutoIncrement
-	v.revertibleNotes = strings.Join(analysis.RevertibleNotes, "\n")
+	v.analysis = analysis
 
 	return nil
 }
@@ -289,17 +262,17 @@ func (v *VRepl) analyzeTableStatus(ctx context.Context, conn *dbconnpool.DBConne
 // generateFilterQuery creates a SELECT query used by vreplication as a filter. It SELECTs all
 // non-generated columns between source & target tables, and takes care of column renames.
 func (v *VRepl) generateFilterQuery() error {
-	if v.sourceSharedColumns.Len() == 0 {
+	if v.analysis.SourceSharedColumns.Len() == 0 {
 		return fmt.Errorf("empty column list")
 	}
 	var sb strings.Builder
 	sb.WriteString("select ")
 
-	for i, sourceCol := range v.sourceSharedColumns.Entities {
+	for i, sourceCol := range v.analysis.SourceSharedColumns.Entities {
 		name := sourceCol.Name()
-		targetName := v.sharedColumnsMap[name]
+		targetName := v.analysis.SharedColumnsMap[name]
 
-		targetCol := v.targetSharedColumns.GetColumn(targetName)
+		targetCol := v.analysis.TargetSharedColumns.GetColumn(targetName)
 		if targetCol == nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
 		}
@@ -311,7 +284,7 @@ func (v *VRepl) generateFilterQuery() error {
 		case sourceCol.HasEnumValues():
 			// Source is `enum` or `set`. We always take the textual represenation rather than the numeric one.
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
-		case v.intToEnumMap[name]:
+		case v.analysis.IntToEnumMap[name]:
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
 		case sourceCol.Type() == "json":
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
@@ -375,16 +348,16 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 	rule := &binlogdatapb.Rule{
 		Match:                        v.targetTableName(),
 		Filter:                       v.filterQuery,
-		SourceUniqueKeyColumns:       encodeColumns(v.chosenSourceUniqueKey.ColumnList.Names()),
-		TargetUniqueKeyColumns:       encodeColumns(v.chosenTargetUniqueKey.ColumnList.Names()),
-		SourceUniqueKeyTargetColumns: encodeColumns(schemadiff.MappedColumnNames(v.chosenSourceUniqueKey.ColumnList, v.sharedColumnsMap)),
-		ForceUniqueKey:               url.QueryEscape(v.chosenSourceUniqueKey.Name()),
+		SourceUniqueKeyColumns:       encodeColumns(v.analysis.ChosenSourceUniqueKey.ColumnList.Names()),
+		TargetUniqueKeyColumns:       encodeColumns(v.analysis.ChosenTargetUniqueKey.ColumnList.Names()),
+		SourceUniqueKeyTargetColumns: encodeColumns(schemadiff.MappedColumnNames(v.analysis.ChosenSourceUniqueKey.ColumnList, v.analysis.SharedColumnsMap)),
+		ForceUniqueKey:               url.QueryEscape(v.analysis.ChosenSourceUniqueKey.Name()),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset
 	}
-	if len(v.intToEnumMap) > 0 {
-		rule.ConvertIntToEnum = v.intToEnumMap
+	if len(v.analysis.IntToEnumMap) > 0 {
+		rule.ConvertIntToEnum = v.analysis.IntToEnumMap
 	}
 
 	bls.Filter.Rules = append(bls.Filter.Rules, rule)
