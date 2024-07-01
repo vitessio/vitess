@@ -52,6 +52,7 @@ const (
 
 const (
 	workflowActionCreate         = "Create"
+	workflowActionMirrorTraffic  = "Mirror"
 	workflowActionSwitchTraffic  = "SwitchTraffic"
 	workflowActionReverseTraffic = "ReverseTraffic"
 	workflowActionComplete       = "Complete"
@@ -70,6 +71,7 @@ type workflowExecOptions struct {
 	deferSecondaryKeys bool
 	atomicCopy         bool
 	shardSubset        string
+	percent            float32
 }
 
 var defaultWorkflowExecOptions = &workflowExecOptions{
@@ -222,6 +224,8 @@ func tstWorkflowExecVtctl(t *testing.T, cells, workflow, sourceKs, targetKs, tab
 			}
 			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
 		}
+	case workflowActionMirrorTraffic:
+		args = append(args, "--percent", strconv.FormatFloat(float64(options.percent), byte('f'), -1, 32))
 	default:
 		if options.shardSubset != "" {
 			args = append(args, "--shards", options.shardSubset)
