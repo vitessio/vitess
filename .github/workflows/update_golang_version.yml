@@ -15,7 +15,7 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-20.0, release-19.0, release-18.0, release-17.0 ]
+        branch: [ main, release-20.0, release-19.0, release-18.0 ]
     name: Update Golang Version
     runs-on: ubuntu-latest
     steps:
