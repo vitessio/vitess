@@ -157,10 +157,14 @@ func TestGetRevertUUID(t *testing.T) {
 	}{
 		{
 			statement: "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90",
-			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90",
+			isError:   true,
 		},
 		{
 			statement: "REVERT   4e5dcf80_354b_11eb_82cd_f875a4d24e90",
+			isError:   true,
+		},
+		{
+			statement: "revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'",
 			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90",
 		},
 		{
@@ -185,6 +189,9 @@ func TestGetRevertUUID(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.statement, func(t *testing.T) {
 			onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.statement, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "", parser)
+			if err != nil && ts.isError {
+				return
+			}
 			assert.NoError(t, err)
 			require.NotNil(t, onlineDDL)
 			uuid, err := onlineDDL.GetRevertUUID(parser)
