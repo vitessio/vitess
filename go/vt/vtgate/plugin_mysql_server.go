@@ -626,10 +626,15 @@ func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
 	if srv.sigChan != nil {
 		signal.Stop(srv.sigChan)
 	}
+	setListenerToNil := func() {
+		srv.tcpListener = nil
+		srv.unixListener = nil
+	}
 
 	if mysqlDrainOnTerm {
 		stopListener(srv.unixListener, false)
 		stopListener(srv.tcpListener, false)
+		setListenerToNil()
 		// We wait for connected clients to drain by themselves or to run into the onterm timeout
 		log.Infof("Starting drain loop, waiting for all clients to disconnect")
 		reported := time.Now()
@@ -645,6 +650,7 @@ func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
 
 	stopListener(srv.unixListener, true)
 	stopListener(srv.tcpListener, true)
+	setListenerToNil()
 	if busy := srv.vtgateHandle.busyConnections.Load(); busy > 0 {
 		log.Infof("Waiting for all client connections to be idle (%d active)...", busy)
 		start := time.Now()
@@ -671,7 +677,6 @@ func stopListener(listener *mysql.Listener, shutdown bool) {
 	} else {
 		listener.Close()
 	}
-	listener = nil
 }
 
 func (srv *mysqlServer) rollbackAtShutdown() {

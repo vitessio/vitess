@@ -21,7 +21,6 @@ import (
 	_ "embed"
 	"flag"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -176,23 +175,12 @@ func TestConnectionDrainOnTermTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	// Run a busy query that returns only after the onterm_timeout is reached, this should fail when we reach the timeout
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var err error
-		_, err = vtConn.ExecuteFetch("select sleep(40)", 1, false)
-		require.Error(t, err)
-	}()
-
-	// Sleeping 40 seconds here is already plenty of time, and we will for sure reach the onterm_timeout of 30s
-	time.Sleep(40 * time.Second)
+	_, err = vtConn.ExecuteFetch("select sleep(40)", 1, false)
+	require.Error(t, err)
 
 	// Running a query after we have reached the onterm_timeout should fail
 	_, err = vtConn2.ExecuteFetch("select id from t1", 1, false)
 	require.Error(t, err)
-
-	wg.Wait()
 
 	// By now vtgate will be shutdown becaused it reached its onterm_timeout, despite idle connections still being opened
 	require.True(t, clusterInstance.VtgateProcess.IsShutdown())
