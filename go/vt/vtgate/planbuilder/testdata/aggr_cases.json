@@ -1675,7 +1675,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(1) AS count(*)",
-        "GroupBy": "(0|2)",
+        "GroupBy": "(0|2) COLLATE latin1_swedish_ci",
         "ResultColumns": 2,
         "Inputs": [
           {
@@ -1686,7 +1686,7 @@
               "Sharded": true
             },
             "FieldQuery": "select lower(col1) as v, count(*), weight_string(lower(col1)) from authoritative where 1 != 1 group by lower(col1), weight_string(lower(col1))",
-            "OrderBy": "(0|2) ASC",
+            "OrderBy": "(0|2) ASC COLLATE latin1_swedish_ci",
             "Query": "select lower(col1) as v, count(*), weight_string(lower(col1)) from authoritative group by lower(col1), weight_string(lower(col1)) order by lower(col1) asc",
             "Table": "authoritative"
           }
