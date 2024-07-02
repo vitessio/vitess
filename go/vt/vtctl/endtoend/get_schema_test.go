@@ -173,7 +173,7 @@ func TestGetSchema(t *testing.T) {
 	val := events[0].Value
 
 	actual := &tabletmanagerdatapb.SchemaDefinition{}
-	err = json2.Unmarshal([]byte(val), actual)
+	err = json2.UnmarshalPB([]byte(val), actual)
 	require.NoError(t, err)
 
 	utils.MustMatch(t, sd, actual)
@@ -214,7 +214,7 @@ func TestGetSchema(t *testing.T) {
 	val = events[0].Value
 
 	actual = &tabletmanagerdatapb.SchemaDefinition{}
-	err = json2.Unmarshal([]byte(val), actual)
+	err = json2.UnmarshalPB([]byte(val), actual)
 	require.NoError(t, err)
 
 	utils.MustMatch(t, sd, actual)

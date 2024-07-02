@@ -173,7 +173,7 @@ func (vtctldclient *VtctldClientProcess) GetShardReplication(keyspace string, sh
 	}
 
 	var resp vtctldatapb.GetShardReplicationResponse
-	err = json2.Unmarshal([]byte(out), &resp)
+	err = json2.UnmarshalPB([]byte(out), &resp)
 	return resp.ShardReplicationByCell, err
 }
 
@@ -252,7 +252,7 @@ func (vtctldclient *VtctldClientProcess) GetKeyspace(keyspace string) (*vtctldat
 	}
 
 	var ks vtctldatapb.Keyspace
-	err = json2.Unmarshal([]byte(data), &ks)
+	err = json2.UnmarshalPB([]byte(data), &ks)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to parse keyspace output: %s", data)
 	}
@@ -267,7 +267,7 @@ func (vtctldclient *VtctldClientProcess) GetShard(keyspace string, shard string)
 	}
 
 	var si vtctldatapb.Shard
-	err = json2.Unmarshal([]byte(data), &si)
+	err = json2.UnmarshalPB([]byte(data), &si)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to parse shard output: %s", data)
 	}
@@ -282,7 +282,7 @@ func (vtctldclient *VtctldClientProcess) GetTablet(alias string) (*topodatapb.Ta
 	}
 
 	var tablet topodatapb.Tablet
-	err = json2.Unmarshal([]byte(data), &tablet)
+	err = json2.UnmarshalPB([]byte(data), &tablet)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to parse tablet output: %s", data)
 	}

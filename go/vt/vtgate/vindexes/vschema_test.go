@@ -2735,7 +2735,7 @@ func TestVSchemaPBJSON(t *testing.T) {
 	}
 `
 	var got vschemapb.Keyspace
-	if err := json2.Unmarshal([]byte(in), &got); err != nil {
+	if err := json2.UnmarshalPB([]byte(in), &got); err != nil {
 		t.Error(err)
 	}
 	want := vschemapb.Keyspace{

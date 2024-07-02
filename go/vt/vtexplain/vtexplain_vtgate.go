@@ -101,7 +101,7 @@ func (vte *VTExplain) buildTopology(ctx context.Context, ts *topo.Server, opts *
 	// handle string->enum conversion correctly.
 	var srvVSchema vschemapb.SrvVSchema
 	wrappedStr := fmt.Sprintf(`{"keyspaces": %s}`, vschemaStr)
-	err := json2.Unmarshal([]byte(wrappedStr), &srvVSchema)
+	err := json2.UnmarshalPB([]byte(wrappedStr), &srvVSchema)
 	if err != nil {
 		return err
 	}

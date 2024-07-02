@@ -37,7 +37,7 @@ func onceInit() {
 // loadSchemaForFuzzing is a helper to load *vindexes.VSchema
 // for fuzzing.
 func loadSchemaForFuzzing(f *fuzz.ConsumeFuzzer) (*vindexes.VSchema, error) {
-	//formal, err := vindexes.LoadFormal(filename)
+	// formal, err := vindexes.LoadFormal(filename)
 	formal, err := loadFormalForFuzzing(f)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func loadFormalForFuzzing(f *fuzz.ConsumeFuzzer) (*vschemapb.SrvVSchema, error) 
 	if err != nil {
 		return nil, err
 	}
-	err = json2.Unmarshal(data, formal)
+	err = json2.UnmarshalPB(data, formal)
 	if err != nil {
 		return nil, err
 	}

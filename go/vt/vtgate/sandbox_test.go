@@ -81,7 +81,7 @@ func getSandboxSrvVSchema() *vschemapb.SrvVSchema {
 	defer sandboxMu.Unlock()
 	for keyspace, sandbox := range ksToSandbox {
 		var vs vschemapb.Keyspace
-		if err := json2.Unmarshal([]byte(sandbox.VSchema), &vs); err != nil {
+		if err := json2.UnmarshalPB([]byte(sandbox.VSchema), &vs); err != nil {
 			panic(err)
 		}
 		result.Keyspaces[keyspace] = &vs
