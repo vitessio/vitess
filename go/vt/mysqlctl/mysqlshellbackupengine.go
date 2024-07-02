@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"os/exec"
 	"path"
@@ -12,29 +11,28 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
 	// location to store the mysql shell backup
-	mysqlShellBackupLocation = flag.String("mysql_shell_backup_location", "", "location where the backup will be stored")
-	mysqlShellFlags          = flag.String("mysql_shell_flags", "--defaults-file=/dev/null --js -h localhost", "execution flags to pass to mysqlsh binary")
-	// flags to pass through to backup phase
-	mysqlShellDumpFlags = flag.String("mysql_shell_dump_flags",
-		`{"threads": 2}`,
-		"flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST")
-	// flags to pass through to extract phase of restore
-	mysqlShellLoadFlags = flag.String("mysql_shell_load_flags",
-		`{"threads": 2, "updateGtidSet": "replace", "skipBinlog": true, "progressFile": ""}`,
-		"flags to pass to mysql shell load utility. This should be a JSON string")
-	// additional flags
-	mysqlShellBackupShouldDrain = flag.Bool("mysql_shell_should_drain",
-		false, "decide if we should drain while taking a backup or continue to serving traffic")
-	mysqlShellSpeedUpRestore = flag.Bool("mysql_shell_speedup_restore",
-		false, "speed up restore by disabling redo logging and double write buffer during the restore process")
+	mysqlShellBackupLocation = ""
+	// flags passed to the mysql shell utility, used both on dump/restore
+	mysqlShellFlags = "--defaults-file=/dev/null --js -h localhost"
+	// flags passed to the Dump command, as a JSON string
+	mysqlShellDumpFlags = `{"threads": 2}`
+	// flags passed to the Load command, as a JSON string
+	mysqlShellLoadFlags = `{"threads": 4, "updateGtidSet": "replace", "skipBinlog": true, "progressFile": ""}`
+	// drain a tablet when taking a backup
+	mysqlShellBackupShouldDrain = false
+	// disable redo logging and double write buffer
+	mysqlShellSpeedUpRestore = false
 
 	MySQLShellPreCheckError = errors.New("MySQLShellPreCheckError")
 )
@@ -50,6 +48,21 @@ type MySQLShellBackupManifest struct {
 	BackupLocation string
 	// Params are the parameters that backup was created with
 	Params string
+}
+
+func init() {
+	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver", "vtctldclient"} {
+		servenv.OnParseFor(cmd, registerMysqlShellBackupEngineFlags)
+	}
+}
+
+func registerMysqlShellBackupEngineFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&mysqlShellBackupLocation, "mysql_shell_backup_location", mysqlShellBackupLocation, "location where the backup will be stored")
+	fs.StringVar(&mysqlShellFlags, "mysql_shell_flags", mysqlShellFlags, "execution flags to pass to mysqlsh binary to be used during dump/load")
+	fs.StringVar(&mysqlShellDumpFlags, "mysql_shell_dump_flags", mysqlShellDumpFlags, "flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST")
+	fs.StringVar(&mysqlShellLoadFlags, "mysql_shell_load_flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string")
+	fs.BoolVar(&mysqlShellBackupShouldDrain, "mysql_shell_should_drain", mysqlShellBackupShouldDrain, "decide if we should drain while taking a backup or continue to serving traffic")
+	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql_shell_speedup_restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer during the restore process")
 }
 
 // MySQLShellBackupEngine encapsulates the logic to implement the restoration
@@ -71,18 +84,18 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	}
 
 	start := time.Now().UTC()
-	location := path.Join(*mysqlShellBackupLocation, params.Keyspace, params.Shard, start.Format("2006-01-02_15-04-05"))
+	location := path.Join(mysqlShellBackupLocation, params.Keyspace, params.Shard, start.Format("2006-01-02_15-04-05"))
 
 	args := []string{}
 
-	if *mysqlShellFlags != "" {
-		args = append(args, strings.Fields(*mysqlShellFlags)...)
+	if mysqlShellFlags != "" {
+		args = append(args, strings.Fields(mysqlShellFlags)...)
 	}
 
 	args = append(args, "-e", fmt.Sprintf("util.dumpSchemas([\"vt_%s\"], %q, %s)",
 		params.Keyspace,
 		location,
-		*mysqlShellDumpFlags,
+		mysqlShellDumpFlags,
 	))
 
 	cmd := exec.CommandContext(ctx, mysqlShellBackupBinaryName, args...)
@@ -135,7 +148,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 
 		// mysql shell backup specific fields
 		BackupLocation: location,
-		Params:         *mysqlShellLoadFlags,
+		Params:         mysqlShellLoadFlags,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -200,7 +213,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, vterrors.Wrap(err, "unable to set local_infile=1")
 	}
 
-	if *mysqlShellSpeedUpRestore {
+	if mysqlShellSpeedUpRestore {
 		// disable redo logging and double write buffer if we are configured to do so.
 		err = params.Mysqld.ExecuteSuperQueryList(ctx, []string{"ALTER INSTANCE DISABLE INNODB REDO_LOG"})
 		if err != nil {
@@ -220,13 +233,13 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 
 	args := []string{}
 
-	if *mysqlShellFlags != "" {
-		args = append(args, strings.Fields(*mysqlShellFlags)...)
+	if mysqlShellFlags != "" {
+		args = append(args, strings.Fields(mysqlShellFlags)...)
 	}
 
 	args = append(args, "-e", fmt.Sprintf("util.loadDump(%q, %s)",
 		bm.BackupLocation,
-		*mysqlShellLoadFlags,
+		mysqlShellLoadFlags,
 	))
 
 	cmd := exec.CommandContext(ctx, "mysqlsh", args...)
@@ -285,15 +298,15 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 // ShouldDrainForBackup satisfies the BackupEngine interface
 // MySQL Shell backups can be taken while MySQL is running so we can control this via a flag.
 func (be *MySQLShellBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool {
-	return *mysqlShellBackupShouldDrain
+	return mysqlShellBackupShouldDrain
 }
 
 func (be *MySQLShellBackupEngine) backupPreCheck() error {
-	if *mysqlShellBackupLocation == "" {
+	if mysqlShellBackupLocation == "" {
 		return fmt.Errorf("%w: no backup location set via --mysql_shell_location", MySQLShellPreCheckError)
 	}
 
-	if *mysqlShellFlags == "" || !strings.Contains(*mysqlShellFlags, "--js") {
+	if mysqlShellFlags == "" || !strings.Contains(mysqlShellFlags, "--js") {
 		return fmt.Errorf("%w: at least the --js flag is required", MySQLShellPreCheckError)
 	}
 
@@ -301,12 +314,12 @@ func (be *MySQLShellBackupEngine) backupPreCheck() error {
 }
 
 func (be *MySQLShellBackupEngine) restorePreCheck() error {
-	if *mysqlShellFlags == "" {
+	if mysqlShellFlags == "" {
 		return fmt.Errorf("%w: at least the --js flag is required", MySQLShellPreCheckError)
 	}
 
 	loadFlags := map[string]interface{}{}
-	err := json.Unmarshal([]byte(*mysqlShellLoadFlags), &loadFlags)
+	err := json.Unmarshal([]byte(mysqlShellLoadFlags), &loadFlags)
 	if err != nil {
 		return fmt.Errorf("%w: unable to parse JSON of load flags", MySQLShellPreCheckError)
 	}
