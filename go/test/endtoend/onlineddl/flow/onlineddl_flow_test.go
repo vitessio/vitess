@@ -339,7 +339,7 @@ func TestSchemaChange(t *testing.T) {
 			})
 			isComplete := false
 			t.Run("optimistic wait for migration completion", func(t *testing.T) {
-				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusComplete)
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 				isComplete = (status == schema.OnlineDDLStatusComplete)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			})
@@ -348,7 +348,7 @@ func TestSchemaChange(t *testing.T) {
 					onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, uuid, true)
 				})
 				t.Run("another optimistic wait for migration completion", func(t *testing.T) {
-					status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusComplete)
+					status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 					isComplete = (status == schema.OnlineDDLStatusComplete)
 					fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				})
