@@ -318,33 +318,15 @@ func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 }
 
 func (aj *ApplyJoin) planOffsetFor(ctx *plancontext.PlanningContext, col applyJoinColumn) {
-	if col.DTColName != nil {
-		// If DTColName is set, then we already pushed the parts of the expression down while planning.
-		// We need to use this name and ask the correct side of the join for it. Nothing else is required.
-		if col.IsPureLeft() {
-			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.DTColName))
-			aj.addOffset(ToLeftOffset(offset))
-		} else {
-			for _, lhsExpr := range col.LHSExprs {
-				offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
-				aj.Vars[lhsExpr.Name] = offset
-			}
-			offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.DTColName))
-			aj.addOffset(ToRightOffset(offset))
-		}
-		return
-	}
-	for _, lhsExpr := range col.LHSExprs {
-		offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
-		if col.RHSExpr == nil {
-			// if we don't have an RHS expr, it means that this is a pure LHS expression
-			aj.addOffset(ToLeftOffset(offset))
-		} else {
+	if col.IsPureLeft() {
+		offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.GetPureLeftExpr()))
+		aj.addOffset(ToLeftOffset(offset))
+	} else {
+		for _, lhsExpr := range col.LHSExprs {
+			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
 			aj.Vars[lhsExpr.Name] = offset
 		}
-	}
-	if col.RHSExpr != nil {
-		offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.RHSExpr))
+		offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.GetRHSExpr()))
 		aj.addOffset(ToRightOffset(offset))
 	}
 }
@@ -474,6 +456,20 @@ func (jc applyJoinColumn) IsPureRight() bool {
 
 func (jc applyJoinColumn) IsMixedLeftAndRight() bool {
 	return len(jc.LHSExprs) > 0 && jc.RHSExpr != nil
+}
+
+func (jc applyJoinColumn) GetPureLeftExpr() sqlparser.Expr {
+	if jc.DTColName != nil {
+		return jc.DTColName
+	}
+	return jc.LHSExprs[0].Expr
+}
+
+func (jc applyJoinColumn) GetRHSExpr() sqlparser.Expr {
+	if jc.DTColName != nil {
+		return jc.DTColName
+	}
+	return jc.RHSExpr
 }
 
 func (bve BindVarExpr) String() string {
