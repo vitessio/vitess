@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+  http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,6 +30,35 @@ type testQuery struct {
 	tableName string
 	cols      []string
 	intTyp    []bool
+}
+
+var deleteUser, deleteUserExtra = "delete from user", "delete from user_extra"
+
+func generateInserts(userSize int, userExtraSize int) (string, string) {
+	var userInserts []string
+	var userExtraInserts []string
+
+	// Generate user table inserts
+	for i := 1; i <= userSize; i++ {
+		id := i
+		notShardingKey := i
+		typeValue := i % 5            // Just an example for type values
+		teamID := i%userExtraSize + 1 // To ensure team_id references user_extra id
+		userInserts = append(userInserts, fmt.Sprintf("(%d, %d, %d, %d)", id, notShardingKey, typeValue, teamID))
+	}
+
+	// Generate user_extra table inserts
+	for i := 1; i <= userExtraSize; i++ {
+		id := i
+		notShardingKey := i
+		colValue := fmt.Sprintf("col_value_%d", i)
+		userExtraInserts = append(userExtraInserts, fmt.Sprintf("(%d, %d, '%s')", id, notShardingKey, colValue))
+	}
+
+	userInsertStatement := fmt.Sprintf("INSERT INTO user (id, not_sharding_key, type, team_id) VALUES %s;", strings.Join(userInserts, ", "))
+	userExtraInsertStatement := fmt.Sprintf("INSERT INTO user_extra (id, not_sharding_key, col) VALUES %s;", strings.Join(userExtraInserts, ", "))
+
+	return userInsertStatement, userExtraInsertStatement
 }
 
 func (tq *testQuery) getInsertQuery(rows int) string {
@@ -144,5 +173,27 @@ func BenchmarkShardedTblDeleteIn(b *testing.B) {
 				_ = utils.Exec(b, conn, delStmt)
 			}
 		})
+	}
+}
+
+func BenchmarkShardedAggrPushDown(b *testing.B) {
+	conn, closer := start(b)
+	defer closer()
+
+	sizes := []int{100, 500, 1000}
+
+	for _, user := range sizes {
+		for _, userExtra := range sizes {
+			insert1, insert2 := generateInserts(user, userExtra)
+			_ = utils.Exec(b, conn, insert1)
+			_ = utils.Exec(b, conn, insert2)
+			b.Run(fmt.Sprintf("user-%d-user_extra-%d", user, userExtra), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					_ = utils.Exec(b, conn, "select sum(user.type) from user join user_extra on user.team_id = user_extra.id group by user_extra.id order by user_extra.id")
+				}
+			})
+			_ = utils.Exec(b, conn, deleteUser)
+			_ = utils.Exec(b, conn, deleteUserExtra)
+		}
 	}
 }

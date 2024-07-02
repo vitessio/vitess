@@ -592,14 +592,23 @@ ordering:
 	return true
 }
 
+// pushOrderingUnderAggr pushes the ORDER BY clause under the aggregation if possible,
+// to optimize the query plan by aligning the GROUP BY and ORDER BY clauses and
+// potentially removing redundant ORDER BY clauses.
 func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (Operator, *ApplyResult) {
-	// If Aggregator is a derived table, then we should rewrite the ordering before pushing.
+	// Avoid pushing down too early to allow for aggregation pushdown to MySQL
+	if !reachedPhase(ctx, delegateAggregation) {
+		return order, NoRewrite
+	}
+
+	// Rewrite ORDER BY if Aggregator is a derived table
 	if aggregator.isDerived() {
 		for idx, orderExpr := range order.Order {
 			ti, err := ctx.SemTable.TableInfoFor(aggregator.DT.TableID)
 			if err != nil {
 				panic(err)
 			}
+			// Rewrite expressions in ORDER BY to match derived table columns
 			newOrderExpr := orderExpr.Map(func(expr sqlparser.Expr) sqlparser.Expr {
 				return semantics.RewriteDerivedTableExpression(expr, ti)
 			})
@@ -607,9 +616,7 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 		}
 	}
 
-	// Step 1: Align the GROUP BY and ORDER BY.
-	//         Reorder the GROUP BY columns to match the ORDER BY columns.
-	//         Since the GB clause is a set, we can reorder these columns freely.
+	// Align GROUP BY with ORDER BY by reordering GROUP BY columns to match ORDER BY
 	var newGrouping []GroupBy
 	used := make([]bool, len(aggregator.Grouping))
 	for _, orderExpr := range order.Order {
@@ -621,11 +628,8 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 		}
 	}
 
-	// Step 2: Add any missing columns from the ORDER BY.
-	//         The ORDER BY column is not a set, but we can add more elements
-	//         to the end without changing the semantics of the query.
+	// Add any missing GROUP BY columns to ORDER BY
 	if len(newGrouping) != len(aggregator.Grouping) {
-		// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
 		for i, added := range used {
 			if !added {
 				groupBy := aggregator.Grouping[i]
@@ -638,7 +642,7 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 	aggregator.Grouping = newGrouping
 	aggrSource, isOrdering := aggregator.Source.(*Ordering)
 	if isOrdering {
-		// Transform the query plan tree:
+		// Optimize query plan by removing redundant ORDER BY
 		// From:   Ordering(1)      To: Aggregation
 		//               |                 |
 		//         Aggregation          Ordering(1)
@@ -646,11 +650,8 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 		//         Ordering(2)          <Inputs>
 		//               |
 		//           <Inputs>
-		//
-		// Remove Ordering(2) from the plan tree, as it's redundant
-		// after pushing down the higher ordering.
 		order.Source = aggrSource.Source
-		aggrSource.Source = nil // removing from plan tree
+		aggrSource.Source = nil
 		aggregator.Source = order
 		return aggregator, Rewrote("push ordering under aggregation, removing extra ordering")
 	}

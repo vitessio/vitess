@@ -284,7 +284,11 @@ func pushProjectionInApplyJoin(
 	src.LHS = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.DT)
 	src.RHS = createProjectionWithTheseColumns(ctx, src.RHS, rhs, p.DT)
 
-	return src, Rewrote("split projection to either side of join")
+	message := "split projection to either side of join"
+	if p.DT != nil {
+		message += " " + p.DT.Alias
+	}
+	return src, Rewrote(message)
 }
 
 // splitProjectionAcrossJoin creates JoinPredicates for all projections,
@@ -396,14 +400,14 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 	lhsIDs := TableID(src.LHS)
 	rhsIDs := TableID(src.RHS)
-	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs, rhs)
+	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs)
 }
 
 func rewriteColumnsForJoin(
 	ctx *plancontext.PlanningContext,
 	columns []applyJoinColumn,
 	lhsIDs, rhsIDs semantics.TableSet,
-	lhs, rhs *projector,
+	lhs *projector,
 ) {
 	for colIdx, column := range columns {
 		for lhsIdx, bve := range column.LHSExprs {

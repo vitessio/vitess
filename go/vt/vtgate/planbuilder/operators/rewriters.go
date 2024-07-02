@@ -232,6 +232,7 @@ func bottomUp(
 
 	newOp, treeIdentity := rewriter(root, rootID, isRoot)
 	anythingChanged = anythingChanged.Merge(treeIdentity)
+
 	return newOp, anythingChanged
 }
 
