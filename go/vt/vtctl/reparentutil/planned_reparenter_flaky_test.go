@@ -1081,7 +1081,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 				require.NoError(t, err)
 				tt.opts.durability = durability
 			}
-			isNoop, err := pr.preflightChecks(ctx, tt.ev, tt.keyspace, tt.shard, tt.tabletMap, tt.opts)
+			isNoop, err := pr.preflightChecks(ctx, tt.ev, tt.tabletMap, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedIsNoop, isNoop, "preflightChecks returned wrong isNoop signal")
@@ -1109,7 +1109,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		shard          string
 		currentPrimary *topo.TabletInfo
 		primaryElect   *topodatapb.Tablet
-		tabletMap      map[string]*topo.TabletInfo
 		opts           PlannedReparentOptions
 
 		expectedEvent *events.Reparent
@@ -1171,7 +1170,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: false,
 		},
@@ -1204,7 +1202,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 		},
@@ -1240,7 +1237,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 		},
@@ -1279,7 +1275,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts: PlannedReparentOptions{
 				WaitReplicasTimeout: time.Millisecond * 10,
 			},
@@ -1318,7 +1313,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 		},
@@ -1362,7 +1356,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 		},
@@ -1418,7 +1411,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 		},
@@ -1477,7 +1469,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts: PlannedReparentOptions{
 				WaitReplicasTimeout: time.Millisecond * 10,
 			},
@@ -1535,7 +1526,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 		},
@@ -1594,7 +1584,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 			extraAssertions: func(t *testing.T, err error) {
@@ -1656,7 +1645,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			tabletMap: map[string]*topo.TabletInfo{},
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 			extraAssertions: func(t *testing.T, err error) {
@@ -1713,7 +1701,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 				tt.shard,
 				tt.currentPrimary,
 				tt.primaryElect,
-				tt.tabletMap,
 				tt.opts,
 			)
 
@@ -2395,9 +2382,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
-			durability, err := GetDurabilityPolicy("none")
-			require.NoError(t, err)
-			err = pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap, PlannedReparentOptions{durability: durability})
+			err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap)
 			if tt.shouldErr {
 				assert.Error(t, err)
 
