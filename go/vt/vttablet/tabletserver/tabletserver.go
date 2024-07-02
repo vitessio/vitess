@@ -645,11 +645,7 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 		"Prepare", "prepare", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.Prepare(transactionID, dtid)
 		},
 	)
@@ -662,11 +658,7 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 		"CommitPrepared", "commit_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.CommitPrepared(dtid)
 		},
 	)
@@ -679,11 +671,7 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 		"RollbackPrepared", "rollback_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.RollbackPrepared(dtid, originalID)
 		},
 	)
@@ -696,11 +684,7 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 		"CreateTransaction", "create_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.CreateTransaction(dtid, participants)
 		},
 	)
@@ -714,11 +698,7 @@ func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target
 		"StartCommit", "start_commit", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.StartCommit(transactionID, dtid)
 		},
 	)
@@ -732,11 +712,7 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 		"SetRollback", "set_rollback", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.SetRollback(dtid, transactionID)
 		},
 	)
@@ -750,11 +726,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 		"ConcludeTransaction", "conclude_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.ConcludeTransaction(dtid)
 		},
 	)
@@ -767,11 +739,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 		"ReadTransaction", "read_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			metadata, err = txe.ReadTransaction(dtid)
 			return err
 		},
@@ -1778,11 +1746,7 @@ func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
 func (tsv *TabletServer) registerTwopczHandler() {
 	tsv.exporter.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
-		txe := &TxExecutor{
-			ctx:      ctx,
-			logStats: tabletenv.NewLogStats(ctx, "twopcz"),
-			te:       tsv.te,
-		}
+		txe := NewDTExecutor(ctx, tsv.te, tabletenv.NewLogStats(ctx, "twopcz"))
 		twopczHandler(txe, w, r)
 	})
 }
