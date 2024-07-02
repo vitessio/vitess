@@ -61,18 +61,6 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 	}
 
-	isGeneratedColumn := func(col *sqlparser.ColumnDefinition) (bool, sqlparser.ColumnStorage) {
-		if col == nil {
-			return false, 0
-		}
-		if col.Type.Options == nil {
-			return false, 0
-		}
-		if col.Type.Options.As == nil {
-			return false, 0
-		}
-		return true, col.Type.Options.Storage
-	}
 	colStringStrippedDown := func(col *sqlparser.ColumnDefinition, stripDefault bool, stripEnum bool) string {
 		strippedCol := sqlparser.Clone(col)
 		if stripDefault {
@@ -114,7 +102,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			return false, nil
 		}
 		for _, column := range opt.Columns {
-			if isGenerated, storage := isGeneratedColumn(column); isGenerated {
+			if isGenerated, storage := IsGeneratedColumn(column); isGenerated {
 				if storage == sqlparser.StoredStorage {
 					// Adding a generated "STORED" column is unsupported
 					return false, nil
@@ -149,7 +137,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			// not supported if the column is part of an index
 			return false, nil
 		}
-		if isGenerated, _ := isGeneratedColumn(col); isGenerated {
+		if isGenerated, _ := IsGeneratedColumn(col); isGenerated {
 			// supported by all 8.0 versions
 			// Note: according to the docs dropping a STORED generated column is not INSTANT-able,
 			// but in practice this is supported. This is why we don't test for STORED here, like

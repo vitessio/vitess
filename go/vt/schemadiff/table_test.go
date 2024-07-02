@@ -2781,9 +2781,10 @@ func TestValidate(t *testing.T) {
 
 func TestNormalize(t *testing.T) {
 	tt := []struct {
-		name string
-		from string
-		to   string
+		name    string
+		from    string
+		to      string
+		autoinc uint64
 	}{
 		{
 			name: "basic table",
@@ -2794,6 +2795,17 @@ func TestNormalize(t *testing.T) {
 			name: "basic table, primary key",
 			from: "create table t (id int primary key, i int)",
 			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "basic table, auto increment",
+			from: "create table t (id int auto_increment primary key, i int)",
+			to:   "CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name:    "basic table, auto increment val",
+			from:    "create table t (id int auto_increment primary key, i int) auto_increment = 123",
+			to:      "CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n) AUTO_INCREMENT 123",
+			autoinc: 123,
 		},
 		{
 			name: "removes default null",
@@ -3067,6 +3079,10 @@ func TestNormalize(t *testing.T) {
 			from, err := NewCreateTableEntity(env, fromCreateTable)
 			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
+
+			autoinc, err := from.AutoIncrementValue()
+			require.NoError(t, err)
+			assert.EqualValues(t, ts.autoinc, autoinc)
 		})
 	}
 }
