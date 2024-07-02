@@ -5324,8 +5324,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra where 1 != 1 group by :user_id + user_extra.id",
-                        "Query": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra group by :user_id + user_extra.id",
+                        "FieldQuery": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra where 1 != 1 group by :user_id + user_extra.id, weight_string(:user_id + user_extra.id)",
+                        "Query": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra group by :user_id + user_extra.id, weight_string(:user_id + user_extra.id)",
                         "Table": "user_extra"
                       }
                     ]

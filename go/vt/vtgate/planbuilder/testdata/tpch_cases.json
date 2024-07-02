@@ -1119,7 +1119,10 @@
                             "Variant": "Join",
                             "JoinColumnIndexes": "R:0,L:0,L:4,L:6,L:7",
                             "JoinVars": {
+                              "l_discount": 2,
+                              "l_extendedprice": 1,
                               "l_partkey": 5,
+                              "l_quantity": 3,
                               "l_suppkey": 4
                             },
                             "TableName": "orders_lineitem_part_partsupp",

@@ -203,14 +203,10 @@ func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col applyJoinColumn) {
-	defer func() {
-		col.Original = orig.Expr
-	}()
 	lhs := TableID(aj.LHS)
 	rhs := TableID(aj.RHS)
 	both := lhs.Merge(rhs)
 	deps := ctx.SemTable.RecursiveDeps(e)
-	col.GroupBy = addToGroupBy
 
 	switch {
 	case deps.IsSolvedBy(lhs):
@@ -222,6 +218,9 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("expression depends on tables outside this join: %s", sqlparser.String(e))))
 	}
+
+	col.GroupBy = addToGroupBy
+	col.Original = orig.Expr
 
 	return
 }
