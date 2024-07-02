@@ -14,29 +14,29 @@
  * limitations under the License.
  */
 .headingMeta {
-    display: flex;
+  display: flex;
 }
 
 .headingMeta span {
+  display: inline-block;
+  line-height: 2;
+
+  &::after {
+    color: var(--colorScaffoldingHighlight);
+    content: "/";
     display: inline-block;
-    line-height: 2;
+    margin: 0 1.2rem;
+  }
 
-    &::after {
-        color: var(--colorScaffoldingHighlight);
-        content: '/';
-        display: inline-block;
-        margin: 0 1.2rem;
-    }
-
-    &:last-child::after {
-        content: none;
-    }
+  &:last-child::after {
+    content: none;
+  }
 }
 
 .headingMetaContainer div {
-    width: '100%';
-    display: 'flex';
-    justifyContent: 'space-between';
-    paddingTop: '0px';
-    paddingBottom: '0px';
- }
+  width: "100%";
+  display: "flex";
+  justifycontent: "space-between";
+  paddingtop: "0px";
+  paddingbottom: "0px";
+}
