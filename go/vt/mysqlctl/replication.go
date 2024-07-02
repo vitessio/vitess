@@ -421,9 +421,9 @@ func (mysqld *Mysqld) ReplicationStatus(ctx context.Context) (replication.Replic
 	if err != nil {
 		return replication.ReplicationStatus{}, err
 	}
-	defer conn.Recycle()
 
-	return conn.Conn.ShowReplicationStatus()
+	defer conn.Recycle()
+	return conn.Conn.ShowReplicationStatusWithContext(ctx)
 }
 
 // PrimaryStatus returns the primary replication statuses
