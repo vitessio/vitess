@@ -22,7 +22,7 @@ interface Props {
     state?: PipState;
 }
 
-export type PipState = 'primary' | 'success' | 'warning' | 'danger' | null | undefined;
+export type PipState = 'primary' | 'success' | 'warning' | 'danger' | 'throttled' | null | undefined;
 
 export const Pip = ({ className, state }: Props) => {
     return <div className={cx(className, style.pip, state && style[state])} />;

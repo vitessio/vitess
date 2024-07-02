@@ -35,6 +35,7 @@ import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { UseQueryResult } from 'react-query';
+import { vttime } from '../../proto/vtadmin';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -67,7 +68,6 @@ export const Workflows = () => {
                 row.clusterID && row.keyspace && row.name
                     ? `/workflow/${row.clusterID}/${row.keyspace}/${row.name}`
                     : null;
-
             return (
                 <tr key={idx}>
                     <DataCell>
@@ -112,13 +112,53 @@ export const Workflows = () => {
                             {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
                             {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
                                 if (streamState in row.streams) {
+                                    var numThrottled = 0;
+                                    var throttledApp = '';
+                                    var throttledFrom: vttime.ITime | null | undefined;
                                     const streamCount = row.streams[streamState].length;
+                                    var streamDescription: string;
+                                    switch (streamState) {
+                                        case 'Error':
+                                            streamDescription = 'failed';
+                                            break;
+                                        case 'Running':
+                                            const running = row.streams['Running'];
+                                            if (running !== undefined && running !== null) {
+                                                for (const stream of running) {
+                                                    if (
+                                                        stream?.throttler_status?.component_throttled !== null &&
+                                                        stream?.throttler_status?.component_throttled !== undefined
+                                                    ) {
+                                                        numThrottled++;
+                                                        throttledApp = stream?.throttler_status?.component_throttled;
+                                                        throttledFrom = stream?.throttler_status?.time_throttled;
+                                                    }
+                                                }
+                                            }
+                                            if (numThrottled > 0) {
+                                                streamDescription = '';
+                                                streamState = 'Throttled';
+                                            } else {
+                                                streamDescription = streamState;
+                                            }
+                                            break;
+                                        default:
+                                            streamDescription = streamState.toLocaleLowerCase();
+                                    }
                                     const tooltip = [
                                         streamCount,
-                                        streamState === 'Error' ? 'failed' : streamState.toLocaleLowerCase(),
+                                        streamDescription,
                                         streamCount === 1 ? 'stream' : 'streams',
+                                        numThrottled > 0
+                                            ? '(' +
+                                              numThrottled +
+                                              ' throttled by ' +
+                                              throttledApp +
+                                              ' ' +
+                                              formatRelativeTime(throttledFrom?.seconds) +
+                                              ')'
+                                            : '',
                                     ].join(' ');
-
                                     return (
                                         <Tooltip key={streamState} text={tooltip}>
                                             <span className={style.stream}>
