@@ -320,3 +320,21 @@ func (ctx *PlanningContext) SQLTypeForExpr(e sqlparser.Expr) sqltypes.Type {
 	}
 	return t.Type()
 }
+
+func (ctx *PlanningContext) NeedsWeightString(e sqlparser.Expr) bool {
+	switch e := e.(type) {
+	case *sqlparser.WeightStringFuncExpr, *sqlparser.Literal:
+		return false
+	default:
+		typ, found := ctx.TypeForExpr(e)
+		if !found {
+			return true
+		}
+
+		if !sqltypes.IsText(typ.Type()) {
+			return false
+		}
+
+		return !ctx.VSchema.Environment().CollationEnv().IsSupported(typ.Collation())
+	}
+}
