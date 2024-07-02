@@ -50,7 +50,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for idx, col := range columns {
 		e := col.Expr
 		var wsCol *int
-		if ctx.SemTable.NeedsWeightString(e) {
+		if ctx.NeedsWeightString(e) {
 			offset := d.Source.AddWSColumn(ctx, idx, false)
 			wsCol = &offset
 		}

@@ -1675,8 +1675,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(1) AS count(*)",
-        "GroupBy": "(0|2)",
-        "ResultColumns": 2,
+        "GroupBy": "0 COLLATE latin1_swedish_ci",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1685,9 +1684,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select lower(col1) as v, count(*), weight_string(lower(col1)) from authoritative where 1 != 1 group by lower(col1), weight_string(lower(col1))",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select lower(col1) as v, count(*), weight_string(lower(col1)) from authoritative group by lower(col1), weight_string(lower(col1)) order by lower(col1) asc",
+            "FieldQuery": "select lower(col1) as v, count(*) from authoritative where 1 != 1 group by lower(col1)",
+            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+            "Query": "select lower(col1) as v, count(*) from authoritative group by lower(col1) order by lower(col1) asc",
             "Table": "authoritative"
           }
         ]
@@ -1707,8 +1706,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(1) AS count(*)",
-        "GroupBy": "(0|2)",
-        "ResultColumns": 2,
+        "GroupBy": "0",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1717,9 +1715,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select char_length(col1) as a, count(*), weight_string(char_length(col1)) from authoritative where 1 != 1 group by char_length(col1), weight_string(char_length(col1))",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select char_length(col1) as a, count(*), weight_string(char_length(col1)) from authoritative group by char_length(col1), weight_string(char_length(col1)) order by char_length(authoritative.col1) asc",
+            "FieldQuery": "select char_length(col1) as a, count(*) from authoritative where 1 != 1 group by char_length(col1)",
+            "OrderBy": "0 ASC",
+            "Query": "select char_length(col1) as a, count(*) from authoritative group by char_length(col1) order by char_length(authoritative.col1) asc",
             "Table": "authoritative"
           }
         ]
@@ -4085,13 +4083,13 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "(2|3) ASC",
+        "OrderBy": "2 ASC",
         "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*), any_value(2) AS col + 1, any_value(3)",
+            "Aggregates": "sum_count_star(1) AS count(*), any_value(2) AS col + 1",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -4101,9 +4099,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select col, count(*), col + 1, weight_string(col + 1) from `user` where 1 != 1 group by col",
+                "FieldQuery": "select col, count(*), col + 1 from `user` where 1 != 1 group by col",
                 "OrderBy": "0 ASC",
-                "Query": "select col, count(*), col + 1, weight_string(col + 1) from `user` group by col order by col asc",
+                "Query": "select col, count(*), col + 1 from `user` group by col order by col asc",
                 "Table": "`user`"
               }
             ]

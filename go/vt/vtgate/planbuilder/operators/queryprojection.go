@@ -88,7 +88,7 @@ type (
 )
 
 func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
-	return aggr.OpCode.NeedsComparableValues() && ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
+	return aggr.OpCode.NeedsComparableValues() && ctx.NeedsWeightString(aggr.Func.GetArg())
 }
 
 func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.Type {

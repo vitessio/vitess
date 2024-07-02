@@ -280,11 +280,6 @@
     "plan": "VT12001: unsupported: unmergable subquery can not be inside complex expression"
   },
   {
-    "comment": "this query needs better type information to be able to use the hash join",
-    "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
-    "plan": "VT12001: unsupported: missing type information for [u.id, ue.user_id]"
-  },
-  {
     "comment": "multi-shard union",
     "query": "select 1 from music union (select id from user union all select name from unsharded)",
     "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"

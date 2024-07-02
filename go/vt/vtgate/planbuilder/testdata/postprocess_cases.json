@@ -2030,13 +2030,13 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "(1|2) ASC",
+        "OrderBy": "1 ASC",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0,R:1",
+            "JoinColumnIndexes": "L:0,R:0",
             "JoinVars": {
               "user_col": 1
             },
@@ -2060,8 +2060,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select coalesce(:user_col /* INT16 */, user_extra.col), weight_string(coalesce(:user_col /* INT16 */, user_extra.col)) from user_extra where 1 != 1",
-                "Query": "select coalesce(:user_col /* INT16 */, user_extra.col), weight_string(coalesce(:user_col /* INT16 */, user_extra.col)) from user_extra",
+                "FieldQuery": "select coalesce(:user_col /* INT16 */, user_extra.col) from user_extra where 1 != 1",
+                "Query": "select coalesce(:user_col /* INT16 */, user_extra.col) from user_extra",
                 "Table": "user_extra"
               }
             ]
