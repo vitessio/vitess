@@ -4758,6 +4758,26 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	return rs, nil
 }
 
+// CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
+// all we do is set retain_artifacts_seconds to a very small number (it's actually a negative) so that the
+// next iteration of gcArtifacts() picks up the migration's artifacts and schedules them for deletion
+func (e *Executor) CleanupAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
+	}
+	log.Infof("CleanupMigration: request to cleanup all terminal migrations")
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	rs, err := e.execQuery(ctx, sqlUpdateReadyForCleanupAll)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("CleanupMigration: %v migrations marked as ready to clean up", rs.RowsAffected)
+	defer e.triggerNextCheckInterval()
+	return rs, nil
+}
+
 // ForceCutOverMigration markes the given migration for forced cut-over. This has two implications:
 //   - No backoff for the given migration's cut-over (cut-over will be attempted at the next scheduler cycle,
 //     irrespective of how many cut-over attempts have been made and when these attempts have been made).
