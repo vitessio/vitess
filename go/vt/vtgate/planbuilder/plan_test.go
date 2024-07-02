@@ -591,6 +591,18 @@ func (s *planTestSuite) TestOtherPlanningFromFile() {
 	s.testFile("other_admin_cases.json", vschema, false)
 }
 
+func (s *planTestSuite) TestMirrorPlanning() {
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(s.T(), "vschemas/mirror_schema.json", true),
+		TabletType_:   topodatapb.TabletType_PRIMARY,
+		SysVarEnabled: true,
+		TestBuilder:   TestBuilder,
+		Env:           vtenv.NewTestEnv(),
+	}
+
+	s.testFile("mirror_cases.json", vschema, false)
+}
+
 func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
 	require.NoError(t, err)
@@ -836,6 +848,35 @@ func BenchmarkSelectVsDML(b *testing.B) {
 
 	b.Run("Select (random sample, N=32)", func(b *testing.B) {
 		benchmarkPlanner(b, Gen4, selectCases[:32], vschema)
+	})
+}
+
+func BenchmarkBaselineVsMirrored(b *testing.B) {
+	baseline := loadSchema(b, "vschemas/mirror_schema.json", true)
+	baseline.MirrorRules = map[string]*vindexes.MirrorRule{}
+	baselineVschema := &vschemawrapper.VSchemaWrapper{
+		V:             baseline,
+		SysVarEnabled: true,
+		Version:       Gen4,
+		Env:           vtenv.NewTestEnv(),
+	}
+
+	mirroredSchema := loadSchema(b, "vschemas/mirror_schema.json", true)
+	mirroredVschema := &vschemawrapper.VSchemaWrapper{
+		V:             mirroredSchema,
+		SysVarEnabled: true,
+		Version:       Gen4,
+		Env:           vtenv.NewTestEnv(),
+	}
+
+	cases := readJSONTests("mirror_cases.json")
+
+	b.Run("Baseline", func(b *testing.B) {
+		benchmarkPlanner(b, Gen4, cases, baselineVschema)
+	})
+
+	b.Run("Mirrored", func(b *testing.B) {
+		benchmarkPlanner(b, Gen4, cases, mirroredVschema)
 	})
 }
 

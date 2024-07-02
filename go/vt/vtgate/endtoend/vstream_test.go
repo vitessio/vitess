@@ -279,6 +279,11 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	_, err = conn.ExecuteFetch("insert into t1_copy_all_ks3(id1,id2) values(30,30), (40,40)", 1, false)
+	if err != nil {
+		require.NoError(t, err)
+	}
+
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/t1_copy_all.*/",
@@ -303,6 +308,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 	// copy phase operations in the vstream.
 	expectedKs1EventNum := 2 /* num shards */ * (9 /* begin/field/vgtid:pos/4 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
 	expectedKs2EventNum := 2 /* num shards */ * (6 /* begin/field/vgtid:pos/1 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
+	expectedKs3EventNum := 2 /* num shards */ * (6 /* begin/field/vgtid:pos/1 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
 	expectedFullyCopyCompletedNum := 1
 
 	cases := []struct {
@@ -316,12 +322,14 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 			shardGtid: &binlogdatapb.ShardGtid{
 				Keyspace: "/.*",
 			},
-			expectedEventNum: expectedKs1EventNum + expectedKs2EventNum + expectedFullyCopyCompletedNum,
+			expectedEventNum: expectedKs1EventNum + expectedKs2EventNum + expectedKs3EventNum + expectedFullyCopyCompletedNum,
 			expectedCompletedEvents: []string{
 				`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
 				`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
 				`type:COPY_COMPLETED keyspace:"ks2" shard:"-80"`,
 				`type:COPY_COMPLETED keyspace:"ks2" shard:"80-"`,
+				`type:COPY_COMPLETED keyspace:"ks3" shard:"-80"`,
+				`type:COPY_COMPLETED keyspace:"ks3" shard:"80-"`,
 				`type:COPY_COMPLETED`,
 			},
 		},

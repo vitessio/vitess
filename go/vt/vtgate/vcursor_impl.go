@@ -250,7 +250,7 @@ func (vc *vcursorImpl) IsShardRoutingEnabled() bool {
 	return enableShardRouting
 }
 
-// FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
+// FindTable finds the specified table. If the keyspace was specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
@@ -1079,6 +1079,23 @@ func (vc *vcursorImpl) GetAggregateUDFs() []string {
 	return vc.vschema.GetAggregateUDFs()
 }
 
+// FindMirrorRule finds the mirror rule for the requested table name and
+// VSchema tablet type.
+func (vc *vcursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error) {
+	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	if err != nil {
+		return nil, "", destTabletType, nil, err
+	}
+	if destKeyspace == "" {
+		destKeyspace = vc.keyspace
+	}
+	mirrorRule, err := vc.vschema.FindMirrorRule(destKeyspace, name.Name.String(), destTabletType)
+	if err != nil {
+		return nil, "", destTabletType, nil, err
+	}
+	return mirrorRule, destKeyspace, destTabletType, dest, err
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
@@ -1352,6 +1369,37 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
+
+	return v
+}
+
+func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
+	callerId := callerid.EffectiveCallerIDFromContext(ctx)
+	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
+
+	clonedCtx := callerid.NewContext(ctx, callerId, immediateCallerId)
+
+	v := &vcursorImpl{
+		safeSession:         NewAutocommitSession(vc.safeSession.Session),
+		keyspace:            vc.keyspace,
+		tabletType:          vc.tabletType,
+		destination:         vc.destination,
+		marginComments:      vc.marginComments,
+		executor:            vc.executor,
+		resolver:            vc.resolver,
+		topoServer:          vc.topoServer,
+		logStats:            &logstats.LogStats{Ctx: clonedCtx},
+		collation:           vc.collation,
+		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
+		vschema:             vc.vschema,
+		vm:                  vc.vm,
+		semTable:            vc.semTable,
+		warnShardedOnly:     vc.warnShardedOnly,
+		warnings:            vc.warnings,
+		pv:                  vc.pv,
+	}
+
+	v.marginComments.Trailing += "/* mirror query */"
 
 	return v
 }

@@ -166,6 +166,18 @@ var (
 					Type: sqltypes.Char,
 				}},
 			},
+			"mirror_tbl1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+			},
+			"mirror_tbl2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+			},
 		},
 	}
 
@@ -174,6 +186,11 @@ create table t1_copy_all_ks2(
 	id1 bigint,
 	id2 bigint,
 	primary key(id1)
+) Engine=InnoDB;
+
+create table mirror_tbl1(
+	id bigint not null,
+	primary key(id)
 ) Engine=InnoDB;
 `
 
@@ -188,6 +205,48 @@ create table t1_copy_all_ks2(
 			"t1_copy_all_ks2": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id1",
+					Name:   "hash",
+				}},
+			},
+			"mirror_tbl1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+			},
+		},
+	}
+
+	schema3 = `
+create table t1_copy_all_ks3(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
+
+create table mirror_tbl2(
+	id bigint not null,
+	primary key(id)
+) Engine=InnoDB;
+`
+
+	vschema3 = &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1_copy_all_ks3": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+			},
+			"mirror_tbl2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
 					Name:   "hash",
 				}},
 			},
@@ -218,6 +277,14 @@ func TestMain(m *testing.M) {
 						Name: "80-",
 					}},
 				},
+				{
+					Name: "ks3",
+					Shards: []*vttestpb.Shard{{
+						Name: "-80",
+					}, {
+						Name: "80-",
+					}},
+				},
 			},
 		}
 		if err := cfg.InitSchemas("ks", Schema, vschema); err != nil {
@@ -227,6 +294,11 @@ func TestMain(m *testing.M) {
 		}
 		defer os.RemoveAll(cfg.SchemaDir)
 		if err := cfg.InitSchemas("ks2", schema2, vschema2); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.RemoveAll(cfg.SchemaDir)
+			return 1
+		}
+		if err := cfg.InitSchemas("ks3", schema3, vschema3); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.RemoveAll(cfg.SchemaDir)
 			return 1

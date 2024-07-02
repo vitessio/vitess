@@ -131,6 +131,9 @@ type (
 
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
 		CloneForReplicaWarming(ctx context.Context) VCursor
+
+		// CloneForMirroring clones the VCursor for re-use in mirroring queries to other keyspaces
+		CloneForMirroring(ctx context.Context) VCursor
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
