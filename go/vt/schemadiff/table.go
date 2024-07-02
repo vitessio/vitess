@@ -454,6 +454,15 @@ func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTa
 	return entity, nil
 }
 
+func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity {
+	cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
+	entities := make([]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
+	for i := range c.CreateTable.TableSpec.Columns {
+		entities[i] = NewColumnDefinitionEntity(c.Env, c.CreateTable.TableSpec.Columns[i], cc)
+	}
+	return entities
+}
+
 // normalize cleans up the table definition:
 // - setting names to all keys
 // - table option case (upper/lower/special)
@@ -1731,11 +1740,11 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColName := t2Col.Name.Lowered()
 		// we know that column exists in both tables
 		t1Col := t1ColumnsMap[t2ColName]
-		t1ColEntity := NewColumnDefinitionEntity(t1Col.col)
-		t2ColEntity := NewColumnDefinitionEntity(t2Col)
+		t1ColEntity := NewColumnDefinitionEntity(c.Env, t1Col.col, t1cc)
+		t2ColEntity := NewColumnDefinitionEntity(c.Env, t2Col, t2cc)
 
 		// check diff between before/after columns:
-		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, t1cc, t2cc, hints)
+		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, hints)
 		if err != nil {
 			return err
 		}
