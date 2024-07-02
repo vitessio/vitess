@@ -169,6 +169,13 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateReadyForCleanupAll = `UPDATE _vt.schema_migrations
+			SET retain_artifacts_seconds=-1
+		WHERE
+			migration_status IN ('complete', 'cancelled', 'failed')
+			AND cleanup_timestamp IS NULL
+			AND retain_artifacts_seconds > 0
+	`
 	sqlUpdateForceCutOver = `UPDATE _vt.schema_migrations
 			SET force_cutover=1
 		WHERE

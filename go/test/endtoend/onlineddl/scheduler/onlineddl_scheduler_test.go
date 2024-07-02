@@ -73,6 +73,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
+	primary         *cluster.Vttablet
 
 	normalWaitTime            = 20 * time.Second
 	extendedWaitTime          = 60 * time.Second
@@ -310,6 +311,7 @@ func testScheduler(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+	primary = shards[0].PrimaryTablet()
 
 	ddlStrategy := "vitess"
 
@@ -334,7 +336,7 @@ func testScheduler(t *testing.T) {
 		}
 	}
 
-	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	mysqlVersion := onlineddl.GetMySQLVersion(t, primary)
 	require.NotEmpty(t, mysqlVersion)
 	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
@@ -586,7 +588,7 @@ func testScheduler(t *testing.T) {
 			commitTransactionChan := make(chan any)
 			transactionErrorChan := make(chan error)
 			t.Run("locking table rows", func(t *testing.T) {
-				go runInTransaction(t, ctx, shards[0].Vttablets[0], "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+				go runInTransaction(t, ctx, primary, "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
 			})
 			t.Run("check no force_cutover", func(t *testing.T) {
 				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
@@ -1035,6 +1037,22 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
+	readCleanupsTimetamps := func(t *testing.T, migrationsLike string) (rows int64, cleanedUp int64, needCleanup int64, artifacts []string) {
+		rs := onlineddl.ReadMigrations(t, &vtParams, migrationsLike)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			rows++
+			if row["cleanup_timestamp"].IsNull() {
+				needCleanup++
+			} else {
+				cleanedUp++
+			}
+			migrationArtifacts := textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+			artifacts = append(artifacts, migrationArtifacts...)
+		}
+		return
+	}
+
 	t.Run("Cleanup artifacts", func(t *testing.T) {
 		// Create a migration with a low --retain-artifacts value.
 		// We will cancel the migration and expect the artifact to be cleaned.
@@ -1071,14 +1089,14 @@ func testScheduler(t *testing.T) {
 			defer cancel()
 
 			for {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-				require.NotNil(t, rs)
-				row := rs.Named().Row()
-				require.NotNil(t, row)
-				if !row["cleanup_timestamp"].IsNull() {
+				rows, cleanedUp, needCleanup, _ := readCleanupsTimetamps(t, t1uuid)
+				assert.EqualValues(t, 1, rows)
+				if cleanedUp == 1 {
 					// This is what we've been waiting for
 					break
 				}
+				assert.EqualValues(t, 0, cleanedUp)
+				assert.EqualValues(t, 1, needCleanup)
 				select {
 				case <-ctx.Done():
 					assert.Fail(t, "timeout waiting for cleanup")
@@ -1087,6 +1105,108 @@ func testScheduler(t *testing.T) {
 				}
 			}
 		})
+		t.Run("validate artifact does not exist", func(t *testing.T) {
+			checkTable(t, artifacts[0], false)
+		})
+	})
+
+	t.Run("cleanup artifacts with CLEANUP ALL", func(t *testing.T) {
+		// First, cleanup any existing migrations. We don't have an exact track of how many we've had so far.
+		t.Run("initial cleanup all", func(t *testing.T) {
+			t.Run("validate migrations exist that need cleanup", func(t *testing.T) {
+				_, _, needCleanup, _ := readCleanupsTimetamps(t, "%")
+				assert.Greater(t, needCleanup, int64(1))
+			})
+			t.Run("issue cleanup all", func(t *testing.T) {
+				cleanedUp := onlineddl.CheckCleanupAllMigrations(t, &vtParams, -1)
+				t.Logf("marked %d migrations for cleanup", cleanedUp)
+			})
+			t.Run("wait for all migrations cleanup", func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime)
+				defer cancel()
+
+				for {
+					rows, cleanedUp, needCleanup, artifacts := readCleanupsTimetamps(t, "%")
+					if needCleanup == 0 {
+						// This is what we've been waiting for
+						assert.NotZero(t, rows)
+						assert.Equal(t, rows, cleanedUp)
+						assert.Empty(t, artifacts)
+						t.Logf("rows needing cleanup: %v", needCleanup)
+						return
+					}
+					select {
+					case <-ctx.Done():
+						assert.Fail(t, "timeout waiting for cleanup", "rows needing cleanup: %v. artifacts: %v", needCleanup, artifacts)
+						return
+					case <-time.After(time.Second):
+					}
+					t.Logf("rows needing cleanup: %v. artifacts: %v", needCleanup, artifacts)
+				}
+			})
+		})
+		// Create a migration with a low --retain-artifacts value.
+		// We will cancel the migration and expect the artifact to be cleaned.
+		t.Run("start migration", func(t *testing.T) {
+			// Intentionally set `--retain-artifacts=1h` which is a long time. Then we will issue
+			// `ALTER VITESS_MIGRATION CLEANUP ALL` and expect the artifact to be cleaned.
+			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion --retain-artifacts=1h", "vtctl", "", "", true)) // skip wait
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("wait for ready_to_complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+		})
+		var artifacts []string
+		t.Run("validate artifact exists", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			row := rs.Named().Row()
+			require.NotNil(t, row)
+
+			artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+			assert.Len(t, artifacts, 1)
+			checkTable(t, artifacts[0], true)
+
+			retainArtifactsSeconds := row.AsInt64("retain_artifacts_seconds", 0)
+			assert.EqualValues(t, 3600, retainArtifactsSeconds) // due to --retain-artifacts=1h
+		})
+		t.Run("check needs cleanup", func(t *testing.T) {
+			_, _, needCleanup, _ := readCleanupsTimetamps(t, "%")
+			assert.EqualValues(t, 1, needCleanup)
+		})
+		t.Run("complete migration", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("cleanup all", func(t *testing.T) {
+			onlineddl.CheckCleanupAllMigrations(t, &vtParams, 1)
+		})
+		t.Run("wait for migration cleanup", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime)
+			defer cancel()
+
+			for {
+				rows, cleanedUp, needCleanup, artifacts := readCleanupsTimetamps(t, "%")
+				if needCleanup == 0 {
+					// This is what we've been waiting for
+					assert.NotZero(t, rows)
+					assert.Equal(t, rows, cleanedUp)
+					assert.Empty(t, artifacts)
+					t.Logf("rows needing cleanup: %v", needCleanup)
+					return
+				}
+				select {
+				case <-ctx.Done():
+					assert.Fail(t, "timeout waiting for cleanup", "rows needing cleanup: %v. artifacts: %v", needCleanup, artifacts)
+					return
+				case <-time.After(time.Second):
+				}
+				t.Logf("rows needing cleanup: %v. artifacts: %v", needCleanup, artifacts)
+			}
+		})
+
 		t.Run("validate artifact does not exist", func(t *testing.T) {
 			checkTable(t, artifacts[0], false)
 		})
@@ -1105,7 +1225,7 @@ func testScheduler(t *testing.T) {
 				// name it `with_constraint_chk_1`. But we expect Online DDL to explicitly
 				// modify the constraint name, specifically to get rid of the <table-name> prefix,
 				// so that we don't get into https://bugs.mysql.com/bug.php?id=107772 situation.
-				createStatement := getCreateTableStatement(t, shards[0].Vttablets[0], "with_constraint")
+				createStatement := getCreateTableStatement(t, primary, "with_constraint")
 				assert.NotContains(t, createStatement, "with_constraint_chk")
 			})
 		})
@@ -2433,7 +2553,7 @@ func testForeignKeys(t *testing.T) {
 		//
 		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
 		// query for this variable, and manipulate it, when starting the migration and when cutting over.
-		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		rs, err := primary.VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
 		require.NoError(t, err)
 		fkOnlineDDLPossible = len(rs.Rows) > 0
 		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
