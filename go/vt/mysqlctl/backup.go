@@ -17,9 +17,11 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -499,4 +502,21 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	params.Stats.Scope(backupstats.Operation("Restore")).TimedIncrement(time.Since(startTs))
 	params.Logger.Infof("Restore: complete")
 	return manifest, nil
+}
+
+// scanLinesToLogger scans full lines from the given Reader and sends them to
+// the given Logger until EOF.
+func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, doneFunc func()) {
+	defer doneFunc()
+
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		logger.Infof("%s: %s", prefix, line)
+	}
+	if err := scanner.Err(); err != nil {
+		// This is usually run in a background goroutine, so there's no point
+		// returning an error. Just log it.
+		logger.Warningf("error scanning lines from %s: %v", prefix, err)
+	}
 }
