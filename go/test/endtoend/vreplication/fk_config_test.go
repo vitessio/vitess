@@ -22,7 +22,6 @@ var (
 	initialFKSchema = `
 create table parent(id int, name varchar(128), primary key(id)) engine=innodb;
 create table child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade) engine=innodb;
-create view vparent as select * from parent;
 create table t1(id int, name varchar(128), primary key(id)) engine=innodb;
 create table t2(id int, t1id int, name varchar(128), primary key(id), foreign key(t1id) references t1(id) on delete cascade) engine=innodb;
 create table t11 (id int primary key, i int);
@@ -39,6 +38,7 @@ insert into t11 values(1, null);
 insert into t12 values(1, 1);
 update t11 set i = 1 where id = 1;
 `
+	createParentView = `create view vparent as select * from parent;`
 
 	initialFKSourceVSchema = `
 {

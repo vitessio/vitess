@@ -99,6 +99,9 @@ type vplayer struct {
 	// foreignKeyChecksStateInitialized is set to true once we have initialized the foreignKeyChecksEnabled.
 	// The initialization is done on the first row event that this vplayer sees.
 	foreignKeyChecksStateInitialized bool
+	// globalForeignKeyChecksDisabled tracks the @@global.foreign_key_checks state. If OFF the
+	// @@session.foreign_key_checks is set to OFF as well for all vplayer DMLs.
+	globalForeignKeyChecksDisabled bool
 }
 
 // NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
@@ -183,6 +186,18 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 }
 
+func (vp *vplayer) getGlobalFKChecksState(ctx context.Context) (bool, error) {
+	qr, err := vp.query(ctx, "select @@global.foreign_key_checks")
+	if err != nil {
+		log.Errorf("Error getting global foreign_key_checks state, will use the session state: %v", err)
+		return false, nil
+	}
+	if len(qr.Rows) == 0 {
+		return false, fmt.Errorf("no rows returned when getting global foreign_key_checks state")
+	}
+	return qr.Rows[0][0].ToString() == "0", nil
+}
+
 // play is the entry point for playing binlogs.
 func (vp *vplayer) play(ctx context.Context) error {
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
@@ -191,6 +206,11 @@ func (vp *vplayer) play(ctx context.Context) error {
 			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
 		return nil
+	}
+
+	var err error
+	if vp.globalForeignKeyChecksDisabled, err = vp.getGlobalFKChecksState(ctx); err != nil {
+		return fmt.Errorf("failed to get @@global.foreign_key_checks: %w", err)
 	}
 
 	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
@@ -219,6 +239,16 @@ func (vp *vplayer) play(ctx context.Context) error {
 // - If unset (0), foreign key checks are enabled.
 // updateFKCheck also updates the state for the first row event that this vplayer, and hence the db connection, sees.
 func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
+	if vp.globalForeignKeyChecksDisabled && (!vp.foreignKeyChecksStateInitialized || vp.foreignKeyChecksEnabled) {
+		// If global foreign key checks are disabled, we don't want to enable it during a vplayer
+		// DML since it could lead to the workflow erroring out due to foreign key constraint violations.
+		log.Infof("Global foreign_key_checks is disabled, setting this session's foreign_key_checks to 0")
+		vp.query(ctx, "set @@session.foreign_key_checks=0")
+		vp.foreignKeyChecksStateInitialized = true
+		vp.foreignKeyChecksEnabled = false
+		return nil
+	}
+
 	mustUpdate := false
 	if vp.vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
 		// If this is an atomic copy, we must update the foreign_key_checks state even when the vplayer runs during
