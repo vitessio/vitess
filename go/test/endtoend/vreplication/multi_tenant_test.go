@@ -203,6 +203,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 
+	vdiff(t, targetKeyspace, workflowName, defaultCellName, false, true, nil)
 	mt.SwitchReads()
 	confirmOnlyReadsSwitched(t)
 
@@ -362,6 +363,7 @@ func TestMultiTenantSharded(t *testing.T) {
 	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	vdiff(t, targetKeyspace, workflowName, defaultCellName, false, true, nil)
 	mt.SwitchReadsAndWrites()
 	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
@@ -558,6 +560,7 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	mt := mtm.getActiveMoveTables(tenantId)
 	ksWorkflow := fmt.Sprintf("%s.%s", mtm.targetKeyspace, mt.workflowName)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	vdiff(t, mt.targetKeyspace, mt.workflowName, defaultCellName, false, true, nil)
 	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
 	mt.SwitchReadsAndWrites()
 	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
