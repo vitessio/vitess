@@ -177,9 +177,20 @@ func (ins *Insert) executeInsertQueries(
 		return nil, vterrors.Aggregate(errs)
 	}
 
+	// If this insert used auto increment values from a sequence, we need to set the `last_insert_id` value.
 	if insertID != 0 {
-		result.InsertID = insertID
+		if result.RowsAffected > 0 {
+			// If at least one row was affected, we set the `last_insert_id` value to the lowest reserved sequence id.
+			//
+			// This does not match the behaviour of MySQL in case where no new rows where inserted (but one or more rows were updated
+			// via `ON DUPLICATE KEY UPDATE`), where the `last_insert_id` value is set to the `auto_increment` column value.
+			result.InsertID = insertID
+		} else {
+			// If no rows were inserted or updated, clear the `last_insert_id` value.
+			result.InsertID = 0
+		}
 	}
+
 	return result, nil
 }
 

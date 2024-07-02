@@ -87,3 +87,13 @@ create table lkp_mixed_idx
     keyspace_id varbinary(20),
     primary key (lkp_key)
 ) Engine = InnoDB;
+
+create table last_insert_id_test
+(
+    id bigint NOT NULL AUTO_INCREMENT,
+    user_id bigint,
+    reason varchar(20),
+    sharding_key varchar(20),
+    primary key (id),
+    unique (user_id, sharding_key)
+)
