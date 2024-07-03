@@ -838,7 +838,7 @@ func keyspaceParamsToKeyspaces(ctx context.Context, wr *wrangler.Wrangler, param
 		}
 		if param[0] == '/' {
 			// this is a topology-specific path
-			result = append(result, params...)
+			result = append(result, param)
 		} else {
 			// this is not a path, so assume a keyspace name,
 			// possibly with wildcards
