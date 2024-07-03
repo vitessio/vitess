@@ -251,13 +251,14 @@ func (ctx *PlanningContext) calculateTypeFor(e sqlparser.Expr) evalengine.Type {
 	// We need to rewrite the aggregate functions to their corresponding types
 	// The evaluation engine compiler doesn't handle them, so we replace them with Arguments before
 	// asking the compiler for the type
-	expr, unknown := ctx.replaceAggrWithArg(e, cfg, env)
 
-	if unknown {
-		return evalengine.NewUnknownType()
-	}
+	// TODO: put this back in when we can calculate the aggregation types correctly
+	// expr, unknown := ctx.replaceAggrWithArg(e, cfg, env)
+	// if unknown {
+	// 	return evalengine.NewUnknownType()
+	// }
 
-	translatedExpr, err := evalengine.Translate(expr, cfg)
+	translatedExpr, err := evalengine.Translate(e, cfg)
 	if err != nil {
 		return evalengine.NewUnknownType()
 	}
