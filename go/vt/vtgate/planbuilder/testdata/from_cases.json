@@ -585,7 +585,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select m1.col from unsharded as m1 where 1 != 1",
-                "Query": "select m1.col from unsharded as m1 where m1.col = :user_col",
+                "Query": "select m1.col from unsharded as m1 where m1.col = :user_col /* INT16 */",
                 "Table": "unsharded"
               }
             ]
@@ -651,7 +651,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select e.col from user_extra as e where 1 != 1",
-                "Query": "select e.col from user_extra as e where e.col = :user_col",
+                "Query": "select e.col from user_extra as e where e.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               },
               {
@@ -662,7 +662,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
-                "Query": "select 1 from unsharded as m1 where m1.col = :e_col",
+                "Query": "select 1 from unsharded as m1 where m1.col = :e_col /* INT16 */",
                 "Table": "unsharded"
               }
             ]
@@ -1221,7 +1221,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user` where `user`.id = :user_extra_col",
+            "Query": "select `user`.col from `user` where `user`.id = :user_extra_col /* INT16 */",
             "Table": "`user`",
             "Values": [
               ":user_extra_col"
@@ -1924,7 +1924,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */",
             "Table": "user_extra"
           }
         ]
@@ -3244,7 +3244,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as uu where 1 != 1",
-            "Query": "select 1 from `user` as uu where uu.intcol = :u_intcol",
+            "Query": "select 1 from `user` as uu where uu.intcol = :u_intcol /* INT16 */",
             "Table": "`user`"
           }
         ]
@@ -3357,7 +3357,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
@@ -3594,7 +3594,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
@@ -3654,7 +3654,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                    "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                    "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                     "Table": "user_extra"
                   }
                 ]
@@ -3720,7 +3720,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
@@ -3799,7 +3799,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded_authoritative.col2 from unsharded_authoritative where 1 != 1",
-            "Query": "select unsharded_authoritative.col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1",
+            "Query": "select unsharded_authoritative.col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1 /* VARCHAR */",
             "Table": "unsharded_authoritative"
           }
         ]
@@ -3921,7 +3921,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
@@ -4430,7 +4430,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from music as m where 1 != 1",
-            "Query": "select 1 from music as m where m.user_id = 5 and m.id = 20 and m.col = :u_col",
+            "Query": "select 1 from music as m where m.user_id = 5 and m.id = 20 and m.col = :u_col /* INT16 */",
             "Table": "music",
             "Values": [
               "20"

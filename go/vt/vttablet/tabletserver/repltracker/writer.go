@@ -38,52 +38,87 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// We identify these heartbeat configuration types:
+// - No configuration: the heartbeat writer is generally disabled and does not produce heartbeats (but see below).
+// - On-demand: on-demand heartbeat interval was specified.
+// - Always: the heartbeat writer is always on and produces heartbeats at a regular interval.
+type HeartbeatConfigType int
+
 const (
-	sqlUpsertHeartbeat = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
+	HeartbeatConfigTypeNone HeartbeatConfigType = iota
+	HeartbeatConfigTypeOnDemand
+	HeartbeatConfigTypeAlways
+)
+
+const (
+	sqlUpsertHeartbeat      = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
+	minimalOnDemandDuration = 4 * time.Second
+)
+
+var (
+	// Can be overridden by unit tests
+	defaultOnDemandDuration  = 10 * time.Second
+	defaultHeartbeatInterval = 1 * time.Second
 )
 
 // heartbeatWriter runs on primary tablets and writes heartbeats to the heartbeat
-// table at a regular interval, defined by heartbeat_interval.
+// table, depending on the configuration:
+//   - HeartbeatConfigTypeAlways: while open, the writer produces heartbeats at a regular interval.
+//     RequetHeartbeats() is meaningless in this mode.
+//   - HeartbeatConfigTypeOnDemand: when opened, the writer produces heartbeats for the configured lease.
+//     The heartbeats then expire. Lease can be renewed (after expired) or extended (while running) via
+//     RequetHeartbeats().
+//   - HeartbeatConfigTypeNone: the writer does not initiate any heartbeats. However, RequetHeartbeats()
+//     can be called to request a heartbeat lease. The lease duration is predetermined as `defaultOnDemandDuration`.
 type heartbeatWriter struct {
 	env tabletenv.Env
 
-	enabled       bool
+	configType    HeartbeatConfigType
 	interval      time.Duration
 	tabletAlias   *topodatapb.TabletAlias
 	keyspaceShard string
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
-	mu           sync.Mutex
-	isOpen       bool
-	appPool      *dbconnpool.ConnectionPool
-	allPrivsPool *dbconnpool.ConnectionPool
-	ticks        *timer.Timer
-	writeConnID  atomic.Int64
+	mu                          sync.Mutex
+	isOpen                      bool
+	appPool                     *dbconnpool.ConnectionPool
+	allPrivsPool                *dbconnpool.ConnectionPool
+	ticks                       *timer.Timer
+	onDemandRequestsRateLimiter atomic.Pointer[timer.RateLimiter]
+	writeConnID                 atomic.Int64
 
-	onDemandDuration            time.Duration
-	onDemandMu                  sync.Mutex
-	concurrentHeartbeatRequests int64
-	onDemandRequestTicks        int64
-	onDemandLastRequestTick     int64
+	onDemandDuration time.Duration
 }
 
 // newHeartbeatWriter creates a new heartbeatWriter.
 func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heartbeatWriter {
 	config := env.Config()
 
-	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
-	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && config.ReplicationTracker.HeartbeatOnDemand == 0 {
-		return &heartbeatWriter{}
+	configType := HeartbeatConfigTypeNone
+	onDemandDuration := defaultOnDemandDuration
+	switch {
+	case config.ReplicationTracker.HeartbeatOnDemand > 0:
+		configType = HeartbeatConfigTypeOnDemand
+		onDemandDuration = config.ReplicationTracker.HeartbeatOnDemand
+		if onDemandDuration < minimalOnDemandDuration {
+			onDemandDuration = minimalOnDemandDuration
+		}
+	case config.ReplicationTracker.Mode == tabletenv.Heartbeat:
+		configType = HeartbeatConfigTypeAlways
+		onDemandDuration = 0
 	}
 	heartbeatInterval := config.ReplicationTracker.HeartbeatInterval
+	if heartbeatInterval == 0 {
+		heartbeatInterval = defaultHeartbeatInterval
+	}
 	w := &heartbeatWriter{
 		env:              env,
-		enabled:          true,
+		configType:       configType,
 		tabletAlias:      alias.CloneVT(),
 		now:              time.Now,
 		interval:         heartbeatInterval,
-		onDemandDuration: config.ReplicationTracker.HeartbeatOnDemand,
+		onDemandDuration: onDemandDuration,
 		ticks:            timer.NewTimer(heartbeatInterval),
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
@@ -91,21 +126,8 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", env.Exporter(), 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", env.Exporter(), 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 	}
+
 	w.writeConnID.Store(-1)
-	if w.onDemandDuration > 0 {
-		// see RequestHeartbeats() for use of onDemandRequestTicks
-		// it's basically a mechanism to rate limit operation RequestHeartbeats().
-		// and selectively drop excessive requests.
-		w.allowNextHeartbeatRequest()
-		go func() {
-			// this will allow up to 1 request per (w.onDemandDuration / 4) to pass through
-			tick := time.NewTicker(w.onDemandDuration / 4)
-			defer tick.Stop()
-			for range tick.C {
-				w.allowNextHeartbeatRequest()
-			}
-		}()
-	}
 	return w
 }
 
@@ -117,14 +139,14 @@ func (w *heartbeatWriter) InitDBConfig(target *querypb.Target) {
 // Open sets up the heartbeatWriter's db connection and launches the ticker
 // responsible for periodically writing to the heartbeat table.
 func (w *heartbeatWriter) Open() {
-	if !w.enabled {
-		return
-	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.isOpen {
 		return
 	}
+	defer func() {
+		w.isOpen = true
+	}()
 	log.Info("Heartbeat Writer: opening")
 
 	// We cannot create the database and tables in this Open function
@@ -133,34 +155,56 @@ func (w *heartbeatWriter) Open() {
 	// block this thread, and we could end up in a deadlock.
 	// Instead, we try creating the database and table in each tick which runs in a go routine
 	// keeping us safe from hanging the main thread.
-	w.appPool.Open(w.env.Config().DB.AppWithDB())
-	w.allPrivsPool.Open(w.env.Config().DB.AllPrivsWithDB())
-	if w.onDemandDuration == 0 {
-		w.enableWrites(true)
-		// when onDemandDuration > 0 we only enable writes per request
-	} else {
+
+	// This function could be running from within a unit test scope, in which case we use
+	// mock pools that are already open. This is why we test for the pool being open.
+	if !w.appPool.IsOpen() {
+		w.appPool.Open(w.env.Config().DB.AppWithDB())
+	}
+	if !w.allPrivsPool.IsOpen() {
+		w.allPrivsPool.Open(w.env.Config().DB.AllPrivsWithDB())
+	}
+
+	if w.onDemandDuration > 0 {
+		// Clients are given access to RequestHeartbeats(). But such clients can also abuse
+		// the system by initiating heartbeats too frequently. We rate-limit these requests.
+		rateLimiter := timer.NewRateLimiter(time.Second)
+		w.onDemandRequestsRateLimiter.Store(rateLimiter)
+	}
+
+	switch w.configType {
+	case HeartbeatConfigTypeNone:
+		// Do not kick any heartbeats
+		return
+	case HeartbeatConfigTypeAlways:
+		// Heartbeats are always on
+		w.enableWrites()
+	case HeartbeatConfigTypeOnDemand:
 		// A one-time kick off of heartbeats upon Open()
 		go w.RequestHeartbeats()
 	}
-
-	w.isOpen = true
 }
 
 // Close closes the heartbeatWriter's db connection and stops the periodic ticker.
 func (w *heartbeatWriter) Close() {
-	if !w.enabled {
-		return
-	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if !w.isOpen {
 		return
 	}
+	defer func() {
+		w.isOpen = false
+	}()
 
-	w.enableWrites(false)
+	w.disableWrites()
 	w.appPool.Close()
 	w.allPrivsPool.Close()
-	w.isOpen = false
+
+	if rateLimiter := w.onDemandRequestsRateLimiter.Load(); rateLimiter != nil {
+		rateLimiter.Stop()
+	}
+	w.onDemandRequestsRateLimiter.Store(nil)
+
 	log.Info("Heartbeat Writer: closed")
 }
 
@@ -185,11 +229,23 @@ func (w *heartbeatWriter) bindHeartbeatVars(query string) (string, error) {
 func (w *heartbeatWriter) writeHeartbeat() {
 	if err := w.write(); err != nil {
 		w.recordError(err)
-		return
+	} else {
+		writes.Add(1)
 	}
-	writes.Add(1)
+
+	if w.onDemandDuration > 0 {
+		// See if we need to expire the heartbeats
+		go func() {
+			if rateLimiter := w.onDemandRequestsRateLimiter.Load(); rateLimiter != nil {
+				if rateLimiter.Diff() > int64(w.onDemandDuration.Seconds()) {
+					w.disableWrites()
+				}
+			}
+		}()
+	}
 }
 
+// write writes a single heartbeat update.
 func (w *heartbeatWriter) write() error {
 	defer w.env.LogError()
 	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
@@ -221,41 +277,36 @@ func (w *heartbeatWriter) recordError(err error) {
 	writeErrors.Add(1)
 }
 
-// enableWrites activates or deactivates heartbeat writes
-func (w *heartbeatWriter) enableWrites(enable bool) {
-	if w.ticks == nil {
-		return
-	}
-	switch enable {
-	case true:
-		// We must combat a potential race condition: the writer is Open, and a request comes
-		// to enableWrites(true), but simultaneously the writes gets Close()d.
-		// We must not send any more ticks while the writer is closed.
-		go func() {
-			w.mu.Lock()
-			defer w.mu.Unlock()
-			if !w.isOpen {
-				return
-			}
-			w.ticks.Start(w.writeHeartbeat)
-		}()
-	case false:
-		// We stop the ticks in a separate go routine because it can block if the write is stuck on semi-sync ACKs.
-		// At the same time we try and kill the write that is in progress. We use the context and its cancellation
-		// for coordination between the two go-routines. In the end we will have guaranteed that the ticks have stopped
-		// and no write is in progress.
-		ctx, cancel := context.WithCancel(context.Background())
-		go func() {
-			w.ticks.Stop()
-			cancel()
-		}()
-		w.killWritesUntilStopped(ctx)
-
-		if w.onDemandDuration > 0 {
-			// Let the next RequestHeartbeats() go through
-			w.allowNextHeartbeatRequest()
+// enableWrites activates heartbeat writes
+func (w *heartbeatWriter) enableWrites() {
+	// We must combat a potential race condition: the writer is Open, and a request comes
+	// to enableWrites(), but simultaneously the writes gets Close()d.
+	// We must not send any more ticks while the writer is closed.
+	go func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if !w.isOpen {
+			return
 		}
-	}
+		w.ticks.Start(w.writeHeartbeat)
+	}()
+}
+
+// disableWrites deactivates heartbeat writes
+func (w *heartbeatWriter) disableWrites() {
+	// We stop the ticks in a separate go routine because it can block if the write is stuck on semi-sync ACKs.
+	// At the same time we try and kill the write that is in progress. We use the context and its cancellation
+	// for coordination between the two go-routines. In the end we will have guaranteed that the ticks have stopped
+	// and no write is in progress.
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		w.ticks.Stop()
+		cancel()
+	}()
+	w.killWritesUntilStopped(ctx)
+
+	// Let the next RequestHeartbeats() go through
+	w.allowNextHeartbeatRequest()
 }
 
 // killWritesUntilStopped tries to kill the write in progress until the ticks have stopped.
@@ -298,9 +349,15 @@ func (w *heartbeatWriter) killWrite() error {
 }
 
 // allowNextHeartbeatRequest ensures that the next call to RequestHeartbeats() passes through and
-// is not dropped.
+// is not rate-limited.
+// Use case: just as the on-demand lease expires, a new request for heartbeat comes, and it's in the same timeslot
+// as the one before the expiration. We want to allow the new request to re-lease on demand heartbeats.
 func (w *heartbeatWriter) allowNextHeartbeatRequest() {
-	atomic.AddInt64(&w.onDemandRequestTicks, 1)
+	// The writer could be close()d while this function is running and thus the value of the rate limiter could be nil.
+	// We thus use golang atomic here to avoid locking mutexes.
+	if rateLimiter := w.onDemandRequestsRateLimiter.Load(); rateLimiter != nil {
+		rateLimiter.AllowOne()
+	}
 }
 
 // RequestHeartbeats implements heartbeat.HeartbeatWriter.RequestHeartbeats()
@@ -309,41 +366,12 @@ func (w *heartbeatWriter) allowNextHeartbeatRequest() {
 // This function will selectively and silently drop some such requests, depending on arrival rate.
 // This function is safe to call concurrently from goroutines
 func (w *heartbeatWriter) RequestHeartbeats() {
-	if w.onDemandDuration == 0 {
-		// heartbeats are not by demand. Therefore they are just coming in on their own (if enabled)
-		return
+	// The writer could be close()d while this function is running and thus the value of the rate limiter could be nil.
+	// We thus use golang atomic here to avoid locking mutexes.
+	if rateLimiter := w.onDemandRequestsRateLimiter.Load(); rateLimiter != nil {
+		rateLimiter.Do(func() error {
+			w.enableWrites()
+			return nil
+		})
 	}
-	// In this function we're going to create a timer to activate heartbeats by-demand. Creating a timer has a cost.
-	// Now, this function can be spammed by clients (the lag throttler). We therefore only allow this function to
-	// actually operate once per X seconds (1/4 of onDemandDuration as a reasonable oversampling value):
-	if atomic.LoadInt64(&w.onDemandLastRequestTick) >= atomic.LoadInt64(&w.onDemandRequestTicks) {
-		// Too many requests. We're dropping this one.
-		return
-	}
-	atomic.StoreInt64(&w.onDemandLastRequestTick, atomic.LoadInt64(&w.onDemandRequestTicks))
-
-	// OK, the request passed through.
-
-	w.onDemandMu.Lock()
-	defer w.onDemandMu.Unlock()
-
-	// Now for the actual logic. A client requests heartbeats. If it were only this client, we would
-	// activate heartbeats for the duration of onDemandDuration, and then turn heartbeats off.
-	// However, there may be multiple clients interested in heartbeats, or maybe the same single client
-	// requesting heartbeats again and again. So we keep track of how many _concurrent_ requests we have.
-	// We enable heartbeats as soon as we have a request; we turn heartbeats off once
-	// we have zero concurrent requests
-	w.enableWrites(true)
-	w.concurrentHeartbeatRequests++
-
-	time.AfterFunc(w.onDemandDuration, func() {
-		w.onDemandMu.Lock()
-		defer w.onDemandMu.Unlock()
-		w.concurrentHeartbeatRequests--
-		if w.concurrentHeartbeatRequests == 0 {
-			// means there are currently no more clients interested in heartbeats
-			w.enableWrites(false)
-		}
-		w.allowNextHeartbeatRequest()
-	})
 }

@@ -206,6 +206,11 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		return fmt.Errorf("Failed to load routing rules: %w", err)
 	}
 
+	// attempt to load any mirror rules specified by tpb
+	if err := vtcombo.InitMirrorRules(context.Background(), ts, tpb.GetMirrorRules()); err != nil {
+		return fmt.Errorf("Failed to load mirror rules: %w", err)
+	}
+
 	servenv.Init()
 	tabletenv.Init()
 

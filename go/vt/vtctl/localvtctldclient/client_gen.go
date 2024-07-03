@@ -306,6 +306,11 @@ func (client *localVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldata
 	return client.s.GetKeyspaces(ctx, in)
 }
 
+// GetMirrorRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetMirrorRules(ctx context.Context, in *vtctldatapb.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetMirrorRulesResponse, error) {
+	return client.s.GetMirrorRules(ctx, in)
+}
+
 // GetPermissions is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetPermissions(ctx context.Context, in *vtctldatapb.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetPermissionsResponse, error) {
 	return client.s.GetPermissions(ctx, in)
@@ -735,6 +740,11 @@ func (client *localVtctldClient) ValidateVersionShard(ctx context.Context, in *v
 // WorkflowDelete is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldatapb.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowDeleteResponse, error) {
 	return client.s.WorkflowDelete(ctx, in)
+}
+
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowMirrorTraffic(ctx context.Context, in *vtctldatapb.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowMirrorTrafficResponse, error) {
+	return client.s.WorkflowMirrorTraffic(ctx, in)
 }
 
 // WorkflowStatus is part of the vtctlservicepb.VtctldClient interface.

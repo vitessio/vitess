@@ -39,55 +39,40 @@ var (
 	sqlSchema       = `create table test(id bigint primary key)Engine=InnoDB;`
 )
 
-var enableSettingsPool bool
-
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
-	code := runAllTests(m)
-	if code != 0 {
-		os.Exit(code)
-	}
+	exitCode := func() int {
+		clusterInstance = cluster.NewCluster(cell, hostname)
+		defer clusterInstance.Teardown()
 
-	println("running with settings pool enabled")
-	// run again with settings pool enabled.
-	enableSettingsPool = true
-	code = runAllTests(m)
-	os.Exit(code)
-}
+		// Start topo server
+		if err := clusterInstance.StartTopo(); err != nil {
+			return 1
+		}
 
-func runAllTests(m *testing.M) int {
-	clusterInstance = cluster.NewCluster(cell, hostname)
-	defer clusterInstance.Teardown()
+		// Start keyspace
+		keyspace := &cluster.Keyspace{
+			Name:      keyspaceName,
+			SchemaSQL: sqlSchema,
+		}
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false); err != nil {
+			return 1
+		}
 
-	// Start topo server
-	if err := clusterInstance.StartTopo(); err != nil {
-		return 1
-	}
+		// Start vtgate
+		if err := clusterInstance.StartVtgate(); err != nil {
+			return 1
+		}
 
-	// Start keyspace
-	keyspace := &cluster.Keyspace{
-		Name:      keyspaceName,
-		SchemaSQL: sqlSchema,
-	}
-	if enableSettingsPool {
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool")
-	}
-	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false); err != nil {
-		return 1
-	}
-
-	// Start vtgate
-	if err := clusterInstance.StartVtgate(); err != nil {
-		return 1
-	}
-
-	vtParams = mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	return m.Run()
+		vtParams = mysql.ConnParams{
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
+		}
+		return m.Run()
+	}()
+	os.Exit(exitCode)
 }
 
 func TestVttabletDownServingChange(t *testing.T) {

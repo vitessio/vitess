@@ -66,6 +66,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -958,10 +959,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		return ts, state, nil
 	}
 
-	var (
-		reverse        bool
-		sourceKeyspace string
-	)
+	var sourceKeyspace string
 
 	// We reverse writes by using the source_keyspace.workflowname_reverse workflow
 	// spec, so we need to use the source of the reverse workflow, which is the
@@ -970,7 +968,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	// source to check if writes have been switched.
 
 	if strings.HasSuffix(workflowName, "_reverse") {
-		reverse = true
+		state.IsReverse = true
 		// Flip the source and target keyspaces.
 		sourceKeyspace = state.TargetKeyspace
 		targetKeyspace = state.SourceKeyspace
@@ -1039,7 +1037,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 
 		// We assume a consistent state, so only choose one shard.
 		var shard *topo.ShardInfo
-		if reverse {
+		if state.IsReverse {
 			shard = ts.TargetShards()[0]
 		} else {
 			shard = ts.SourceShards()[0]
@@ -1725,7 +1723,7 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 
 	if err := s.ts.ValidateSrvKeyspace(ctx, keyspace, strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "SrvKeyspace for keyspace %s is corrupt for cell(s) %s", keyspace, cells)
-		log.Errorf("%w", err2)
+		log.Errorf("%v", err2)
 		return nil, err
 	}
 	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
@@ -1755,6 +1753,7 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 	return s.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
 		Keyspace: req.Keyspace,
 		Workflow: req.Workflow,
+		Shards:   req.TargetShards,
 	})
 }
 
@@ -3238,6 +3237,12 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return handleError("workflow validation failed", err)
 	}
 
+	// Remove mirror rules for the specified tablet types.
+	if err := sw.mirrorTableTraffic(ctx, roTabletTypes, 0); err != nil {
+		return handleError(fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for read-only tablet types",
+			ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
+	}
+
 	// For reads, locking the source keyspace is sufficient.
 	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads")
 	if lockErr != nil {
@@ -3308,6 +3313,12 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		if err := areTabletsAvailableToStreamFrom(ctx, req, ts, ts.TargetKeyspaceName(), ts.TargetShards()); err != nil {
 			return handleError(fmt.Sprintf("no tablets were available to stream from in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
+	}
+
+	// Remove mirror rules for the primary tablet type.
+	if err := sw.mirrorTableTraffic(ctx, []topodata.TabletType{topodatapb.TabletType_PRIMARY}, 0); err != nil {
+		return handleError(fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for primary tablet type",
+			ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
 	}
 
 	// Need to lock both source and target keyspaces.
@@ -4066,4 +4077,95 @@ func (s *Server) getWorkflowStatus(ctx context.Context, keyspace string, workflo
 		}
 	}
 	return workflowStatus, nil
+}
+
+// WorkflowMirrorTraffic mirrors traffic from the source keyspace to the target keyspace.
+func (s *Server) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest) (*vtctldatapb.WorkflowMirrorTrafficResponse, error) {
+	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	// Traffic mirroring was built with basic MoveTables workflows in mind. In
+	// theory, other workflow types (e.g. Migrate) and variants (e.g. partial,
+	// multi-tenant) could be supported. Until demand for these use cases
+	// arises, reject everything but basic MoveTables.
+	if startState.WorkflowType != TypeMoveTables {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for %s workflow: MirrorTraffic", string(startState.WorkflowType))
+	}
+	if startState.IsReverse {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for reverse workflow: MirrorTraffic")
+	}
+	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for %s migration type: MirrorTraffic", binlogdatapb.MigrationType_name[int32(ts.MigrationType())])
+	}
+	if ts.IsPartialMigration() {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for partial migration: MirrorTraffic")
+	}
+	if ts.IsMultiTenantMigration() {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for multi-tenant migration: MirrorTraffic")
+	}
+
+	// Don't allow traffic to be mirrored if any traffic has been switched over
+	// to the target keyspace.
+	var cannotSwitchTabletTypes []string
+	for _, tt := range req.TabletTypes {
+		if tt == topodatapb.TabletType_RDONLY && len(startState.RdonlyCellsSwitched) > 0 {
+			cannotSwitchTabletTypes = append(cannotSwitchTabletTypes, "rdonly")
+		}
+		if tt == topodatapb.TabletType_REPLICA && len(startState.ReplicaCellsSwitched) > 0 {
+			cannotSwitchTabletTypes = append(cannotSwitchTabletTypes, "replica")
+		}
+		if tt == topodatapb.TabletType_PRIMARY && startState.WritesSwitched {
+			cannotSwitchTabletTypes = append(cannotSwitchTabletTypes, "primary")
+		}
+	}
+	if len(cannotSwitchTabletTypes) > 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot mirror [%s] traffic for workflow %s at this time: traffic for those tablet types is switched", strings.Join(cannotSwitchTabletTypes, ","), startState.Workflow)
+	}
+
+	if err := s.mirrorTraffic(ctx, req, ts, startState); err != nil {
+		return nil, err
+	}
+
+	cmd := "MirrorTraffic"
+	resp := &vtctldatapb.WorkflowMirrorTrafficResponse{}
+	log.Infof("Mirror Traffic done for workflow %s.%s", req.Keyspace, req.Workflow)
+	resp.Summary = fmt.Sprintf("%s was successful for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
+	// Reload the state after the MirrorTraffic operation
+	// and return that as a string.
+	keyspace := req.Keyspace
+	workflow := req.Workflow
+	resp.StartState = startState.String()
+	log.Infof("Before reloading workflow state after mirror traffic: %+v\n", resp.StartState)
+	_, currentState, err := s.getWorkflowState(ctx, keyspace, workflow)
+	if err != nil {
+		resp.CurrentState = fmt.Sprintf("Error reloading workflow state after mirror traffic: %v", err)
+	} else {
+		resp.CurrentState = currentState.String()
+	}
+	return resp, nil
+}
+
+// mirrorTraffic manages mirror routing rules for tables in the workflow.
+func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest, ts *trafficSwitcher, state *State) (err error) {
+	// Consistently handle errors by logging and returning them.
+	handleError := func(message string, err error) error {
+		ts.Logger().Error(err)
+		return err
+	}
+
+	log.Infof("Mirroring traffic: %s.%s, workflow state: %s", ts.targetKeyspace, ts.workflow, state.String())
+
+	sw := &switcher{ts: ts, s: s}
+
+	if err := ts.validate(ctx); err != nil {
+		return handleError("workflow validation failed", err)
+	}
+
+	if err := sw.mirrorTableTraffic(ctx, req.TabletTypes, req.Percent); err != nil {
+		return handleError("failed to mirror traffic for the tables", err)
+	}
+
+	return nil
 }
