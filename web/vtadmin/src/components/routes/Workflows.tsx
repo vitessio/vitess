@@ -35,7 +35,6 @@ import { Tooltip } from "../tooltip/Tooltip";
 import { KeyspaceLink } from "../links/KeyspaceLink";
 import { QueryLoadingPlaceholder } from "../placeholders/QueryLoadingPlaceholder";
 import { UseQueryResult } from "react-query";
-import { vtctldata, vttime } from "../../proto/vtadmin";
 
 export const ThrottleThresholdSeconds = 60;
 
