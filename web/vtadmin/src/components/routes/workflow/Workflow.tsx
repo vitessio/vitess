@@ -73,7 +73,7 @@ export const Workflow = () => {
             </span>
           </div>
           <div style={{ float: "right" }}>
-            <a href={`#workflowStreams`}>Streams</a>
+            <a href={`#workflowStreams`}>Scroll To Streams</a>
           </div>
         </div>
       </WorkspaceHeader>
