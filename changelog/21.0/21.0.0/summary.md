@@ -7,8 +7,8 @@
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deletion of deprecated metrics](#metric-deletion)
     - [VTTablet Flags](#vttablet-flags)
-  - **[Breaking changes](#breaking-changes)**
   - **[Traffic Mirroring](#traffic-mirroring)**
+  - **[New Connection Drain](#new-connection-drain)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -50,3 +50,13 @@ $ vtctldclient --server :15999 MoveTables --target-keyspace customer --workflow 
 ```
 
 Mirror rules can be inspected with `GetMirrorRules`.
+
+### <a id="new-connection-drain"/>New Connection Drain
+
+We are adding a new way to terminate VTGate in v21 by using a connection drain timeout rather than an activity drain timeout.
+The goal of this new drain is to disallow new connections when VTGate is shutting down, but keep allowing idle/actives
+connections to execute queries until they disconnect or until the `--onterm_timeout` is reached.
+
+This new connection drain can be enabled by setting the `--mysql_server_drain_onterm` VTGate flag to `true`.
+
+See more information about this change by [reading its RFC](https://github.com/vitessio/vitess/issues/15971).
