@@ -124,9 +124,9 @@ type BinlogEvent interface {
 	// IsWriteRows(), IsUpdateRows(), or IsDeleteRows() returns
 	// true.
 	Rows(BinlogFormat, *TableMap) (Rows, error)
-	// TransactionPayload returns a list of BinlogEvents contained
+	// TransactionPayload returns a function used to iterate over the events
 	// within the compressed transaction.
-	TransactionPayload(BinlogFormat) ([]BinlogEvent, error)
+	TransactionPayload(BinlogFormat) (func() (BinlogEvent, error), error)
 	// NextLogFile returns the name of the next binary log file & pos.
 	// This is only valid if IsRotate() returns true
 	NextLogFile(BinlogFormat) (string, uint64, error)

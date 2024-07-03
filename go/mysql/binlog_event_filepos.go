@@ -247,8 +247,8 @@ func (ev filePosFakeEvent) Rows(BinlogFormat, *TableMap) (Rows, error) {
 	return Rows{}, nil
 }
 
-func (ev filePosFakeEvent) TransactionPayload(BinlogFormat) ([]BinlogEvent, error) {
-	return []BinlogEvent{}, nil
+func (ev filePosFakeEvent) TransactionPayload(BinlogFormat) (func() (BinlogEvent, error), error) {
+	return func() (BinlogEvent, error) { return nil, nil }, nil
 }
 
 func (ev filePosFakeEvent) NextLogFile(BinlogFormat) (string, uint64, error) {

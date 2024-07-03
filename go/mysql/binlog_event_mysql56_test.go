@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"fmt"
+	"io"
 	"reflect"
 	"testing"
 
@@ -108,10 +109,17 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 		"[2 sup@planetscale.com]",   // WriteRows event
 		"COMMIT",                    // XID event
 	}
-	internalEvents, err := mysql56TransactionPayloadEvent.TransactionPayload(format)
+	iter, err := mysql56TransactionPayloadEvent.TransactionPayload(format)
 	require.NoError(t, err)
 	eventStrs := []string{}
-	for _, ev := range internalEvents {
+	for {
+		ev, err := iter()
+		if err != nil && err != io.EOF {
+			require.Fail(t, "unexpected error: %v", err)
+		}
+		if ev == nil || err == io.EOF {
+			break
+		}
 		switch {
 		case ev.IsTableMap():
 			tableMap, err = ev.TableMap(format)
