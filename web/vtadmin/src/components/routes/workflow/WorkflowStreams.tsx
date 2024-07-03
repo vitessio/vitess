@@ -83,12 +83,8 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
             </div>
             {isThrottled ? (
               <div className="text-sm text-secondary">
-                <span className="font-bold text-danger">Throttled:</span>
-                {row.throttler_status?.component_throttled}(
-                {formatRelativeTime(
-                  row.throttler_status?.time_throttled?.seconds
-                )}
-                )
+                <span className="font-bold text-danger">Throttled: </span>
+                in {row.throttler_status?.component_throttled}
               </div>
             ) : null}
           </DataCell>
