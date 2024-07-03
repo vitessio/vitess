@@ -13,35 +13,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { groupBy, orderBy } from 'lodash-es';
+import {groupBy, orderBy} from 'lodash-es';
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import {Link} from 'react-router-dom';
 
 import style from './Workflows.module.scss';
-import { useWorkflows } from '../../hooks/api';
-import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { DataCell } from '../dataTable/DataCell';
-import { DataTable } from '../dataTable/DataTable';
-import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
-import { filterNouns } from '../../util/filterNouns';
-import { getStreams, getTimeUpdated } from '../../util/workflows';
-import { formatDateTime, formatRelativeTime } from '../../util/time';
-import { StreamStatePip } from '../pips/StreamStatePip';
-import { ContentContainer } from '../layout/ContentContainer';
-import { WorkspaceHeader } from '../layout/WorkspaceHeader';
-import { WorkspaceTitle } from '../layout/WorkspaceTitle';
-import { DataFilter } from '../dataTable/DataFilter';
-import { Tooltip } from '../tooltip/Tooltip';
-import { KeyspaceLink } from '../links/KeyspaceLink';
-import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
-import { UseQueryResult } from 'react-query';
-import { vttime } from '../../proto/vtadmin';
+import {useWorkflows} from '../../hooks/api';
+import {useDocumentTitle} from '../../hooks/useDocumentTitle';
+import {DataCell} from '../dataTable/DataCell';
+import {DataTable} from '../dataTable/DataTable';
+import {useSyncedURLParam} from '../../hooks/useSyncedURLParam';
+import {filterNouns} from '../../util/filterNouns';
+import {getStreams, getTimeUpdated} from '../../util/workflows';
+import {formatDateTime, formatRelativeTime} from '../../util/time';
+import {StreamStatePip} from '../pips/StreamStatePip';
+import {ContentContainer} from '../layout/ContentContainer';
+import {WorkspaceHeader} from '../layout/WorkspaceHeader';
+import {WorkspaceTitle} from '../layout/WorkspaceTitle';
+import {DataFilter} from '../dataTable/DataFilter';
+import {Tooltip} from '../tooltip/Tooltip';
+import {KeyspaceLink} from '../links/KeyspaceLink';
+import {QueryLoadingPlaceholder} from '../placeholders/QueryLoadingPlaceholder';
+import {UseQueryResult} from 'react-query';
+import {vttime} from '../../proto/vtadmin';
+
+export const ThrottleThresholdSeconds = 60;
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
     const workflowsQuery = useWorkflows();
 
-    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
+    const {value: filter, updateValue: updateFilter} = useSyncedURLParam('filter');
 
     const sortedData = React.useMemo(() => {
         const mapped = (workflowsQuery.data || []).map((workflow) => ({
@@ -113,7 +115,7 @@ export const Workflows = () => {
                             {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
                                 if (streamState in row.streams) {
                                     var numThrottled = 0;
-                                    var throttledApp = '';
+                                    var throttledApp: string | undefined = '';
                                     var throttledFrom: vttime.ITime | null | undefined;
                                     const streamCount = row.streams[streamState].length;
                                     var streamDescription: string;
@@ -126,12 +128,18 @@ export const Workflows = () => {
                                             if (running !== undefined && running !== null) {
                                                 for (const stream of running) {
                                                     if (
-                                                        stream?.throttler_status?.component_throttled !== null &&
-                                                        stream?.throttler_status?.component_throttled !== undefined
+                                                        stream?.throttler_status?.time_throttled !== null &&
+                                                        stream?.throttler_status?.time_throttled !== undefined &&
+                                                        // If the stream has been throttled for more than 5 seconds, show it as throttled.
+                                                        Number(stream?.throttler_status?.time_throttled?.seconds) > (Date.now() / 1000 - ThrottleThresholdSeconds)
                                                     ) {
                                                         numThrottled++;
-                                                        throttledApp = stream?.throttler_status?.component_throttled;
-                                                        throttledFrom = stream?.throttler_status?.time_throttled;
+                                                        // In case of multiple streams, show the first throttled app and time.
+                                                        // The detail page will show each stream separately.
+                                                        if (numThrottled === 1) {
+                                                            throttledApp = stream?.throttler_status?.component_throttled?.toString();
+                                                            throttledFrom = stream?.throttler_status?.time_throttled;
+                                                        }
                                                     }
                                                 }
                                             }
@@ -151,18 +159,18 @@ export const Workflows = () => {
                                         streamCount === 1 ? 'stream' : 'streams',
                                         numThrottled > 0
                                             ? '(' +
-                                              numThrottled +
-                                              ' throttled by ' +
-                                              throttledApp +
-                                              ' ' +
-                                              formatRelativeTime(throttledFrom?.seconds) +
-                                              ')'
+                                            numThrottled +
+                                            ' throttled in ' +
+                                            throttledApp +
+                                            ' ' +
+                                            formatRelativeTime(throttledFrom?.seconds) +
+                                            ')'
                                             : '',
                                     ].join(' ');
                                     return (
                                         <Tooltip key={streamState} text={tooltip}>
                                             <span className={style.stream}>
-                                                <StreamStatePip state={streamState} /> {streamCount}
+                                                <StreamStatePip state={streamState}/> {streamCount}
                                             </span>
                                         </Tooltip>
                                     );
@@ -204,7 +212,7 @@ export const Workflows = () => {
                     renderRows={renderRows}
                 />
 
-                <QueryLoadingPlaceholder query={workflowsQuery as UseQueryResult} />
+                <QueryLoadingPlaceholder query={workflowsQuery as UseQueryResult}/>
             </ContentContainer>
         </div>
     );

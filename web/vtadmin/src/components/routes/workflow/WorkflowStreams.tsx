@@ -14,21 +14,22 @@
  * limitations under the License.
  */
 
-import { groupBy, orderBy } from 'lodash-es';
-import React, { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import {groupBy, orderBy} from 'lodash-es';
+import React, {useMemo} from 'react';
+import {Link} from 'react-router-dom';
 
-import { useWorkflow } from '../../../hooks/api';
-import { formatAlias } from '../../../util/tablets';
-import { formatDateTime, formatRelativeTime } from '../../../util/time';
-import { formatStreamKey, getStreams, getStreamSource, getStreamTarget } from '../../../util/workflows';
-import { DataCell } from '../../dataTable/DataCell';
-import { DataTable } from '../../dataTable/DataTable';
-import { TabletLink } from '../../links/TabletLink';
-import { StreamStatePip } from '../../pips/StreamStatePip';
-import { WorkflowStreamsLagChart } from '../../charts/WorkflowStreamsLagChart';
-import { ShardLink } from '../../links/ShardLink';
-import { env } from '../../../util/env';
+import {useWorkflow} from '../../../hooks/api';
+import {formatAlias} from '../../../util/tablets';
+import {formatDateTime, formatRelativeTime} from '../../../util/time';
+import {formatStreamKey, getStreams, getStreamSource, getStreamTarget} from '../../../util/workflows';
+import {DataCell} from '../../dataTable/DataCell';
+import {DataTable} from '../../dataTable/DataTable';
+import {TabletLink} from '../../links/TabletLink';
+import {StreamStatePip} from '../../pips/StreamStatePip';
+import {WorkflowStreamsLagChart} from '../../charts/WorkflowStreamsLagChart';
+import {ShardLink} from '../../links/ShardLink';
+import {env} from '../../../util/env';
+import {ThrottleThresholdSeconds} from "../Workflows";
 
 interface Props {
     clusterID: string;
@@ -38,8 +39,8 @@ interface Props {
 
 const COLUMNS = ['Stream', 'Source', 'Target', 'Tablet'];
 
-export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
-    const { data } = useWorkflow({ clusterID, keyspace, name });
+export const WorkflowStreams = ({clusterID, keyspace, name}: Props) => {
+    const {data} = useWorkflow({clusterID, keyspace, name});
 
     const streams = useMemo(() => {
         const rows = getStreams(data).map((stream) => ({
@@ -61,18 +62,19 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
 
             const source = getStreamSource(row);
             const target = getStreamTarget(row, keyspace);
-            const rowState = row?.throttler_status?.component_throttled ? 'Throttled' : row.state;
+            var isThrottled = Number(row?.throttler_status?.time_throttled?.seconds) > (Date.now() / 1000 - ThrottleThresholdSeconds)
+            const rowState = isThrottled ? 'Throttled' : row.state;
             return (
                 <tr key={row.key}>
                     <DataCell>
-                        <StreamStatePip state={rowState} />{' '}
+                        <StreamStatePip state={rowState}/>{' '}
                         <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
                         <div className="text-sm text-secondary">
                             Updated {formatDateTime(row.time_updated?.seconds)}
                         </div>
-                        {row?.throttler_status?.component_throttled ? (
+                        {isThrottled ? (
                             <div className="text-sm text-secondary">
                                 <span className="font-bold text-danger">Throttled:</span>
                                 {row.throttler_status?.component_throttled}(
@@ -117,7 +119,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
             {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                 <>
                     <h3 className="my-8">Stream VReplication Lag</h3>
-                    <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />
+                    <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name}/>
                 </>
             )}
 
