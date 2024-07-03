@@ -142,10 +142,10 @@ export const Workflows = () => {
                                                     }
                                                 }
                                             }
+                                            streamDescription = streamState.toLocaleLowerCase();
                                             if (numThrottled > 0) {
                                                 streamState = 'Throttled';
                                             }
-                                            streamDescription = streamState.toLocaleLowerCase();
                                             break;
                                         default:
                                             streamDescription = streamState.toLocaleLowerCase();
