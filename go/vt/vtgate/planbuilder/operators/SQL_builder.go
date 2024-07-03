@@ -115,12 +115,6 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 }
 
 func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
-	_, isWS := original.(*sqlparser.WeightStringFuncExpr)
-	if isWS {
-		// weight strings don't make much sense in the group by. the argument to the ws function is already
-		// in the grouping set, and it makes no semantic difference if it's there or not, so we can safely ignore it
-		return
-	}
 	sel := qb.stmt.(*sqlparser.Select)
 	sel.AddGroupBy(original)
 }
@@ -464,6 +458,10 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 
 	for _, by := range op.Grouping {
 		qb.addGroupBy(by.Inner)
+		simplified := by.Inner
+		if by.WSOffset != -1 {
+			qb.addGroupBy(weightStringFor(simplified))
+		}
 	}
 	if op.WithRollup {
 		qb.setWithRollup()

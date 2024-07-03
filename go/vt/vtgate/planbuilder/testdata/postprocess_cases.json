@@ -1596,9 +1596,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
+            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
             "OrderBy": "(1|2) ASC",
-            "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
+            "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
             "Table": "`user`"
           }
         ]
@@ -1633,9 +1633,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
+                "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
                 "OrderBy": "(1|2) ASC",
-                "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
+                "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
                 "Table": "`user`"
               }
             ]
@@ -2108,9 +2108,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select min(a.id), a.tcol1, weight_string(a.tcol1), weight_string(a.id) from `user` as a where 1 != 1 group by a.tcol1",
+                    "FieldQuery": "select min(a.id), a.tcol1, weight_string(a.tcol1), weight_string(a.id) from `user` as a where 1 != 1 group by a.tcol1, weight_string(a.tcol1), weight_string(a.id)",
                     "OrderBy": "(1|2) ASC",
-                    "Query": "select min(a.id), a.tcol1, weight_string(a.tcol1), weight_string(a.id) from `user` as a group by a.tcol1 order by a.tcol1 asc",
+                    "Query": "select min(a.id), a.tcol1, weight_string(a.tcol1), weight_string(a.id) from `user` as a group by a.tcol1, weight_string(a.tcol1), weight_string(a.id) order by a.tcol1 asc",
                     "Table": "`user`"
                   },
                   {
@@ -2185,9 +2185,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select foo, col, weight_string(foo) from `user` where 1 != 1 group by foo, col",
+            "FieldQuery": "select foo, col, weight_string(foo) from `user` where 1 != 1 group by foo, col, weight_string(foo)",
             "OrderBy": "1 ASC, (0|2) ASC",
-            "Query": "select foo, col, weight_string(foo) from `user` where id between :vtg1 and :vtg2 group by foo, col order by `user`.col asc, foo asc",
+            "Query": "select foo, col, weight_string(foo) from `user` where id between :vtg1 and :vtg2 group by foo, col, weight_string(foo) order by `user`.col asc, foo asc",
             "Table": "`user`"
           }
         ]

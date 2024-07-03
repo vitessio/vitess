@@ -488,9 +488,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo",
+                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo), weight_string(baz)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user`) as f group by foo order by foo asc",
+                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user`) as f group by foo, weight_string(foo), weight_string(baz) order by foo asc",
                 "Table": "`user`"
               }
             ]
@@ -527,9 +527,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo",
+                "FieldQuery": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo order by foo asc",
+                "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
                 "Table": "`user`"
               }
             ]
