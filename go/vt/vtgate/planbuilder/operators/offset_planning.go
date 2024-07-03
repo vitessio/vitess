@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -129,26 +128,8 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator
 		return in, NoRewrite
 	}
 
-	// while we are out here walking the operator tree, if we find a UDF in an aggregation, we should fail
-	failUDFAggregation := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
-		aggrOp, ok := in.(*Aggregator)
-		if !ok {
-			return in, NoRewrite
-		}
-		for _, aggr := range aggrOp.Aggregations {
-			if aggr.OpCode == opcode.AggregateUDF {
-				// we don't support UDFs in aggregation if it's still above a route
-				message := fmt.Sprintf("Aggregate UDF '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
-				panic(vterrors.VT12001(message))
-			}
-		}
-		return in, NoRewrite
-	}
-
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
-		out, res := addColumnsNeededByFilter(in, semantics.EmptyTableSet(), isRoot)
-		failUDFAggregation(in, semantics.EmptyTableSet(), isRoot)
-		return out, res
+		return addColumnsNeededByFilter(in, semantics.EmptyTableSet(), isRoot)
 	}
 
 	return TopDown(root, TableID, visitor, stopAtRoute)

@@ -304,9 +304,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	var groupByKeys []*engine.GroupByParams
 
 	for _, aggr := range op.Aggregations {
-		if aggr.OpCode == opcode.AggregateUnassigned {
+		switch aggr.OpCode {
+		case opcode.AggregateUnassigned:
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+		case opcode.AggregateUDF:
+			message := fmt.Sprintf("Aggregate UDF '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
+			return nil, vterrors.VT12001(message)
 		}
+
 		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias, ctx.VSchema.Environment().CollationEnv())
 		aggrParam.Func = aggr.Func
 		if gcFunc, isGc := aggrParam.Func.(*sqlparser.GroupConcatExpr); isGc && gcFunc.Separator == "" {
