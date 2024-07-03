@@ -33,10 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-const (
-	testKeyspaceShard = "test:0"
-)
-
 func TestWriteHeartbeat(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -335,7 +331,7 @@ func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time, replTrackerMode stri
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
 	tw := newHeartbeatWriter(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "WriterTest"), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
-	tw.keyspaceShard = testKeyspaceShard
+	tw.keyspaceShard = "test/-"
 
 	if frozenTime != nil {
 		tw.now = func() time.Time {
