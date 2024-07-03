@@ -1996,3 +1996,23 @@ message WorkflowUpdateResponse {
   string summary = 1;
   repeated TabletInfo details = 2;
 }
+
+message GetMirrorRulesRequest {
+}
+
+message GetMirrorRulesResponse {
+  vschema.MirrorRules mirror_rules = 1;
+}
+
+message WorkflowMirrorTrafficRequest {
+  string keyspace = 1;
+  string workflow = 2;
+  repeated topodata.TabletType tablet_types = 3;
+  float percent = 4;
+}
+
+message WorkflowMirrorTrafficResponse {
+  string summary = 1;
+  string start_state = 2;
+  string current_state = 3;
+}

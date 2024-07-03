@@ -292,7 +292,6 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 		schemamanager.NewPlainController(req.Sql, req.Keyspace),
 		executor,
 	)
-
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +464,6 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
-
 	// Instead of return on err directly, only return err when no tablets for backup at all
 	if err != nil {
 		tablets = reparentutil.GetBackupCandidates(tablets, stats)
@@ -518,7 +516,8 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, req *vtctldatapb.BackupRequest, stream interface {
 	Send(resp *vtctldatapb.BackupResponse) error
-}) error {
+},
+) error {
 	r := &tabletmanagerdatapb.BackupRequest{
 		Concurrency:        req.Concurrency,
 		AllowPrimary:       req.AllowPrimary,
@@ -1957,7 +1956,6 @@ func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.Get
 	for _, cell := range cells {
 		var srvKeyspace *topodatapb.SrvKeyspace
 		srvKeyspace, err = s.ts.GetSrvKeyspace(ctx, cell, req.Keyspace)
-
 		if err != nil {
 			if !topo.IsErrType(err, topo.NoNode) {
 				return nil, err
@@ -2143,7 +2141,6 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 	for _, cell := range cells {
 		var sv *vschemapb.SrvVSchema
 		sv, err = s.ts.GetSrvVSchema(ctx, cell)
-
 		if err != nil {
 			if !topo.IsErrType(err, topo.NoNode) {
 				return nil, err
@@ -3396,6 +3393,7 @@ func (s *VtctldServer) ReshardCreate(ctx context.Context, req *vtctldatapb.Resha
 	resp, err = s.ws.ReshardCreate(ctx, req)
 	return resp, err
 }
+
 func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupRequest, stream vtctlservicepb.Vtctld_RestoreFromBackupServer) (err error) {
 	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.RestoreFromBackup")
 	defer span.Finish()
@@ -4226,7 +4224,6 @@ func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.Upda
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -4257,7 +4254,6 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 		ca.Cells = req.CellsAlias.Cells
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -5167,6 +5163,38 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 	return resp, err
 }
 
+// GetMirrorRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetMirrorRules(ctx context.Context, req *vtctldatapb.GetMirrorRulesRequest) (resp *vtctldatapb.GetMirrorRulesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetMirrorRules")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	mr, err := s.ts.GetMirrorRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetMirrorRulesResponse{
+		MirrorRules: mr,
+	}, nil
+}
+
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest) (resp *vtctldatapb.WorkflowMirrorTrafficResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowMirrorTraffic")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("percent", req.Percent)
+
+	resp, err = s.ws.WorkflowMirrorTraffic(ctx, req)
+	return resp, err
+}
+
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, env *vtenv.Environment, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(env, ts))
@@ -5257,8 +5285,10 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 	return version, nil
 }
 
-var versionFuncMu sync.Mutex
-var getVersionFromTablet = getVersionFromTabletDebugVars
+var (
+	versionFuncMu        sync.Mutex
+	getVersionFromTablet = getVersionFromTabletDebugVars
+)
 
 func SetVersionFunc(versionFunc func(string) (string, error)) {
 	versionFuncMu.Lock()

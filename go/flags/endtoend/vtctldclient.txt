@@ -43,6 +43,7 @@ Available Commands:
   GetKeyspace                 Returns information about the given keyspace from the topology.
   GetKeyspaceRoutingRules     Displays the currently active keyspace routing rules.
   GetKeyspaces                Returns information about every keyspace in the topology.
+  GetMirrorRules              Displays the VSchema mirror rules.
   GetPermissions              Displays the permissions for a tablet.
   GetRoutingRules             Displays the VSchema routing rules.
   GetSchema                   Displays the full schema for a tablet, optionally restricted to the specified tables/views.

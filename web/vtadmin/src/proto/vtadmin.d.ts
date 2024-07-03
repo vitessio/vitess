@@ -45018,6 +45018,9 @@ export namespace vschema {
 
         /** SrvVSchema keyspace_routing_rules */
         keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
+
+        /** SrvVSchema mirror_rules */
+        mirror_rules?: (vschema.IMirrorRules|null);
     }
 
     /** Represents a SrvVSchema. */
@@ -45040,6 +45043,9 @@ export namespace vschema {
 
         /** SrvVSchema keyspace_routing_rules. */
         public keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
+
+        /** SrvVSchema mirror_rules. */
+        public mirror_rules?: (vschema.IMirrorRules|null);
 
         /**
          * Creates a new SrvVSchema instance using the specified properties.
@@ -45519,6 +45525,212 @@ export namespace vschema {
 
         /**
          * Gets the default type url for KeyspaceRoutingRule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MirrorRules. */
+    interface IMirrorRules {
+
+        /** MirrorRules rules */
+        rules?: (vschema.IMirrorRule[]|null);
+    }
+
+    /** Represents a MirrorRules. */
+    class MirrorRules implements IMirrorRules {
+
+        /**
+         * Constructs a new MirrorRules.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IMirrorRules);
+
+        /** MirrorRules rules. */
+        public rules: vschema.IMirrorRule[];
+
+        /**
+         * Creates a new MirrorRules instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MirrorRules instance
+         */
+        public static create(properties?: vschema.IMirrorRules): vschema.MirrorRules;
+
+        /**
+         * Encodes the specified MirrorRules message. Does not implicitly {@link vschema.MirrorRules.verify|verify} messages.
+         * @param message MirrorRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IMirrorRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MirrorRules message, length delimited. Does not implicitly {@link vschema.MirrorRules.verify|verify} messages.
+         * @param message MirrorRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IMirrorRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MirrorRules message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MirrorRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.MirrorRules;
+
+        /**
+         * Decodes a MirrorRules message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MirrorRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.MirrorRules;
+
+        /**
+         * Verifies a MirrorRules message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MirrorRules message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MirrorRules
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.MirrorRules;
+
+        /**
+         * Creates a plain object from a MirrorRules message. Also converts values to other types if specified.
+         * @param message MirrorRules
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.MirrorRules, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MirrorRules to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MirrorRules
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MirrorRule. */
+    interface IMirrorRule {
+
+        /** MirrorRule from_table */
+        from_table?: (string|null);
+
+        /** MirrorRule to_table */
+        to_table?: (string|null);
+
+        /** MirrorRule percent */
+        percent?: (number|null);
+    }
+
+    /** Represents a MirrorRule. */
+    class MirrorRule implements IMirrorRule {
+
+        /**
+         * Constructs a new MirrorRule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IMirrorRule);
+
+        /** MirrorRule from_table. */
+        public from_table: string;
+
+        /** MirrorRule to_table. */
+        public to_table: string;
+
+        /** MirrorRule percent. */
+        public percent: number;
+
+        /**
+         * Creates a new MirrorRule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MirrorRule instance
+         */
+        public static create(properties?: vschema.IMirrorRule): vschema.MirrorRule;
+
+        /**
+         * Encodes the specified MirrorRule message. Does not implicitly {@link vschema.MirrorRule.verify|verify} messages.
+         * @param message MirrorRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IMirrorRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MirrorRule message, length delimited. Does not implicitly {@link vschema.MirrorRule.verify|verify} messages.
+         * @param message MirrorRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IMirrorRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MirrorRule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MirrorRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.MirrorRule;
+
+        /**
+         * Decodes a MirrorRule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MirrorRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.MirrorRule;
+
+        /**
+         * Verifies a MirrorRule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MirrorRule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MirrorRule
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.MirrorRule;
+
+        /**
+         * Creates a plain object from a MirrorRule message. Also converts values to other types if specified.
+         * @param message MirrorRule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.MirrorRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MirrorRule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MirrorRule
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -73395,5 +73607,417 @@ export namespace vtctldata {
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
+    }
+
+    /** Properties of a GetMirrorRulesRequest. */
+    interface IGetMirrorRulesRequest {
+    }
+
+    /** Represents a GetMirrorRulesRequest. */
+    class GetMirrorRulesRequest implements IGetMirrorRulesRequest {
+
+        /**
+         * Constructs a new GetMirrorRulesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetMirrorRulesRequest);
+
+        /**
+         * Creates a new GetMirrorRulesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetMirrorRulesRequest instance
+         */
+        public static create(properties?: vtctldata.IGetMirrorRulesRequest): vtctldata.GetMirrorRulesRequest;
+
+        /**
+         * Encodes the specified GetMirrorRulesRequest message. Does not implicitly {@link vtctldata.GetMirrorRulesRequest.verify|verify} messages.
+         * @param message GetMirrorRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetMirrorRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetMirrorRulesRequest message, length delimited. Does not implicitly {@link vtctldata.GetMirrorRulesRequest.verify|verify} messages.
+         * @param message GetMirrorRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetMirrorRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetMirrorRulesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetMirrorRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetMirrorRulesRequest;
+
+        /**
+         * Decodes a GetMirrorRulesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetMirrorRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetMirrorRulesRequest;
+
+        /**
+         * Verifies a GetMirrorRulesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetMirrorRulesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetMirrorRulesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetMirrorRulesRequest;
+
+        /**
+         * Creates a plain object from a GetMirrorRulesRequest message. Also converts values to other types if specified.
+         * @param message GetMirrorRulesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetMirrorRulesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetMirrorRulesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetMirrorRulesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetMirrorRulesResponse. */
+    interface IGetMirrorRulesResponse {
+
+        /** GetMirrorRulesResponse mirror_rules */
+        mirror_rules?: (vschema.IMirrorRules|null);
+    }
+
+    /** Represents a GetMirrorRulesResponse. */
+    class GetMirrorRulesResponse implements IGetMirrorRulesResponse {
+
+        /**
+         * Constructs a new GetMirrorRulesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetMirrorRulesResponse);
+
+        /** GetMirrorRulesResponse mirror_rules. */
+        public mirror_rules?: (vschema.IMirrorRules|null);
+
+        /**
+         * Creates a new GetMirrorRulesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetMirrorRulesResponse instance
+         */
+        public static create(properties?: vtctldata.IGetMirrorRulesResponse): vtctldata.GetMirrorRulesResponse;
+
+        /**
+         * Encodes the specified GetMirrorRulesResponse message. Does not implicitly {@link vtctldata.GetMirrorRulesResponse.verify|verify} messages.
+         * @param message GetMirrorRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetMirrorRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetMirrorRulesResponse message, length delimited. Does not implicitly {@link vtctldata.GetMirrorRulesResponse.verify|verify} messages.
+         * @param message GetMirrorRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetMirrorRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetMirrorRulesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetMirrorRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetMirrorRulesResponse;
+
+        /**
+         * Decodes a GetMirrorRulesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetMirrorRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetMirrorRulesResponse;
+
+        /**
+         * Verifies a GetMirrorRulesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetMirrorRulesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetMirrorRulesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetMirrorRulesResponse;
+
+        /**
+         * Creates a plain object from a GetMirrorRulesResponse message. Also converts values to other types if specified.
+         * @param message GetMirrorRulesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetMirrorRulesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetMirrorRulesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetMirrorRulesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a WorkflowMirrorTrafficRequest. */
+    interface IWorkflowMirrorTrafficRequest {
+
+        /** WorkflowMirrorTrafficRequest keyspace */
+        keyspace?: (string|null);
+
+        /** WorkflowMirrorTrafficRequest workflow */
+        workflow?: (string|null);
+
+        /** WorkflowMirrorTrafficRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** WorkflowMirrorTrafficRequest percent */
+        percent?: (number|null);
+    }
+
+    /** Represents a WorkflowMirrorTrafficRequest. */
+    class WorkflowMirrorTrafficRequest implements IWorkflowMirrorTrafficRequest {
+
+        /**
+         * Constructs a new WorkflowMirrorTrafficRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowMirrorTrafficRequest);
+
+        /** WorkflowMirrorTrafficRequest keyspace. */
+        public keyspace: string;
+
+        /** WorkflowMirrorTrafficRequest workflow. */
+        public workflow: string;
+
+        /** WorkflowMirrorTrafficRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /** WorkflowMirrorTrafficRequest percent. */
+        public percent: number;
+
+        /**
+         * Creates a new WorkflowMirrorTrafficRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowMirrorTrafficRequest instance
+         */
+        public static create(properties?: vtctldata.IWorkflowMirrorTrafficRequest): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficRequest message. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficRequest.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowMirrorTrafficRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficRequest.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowMirrorTrafficRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowMirrorTrafficRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowMirrorTrafficRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Verifies a WorkflowMirrorTrafficRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowMirrorTrafficRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowMirrorTrafficRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Creates a plain object from a WorkflowMirrorTrafficRequest message. Also converts values to other types if specified.
+         * @param message WorkflowMirrorTrafficRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowMirrorTrafficRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowMirrorTrafficRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowMirrorTrafficRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a WorkflowMirrorTrafficResponse. */
+    interface IWorkflowMirrorTrafficResponse {
+
+        /** WorkflowMirrorTrafficResponse summary */
+        summary?: (string|null);
+
+        /** WorkflowMirrorTrafficResponse start_state */
+        start_state?: (string|null);
+
+        /** WorkflowMirrorTrafficResponse current_state */
+        current_state?: (string|null);
+    }
+
+    /** Represents a WorkflowMirrorTrafficResponse. */
+    class WorkflowMirrorTrafficResponse implements IWorkflowMirrorTrafficResponse {
+
+        /**
+         * Constructs a new WorkflowMirrorTrafficResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowMirrorTrafficResponse);
+
+        /** WorkflowMirrorTrafficResponse summary. */
+        public summary: string;
+
+        /** WorkflowMirrorTrafficResponse start_state. */
+        public start_state: string;
+
+        /** WorkflowMirrorTrafficResponse current_state. */
+        public current_state: string;
+
+        /**
+         * Creates a new WorkflowMirrorTrafficResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowMirrorTrafficResponse instance
+         */
+        public static create(properties?: vtctldata.IWorkflowMirrorTrafficResponse): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficResponse message. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficResponse.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowMirrorTrafficResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficResponse.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowMirrorTrafficResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowMirrorTrafficResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowMirrorTrafficResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Verifies a WorkflowMirrorTrafficResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowMirrorTrafficResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowMirrorTrafficResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Creates a plain object from a WorkflowMirrorTrafficResponse message. Also converts values to other types if specified.
+         * @param message WorkflowMirrorTrafficResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowMirrorTrafficResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowMirrorTrafficResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowMirrorTrafficResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }

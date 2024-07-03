@@ -296,9 +296,6 @@ func TestDMLOnNewTable(t *testing.T) {
 
 // TestNewView validates that view tracking works as expected.
 func TestNewView(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vttablet")
-
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -321,9 +318,6 @@ func TestNewView(t *testing.T) {
 
 // TestViewAndTable validates that new column added in table is present in the view definition
 func TestViewAndTable(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vttablet")
-
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
