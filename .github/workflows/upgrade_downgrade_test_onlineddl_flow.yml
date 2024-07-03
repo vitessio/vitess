@@ -124,12 +124,6 @@ jobs:
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get update
-        sudo apt-get install -y percona-xtrabackup-24
-
     # Checkout to the last release of Vitess
     - name: Check out last version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
