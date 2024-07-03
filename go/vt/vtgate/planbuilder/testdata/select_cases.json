@@ -1818,9 +1818,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select sum(intcol) as avg_col, textcol1, textcol2, count(intcol), weight_string(textcol2) from `user` where 1 != 1 group by textcol1, textcol2, weight_string(textcol2)",
+                    "FieldQuery": "select sum(intcol) as avg_col, textcol1, textcol2, count(intcol), weight_string(textcol2) from `user` where 1 != 1 group by textcol1, textcol2",
                     "OrderBy": "1 ASC COLLATE latin1_swedish_ci, (2|4) ASC COLLATE ",
-                    "Query": "select sum(intcol) as avg_col, textcol1, textcol2, count(intcol), weight_string(textcol2) from `user` group by textcol1, textcol2, weight_string(textcol2) order by textcol1 asc, textcol2 asc",
+                    "Query": "select sum(intcol) as avg_col, textcol1, textcol2, count(intcol), weight_string(textcol2) from `user` group by textcol1, textcol2 order by textcol1 asc, textcol2 asc",
                     "Table": "`user`"
                   }
                 ]
@@ -4132,9 +4132,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select music.id, music.genre, weight_string(music.genre) from music where 1 != 1 group by music.genre, weight_string(music.genre)",
+                "FieldQuery": "select music.id, music.genre, weight_string(music.genre) from music where 1 != 1 group by music.genre",
                 "OrderBy": "(1|2) ASC",
-                "Query": "select music.id, music.genre, weight_string(music.genre) from music where music.genre = 'pop' group by music.genre, weight_string(music.genre) order by music.genre asc",
+                "Query": "select music.id, music.genre, weight_string(music.genre) from music where music.genre = 'pop' group by music.genre order by music.genre asc",
                 "Table": "music"
               }
             ]
@@ -4298,8 +4298,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(music.id), weight_string(music.id) from music where 1 != 1 group by weight_string(music.id)",
-                "Query": "select max(music.id), weight_string(music.id) from music where music.user_id in ::__vals group by weight_string(music.id)",
+                "FieldQuery": "select max(music.id), weight_string(music.id) from music where 1 != 1",
+                "Query": "select max(music.id), weight_string(music.id) from music where music.user_id in ::__vals",
                 "Table": "music",
                 "Values": [
                   "(5, 6)"
@@ -4835,9 +4835,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra where 1 != 1 group by req, id, weight_string(req), weight_string(id)",
+                    "FieldQuery": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra where 1 != 1 group by req, id",
                     "OrderBy": "(2|3) ASC, (0|4) ASC",
-                    "Query": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra group by req, id, weight_string(req), weight_string(id) order by req asc, id asc",
+                    "Query": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra group by req, id order by req asc, id asc",
                     "Table": "user_extra"
                   }
                 ]
