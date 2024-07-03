@@ -116,7 +116,6 @@ export const Workflows = () => {
                                 if (streamState in row.streams) {
                                     var numThrottled = 0;
                                     var throttledApp: string | undefined = '';
-                                    var throttledFrom: vttime.ITime | null | undefined;
                                     const streamCount = row.streams[streamState].length;
                                     var streamDescription: string;
                                     switch (streamState) {
@@ -130,7 +129,7 @@ export const Workflows = () => {
                                                     if (
                                                         stream?.throttler_status?.time_throttled !== null &&
                                                         stream?.throttler_status?.time_throttled !== undefined &&
-                                                        // If the stream has been throttled for more than 5 seconds, show it as throttled.
+                                                        // If the stream has been throttled recently, treat it as throttled.
                                                         Number(stream?.throttler_status?.time_throttled?.seconds) > (Date.now() / 1000 - ThrottleThresholdSeconds)
                                                     ) {
                                                         numThrottled++;
@@ -138,7 +137,6 @@ export const Workflows = () => {
                                                         // The detail page will show each stream separately.
                                                         if (numThrottled === 1) {
                                                             throttledApp = stream?.throttler_status?.component_throttled?.toString();
-                                                            throttledFrom = stream?.throttler_status?.time_throttled;
                                                         }
                                                     }
                                                 }
@@ -161,10 +159,7 @@ export const Workflows = () => {
                                             ? '(' +
                                             numThrottled +
                                             ' throttled in ' +
-                                            throttledApp +
-                                            ' ' +
-                                            formatRelativeTime(throttledFrom?.seconds) +
-                                            ')'
+                                            throttledApp + ')'
                                             : '',
                                     ].join(' ');
                                     return (
