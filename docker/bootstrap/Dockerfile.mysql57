@@ -14,6 +14,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         echo percona-server-server-5.7 percona-server-server/root_password password 'unused'; \
         echo percona-server-server-5.7 percona-server-server/root_password_again password 'unused'; \
     } | debconf-set-selections && \
+    percona-release enable-only tools \
     apt-get update -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server libmysqlclient-dev libdbd-mysql-perl rsync libev4 percona-xtrabackup-24 && \
     rm -rf /var/lib/apt/lists/*
