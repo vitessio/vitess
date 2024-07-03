@@ -75,13 +75,6 @@ jobs:
           # install JUnit report formatter
           go install github.com/vitessio/go-junit-report@HEAD
           
-          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-          sudo apt-get install -y gnupg2
-          sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-          sudo percona-release enable-only tools
-          sudo apt-get update
-          sudo apt-get install -y percona-xtrabackup-24
-
       - name: Building binaries
         timeout-minutes: 30
         run: |
