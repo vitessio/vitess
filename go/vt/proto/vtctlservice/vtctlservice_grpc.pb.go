@@ -169,6 +169,8 @@ type VtctldClient interface {
 	//
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error)
+	// CheckThrottler issues a 'check' on a tablet's throttler
+	CheckThrottler(ctx context.Context, in *vtctldata.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldata.CheckThrottlerResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
@@ -268,6 +270,8 @@ type VtctldClient interface {
 	GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
+	// GetThrottlerStatus gets the status of a tablet throttler
+	GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -460,6 +464,9 @@ type VtctldClient interface {
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
+	// GetMirrorRules returns the VSchema routing rules.
+	GetMirrorRules(ctx context.Context, in *vtctldata.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetMirrorRulesResponse, error)
+	WorkflowMirrorTraffic(ctx context.Context, in *vtctldata.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowMirrorTrafficResponse, error)
 }
 
 type vtctldClient struct {
@@ -609,6 +616,15 @@ func (c *vtctldClient) CancelSchemaMigration(ctx context.Context, in *vtctldata.
 func (c *vtctldClient) ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error) {
 	out := new(vtctldata.ChangeTabletTypeResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ChangeTabletType", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) CheckThrottler(ctx context.Context, in *vtctldata.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldata.CheckThrottlerResponse, error) {
+	out := new(vtctldata.CheckThrottlerResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CheckThrottler", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -960,6 +976,15 @@ func (c *vtctldClient) GetTablet(ctx context.Context, in *vtctldata.GetTabletReq
 func (c *vtctldClient) GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error) {
 	out := new(vtctldata.GetTabletsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTablets", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error) {
+	out := new(vtctldata.GetThrottlerStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetThrottlerStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1574,6 +1599,24 @@ func (c *vtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldata.Workflo
 	return out, nil
 }
 
+func (c *vtctldClient) GetMirrorRules(ctx context.Context, in *vtctldata.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetMirrorRulesResponse, error) {
+	out := new(vtctldata.GetMirrorRulesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetMirrorRules", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) WorkflowMirrorTraffic(ctx context.Context, in *vtctldata.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowMirrorTrafficResponse, error) {
+	out := new(vtctldata.WorkflowMirrorTrafficResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowMirrorTraffic", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VtctldServer is the server API for Vtctld service.
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility
@@ -1611,6 +1654,8 @@ type VtctldServer interface {
 	//
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error)
+	// CheckThrottler issues a 'check' on a tablet's throttler
+	CheckThrottler(context.Context, *vtctldata.CheckThrottlerRequest) (*vtctldata.CheckThrottlerResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
@@ -1710,6 +1755,8 @@ type VtctldServer interface {
 	GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
+	// GetThrottlerStatus gets the status of a tablet throttler
+	GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -1902,6 +1949,9 @@ type VtctldServer interface {
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error)
+	// GetMirrorRules returns the VSchema routing rules.
+	GetMirrorRules(context.Context, *vtctldata.GetMirrorRulesRequest) (*vtctldata.GetMirrorRulesResponse, error)
+	WorkflowMirrorTraffic(context.Context, *vtctldata.WorkflowMirrorTrafficRequest) (*vtctldata.WorkflowMirrorTrafficResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -1941,6 +1991,9 @@ func (UnimplementedVtctldServer) CancelSchemaMigration(context.Context, *vtctlda
 }
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
+}
+func (UnimplementedVtctldServer) CheckThrottler(context.Context, *vtctldata.CheckThrottlerRequest) (*vtctldata.CheckThrottlerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckThrottler not implemented")
 }
 func (UnimplementedVtctldServer) CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CleanupSchemaMigration not implemented")
@@ -2058,6 +2111,9 @@ func (UnimplementedVtctldServer) GetTablet(context.Context, *vtctldata.GetTablet
 }
 func (UnimplementedVtctldServer) GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
+}
+func (UnimplementedVtctldServer) GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetThrottlerStatus not implemented")
 }
 func (UnimplementedVtctldServer) GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
@@ -2253,6 +2309,12 @@ func (UnimplementedVtctldServer) WorkflowSwitchTraffic(context.Context, *vtctlda
 }
 func (UnimplementedVtctldServer) WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowUpdate not implemented")
+}
+func (UnimplementedVtctldServer) GetMirrorRules(context.Context, *vtctldata.GetMirrorRulesRequest) (*vtctldata.GetMirrorRulesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMirrorRules not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowMirrorTraffic(context.Context, *vtctldata.WorkflowMirrorTrafficRequest) (*vtctldata.WorkflowMirrorTrafficResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowMirrorTraffic not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -2467,6 +2529,24 @@ func _Vtctld_ChangeTabletType_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ChangeTabletType(ctx, req.(*vtctldata.ChangeTabletTypeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_CheckThrottler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.CheckThrottlerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).CheckThrottler(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/CheckThrottler",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).CheckThrottler(ctx, req.(*vtctldata.CheckThrottlerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3169,6 +3249,24 @@ func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetTablets(ctx, req.(*vtctldata.GetTabletsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetThrottlerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetThrottlerStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetThrottlerStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetThrottlerStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetThrottlerStatus(ctx, req.(*vtctldata.GetThrottlerStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4346,6 +4444,42 @@ func _Vtctld_WorkflowUpdate_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_GetMirrorRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetMirrorRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetMirrorRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetMirrorRules",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetMirrorRules(ctx, req.(*vtctldata.GetMirrorRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_WorkflowMirrorTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowMirrorTrafficRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowMirrorTraffic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowMirrorTraffic",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowMirrorTraffic(ctx, req.(*vtctldata.WorkflowMirrorTrafficRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vtctld_ServiceDesc is the grpc.ServiceDesc for Vtctld service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -4388,6 +4522,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangeTabletType",
 			Handler:    _Vtctld_ChangeTabletType_Handler,
+		},
+		{
+			MethodName: "CheckThrottler",
+			Handler:    _Vtctld_CheckThrottler_Handler,
 		},
 		{
 			MethodName: "CleanupSchemaMigration",
@@ -4544,6 +4682,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTablets",
 			Handler:    _Vtctld_GetTablets_Handler,
+		},
+		{
+			MethodName: "GetThrottlerStatus",
+			Handler:    _Vtctld_GetThrottlerStatus_Handler,
 		},
 		{
 			MethodName: "GetTopologyPath",
@@ -4800,6 +4942,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WorkflowUpdate",
 			Handler:    _Vtctld_WorkflowUpdate_Handler,
+		},
+		{
+			MethodName: "GetMirrorRules",
+			Handler:    _Vtctld_GetMirrorRules_Handler,
+		},
+		{
+			MethodName: "WorkflowMirrorTraffic",
+			Handler:    _Vtctld_WorkflowMirrorTraffic_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

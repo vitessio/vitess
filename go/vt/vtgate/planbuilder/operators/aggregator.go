@@ -51,7 +51,10 @@ type (
 		offsetPlanned bool
 
 		// Original will only be true for the original aggregator created from the AST
-		Original      bool
+		Original bool
+
+		// ResultColumns signals how many columns will be produced by this operator
+		// This is used to truncate the columns in the final result
 		ResultColumns int
 
 		QP *QueryProjection
@@ -141,12 +144,24 @@ func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr
 
 	expr := a.DT.RewriteExpression(ctx, in)
 	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
+		a.checkOffset(offset)
 		return offset
 	}
 	return -1
 }
 
-func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) int {
+func (a *Aggregator) checkOffset(offset int) {
+	// if the offset is greater than the number of columns we expect to produce, we need to update the number of columns
+	// this is to make sure that the column is not truncated in the final result
+	if a.ResultColumns > 0 && a.ResultColumns <= offset {
+		a.ResultColumns = offset + 1
+	}
+}
+
+func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) (offset int) {
+	defer func() {
+		a.checkOffset(offset)
+	}()
 	rewritten := a.DT.RewriteExpression(ctx, ae.Expr)
 
 	ae = &sqlparser.AliasedExpr{
@@ -180,7 +195,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 		a.Aggregations = append(a.Aggregations, aggr)
 	}
 
-	offset := len(a.Columns)
+	offset = len(a.Columns)
 	a.Columns = append(a.Columns, ae)
 	incomingOffset := a.Source.AddColumn(ctx, false, groupBy, ae)
 
@@ -246,6 +261,7 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 		// TODO: we could handle this case by adding a projection on under the aggregator to make the columns line up
 		panic(errFailedToPlan(wsAe))
 	}
+	a.checkOffset(wsOffset)
 	return wsOffset
 }
 
@@ -281,9 +297,9 @@ func isDerived(op Operator) bool {
 	}
 }
 
-func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) (res []*sqlparser.AliasedExpr) {
 	if isDerived(a.Source) {
-		return a.Columns
+		return truncate(a, a.Columns)
 	}
 
 	// we update the incoming columns, so we know about any new columns that have been added
@@ -296,7 +312,7 @@ func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.A
 		a.Columns = append(a.Columns, columns[len(a.Columns):]...)
 	}
 
-	return a.Columns
+	return truncate(a, a.Columns)
 }
 
 func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
@@ -314,6 +330,9 @@ func (a *Aggregator) ShortDescription() string {
 	org := ""
 	if a.Original {
 		org = "ORG "
+	}
+	if a.ResultColumns > 0 {
+		org += fmt.Sprintf(":%d ", a.ResultColumns)
 	}
 
 	if len(a.Grouping) == 0 {
@@ -379,6 +398,21 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	return nil
 }
 
+func (aggr Aggr) setPushColumn(exprs sqlparser.Exprs) {
+	if aggr.Func == nil {
+		if len(exprs) > 1 {
+			panic(vterrors.VT13001(fmt.Sprintf("unexpected number of expression in an random aggregation: %s", sqlparser.String(exprs))))
+		}
+		aggr.Original.Expr = exprs[0]
+		return
+	}
+
+	err := aggr.Func.SetArgs(exprs)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func (aggr Aggr) getPushColumn() sqlparser.Expr {
 	switch aggr.OpCode {
 	case opcode.AggregateAnyValue:
@@ -395,6 +429,17 @@ func (aggr Aggr) getPushColumn() sqlparser.Expr {
 			panic(vterrors.VT03001(sqlparser.String(aggr.Func)))
 		}
 		return aggr.Func.GetArg()
+	}
+}
+
+func (aggr Aggr) getPushColumnExprs() sqlparser.Exprs {
+	switch aggr.OpCode {
+	case opcode.AggregateAnyValue:
+		return sqlparser.Exprs{aggr.Original.Expr}
+	case opcode.AggregateCountStar:
+		return sqlparser.Exprs{sqlparser.NewIntLiteral("1")}
+	default:
+		return aggr.Func.GetArgs()
 	}
 }
 
@@ -485,7 +530,16 @@ func (a *Aggregator) setTruncateColumnCount(offset int) {
 	a.ResultColumns = offset
 }
 
+func (a *Aggregator) getTruncateColumnCount() int {
+	return a.ResultColumns
+}
+
 func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+	if a.ResultColumns == 0 {
+		// if we need to use `internalAddColumn`, it means we are adding columns that are not part of the original list,
+		// so we need to set the ResultColumns to the current length of the columns list
+		a.ResultColumns = len(a.Columns)
+	}
 	offset := a.Source.AddColumn(ctx, true, addToGroupBy, aliasedExpr)
 
 	if offset == len(a.Columns) {
@@ -498,11 +552,23 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 // SplitAggregatorBelowOperators returns the aggregator that will live under the Route.
 // This is used when we are splitting the aggregation so one part is done
 // at the mysql level and one part at the vtgate level
-func (a *Aggregator) SplitAggregatorBelowOperators(input []Operator) *Aggregator {
+func (a *Aggregator) SplitAggregatorBelowOperators(ctx *plancontext.PlanningContext, input []Operator) *Aggregator {
 	newOp := a.Clone(input).(*Aggregator)
 	newOp.Pushed = false
 	newOp.Original = false
 	newOp.DT = nil
+
+	// We need to make sure that the columns are cloned so that the original operator is not affected
+	// by the changes we make to the new operator
+	newOp.Columns = slice.Map(a.Columns, func(from *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
+		return ctx.SemTable.Clone(from).(*sqlparser.AliasedExpr)
+	})
+	for idx, aggr := range newOp.Aggregations {
+		newOp.Aggregations[idx].Original = ctx.SemTable.Clone(aggr.Original).(*sqlparser.AliasedExpr)
+	}
+	for idx, gb := range newOp.Grouping {
+		newOp.Grouping[idx].Inner = ctx.SemTable.Clone(gb.Inner).(sqlparser.Expr)
+	}
 	return newOp
 }
 

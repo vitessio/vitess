@@ -161,7 +161,7 @@ func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
 	if cmp.Operator == sqlparser.NullSafeEqualOp {
 		return
 	}
-	cmp.Operator = sqlparser.Inverse(cmp.Operator)
+	cmp.Operator = cmp.Operator.Inverse()
 	cursor.Replace(cmp)
 }
 
@@ -493,7 +493,7 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 				return
 			}
 
-			cursor.Replace(sqlparser.CloneExpr(item.expr))
+			cursor.Replace(sqlparser.Clone(item.expr))
 		}
 	}, nil)
 

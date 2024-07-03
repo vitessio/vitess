@@ -165,6 +165,23 @@ func InitRoutingRules(
 	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
+// InitMirrorRules saves the mirror rules into ts and reloads the vschema.
+func InitMirrorRules(
+	ctx context.Context,
+	ts *topo.Server,
+	mr *vschemapb.MirrorRules,
+) error {
+	if mr == nil {
+		return nil
+	}
+
+	if err := ts.SaveMirrorRules(ctx, mr); err != nil {
+		return err
+	}
+
+	return ts.RebuildSrvVSchema(ctx, nil)
+}
+
 // InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(
@@ -760,6 +777,15 @@ func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tab
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	return t.tm.GetPermissions(ctx)
+}
+
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (itmc *internalTabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
+	t, ok := tabletMap[tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", topoproto.TabletAliasString(tablet.Alias))
+	}
+	return t.tm.GetGlobalStatusVars(ctx, variables)
 }
 
 func (itmc *internalTabletManagerClient) SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {

@@ -42,6 +42,10 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return checkDerived(node)
 	case *sqlparser.AssignmentExpr:
 		return vterrors.VT12001("Assignment expression")
+	case *sqlparser.ComparisonExpr:
+		if node.Modifier != sqlparser.Missing {
+			return NotSingleRouteErr{Inner: &UnsupportedConstruct{errString: "ANY/ALL/SOME comparison operator"}}
+		}
 	case *sqlparser.Subquery:
 		return a.checkSubqueryColumns(cursor.Parent(), node)
 	case *sqlparser.With:
@@ -49,11 +53,13 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return vterrors.VT12001("recursive common table expression")
 		}
 	case *sqlparser.Insert:
-		if node.Action == sqlparser.ReplaceAct {
+		if !a.singleUnshardedKeyspace && node.Action == sqlparser.ReplaceAct {
 			return ShardedError{Inner: &UnsupportedConstruct{errString: "REPLACE INTO with sharded keyspace"}}
 		}
 	case *sqlparser.OverClause:
-		return ShardedError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
+		if !a.singleUnshardedKeyspace {
+			return ShardedError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
+		}
 	}
 
 	return nil

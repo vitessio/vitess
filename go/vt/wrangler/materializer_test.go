@@ -952,15 +952,15 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		out: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"unicode_loose_md5": {
-					Type: "unicode_loose_md5",
+				"unicode_loose_xxhash": {
+					Type: "unicode_loose_xxhash",
 				},
 			},
 			Tables: map[string]*vschemapb.Table{
 				"lkp": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
 						Column: "c1",
-						Name:   "unicode_loose_md5",
+						Name:   "unicode_loose_xxhash",
 					}},
 				},
 			},
@@ -1002,7 +1002,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			Vindexes: map[string]*vschemapb.Vindex{
 				// Create a misleading vindex name.
 				"xxhash": {
-					Type: "unicode_loose_md5",
+					Type: "unicode_loose_xxhash",
 				},
 			},
 		},
@@ -1929,11 +1929,11 @@ func TestMaterializerOneToOne(t *testing.T) {
 		insertPrefix+
 			`\(`+
 			`'workflow', `+
-			(`'keyspace:\\"sourceks\\" shard:\\"0\\" `+
+			(`'keyspace:"sourceks" shard:"0" `+
 				`filter:{`+
-				`rules:{match:\\"t1\\" filter:\\"select.*t1\\"} `+
-				`rules:{match:\\"t2\\" filter:\\"select.*t3\\"} `+
-				`rules:{match:\\"t4\\"}`+
+				`rules:{match:"t1" filter:"select.*t1"} `+
+				`rules:{match:"t2" filter:"select.*t3"} `+
+				`rules:{match:"t4"}`+
 				`}', `)+
 			`'', [0-9]*, [0-9]*, 'zone1', 'primary,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'`+
 			`\)`+eol,
@@ -1968,9 +1968,9 @@ func TestMaterializerManyToOne(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"-80\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
+			`\('workflow', 'keyspace:"sourceks" shard:"-80" filter:{rules:{match:"t1" filter:"select.*t1"} rules:{match:"t2" filter:"select.*t3"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
 			`, `+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"80-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
+			`\('workflow', 'keyspace:"sourceks" shard:"80-" filter:{rules:{match:"t1" filter:"select.*t1"} rules:{match:"t2" filter:"select.*t3"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -2021,13 +2021,13 @@ func TestMaterializerOneToMany(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`,
+			`.*shard:"0" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`,
+			`.*shard:"0" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -2078,15 +2078,15 @@ func TestMaterializerManyToMany(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`+
-			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`,
+			`.*shard:"-40" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`+
+			`.*shard:"40-" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`+
-			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`,
+			`.*shard:"-40" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`+
+			`.*shard:"40-" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -2139,13 +2139,13 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
+			`.*shard:"0" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
+			`.*shard:"0" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -2181,7 +2181,7 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
+			`\('workflow', 'keyspace:"sourceks" shard:"0" filter:{rules:{match:"t1" filter:"select.*t1"} rules:{match:"t2" filter:"select.*t3"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -2219,7 +2219,7 @@ func TestMaterializerCopySchema(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
+			`\('workflow', 'keyspace:"sourceks" shard:"0" filter:{rules:{match:"t1" filter:"select.*t1"} rules:{match:"t2" filter:"select.*t3"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -2276,13 +2276,13 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
+			`.*shard:"0" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
+			`.*shard:"0" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -2336,13 +2336,13 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*-80.*`,
+			`.*shard:"0" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*80-.*`,
+			`.*shard:"0" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -2863,7 +2863,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 	}
 
 	getStreamInsert := func(sourceShard, sourceColumn, targetVindex, targetShard string) string {
-		return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(%s.*targetks\.%s.*%s.*`, sourceShard, sourceColumn, targetVindex, targetShard)
+		return fmt.Sprintf(`.*shard:"%s" filter:{rules:{match:"t1" filter:"select.*t1 where in_keyrange\(%s.*targetks\.%s.*%s.*`, sourceShard, sourceColumn, targetVindex, targetShard)
 	}
 
 	targetVSchema := &vschemapb.Keyspace{
@@ -3056,7 +3056,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 			// The single target shard streams all data from each source shard
 			// without any keyrange filtering.
 			getStreamInsert: func(sourceShard, _, _, targetShard string) string {
-				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1`, sourceShard)
+				return fmt.Sprintf(`.*shard:"%s" filter:{rules:{match:"t1" filter:"select.*t1`, sourceShard)
 			},
 		},
 		{
@@ -3611,10 +3611,8 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				}
 				blsBytes, err := prototext.Marshal(bls)
 				require.NoError(t, err, "failed to marshal binlog source: %v", err)
-				// This is also escaped in the SQL statement.
-				blsStr := strings.ReplaceAll(string(blsBytes), `"`, `\"`)
 				// Escape the string for the regexp comparison.
-				blsStr = regexp.QuoteMeta(blsStr)
+				blsStr := regexp.QuoteMeta(string(blsBytes))
 				// For some reason we end up with an extra slash added by QuoteMeta for the
 				// escaped single quotes in the filter.
 				blsStr = strings.ReplaceAll(blsStr, `\\\\`, `\\\`)

@@ -41,7 +41,7 @@ type (
 		// This is only filled in during offset planning
 		Columns []engine.CheckCol
 
-		Truncate int
+		ResultColumns int
 	}
 )
 
@@ -54,7 +54,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			offset := d.Source.AddWSColumn(ctx, idx, false)
 			wsCol = &offset
 		}
-		typ, _ := ctx.SemTable.TypeForExpr(e)
+		typ, _ := ctx.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:          idx,
 			WsCol:        wsCol,
@@ -72,7 +72,7 @@ func (d *Distinct) Clone(inputs []Operator) Operator {
 		Columns:           slices.Clone(d.Columns),
 		QP:                d.QP,
 		PushedPerformance: d.PushedPerformance,
-		Truncate:          d.Truncate,
+		ResultColumns:     d.ResultColumns,
 	}
 }
 
@@ -101,11 +101,11 @@ func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr
 }
 
 func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return d.Source.GetColumns(ctx)
+	return truncate(d, d.Source.GetColumns(ctx))
 }
 
 func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return d.Source.GetSelectExprs(ctx)
+	return truncate(d, d.Source.GetSelectExprs(ctx))
 }
 
 func (d *Distinct) ShortDescription() string {
@@ -120,5 +120,9 @@ func (d *Distinct) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func (d *Distinct) setTruncateColumnCount(offset int) {
-	d.Truncate = offset
+	d.ResultColumns = offset
+}
+
+func (d *Distinct) getTruncateColumnCount() int {
+	return d.ResultColumns
 }

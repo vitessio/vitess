@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-
-	"vitess.io/vitess/go/hack"
 )
 
 func ParseUint64(s string, base int) (uint64, error) {
@@ -259,9 +257,8 @@ func ParseFloat64(s string) (float64, error) {
 	ws := i
 
 	// We only care to parse as many of the initial float characters of the
-	// string as possible. This functionality is implemented in the `strconv` package
-	// of the standard library, but not exposed, so we hook into it.
-	val, l, err := hack.Atof64(s[ws:])
+	// string as possible.
+	val, l, err := Atof64(s[ws:])
 	for l < len(s[ws:]) {
 		if !isSpace(s[ws+uint(l)]) {
 			break

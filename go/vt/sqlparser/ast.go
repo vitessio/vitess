@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 /*
@@ -2273,12 +2274,16 @@ type (
 	// ComparisonExpr represents a two-value comparison expression.
 	ComparisonExpr struct {
 		Operator    ComparisonExprOperator
+		Modifier    ComparisonModifier
 		Left, Right Expr
 		Escape      Expr
 	}
 
 	// ComparisonExprOperator is an enum for ComparisonExpr.Operator
 	ComparisonExprOperator int8
+
+	// ComparisonModifier is an enum for ComparisonExpr.Modifier
+	ComparisonModifier int8
 
 	// BetweenExpr represents a BETWEEN or a NOT BETWEEN expression.
 	BetweenExpr struct {
@@ -2567,6 +2572,21 @@ type (
 		Alias   IdentifierCS
 		Filter  Expr
 		Columns []*JtColumnDefinition
+	}
+
+	// JSONArrayAgg is an aggregation expression that creates a JSON Array.
+	// For more information, visit https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-arrayagg
+	JSONArrayAgg struct {
+		Expr       Expr
+		OverClause *OverClause
+	}
+
+	// JSONObjectAgg is an aggregation expression that creates a JSON Object.
+	// For more information, visit https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-objectagg
+	JSONObjectAgg struct {
+		Key        Expr
+		Value      Expr
+		OverClause *OverClause
 	}
 
 	// JtOnResponseType describes the type of column: default, error or null
@@ -2874,6 +2894,8 @@ type (
 		Expr
 		GetArg() Expr
 		GetArgs() Exprs
+		SetArg(expr Expr)
+		SetArgs(exprs Exprs) error
 		// AggrName returns the lower case string representing this aggregation function
 		AggrName() string
 	}
@@ -3219,7 +3241,9 @@ func (*JSONOverlapsExpr) IsExpr()                   {}
 func (*JSONSearchExpr) IsExpr()                     {}
 func (*JSONValueExpr) IsExpr()                      {}
 func (*JSONArrayExpr) IsExpr()                      {}
+func (*JSONArrayAgg) IsExpr()                       {}
 func (*JSONObjectExpr) IsExpr()                     {}
+func (*JSONObjectAgg) IsExpr()                      {}
 func (*JSONQuoteExpr) IsExpr()                      {}
 func (*JSONAttributesExpr) IsExpr()                 {}
 func (*JSONValueModifierExpr) IsExpr()              {}
@@ -3381,6 +3405,8 @@ func (varP *VarPop) GetArg() Expr               { return varP.Arg }
 func (varS *VarSamp) GetArg() Expr              { return varS.Arg }
 func (variance *Variance) GetArg() Expr         { return variance.Arg }
 func (av *AnyValue) GetArg() Expr               { return av.Arg }
+func (jaa *JSONArrayAgg) GetArg() Expr          { return jaa.Expr }
+func (joa *JSONObjectAgg) GetArg() Expr         { return joa.Key }
 
 func (sum *Sum) GetArgs() Exprs                   { return Exprs{sum.Arg} }
 func (min *Min) GetArgs() Exprs                   { return Exprs{min.Arg} }
@@ -3400,6 +3426,64 @@ func (varP *VarPop) GetArgs() Exprs               { return Exprs{varP.Arg} }
 func (varS *VarSamp) GetArgs() Exprs              { return Exprs{varS.Arg} }
 func (variance *Variance) GetArgs() Exprs         { return Exprs{variance.Arg} }
 func (av *AnyValue) GetArgs() Exprs               { return Exprs{av.Arg} }
+func (jaa *JSONArrayAgg) GetArgs() Exprs          { return Exprs{jaa.Expr} }
+func (joa *JSONObjectAgg) GetArgs() Exprs         { return Exprs{joa.Key, joa.Value} }
+
+func (min *Min) SetArg(expr Expr)                   { min.Arg = expr }
+func (sum *Sum) SetArg(expr Expr)                   { sum.Arg = expr }
+func (max *Max) SetArg(expr Expr)                   { max.Arg = expr }
+func (avg *Avg) SetArg(expr Expr)                   { avg.Arg = expr }
+func (*CountStar) SetArg(expr Expr)                 {}
+func (count *Count) SetArg(expr Expr)               { count.Args = Exprs{expr} }
+func (grpConcat *GroupConcatExpr) SetArg(expr Expr) { grpConcat.Exprs = Exprs{expr} }
+func (bAnd *BitAnd) SetArg(expr Expr)               { bAnd.Arg = expr }
+func (bOr *BitOr) SetArg(expr Expr)                 { bOr.Arg = expr }
+func (bXor *BitXor) SetArg(expr Expr)               { bXor.Arg = expr }
+func (std *Std) SetArg(expr Expr)                   { std.Arg = expr }
+func (stdD *StdDev) SetArg(expr Expr)               { stdD.Arg = expr }
+func (stdP *StdPop) SetArg(expr Expr)               { stdP.Arg = expr }
+func (stdS *StdSamp) SetArg(expr Expr)              { stdS.Arg = expr }
+func (varP *VarPop) SetArg(expr Expr)               { varP.Arg = expr }
+func (varS *VarSamp) SetArg(expr Expr)              { varS.Arg = expr }
+func (variance *Variance) SetArg(expr Expr)         { variance.Arg = expr }
+func (av *AnyValue) SetArg(expr Expr)               { av.Arg = expr }
+func (jaa *JSONArrayAgg) SetArg(expr Expr)          { jaa.Expr = expr }
+func (joa *JSONObjectAgg) SetArg(expr Expr)         { joa.Key = expr }
+
+func (min *Min) SetArgs(exprs Exprs) error           { return setFuncArgs(min, exprs, "MIN") }
+func (sum *Sum) SetArgs(exprs Exprs) error           { return setFuncArgs(sum, exprs, "SUM") }
+func (max *Max) SetArgs(exprs Exprs) error           { return setFuncArgs(max, exprs, "MAX") }
+func (avg *Avg) SetArgs(exprs Exprs) error           { return setFuncArgs(avg, exprs, "AVG") }
+func (*CountStar) SetArgs(Exprs) error               { return nil }
+func (bAnd *BitAnd) SetArgs(exprs Exprs) error       { return setFuncArgs(bAnd, exprs, "BIT_AND") }
+func (bOr *BitOr) SetArgs(exprs Exprs) error         { return setFuncArgs(bOr, exprs, "BIT_OR") }
+func (bXor *BitXor) SetArgs(exprs Exprs) error       { return setFuncArgs(bXor, exprs, "BIT_XOR") }
+func (std *Std) SetArgs(exprs Exprs) error           { return setFuncArgs(std, exprs, "STD") }
+func (stdD *StdDev) SetArgs(exprs Exprs) error       { return setFuncArgs(stdD, exprs, "STDDEV") }
+func (stdP *StdPop) SetArgs(exprs Exprs) error       { return setFuncArgs(stdP, exprs, "STDDEV_POP") }
+func (stdS *StdSamp) SetArgs(exprs Exprs) error      { return setFuncArgs(stdS, exprs, "STDDEV_SAMP") }
+func (varP *VarPop) SetArgs(exprs Exprs) error       { return setFuncArgs(varP, exprs, "VAR_POP") }
+func (varS *VarSamp) SetArgs(exprs Exprs) error      { return setFuncArgs(varS, exprs, "VAR_SAMP") }
+func (variance *Variance) SetArgs(exprs Exprs) error { return setFuncArgs(variance, exprs, "VARIANCE") }
+func (av *AnyValue) SetArgs(exprs Exprs) error       { return setFuncArgs(av, exprs, "ANY_VALUE") }
+func (jaa *JSONArrayAgg) SetArgs(exprs Exprs) error  { return setFuncArgs(jaa, exprs, "JSON_ARRAYARG") }
+func (joa *JSONObjectAgg) SetArgs(exprs Exprs) error {
+	if len(exprs) != 2 {
+		return vterrors.VT13001("JSONObjectAgg takes in 2 expressions")
+	}
+	joa.Key = exprs[0]
+	joa.Value = exprs[1]
+	return nil
+}
+
+func (count *Count) SetArgs(exprs Exprs) error {
+	count.Args = exprs
+	return nil
+}
+func (grpConcat *GroupConcatExpr) SetArgs(exprs Exprs) error {
+	grpConcat.Exprs = exprs
+	return nil
+}
 
 func (sum *Sum) IsDistinct() bool                   { return sum.Distinct }
 func (min *Min) IsDistinct() bool                   { return min.Distinct }
@@ -3433,6 +3517,8 @@ func (*VarPop) AggrName() string          { return "var_pop" }
 func (*VarSamp) AggrName() string         { return "var_samp" }
 func (*Variance) AggrName() string        { return "variance" }
 func (*AnyValue) AggrName() string        { return "any_value" }
+func (*JSONArrayAgg) AggrName() string    { return "json_arrayagg" }
+func (*JSONObjectAgg) AggrName() string   { return "json_objectagg" }
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

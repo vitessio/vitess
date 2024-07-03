@@ -50,11 +50,11 @@ var snapshotDiscoveryKeys chan string
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
 
-var discoveriesCounter = stats.NewCounter("discoveries.attempt", "Number of discoveries attempted")
-var failedDiscoveriesCounter = stats.NewCounter("discoveries.fail", "Number of failed discoveries")
-var instancePollSecondsExceededCounter = stats.NewCounter("discoveries.instance_poll_seconds_exceeded", "Number of instances that took longer than InstancePollSeconds to poll")
-var discoveryQueueLengthGauge = stats.NewGauge("discoveries.queue_length", "Length of the discovery queue")
-var discoveryRecentCountGauge = stats.NewGauge("discoveries.recent_count", "Number of recent discoveries")
+var discoveriesCounter = stats.NewCounter("DiscoveriesAttempt", "Number of discoveries attempted")
+var failedDiscoveriesCounter = stats.NewCounter("DiscoveriesFail", "Number of failed discoveries")
+var instancePollSecondsExceededCounter = stats.NewCounter("DiscoveriesInstancePollSecondsExceeded", "Number of instances that took longer than InstancePollSeconds to poll")
+var discoveryQueueLengthGauge = stats.NewGauge("DiscoveriesQueueLength", "Length of the discovery queue")
+var discoveryRecentCountGauge = stats.NewGauge("DiscoveriesRecentCount", "Number of recent discoveries")
 var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
 
 var recentDiscoveryOperationKeys *cache.Cache

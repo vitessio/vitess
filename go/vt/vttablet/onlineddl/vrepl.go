@@ -105,11 +105,11 @@ type VRepl struct {
 	sourceTable string
 	targetTable string
 	pos         string
-	alterQuery  string
+	alterQuery  *sqlparser.AlterTable
 	tableRows   int64
 
-	originalShowCreateTable string
-	vreplShowCreateTable    string
+	originalCreateTable *sqlparser.CreateTable
+	vreplCreateTable    *sqlparser.CreateTable
 
 	analyzeTable bool
 
@@ -150,27 +150,27 @@ func NewVRepl(
 	dbName string,
 	sourceTable string,
 	targetTable string,
-	originalShowCreateTable string,
-	vreplShowCreateTable string,
-	alterQuery string,
+	originalCreateTable *sqlparser.CreateTable,
+	vreplCreateTable *sqlparser.CreateTable,
+	alterQuery *sqlparser.AlterTable,
 	analyzeTable bool,
 ) *VRepl {
 	return &VRepl{
-		env:                     env,
-		workflow:                workflow,
-		keyspace:                keyspace,
-		shard:                   shard,
-		dbName:                  dbName,
-		sourceTable:             sourceTable,
-		targetTable:             targetTable,
-		originalShowCreateTable: originalShowCreateTable,
-		vreplShowCreateTable:    vreplShowCreateTable,
-		alterQuery:              alterQuery,
-		analyzeTable:            analyzeTable,
-		parser:                  vrepl.NewAlterTableParser(),
-		enumToTextMap:           map[string]string{},
-		intToEnumMap:            map[string]bool{},
-		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
+		env:                 env,
+		workflow:            workflow,
+		keyspace:            keyspace,
+		shard:               shard,
+		dbName:              dbName,
+		sourceTable:         sourceTable,
+		targetTable:         targetTable,
+		originalCreateTable: originalCreateTable,
+		vreplCreateTable:    vreplCreateTable,
+		alterQuery:          alterQuery,
+		analyzeTable:        analyzeTable,
+		parser:              vrepl.NewAlterTableParser(),
+		enumToTextMap:       map[string]string{},
+		intToEnumMap:        map[string]bool{},
+		convertCharset:      map[string](*binlogdatapb.CharsetConversion){},
 	}
 }
 
@@ -386,15 +386,13 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 }
 
 func (v *VRepl) analyzeAlter(ctx context.Context) error {
-	if v.alterQuery == "" {
+	if v.alterQuery == nil {
 		// Happens for REVERT
 		return nil
 	}
-	if err := v.parser.ParseAlterStatement(v.alterQuery, v.env.Parser()); err != nil {
-		return err
-	}
+	v.parser.AnalyzeAlter(v.alterQuery)
 	if v.parser.IsRenameTable() {
-		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", v.alterQuery)
+		return fmt.Errorf("Renaming the table is not supported in ALTER TABLE: %s", sqlparser.CanonicalString(v.alterQuery))
 	}
 	return nil
 }
@@ -461,7 +459,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.env, v.originalShowCreateTable, v.vreplShowCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.env, v.originalCreateTable, v.vreplCreateTable)
 	if err != nil {
 		return err
 	}

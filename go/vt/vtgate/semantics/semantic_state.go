@@ -656,6 +656,7 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 }
 
 // TypeForExpr returns the type of expressions in the query
+// Note that PlanningContext has the same method, and you should use that if you have a PlanningContext
 func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 	if typ, found := st.ExprTypes[e]; found {
 		return typ, true
@@ -670,7 +671,7 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 		return evalengine.NewTypeEx(sqltypes.VarBinary, collations.CollationBinaryID, wt.Nullable(), 0, 0, nil), true
 	}
 
-	return evalengine.Type{}, false
+	return evalengine.NewUnknownType(), false
 }
 
 // NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
@@ -821,7 +822,7 @@ func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tab
 	return ks, tables
 }
 
-// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same keyspace
+// SingleKeyspace returns the single keyspace if all tables in the query are in the same keyspace
 func (st *SemTable) SingleKeyspace() (ks *vindexes.Keyspace) {
 	validKS := func(this *vindexes.Keyspace) bool {
 		if this == nil {
@@ -966,7 +967,7 @@ func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
 		if !isExpr {
 			return
 		}
-		cursor.Replace(sqlparser.CloneExpr(expr))
+		cursor.Replace(sqlparser.Clone(expr))
 	}, st.CopySemanticInfo)
 }
 

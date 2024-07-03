@@ -60,14 +60,9 @@ func TestRegisterService(t *testing.T) {
 
 	serviceName := "vtservice"
 	closer := StartTracing(serviceName)
-	tracer, ok := closer.(*fakeTracer)
-	if !ok {
-		t.Fatalf("did not get the expected tracer, got %+v (%T)", tracer, tracer)
-	}
+	tracer := closer.(*fakeTracer)
 
-	if tracer.name != serviceName {
-		t.Fatalf("expected the name to be `%v` but it was `%v`", serviceName, tracer.name)
-	}
+	require.Equal(t, serviceName, tracer.name, fmt.Sprintf("tracer name mismatch: expected %s, got %s", serviceName, tracer.name))
 }
 
 func TestNewFromString(t *testing.T) {

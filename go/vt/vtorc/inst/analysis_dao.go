@@ -36,7 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
-var analysisChangeWriteCounter = stats.NewCounter("analysis.change.write", "Number of times analysis has changed")
+var analysisChangeWriteCounter = stats.NewCounter("AnalysisChangeWrite", "Number of times analysis has changed")
 
 var recentInstantAnalysis *cache.Cache
 

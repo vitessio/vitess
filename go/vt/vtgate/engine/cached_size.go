@@ -41,8 +41,8 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	size += cached.Type.CachedSize(false)
 	// field Alias string
 	size += hack.RuntimeAllocSize(int64(len(cached.Alias)))
-	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Expr.(cachedObject); ok {
+	// field Func vitess.io/vitess/go/vt/sqlparser.AggrFunc
+	if cc, ok := cached.Func.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Original *vitess.io/vitess/go/vt/sqlparser.AliasedExpr
@@ -793,8 +793,6 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
-	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *Plan) CachedSize(alloc bool) int64 {
@@ -1076,7 +1074,7 @@ func (cached *SemiJoin) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Left.(cachedObject); ok {
@@ -1085,10 +1083,6 @@ func (cached *SemiJoin) CachedSize(alloc bool) int64 {
 	// field Right vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Right.(cachedObject); ok {
 		size += cc.CachedSize(true)
-	}
-	// field Cols []int
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
 	}
 	// field Vars map[string]int
 	if cached.Vars != nil {

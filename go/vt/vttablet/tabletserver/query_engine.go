@@ -187,8 +187,8 @@ type QueryEngine struct {
 
 	// stats
 	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains error code as an additional dimension
-	queryCounts, queryCountsWithTabletType, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
-	queryCacheHits, queryCacheMisses                                                                                                     *stats.CounterFunc
+	queryCounts, queryCountsWithTabletType, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned, queryTextCharsProcessed *stats.CountersWithMultiLabels
+	queryCacheHits, queryCacheMisses                                                                                                                              *stats.CounterFunc
 
 	// stats flags
 	enablePerWorkloadTableMetrics bool
@@ -269,22 +269,22 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Load)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Load)
 
-	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", func() int64 {
+	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query plan cache length", func() int64 {
 		return int64(qe.plans.Len())
 	})
-	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", func() int64 {
+	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query plan cache size", func() int64 {
 		return int64(qe.plans.UsedCapacity())
 	})
-	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", func() int64 {
+	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query plan cache capacity", func() int64 {
 		return int64(qe.plans.MaxCapacity())
 	})
-	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", func() int64 {
+	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query plan cache evictions", func() int64 {
 		return qe.plans.Metrics.Evicted()
 	})
-	qe.queryCacheHits = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query cache hits", func() int64 {
+	qe.queryCacheHits = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query plan cache hits", func() int64 {
 		return qe.plans.Metrics.Hits()
 	})
-	qe.queryCacheMisses = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query cache misses", func() int64 {
+	qe.queryCacheMisses = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query plan cache misses", func() int64 {
 		return qe.plans.Metrics.Misses()
 	})
 
@@ -298,6 +298,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", labels)
 	qe.queryRowsAffected = env.Exporter().NewCountersWithMultiLabels("QueryRowsAffected", "query rows affected", labels)
 	qe.queryRowsReturned = env.Exporter().NewCountersWithMultiLabels("QueryRowsReturned", "query rows returned", labels)
+	qe.queryTextCharsProcessed = env.Exporter().NewCountersWithMultiLabels("QueryTextCharactersProcessed", "query text characters processed", labels)
 	qe.queryErrorCounts = env.Exporter().NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", labels)
 	qe.queryErrorCountsWithCode = env.Exporter().NewCountersWithMultiLabels("QueryErrorCountsWithCode", "query error counts with error code", []string{"Table", "Plan", "Code"})
 
@@ -559,9 +560,9 @@ func (qe *QueryEngine) QueryPlanCacheLen() (count int) {
 }
 
 // AddStats adds the given stats for the planName.tableName
-func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName, workload string, tabletType topodata.TabletType, queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64, errorCode string) {
+func (qe *QueryEngine) AddStats(plan *TabletPlan, tableName, workload string, tabletType topodata.TabletType, queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64, errorCode string) {
 	// table names can contain "." characters, replace them!
-	keys := []string{tableName, planType.String()}
+	keys := []string{tableName, plan.PlanID.String()}
 	// Only use the workload as a label if that's enabled in the configuration.
 	if qe.enablePerWorkloadTableMetrics {
 		keys = append(keys, workload)
@@ -569,20 +570,23 @@ func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName, worklo
 	qe.queryCounts.Add(keys, queryCount)
 	qe.queryTimes.Add(keys, int64(duration))
 	qe.queryErrorCounts.Add(keys, errorCount)
+	if plan.FullQuery != nil {
+		qe.queryTextCharsProcessed.Add(keys, int64(len(plan.FullQuery.Query)))
+	}
 
-	qe.queryCountsWithTabletType.Add([]string{tableName, planType.String(), tabletType.String()}, queryCount)
+	qe.queryCountsWithTabletType.Add([]string{tableName, plan.PlanID.String(), tabletType.String()}, queryCount)
 
 	// queryErrorCountsWithCode is similar to queryErrorCounts except we have an additional dimension
 	// of error code.
 	if errorCount > 0 {
-		errorKeys := []string{tableName, planType.String(), errorCode}
+		errorKeys := []string{tableName, plan.PlanID.String(), errorCode}
 		qe.queryErrorCountsWithCode.Add(errorKeys, errorCount)
 	}
 
 	// For certain plan types like select, we only want to add their metrics to rows returned
 	// But there are special cases like `SELECT ... INTO OUTFILE ''` which return positive rows affected
 	// So we check if it is positive and add that too.
-	switch planType {
+	switch plan.PlanID {
 	case planbuilder.PlanSelect, planbuilder.PlanSelectStream, planbuilder.PlanSelectImpossible, planbuilder.PlanShow, planbuilder.PlanOtherRead:
 		qe.queryRowsReturned.Add(keys, rowsReturned)
 		if rowsAffected > 0 {

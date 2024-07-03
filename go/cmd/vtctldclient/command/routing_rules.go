@@ -82,7 +82,7 @@ func commandApplyRoutingRules(cmd *cobra.Command, args []string) error {
 	}
 
 	rr := &vschemapb.RoutingRules{}
-	if err := json2.Unmarshal(rulesBytes, &rr); err != nil {
+	if err := json2.UnmarshalPB(rulesBytes, rr); err != nil {
 		return err
 	}
 

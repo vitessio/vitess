@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path"
@@ -837,7 +837,7 @@ func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType)
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
 		require.NoError(t, err)
 		var tabletPB topodata.Tablet
-		err = json2.Unmarshal([]byte(output), &tabletPB)
+		err = json2.UnmarshalPB([]byte(output), &tabletPB)
 		require.NoError(t, err)
 		if tabletType == tabletPB.Type {
 			return
@@ -1058,7 +1058,7 @@ func terminateBackup(t *testing.T, alias string) {
 		text := scanner.Text()
 		if strings.Contains(text, stopBackupMsg) {
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true //nolint
+			found = true // nolint
 			return
 		}
 	}
@@ -1313,7 +1313,7 @@ func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replic
 	require.False(t, restoreToPos.IsZero())
 	restoreToPosArg := replication.EncodePosition(restoreToPos)
 	assert.Contains(t, restoreToPosArg, "MySQL56/")
-	if rand.Intn(2) == 0 {
+	if rand.IntN(2) == 0 {
 		// Verify that restore works whether or not the MySQL56/ prefix is present.
 		restoreToPosArg = strings.Replace(restoreToPosArg, "MySQL56/", "", 1)
 		assert.NotContains(t, restoreToPosArg, "MySQL56/")

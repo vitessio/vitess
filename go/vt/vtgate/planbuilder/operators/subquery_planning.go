@@ -100,13 +100,39 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 				newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, aggr.SubQueryExpression, aggr.Original.Expr)
 				if rewritten {
 					aggr.Original.Expr = newExpr
+					op.Columns[aggr.ColOffset].Expr = newExpr
 				}
 			}
+		case *Ordering:
+			op.settleOrderingExpressions(ctx)
 		}
 		return op, NoRewrite
 	}
 
 	return BottomUp(op, TableID, visit, nil)
+}
+
+func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
+	for idx, order := range o.Order {
+		for _, sq := range ctx.MergedSubqueries {
+			arg := ctx.GetReservedArgumentFor(sq)
+			expr := sqlparser.Rewrite(order.SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
+				switch expr := cursor.Node().(type) {
+				case *sqlparser.ColName:
+					if expr.Name.String() == arg {
+						cursor.Replace(sq)
+					}
+				case *sqlparser.Argument:
+					if expr.Name == arg {
+						cursor.Replace(sq)
+					}
+				}
+
+				return true
+			})
+			o.Order[idx].SimplifiedExpr = expr.(sqlparser.Expr)
+		}
+	}
 }
 
 func mergeSubqueryExpr(ctx *plancontext.PlanningContext, pe *ProjExpr) {
@@ -319,7 +345,7 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 		}
 	}
 
-	sql.Inner = append(sql.Inner, inner)
+	sql.addInner(inner)
 	return sql
 }
 
@@ -338,36 +364,72 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 		// need to find the argument name for it and use that instead
 		// we can't use the column name directly, because we're in the RHS of the join
 		name := outer.findOrAddColNameBindVarName(ctx, col)
-		cursor.Replace(sqlparser.NewArgument(name))
+		typ, _ := ctx.TypeForExpr(col)
+		arg := sqlparser.NewTypedArgument(name, typ.Type())
+		arg.Scale = typ.Scale()
+		arg.Size = typ.Size()
+		cursor.Replace(arg)
 	}, nil)
 	return result.(sqlparser.Expr)
 }
 
-func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
+// rewriteColNameToArgument rewrites the column names in the expression to use the argument names instead
+// this is used when we push an operator from above the subquery into the outer side of the subquery
+func rewriteColNameToArgument(
+	ctx *plancontext.PlanningContext,
+	in sqlparser.Expr, // the expression to rewrite
+	se SubQueryExpression, // the subquery expression we are rewriting
+	subqueries ...*SubQuery, // the inner subquery operators
+) sqlparser.Expr {
+	// the visitor function that will rewrite the expression tree
+	// it will be invoked on unqualified column names, and replace them with arguments
+	// when the column is representing a subquery
 	rewriteIt := func(s string) sqlparser.SQLNode {
-		for _, sq1 := range se {
-			if sq1.ArgName != s && sq1.HasValuesName != s {
-				continue
-			}
-
-			for _, sq2 := range subqueries {
-				if s == sq2.ArgName {
-					switch {
-					case sq1.FilterType.NeedsListArg():
-						return sqlparser.NewListArg(s)
-					case sq1.FilterType == opcode.PulloutExists:
-						if sq1.HasValuesName == "" {
-							sq1.HasValuesName = ctx.ReservedVars.ReserveHasValuesSubQuery()
-							sq2.HasValuesName = sq1.HasValuesName
-						}
-						return sqlparser.NewArgument(sq1.HasValuesName)
-					default:
-						return sqlparser.NewArgument(s)
-					}
-				}
+		var sq1, sq2 *SubQuery
+		for _, sq := range se {
+			if sq.ArgName == s || sq.HasValuesName == s {
+				sq1 = sq
+				break
 			}
 		}
-		return nil
+		for _, sq := range subqueries {
+			if s == sq.ArgName {
+				sq2 = sq
+				break
+			}
+		}
+
+		if sq1 == nil || sq2 == nil {
+			return nil
+		}
+
+		switch {
+		case sq1.FilterType.NeedsListArg():
+			return sqlparser.NewListArg(s)
+		case sq1.FilterType == opcode.PulloutExists:
+			if sq1.HasValuesName == "" {
+				sq1.HasValuesName = ctx.ReservedVars.ReserveHasValuesSubQuery()
+				sq2.HasValuesName = sq1.HasValuesName
+			}
+			return sqlparser.NewArgument(sq1.HasValuesName)
+		default:
+			// for scalar value subqueries, the argument is typed based on the first expression in the subquery
+			// so here we make an attempt at figuring out the type of the argument
+			ae, isAe := sq2.originalSubquery.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
+			if !isAe {
+				return sqlparser.NewArgument(s)
+			}
+
+			argType, found := ctx.TypeForExpr(ae.Expr)
+			if !found {
+				return sqlparser.NewArgument(s)
+			}
+
+			arg := sqlparser.NewTypedArgument(s, argType.Type())
+			arg.Scale = argType.Scale()
+			arg.Size = argType.Size()
+			return arg
+		}
 	}
 
 	// replace the ColNames with Argument inside the subquery
@@ -467,6 +529,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, NoRewrite
 	}
 	exprs := subQuery.GetMergePredicates()
+	sqlparser.RemoveKeyspace(subQuery.Original)
 	merger := &subqueryRouteMerger{
 		outer:    outer,
 		original: subQuery.Original,
@@ -476,7 +539,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if op == nil {
 		return outer, NoRewrite
 	}
-	if !subQuery.IsProjection {
+	if !subQuery.IsArgument {
 		op.Source = newFilter(outer.Source, subQuery.Original)
 	}
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
@@ -581,7 +644,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	var src Operator
 	if isSharded {
 		src = s.outer.Source
-		if !s.subq.IsProjection {
+		if !s.subq.IsArgument {
 			src = newFilter(s.outer.Source, s.original)
 		}
 	} else {
@@ -642,7 +705,7 @@ func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningCont
 		panic(err)
 	}
 
-	if s.subq.IsProjection {
+	if s.subq.IsArgument {
 		ctx.SemTable.CopySemanticInfo(s.subq.originalSubquery.Select, subqStmt)
 		s.subq.originalSubquery.Select = subqStmt
 	} else {

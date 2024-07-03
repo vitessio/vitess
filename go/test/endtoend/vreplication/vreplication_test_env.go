@@ -17,33 +17,32 @@ limitations under the License.
 package vreplication
 
 var dryRunResultsSwitchWritesCustomerShard = []string{
+	"Mirroring 0.00 percent of traffic from keyspace product to keyspace customer for tablet types [PRIMARY]",
 	"Lock keyspace product",
 	"Lock keyspace customer",
-	"Stop writes on keyspace product, tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]:",
-	"/       Keyspace product, Shard 0 at Position",
-	"Wait for VReplication on stopped streams to catchup for up to 30s",
-	"Create reverse replication workflow p2c_reverse",
+	"/Stop writes on keyspace product for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]: [keyspace:product;shard:0;position:",
+	"Wait for vreplication on stopped streams to catchup for up to 30s",
+	"Create reverse vreplication workflow p2c_reverse",
 	"Create journal entries on source databases",
-	"Enable writes on keyspace customer tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]",
+	"Enable writes on keyspace customer for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]",
 	"Switch routing from keyspace product to keyspace customer",
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
-	"Switch writes completed, freeze and delete vreplication streams on:",
-	"       tablet 200 ",
-	"       tablet 300 ",
-	"Start reverse replication streams on:",
-	"       tablet 100 ",
-	"Mark vreplication streams frozen on:",
-	"       Keyspace customer, Shard -80, Tablet 200, Workflow p2c, DbName vt_customer",
-	"       Keyspace customer, Shard 80-, Tablet 300, Workflow p2c, DbName vt_customer",
+	"Switch writes completed, freeze and delete vreplication streams on: [tablet:200,tablet:300]",
+	"Start reverse vreplication streams on: [tablet:100]",
+	"Mark vreplication streams frozen on: [keyspace:customer;shard:-80;tablet:200;workflow:p2c;dbname:vt_customer,keyspace:customer;shard:80-;tablet:300;workflow:p2c;dbname:vt_customer]",
 	"Unlock keyspace customer",
 	"Unlock keyspace product",
+	"", // Additional empty newline in the output
 }
 
 var dryRunResultsReadCustomerShard = []string{
+	"Mirroring 0.00 percent of traffic from keyspace product to keyspace customer for tablet types [RDONLY,REPLICA]",
 	"Lock keyspace product",
 	"Switch reads for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] to keyspace customer for tablet types [RDONLY,REPLICA]",
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
+	"Serving VSchema will be rebuilt for the customer keyspace",
 	"Unlock keyspace product",
+	"", // Additional empty newline in the output
 }
 
 var dryRunResultsSwitchWritesM2m3 = []string{

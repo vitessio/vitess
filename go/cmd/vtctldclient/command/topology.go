@@ -35,6 +35,12 @@ var (
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetTopologyPath,
 	}
+
+	// The version of the key/path to get. If not specified, the latest/current
+	// version is returned.
+	version int64 = 0
+	// If true, only the data is output and it is in JSON format rather than prototext.
+	dataAsJSON bool = false
 )
 
 func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
@@ -43,13 +49,23 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetTopologyPath(commandCtx, &vtctldatapb.GetTopologyPathRequest{
-		Path: path,
+		Path:    path,
+		Version: version,
+		AsJson:  dataAsJSON,
 	})
 	if err != nil {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp.Cell)
+	if dataAsJSON {
+		if resp.GetCell() == nil || resp.GetCell().GetData() == "" {
+			return fmt.Errorf("no data found for path %s", path)
+		}
+		fmt.Println(resp.GetCell().GetData())
+		return nil
+	}
+
+	data, err := cli.MarshalJSONPretty(resp.GetCell())
 	if err != nil {
 		return err
 	}
@@ -60,5 +76,7 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	GetTopologyPath.Flags().Int64Var(&version, "version", version, "The version of the path's key to get. If not specified, the latest version is returned.")
+	GetTopologyPath.Flags().BoolVar(&dataAsJSON, "data-as-json", dataAsJSON, "If true, only the data is output and it is in JSON format rather than prototext.")
 	Root.AddCommand(GetTopologyPath)
 }

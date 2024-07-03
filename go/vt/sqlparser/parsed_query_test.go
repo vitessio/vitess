@@ -20,10 +20,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewParsedQuery(t *testing.T) {
@@ -202,6 +203,95 @@ func TestParseAndBind(t *testing.T) {
 			query, err := ParseAndBind(tc.in, tc.binds...)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.out, query)
+		})
+	}
+}
+
+func TestCastBindVars(t *testing.T) {
+	testcases := []struct {
+		typ   sqltypes.Type
+		size  int
+		binds map[string]*querypb.BindVariable
+		out   string
+	}{
+		{
+			typ:   sqltypes.Decimal,
+			binds: map[string]*querypb.BindVariable{"arg": sqltypes.DecimalBindVariable("50")},
+			out:   "select CAST(50 AS DECIMAL(0, 0)) from ",
+		},
+		{
+			typ:   sqltypes.Uint32,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Uint32, Value: sqltypes.NewUint32(42).Raw()}},
+			out:   "select CAST(42 AS UNSIGNED) from ",
+		},
+		{
+			typ:   sqltypes.Float64,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Float64, Value: sqltypes.NewFloat64(42.42).Raw()}},
+			out:   "select CAST(42.42 AS DOUBLE) from ",
+		},
+		{
+			typ:   sqltypes.Float32,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Float32, Value: sqltypes.NewFloat32(42).Raw()}},
+			out:   "select CAST(42 AS FLOAT) from ",
+		},
+		{
+			typ:   sqltypes.Date,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Date, Value: sqltypes.NewDate("2021-10-30").Raw()}},
+			out:   "select CAST('2021-10-30' AS DATE) from ",
+		},
+		{
+			typ:   sqltypes.Time,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Time, Value: sqltypes.NewTime("12:00:00").Raw()}},
+			out:   "select CAST('12:00:00' AS TIME) from ",
+		},
+		{
+			typ:   sqltypes.Time,
+			size:  6,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Time, Value: sqltypes.NewTime("12:00:00").Raw()}},
+			out:   "select CAST('12:00:00' AS TIME(6)) from ",
+		},
+		{
+			typ:   sqltypes.Timestamp,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Timestamp, Value: sqltypes.NewTimestamp("2021-10-22 12:00:00").Raw()}},
+			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME) from ",
+		},
+		{
+			typ:   sqltypes.Timestamp,
+			size:  6,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Timestamp, Value: sqltypes.NewTimestamp("2021-10-22 12:00:00").Raw()}},
+			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME(6)) from ",
+		},
+		{
+			typ:   sqltypes.Datetime,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Datetime, Value: sqltypes.NewDatetime("2021-10-22 12:00:00").Raw()}},
+			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME) from ",
+		},
+		{
+			typ:   sqltypes.Datetime,
+			size:  6,
+			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Datetime, Value: sqltypes.NewDatetime("2021-10-22 12:00:00").Raw()}},
+			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME(6)) from ",
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.out, func(t *testing.T) {
+			argument := NewTypedArgument("arg", testcase.typ)
+			if testcase.size > 0 {
+				argument.Size = int32(testcase.size)
+			}
+
+			s := &Select{
+				SelectExprs: SelectExprs{
+					NewAliasedExpr(argument, ""),
+				},
+			}
+
+			pq := NewParsedQuery(s)
+			out, err := pq.GenerateQuery(testcase.binds, nil)
+
+			require.NoError(t, err)
+			require.Equal(t, testcase.out, out)
 		})
 	}
 }

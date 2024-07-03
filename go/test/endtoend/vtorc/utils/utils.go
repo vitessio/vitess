@@ -1018,7 +1018,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
-		prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
+		prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
 		successCount := getIntFromValue(prsCountsMap[mapKey])
 		if successCount == countExpected {
 			return
@@ -1026,7 +1026,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 		time.Sleep(time.Second)
 	}
 	vars := vtorcInstance.GetVars()
-	prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
+	prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
 	successCount := getIntFromValue(prsCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
 }
@@ -1039,7 +1039,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
-		ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
+		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
 		successCount := getIntFromValue(ersCountsMap[mapKey])
 		if successCount == countExpected {
 			return
@@ -1047,9 +1047,24 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 		time.Sleep(time.Second)
 	}
 	vars := vtorcInstance.GetVars()
-	ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
+	ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
 	successCount := getIntFromValue(ersCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
+}
+
+// CheckVarExists checks whether the given metric exists or not in /debug/vars.
+func CheckVarExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricName string) {
+	t.Helper()
+	vars := vtorcInstance.GetVars()
+	_, exists := vars[metricName]
+	assert.True(t, exists, vars)
+}
+
+// CheckMetricExists checks whether the given metric exists or not in /metrics.
+func CheckMetricExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricName string) {
+	t.Helper()
+	metrics := vtorcInstance.GetMetrics()
+	assert.Contains(t, metrics, metricName)
 }
 
 // getIntFromValue is a helper function to get an integer from the given value.

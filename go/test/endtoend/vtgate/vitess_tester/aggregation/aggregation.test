@@ -1,0 +1,50 @@
+CREATE TABLE `t1`
+(
+    `id`   int unsigned NOT NULL AUTO_INCREMENT,
+    `name` varchar(191) NOT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `t2`
+(
+    `id`      bigint unsigned NOT NULL AUTO_INCREMENT,
+    `t1_id` int unsigned NOT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `t3`
+(
+    `id`   bigint unsigned NOT NULL AUTO_INCREMENT,
+    `name` varchar(191) NOT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_unicode_ci;
+
+insert into t1 (id, name)
+values (1, 'A'),
+       (2, 'B'),
+       (3, 'C'),
+       (4, 'D');
+
+insert into t2 (id, t1_id)
+values (1, 1),
+       (2, 2),
+       (3, 3);
+
+insert into t3 (id, name)
+values (1, 'A'),
+       (2, 'B');
+
+-- wait_authoritative t1
+-- wait_authoritative t2
+-- wait_authoritative t3
+select group_concat(t3.name SEPARATOR ', ') as "Group Name"
+from t1
+         join t2 on t1.id = t2.t1_id
+         left join t3 on t1.id = t3.id
+group by t1.id;

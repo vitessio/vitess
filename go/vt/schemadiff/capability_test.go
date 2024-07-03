@@ -80,6 +80,42 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			expectCapableOfInstantDDL: false,
 		},
 		{
+			name:                      "add column with default value",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 add column i2 int not null default 17",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "add column with expression default value",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 add column i2 int not null default (17)",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "add column with complex expression default value",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 add column i2 int not null default ((17+2))",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "add varchar column with default literal value",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 add column v2 varchar(10) not null default '17'",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "add varchar column with default expression value",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 add column v2 varchar(10) not null default ('17')",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "add varchar column with default expression null value",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 add column v2 varchar(10) not null default (null)",
+			expectCapableOfInstantDDL: false,
+		},
+		{
 			name: "add columns max capacity",
 			create: `create table t(i1 int, i2 int, i3 int, i4 int, i5 int, i6 int, i7 int, i8 int, i9 int, i10 int, i11 int, i12 int, i13 int, i14 int, i15 int, i16 int, i17 int, i18 int, i19 int, i20 int, i21 int, i22 int, i23 int, i24 int, i25 int, i26 int, i27 int, i28 int, i29 int, i30 int, i31 int, i32 int, i33 int, i34 int, i35 int, i36 int, i37 int, i38 int, i39 int, i40 int, i41 int, i42 int, i43 int, i44 int, i45 int, i46 int, i47 int, i48 int, i49 int, i50 int, i51 int, i52 int, i53 int, i54 int, i55 int, i56 int, i57 int, i58 int, i59 int, i60 int, i61 int, i62 int, i63 int, i64 int, i65 int, i66 int, i67 int, i68 int, i69 int, i70 int, i71 int, i72 int, i73 int, i74 int, i75 int, i76 int, i77 int, i78 int, i79 int, i80 int, i81 int, i82 int, i83 int, i84 int, i85 int, i86 int, i87 int, i88 int, i89 int, i90 int, i91 int, i92 int, i93 int, i94 int, i95 int, i96 int, i97 int, i98 int, i99 int, i100 int, i101 int, i102 int, i103 int, i104 int, i105 int, i106 int, i107 int, i108 int, i109 int, i110 int, i111 int, i112 int, i113 int, i114 int, i115 int, i116 int, i117 int, i118 int, i119 int, i120 int, i121 int, i122 int, i123 int, i124 int, i125 int, i126 int, i127 int, i128 int, i129 int, i130 int, i131 int, i132 int, i133 int, i134 int, i135 int, i136 int, i137 int, i138 int, i139 int, i140 int, i141 int, i142 int, i143 int, i144 int, i145 int, i146 int, i147 int, i148 int, i149 int, i150 int, i151 int, i152 int, i153 int, i154 int, i155 int, i156 int, i157 int, i158 int, i159 int, i160 int, i161 int, i162 int, i163 int, i164 int, i165 int, i166 int, i167 int, i168 int, i169 int, i170 int, i171 int, i172 int, i173 int, i174 int, i175 int, i176 int, i177 int, i178 int, i179 int, i180 int, i181 int, i182 int, i183 int, i184 int, i185 int, i186 int, i187 int, i188 int, i189 int, i190 int, i191 int, i192 int, i193 int, i194 int, i195 int, i196 int, i197 int, i198 int, i199 int, i200 int,
 				i201 int, i202 int, i203 int, i204 int, i205 int, i206 int, i207 int, i208 int, i209 int, i210 int, i211 int, i212 int, i213 int, i214 int, i215 int, i216 int, i217 int, i218 int, i219 int, i220 int, i221 int, i222 int, i223 int, i224 int, i225 int, i226 int, i227 int, i228 int, i229 int, i230 int, i231 int, i232 int, i233 int, i234 int, i235 int, i236 int, i237 int, i238 int, i239 int, i240 int, i241 int, i242 int, i243 int, i244 int, i245 int, i246 int, i247 int, i248 int, i249 int, i250 int, i251 int, i252 int, i253 int, i254 int, i255 int, i256 int, i257 int, i258 int, i259 int, i260 int, i261 int, i262 int, i263 int, i264 int, i265 int, i266 int, i267 int, i268 int, i269 int, i270 int, i271 int, i272 int, i273 int, i274 int, i275 int, i276 int, i277 int, i278 int, i279 int, i280 int, i281 int, i282 int, i283 int, i284 int, i285 int, i286 int, i287 int, i288 int, i289 int, i290 int, i291 int, i292 int, i293 int, i294 int, i295 int, i296 int, i297 int, i298 int, i299 int, i300 int, i301 int, i302 int, i303 int, i304 int, i305 int, i306 int, i307 int, i308 int, i309 int, i310 int, i311 int, i312 int, i313 int, i314 int, i315 int, i316 int, i317 int, i318 int, i319 int, i320 int, i321 int, i322 int, i323 int, i324 int, i325 int, i326 int, i327 int, i328 int, i329 int, i330 int, i331 int, i332 int, i333 int, i334 int, i335 int, i336 int, i337 int, i338 int, i339 int, i340 int, i341 int, i342 int, i343 int, i344 int, i345 int, i346 int, i347 int, i348 int, i349 int, i350 int, i351 int, i352 int, i353 int, i354 int, i355 int, i356 int, i357 int, i358 int, i359 int, i360 int, i361 int, i362 int, i363 int, i364 int, i365 int, i366 int, i367 int, i368 int, i369 int, i370 int, i371 int, i372 int, i373 int, i374 int, i375 int, i376 int, i377 int, i378 int, i379 int, i380 int, i381 int, i382 int, i383 int, i384 int, i385 int, i386 int, i387 int, i388 int, i389 int, i390 int, i391 int, i392 int, i393 int, i394 int, i395 int, i396 int, i397 int, i398 int, i399 int,

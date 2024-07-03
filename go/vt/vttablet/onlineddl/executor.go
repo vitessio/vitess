@@ -604,6 +604,23 @@ func (e *Executor) showCreateTable(ctx context.Context, tableName string) (strin
 	return row[1].ToString(), nil
 }
 
+// getCreateTableStatement gets a formal AlterTable representation of the given table
+func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string) (*sqlparser.CreateTable, error) {
+	showCreateTable, err := e.showCreateTable(ctx, tableName)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "in Executor.getCreateTableStatement()")
+	}
+	stmt, err := e.env.Environment().Parser().ParseStrictDDL(showCreateTable)
+	if err != nil {
+		return nil, err
+	}
+	createTable, ok := stmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.CanonicalString(stmt))
+	}
+	return createTable, nil
+}
+
 func (e *Executor) parseAlterOptions(ctx context.Context, onlineDDL *schema.OnlineDDL) string {
 	// Temporary hack (2020-08-11)
 	// Because sqlparser does not do full blown ALTER TABLE parsing,
@@ -996,7 +1013,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	}
 
 	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
-
 	waitForRenameProcess := func() error {
 		// This function waits until it finds the RENAME TABLE... query running in MySQL's PROCESSLIST, or until timeout
 		// The function assumes that one of the renamed tables is locked, thus causing the RENAME to block. If nothing
@@ -1388,52 +1404,62 @@ func (e *Executor) validateAndEditAlterTableStatement(capableOf capabilities.Cap
 // - The format CreateTable AST
 // - A new CreateTable AST, with the table renamed as `newTableName`, and with constraints renamed deterministically
 // - Map of renamed constraints
-func (e *Executor) duplicateCreateTable(ctx context.Context, onlineDDL *schema.OnlineDDL, originalShowCreateTable string, newTableName string) (
-	originalCreateTable *sqlparser.CreateTable,
+func (e *Executor) duplicateCreateTable(ctx context.Context, onlineDDL *schema.OnlineDDL, originalCreateTable *sqlparser.CreateTable, newTableName string) (
 	newCreateTable *sqlparser.CreateTable,
 	constraintMap map[string]string,
 	err error,
 ) {
-	stmt, err := e.env.Environment().Parser().ParseStrictDDL(originalShowCreateTable)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	originalCreateTable, ok := stmt.(*sqlparser.CreateTable)
-	if !ok {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
-	}
-	newCreateTable = sqlparser.CloneRefOfCreateTable(originalCreateTable)
+	newCreateTable = sqlparser.Clone(originalCreateTable)
 	newCreateTable.SetTable(newCreateTable.GetTable().Qualifier.CompliantName(), newTableName)
+
+	// If this table has a self-referencing foreign key constraint, ensure the referenced table gets renamed:
+	renameSelfFK := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ConstraintDefinition:
+			fk, ok := node.Details.(*sqlparser.ForeignKeyDefinition)
+			if !ok {
+				return true, nil
+			}
+			if referencedTableName := fk.ReferenceDefinition.ReferencedTable.Name.String(); referencedTableName == originalCreateTable.Table.Name.String() {
+				// This is a self-referencing foreign key
+				// We need to rename the referenced table as well
+				fk.ReferenceDefinition.ReferencedTable.Name = sqlparser.NewIdentifierCS(newTableName)
+			}
+		}
+		return true, nil
+	}
+	_ = sqlparser.Walk(renameSelfFK, newCreateTable)
+
 	// manipulate CreateTable statement: take care of constraints names which have to be
 	// unique across the schema
 	constraintMap, err = e.validateAndEditCreateTableStatement(onlineDDL, newCreateTable)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	return originalCreateTable, newCreateTable, constraintMap, nil
+	return newCreateTable, constraintMap, nil
 }
 
 // createDuplicateTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
 // This function emulates MySQL's `CREATE TABLE LIKE ...` statement. The difference is that this function takes control over the generated CONSTRAINT names,
 // if any, such that they are deterministic across shards, as well as preserve original names where possible.
 func (e *Executor) createDuplicateTableLike(ctx context.Context, newTableName string, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (
-	originalShowCreateTable string,
+	originalCreateTable *sqlparser.CreateTable,
 	constraintMap map[string]string,
 	err error,
 ) {
-	originalShowCreateTable, err = e.showCreateTable(ctx, onlineDDL.Table)
+	originalCreateTable, err = e.getCreateTableStatement(ctx, onlineDDL.Table)
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
-	_, vreplCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, originalShowCreateTable, newTableName)
+	vreplCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, originalCreateTable, newTableName)
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 	// Create the vrepl (shadow) table:
 	if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(vreplCreateTable), 0, false); err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
-	return originalShowCreateTable, constraintMap, nil
+	return originalCreateTable, constraintMap, nil
 }
 
 // initVreplicationOriginalMigration performs the first steps towards running a VRepl ALTER migration:
@@ -1458,7 +1484,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	originalShowCreateTable, constraintMap, err := e.createDuplicateTableLike(ctx, vreplTableName, onlineDDL, conn)
+	originalCreateTable, constraintMap, err := e.createDuplicateTableLike(ctx, vreplTableName, onlineDDL, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -1487,12 +1513,12 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		}
 	}
 
-	vreplShowCreateTable, err := e.showCreateTable(ctx, vreplTableName)
+	vreplCreateTable, err := e.getCreateTableStatement(ctx, vreplTableName)
 	if err != nil {
 		return v, err
 	}
 
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalShowCreateTable, vreplShowCreateTable, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
+	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalCreateTable, vreplCreateTable, alterTable, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
 	return v, nil
 }
 
@@ -1546,7 +1572,7 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "", "", "", false)
+	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, nil, nil, nil, false)
 	v.pos = revertStream.pos
 	return v, nil
 }
@@ -2854,6 +2880,31 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 	return completedUUID, nil
 }
 
+// readFailedCancelledMigrationsInContextBeforeMigration returns UUIDs for migrations that are failed/cancelled
+// and are in the same context as given migration and _precede_ it chronologically (have lower `id` value)
+func (e *Executor) readFailedCancelledMigrationsInContextBeforeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (uuids []string, err error) {
+	if onlineDDL.MigrationContext == "" {
+		// only applies to migrations with an explicit context
+		return nil, nil
+	}
+	query, err := sqlparser.ParseAndBind(sqlSelectFailedCancelledMigrationsInContextBeforeMigration,
+		sqltypes.StringBindVariable(onlineDDL.MigrationContext),
+		sqltypes.StringBindVariable(onlineDDL.UUID),
+	)
+	if err != nil {
+		return nil, err
+	}
+	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return uuids, err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		uuids = append(uuids, uuid)
+	}
+	return uuids, err
+}
+
 // failMigration marks a migration as failed
 func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	defer e.triggerNextCheckInterval()
@@ -2863,6 +2914,23 @@ func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDD
 	}
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 	return withError
+}
+
+// validateInOrderMigration checks whether an in-order migration should be forced to fail, either before running or
+// while running.
+// This may happen if a prior migration in the same context has failed or was cancelled.
+func (e *Executor) validateInOrderMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (wasFailed bool, err error) {
+	if !onlineDDL.StrategySetting().IsInOrderCompletion() {
+		return false, nil
+	}
+	uuids, err := e.readFailedCancelledMigrationsInContextBeforeMigration(ctx, onlineDDL)
+	if err != nil {
+		return false, err
+	}
+	if len(uuids) == 0 {
+		return false, err
+	}
+	return true, e.failMigration(ctx, onlineDDL, fmt.Errorf("migration %v cannot run because prior migration %v in same context has failed/was cancelled", onlineDDL.UUID, uuids[0]))
 }
 
 // analyzeDropDDLActionMigration analyzes a DROP <TABLE|VIEW> migration.
@@ -2991,7 +3059,7 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 		}
 	}
 	if originalCreateTable, ok := ddlStmt.(*sqlparser.CreateTable); ok {
-		newCreateTable := sqlparser.CloneRefOfCreateTable(originalCreateTable)
+		newCreateTable := sqlparser.Clone(originalCreateTable)
 		// Rewrite this CREATE TABLE statement such that CONSTRAINT names are edited,
 		// specifically removing any <tablename> prefix.
 		if _, err := e.validateAndEditCreateTableStatement(onlineDDL, newCreateTable); err != nil {
@@ -3075,7 +3143,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 			Select:      viewStmt.Select,
 			CheckOption: viewStmt.CheckOption,
 			IsReplace:   true,
-			Comments:    sqlparser.CloneRefOfParsedComments(viewStmt.Comments),
+			Comments:    sqlparser.Clone(viewStmt.Comments),
 		}
 		stmt.SetTable("", artifactViewName)
 	default:
@@ -3384,6 +3452,58 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	return nil
 }
 
+// getNonConflictingMigration finds a single 'ready' migration which does not conflict with running migrations.
+// Conflicts are:
+// - a migration is 'ready' but is not set to run _concurrently_, and there's a running migration that is also non-concurrent
+// - a migration is 'ready' but there's another migration 'running' on the exact same table
+func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.OnlineDDL, error) {
+	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	r, err := e.execQuery(ctx, sqlSelectReadyMigrations)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		onlineDDL, migrationRow, err := e.readMigration(ctx, uuid)
+		if err != nil {
+			return nil, err
+		}
+		isImmediateOperation := migrationRow.AsBool("is_immediate_operation", false)
+
+		if conflictFound, _ := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
+			continue // this migration conflicts with a running one
+		}
+		if e.countOwnedRunningMigrations() >= maxConcurrentOnlineDDLs {
+			return nil, nil // too many running migrations
+		}
+		if isImmediateOperation && onlineDDL.StrategySetting().IsInOrderCompletion() {
+			// This migration is immediate: if we run it now, it will complete within a second or two at most.
+			if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
+				continue
+			}
+		}
+		// We will fail an in-order migration if there's _prior_ migrations within the same migration-context
+		// which have failed.
+		if onlineDDL.StrategySetting().IsInOrderCompletion() {
+			wasFailed, err := e.validateInOrderMigration(ctx, onlineDDL)
+			if err != nil {
+				return nil, err
+			}
+			if wasFailed {
+				continue
+			}
+		}
+		// This migration seems good to go
+		return onlineDDL, err
+	}
+	// no non-conflicting migration found...
+	// Either all ready migrations are conflicting, or there are no ready migrations...
+	return nil, nil
+}
+
 // runNextMigration picks up to one 'ready' migration that is able to run, and executes it.
 // Possible scenarios:
 // - no migration is in 'ready' state -- nothing to be done
@@ -3405,47 +3525,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		return nil
 	}
 
-	// getNonConflictingMigration finds a single 'ready' migration which does not conflict with running migrations.
-	// Conflicts are:
-	// - a migration is 'ready' but is not set to run _concurrently_, and there's a running migration that is also non-concurrent
-	// - a migration is 'ready' but there's another migration 'running' on the exact same table
-	getNonConflictingMigration := func() (*schema.OnlineDDL, error) {
-		pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
-		if err != nil {
-			return nil, err
-		}
-		r, err := e.execQuery(ctx, sqlSelectReadyMigrations)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range r.Named().Rows {
-			uuid := row["migration_uuid"].ToString()
-			onlineDDL, migrationRow, err := e.readMigration(ctx, uuid)
-			if err != nil {
-				return nil, err
-			}
-			isImmediateOperation := migrationRow.AsBool("is_immediate_operation", false)
-
-			if conflictFound, _ := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
-				continue // this migration conflicts with a running one
-			}
-			if e.countOwnedRunningMigrations() >= maxConcurrentOnlineDDLs {
-				continue // too many running migrations
-			}
-			if isImmediateOperation && onlineDDL.StrategySetting().IsInOrderCompletion() {
-				// This migration is immediate: if we run it now, it will complete within a second or two at most.
-				if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
-					continue
-				}
-			}
-			// This migration seems good to go
-			return onlineDDL, err
-		}
-		// no non-conflicting migration found...
-		// Either all ready migrations are conflicting, or there are no ready migrations...
-		return nil, nil
-	}
-	onlineDDL, err := getNonConflictingMigration()
+	onlineDDL, err := e.getNonConflictingMigration(ctx)
 	if err != nil {
 		return err
 	}
@@ -3792,6 +3872,19 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
 				_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled)
 
+				if onlineDDL.StrategySetting().IsInOrderCompletion() {
+					// We will fail an in-order migration if there's _prior_ migrations within the same migration-context
+					// which have failed.
+					wasFailed, err := e.validateInOrderMigration(ctx, onlineDDL)
+					if err != nil {
+						return err
+					}
+					if wasFailed {
+						return nil
+					}
+				}
+
+				// Check if the migration is ready to cut-over, and proceed to do so if it is.
 				isReady, err := e.isVReplMigrationReadyToCutOver(ctx, onlineDDL, s)
 				if err != nil {
 					_ = e.updateMigrationMessage(ctx, uuid, err.Error())

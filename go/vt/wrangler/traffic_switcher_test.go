@@ -838,8 +838,8 @@ func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 	createReverseVReplication := func() {
 		deleteReverseReplication()
 
-		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*-80.*t1.*from `+"`"+"t1`"+`\\".*t2.*from `+"`"+"t2`"+`\\"`, &sqltypes.Result{InsertID: 1}, nil)
-		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*80-.*t1.*from `+"`"+"t1`"+`\\".*t2.*from `+"`"+"t2`"+`\\"`, &sqltypes.Result{InsertID: 2}, nil)
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*-80.*t1.*from `+"`"+"t1`"+`".*t2.*from `+"`"+"t2`"+`"`, &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*80-.*t1.*from `+"`"+"t1`"+`".*t2.*from `+"`"+"t2`"+`"`, &sqltypes.Result{InsertID: 2}, nil)
 		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 	}
@@ -1072,8 +1072,8 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	createReverseVReplication := func() {
 		deleteReverseReplicaion()
 
-		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*-80.*t1.*from t1\\".*t2.*from t2\\"`, &sqltypes.Result{InsertID: 1}, nil)
-		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*80-.*t1.*from t1\\".*t2.*from t2\\"`, &sqltypes.Result{InsertID: 2}, nil)
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*-80.*t1.*from t1".*t2.*from t2"`, &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*80-.*t1.*from t1".*t2.*from t2"`, &sqltypes.Result{InsertID: 2}, nil)
 		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 	}

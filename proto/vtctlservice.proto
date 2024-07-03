@@ -64,6 +64,8 @@ service Vtctld {
   //
   // NOTE: This command automatically updates the serving graph.
   rpc ChangeTabletType(vtctldata.ChangeTabletTypeRequest) returns (vtctldata.ChangeTabletTypeResponse) {};
+  // CheckThrottler issues a 'check' on a tablet's throttler
+  rpc CheckThrottler(vtctldata.CheckThrottlerRequest) returns (vtctldata.CheckThrottlerResponse) {};
   // CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
   rpc CleanupSchemaMigration(vtctldata.CleanupSchemaMigrationRequest) returns (vtctldata.CleanupSchemaMigrationResponse) {};
   // CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
@@ -163,6 +165,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetThrottlerStatus gets the status of a tablet throttler
+  rpc GetThrottlerStatus(vtctldata.GetThrottlerStatusRequest) returns (vtctldata.GetThrottlerStatusResponse) {};
   // GetTopologyPath returns the topology cell at a given path.
   rpc GetTopologyPath(vtctldata.GetTopologyPathRequest) returns (vtctldata.GetTopologyPathResponse) {};
   // GetVersion returns the version of a tablet from its debug vars.
@@ -360,4 +364,7 @@ service Vtctld {
   // WorkflowUpdate updates the configuration of a vreplication workflow
   // using the provided updated parameters.
   rpc WorkflowUpdate(vtctldata.WorkflowUpdateRequest) returns (vtctldata.WorkflowUpdateResponse) {};
+  // GetMirrorRules returns the VSchema routing rules.
+  rpc GetMirrorRules(vtctldata.GetMirrorRulesRequest) returns (vtctldata.GetMirrorRulesResponse) {};
+  rpc WorkflowMirrorTraffic(vtctldata.WorkflowMirrorTrafficRequest) returns (vtctldata.WorkflowMirrorTrafficResponse) {};
 }

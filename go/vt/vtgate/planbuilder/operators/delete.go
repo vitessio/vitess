@@ -73,7 +73,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return createDeleteWithInputOp(ctx, deleteStmt)
 	}
 
-	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
+	delClone := sqlparser.Clone(deleteStmt)
 	var vTbl *vindexes.Table
 	op, vTbl = createDeleteOperator(ctx, deleteStmt)
 
@@ -315,7 +315,7 @@ func addOrdering(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy, op
 			continue
 		}
 		ordering.Order = append(ordering.Order, OrderBy{
-			Inner:          sqlparser.CloneRefOfOrder(order),
+			Inner:          sqlparser.Clone(order),
 			SimplifiedExpr: order.Expr,
 		})
 	}

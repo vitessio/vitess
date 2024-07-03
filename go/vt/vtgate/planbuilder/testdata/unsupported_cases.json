@@ -175,6 +175,11 @@
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
+    "comment": "group concat with order by requiring evaluation at vtgate",
+    "query": "select group_concat(music.name ORDER BY 1 asc SEPARATOR ', ') as `Group Name` from user join user_extra on user.id = user_extra.user_id left join music on user.id = music.id group by user.id;",
+    "plan": "VT12001: unsupported: cannot evaluate group concat with distinct or order by"
+  },
+  {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# changed to project all the columns from the derived tables.",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
@@ -358,5 +363,20 @@
     "comment": "WITH ROLLUP not supported on sharded queries",
     "query": "select a, b, c, sum(d) from user group by a, b, c with rollup",
     "plan": "VT12001: unsupported: GROUP BY WITH ROLLUP not supported for sharded queries"
+  },
+  {
+    "comment": "SOME/ANY/ALL comparison operator not supported for unsharded queries",
+    "query": "select 1 from user where foo = SOME (select 1 from user_extra where foo = 1)",
+    "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
+  },
+  {
+    "comment": "SOME/ANY/ALL comparison operator not supported for unsharded queries",
+    "query": "select 1 from user where foo = ANY (select 1 from user_extra where foo = 1)",
+    "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
+  },
+  {
+    "comment": "SOME/ANY/ALL comparison operator not supported for unsharded queries",
+    "query": "select 1 from user where foo = ALL (select 1 from user_extra where foo = 1)",
+    "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
   }
 ]

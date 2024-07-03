@@ -19,6 +19,7 @@ package vreplication
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -27,6 +28,7 @@ import (
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -34,6 +36,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // TestVtctldclientCLI tests the vreplication vtctldclient CLI commands, primarily to check that non-standard flags
@@ -61,6 +64,9 @@ func TestVtctldclientCLI(t *testing.T) {
 	workflowName := "wf1"
 	targetTabs := setupMinimalCustomerKeyspace(t)
 
+	t.Run("RoutingRulesApply", func(t *testing.T) {
+		testRoutingRulesApplyCommands(t)
+	})
 	t.Run("WorkflowList", func(t *testing.T) {
 		testWorkflowList(t, sourceKeyspaceName, targetKeyspaceName)
 	})
@@ -390,6 +396,48 @@ func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {
 	return true
 }
 
+func getMirrorRules(t *testing.T) *vschemapb.MirrorRules {
+	mirrorRules, err := vc.VtctldClient.ExecuteCommandWithOutput("GetMirrorRules")
+	require.NoError(t, err)
+	var mirrorRulesResponse vschemapb.MirrorRules
+	err = protojson.Unmarshal([]byte(mirrorRules), &mirrorRulesResponse)
+	require.NoError(t, err)
+	return &mirrorRulesResponse
+}
+
+func confirmNoMirrorRules(t *testing.T) {
+	mirrorRulesResponse := getMirrorRules(t)
+	require.Zero(t, len(mirrorRulesResponse.Rules))
+}
+
+func confirmMirrorRulesExist(t *testing.T) {
+	mirrorRulesResponse := getMirrorRules(t)
+	require.NotZero(t, len(mirrorRulesResponse.Rules))
+}
+
+func expectMirrorRules(t *testing.T, sourceKeyspace, targetKeyspace string, tables []string, tabletTypes []topodatapb.TabletType, percent float32) {
+	t.Helper()
+
+	// Each table should have a mirror rule for each serving type.
+	mirrorRules := getMirrorRules(t)
+	require.Len(t, mirrorRules.Rules, len(tables)*len(tabletTypes))
+	fromTableToRule := make(map[string]*vschemapb.MirrorRule)
+	for _, rule := range mirrorRules.Rules {
+		fromTableToRule[rule.FromTable] = rule
+	}
+	for _, table := range tables {
+		for _, tabletType := range tabletTypes {
+			fromTable := fmt.Sprintf("%s.%s", sourceKeyspace, table)
+			if tabletType != topodatapb.TabletType_PRIMARY {
+				fromTable = fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
+			}
+			require.Contains(t, fromTableToRule, fromTable)
+			require.Equal(t, fmt.Sprintf("%s.%s", targetKeyspace, table), fromTableToRule[fromTable].ToTable)
+			require.Equal(t, percent, fromTableToRule[fromTable].Percent)
+		}
+	}
+}
+
 func getRoutingRules(t *testing.T) *vschemapb.RoutingRules {
 	routingRules, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
@@ -437,4 +485,139 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 	require.Equalf(t, 1, len(bls.Filter.Rules), "Rules are %+v", bls.Filter.Rules) // only customer, customer2 should be excluded
 	require.Equal(t, binlogdatapb.OnDDLAction_STOP, bls.OnDdl)
 	require.True(t, bls.StopAfterCopy)
+}
+
+// Test that routing rules can be applied using the vtctldclient CLI for all types of routing rules.
+func testRoutingRulesApplyCommands(t *testing.T) {
+	var rulesBytes []byte
+	var err error
+	var validateRules func(want, got string)
+
+	ruleTypes := []string{"RoutingRules", "ShardRoutingRules", "KeyspaceRoutingRules"}
+	for _, typ := range ruleTypes {
+		switch typ {
+		case "RoutingRules":
+			rr := &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "from1",
+						ToTables:  []string{"to1", "to2"},
+					},
+				},
+			}
+			rulesBytes, err = json2.MarshalPB(rr)
+			require.NoError(t, err)
+			validateRules = func(want, got string) {
+				var wantRules = &vschemapb.RoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
+				var gotRules = &vschemapb.RoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
+				require.EqualValues(t, wantRules, gotRules)
+			}
+		case "ShardRoutingRules":
+			srr := &vschemapb.ShardRoutingRules{
+				Rules: []*vschemapb.ShardRoutingRule{
+					{
+						FromKeyspace: "from1",
+						ToKeyspace:   "to1",
+						Shard:        "-80",
+					},
+				},
+			}
+			rulesBytes, err = json2.MarshalPB(srr)
+			require.NoError(t, err)
+			validateRules = func(want, got string) {
+				var wantRules = &vschemapb.ShardRoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
+				var gotRules = &vschemapb.ShardRoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
+				require.EqualValues(t, wantRules, gotRules)
+			}
+		case "KeyspaceRoutingRules":
+			krr := &vschemapb.KeyspaceRoutingRules{
+				Rules: []*vschemapb.KeyspaceRoutingRule{
+					{
+						FromKeyspace: "from1",
+						ToKeyspace:   "to1",
+					},
+				},
+			}
+			rulesBytes, err = json2.MarshalPB(krr)
+			require.NoError(t, err)
+			validateRules = func(want, got string) {
+				var wantRules = &vschemapb.KeyspaceRoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
+				var gotRules = &vschemapb.KeyspaceRoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
+				require.EqualValues(t, wantRules, gotRules)
+			}
+		default:
+			require.FailNow(t, "Unknown type %s", typ)
+		}
+		testOneRoutingRulesCommand(t, typ, string(rulesBytes), validateRules)
+	}
+
+}
+
+// For a given routing rules type, test that the rules can be applied using the vtctldclient CLI.
+// We test both inline and file-based rules.
+// The test also validates that both camelCase and snake_case key names work correctly.
+func testOneRoutingRulesCommand(t *testing.T, typ string, rules string, validateRules func(want, got string)) {
+	type routingRulesTest struct {
+		name    string
+		rules   string
+		useFile bool // if true, use a file to pass the rules
+	}
+	tests := []routingRulesTest{
+		{
+			name:  "inline",
+			rules: rules,
+		},
+		{
+			name:    "file",
+			rules:   rules,
+			useFile: true,
+		},
+		{
+			name:  "empty", // finally, cleanup rules
+			rules: "{}",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(typ+"/"+tt.name, func(t *testing.T) {
+			wantRules := tt.rules
+			// The input rules are in camelCase, since they are the output of json2.MarshalPB
+			// The first iteration uses the output of routing rule Gets which are in snake_case.
+			for _, keyCase := range []string{"camelCase", "snake_case"} {
+				t.Run(keyCase, func(t *testing.T) {
+					var args []string
+					apply := fmt.Sprintf("Apply%s", typ)
+					get := fmt.Sprintf("Get%s", typ)
+					args = append(args, apply)
+					if tt.useFile {
+						tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_rules.json", tt.name))
+						require.NoError(t, err)
+						defer os.Remove(tmpFile.Name())
+						_, err = tmpFile.WriteString(wantRules)
+						require.NoError(t, err)
+						args = append(args, "--rules-file", tmpFile.Name())
+					} else {
+						args = append(args, "--rules", wantRules)
+					}
+					var output string
+					var err error
+					if output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...); err != nil {
+						require.FailNowf(t, "failed action", apply, "%v: %s", err, output)
+					}
+					if output, err = vc.VtctldClient.ExecuteCommandWithOutput(get); err != nil {
+						require.FailNowf(t, "failed action", get, "%v: %s", err, output)
+					}
+					validateRules(wantRules, output)
+					// output of GetRoutingRules is in snake_case and we use it for the next iteration which
+					// tests applying rules with snake_case keys.
+					wantRules = output
+				})
+			}
+		})
+	}
 }

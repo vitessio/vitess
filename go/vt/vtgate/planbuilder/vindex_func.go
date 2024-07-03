@@ -20,72 +20,42 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
-
-var _ logicalPlan = (*vindexFunc)(nil)
-
-// vindexFunc is used to build a VindexFunc primitive.
-type vindexFunc struct {
-	order int
-
-	// the tableID field is only used by the gen4 planner
-	tableID semantics.TableSet
-
-	// eVindexFunc is the primitive being built.
-	eVindexFunc *engine.VindexFunc
-}
-
-var colnames = []string{
-	"id",
-	"keyspace_id",
-	"range_start",
-	"range_end",
-	"hex_keyspace_id",
-	"shard",
-}
-
-// Primitive implements the logicalPlan interface
-func (vf *vindexFunc) Primitive() engine.Primitive {
-	return vf.eVindexFunc
-}
 
 // SupplyProjection pushes the given aliased expression into the fields and cols slices of the
 // vindexFunc engine primitive. The method returns the offset of the new expression in the columns
 // list.
-func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr, reuse bool) (int, error) {
+func SupplyProjection(eVindexFunc *engine.VindexFunc, expr *sqlparser.AliasedExpr, reuse bool) error {
 	colName, isColName := expr.Expr.(*sqlparser.ColName)
 	if !isColName {
-		return 0, vterrors.VT12001("expression on results of a vindex function")
+		return vterrors.VT12001("expression on results of a vindex function")
 	}
 
 	enum := vindexColumnToIndex(colName)
 	if enum == -1 {
-		return 0, vterrors.VT03016(colName.Name.String())
+		return vterrors.VT03016(colName.Name.String())
 	}
 
 	if reuse {
-		for i, col := range vf.eVindexFunc.Cols {
+		for _, col := range eVindexFunc.Cols {
 			if col == enum {
-				return i, nil
+				return nil
 			}
 		}
 	}
 
-	vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
+	eVindexFunc.Fields = append(eVindexFunc.Fields, &querypb.Field{
 		Name:    expr.ColumnName(),
 		Type:    querypb.Type_VARBINARY,
 		Charset: collations.CollationBinaryID,
 		Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 	})
-	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, enum)
-	return len(vf.eVindexFunc.Cols) - 1, nil
+	eVindexFunc.Cols = append(eVindexFunc.Cols, enum)
+	return nil
 }
 
 // UnsupportedSupplyWeightString represents the error where the supplying a weight string is not supported
