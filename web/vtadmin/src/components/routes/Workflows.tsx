@@ -35,7 +35,7 @@ import {Tooltip} from '../tooltip/Tooltip';
 import {KeyspaceLink} from '../links/KeyspaceLink';
 import {QueryLoadingPlaceholder} from '../placeholders/QueryLoadingPlaceholder';
 import {UseQueryResult} from 'react-query';
-import {vttime} from '../../proto/vtadmin';
+import {vtctldata, vttime} from '../../proto/vtadmin';
 
 export const ThrottleThresholdSeconds = 60;
 
@@ -123,9 +123,10 @@ export const Workflows = () => {
                                             streamDescription = 'failed';
                                             break;
                                         case 'Running':
-                                            const running = row.streams['Running'];
-                                            if (running !== undefined && running !== null) {
-                                                for (const stream of running) {
+                                        case 'Copying':
+                                            const streams = row.streams[streamState];
+                                            if (streams !== undefined && streams !== null) {
+                                                for (const stream of streams) {
                                                     if (
                                                         stream?.throttler_status?.time_throttled !== null &&
                                                         stream?.throttler_status?.time_throttled !== undefined &&
@@ -142,11 +143,9 @@ export const Workflows = () => {
                                                 }
                                             }
                                             if (numThrottled > 0) {
-                                                streamDescription = '';
                                                 streamState = 'Throttled';
-                                            } else {
-                                                streamDescription = streamState;
                                             }
+                                            streamDescription = streamState.toLocaleLowerCase();
                                             break;
                                         default:
                                             streamDescription = streamState.toLocaleLowerCase();
