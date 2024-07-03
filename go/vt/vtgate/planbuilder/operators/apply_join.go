@@ -284,7 +284,7 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	if out >= 0 {
 		aj.addOffset(out)
 	} else {
-		col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ContainsAggr(ctx, wsExpr))
+		col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ctx.ContainsAggr(wsExpr))
 		aj.JoinColumns.add(col)
 		aj.planOffsetFor(ctx, col)
 	}
