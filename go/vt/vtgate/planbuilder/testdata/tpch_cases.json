@@ -1908,8 +1908,8 @@
                   "Name": "main",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(total_revenue), weight_string(total_revenue) from revenue0 where 1 != 1 group by weight_string(total_revenue)",
-                "Query": "select max(total_revenue), weight_string(total_revenue) from revenue0 group by weight_string(total_revenue)",
+                "FieldQuery": "select max(total_revenue), weight_string(max(total_revenue)) from revenue0 where 1 != 1",
+                "Query": "select max(total_revenue), weight_string(max(total_revenue)) from revenue0",
                 "Table": "revenue0"
               }
             ]

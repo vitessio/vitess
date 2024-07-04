@@ -84,6 +84,8 @@ type (
 		WSOffset  int // Offset for the weight string of the column
 
 		SubQueryExpression []*SubQuery // Subqueries associated with this aggregation
+
+		PushedDown bool // Whether the aggregation has been pushed down to the next layer
 	}
 )
 
