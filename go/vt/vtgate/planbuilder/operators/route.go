@@ -805,7 +805,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			WOffset:   -1,
 			Direction: order.Inner.Direction,
 		}
-		if ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
+		if ctx.NeedsWeightString(order.SimplifiedExpr) {
 			ws := weightStringFor(order.SimplifiedExpr)
 			offset := r.AddColumn(ctx, true, false, aeWrap(ws))
 			o.WOffset = offset
