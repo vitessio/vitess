@@ -667,9 +667,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), weight_string(col2)",
+            "FieldQuery": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(min(col2)) from `user` where 1 != 1 group by col1, weight_string(col1)",
             "OrderBy": "(0|2) ASC",
-            "Query": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), weight_string(col2) order by col1 asc",
+            "Query": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(min(col2)) from `user` group by col1, weight_string(col1) order by col1 asc",
             "Table": "`user`"
           }
         ]
@@ -2605,9 +2605,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(id), weight_string(col3) from `user` where 1 != 1 group by col1, col3, weight_string(col1), weight_string(id), weight_string(col3)",
+            "FieldQuery": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(min(id)), weight_string(col3) from `user` where 1 != 1 group by col1, col3, weight_string(col1), weight_string(col3)",
             "OrderBy": "(0|3) ASC, (2|5) ASC",
-            "Query": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(id), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(id), weight_string(col3) order by col1 asc, col3 asc",
+            "Query": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(min(id)), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(col3) order by col1 asc, col3 asc",
             "Table": "`user`"
           }
         ]
@@ -4023,9 +4023,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo), weight_string(baz)",
+                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user`) as f group by foo, weight_string(foo), weight_string(baz) order by foo asc",
+                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
                 "Table": "`user`"
               }
             ]
@@ -4949,9 +4949,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select min(textcol1), max(textcol2), textcol1, textcol1, weight_string(textcol2) from `user` where 1 != 1 group by textcol1, weight_string(textcol2)",
+            "FieldQuery": "select min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` where 1 != 1 group by textcol1",
             "OrderBy": "2 ASC COLLATE latin1_swedish_ci",
-            "Query": "select min(textcol1), max(textcol2), textcol1, textcol1, weight_string(textcol2) from `user` group by textcol1, weight_string(textcol2) order by textcol1 asc",
+            "Query": "select min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` group by textcol1 order by textcol1 asc",
             "Table": "`user`"
           }
         ]
@@ -4981,9 +4981,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, min(textcol1), max(textcol2), textcol1, textcol1, weight_string(textcol2) from `user` where 1 != 1 group by col, textcol1, weight_string(textcol2)",
+            "FieldQuery": "select col, min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` where 1 != 1 group by col, textcol1",
             "OrderBy": "0 ASC, 3 ASC COLLATE latin1_swedish_ci",
-            "Query": "select col, min(textcol1), max(textcol2), textcol1, textcol1, weight_string(textcol2) from `user` group by col, textcol1, weight_string(textcol2) order by col asc, textcol1 asc",
+            "Query": "select col, min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` group by col, textcol1 order by col asc, textcol1 asc",
             "Table": "`user`"
           }
         ]
@@ -5868,9 +5868,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) from `user` where 1 != 1 group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto)",
+            "FieldQuery": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(min(bar)), weight_string(baz), weight_string(max(toto)) from `user` where 1 != 1 group by foo, baz, weight_string(foo), weight_string(baz)",
             "OrderBy": "(0|5) ASC, (2|7) ASC",
-            "Query": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) from `user` group by foo, baz, weight_string(foo), weight_string(bar), weight_string(baz), weight_string(toto) order by foo asc, baz asc",
+            "Query": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(min(bar)), weight_string(baz), weight_string(max(toto)) from `user` group by foo, baz, weight_string(foo), weight_string(baz) order by foo asc, baz asc",
             "Table": "`user`"
           }
         ]
@@ -6424,7 +6424,7 @@
                       {
                         "OperatorType": "Aggregate",
                         "Variant": "Scalar",
-                        "Aggregates": "min(0|2) AS min_id, max(1|2) AS max_id",
+                        "Aggregates": "min(0|2) AS min_id, max(1|3) AS max_id",
                         "ResultColumns": 2,
                         "Inputs": [
                           {
@@ -6434,9 +6434,9 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(bb.id) from `user` as bb where 1 != 1 group by weight_string(bb.id)",
+                            "FieldQuery": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(min(bb.id)), weight_string(max(bb.id)) from `user` as bb where 1 != 1",
                             "OrderBy": "0 ASC COLLATE utf8mb4_0900_ai_ci",
-                            "Query": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(bb.id) from `user` as bb group by weight_string(bb.id) order by min(bb.id) asc",
+                            "Query": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(min(bb.id)), weight_string(max(bb.id)) from `user` as bb order by min(bb.id) asc",
                             "Table": "`user`"
                           }
                         ]
@@ -6909,8 +6909,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string((select max(col2) from `user` as u1 where 1 != 1)) from `user` as u2 where 1 != 1 group by weight_string((select max(col2) from `user` as u1 where 1 != 1))",
-            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string((select max(col2) from `user` as u1 where u1.id = u2.id)) from `user` as u2 group by weight_string((select max(col2) from `user` as u1 where u1.id = u2.id))",
+            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string(max((select max(col2) from `user` as u1 where 1 != 1))) from `user` as u2 where 1 != 1",
+            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string(max((select max(col2) from `user` as u1 where u1.id = u2.id))) from `user` as u2",
             "Table": "`user`"
           }
         ]
