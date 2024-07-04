@@ -86,7 +86,7 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		offset := o.Source.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 		o.Offset = append(o.Offset, offset)
 
-		if !ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
+		if !ctx.NeedsWeightString(order.SimplifiedExpr) {
 			o.WOffset = append(o.WOffset, -1)
 			continue
 		}

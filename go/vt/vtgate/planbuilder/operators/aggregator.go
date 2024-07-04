@@ -379,7 +379,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			a.Grouping[idx].ColOffset = offset
 			gb.ColOffset = offset
 		}
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
+		if gb.WSOffset != -1 || !ctx.NeedsWeightString(gb.Inner) {
 			continue
 		}
 
@@ -516,7 +516,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			a.Grouping[idx].ColOffset = offset
 		}
 
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
+		if gb.WSOffset != -1 || !ctx.NeedsWeightString(gb.Inner) {
 			continue
 		}
 
