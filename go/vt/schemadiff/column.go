@@ -122,9 +122,6 @@ func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate() error {
 	if c.columnDefinition.Type.Charset.Name == "" {
 		// Still nothing? Assign the table's charset/collation.
 		c.columnDefinition.Type.Charset.Name = c.tableCharsetCollate.charset
-		if c.columnDefinition.Type.Options.Collate == "" {
-			c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate
-		}
 		if c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate; c.columnDefinition.Type.Options.Collate == "" {
 			collation := c.Env.CollationEnv().DefaultCollationForCharset(c.tableCharsetCollate.charset)
 			if collation == collations.Unknown {
