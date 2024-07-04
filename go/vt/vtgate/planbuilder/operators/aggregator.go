@@ -391,8 +391,16 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		if !aggr.NeedsWeightString(ctx) {
 			continue
 		}
-		arg := aggr.getPushColumn()
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), true)
+		var offset int
+		if aggr.PushedDown {
+			// if we have already pushed down aggregation, we need to use
+			// the weight string of the aggregation and not the argument
+			offset = a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func)), false)
+		} else {
+			// If we have not pushed down the aggregation, we need the weight_string of the argument
+			arg := aggr.getPushColumn()
+			offset = a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), true)
+		}
 		a.Aggregations[idx].WSOffset = offset
 	}
 	return nil

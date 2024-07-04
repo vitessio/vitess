@@ -177,6 +177,7 @@ func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, 
 		if !aggr.Distinct || canPushDistinctAggr {
 			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggr)
 			aggregateTheAggregate(aggregator, i)
+			aggregator.Aggregations[i].PushedDown = true
 			continue
 		}
 
