@@ -96,19 +96,20 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operat
 }
 
 func findAggregatorInSource(op Operator) *Aggregator {
+	// we'll just loop through the inputs until we find the aggregator
 	for {
 		aggr, ok := op.(*Aggregator)
 		if ok {
 			return aggr
 		}
 		inputs := op.Inputs()
-		if len(inputs) > 1 {
-			panic(vterrors.VT12001("unexpected multiple inputs"))
+		if len(inputs) != 1 {
+			panic(vterrors.VT13001("unexpected multiple inputs"))
 		}
 		src := inputs[0]
 		_, isRoute := src.(*Route)
 		if isRoute {
-			panic(vterrors.VT12001("failed to find the aggregator"))
+			panic(vterrors.VT13001("failed to find the aggregator"))
 		}
 		op = src
 	}
