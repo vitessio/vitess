@@ -886,6 +886,8 @@ message RealtimeStats {
 
   // udfs_changed is used to signal that the UDFs have changed on the tablet.
   bool udfs_changed = 9;
+
+  bool dt_unresolved = 10;
 }
 
 // AggregateStats contains information about the health of a group of
