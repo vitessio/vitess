@@ -435,8 +435,6 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 		return nil
 	}
 	files, err := getListOfFilesInPaths([]string{
-		"./docker/lite",
-		"./docker/local",
 		"./docker/vttestserver",
 		"./Makefile",
 		"./test/templates",
