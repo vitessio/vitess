@@ -59,7 +59,6 @@ func Run(bindAddress string, port int) {
 	signal.Notify(ExitChan, syscall.SIGTERM, syscall.SIGINT)
 	// Wait for signal
 	<-ExitChan
-	l.Close()
 
 	startTime := time.Now()
 	log.Infof("Entering lameduck mode for at least %v", timeouts.LameduckPeriod)
@@ -71,6 +70,7 @@ func Run(bindAddress string, port int) {
 		log.Infof("Sleeping an extra %v after OnTermSync to finish lameduck period", remain)
 		time.Sleep(remain)
 	}
+	l.Close()
 
 	log.Info("Shutting down gracefully")
 	fireOnCloseHooks(timeouts.OnCloseTimeout)

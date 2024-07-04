@@ -17,6 +17,8 @@ limitations under the License.
 package plancontext
 
 import (
+	"io"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -338,4 +340,39 @@ func (ctx *PlanningContext) NeedsWeightString(e sqlparser.Expr) bool {
 
 		return !ctx.VSchema.Environment().CollationEnv().IsSupported(typ.Collation())
 	}
+}
+
+func (ctx *PlanningContext) IsAggr(e sqlparser.SQLNode) bool {
+	switch node := e.(type) {
+	case sqlparser.AggrFunc:
+		return true
+	case *sqlparser.FuncExpr:
+		return node.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs())
+	}
+
+	return false
+}
+
+func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.Offset:
+			// offsets here indicate that a possible aggregation has already been handled by an input,
+			// so we don't need to worry about aggregation in the original
+			return false, nil
+		case sqlparser.AggrFunc:
+			hasAggr = true
+			return false, io.EOF
+		case *sqlparser.Subquery:
+			return false, nil
+		case *sqlparser.FuncExpr:
+			if ctx.IsAggr(node) {
+				hasAggr = true
+				return false, io.EOF
+			}
+		}
+
+		return true, nil
+	}, e)
+	return
 }

@@ -4350,8 +4350,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(music.id), weight_string(music.id) from music where 1 != 1 group by weight_string(music.id)",
-                "Query": "select max(music.id), weight_string(music.id) from music where music.user_id in ::__vals group by weight_string(music.id)",
+                "FieldQuery": "select max(music.id), weight_string(max(music.id)) from music where 1 != 1",
+                "Query": "select max(music.id), weight_string(max(music.id)) from music where music.user_id in ::__vals",
                 "Table": "music",
                 "Values": [
                   "(5, 6)"

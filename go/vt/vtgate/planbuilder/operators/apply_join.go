@@ -202,19 +202,11 @@ func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return aj.LHS.GetOrdering(ctx)
 }
 
-func joinColumnToExpr(column applyJoinColumn) sqlparser.Expr {
-	return column.Original
-}
-
 func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col applyJoinColumn) {
-	defer func() {
-		col.Original = orig.Expr
-	}()
 	lhs := TableID(aj.LHS)
 	rhs := TableID(aj.RHS)
 	both := lhs.Merge(rhs)
 	deps := ctx.SemTable.RecursiveDeps(e)
-	col.GroupBy = addToGroupBy
 
 	switch {
 	case deps.IsSolvedBy(lhs):
@@ -224,8 +216,11 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	case deps.IsSolvedBy(both):
 		col = breakExpressionInLHSandRHS(ctx, e, TableID(aj.LHS))
 	default:
-		panic(vterrors.VT13002(sqlparser.String(e)))
+		panic(vterrors.VT13001(fmt.Sprintf("expression depends on tables outside this join: %s", sqlparser.String(e))))
 	}
+
+	col.GroupBy = addToGroupBy
+	col.Original = orig.Expr
 
 	return
 }
@@ -289,7 +284,7 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	if out >= 0 {
 		aj.addOffset(out)
 	} else {
-		col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ContainsAggr(ctx, wsExpr))
+		col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ctx.ContainsAggr(wsExpr))
 		aj.JoinColumns.add(col)
 		aj.planOffsetFor(ctx, col)
 	}
@@ -323,33 +318,15 @@ func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 }
 
 func (aj *ApplyJoin) planOffsetFor(ctx *plancontext.PlanningContext, col applyJoinColumn) {
-	if col.DTColName != nil {
-		// If DTColName is set, then we already pushed the parts of the expression down while planning.
-		// We need to use this name and ask the correct side of the join for it. Nothing else is required.
-		if col.IsPureLeft() {
-			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.DTColName))
-			aj.addOffset(ToLeftOffset(offset))
-		} else {
-			for _, lhsExpr := range col.LHSExprs {
-				offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
-				aj.Vars[lhsExpr.Name] = offset
-			}
-			offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.DTColName))
-			aj.addOffset(ToRightOffset(offset))
-		}
-		return
-	}
-	for _, lhsExpr := range col.LHSExprs {
-		offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
-		if col.RHSExpr == nil {
-			// if we don't have an RHS expr, it means that this is a pure LHS expression
-			aj.addOffset(ToLeftOffset(offset))
-		} else {
+	if col.IsPureLeft() {
+		offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.GetPureLeftExpr()))
+		aj.addOffset(ToLeftOffset(offset))
+	} else {
+		for _, lhsExpr := range col.LHSExprs {
+			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
 			aj.Vars[lhsExpr.Name] = offset
 		}
-	}
-	if col.RHSExpr != nil {
-		offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.RHSExpr))
+		offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.GetRHSExpr()))
 		aj.addOffset(ToRightOffset(offset))
 	}
 }
@@ -443,17 +420,17 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 	return bvName
 }
 
-func (a *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed sqlparser.Exprs) {
+func (aj *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed sqlparser.Exprs) {
 	f := func(from BindVarExpr) sqlparser.Expr {
 		return from.Expr
 	}
-	for _, jc := range a.JoinColumns.columns {
+	for _, jc := range aj.JoinColumns.columns {
 		needed = append(needed, slice.Map(jc.LHSExprs, f)...)
 	}
-	for _, jc := range a.JoinPredicates.columns {
+	for _, jc := range aj.JoinPredicates.columns {
 		needed = append(needed, slice.Map(jc.LHSExprs, f)...)
 	}
-	needed = append(needed, slice.Map(a.ExtraLHSVars, f)...)
+	needed = append(needed, slice.Map(aj.ExtraLHSVars, f)...)
 	return ctx.SemTable.Uniquify(needed)
 }
 
@@ -462,7 +439,11 @@ func (jc applyJoinColumn) String() string {
 	lhs := slice.Map(jc.LHSExprs, func(e BindVarExpr) string {
 		return sqlparser.String(e.Expr)
 	})
-	return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
+	if jc.DTColName == nil {
+		return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
+	}
+
+	return fmt.Sprintf("[%s | %s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original), sqlparser.String(jc.DTColName))
 }
 
 func (jc applyJoinColumn) IsPureLeft() bool {
@@ -475,6 +456,20 @@ func (jc applyJoinColumn) IsPureRight() bool {
 
 func (jc applyJoinColumn) IsMixedLeftAndRight() bool {
 	return len(jc.LHSExprs) > 0 && jc.RHSExpr != nil
+}
+
+func (jc applyJoinColumn) GetPureLeftExpr() sqlparser.Expr {
+	if jc.DTColName != nil {
+		return jc.DTColName
+	}
+	return jc.LHSExprs[0].Expr
+}
+
+func (jc applyJoinColumn) GetRHSExpr() sqlparser.Expr {
+	if jc.DTColName != nil {
+		return jc.DTColName
+	}
+	return jc.RHSExpr
 }
 
 func (bve BindVarExpr) String() string {
