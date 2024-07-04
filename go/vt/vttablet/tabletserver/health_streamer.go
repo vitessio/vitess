@@ -29,7 +29,6 @@ import (
 	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/history"
@@ -78,9 +77,7 @@ type healthStreamer struct {
 	se      *schema.Engine
 	history *history.History
 
-	dbConfig               dbconfigs.Connector
 	signalWhenSchemaChange bool
-	reloadTimeout          time.Duration
 
 	viewsEnabled bool
 }
@@ -101,7 +98,6 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 
 		history:                history.New(5),
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
-		reloadTimeout:          env.Config().SchemaChangeReloadTimeout,
 		viewsEnabled:           env.Config().EnableViews,
 		se:                     engine,
 	}
@@ -109,9 +105,8 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 	return hs
 }
 
-func (hs *healthStreamer) InitDBConfig(target *querypb.Target, cp dbconfigs.Connector) {
+func (hs *healthStreamer) InitDBConfig(target *querypb.Target) {
 	hs.state.Target = target.CloneVT()
-	hs.dbConfig = cp
 }
 
 func (hs *healthStreamer) Open() {
