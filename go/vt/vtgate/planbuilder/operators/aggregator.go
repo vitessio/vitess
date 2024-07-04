@@ -101,7 +101,7 @@ func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 		case sqlparser.AggrFunc:
 			aggr = createAggrFromAggrFunc(e, expr)
 		case *sqlparser.FuncExpr:
-			if IsAggr(ctx, e) {
+			if ctx.IsAggr(e) {
 				aggr = NewAggr(opcode.AggregateUDF, nil, expr, expr.As.String())
 			} else {
 				aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
