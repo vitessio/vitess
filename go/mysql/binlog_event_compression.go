@@ -300,7 +300,7 @@ func (tp *TransactionPayload) decompress() ([]byte, *os.File, error) {
 		// close our open file descriptor after trying to read it in decode().
 		defer os.Remove(tmpFile.Name())
 		in := bytes.NewReader(tp.payload)
-		streamDecoder, err := zstd.NewReader(in)
+		streamDecoder, err := zstd.NewReader(in, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
 		if err != nil {
 			return nil, nil, err
 		}
