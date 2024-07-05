@@ -652,11 +652,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		vs.format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
 		for {
 			tpevent, err := tpIter()
-			if err != nil && err != io.EOF {
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
 				return nil, err
-			}
-			if tpevent == nil || err == io.EOF {
-				break
 			}
 			tpvevents, err := vs.parseEvent(tpevent)
 			if err != nil {

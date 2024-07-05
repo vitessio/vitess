@@ -114,11 +114,11 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 	eventStrs := []string{}
 	for {
 		ev, err := iter()
-		if err != nil && err != io.EOF {
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			require.Fail(t, "unexpected error: %v", err)
-		}
-		if ev == nil || err == io.EOF {
-			break
 		}
 		switch {
 		case ev.IsTableMap():
