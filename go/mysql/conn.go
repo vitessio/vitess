@@ -1290,7 +1290,6 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	c.PrepareData[c.StatementID] = prepare
 
 	fld, err := handler.ComPrepare(c, queries[0], bindVars)
-
 	if err != nil {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}

@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-var testGoTime = time.Date(2024, 03, 12, 12, 30, 20, 987654321, time.UTC)
+var testGoTime = time.Date(2024, 0o3, 12, 12, 30, 20, 987654321, time.UTC)
 
 func TestNewTimeFromStd(t *testing.T) {
 	time := NewTimeFromStd(testGoTime)
@@ -41,7 +41,7 @@ func TestNewDateFromStd(t *testing.T) {
 	date := NewDateFromStd(testGoTime)
 
 	assert.Equal(t, uint16(2024), date.year)
-	assert.Equal(t, uint8(03), date.month)
+	assert.Equal(t, uint8(0o3), date.month)
 	assert.Equal(t, uint8(12), date.day)
 }
 
@@ -49,7 +49,7 @@ func TestNewDateTimeFromStd(t *testing.T) {
 	dt := NewDateTimeFromStd(testGoTime)
 
 	assert.Equal(t, uint16(2024), dt.Date.year)
-	assert.Equal(t, uint8(03), dt.Date.month)
+	assert.Equal(t, uint8(0o3), dt.Date.month)
 	assert.Equal(t, uint8(12), dt.Date.day)
 
 	assert.Equal(t, uint16(12), dt.Time.hour)
@@ -649,13 +649,13 @@ func TestDateCompare(t *testing.T) {
 		d2   Date
 		want int
 	}{
-		{Date{2024, 03, 12}, Date{2023, 02, 28}, 1},
-		{Date{2023, 02, 28}, Date{2024, 03, 12}, -1},
-		{Date{2024, 03, 12}, Date{2024, 02, 28}, 1},
-		{Date{2024, 02, 28}, Date{2024, 03, 12}, -1},
-		{Date{2024, 02, 28}, Date{2024, 02, 12}, 1},
-		{Date{2024, 02, 12}, Date{2024, 02, 28}, -1},
-		{Date{2024, 03, 12}, Date{2024, 03, 12}, 0},
+		{Date{2024, 0o3, 12}, Date{2023, 0o2, 28}, 1},
+		{Date{2023, 0o2, 28}, Date{2024, 0o3, 12}, -1},
+		{Date{2024, 0o3, 12}, Date{2024, 0o2, 28}, 1},
+		{Date{2024, 0o2, 28}, Date{2024, 0o3, 12}, -1},
+		{Date{2024, 0o2, 28}, Date{2024, 0o2, 12}, 1},
+		{Date{2024, 0o2, 12}, Date{2024, 0o2, 28}, -1},
+		{Date{2024, 0o3, 12}, Date{2024, 0o3, 12}, 0},
 	}
 
 	for _, tc := range testCases {
@@ -672,7 +672,7 @@ func TestAddInterval(t *testing.T) {
 		ok   bool
 	}{
 		{
-			d: Date{2024, 03, 12},
+			d: Date{2024, 0o3, 12},
 			in: Interval{
 				timeparts: timeparts{
 					sec:  (maxDay + 1) * 24 * 60 * 60,
@@ -680,11 +680,11 @@ func TestAddInterval(t *testing.T) {
 				},
 				unit: IntervalSecond,
 			},
-			want: Date{2024, 03, 12},
+			want: Date{2024, 0o3, 12},
 			ok:   false,
 		},
 		{
-			d: Date{2023, 02, 12},
+			d: Date{2023, 0o2, 12},
 			in: Interval{
 				timeparts: timeparts{
 					day:  18,
@@ -693,11 +693,11 @@ func TestAddInterval(t *testing.T) {
 				},
 				unit: IntervalSecond,
 			},
-			want: Date{2023, 03, 02},
+			want: Date{2023, 0o3, 0o2},
 			ok:   true,
 		},
 		{
-			d: Date{2024, 03, 12},
+			d: Date{2024, 0o3, 12},
 			in: Interval{
 				timeparts: timeparts{
 					sec:  3600 * 24,
@@ -705,11 +705,11 @@ func TestAddInterval(t *testing.T) {
 				},
 				unit: IntervalSecond,
 			},
-			want: Date{2024, 03, 13},
+			want: Date{2024, 0o3, 13},
 			ok:   true,
 		},
 		{
-			d: Date{2024, 03, 12},
+			d: Date{2024, 0o3, 12},
 			in: Interval{
 				timeparts: timeparts{
 					day:  maxDay + 1,
@@ -721,7 +721,7 @@ func TestAddInterval(t *testing.T) {
 			ok:   true,
 		},
 		{
-			d: Date{2024, 03, 12},
+			d: Date{2024, 0o3, 12},
 			in: Interval{
 				timeparts: timeparts{
 					day:  123,
@@ -733,7 +733,7 @@ func TestAddInterval(t *testing.T) {
 			ok:   true,
 		},
 		{
-			d: Date{2024, 03, 12},
+			d: Date{2024, 0o3, 12},
 			in: Interval{
 				timeparts: timeparts{
 					month: 12,
@@ -744,7 +744,7 @@ func TestAddInterval(t *testing.T) {
 			ok:   true,
 		},
 		{
-			d: Date{2024, 03, 12},
+			d: Date{2024, 0o3, 12},
 			in: Interval{
 				timeparts: timeparts{
 					year: -3000,
@@ -755,7 +755,7 @@ func TestAddInterval(t *testing.T) {
 			ok:   false,
 		},
 		{
-			d: Date{2023, 03, 29},
+			d: Date{2023, 0o3, 29},
 			in: Interval{
 				timeparts: timeparts{
 					month: -1,
@@ -766,7 +766,7 @@ func TestAddInterval(t *testing.T) {
 			ok:   true,
 		},
 		{
-			d: Date{2024, 02, 29},
+			d: Date{2024, 0o2, 29},
 			in: Interval{
 				timeparts: timeparts{
 					year: -1,
@@ -777,7 +777,7 @@ func TestAddInterval(t *testing.T) {
 			ok:   true,
 		},
 		{
-			d: Date{2024, 03, 12},
+			d: Date{2024, 0o3, 12},
 			in: Interval{
 				timeparts: timeparts{
 					year: 12,
@@ -788,7 +788,7 @@ func TestAddInterval(t *testing.T) {
 			ok:   true,
 		},
 		{
-			d: Date{2024, 03, 12},
+			d: Date{2024, 0o3, 12},
 			in: Interval{
 				timeparts: timeparts{
 					year: 10001,
@@ -879,10 +879,10 @@ func TestDateTimeCompare(t *testing.T) {
 		dt2  DateTime
 		want int
 	}{
-		{DateTime{Date: Date{2024, 03, 12}}, DateTime{Date: Date{2024, 02, 12}}, 1},
+		{DateTime{Date: Date{2024, 0o3, 12}}, DateTime{Date: Date{2024, 0o2, 12}}, 1},
 		{DateTime{Time: Time{12, 30, 20, 0}}, DateTime{Time: Time{12, 30, 20, 23}}, -1},
-		{DateTime{Date: Date{2024, 03, 12}, Time: Time{12, 30, 20, 0}}, DateTime{Time: Time{12, 30, 20, 23}}, -1},
-		{DateTime{Date: Date{2024, 03, 12}, Time: Time{12, 30, 20, 0}}, DateTime{Date: Date{2024, 03, 12}, Time: Time{12, 30, 20, 0}}, 0},
+		{DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 0}}, DateTime{Time: Time{12, 30, 20, 23}}, -1},
+		{DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 0}}, DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 0}}, 0},
 	}
 
 	for _, tc := range testCases {
@@ -897,11 +897,11 @@ func TestDateTimeRound(t *testing.T) {
 		p    int
 		want DateTime
 	}{
-		{DateTime{Date: Date{2024, 03, 12}}, 4, DateTime{Date: Date{2024, 03, 12}}},
+		{DateTime{Date: Date{2024, 0o3, 12}}, 4, DateTime{Date: Date{2024, 0o3, 12}}},
 		{DateTime{Time: Time{12, 30, 20, 123312}}, 6, DateTime{Time: Time{12, 30, 20, 123000}}},
-		{DateTime{Date: Date{2024, 03, 12}, Time: Time{12, 30, 20, 123312}}, 9, DateTime{Date: Date{2024, 03, 12}, Time: Time{12, 30, 20, 123312}}},
-		{DateTime{Date: Date{2024, 03, 12}, Time: Time{12, 30, 20, 1e9}}, 9, DateTime{Date: Date{2024, 03, 12}, Time: Time{12, 30, 21, 0}}},
-		{DateTime{Date: Date{2024, 03, 12}, Time: Time{12, 30, 20, 123}}, 0, DateTime{Date: Date{2024, 03, 12}, Time: Time{12, 30, 20, 0}}},
+		{DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 123312}}, 9, DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 123312}}},
+		{DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 1e9}}, 9, DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 21, 0}}},
+		{DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 123}}, 0, DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 0}}},
 	}
 
 	for _, tc := range testCases {

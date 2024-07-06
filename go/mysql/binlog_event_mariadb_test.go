@@ -106,7 +106,6 @@ func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.False(t, hasBegin, "unexpected hasBegin")
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.GTID() = %#v, want %#v", input, got, want)
-
 }
 
 func TestMariadbBinlogEventGTID(t *testing.T) {
@@ -122,7 +121,6 @@ func TestMariadbBinlogEventGTID(t *testing.T) {
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, hasBegin, "unexpected !hasBegin")
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.GTID() = %#v, want %#v", input, got, want)
-
 }
 
 func TestMariadbBinlogEventFormat(t *testing.T) {
@@ -137,7 +135,6 @@ func TestMariadbBinlogEventFormat(t *testing.T) {
 	got, err := input.Format()
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
-
 }
 
 func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
@@ -152,7 +149,6 @@ func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
 	got, err := input.Format()
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
-
 }
 
 func TestMariadbBinlogEventStripChecksum(t *testing.T) {

@@ -148,7 +148,6 @@ func TestMysql56ParsePosition(t *testing.T) {
 	got, err := replication.ParsePosition(replication.Mysql56FlavorID, input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "(&mysql56{}).ParsePosition(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestMysql56SemiSyncAck(t *testing.T) {

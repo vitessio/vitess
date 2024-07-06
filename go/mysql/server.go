@@ -602,20 +602,19 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, ch
 		authMethod = MysqlNativePassword
 	}
 
-	length :=
-		1 + // protocol version
-			lenNullString(serverVersion) +
-			4 + // connection ID
-			8 + // first part of plugin auth data
-			1 + // filler byte
-			2 + // capability flags (lower 2 bytes)
-			1 + // character set
-			2 + // status flag
-			2 + // capability flags (upper 2 bytes)
-			1 + // length of auth plugin data
-			10 + // reserved (0)
-			13 + // auth-plugin-data
-			lenNullString(string(authMethod)) // auth-plugin-name
+	length := 1 + // protocol version
+		lenNullString(serverVersion) +
+		4 + // connection ID
+		8 + // first part of plugin auth data
+		1 + // filler byte
+		2 + // capability flags (lower 2 bytes)
+		1 + // character set
+		2 + // status flag
+		2 + // capability flags (upper 2 bytes)
+		1 + // length of auth plugin data
+		10 + // reserved (0)
+		13 + // auth-plugin-data
+		lenNullString(string(authMethod)) // auth-plugin-name
 
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
@@ -857,7 +856,6 @@ func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
 	}
 
 	return attrs, pos, nil
-
 }
 
 // writeAuthSwitchRequest writes an auth switch request packet.

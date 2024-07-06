@@ -53,8 +53,10 @@ func lower(c byte) byte {
 	return c | ('x' - 'X')
 }
 
-var float32info = floatInfo{23, 8, -127}
-var float64info = floatInfo{52, 11, -1023}
+var (
+	float32info = floatInfo{23, 8, -127}
+	float64info = floatInfo{52, 11, -1023}
+)
 
 // commonPrefixLenIgnoreCase returns the length of the common
 // prefix of s and prefix, with the character case of s ignored.

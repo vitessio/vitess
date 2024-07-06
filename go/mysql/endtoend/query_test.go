@@ -137,7 +137,6 @@ func TestQueries(t *testing.T) {
 	result, err = conn.ExecuteFetch("drop table a", 0, false)
 	require.NoError(t, err, "drop table failed: %v", err)
 	assert.Equal(t, uint64(0), result.RowsAffected, "insert into returned RowsAffected %v, was expecting 0", result.RowsAffected)
-
 }
 
 func TestLargeQueries(t *testing.T) {
@@ -263,7 +262,6 @@ func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
 
 	_, err = conn.ExecuteFetch("drop table a", 0, false)
 	require.NoError(t, err, "create table failed: %v", err)
-
 }
 
 func TestWarningsDeprecateEOF(t *testing.T) {

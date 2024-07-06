@@ -103,7 +103,8 @@ func TestBinaryJSON(t *testing.T) {
 		},
 		{
 			name: `scalar "scalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar string"`,
-			data: []byte{12, 130, 1,
+			data: []byte{
+				12, 130, 1,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
@@ -113,7 +114,8 @@ func TestBinaryJSON(t *testing.T) {
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
-				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103},
+				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			},
 			expected: json.NewString("scalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar string"),
 		},
 		{
@@ -314,7 +316,8 @@ func TestMarshalJSONToSQL(t *testing.T) {
 		},
 		{
 			name: `scalar "scalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar string"`,
-			data: []byte{12, 130, 1,
+			data: []byte{
+				12, 130, 1,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
@@ -324,7 +327,8 @@ func TestMarshalJSONToSQL(t *testing.T) {
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
 				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
-				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103},
+				115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			},
 			expected: `CAST(JSON_QUOTE(_utf8mb4'scalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar string') as JSON)`,
 		},
 		{

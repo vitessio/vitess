@@ -171,7 +171,7 @@ func TestOpRoundings(t *testing.T) {
 }
 
 func TestLargestForm(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		integral, fractional int32
 		result               string
 	}{
@@ -184,7 +184,7 @@ func TestLargestForm(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		var b = largestForm(tc.integral, tc.fractional, false)
+		b := largestForm(tc.integral, tc.fractional, false)
 		if b.String() != tc.result {
 			t.Errorf("LargestForm(%d, %d) = %q (expected %q)", tc.integral, tc.fractional, b.String(), tc.result)
 		}
@@ -315,7 +315,7 @@ func BenchmarkDecimalParsing(b *testing.B) {
 		}
 	})
 
-	var decimalBytes = make([][]byte, 0, len(decimals))
+	decimalBytes := make([][]byte, 0, len(decimals))
 	for _, dec := range decimals {
 		decimalBytes = append(decimalBytes, []byte(dec))
 	}
@@ -331,8 +331,8 @@ func BenchmarkDecimalParsing(b *testing.B) {
 }
 
 func TestRoundtrip(t *testing.T) {
-	var bad = []string{"", "+", "-"}
-	var cases = append(decimals, bad...)
+	bad := []string{"", "+", "-"}
+	cases := append(decimals, bad...)
 
 	for _, in := range cases {
 		d, err1 := NewFromString(in)
@@ -360,7 +360,7 @@ func TestRoundtrip(t *testing.T) {
 }
 
 func TestRoundtripStress(t *testing.T) {
-	var count = 1000000
+	count := 1000000
 	if testing.Short() {
 		count = 100
 	}
@@ -380,7 +380,7 @@ func TestRoundtripStress(t *testing.T) {
 
 func BenchmarkFormatting(b *testing.B) {
 	const Count = 10000
-	var parsed = make([]Decimal, 0, Count)
+	parsed := make([]Decimal, 0, Count)
 	for i := 0; i < Count; i++ {
 		parsed = append(parsed, NewFromFloat(rand.NormFloat64()))
 	}
@@ -438,7 +438,7 @@ func TestFormatFast(t *testing.T) {
 				b = b.Neg(b)
 			}
 			for exp := -100; exp <= 100; exp++ {
-				var d = Decimal{value: b, exp: int32(exp)}
+				d := Decimal{value: b, exp: int32(exp)}
 
 				expect := d.formatSlow(false)
 				got := d.formatFast(0, false, false)
@@ -460,7 +460,7 @@ func TestFormatAndRound(t *testing.T) {
 			}
 			for prec := int32(1); prec < 32; prec++ {
 				for exp := -100; exp <= 100; exp++ {
-					var d = Decimal{value: b, exp: int32(exp)}
+					d := Decimal{value: b, exp: int32(exp)}
 
 					expect := d.StringFixed(prec)
 					got := string(d.formatFast(int(prec), true, false))

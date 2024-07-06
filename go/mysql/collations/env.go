@@ -78,8 +78,10 @@ func (env *Environment) BinaryCollationForCharset(charset string) ID {
 	return Unknown
 }
 
-var globalEnvironments = make(map[collver]*Environment)
-var globalEnvironmentsMu sync.Mutex
+var (
+	globalEnvironments   = make(map[collver]*Environment)
+	globalEnvironmentsMu sync.Mutex
+)
 
 // fetchCacheEnvironment returns a cached Environment from a global cache.
 // We can keep a single Environment per collver version because Environment

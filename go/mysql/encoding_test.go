@@ -96,7 +96,6 @@ func TestEncUint16(t *testing.T) {
 
 	_, _, ok = readUint16(data, 9)
 	assert.False(t, ok, "readUint16 returned ok=true for shorter value")
-
 }
 
 func TestEncBytes(t *testing.T) {
@@ -122,7 +121,6 @@ func TestEncBytes(t *testing.T) {
 
 	_, _, ok = readBytes(data, 9, 2)
 	assert.False(t, ok, "readBytes returned ok=true for shorter value")
-
 }
 
 func TestEncUint32(t *testing.T) {
@@ -145,7 +143,6 @@ func TestEncUint32(t *testing.T) {
 
 	_, _, ok = readUint32(data, 7)
 	assert.False(t, ok, "readUint32 returned ok=true for shorter value")
-
 }
 
 func TestEncUint64(t *testing.T) {
@@ -169,7 +166,6 @@ func TestEncUint64(t *testing.T) {
 
 	_, _, ok = readUint64(data, 7)
 	assert.False(t, ok, "readUint64 returned ok=true for shorter value")
-
 }
 
 func TestEncString(t *testing.T) {

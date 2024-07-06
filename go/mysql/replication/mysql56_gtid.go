@@ -29,9 +29,7 @@ import (
 // Mysql56FlavorID is the string identifier for the Mysql56 flavor.
 const Mysql56FlavorID = "MySQL56"
 
-var (
-	ErrExpectMysql56Flavor = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "expected MySQL GTID position but found a different or invalid format.")
-)
+var ErrExpectMysql56Flavor = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "expected MySQL GTID position but found a different or invalid format.")
 
 // parseMysql56GTID is registered as a GTID parser.
 func parseMysql56GTID(s string) (GTID, error) {

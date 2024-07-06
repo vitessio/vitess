@@ -31,7 +31,6 @@ func TestParseMariaGTID(t *testing.T) {
 	got, err := parseMariadbGTID(input)
 	assert.NoError(t, err, "%v", err)
 	assert.Equal(t, want, got.(MariadbGTID), "parseMariadbGTID(%v) = %v, want %v", input, got, want)
-
 }
 
 func TestParseInvalidMariaGTID(t *testing.T) {
@@ -41,7 +40,6 @@ func TestParseInvalidMariaGTID(t *testing.T) {
 	_, err := parseMariadbGTID(input)
 	assert.Error(t, err, "expected error for invalid input (%v)", input)
 	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
-
 }
 
 func TestParseMariaGTIDInvalidDomain(t *testing.T) {
@@ -51,7 +49,6 @@ func TestParseMariaGTIDInvalidDomain(t *testing.T) {
 	_, err := parseMariadbGTID(input)
 	assert.Error(t, err, "expected error for invalid input (%v)", input)
 	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
-
 }
 
 func TestParseMariaGTIDInvalidServer(t *testing.T) {
@@ -61,7 +58,6 @@ func TestParseMariaGTIDInvalidServer(t *testing.T) {
 	_, err := parseMariadbGTID(input)
 	assert.Error(t, err, "expected error for invalid input (%v)", input)
 	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
-
 }
 
 func TestParseMariaGTIDInvalidSequence(t *testing.T) {
@@ -71,7 +67,6 @@ func TestParseMariaGTIDInvalidSequence(t *testing.T) {
 	_, err := parseMariadbGTID(input)
 	assert.Error(t, err, "expected error for invalid input (%v)", input)
 	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
-
 }
 
 func TestParseMariaGTIDSet(t *testing.T) {
@@ -84,7 +79,6 @@ func TestParseMariaGTIDSet(t *testing.T) {
 	got, err := ParseMariadbGTIDSet(input)
 	assert.NoError(t, err, "%v", err)
 	assert.True(t, got.Equal(want), "ParseMariadbGTIDSet(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestParseInvalidMariaGTIDSet(t *testing.T) {
@@ -107,7 +101,6 @@ func TestMariaGTIDString(t *testing.T) {
 
 	got := input.String()
 	assert.Equal(t, want, got, "%#v.String() = '%v', want '%v'", input, got, want)
-
 }
 
 func TestMariaGTIDFlavor(t *testing.T) {
@@ -116,7 +109,6 @@ func TestMariaGTIDFlavor(t *testing.T) {
 
 	got := input.Flavor()
 	assert.Equal(t, want, got, "%#v.Flavor() = '%v', want '%v'", input, got, want)
-
 }
 
 func TestMariaGTIDSequenceDomain(t *testing.T) {
@@ -125,7 +117,6 @@ func TestMariaGTIDSequenceDomain(t *testing.T) {
 
 	got := input.SequenceDomain()
 	assert.Equal(t, want, got, "%#v.SequenceDomain() = %#v, want %#v", input, got, want)
-
 }
 
 func TestMariaGTIDSourceServer(t *testing.T) {
@@ -134,7 +125,6 @@ func TestMariaGTIDSourceServer(t *testing.T) {
 
 	got := input.SourceServer()
 	assert.Equal(t, want, got, "%#v.SourceServer() = %#v, want %#v", input, got, want)
-
 }
 
 func TestMariaGTIDSequenceNumber(t *testing.T) {
@@ -143,7 +133,6 @@ func TestMariaGTIDSequenceNumber(t *testing.T) {
 
 	got := input.SequenceNumber()
 	assert.Equal(t, want, got, "%#v.SequenceNumber() = %#v, want %#v", input, got, want)
-
 }
 
 func TestMariaGTIDGTIDSet(t *testing.T) {
@@ -152,7 +141,6 @@ func TestMariaGTIDGTIDSet(t *testing.T) {
 
 	got := input.GTIDSet()
 	assert.True(t, got.Equal(want), "%#v.GTIDSet() = %#v, want %#v", input, got, want)
-
 }
 
 func TestMariaGTIDSetString(t *testing.T) {
@@ -165,7 +153,6 @@ func TestMariaGTIDSetString(t *testing.T) {
 
 	got := input.String()
 	assert.Equal(t, want, got, "%#v.String() = '%v', want '%v'", input, got, want)
-
 }
 
 func TestMariaGTIDSetContainsLess(t *testing.T) {
@@ -577,7 +564,6 @@ func TestMariaGTIDSetUnion(t *testing.T) {
 		5: MariadbGTID{Domain: 5, Server: 1, Sequence: 4},
 	}
 	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
-
 }
 
 func TestMariaGTIDSetUnionNewDomain(t *testing.T) {
@@ -615,7 +601,6 @@ func TestMariaGTIDSetUnionNewDomain(t *testing.T) {
 }
 
 func TestMariaGTIDSetLast(t *testing.T) {
-
 	testCases := map[string]string{
 		"12-34-5678,11-22-3333,24-52-4523": "24-52-4523",
 		"12-34-5678":                       "12-34-5678",

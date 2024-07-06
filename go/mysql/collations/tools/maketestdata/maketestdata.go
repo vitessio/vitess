@@ -167,9 +167,9 @@ func main() {
 	fs := pflag.NewFlagSet("maketestdata", pflag.ExitOnError)
 	flag.Parse(fs)
 
-	var defaults = collations.MySQL8()
-	var collationsForLanguage = make(map[testutil.Lang][]collations.ID)
-	var allcollations = colldata.All(defaults)
+	defaults := collations.MySQL8()
+	collationsForLanguage := make(map[testutil.Lang][]collations.ID)
+	allcollations := colldata.All(defaults)
 	for lang := range testutil.KnownLanguages {
 		for _, coll := range allcollations {
 			if lang.MatchesCollation(coll.Name()) {
@@ -178,7 +178,7 @@ func main() {
 		}
 	}
 
-	var rootCollations = []collations.ID{
+	rootCollations := []collations.ID{
 		defaults.LookupByName("utf8mb4_0900_as_cs"),
 		defaults.LookupByName("utf8mb4_0900_as_ci"),
 		defaults.LookupByName("utf8mb4_0900_ai_ci"),
@@ -193,7 +193,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var tdata = &testutil.GoldenTest{Name: os.Args[1]}
+	tdata := &testutil.GoldenTest{Name: os.Args[1]}
 
 	for lang, article := range articles {
 		start := time.Now()

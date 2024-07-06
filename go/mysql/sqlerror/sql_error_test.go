@@ -54,7 +54,7 @@ func TestDemuxResourceExhaustedErrors(t *testing.T) {
 }
 
 func TestNewSQLErrorFromError(t *testing.T) {
-	var tCases = []struct {
+	tCases := []struct {
 		err error
 		num ErrorCode
 		ss  string

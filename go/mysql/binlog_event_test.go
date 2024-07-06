@@ -38,7 +38,6 @@ func TestQueryString(t *testing.T) {
 	want := `{Database: "test_database", Charset:`
 	got := input.String()
 	assert.True(t, strings.HasPrefix(got, want), "%#v.String() = %#v, want %#v", input, got, want)
-
 }
 
 func TestQueryStringNilCharset(t *testing.T) {

@@ -55,35 +55,35 @@ const (
 // These constants describe the event types.
 // See: http://dev.mysql.com/doc/internals/en/binlog-event-type.html
 const (
-	//eUnknownEvent           = 0
+	// eUnknownEvent           = 0
 	// Unused
-	//eStartEventV3           = 1
+	// eStartEventV3           = 1
 	eQueryEvent  = 2
 	eStopEvent   = 3
 	eRotateEvent = 4
 	eIntVarEvent = 5
 	// Unused
-	//eLoadEvent              = 6
+	// eLoadEvent              = 6
 	// Unused
-	//eSlaveEvent             = 7
+	// eSlaveEvent             = 7
 	// Unused
-	//eCreateFileEvent        = 8
+	// eCreateFileEvent        = 8
 	// Unused
-	//eAppendBlockEvent       = 9
-	//eExecLoadEvent          = 10
+	// eAppendBlockEvent       = 9
+	// eExecLoadEvent          = 10
 	// Unused
-	//eDeleteFileEvent        = 11
+	// eDeleteFileEvent        = 11
 	// Unused
-	//eNewLoadEvent           = 12
+	// eNewLoadEvent           = 12
 	eRandEvent = 13
 	// Unused
-	//eUserVarEvent           = 14
+	// eUserVarEvent           = 14
 	eFormatDescriptionEvent = 15
 	eXIDEvent               = 16
-	//Unused
-	//eBeginLoadQueryEvent    = 17
-	//Unused
-	//eExecuteLoadQueryEvent  = 18
+	// Unused
+	// eBeginLoadQueryEvent    = 17
+	// Unused
+	// eExecuteLoadQueryEvent  = 18
 	eTableMapEvent     = 19
 	eWriteRowsEventV0  = 20
 	eUpdateRowsEventV0 = 21
@@ -92,12 +92,12 @@ const (
 	eUpdateRowsEventV1 = 24
 	eDeleteRowsEventV1 = 25
 	// Unused
-	//eIncidentEvent          = 26
+	// eIncidentEvent          = 26
 	eHeartbeatEvent = 27
 	// Unused
-	//eIgnorableEvent         = 28
+	// eIgnorableEvent         = 28
 	// Unused
-	//eRowsQueryEvent         = 29
+	// eRowsQueryEvent         = 29
 	eWriteRowsEventV2   = 30
 	eUpdateRowsEventV2  = 31
 	eDeleteRowsEventV2  = 32
@@ -106,21 +106,21 @@ const (
 	ePreviousGTIDsEvent = 35
 
 	// MySQL 5.7 events. Unused.
-	//eTransactionContextEvent = 36
-	//eViewChangeEvent         = 37
-	//eXAPrepareLogEvent       = 38
+	// eTransactionContextEvent = 36
+	// eViewChangeEvent         = 37
+	// eXAPrepareLogEvent       = 38
 
 	// Transaction_payload_event when binlog_transaction_compression=ON.
 	eTransactionPayloadEvent = 40
 
 	// MariaDB specific values. They start at 160.
-	//eMariaAnnotateRowsEvent = 160
+	// eMariaAnnotateRowsEvent = 160
 	// Unused
-	//eMariaBinlogCheckpointEvent = 161
+	// eMariaBinlogCheckpointEvent = 161
 	eMariaGTIDEvent     = 162
 	eMariaGTIDListEvent = 163
 	// Unused
-	//eMariaStartEncryptionEvent  = 164
+	// eMariaStartEncryptionEvent  = 164
 )
 
 // These constants describe the type of status variables in q Query packet.

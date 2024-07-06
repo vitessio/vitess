@@ -24,9 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var (
-	ErrUnspecifiedServerVersion = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "server version unspecified")
-)
+var ErrUnspecifiedServerVersion = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "server version unspecified")
 
 type FlavorCapability int
 

@@ -34,7 +34,6 @@ func TestParseMysql56GTID(t *testing.T) {
 	got, err := parseMysql56GTID(input)
 	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "parseMysql56GTID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestParseMysql56GTIDInvalid(t *testing.T) {
@@ -69,7 +68,6 @@ func TestParseSID(t *testing.T) {
 	got, err := ParseSID(input)
 	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "ParseSID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestParseSIDInvalid(t *testing.T) {
@@ -169,7 +167,8 @@ func TestDecodePositionMySQL56(t *testing.T) {
 		expectGTID := Mysql56GTIDSet{
 			SID{
 				0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
-			}: []interval{{start: 1, end: 615}}}
+			}: []interval{{start: 1, end: 615}},
+		}
 		assert.Equal(t, expectGTID, gtidSet)
 	}
 	{
@@ -180,7 +179,8 @@ func TestDecodePositionMySQL56(t *testing.T) {
 		expectGTID := Mysql56GTIDSet{
 			SID{
 				0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
-			}: []interval{{start: 1, end: 615}}}
+			}: []interval{{start: 1, end: 615}},
+		}
 		assert.Equal(t, expectGTID, gtidSet)
 	}
 	{

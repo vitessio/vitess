@@ -33,7 +33,7 @@ var errOverflow = errors.New("overflow")
 func parseDecimal64(s []byte) (Decimal, error) {
 	const cutoff = math.MaxUint64/10 + 1
 	var n uint64
-	var dot = -1
+	dot := -1
 
 	for i, c := range s {
 		var d byte
@@ -87,7 +87,7 @@ func SizeAndScaleFromString(s string) (int32, int32) {
 }
 
 func NewFromMySQL(s []byte) (Decimal, error) {
-	var original = s
+	original := s
 	var neg bool
 
 	if len(s) > 0 {

@@ -34,9 +34,11 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-var testcollationMap map[string]Collation
-var testcollationSlice []Collation
-var testcollationOnce sync.Once
+var (
+	testcollationMap   map[string]Collation
+	testcollationSlice []Collation
+	testcollationOnce  sync.Once
+)
 
 func testinit() {
 	testcollationOnce.Do(func() {
@@ -97,7 +99,7 @@ func TestKanaSensitivity(t *testing.T) {
 	const Kana1 = "の東京ノ"
 	const Kana2 = "ノ東京の"
 
-	var cases = []struct {
+	cases := []struct {
 		collation string
 		equal     bool
 	}{
@@ -111,13 +113,12 @@ func TestKanaSensitivity(t *testing.T) {
 			collation := testcollation(t, tc.collation)
 			equal := collation.Collate([]byte(Kana1), []byte(Kana2), false) == 0
 			assert.Equal(t, tc.equal, equal, "expected %q == %q to be %v", Kana1, Kana2, tc.equal)
-
 		})
 	}
 }
 
 func TestContractions(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		collation string
 		inputs    []string
 		expected  []byte
@@ -148,7 +149,7 @@ func TestContractions(t *testing.T) {
 }
 
 func TestReplacementCharacter(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		collation string
 		expected  []byte
 	}{
@@ -162,13 +163,12 @@ func TestReplacementCharacter(t *testing.T) {
 			coll := testcollation(t, tc.collation)
 			weightString := coll.WeightString(nil, []byte(string(utf8.RuneError)), 0)
 			assert.True(t, bytes.Equal(weightString, tc.expected), "weight_string(\\uFFFD) = %#v (expected %#v)", weightString, tc.expected)
-
 		})
 	}
 }
 
 func TestIsPrefix(t *testing.T) {
-	var collations = []string{
+	collations := []string{
 		"utf8mb4_0900_ai_ci",
 		"utf8mb4_0900_as_ci",
 		"utf8mb4_unicode_ci",
@@ -212,25 +212,32 @@ func DebugUcaLegacyWeightString(t *testing.T, collname string, input, expected [
 	}
 }
 
-const ExampleString = "abc æøå 日本語"
-const ExampleStringLong = "Premature optimization is the root of all evil. " +
-	"Våre norske tegn bør æres. 日本語が少しわかります。 " +
-	"✌️🐶👩🏽"
+const (
+	ExampleString     = "abc æøå 日本語"
+	ExampleStringLong = "Premature optimization is the root of all evil. " +
+		"Våre norske tegn bør æres. 日本語が少しわかります。 " +
+		"✌️🐶👩🏽"
+)
 const JapaneseString = "データの保存とアクセスを行うストレージエンジンがSQLパーサとは" +
 	"分離独立しており、用途に応じたストレージエンジンを選択できる" +
 	"「マルチストレージエンジン」方式を採用している。"
+
 const WhitespaceString = "This is a\n prett\ny unrealist\nic case; a\nn " +
 	"Eng\nlish sente\nnce where\n we'\nve added a new\nline every te\nn " +
 	"bytes or\n so.\n"
+
 const HungarianString = "A MySQL adatbázisok adminisztrációjára a mellékelt " +
 	"parancssori eszközöket (mysql és mysqladmin) használhatjuk."
+
 const JapaneseString2 = "サーバー SQL モードの設定方法。この設定は、たとえば" +
 	"別のデータベースシステムからのコードとの互換性を保ったり、特定の状況に" +
 	"ついてのエラー処理を制御したりするために、SQL の構文およびセマンティクス" +
 	"の特定の側面を変更します。"
+
 const ChineseString = "\xE9\x98\xBF\xE5\x92\x97\xF0\xAC\xBA\xA1" +
 	"\xC4\x81\x61\x62\xC5\xAB\x75\x55\xC7\x96\x5A\xF0\x94\x99\x86" +
 	"\xF0\x97\x86\xA0\xF0\xAC\xBA\xA2\xF0\xAE\xAF\xA0\xF0\xB3\x8C\xB3"
+
 const ChineseString2 = "春江潮水连海平，海上明月共潮生。" +
 	"滟滟随波千万里，何处春江无月明！" +
 	"江流宛转绕芳甸，月照花林皆似霰；" +
@@ -241,8 +248,10 @@ const ChineseString2 = "春江潮水连海平，海上明月共潮生。" +
 	"不知江月待何人，但见长江送流水。" +
 	"白云一片去悠悠，青枫浦上不胜愁。" +
 	"谁家今夜扁舟子？何处相思明月楼？"
+
 const SpanishString = "A mí se me hace cuento que empezó Buenos Aires: " +
 	"La juzgo tan eterna como el agua y el aire."
+
 const EnglishString = "Dame Mary Rosa Alleyne Hunnings DBE (nee Berry; born 24 March 1935), " +
 	"known professionally as Mary Berry, is an English food writer, chef, baker and television presenter."
 
@@ -785,7 +794,7 @@ func BenchmarkAllUCAWeightStrings(b *testing.B) {
 }
 
 func TestCompareWithWeightString(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		left, right string
 		equal       bool
 	}{
@@ -806,13 +815,13 @@ func TestCompareWithWeightString(t *testing.T) {
 }
 
 func TestTinyWeightStrings(t *testing.T) {
-	var Collations = []Collation{
+	Collations := []Collation{
 		testcollation(t, "utf8mb4_0900_as_cs"),
 		testcollation(t, "utf8mb4_0900_as_ci"),
 		testcollation(t, "utf8mb4_0900_ai_ci"),
 	}
 
-	var Strings = []string{
+	Strings := []string{
 		"a", "A", "aa", "AA", "aaa", "AAA", "aaaa", "AAAA",
 		"b", "B", "BB", "BB", "bbb", "BBB", "bbbb", "BBBB",
 		"Abc", "aBC",
@@ -858,7 +867,6 @@ func TestTinyWeightStrings(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 func TestFastIterators(t *testing.T) {
@@ -868,7 +876,7 @@ func TestFastIterators(t *testing.T) {
 	}
 	allASCIICharacters[0] = 'A'
 
-	var cases = []struct {
+	cases := []struct {
 		collation string
 		expected  []byte
 	}{
@@ -891,7 +899,6 @@ func TestFastIterators(t *testing.T) {
 			coll := testcollation(t, tc.collation)
 			result := coll.WeightString(nil, allASCIICharacters, 0)
 			assert.True(t, bytes.Equal(tc.expected, result), "weight_string(%q) = %#v (expected %#v)", allASCIICharacters, result, tc.expected)
-
 		})
 	}
 }
@@ -899,7 +906,7 @@ func TestFastIterators(t *testing.T) {
 func TestUniqueHashes(t *testing.T) {
 	for _, teststr := range AllTestStrings {
 		t.Run(teststr.Name, func(t *testing.T) {
-			var hashes = make(map[uint64]string)
+			hashes := make(map[uint64]string)
 			var hasher vthash.Hasher
 
 			for _, collation := range testall() {
@@ -951,7 +958,7 @@ func (c *ConsistentCollation) Collate(left, right []byte, isPrefix bool) int {
 }
 
 func TestEqualities(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		collation   string
 		left, right string
 		equal       bool
@@ -976,7 +983,7 @@ func TestEqualities(t *testing.T) {
 }
 
 func TestUCACollationOrder(t *testing.T) {
-	var sorted = []string{
+	sorted := []string{
 		"aaaa",
 		"bbbb",
 		"cccc",
@@ -984,7 +991,7 @@ func TestUCACollationOrder(t *testing.T) {
 		"zzzz",
 	}
 
-	var collations = []string{
+	collations := []string{
 		"utf8mb4_0900_ai_ci",
 		"utf8mb4_0900_as_cs",
 	}
@@ -1036,13 +1043,13 @@ func TestCaseChangeEqualities(t *testing.T) {
 }
 
 func BenchmarkUCA900Collation(b *testing.B) {
-	var Collations = []Collation{
+	Collations := []Collation{
 		testcollation(b, "utf8mb4_0900_as_cs"),
 		testcollation(b, "utf8mb4_0900_as_ci"),
 		testcollation(b, "utf8mb4_0900_ai_ci"),
 	}
 
-	var BenchStrings = []struct {
+	BenchStrings := []struct {
 		Name, Content string
 	}{
 		{"Long", ExampleStringLong},

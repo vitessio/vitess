@@ -30,14 +30,16 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
 
-var upropsOnce sync.Once
-var uprops struct {
-	trie             *utrie.UTrie2
-	trie2            *utrie.UTrie2
-	vectorsColumns   int32
-	vectors          []uint32
-	scriptExtensions []uint16
-}
+var (
+	upropsOnce sync.Once
+	uprops     struct {
+		trie             *utrie.UTrie2
+		trie2            *utrie.UTrie2
+		vectorsColumns   int32
+		vectors          []uint32
+		scriptExtensions []uint16
+	}
+)
 
 func trie() *utrie.UTrie2 {
 	loadUProps()

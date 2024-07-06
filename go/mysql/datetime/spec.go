@@ -129,7 +129,7 @@ func (fmtMonthDaySuffix) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (d fmtMonthDaySuffix) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -170,7 +170,7 @@ func (fmtMicroseconds) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (f fmtMicroseconds) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -253,8 +253,9 @@ type fmtZeroYearDay struct{}
 func (fmtZeroYearDay) format(dst []byte, t DateTime, prec uint8) []byte {
 	return appendInt(dst, t.Date.Yearday(), 3)
 }
+
 func (j fmtZeroYearDay) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -265,7 +266,7 @@ func (fmtMonthName) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (m fmtMonthName) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -279,7 +280,7 @@ func (fmtAMorPM) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (p fmtAMorPM) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -297,7 +298,7 @@ func (fmtFullTime12) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (r fmtFullTime12) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -352,7 +353,7 @@ func (fmtFullTime24) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (t2 fmtFullTime24) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -367,7 +368,7 @@ func (fmtWeek0) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (u fmtWeek0) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -382,7 +383,7 @@ func (fmtWeek1) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (u fmtWeek1) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -394,7 +395,7 @@ func (fmtWeek2) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (v fmtWeek2) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -406,7 +407,7 @@ func (fmtWeek3) format(dst []byte, t DateTime, prec uint8) []byte {
 }
 
 func (v fmtWeek3) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -415,8 +416,9 @@ type fmtWeekdayName struct{}
 func (fmtWeekdayName) format(dst []byte, t DateTime, prec uint8) []byte {
 	return append(dst, t.Date.Weekday().String()...)
 }
+
 func (w fmtWeekdayName) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -425,8 +427,9 @@ type fmtWeekday struct{}
 func (fmtWeekday) format(dst []byte, t DateTime, prec uint8) []byte {
 	return appendInt(dst, int(t.Date.Weekday()), 0)
 }
+
 func (w fmtWeekday) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -436,8 +439,9 @@ func (fmtYearForWeek2) format(dst []byte, t DateTime, prec uint8) []byte {
 	year, _ := t.Date.SundayWeek()
 	return appendInt(dst, year, 4)
 }
+
 func (x fmtYearForWeek2) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -447,8 +451,9 @@ func (fmtYearForWeek3) format(dst []byte, t DateTime, prec uint8) []byte {
 	year, _ := t.Date.ISOWeek()
 	return appendInt(dst, year, 4)
 }
+
 func (x fmtYearForWeek3) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -504,7 +509,7 @@ type fmtVerbatim struct {
 }
 
 func (v *fmtVerbatim) parse(t *timeparts, bytes string) (string, bool) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 

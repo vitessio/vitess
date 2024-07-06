@@ -231,7 +231,6 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 
 	for _, other := range contained {
 		assert.True(t, set.Contains(other), "Contains(%#v) = false, want true", other)
-
 	}
 
 	// Test cases that should return Contains() = false.
@@ -462,7 +461,6 @@ func TestMysql56GTIDSetUnion(t *testing.T) {
 		sid3: []interval{{1, 45}},
 	}
 	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
-
 }
 
 func TestMysql56GTIDSetDifference(t *testing.T) {
@@ -507,7 +505,6 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 	got = set10.Difference(set11)
 	want = Mysql56GTIDSet{}
 	assert.True(t, got.Equal(want), "got %#v; want %#v", got, want)
-
 }
 
 func TestMysql56GTIDSetSIDBlock(t *testing.T) {
@@ -549,7 +546,6 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 	set, err := NewMysql56GTIDSetFromSIDBlock(want)
 	require.NoError(t, err, "Reconstructing Mysql56GTIDSet from SID block failed: %v", err)
 	assert.True(t, reflect.DeepEqual(set, input), "NewMysql56GTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
-
 }
 
 func TestMySQL56GTIDSetLast(t *testing.T) {
@@ -684,7 +680,7 @@ func TestSubtract(t *testing.T) {
 }
 
 func BenchmarkMySQL56GTIDParsing(b *testing.B) {
-	var Inputs = []string{
+	Inputs := []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20",

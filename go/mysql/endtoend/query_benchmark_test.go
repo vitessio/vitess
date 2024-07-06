@@ -328,5 +328,4 @@ func BenchmarkSetVarsSingleSet(b *testing.B) {
 			}
 		})
 	}
-
 }

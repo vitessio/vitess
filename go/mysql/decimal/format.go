@@ -85,8 +85,10 @@ func (d *Decimal) formatSlow(trim bool) []byte {
 	return buf
 }
 
-var zeroByte = []byte{'0'}
-var oneByte = []byte{'1'}
+var (
+	zeroByte = []byte{'0'}
+	oneByte  = []byte{'1'}
+)
 
 const smallsString = "00010203040506070809" +
 	"10111213141516171819" +

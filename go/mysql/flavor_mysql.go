@@ -55,8 +55,10 @@ type mysqlFlavor82 struct {
 	mysqlFlavor
 }
 
-var _ flavor = (*mysqlFlavor8)(nil)
-var _ flavor = (*mysqlFlavor82)(nil)
+var (
+	_ flavor = (*mysqlFlavor8)(nil)
+	_ flavor = (*mysqlFlavor82)(nil)
+)
 
 // primaryGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {

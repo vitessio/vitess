@@ -68,10 +68,12 @@ var divisionPrecision = 16
 // Zero should never be compared with == or != directly, please use decimal.Equal or decimal.Cmp instead.
 var Zero = New(0, 0)
 
-var zeroInt = big.NewInt(0)
-var oneInt = big.NewInt(1)
-var fiveInt = big.NewInt(5)
-var tenInt = big.NewInt(10)
+var (
+	zeroInt = big.NewInt(0)
+	oneInt  = big.NewInt(1)
+	fiveInt = big.NewInt(5)
+	tenInt  = big.NewInt(10)
+)
 
 const powTabLen = 20
 
@@ -438,7 +440,7 @@ func (d Decimal) divRound(d2 Decimal, precision int32) Decimal {
 	// now rv2 = abs(r.value) * 2
 	r2 := Decimal{value: &rv2, exp: r.exp + precision}
 	// r2 is now 2 * r * 10 ^ precision
-	var c = r2.Cmp(d2.Abs())
+	c := r2.Cmp(d2.Abs())
 
 	if c < 0 {
 		return q
@@ -791,5 +793,4 @@ func (d Decimal) Clamp(integral, fractional int32) Decimal {
 		return d
 	}
 	return limit
-
 }

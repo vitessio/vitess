@@ -403,15 +403,19 @@ func TestCellLengthAndData(t *testing.T) {
 	}, {
 		typ:      TypeJSON,
 		metadata: 2,
-		data: []byte{0x0f, 0x00,
-			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
+		data: []byte{
+			0x0f, 0x00,
+			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98,
+		},
 		out: sqltypes.MakeTrusted(sqltypes.Expression,
 			[]byte(`{"a": "b"}`)),
 	}, {
 		typ:      TypeJSON,
 		metadata: 4,
-		data: []byte{0x0f, 0x00, 0x00, 0x00,
-			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
+		data: []byte{
+			0x0f, 0x00, 0x00, 0x00,
+			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98,
+		},
 		out: sqltypes.MakeTrusted(sqltypes.Expression,
 			[]byte(`{"a": "b"}`)),
 	}, {

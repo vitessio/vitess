@@ -100,7 +100,7 @@ func (g *Generator) WriteToFile(out string) {
 		return sortedPackages[i] < sortedPackages[j]
 	})
 	for _, pkg := range sortedPackages {
-		var name = "_"
+		name := "_"
 		if g.imported[pkg] {
 			name = pkg.Name()
 		}
@@ -110,7 +110,7 @@ func (g *Generator) WriteToFile(out string) {
 	fmt.Fprintf(&file, ")\n\n")
 	g.Buffer.WriteTo(&file)
 
-	if err := os.WriteFile(out, file.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(out, file.Bytes(), 0o644); err != nil {
 		g.Fail(fmt.Sprintf("failed to generate %q: %v", out, err))
 	}
 
@@ -207,11 +207,13 @@ func (g *Generator) printAtom(v any) {
 	}
 }
 
-type Array8 []byte
-type Array16 []uint16
-type Array32 []uint32
-type Quote string
-type Package string
+type (
+	Array8  []byte
+	Array16 []uint16
+	Array32 []uint32
+	Quote   string
+	Package string
+)
 
 func (pkg Package) Name() string {
 	return path.Base(string(pkg))

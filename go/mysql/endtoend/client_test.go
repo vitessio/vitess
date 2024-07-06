@@ -243,6 +243,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 func TestMultiResultDeprecateEOF(t *testing.T) {
 	doTestMultiResult(t, false)
 }
+
 func TestMultiResultNoDeprecateEOF(t *testing.T) {
 	doTestMultiResult(t, true)
 }
@@ -257,7 +258,6 @@ func expectNoError(t *testing.T, err error) {
 func expectFlag(t *testing.T, msg string, flag, want bool) {
 	t.Helper()
 	require.Equal(t, want, flag, "%s: %v, want: %v", msg, flag, want)
-
 }
 
 // TestTLS tests our client can connect via SSL.
@@ -298,7 +298,6 @@ func TestReplicationStatus(t *testing.T) {
 
 	status, err := conn.ShowReplicationStatus()
 	assert.Equal(t, mysql.ErrNotReplica, err, "Got unexpected result for ShowReplicationStatus: %v %v", status, err)
-
 }
 
 func TestSessionTrackGTIDs(t *testing.T) {

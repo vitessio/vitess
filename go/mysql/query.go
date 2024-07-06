@@ -35,9 +35,7 @@ import (
 
 // This file contains the methods related to queries.
 
-var (
-	ErrExecuteFetchMultipleResults = vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results. Use ExecuteFetchMulti instead.")
-)
+var ErrExecuteFetchMultipleResults = vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results. Use ExecuteFetchMulti instead.")
 
 const (
 	// Use as `maxrows` in `ExecuteFetch` and related functions, to indicate no rows should be fetched.
@@ -438,12 +436,10 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
 		if c.isEOFPacket(data) {
-
 			// This is what we expect.
 			// Warnings and status flags are ignored.
 			c.recycleReadPacket()
 			// goto: read row loop
-
 		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			return nil, false, 0, ParseErrorPacket(data)

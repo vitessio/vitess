@@ -596,7 +596,7 @@ func (p *PathParser) lexQuotedString(in []byte) (string, []byte, error) {
 	}
 
 	var buf strings.Builder
-	var n = 1
+	n := 1
 	for n < len(in) {
 		if in[n] == '"' {
 			return buf.String(), in[n+1:], nil
@@ -646,7 +646,7 @@ func (p *PathParser) ParseBytes(in []byte) (*Path, error) {
 	p.step = stepRoot
 
 	var err error
-	var ptr = in
+	ptr := in
 	for {
 		ptr, err = p.step(p, ptr)
 		if err != nil {

@@ -75,8 +75,10 @@ func (t *UTrie2) indexFromCp(asciiOffset int, c rune) int {
 	}
 }
 
-type EnumRange func(start, end rune, value uint32) bool
-type EnumValue func(value uint32) uint32
+type (
+	EnumRange func(start, end rune, value uint32) bool
+	EnumValue func(value uint32) uint32
+)
 
 func (t *UTrie2) Enum(enumValue EnumValue, enumRange EnumRange) {
 	t.enumEitherTrie(0, 0x110000, enumValue, enumRange)

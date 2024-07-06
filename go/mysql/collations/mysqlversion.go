@@ -18,12 +18,14 @@ limitations under the License.
 
 package collations
 
-type collver byte
-type collalias struct {
-	mask    collver
-	name    string
-	charset string
-}
+type (
+	collver   byte
+	collalias struct {
+		mask    collver
+		name    string
+		charset string
+	}
+)
 
 const (
 	collverInvalid    collver = 0

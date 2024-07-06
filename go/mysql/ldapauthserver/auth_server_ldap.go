@@ -180,7 +180,7 @@ func (lud *LdapUserData) update() {
 		log.Errorf("Error updating LDAP user data: %v", err)
 		return
 	}
-	defer lud.asl.Client.Close() //after the error check
+	defer lud.asl.Client.Close() // after the error check
 	groups, err := lud.asl.getGroups(lud.username)
 	if err != nil {
 		log.Errorf("Error updating LDAP user data: %v", err)

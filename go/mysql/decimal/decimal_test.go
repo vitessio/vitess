@@ -409,7 +409,7 @@ func TestCopy(t *testing.T) {
 		t.Error("expecting copy and origin to be equals, but they are not")
 	}
 
-	//change value
+	// change value
 	cpy = cpy.Add(New(1, 0))
 
 	if cpy.Cmp(origin) == 0 {
@@ -579,7 +579,6 @@ func TestDecimal_NegFromEmpty(t *testing.T) {
 	a := Decimal{}
 	b := a.Neg()
 	assert.Equal(t, "0", b.String())
-
 }
 
 func TestDecimal_Mul(t *testing.T) {
@@ -613,7 +612,6 @@ func TestDecimal_Mul(t *testing.T) {
 	// positive scale
 	c := New(1234, 5).mul(New(45, -1))
 	assert.Equal(t, "555300000", c.String())
-
 }
 
 func TestDecimal_Div(t *testing.T) {
@@ -924,7 +922,6 @@ func TestDecimal_Overflow(t *testing.T) {
 func TestDecimal_Scale(t *testing.T) {
 	a := New(1234, -3)
 	assert.EqualValues(t, -3, a.Exponent())
-
 }
 
 func TestDecimal_Abs1(t *testing.T) {
@@ -933,7 +930,6 @@ func TestDecimal_Abs1(t *testing.T) {
 
 	c := a.Abs()
 	assert.Zero(t, c.Cmp(b))
-
 }
 
 func TestDecimal_Abs2(t *testing.T) {
@@ -942,7 +938,6 @@ func TestDecimal_Abs2(t *testing.T) {
 
 	c := b.Abs()
 	assert.NotZero(t, c.Cmp(a))
-
 }
 
 func TestDecimal_ScalesNotEqual(t *testing.T) {
@@ -1009,7 +1004,6 @@ func TestDecimal_Cmp2(t *testing.T) {
 	a := New(123, 3)
 	b := New(1234, 2)
 	assert.Equal(t, -1, a.Cmp(b))
-
 }
 
 func TestDecimal_IsInteger(t *testing.T) {
@@ -1047,13 +1041,11 @@ func TestDecimal_Sign(t *testing.T) {
 
 	mone := New(-1, 0)
 	assert.Equal(t, -1, mone.Sign())
-
 }
 
 func didPanic(f func()) bool {
 	ret := false
 	func() {
-
 		defer func() {
 			if message := recover(); message != nil {
 				ret = true
@@ -1062,9 +1054,7 @@ func didPanic(f func()) bool {
 
 		// call the target function
 		f()
-
 	}()
 
 	return ret
-
 }

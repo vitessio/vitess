@@ -42,7 +42,7 @@ func findContractedCollations(t testing.TB, unique bool) (result []CollationWith
 		Contractions []uca.Contraction
 	}
 
-	var seen = make(map[string]bool)
+	seen := make(map[string]bool)
 
 	for _, collation := range testall() {
 		var contract uca.Contractor
@@ -98,7 +98,6 @@ func testMatch(t *testing.T, name string, cnt uca.Contraction, result []uint16, 
 	assert.Equal(t, result, cnt.Weights, "%s didn't match: expected %#v, got %#v", name, cnt.Weights, result)
 	assert.Equal(t, 0, len(remainder), "%s bad remainder: %#v", name, remainder)
 	assert.Equal(t, len(cnt.Path), skip, "%s bad skipped length %d for %#v", name, skip, cnt.Path)
-
 }
 
 func TestUCAContractions(t *testing.T) {

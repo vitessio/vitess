@@ -34,6 +34,7 @@ func (mlc *MockLdapClient) Bind(username, password string) error {
 	}
 	return nil
 }
+
 func (mlc *MockLdapClient) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	return &ldap.SearchResult{}, nil
 }
@@ -51,5 +52,4 @@ func TestValidateClearText(t *testing.T) {
 
 	_, err = asl.validate("invaliduser", "invalidpass")
 	require.Error(t, err, "AuthServerLdap validated invalid credentials.")
-
 }

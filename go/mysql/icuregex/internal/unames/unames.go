@@ -197,9 +197,11 @@ func CharForName(nameChoice NameChoice, name string) rune {
 	return charNames.enumNames(0, 0x10ffff+1, upper, nameChoice)
 }
 
-const groupShift = 5
-const linesPerGroup = 1 << groupShift
-const groupMask = linesPerGroup - 1
+const (
+	groupShift    = 5
+	linesPerGroup = 1 << groupShift
+	groupMask     = linesPerGroup - 1
+)
 
 const (
 	groupMsb = iota

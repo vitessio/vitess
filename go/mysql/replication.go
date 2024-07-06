@@ -116,7 +116,6 @@ func (c *Conn) SendSemiSyncAck(binlogFilename string, binlogPos uint64) error {
 		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
-
 }
 
 // WriteBinlogEvent writes a binlog event as part of a replication stream

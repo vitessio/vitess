@@ -387,7 +387,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if !ok {
 		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no capability flags (lower 2 bytes)")
 	}
-	var capabilities = uint32(capLower)
+	capabilities := uint32(capLower)
 
 	// The packet can end here.
 	if pos == len(data) {
@@ -481,11 +481,10 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		// Pass-through ClientFoundRows flag.
 		CapabilityClientFoundRows&uint32(params.Flags)
 
-	length :=
-		4 + // Client capability flags.
-			4 + // Max-packet size.
-			1 + // Character set.
-			23 // Reserved.
+	length := 4 + // Client capability flags.
+		4 + // Max-packet size.
+		1 + // Character set.
+		23 // Reserved.
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
@@ -541,16 +540,15 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 
 	// FIXME(alainjobart) add multi statement.
 
-	length :=
-		4 + // Client capability flags.
-			4 + // Max-packet size.
-			1 + // Character set.
-			23 + // Reserved.
-			lenNullString(params.Uname) +
-			// length of scrambled password is handled below.
-			len(scrambledPassword) +
-			len(c.authPluginName) +
-			1 // terminating zero.
+	length := 4 + // Client capability flags.
+		4 + // Max-packet size.
+		1 + // Character set.
+		23 + // Reserved.
+		lenNullString(params.Uname) +
+		// length of scrambled password is handled below.
+		len(scrambledPassword) +
+		len(c.authPluginName) +
+		1 // terminating zero.
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
