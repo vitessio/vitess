@@ -25,6 +25,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -52,10 +53,16 @@ const (
 	TransactionPayloadCompressionNone = 255
 )
 
-var TransactionPayloadCompressionTypes = map[uint64]string{
-	TransactionPayloadCompressionZstd: "ZSTD",
-	TransactionPayloadCompressionNone: "NONE",
-}
+const tmpFilePattern = "binlog-transaction-payload-*"
+
+var (
+	TransactionPayloadCompressionTypes = map[uint64]string{
+		TransactionPayloadCompressionZstd: "ZSTD",
+		TransactionPayloadCompressionNone: "NONE",
+	}
+	compressedTrxPayloadsInMem     = stats.NewCounter("CompressedTransactionPayloadsInMemory", "The number of compressed binlog transaction payloads that were processed in memory")
+	compressedTrxPayloadsUsingFile = stats.NewCounter("CompressedTransactionPayloadsViaFile", "The number of compressed binlog transaction payloads that were processed using a temporary file")
+)
 
 // Create a reader that caches decompressors. This is used for
 // smaller events that we want to handle entirely using in-memory
@@ -63,8 +70,9 @@ var TransactionPayloadCompressionTypes = map[uint64]string{
 var zstdDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 
 // At what size should we switch from the in-memory buffer
-// decoding to streaming mode -- which is slower, but does not
-// require everything be done in memory.
+// decoding to streaming mode via a temporary file -- which
+// is much slower, but does not require everything be done
+// in memory.
 const zstdInMemoryDecompressorMaxSize = 128 << (10 * 2) // 128MiB
 
 type TransactionPayload struct {
@@ -225,6 +233,7 @@ func (tp *TransactionPayload) decode() error {
 			return vterrors.Wrapf(err, "error seeking to the beginning decompressed transaction payload in the %s file",
 				decompressedFile.Name())
 		}
+		compressedTrxPayloadsUsingFile.Add(1)
 		tp.iterator = func() (ble BinlogEvent, err error) {
 			defer func() {
 				if err != nil {
@@ -269,6 +278,7 @@ func (tp *TransactionPayload) decode() error {
 		return vterrors.Wrapf(err, "error decompressing transaction payload")
 	}
 	pos := uint64(0)
+	compressedTrxPayloadsInMem.Add(1)
 	tp.iterator = func() (BinlogEvent, error) {
 		eventLenPosEnd := pos + BinlogEventLenOffset + 4
 		if eventLenPosEnd > decompressedPayloadLen { // No more events in the payload
@@ -302,7 +312,7 @@ func (tp *TransactionPayload) decompress() ([]byte, *os.File, error) {
 	// temporary file.
 	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
 		// Create a temporary file to stream the uncompressed payload to.
-		tmpFile, err := os.CreateTemp("", "binlog-transaction-payload-*")
+		tmpFile, err := os.CreateTemp("", tmpFilePattern)
 		if err != nil {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"error creating temporary file to store uncompressed transaction payload: %v", err)
