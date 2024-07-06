@@ -109,7 +109,6 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			return nil, err
 		}
 		streamres, err := tm.VREngine.Exec(stmt)
-
 		if err != nil {
 			return nil, err
 		}
@@ -133,7 +132,6 @@ func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *ta
 		return nil, err
 	}
 	streamres, err := tm.VREngine.Exec(stmt)
-
 	if err != nil {
 		return nil, err
 	}

@@ -117,7 +117,6 @@ func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStm
 		},
 		tables: plan.TablesUsed,
 	}, nil
-
 }
 
 func dropPreparedStatement(

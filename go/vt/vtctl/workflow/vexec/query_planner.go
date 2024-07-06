@@ -39,11 +39,10 @@ var ( // Query planning errors.
 	ErrUnsupportedQueryConstruct = errors.New("unsupported query construct")
 )
 
-var ( // Query execution errors.
-	// ErrUnpreparedQuery is returned when attempting to execute an unprepared
-	// QueryPlan.
-	ErrUnpreparedQuery = errors.New("attempted to execute unprepared query")
-)
+// Query execution errors.
+// ErrUnpreparedQuery is returned when attempting to execute an unprepared
+// QueryPlan.
+var ErrUnpreparedQuery = errors.New("attempted to execute unprepared query")
 
 // QueryPlanner defines the interface that VExec uses to build QueryPlans for
 // various vexec workflows. A given vexec table, which is to say a table in the

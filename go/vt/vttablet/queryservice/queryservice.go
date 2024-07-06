@@ -19,9 +19,9 @@ limitations under the License.
 package queryservice
 
 import (
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"context"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
 

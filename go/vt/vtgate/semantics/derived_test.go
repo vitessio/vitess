@@ -107,7 +107,8 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:         "select uu.count from (select count(*) as `count` from t1) uu",
 			directDeps:    TS1,
 			recursiveDeps: TS0,
-		}}
+		},
+	}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
@@ -187,7 +188,6 @@ func TestDerivedTablesOrderClause(t *testing.T) {
 			sel := parse.(*sqlparser.Select)
 			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
 			assert.Equal(t, query.expectation, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
-
 		})
 	}
 }

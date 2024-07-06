@@ -122,7 +122,6 @@ func TestColumnList(t *testing.T) {
 	fields, _, err = GetColumns("", "with ' quote", mockExec)
 	require.NoError(t, err)
 	require.Equal(t, `[name:"col1" type:VARCHAR]`, fmt.Sprintf("%+v", fields))
-
 }
 
 func TestGetSchemaAndSchemaChange(t *testing.T) {

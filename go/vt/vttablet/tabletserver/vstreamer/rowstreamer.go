@@ -42,9 +42,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var (
-	rowStreamertHeartbeatInterval = 10 * time.Second
-)
+var rowStreamertHeartbeatInterval = 10 * time.Second
 
 type RowStreamerMode int32
 
@@ -85,8 +83,8 @@ type rowStreamer struct {
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
 	lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
-	mode RowStreamerMode, conn *snapshotConn) *rowStreamer {
-
+	mode RowStreamerMode, conn *snapshotConn,
+) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
@@ -195,7 +193,7 @@ func (rs *rowStreamer) buildPlan() error {
 
 // buildPKColumnsFromUniqueKey assumes a unique key is indicated,
 func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
-	var pkColumns = make([]int, 0)
+	pkColumns := make([]int, 0)
 	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY/
 
 	for _, colName := range rs.ukColumnNames {
@@ -212,7 +210,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	if len(rs.ukColumnNames) > 0 {
 		return rs.buildPKColumnsFromUniqueKey()
 	}
-	var pkColumns = make([]int, 0)
+	pkColumns := make([]int, 0)
 	if len(st.PKColumns) == 0 {
 		// Use a PK equivalent if one exists.
 		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, rs.cp, st)

@@ -3376,7 +3376,8 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			shouldErr: false,
-		}, {
+		},
+		{
 			name:                   "success - promote replica required",
 			durability:             "semi_sync",
 			promoteReplicaRequired: true,
@@ -3452,7 +3453,8 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			shouldErr: false,
-		}, {
+		},
+		{
 			name:                   "Promote replica failed",
 			durability:             "semi_sync",
 			promoteReplicaRequired: true,

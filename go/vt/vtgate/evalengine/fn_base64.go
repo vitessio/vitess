@@ -35,14 +35,18 @@ type (
 	}
 )
 
-var _ IR = (*builtinToBase64)(nil)
-var _ IR = (*builtinFromBase64)(nil)
+var (
+	_ IR = (*builtinToBase64)(nil)
+	_ IR = (*builtinFromBase64)(nil)
+)
 
 // MySQL wraps every 76 characters with a newline. That maps
 // to a 57 byte input. So we encode here in blocks of 57 bytes
 // with then each a newline.
-var mysqlBase64OutLineLength = 76
-var mysqlBase64InLineLength = (mysqlBase64OutLineLength / 4) * 3
+var (
+	mysqlBase64OutLineLength = 76
+	mysqlBase64InLineLength  = (mysqlBase64OutLineLength / 4) * 3
+)
 
 func mysqlBase64Encode(in []byte) []byte {
 	newlines := len(in) / mysqlBase64InLineLength

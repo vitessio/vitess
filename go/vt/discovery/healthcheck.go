@@ -186,8 +186,10 @@ func FilteringKeyspaces() bool {
 	return len(KeyspacesToWatch) > 0
 }
 
-type KeyspaceShardTabletType string
-type tabletAliasString string
+type (
+	KeyspaceShardTabletType string
+	tabletAliasString       string
+)
 
 // HealthCheck declares what the TabletGateway needs from the HealthCheck
 type HealthCheck interface {

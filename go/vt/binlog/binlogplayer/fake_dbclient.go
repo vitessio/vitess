@@ -23,8 +23,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-type fakeDBClient struct {
-}
+type fakeDBClient struct{}
 
 // NewFakeDBClient returns a fake DBClient. Its functions return
 // preset responses to requests.

@@ -333,8 +333,7 @@ func TestKeyspaceEventTypes(t *testing.T) {
 	}
 }
 
-type fakeTopoServer struct {
-}
+type fakeTopoServer struct{}
 
 // GetTopoServer returns the full topo.Server instance.
 func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {

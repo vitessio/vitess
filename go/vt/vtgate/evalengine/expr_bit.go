@@ -55,8 +55,10 @@ type (
 	opBitShr struct{}
 )
 
-var _ IR = (*BitwiseExpr)(nil)
-var _ IR = (*BitwiseNotExpr)(nil)
+var (
+	_ IR = (*BitwiseExpr)(nil)
+	_ IR = (*BitwiseNotExpr)(nil)
+)
 
 func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := b.Inner.eval(env)
@@ -329,8 +331,10 @@ func (expr *BitwiseExpr) compile(c *compiler) (ctype, error) {
 	}
 }
 
-var _ opBitBinary = (*opBitAnd)(nil)
-var _ opBitBinary = (*opBitOr)(nil)
-var _ opBitBinary = (*opBitXor)(nil)
-var _ opBitShift = (*opBitShl)(nil)
-var _ opBitShift = (*opBitShr)(nil)
+var (
+	_ opBitBinary = (*opBitAnd)(nil)
+	_ opBitBinary = (*opBitOr)(nil)
+	_ opBitBinary = (*opBitXor)(nil)
+	_ opBitShift  = (*opBitShl)(nil)
+	_ opBitShift  = (*opBitShr)(nil)
+)

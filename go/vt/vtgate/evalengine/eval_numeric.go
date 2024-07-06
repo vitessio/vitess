@@ -60,13 +60,17 @@ type (
 	}
 )
 
-var _ evalNumeric = (*evalInt64)(nil)
-var _ evalNumeric = (*evalUint64)(nil)
-var _ evalNumeric = (*evalFloat)(nil)
-var _ evalNumeric = (*evalDecimal)(nil)
+var (
+	_ evalNumeric = (*evalInt64)(nil)
+	_ evalNumeric = (*evalUint64)(nil)
+	_ evalNumeric = (*evalFloat)(nil)
+	_ evalNumeric = (*evalDecimal)(nil)
+)
 
-var evalBoolTrue = &evalInt64{i: 1}
-var evalBoolFalse = &evalInt64{i: 0}
+var (
+	evalBoolTrue  = &evalInt64{i: 1}
+	evalBoolFalse = &evalInt64{i: 0}
+)
 
 func newEvalUint64(u uint64) *evalUint64 {
 	return &evalUint64{u: u}

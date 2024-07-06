@@ -31,8 +31,10 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var ErrTranslateExprNotSupported = "expr cannot be translated, not supported"
-var ErrEvaluatedExprNotSupported = "expr cannot be evaluated, not supported"
+var (
+	ErrTranslateExprNotSupported = "expr cannot be translated, not supported"
+	ErrEvaluatedExprNotSupported = "expr cannot be evaluated, not supported"
+)
 
 func (ast *astCompiler) translateComparisonExpr(op sqlparser.ComparisonExprOperator, left, right sqlparser.Expr) (IR, error) {
 	l, err := ast.translateExpr(left)
@@ -562,8 +564,10 @@ type astCompiler struct {
 	untyped []typedIR
 }
 
-type ColumnResolver func(name *sqlparser.ColName) (int, error)
-type TypeResolver func(expr sqlparser.Expr) (Type, bool)
+type (
+	ColumnResolver func(name *sqlparser.ColName) (int, error)
+	TypeResolver   func(expr sqlparser.Expr) (Type, bool)
+)
 
 type Config struct {
 	ResolveColumn ColumnResolver

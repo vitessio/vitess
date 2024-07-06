@@ -17,9 +17,8 @@ limitations under the License.
 package fakes
 
 import (
-	"fmt"
-
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 

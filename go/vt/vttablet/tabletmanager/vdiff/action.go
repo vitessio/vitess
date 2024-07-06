@@ -126,7 +126,6 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 		return nil, err
 	}
 	return sqltypes.ResultToProto3(qr), nil
-
 }
 
 // Validate vdiff options. Also setup defaults where applicable.

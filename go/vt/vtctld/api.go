@@ -377,7 +377,6 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 			srvKeyspaces[keyspaceName] = srvKeyspace
 		}
 		return srvKeyspaces, nil
-
 	})
 
 	// Tablets

@@ -17,12 +17,11 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -36,7 +35,8 @@ type UIController struct {
 
 // NewUIController creates a UIController instance
 func NewUIController(
-	sqlStr string, keyspace string, writer http.ResponseWriter) *UIController {
+	sqlStr string, keyspace string, writer http.ResponseWriter,
+) *UIController {
 	controller := &UIController{
 		sqls:     make([]string, 0, 32),
 		keyspace: keyspace,

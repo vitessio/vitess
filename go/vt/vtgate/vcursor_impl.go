@@ -58,10 +58,12 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
-var _ engine.VCursor = (*vcursorImpl)(nil)
-var _ plancontext.VSchema = (*vcursorImpl)(nil)
-var _ iExecute = (*Executor)(nil)
-var _ vindexes.VCursor = (*vcursorImpl)(nil)
+var (
+	_ engine.VCursor      = (*vcursorImpl)(nil)
+	_ plancontext.VSchema = (*vcursorImpl)(nil)
+	_ iExecute            = (*Executor)(nil)
+	_ vindexes.VCursor    = (*vcursorImpl)(nil)
+)
 
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
@@ -899,7 +901,6 @@ func (vc *vcursorImpl) SetPriority(priority string) {
 	} else if vc.safeSession.Options != nil && vc.safeSession.Options.Priority != "" {
 		vc.safeSession.Options.Priority = ""
 	}
-
 }
 
 // SetConsolidator implements the SessionActions interface
@@ -1139,7 +1140,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	allowed := vschemaacl.Authorized(user)
 	if !allowed {
 		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform vschema operations", user.GetUsername())
-
 	}
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
@@ -1156,7 +1156,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 
 	ks := srvVschema.Keyspaces[ksName]
 	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, vschemaDDL)
-
 	if err != nil {
 		return err
 	}
@@ -1164,7 +1163,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	srvVschema.Keyspaces[ksName] = ks
 
 	return vc.vm.UpdateVSchema(ctx, ksName, srvVschema)
-
 }
 
 func (vc *vcursorImpl) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
@@ -1288,6 +1286,7 @@ func (vc *vcursorImpl) VExplainLogging() {
 func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
 }
+
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
 }

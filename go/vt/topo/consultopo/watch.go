@@ -28,9 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-var (
-	watchPollDuration = 30 * time.Second
-)
+var watchPollDuration = 30 * time.Second
 
 func init() {
 	servenv.RegisterFlagsForTopoBinaries(registerWatchFlags)

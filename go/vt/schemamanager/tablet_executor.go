@@ -560,8 +560,8 @@ func (exec *TabletExecutor) executeOneTablet(
 	sql string,
 	viaQueryService bool,
 	errChan chan ShardWithError,
-	successChan chan ShardResult) {
-
+	successChan chan ShardResult,
+) {
 	var result *querypb.QueryResult
 	var err error
 	if viaQueryService {

@@ -707,7 +707,8 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 	}, {
 		name:     "less-than-with-and",
 		inFilter: "select * from t1 where id < 2 and val <= 'xyz'",
-		outFilters: []Filter{{Opcode: LessThan, ColNum: 0, Value: sqltypes.NewInt64(2)},
+		outFilters: []Filter{
+			{Opcode: LessThan, ColNum: 0, Value: sqltypes.NewInt64(2)},
 			{Opcode: LessThanEqual, ColNum: 1, Value: sqltypes.NewVarChar("xyz")},
 		},
 	}, {

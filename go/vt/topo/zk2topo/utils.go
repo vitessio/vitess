@@ -17,13 +17,12 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"sort"
 	"strings"
 	"sync"
-
-	"context"
 
 	"github.com/z-division/go-zookeeper/zk"
 

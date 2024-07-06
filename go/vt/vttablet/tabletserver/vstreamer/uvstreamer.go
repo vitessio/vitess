@@ -88,7 +88,7 @@ type uvstreamer struct {
 
 	config *uvstreamerConfig
 
-	vs *vstreamer //last vstreamer created in uvstreamer
+	vs *vstreamer // last vstreamer created in uvstreamer
 }
 
 type uvstreamerConfig struct {
@@ -313,7 +313,7 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	behind := time.Now().UnixNano() - uvs.lastTimestampNs
 	uvs.setReplicationLagSeconds(behind / 1e9)
-	//log.Infof("sbm set to %d", uvs.ReplicationLagSeconds)
+	// log.Infof("sbm set to %d", uvs.ReplicationLagSeconds)
 	var evs2 []*binlogdatapb.VEvent
 	if len(uvs.plans) > 0 {
 		evs2 = uvs.filterEvents(evs)

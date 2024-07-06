@@ -24,9 +24,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const shortWait = 1 * time.Millisecond
-const longWait = 150 * time.Millisecond
-const maxTimeInError = 100 * time.Millisecond
+const (
+	shortWait      = 1 * time.Millisecond
+	longWait       = 150 * time.Millisecond
+	maxTimeInError = 100 * time.Millisecond
+)
 
 // TestLastErrorZeroMaxTime tests maxTimeInError = 0, should always retry
 func TestLastErrorZeroMaxTime(t *testing.T) {

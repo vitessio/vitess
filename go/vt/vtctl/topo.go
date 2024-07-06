@@ -110,7 +110,7 @@ func copyFileFromTopo(ctx context.Context, ts *topo.Server, cell, from, to strin
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(to, data, 0644)
+	return os.WriteFile(to, data, 0o644)
 }
 
 func copyFileToTopo(ctx context.Context, ts *topo.Server, cell, from, to string) error {

@@ -248,7 +248,6 @@ func (tw *TopologyWatcher) loadTablets() {
 	}
 	tw.topoChecksum = crc32.ChecksumIEEE(buf.Bytes())
 	tw.lastRefresh = time.Now()
-
 }
 
 // RefreshLag returns the time since the last refresh.

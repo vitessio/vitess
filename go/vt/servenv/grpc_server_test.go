@@ -17,9 +17,8 @@ limitations under the License.
 package servenv
 
 import (
-	"testing"
-
 	"context"
+	"testing"
 
 	"google.golang.org/grpc"
 )

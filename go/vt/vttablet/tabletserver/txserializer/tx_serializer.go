@@ -19,13 +19,12 @@ limitations under the License.
 package txserializer
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
@@ -131,7 +130,6 @@ func New(env tabletenv.Env) *TxSerializer {
 		logGlobalQueueExceededDryRun: logutil.NewThrottledLogger("HotRowProtection GlobalQueueExceeded DryRun", 5*time.Second),
 		queues:                       make(map[string]*queue),
 	}
-
 }
 
 // DoneFunc is returned by Wait() and must be called by the caller.
@@ -273,7 +271,7 @@ func (txs *TxSerializer) unlockLocked(key string, returnSlot bool) {
 		delete(txs.queues, key)
 
 		if q.max > 1 {
-			var formattedKey = key
+			formattedKey := key
 			var logMsg string
 
 			if txs.env.Config().SanitizeLogMessages {

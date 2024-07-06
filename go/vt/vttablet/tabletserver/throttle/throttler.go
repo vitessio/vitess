@@ -124,9 +124,7 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
 }
 
-var (
-	ErrThrottlerNotOpen = errors.New("throttler not open")
-)
+var ErrThrottlerNotOpen = errors.New("throttler not open")
 
 // ThrottleCheckType allows a client to indicate what type of check it wants to issue. See available types below.
 type ThrottleCheckType int // nolint:revive
@@ -271,7 +269,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		throttler.recentCheckDiff = 1
 	}
 
-	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
+	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) // default
 	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
 		return throttler.readSelfMySQLThrottleMetric(ctx, p)
 	}

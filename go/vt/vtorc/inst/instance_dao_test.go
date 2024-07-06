@@ -19,9 +19,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-var (
-	spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
-)
+var spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
 
 func normalizeQuery(name string) string {
 	name = strings.Replace(name, "`", "", -1)
@@ -185,7 +183,6 @@ func TestReadInstance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			got, found, err := ReadInstance(tt.tabletAliasToRead)
 			require.NoError(t, err)
 			require.Equal(t, tt.instanceFound, found)

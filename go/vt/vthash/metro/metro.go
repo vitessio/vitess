@@ -24,10 +24,12 @@ import (
 	"unsafe"
 )
 
-const k0 = 0xC83A91E1
-const k1 = 0x8648DBDB
-const k2 = 0x7BDEC03B
-const k3 = 0x2F5870A5
+const (
+	k0 = 0xC83A91E1
+	k1 = 0x8648DBDB
+	k2 = 0x7BDEC03B
+	k3 = 0x2F5870A5
+)
 
 type Metro128 struct {
 	state [4]uint64
@@ -48,7 +50,7 @@ func (m *Metro128) Reset() {
 }
 
 func (m *Metro128) Write8(u uint8) {
-	var scratch = [1]byte{u}
+	scratch := [1]byte{u}
 	_, _ = m.Write(scratch[:1])
 }
 

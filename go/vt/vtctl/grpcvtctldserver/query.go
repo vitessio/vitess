@@ -220,7 +220,7 @@ func valueToVTDuration(s string, defaultUnit string) (*vttime.Duration, error) {
 
 // queryResultForTabletResults aggregates given results into a combined result set
 func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	defaultFields := []*querypb.Field{{
 		Name:    "Tablet",
 		Type:    sqltypes.VarBinary,

@@ -3490,7 +3490,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 }
 
 func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *State, direction TrafficSwitchDirection,
-	maxAllowedReplLagSecs int64, shards []string) (reason string, err error) {
+	maxAllowedReplLagSecs int64, shards []string,
+) (reason string, err error) {
 	if direction == DirectionForward && state.WritesSwitched ||
 		direction == DirectionBackward && !state.WritesSwitched {
 		log.Infof("writes already switched no need to check lag")

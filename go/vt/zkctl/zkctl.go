@@ -169,7 +169,7 @@ func (zkd *Zkd) Init() error {
 
 	log.Infof("zkd.Init")
 	for _, path := range zkd.config.DirectoryList() {
-		if err := os.MkdirAll(path, 0775); err != nil {
+		if err := os.MkdirAll(path, 0o775); err != nil {
 			log.Errorf("%v", err)
 			return err
 		}
@@ -178,7 +178,7 @@ func (zkd *Zkd) Init() error {
 
 	configData, err := zkd.makeCfg()
 	if err == nil {
-		err = os.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0664)
+		err = os.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0o664)
 	}
 	if err != nil {
 		log.Errorf("failed creating %v: %v", zkd.config.ConfigFile(), err)

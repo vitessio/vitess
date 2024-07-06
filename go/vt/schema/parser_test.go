@@ -49,7 +49,6 @@ func TestParseAlterTableOptions(t *testing.T) {
 }
 
 func TestLegacyParseRevertUUID(t *testing.T) {
-
 	{
 		uuid, err := legacyParseRevertUUID("revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.NoError(t, err)

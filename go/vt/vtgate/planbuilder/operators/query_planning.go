@@ -733,7 +733,6 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 		}
 	}
 	return Swap(filter, projection, "push filter under projection")
-
 }
 
 func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {

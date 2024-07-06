@@ -282,5 +282,4 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			vdiffenv.dbClient.Wait()
 		})
 	}
-
 }

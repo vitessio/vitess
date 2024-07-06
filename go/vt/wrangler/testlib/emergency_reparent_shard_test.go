@@ -181,8 +181,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// run EmergencyReparentShard
 	waitReplicaTimeout := time.Second * 2
-	err := vp.Run([]string{"EmergencyReparentShard", "--wait_replicas_timeout", waitReplicaTimeout.String(), newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard,
-		topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
+	err := vp.Run([]string{
+		"EmergencyReparentShard", "--wait_replicas_timeout", waitReplicaTimeout.String(), newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard,
+		topoproto.TabletAliasString(newPrimary.Tablet.Alias),
+	})
 	require.NoError(t, err)
 	// check what was run
 	err = newPrimary.FakeMysqlDaemon.CheckSuperQueryList()

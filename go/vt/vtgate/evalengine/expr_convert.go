@@ -41,8 +41,10 @@ type (
 	}
 )
 
-var _ IR = (*ConvertExpr)(nil)
-var _ IR = (*ConvertUsingExpr)(nil)
+var (
+	_ IR = (*ConvertExpr)(nil)
+	_ IR = (*ConvertUsingExpr)(nil)
+)
 
 func (c *ConvertExpr) returnUnsupportedError() error {
 	var err error

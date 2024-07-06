@@ -527,7 +527,6 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 type forTest []FileEntry
@@ -681,7 +680,7 @@ func TestParseBackupName(t *testing.T) {
 
 	// Valid case
 	bt, al, err = ParseBackupName("dir", "2024-03-18.180911.cell1-42")
-	assert.NotNil(t, *bt, time.Date(2024, 03, 18, 18, 9, 11, 0, time.UTC))
+	assert.NotNil(t, *bt, time.Date(2024, 0o3, 18, 18, 9, 11, 0, time.UTC))
 	assert.Equal(t, "cell1", al.Cell)
 	assert.Equal(t, uint32(42), al.Uid)
 	assert.NoError(t, err)

@@ -31,11 +31,11 @@ type (
 	// ConnID as type int64
 	ConnID = int64
 
-	//DTID as type string
+	// DTID as type string
 	DTID = string
 
-	//EngineStateMachine is used to control the state the transactional engine -
-	//whether new connections and/or transactions are allowed or not.
+	// EngineStateMachine is used to control the state the transactional engine -
+	// whether new connections and/or transactions are allowed or not.
 	EngineStateMachine interface {
 		Init() error
 		AcceptReadWrite() error
@@ -46,8 +46,8 @@ type (
 	// ReleaseReason as type int
 	ReleaseReason int
 
-	//Properties contains all information that is related to the currently running
-	//transaction on the connection
+	// Properties contains all information that is related to the currently running
+	// transaction on the connection
 	Properties struct {
 		EffectiveCaller *vtrpcpb.CallerID
 		ImmediateCaller *querypb.VTGateCallerID

@@ -409,7 +409,6 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.dt_participant(\n  dtid varbinary(512),\n\tid bigint,\n\tkeyspace varchar(256),\n\tshard varchar(256),\n  primary key(dtid, id)\n\t) engine=InnoDB": {
-
 			Fields: []*querypb.Field{{
 				Type:    sqltypes.Uint64,
 				Charset: collations.CollationBinaryID,

@@ -105,7 +105,6 @@ func (f *FkVerify) Inputs() ([]Primitive, []map[string]any) {
 		inputName: "PostVerify",
 	})
 	return inputs, inputsMap
-
 }
 
 func (f *FkVerify) description() PrimitiveDescription {

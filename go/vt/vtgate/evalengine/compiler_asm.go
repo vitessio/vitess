@@ -494,6 +494,7 @@ func (asm *assembler) Cmp_lt_n() {
 		return 1
 	}, "CMPFLAG LT [NULL]")
 }
+
 func (asm *assembler) Cmp_ne() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
@@ -4295,7 +4296,6 @@ func (asm *assembler) Interval(l int) {
 		}
 		env.vm.sp -= l
 		return 1
-
 	}, "INTERVAL NUMERIC(SP-1)...NUMERIC(SP-%d)", l)
 }
 
@@ -4623,7 +4623,6 @@ func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col col
 		env.vm.sp--
 		return 1
 	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
-
 }
 
 func (asm *assembler) Fn_REGEXP_LIKE(m *icuregex.Matcher, negate bool, c charset.Charset, offset int) {

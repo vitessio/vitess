@@ -178,6 +178,7 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	tpb.generateWhere(buf, bvf)
 	return buf.ParsedQuery()
 }
+
 func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	key := fmt.Sprintf("%x", dataColumns.Cols)
 	ins, ok := tp.PartialInserts[key]

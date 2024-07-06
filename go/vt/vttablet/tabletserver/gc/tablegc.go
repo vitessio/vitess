@@ -244,7 +244,6 @@ func (collector *TableGC) RequestChecks() {
 
 // operate is the main entry point for the table garbage collector operation and logic.
 func (collector *TableGC) operate(ctx context.Context) {
-
 	dropTablesChan := make(chan *gcTable)
 	purgeRequestsChan := make(chan bool)
 	transitionRequestsChan := make(chan *transitionRequest)
@@ -440,7 +439,6 @@ func (collector *TableGC) checkTables(ctx context.Context, gcTables []*gcTable, 
 	for i := range gcTables {
 		table := gcTables[i] // we capture as local variable as we will later use this in a goroutine
 		shouldTransition, state, uuid, err := collector.shouldTransitionTable(table.tableName)
-
 		if err != nil {
 			log.Errorf("TableGC: error while checking tables: %+v", err)
 			continue

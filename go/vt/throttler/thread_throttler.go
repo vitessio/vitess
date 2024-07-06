@@ -59,9 +59,7 @@ func newThreadThrottler(threadID int, actualRateHistory *aggregatedIntervalHisto
 	return &result
 }
 
-var (
-	oneSecond = time.Time{}.Add(1 * time.Second)
-)
+var oneSecond = time.Time{}.Add(1 * time.Second)
 
 func (t *threadThrottler) throttle(now time.Time) time.Duration {
 	if now.Before(oneSecond) {

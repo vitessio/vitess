@@ -320,7 +320,6 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 				}
 				return callback(resultChunk, currIndex)
 			})
-
 			// Error handling and context cleanup for this source.
 			if err != nil {
 				muFields.Lock()

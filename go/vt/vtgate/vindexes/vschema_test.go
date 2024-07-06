@@ -52,6 +52,7 @@ func (*cheapVindex) NeedsVCursor() bool { return false }
 func (*cheapVindex) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*cheapVindex) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -74,6 +75,7 @@ func (*stFU) NeedsVCursor() bool { return false }
 func (*stFU) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*stFU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -96,6 +98,7 @@ func (*stFN) NeedsVCursor() bool { return false }
 func (*stFN) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*stFN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -118,6 +121,7 @@ func (*stLN) NeedsVCursor() bool { return true }
 func (*stLN) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*stLN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -131,8 +135,10 @@ func newSTLN(name string, _ map[string]string) (Vindex, error) {
 	return &stLN{name: name}, nil
 }
 
-var _ SingleColumn = (*stLN)(nil)
-var _ Lookup = (*stLN)(nil)
+var (
+	_ SingleColumn = (*stLN)(nil)
+	_ Lookup       = (*stLN)(nil)
+)
 
 // stLU is a Lookup, Unique Vindex.
 type stLU struct {
@@ -146,6 +152,7 @@ func (*stLU) NeedsVCursor() bool { return true }
 func (*stLU) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*stLU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -159,9 +166,11 @@ func newSTLU(name string, _ map[string]string) (Vindex, error) {
 	return &stLU{name: name}, nil
 }
 
-var _ SingleColumn = (*stLO)(nil)
-var _ Lookup = (*stLO)(nil)
-var _ WantOwnerInfo = (*stLO)(nil)
+var (
+	_ SingleColumn  = (*stLO)(nil)
+	_ Lookup        = (*stLO)(nil)
+	_ WantOwnerInfo = (*stLO)(nil)
+)
 
 // stLO is a Lookup Vindex that wants owner columns.
 type stLO struct {
@@ -178,6 +187,7 @@ func (*stLO) NeedsVCursor() bool { return true }
 func (*stLO) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*stLO) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -186,6 +196,7 @@ func (*stLO) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error 
 func (*stLO) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
+
 func (v *stLO) SetOwnerInfo(keyspace, table string, cols []sqlparser.IdentifierCI) error {
 	v.keyspace = keyspace
 	v.table = table
@@ -197,8 +208,10 @@ func newSTLO(name string, _ map[string]string) (Vindex, error) {
 	return &stLO{name: name}, nil
 }
 
-var _ SingleColumn = (*stLO)(nil)
-var _ Lookup = (*stLO)(nil)
+var (
+	_ SingleColumn = (*stLO)(nil)
+	_ Lookup       = (*stLO)(nil)
+)
 
 // mcFU is a multi-column Functional, Unique Vindex.
 type mcFU struct {
@@ -212,6 +225,7 @@ func (*mcFU) NeedsVCursor() bool { return false }
 func (*mcFU) Verify(context.Context, VCursor, [][]sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*mcFU) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -294,7 +308,6 @@ func TestMultiTenantAttribute(t *testing.T) {
 				require.Equal(t, test.wanted.TenantIdColumnName, ksSchema.MultiTenantSpec.TenantIdColumnName)
 				require.Equal(t, test.wanted.TenantIdColumnType, ksSchema.MultiTenantSpec.TenantIdColumnType)
 			}
-
 		})
 	}
 }
@@ -334,7 +347,6 @@ func TestForeignKeyMode(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, test.wantedFkMode, ksSchema.ForeignKeyMode)
 		})
-
 	}
 }
 
@@ -343,7 +355,11 @@ func TestUnshardedVSchema(t *testing.T) {
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"unsharded": {
 				Tables: map[string]*vschemapb.Table{
-					"t1": {}}}}}
+					"t1": {},
+				},
+			},
+		},
+	}
 
 	got := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.NoError(t, got.Keyspaces["unsharded"].Error)
@@ -368,7 +384,12 @@ func TestVSchemaColumns(t *testing.T) {
 							{Name: "c2", Type: sqltypes.VarChar},
 							{Name: "c3", Type: sqltypes.VarChar, Default: "''"},
 							{Name: "c4", Type: sqltypes.TypeJSON, Default: "json_array()"},
-						}}}}}}
+						},
+					},
+				},
+			},
+		},
+	}
 
 	got := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.NoError(t, got.Keyspaces["unsharded"].Error)
@@ -391,7 +412,11 @@ func TestVSchemaViews(t *testing.T) {
 							Name: "c1",
 						}, {
 							Name: "c2",
-							Type: sqltypes.VarChar}}}}},
+							Type: sqltypes.VarChar,
+						}},
+					},
+				},
+			},
 			"main": {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
@@ -399,7 +424,13 @@ func TestVSchemaViews(t *testing.T) {
 							Name: "c1",
 						}, {
 							Name: "c2",
-							Type: sqltypes.VarChar}}}}}}}
+							Type: sqltypes.VarChar,
+						}},
+					},
+				},
+			},
+		},
+	}
 	vschema := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
 
@@ -497,7 +528,11 @@ func TestVSchemaForeignKeys(t *testing.T) {
 							Name: "c1",
 						}, {
 							Name: "c2",
-							Type: sqltypes.VarChar}}}}},
+							Type: sqltypes.VarChar,
+						}},
+					},
+				},
+			},
 			"main": {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
@@ -505,7 +540,13 @@ func TestVSchemaForeignKeys(t *testing.T) {
 							Name: "c1",
 						}, {
 							Name: "c2",
-							Type: sqltypes.VarChar}}}}}}}
+							Type: sqltypes.VarChar,
+						}},
+					},
+				},
+			},
+		},
+	}
 	vschema := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.NoError(t, vschema.Keyspaces["main"].Error)
 
@@ -566,10 +607,17 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						Columns: []*vschemapb.Column{{
-							Name: "c1"}, {
+							Name: "c1",
+						}, {
 							Name: "c2",
-							Type: sqltypes.VarChar}},
-						ColumnListAuthoritative: true}}}}}
+							Type: sqltypes.VarChar,
+						}},
+						ColumnListAuthoritative: true,
+					},
+				},
+			},
+		},
+	}
 
 	got := BuildVSchema(&good, sqlparser.NewTestParser())
 
@@ -587,8 +635,15 @@ func TestVSchemaColumnsFail(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						Columns: []*vschemapb.Column{{
-							Name: "c1"}, {
-							Name: "c1"}}}}}}}
+							Name: "c1",
+						}, {
+							Name: "c1",
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	got := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.EqualError(t, got.Keyspaces["unsharded"].Error, "duplicate column name 'c1' for table: t1")
@@ -601,7 +656,12 @@ func TestVSchemaPinned(t *testing.T) {
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Pinned: "80"}}}}}
+						Pinned: "80",
+					},
+				},
+			},
+		},
+	}
 
 	got := BuildVSchema(&good, sqlparser.NewTestParser())
 
@@ -622,18 +682,29 @@ func TestShardedVSchemaOwned(t *testing.T) {
 					"stfu1": {
 						Type:   "stfu",
 						Params: map[string]string{},
-						Owner:  "t1"},
+						Owner:  "t1",
+					},
 					"stln1": {
 						Type:  "stln",
-						Owner: "t1"}},
+						Owner: "t1",
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Column: "c1",
-								Name:   "stfu1"}, {
+								Name:   "stfu1",
+							}, {
 								Column: "c2",
-								Name:   "stln1"}}}}}}}
+								Name:   "stln1",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 
 	got := BuildVSchema(&good, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
@@ -1018,42 +1089,64 @@ func TestFindBestColVindex(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu": {
-						Type: "stfu"},
+						Type: "stfu",
+					},
 					"stfn": {
-						Type: "stfn"},
+						Type: "stfn",
+					},
 					"stlu": {
-						Type: "stlu"},
+						Type: "stlu",
+					},
 					"stln": {
-						Type: "stln"},
+						Type: "stln",
+					},
 					"cheap": {
-						Type: "cheap"},
+						Type: "cheap",
+					},
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "stfu",
-							Columns: []string{"id"}}}},
+							Columns: []string{"id"},
+						}},
+					},
 					"nogoodvindex": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "stlu",
-							Columns: []string{"id"}}}},
+							Columns: []string{"id"},
+						}},
+					},
 					"thirdvindexgood": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "stlu",
-							Columns: []string{"id"}}, {
+							Columns: []string{"id"},
+						}, {
 							Name:    "stfn",
-							Columns: []string{"id"}}, {
+							Columns: []string{"id"},
+						}, {
 							Name:    "stfu",
-							Columns: []string{"id"}}}},
+							Columns: []string{"id"},
+						}},
+					},
 					"cheapest": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "stfu",
-							Columns: []string{"id"}}, {
+							Columns: []string{"id"},
+						}, {
 							Name:    "cheap",
-							Columns: []string{"id"}}}}}},
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
 			"unsharded": {
 				Tables: map[string]*vschemapb.Table{
-					"t2": {}}}}}
+					"t2": {},
+				},
+			},
+		},
+	}
 
 	vs := BuildVSchema(testSrvVSchema, sqlparser.NewTestParser())
 
@@ -1214,12 +1307,20 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 					"stfu1": {
 						Type:   "stfu",
 						Params: map[string]string{},
-						Owner:  "t1"}},
+						Owner:  "t1",
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Columns: []string{"c1", "c2"},
-							Name:    "stfu1"}}}}}}}
+							Name:    "stfu1",
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	got := buildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
@@ -1259,10 +1360,14 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 				ForeignKeyMode: vschemapb.Keyspace_disallow,
 				Keyspace:       ks,
 				Tables: map[string]*Table{
-					"t1": t1},
+					"t1": t1,
+				},
 				Vindexes: map[string]Vindex{
-					"stfu1": vindex1},
-			}}}
+					"stfu1": vindex1,
+				},
+			},
+		},
+	}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -1279,17 +1384,27 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stlu1": {
 						Type:  "stlu",
-						Owner: ""},
+						Owner: "",
+					},
 					"stfu1": {
 						Type:  "stfu",
-						Owner: ""}},
+						Owner: "",
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Column: "c1",
-							Name:   "stlu1"}, {
+							Name:   "stlu1",
+						}, {
 							Column: "c2",
-							Name:   "stfu1"}}}}}}}
+							Name:   "stfu1",
+						}},
+					},
+				},
+			},
+		},
+	}
 	got := buildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
@@ -1318,10 +1433,14 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 				Owned:    false,
 				Vindex:   vindex2,
 				isUnique: vindex2.IsUnique(),
-				cost:     vindex2.Cost()}}}
+				cost:     vindex2.Cost(),
+			},
+		},
+	}
 	t1.Ordered = []*ColumnVindex{
 		t1.ColumnVindexes[1],
-		t1.ColumnVindexes[0]}
+		t1.ColumnVindexes[0],
+	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
@@ -1329,7 +1448,8 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		},
 		uniqueVindexes: map[string]Vindex{
 			"stlu1": vindex1,
-			"stfu1": vindex2},
+			"stfu1": vindex2,
+		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				ForeignKeyMode: vschemapb.Keyspace_managed,
@@ -1339,8 +1459,11 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 				},
 				Vindexes: map[string]Vindex{
 					"stlu1": vindex1,
-					"stfu1": vindex2},
-			}}}
+					"stfu1": vindex2,
+				},
+			},
+		},
+	}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -1410,25 +1533,37 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 				ForeignKeyMode: vschemapb.Keyspace_managed,
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Type: "sequence"}}},
+						Type: "sequence",
+					},
+				},
+			},
 			"ksb": {
 				ForeignKeyMode: vschemapb.Keyspace_managed,
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Type: "sequence"}}}}}
+						Type: "sequence",
+					},
+				},
+			},
+		},
+	}
 	ksa := &Keyspace{
-		Name: "ksa"}
+		Name: "ksa",
+	}
 	ksb := &Keyspace{
-		Name: "ksb"}
+		Name: "ksb",
+	}
 	got := buildVSchema(&good)
 	t1a := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
-		Type:     "sequence"}
+		Type:     "sequence",
+	}
 	t1b := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
-		Type:     "sequence"}
+		Type:     "sequence",
+	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
@@ -1450,7 +1585,10 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 				Tables: map[string]*Table{
 					"t1": t1b,
 				},
-				Vindexes: map[string]Vindex{}}}}
+				Vindexes: map[string]Vindex{},
+			},
+		},
+	}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -3145,21 +3283,24 @@ func TestOtherTablesMakeReferenceTableAndSourceAmbiguous(t *testing.T) {
 func TestFindTableWithSequences(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		RoutingRules: &vschemapb.RoutingRules{
-			Rules: []*vschemapb.RoutingRule{{
-				FromTable: "seq3",
-				ToTables:  []string{"ksb.seq3"},
-			},
+			Rules: []*vschemapb.RoutingRule{
+				{
+					FromTable: "seq3",
+					ToTables:  []string{"ksb.seq3"},
+				},
 				{
 					FromTable: "seq4",
 					ToTables:  []string{"ksb.seq4"},
-				}},
+				},
+			},
 		},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ksa": {
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
 						Type: "stfu",
-					}},
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{

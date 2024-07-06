@@ -482,7 +482,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// call PromoteReplica on it. We just want to get all replicas to replicate from it to get caught up, after which we'll promote the primary
 	// candidate separately. During the final promotion, we call `PromoteReplica` and `PopulateReparentJournal`.
 ) ([]*topodatapb.Tablet, error) {
-
 	var (
 		replicasStartedReplication []*topodatapb.Tablet
 		replicaMutex               sync.Mutex
@@ -646,7 +645,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			return replicasStartedReplication, nil
 		}
 	}
-
 }
 
 // isIntermediateSourceIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not

@@ -683,7 +683,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(res.Rows))
 	// TODO: figure out why the KILL never shows up...
-	//require.Equal(t, "1", res.Rows[0][0].ToString())
+	// require.Equal(t, "1", res.Rows[0][0].ToString())
 
 	// Confirm that the post copy action record still exists
 	// so it will later be retried.

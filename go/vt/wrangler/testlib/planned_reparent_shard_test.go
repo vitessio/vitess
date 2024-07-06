@@ -262,8 +262,10 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
+	err := vp.Run([]string{
+		"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary",
+		topoproto.TabletAliasString(newPrimary.Tablet.Alias),
+	})
 	require.NoError(t, err)
 
 	// check what was run
@@ -652,8 +654,10 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(primary.Tablet.Alias)})
+	err := vp.Run([]string{
+		"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
+		topoproto.TabletAliasString(primary.Tablet.Alias),
+	})
 	require.NoError(t, err)
 	// check what was run
 	err = primary.FakeMysqlDaemon.CheckSuperQueryList()
@@ -739,8 +743,10 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
-		topoproto.TabletAliasString(primary.Tablet.Alias)})
+	err := vp.Run([]string{
+		"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "--new_primary",
+		topoproto.TabletAliasString(primary.Tablet.Alias),
+	})
 	require.NoError(t, err)
 	// check what was run
 	err = primary.FakeMysqlDaemon.CheckSuperQueryList()

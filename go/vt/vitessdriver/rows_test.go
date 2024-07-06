@@ -141,7 +141,7 @@ func TestRows(t *testing.T) {
 // Test that the ColumnTypeScanType function returns the correct reflection type for each
 // sql type. The sql type in turn comes from a table column's type.
 func TestColumnTypeScanType(t *testing.T) {
-	var r = sqltypes.Result{
+	r := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "field1",
@@ -230,7 +230,7 @@ func TestColumnTypeScanType(t *testing.T) {
 // Test that the ColumnTypeScanType function returns the correct reflection type for each
 // sql type. The sql type in turn comes from a table column's type.
 func TestColumnTypeDatabaseTypeName(t *testing.T) {
-	var r = sqltypes.Result{
+	r := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "field1",
@@ -319,7 +319,7 @@ func TestColumnTypeDatabaseTypeName(t *testing.T) {
 // Test that the ColumnTypeScanType function returns the correct reflection type for each
 // sql type. The sql type in turn comes from a table column's type.
 func TestColumnTypeNullable(t *testing.T) {
-	var r = sqltypes.Result{
+	r := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:  "field1",

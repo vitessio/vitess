@@ -626,7 +626,8 @@ func TestDeleteInUnique(t *testing.T) {
 					evalengine.NewLiteralInt(1),
 					evalengine.NewLiteralInt(2),
 					evalengine.NewLiteralInt(4),
-				}}},
+				}},
+			},
 			Query: "delete t where id in ::__vals",
 		},
 	}

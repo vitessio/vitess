@@ -81,7 +81,7 @@ func TestTabletSet_LargeMergeInPlace(t *testing.T) {
 	const SetRange = 256
 	const Blocks = 64
 
-	var tablesets = make([]TableSet, 64)
+	tablesets := make([]TableSet, 64)
 
 	for i := range tablesets {
 		setrng := i * SetRange
@@ -95,7 +95,7 @@ func TestTabletSet_LargeMergeInPlace(t *testing.T) {
 		result = result.Merge(ts)
 	}
 
-	var expected = make([]TableSet, SetRange*Blocks)
+	expected := make([]TableSet, SetRange*Blocks)
 	for tid := range expected {
 		expected[tid] = SingleTableSet(tid)
 	}
@@ -107,7 +107,7 @@ func TestTabletSet_LargeMerge(t *testing.T) {
 	const SetRange = 256
 	const Blocks = 64
 
-	var tablesets = make([]TableSet, 64)
+	tablesets := make([]TableSet, 64)
 
 	for i := range tablesets {
 		setrng := i * SetRange
@@ -121,7 +121,7 @@ func TestTabletSet_LargeMerge(t *testing.T) {
 		result = result.Merge(ts)
 	}
 
-	var expected = make([]TableSet, SetRange*Blocks)
+	expected := make([]TableSet, SetRange*Blocks)
 	for tid := range expected {
 		expected[tid] = SingleTableSet(tid)
 	}

@@ -184,7 +184,6 @@ func TestExecutePanic(t *testing.T) {
 	}()
 
 	_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(session), true /*autocommit*/, false)
-
 }
 
 func TestReservedOnMultiReplica(t *testing.T) {
@@ -242,7 +241,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				shards:      []string{"0", "1"},
 				transaction: true,
 				// nothing needs to be done
-			}},
+			},
+		},
 	}, {
 		name: "reserve",
 		actions: []testAction{
@@ -258,7 +258,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				shards:   []string{"0", "1"},
 				reserved: true,
 				// nothing needs to be done
-			}},
+			},
+		},
 	}, {
 		name: "reserve everywhere",
 		actions: []testAction{
@@ -267,7 +268,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				reserved:    true,
 				sbc0Reserve: 1,
 				sbc1Reserve: 1,
-			}},
+			},
+		},
 	}, {
 		name: "begin then reserve",
 		actions: []testAction{
@@ -282,7 +284,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				sbc0Reserve: 1,
 				sbc1Reserve: 1,
 				sbc1Begin:   1,
-			}},
+			},
+		},
 	}, {
 		name: "reserve then begin",
 		actions: []testAction{
@@ -301,7 +304,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				transaction: true,
 				reserved:    true,
 				sbc1Begin:   1,
-			}},
+			},
+		},
 	}, {
 		name: "reserveBegin",
 		actions: []testAction{
@@ -322,7 +326,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				transaction: true,
 				reserved:    true,
 				// nothing needs to be done
-			}},
+			},
+		},
 	}, {
 		name: "reserveBegin everywhere",
 		actions: []testAction{
@@ -334,7 +339,8 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				sbc0Begin:   1,
 				sbc1Reserve: 1,
 				sbc1Begin:   1,
-			}},
+			},
+		},
 	}}
 	for _, test := range tests {
 		keyspace := "keyspace"
@@ -493,7 +499,7 @@ func TestReservedConnFail(t *testing.T) {
 }
 
 func TestIsConnClosed(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name      string
 		err       error
 		conClosed bool

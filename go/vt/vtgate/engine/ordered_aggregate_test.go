@@ -371,7 +371,8 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{
 			NewAggregateParam(AggregateCountDistinct, 1, "count(distinct col2)", collations.MySQL8()),
-			aggr2},
+			aggr2,
+		},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
@@ -1016,7 +1017,7 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 		"int64|text",
 	)
 
-	var tcases = []struct {
+	tcases := []struct {
 		name        string
 		inputResult *sqltypes.Result
 		expResult   *sqltypes.Result
@@ -1101,7 +1102,7 @@ func TestGroupConcat(t *testing.T) {
 		"int64|blob",
 	)
 
-	var tcases = []struct {
+	tcases := []struct {
 		name        string
 		inputResult *sqltypes.Result
 		expResult   *sqltypes.Result

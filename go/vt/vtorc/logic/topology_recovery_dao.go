@@ -201,7 +201,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		res = append(res, &topologyRecovery)
 		return nil
 	})
-
 	if err != nil {
 		log.Error(err)
 	}

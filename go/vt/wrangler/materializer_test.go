@@ -47,10 +47,12 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-const mzUpdateQuery = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
-const mzSelectIDQuery = "select id from _vt.vreplication where db_name='vt_targetks' and workflow='workflow'"
-const mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
-const mzCheckJournal = "/select val from _vt.resharding_journal where id="
+const (
+	mzUpdateQuery       = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
+	mzSelectIDQuery     = "select id from _vt.vreplication where db_name='vt_targetks' and workflow='workflow'"
+	mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
+	mzCheckJournal      = "/select val from _vt.resharding_journal where id="
+)
 
 var defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 
@@ -163,7 +165,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 
 	var err error
 
-	var targetTables = func(ctx context.Context, env *testMaterializerEnv) []string {
+	targetTables := func(ctx context.Context, env *testMaterializerEnv) []string {
 		vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 		require.NoError(t, err)
 		var targetTables []string
@@ -198,9 +200,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			require.NoError(t, err)
 			require.EqualValues(t, tcase.want, targetTables(ctx, env))
 		})
-
 	}
-
 }
 
 func TestMoveTablesStopFlags(t *testing.T) {
@@ -254,7 +254,8 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
-	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
+	want := []string{
+		`keyspaces:{key:"sourceks" value:{}}`,
 		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
 		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
 		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
@@ -1188,6 +1189,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		t.Errorf("same keyspace: got:\n%v, want\n%v", got, want)
 	}
 }
+
 func TestCreateCustomizedVindex(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		SourceKeyspace: "ks",
@@ -2230,7 +2232,6 @@ func TestMaterializerCopySchema(t *testing.T) {
 	env.tmc.verifyQueries(t)
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
 	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
-
 }
 
 func TestMaterializerExplicitColumns(t *testing.T) {
@@ -2429,7 +2430,6 @@ func TestMaterializerNoDDL(t *testing.T) {
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 0)
 	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
-
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {

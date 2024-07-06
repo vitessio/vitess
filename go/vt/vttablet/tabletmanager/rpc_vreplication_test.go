@@ -717,7 +717,6 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, copying, nil)
 				} else {
 					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, notCopying, nil)
-
 				}
 			}
 			// This is our expected query, which will also short circuit
@@ -2673,7 +2672,6 @@ func TestMaterializerNoDDL(t *testing.T) {
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
 	require.Equal(t, tenv.tmc.getSchemaRequestCount(100), 0)
 	require.Equal(t, tenv.tmc.getSchemaRequestCount(200), 1)
-
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {

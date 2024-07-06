@@ -28,9 +28,11 @@ import (
 // seriously messed up.
 var ErrInvalidTime = errors.New("invalid MySQL time string")
 
-var isoTimeFormat = "2006-01-02 15:04:05.999999"
-var isoNullTime = "0000-00-00 00:00:00.000000"
-var isoTimeLength = len(isoTimeFormat)
+var (
+	isoTimeFormat = "2006-01-02 15:04:05.999999"
+	isoNullTime   = "0000-00-00 00:00:00.000000"
+	isoTimeLength = len(isoTimeFormat)
+)
 
 // parseISOTime pases a time string in MySQL's textual datetime format.
 // This is very similar to ISO8601, with some differences:

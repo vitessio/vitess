@@ -1606,8 +1606,10 @@ type infoSchemaWithColumns struct {
 // MySQLVersion implements SchemaInformation.
 
 // We cache this information, since these are maps that are not changed
-var infoSchema57 = getInfoSchema57()
-var infoSchema80 = getInfoSchema80()
+var (
+	infoSchema57 = getInfoSchema57()
+	infoSchema80 = getInfoSchema80()
+)
 
 // newSchemaInfo returns a SchemaInformation that has the column information for all info_schema tables
 func newSchemaInfo(inner SchemaInformation) SchemaInformation {

@@ -82,10 +82,11 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 // TestAutocommitUpdateVindexChange: transaction: select & update before final update.
 func TestAutocommitUpdateVindexChange(t *testing.T) {
 	executor, sbc, _, sbclookup, _ := createExecutorEnv(t)
-	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname|name_lastname_keyspace_id_map", "int64|int32|varchar|int64"),
-		"1|1|foo|0",
-	),
+	sbc.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|name|lastname|name_lastname_keyspace_id_map", "int64|int32|varchar|int64"),
+			"1|1|foo|0",
+		),
 	})
 
 	_, err := autocommitExec(executor, "update user2 set name='myname', lastname='mylastname' where id = 1")
@@ -138,10 +139,11 @@ func TestAutocommitDeleteSharded(t *testing.T) {
 // TestAutocommitDeleteLookup: transaction: select before update.
 func TestAutocommitDeleteLookup(t *testing.T) {
 	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
-	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
-		"1|1|foo",
-	),
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
+			"1|1|foo",
+		),
 	})
 	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),

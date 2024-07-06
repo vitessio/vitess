@@ -219,7 +219,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	return nil
 }
 
-//region ****show response
+// region ****show response
 
 // summary aggregates/selects the current state of the vdiff from all shards
 
@@ -436,6 +436,7 @@ func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, wor
 	wr.Logger().Printf(str + "\n")
 	return state, nil
 }
+
 func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput, verbose bool) (*vdiffSummary, error) {
 	summary := &vdiffSummary{
 		Workflow:     workflow,
@@ -525,7 +526,6 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 							TableName: table,
 							State:     vdiff.UnknownState,
 						}
-
 					}
 					ts := tableSummaryMap[table]
 					// This is the shard level VDiff table state
@@ -619,8 +619,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 	return summary, nil
 }
 
-//endregion
-
+// endregion
 func displayVDiff2ScheduledResponse(wr *wrangler.Wrangler, format, uuid string, typ vdiff.VDiffAction) {
 	if format == "json" {
 		type ScheduledResponse struct {

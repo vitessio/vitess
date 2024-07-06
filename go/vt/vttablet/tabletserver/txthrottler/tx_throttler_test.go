@@ -241,10 +241,9 @@ type mockTxThrottlerState struct {
 }
 
 func (t *mockTxThrottlerState) deallocateResources() {
-
 }
-func (t *mockTxThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
 
+func (t *mockTxThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
 }
 
 func (t *mockTxThrottlerState) throttle() bool {

@@ -73,7 +73,7 @@ func TestPickLocalPreferences(t *testing.T) {
 	type testCase struct {
 		name string
 
-		//inputs
+		// inputs
 		tablets       []tablet
 		envCells      []string
 		inCells       []string
@@ -81,7 +81,7 @@ func TestPickLocalPreferences(t *testing.T) {
 		inTabletTypes string
 		options       TabletPickerOptions
 
-		//expected
+		// expected
 		tpCells     []string
 		wantTablets []uint32
 	}
@@ -735,11 +735,11 @@ func deleteTablet(t *testing.T, te *pickerTestEnv, tablet *topodatapb.Tablet) {
 	if tablet == nil {
 		return
 	}
-	{ //log error
+	{ // log error
 		err := te.topoServ.DeleteTablet(context.Background(), tablet.Alias)
 		require.NoError(t, err, "failed to DeleteTablet with alias: %v", err)
 	}
-	{ //This is not automatically removed from shard replication, which results in log spam and log error
+	{ // This is not automatically removed from shard replication, which results in log spam and log error
 		err := topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet)
 		require.NoError(t, err, "failed to automatically remove from shard replication: %v", err)
 	}

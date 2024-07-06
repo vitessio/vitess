@@ -36,9 +36,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	actionTimeout = wrangler.DefaultActionTimeout
-)
+var actionTimeout = wrangler.DefaultActionTimeout
 
 // ActionResult contains the result of an action. If Error, the action failed.
 type ActionResult struct {

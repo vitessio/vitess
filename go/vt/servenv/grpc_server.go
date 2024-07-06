@@ -335,7 +335,6 @@ func GRPCCheckServiceMap(name string) bool {
 
 func authenticatingStreamInterceptor(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	newCtx, err := authPlugin.Authenticate(stream.Context(), info.FullMethod)
-
 	if err != nil {
 		return err
 	}

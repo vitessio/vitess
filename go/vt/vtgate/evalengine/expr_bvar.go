@@ -38,8 +38,10 @@ type (
 	}
 )
 
-var _ IR = (*BindVariable)(nil)
-var _ Expr = (*BindVariable)(nil)
+var (
+	_ IR   = (*BindVariable)(nil)
+	_ Expr = (*BindVariable)(nil)
+)
 
 func (env *ExpressionEnv) lookupBindVar(key string) (*querypb.BindVariable, error) {
 	val, ok := env.BindVars[key]

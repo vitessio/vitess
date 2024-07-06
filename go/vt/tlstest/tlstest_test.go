@@ -248,7 +248,7 @@ func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(C
 	firstConfigChannel := make(chan *tls.Config, configsToGenerate)
 	secondConfigChannel := make(chan *tls.Config, configsToGenerate)
 
-	var configCounter = 0
+	configCounter := 0
 
 	for i := 1; i <= configsToGenerate; i++ {
 		go func() {
@@ -274,7 +274,6 @@ func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(C
 			break
 		}
 	}
-
 }
 
 func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int, combine bool) {
@@ -294,7 +293,6 @@ func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int,
 		clientServerKeyPairs.ClientCRL,
 		serverCA,
 		tls.VersionTLS12)
-
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}

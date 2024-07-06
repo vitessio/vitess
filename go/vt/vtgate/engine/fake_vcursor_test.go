@@ -46,11 +46,15 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-var testMaxMemoryRows = 100
-var testIgnoreMaxMemoryRows = false
+var (
+	testMaxMemoryRows       = 100
+	testIgnoreMaxMemoryRows = false
+)
 
-var _ VCursor = (*noopVCursor)(nil)
-var _ SessionActions = (*noopVCursor)(nil)
+var (
+	_ VCursor        = (*noopVCursor)(nil)
+	_ SessionActions = (*noopVCursor)(nil)
+)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
@@ -380,8 +384,10 @@ func (t *noopVCursor) GetDBDDLPluginName() string {
 	panic("unimplemented")
 }
 
-var _ VCursor = (*loggingVCursor)(nil)
-var _ SessionActions = (*loggingVCursor)(nil)
+var (
+	_ VCursor        = (*loggingVCursor)(nil)
+	_ SessionActions = (*loggingVCursor)(nil)
+)
 
 // loggingVCursor logs requests and allows you to verify
 // that the correct requests were made.
@@ -827,6 +833,7 @@ func (t *noopVCursor) DisableLogging()  {}
 func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
 	return nil
 }
+
 func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 	return nil, nil
 }

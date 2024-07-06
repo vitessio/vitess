@@ -31,7 +31,7 @@ import (
 func TestTinyWeightStrings(t *testing.T) {
 	const Length = 10000
 
-	var cases = []struct {
+	cases := []struct {
 		typ    sqltypes.Type
 		gen    func() sqltypes.Value
 		col    collations.ID
@@ -112,7 +112,7 @@ func TestWeightStrings(t *testing.T) {
 		weight string
 	}
 
-	var cases = []struct {
+	cases := []struct {
 		name   string
 		gen    func() sqltypes.Value
 		types  []sqltypes.Type

@@ -164,7 +164,7 @@ func TestCompilerReference(t *testing.T) {
 }
 
 func TestCompilerSingle(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		values     []sqltypes.Value
 		result     string
@@ -788,7 +788,7 @@ func TestCompilerSingle(t *testing.T) {
 }
 
 func TestBindVarLiteral(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		bindType   func(expr sqlparser.Expr)
 		bindVar    *querypb.BindVariable
@@ -867,7 +867,7 @@ func TestBindVarLiteral(t *testing.T) {
 }
 
 func TestCompilerNonConstant(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 	}{
 		{

@@ -29,9 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var (
-	_ MultiColumn = (*MultiCol)(nil)
-)
+var _ MultiColumn = (*MultiCol)(nil)
 
 type MultiCol struct {
 	name        string

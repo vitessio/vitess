@@ -49,7 +49,6 @@ func (sa *ScalarAggregate) RouteType() string {
 // GetKeyspaceName implements the Primitive interface
 func (sa *ScalarAggregate) GetKeyspaceName() string {
 	return sa.Input.GetKeyspaceName()
-
 }
 
 // GetTableName implements the Primitive interface
@@ -168,5 +167,4 @@ func (sa *ScalarAggregate) description() PrimitiveDescription {
 		Variant:      "Scalar",
 		Other:        other,
 	}
-
 }

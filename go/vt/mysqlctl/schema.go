@@ -512,7 +512,8 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 					// schema, we already applied it
 					return &tabletmanagerdatapb.SchemaChangeResult{
 						BeforeSchema: beforeSchema,
-						AfterSchema:  beforeSchema}, nil
+						AfterSchema:  beforeSchema,
+					}, nil
 				}
 			}
 

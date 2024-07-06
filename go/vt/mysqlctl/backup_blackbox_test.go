@@ -59,7 +59,7 @@ func setBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
 
 func createBackupDir(root string, dirs ...string) error {
 	for _, dir := range dirs {
-		if err := os.MkdirAll(path.Join(root, dir), 0755); err != nil {
+		if err := os.MkdirAll(path.Join(root, dir), 0o755); err != nil {
 			return err
 		}
 	}

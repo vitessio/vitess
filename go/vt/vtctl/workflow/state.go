@@ -49,6 +49,7 @@ var TypeStrMap = map[VReplicationWorkflowType]Type{
 	ReshardWorkflow:    TypeReshard,
 	MigrateWorkflow:    TypeMigrate,
 }
+
 var TypeIntMap = map[Type]VReplicationWorkflowType{
 	TypeMoveTables: MoveTablesWorkflow,
 	TypeReshard:    ReshardWorkflow,

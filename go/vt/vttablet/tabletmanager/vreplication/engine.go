@@ -122,11 +122,13 @@ type journalEvent struct {
 	shardGTIDs   map[string]*binlogdatapb.ShardGtid
 }
 
-type PostCopyActionType int
-type PostCopyAction struct {
-	Type PostCopyActionType `json:"type"`
-	Task string             `json:"task"`
-}
+type (
+	PostCopyActionType int
+	PostCopyAction     struct {
+		Type PostCopyActionType `json:"type"`
+		Task string             `json:"task"`
+	}
+)
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
@@ -639,7 +641,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 
 	log.Infof("Transitioning for journal:workload %v", je)
 
-	//sort both participants and shardgtids
+	// sort both participants and shardgtids
 	participants := make([]string, 0)
 	for ks := range je.participants {
 		participants = append(participants, ks)

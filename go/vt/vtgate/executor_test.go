@@ -502,7 +502,6 @@ func TestExecutorShowColumns(t *testing.T) {
 			sbclookup.BatchQueries = nil
 		})
 	}
-
 }
 
 func sortString(w string) string {
@@ -1605,7 +1604,8 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *vcur
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
 	vcursor.safeSession = &SafeSession{
 		Session: &vtgatepb.Session{
-			Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
+			Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache},
+		},
 	}
 
 	stmt, reservedVars, err := parseAndValidateQuery(sql, sqlparser.NewTestParser())
@@ -1751,7 +1751,6 @@ func TestGetPlanNormalized(t *testing.T) {
 }
 
 func TestGetPlanPriority(t *testing.T) {
-
 	testCases := []struct {
 		name             string
 		sql              string
@@ -1790,7 +1789,6 @@ func TestGetPlanPriority(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestPassthroughDDL(t *testing.T) {
@@ -2725,7 +2723,6 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 
 			_, err = executor.Execute(ctx, nil, "TestExecutorStartTxnStmt", session, "rollback", nil)
 			require.NoError(t, err)
-
 		})
 	}
 }

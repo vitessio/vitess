@@ -90,8 +90,10 @@ type Discovery interface {
 type Factory func(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (Discovery, error)
 
 // nolint:gochecknoglobals
-var registry = map[string]Factory{}
-var registryMu sync.Mutex
+var (
+	registry   = map[string]Factory{}
+	registryMu sync.Mutex
+)
 
 // Register registers a factory for the given implementation name. Attempting
 // to register multiple factories for the same implementation name causes a

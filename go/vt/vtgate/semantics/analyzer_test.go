@@ -1015,7 +1015,8 @@ func TestScopingWithWITH(t *testing.T) {
 			query:     "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
 			direct:    NoTables,
 			recursive: NoTables,
-		}}
+		},
+	}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
@@ -1378,17 +1379,18 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 
 	tb := st.DirectDeps(parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
 	require.Equal(t, 3, tb.NumberOfTables())
-
 }
 
 var unsharded = &vindexes.Keyspace{
 	Name:    "unsharded",
 	Sharded: false,
 }
+
 var ks2 = &vindexes.Keyspace{
 	Name:    "ks2",
 	Sharded: true,
 }
+
 var ks3 = &vindexes.Keyspace{
 	Name:    "ks3",
 	Sharded: true,
@@ -1415,6 +1417,7 @@ func tableT() *vindexes.Table {
 		Keyspace: unsharded,
 	}
 }
+
 func tableT1() *vindexes.Table {
 	return &vindexes.Table{
 		Name: sqlparser.NewIdentifierCS("t1"),
@@ -1429,6 +1432,7 @@ func tableT1() *vindexes.Table {
 		Keyspace: ks2,
 	}
 }
+
 func tableT2() *vindexes.Table {
 	return &vindexes.Table{
 		Name: sqlparser.NewIdentifierCS("t2"),

@@ -42,6 +42,7 @@ func newFakeWriter() *fakeWriter {
 		messages: make(map[string]bool),
 	}
 }
+
 func (fw *fakeWriter) write(pri syslog.Priority, msg string) error {
 	fw.messages[strings.TrimSpace(msg)] = true
 	return nil
@@ -73,6 +74,7 @@ func newFailingFakeWriter() *failingFakeWriter {
 		numberProcessed: 0,
 	}
 }
+
 func (fw *failingFakeWriter) write(pri syslog.Priority, msg string) error {
 	fw.numberProcessed++
 	if fw.numberProcessed%4 == 0 {
@@ -227,7 +229,6 @@ func TestSyslogWithBadData(t *testing.T) {
 // while they're processing.  Verifies that the plugin gracefully handles and recovers from the broken connectivity,
 // and that all messages received while the connection is alive are logged successfully.
 func TestSyslogWithInterruptedConnection(t *testing.T) {
-
 	// This mock will simulate a broken syslog connection when processing every 4th record
 	mock := newFailingFakeWriter()
 	writer = mock

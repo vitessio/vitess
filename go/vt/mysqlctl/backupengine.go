@@ -40,10 +40,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var (
-	// backupEngineImplementation is the implementation to use for BackupEngine
-	backupEngineImplementation = builtinBackupEngineName
-)
+// backupEngineImplementation is the implementation to use for BackupEngine
+var backupEngineImplementation = builtinBackupEngineName
 
 type BackupResult int
 
@@ -594,12 +592,14 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 
 // See https://github.com/mysql/mysql-server/commit/9a940abe085fc75e1ffe7b72286927fdc9f11207 for the
 // importance of this specific version and why downgrades within patches are allowed since that version.
-var mysql8035 = ServerVersion{Major: 8, Minor: 0, Patch: 35}
-var ltsVersions = []ServerVersion{
-	{Major: 5, Minor: 7, Patch: 0},
-	{Major: 8, Minor: 0, Patch: 0},
-	{Major: 8, Minor: 4, Patch: 0},
-}
+var (
+	mysql8035   = ServerVersion{Major: 8, Minor: 0, Patch: 35}
+	ltsVersions = []ServerVersion{
+		{Major: 5, Minor: 7, Patch: 0},
+		{Major: 8, Minor: 0, Patch: 0},
+		{Major: 8, Minor: 4, Patch: 0},
+	}
+)
 
 func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe bool) error {
 	// It's always safe to use the same version.

@@ -109,8 +109,10 @@ func (config *Configuration) ToJSONString() string {
 }
 
 // Config is *the* configuration instance, used globally to get configuration data
-var Config = newConfiguration()
-var readFileNames []string
+var (
+	Config        = newConfiguration()
+	readFileNames []string
+)
 
 // UpdateConfigValuesFromFlags is used to update the config values from the flags defined.
 // This is done before we read any configuration files from the user. So the config files take precedence.

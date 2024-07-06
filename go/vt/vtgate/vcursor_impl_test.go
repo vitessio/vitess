@@ -36,8 +36,7 @@ func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, v
 	panic("implement me")
 }
 
-type fakeTopoServer struct {
-}
+type fakeTopoServer struct{}
 
 // GetTopoServer returns the full topo.Server instance.
 func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {
@@ -77,7 +76,6 @@ func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace st
 // the provided cell.  It will call the callback when
 // a new value or an error occurs.
 func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
-
 }
 
 func TestDestinationKeyspace(t *testing.T) {
@@ -105,12 +103,14 @@ func TestDestinationKeyspace(t *testing.T) {
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			ks1.Name: ks1Schema,
 			ks2.Name: ks2Schema,
-		}}
+		},
+	}
 
 	vschemaWith1KS := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			ks1.Name: ks1Schema,
-		}}
+		},
+	}
 
 	type testCase struct {
 		vschema                 *vindexes.VSchema
@@ -202,20 +202,23 @@ func TestDestinationKeyspace(t *testing.T) {
 	}
 }
 
-var ks1 = &vindexes.Keyspace{Name: "ks1"}
-var ks1Schema = &vindexes.KeyspaceSchema{Keyspace: ks1}
-var ks2 = &vindexes.Keyspace{Name: "ks2"}
-var ks2Schema = &vindexes.KeyspaceSchema{Keyspace: ks2}
-var vschemaWith1KS = &vindexes.VSchema{
-	Keyspaces: map[string]*vindexes.KeyspaceSchema{
-		ks1.Name: ks1Schema,
-	},
-}
+var (
+	ks1            = &vindexes.Keyspace{Name: "ks1"}
+	ks1Schema      = &vindexes.KeyspaceSchema{Keyspace: ks1}
+	ks2            = &vindexes.Keyspace{Name: "ks2"}
+	ks2Schema      = &vindexes.KeyspaceSchema{Keyspace: ks2}
+	vschemaWith1KS = &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1.Name: ks1Schema,
+		},
+	}
+)
 var vschemaWith2KS = &vindexes.VSchema{
 	Keyspaces: map[string]*vindexes.KeyspaceSchema{
 		ks1.Name: ks1Schema,
 		ks2.Name: ks2Schema,
-	}}
+	},
+}
 
 func TestSetTarget(t *testing.T) {
 	type testCase struct {
@@ -317,7 +320,8 @@ func TestFirstSortedKeyspace(t *testing.T) {
 			ks1Schema.Keyspace.Name: ks1Schema,
 			ks2Schema.Keyspace.Name: ks2Schema,
 			ks3Schema.Keyspace.Name: ks3Schema,
-		}}
+		},
+	}
 
 	r, _, _, _, _ := createExecutorEnv(t)
 	vc, err := newVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)

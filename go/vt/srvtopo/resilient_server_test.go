@@ -100,7 +100,6 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// Wait a bit to give the watcher enough time to update the value.
 	time.Sleep(10 * time.Millisecond)
 	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 	}
@@ -711,7 +710,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 
 	waitForEntries := func(entryCount int) []watched {
 		var current []watched
-		var expire = time.Now().Add(5 * time.Second)
+		expire := time.Now().Add(5 * time.Second)
 
 		for time.Now().Before(expire) {
 			current = allSeen()

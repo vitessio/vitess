@@ -112,7 +112,6 @@ func TestStreamMigrateMainflow(t *testing.T) {
 				sourceRows[i]...),
 				nil)
 		}
-
 	}
 	stopStreams()
 

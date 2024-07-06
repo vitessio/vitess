@@ -213,13 +213,13 @@ func JSONObject(yield Query) {
 }
 
 func CharsetConversionOperators(yield Query) {
-	var introducers = []string{
+	introducers := []string{
 		"", "_latin1", "_utf8mb4", "_utf8", "_binary",
 	}
-	var contents = []string{
+	contents := []string{
 		`"foobar"`, `X'4D7953514C'`,
 	}
-	var charsets = []string{
+	charsets := []string{
 		"utf8mb4", "utf8", "utf16", "utf32", "latin1", "ucs2",
 	}
 
@@ -233,7 +233,7 @@ func CharsetConversionOperators(yield Query) {
 }
 
 func CaseExprWithPredicate(yield Query) {
-	var predicates = []string{
+	predicates := []string{
 		"true",
 		"false",
 		"null",
@@ -263,7 +263,7 @@ func CaseExprWithPredicate(yield Query) {
 }
 
 func FnCeil(yield Query) {
-	var ceilInputs = []string{
+	ceilInputs := []string{
 		"0",
 		"1",
 		"-1",
@@ -288,7 +288,7 @@ func FnCeil(yield Query) {
 }
 
 func FnFloor(yield Query) {
-	var floorInputs = []string{
+	floorInputs := []string{
 		"0",
 		"1",
 		"-1",
@@ -311,7 +311,7 @@ func FnFloor(yield Query) {
 }
 
 func FnAbs(yield Query) {
-	var absInputs = []string{
+	absInputs := []string{
 		"0",
 		"1",
 		"-1",
@@ -780,7 +780,7 @@ func If(yield Query) {
 }
 
 func Base64(yield Query) {
-	var inputs = []string{
+	inputs := []string{
 		`'bGlnaHQgdw=='`,
 		`'bGlnaHQgd28='`,
 		`'bGlnaHQgd29y'`,
@@ -810,7 +810,7 @@ func Conversion(yield Query) {
 }
 
 func LargeDecimals(yield Query) {
-	var largepi = inputPi + inputPi
+	largepi := inputPi + inputPi
 
 	for pos := 0; pos < len(largepi); pos++ {
 		yield(fmt.Sprintf("%s.%s", largepi[:pos], largepi[pos:]), nil)
@@ -819,7 +819,7 @@ func LargeDecimals(yield Query) {
 }
 
 func LargeIntegers(yield Query) {
-	var largepi = inputPi + inputPi
+	largepi := inputPi + inputPi
 
 	for pos := 1; pos < len(largepi); pos++ {
 		yield(largepi[:pos], nil)
@@ -862,7 +862,7 @@ func BitwiseOperators(yield Query) {
 }
 
 func WeightString(yield Query) {
-	var inputs = []string{
+	inputs := []string{
 		`'foobar'`, `_latin1 'foobar'`,
 		`'foobar' as char(12)`, `'foobar' as char(3)`, `'foobar' as binary(12)`, `'foobar' as binary(3)`,
 		`'foobar' collate utf8mb4_bin as char(12)`, `'foobar' collate utf8mb4_bin as char(3)`,
@@ -913,7 +913,7 @@ func WeightString(yield Query) {
 }
 
 func FloatFormatting(yield Query) {
-	var floats = []string{
+	floats := []string{
 		`18446744073709551615`,
 		`9223372036854775807`,
 		`0xff`, `0xffff`, `0xffffffff`,
@@ -941,7 +941,7 @@ func FloatFormatting(yield Query) {
 }
 
 func UnderscoreAndPercentage(yield Query) {
-	var queries = []string{
+	queries := []string{
 		`'pokemon' LIKE 'poke%'`,
 		`'pokemon' LIKE 'poke\%'`,
 		`'poke%mon' LIKE 'poke\%mon'`,
@@ -965,7 +965,7 @@ func UnderscoreAndPercentage(yield Query) {
 }
 
 func Types(yield Query) {
-	var queries = []string{
+	queries := []string{
 		"1 > 3",
 		"3 > 1",
 		"-1 > -1",
@@ -1014,7 +1014,7 @@ func Arithmetic(yield Query) {
 }
 
 func HexArithmetic(yield Query) {
-	var cases = []string{
+	cases := []string{
 		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
 		`X'00'`, `X'1234'`, `X'ff'`,
 		`0x00`, `0x1`, `0x1234`,
@@ -1031,7 +1031,7 @@ func HexArithmetic(yield Query) {
 }
 
 func NumericTypes(yield Query) {
-	var numbers = []string{
+	numbers := []string{
 		`1234`, `-1234`,
 		`18446744073709551614`,
 		`18446744073709551615`, // MaxUint64
@@ -1058,7 +1058,7 @@ func NumericTypes(yield Query) {
 }
 
 func NegateArithmetic(yield Query) {
-	var cases = []string{
+	cases := []string{
 		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
 		`X'00'`, `X'1234'`, `X'ff'`,
 		`0x00`, `0x1`, `0x1234`,
@@ -1081,7 +1081,7 @@ func NegateArithmetic(yield Query) {
 }
 
 func CollationOperations(yield Query) {
-	var cases = []string{
+	cases := []string{
 		"COLLATION('foobar')",
 		"COLLATION(_latin1 'foobar')",
 		"COLLATION(_utf8mb4 'foobar' COLLATE utf8mb4_general_ci)",
@@ -1095,13 +1095,13 @@ func CollationOperations(yield Query) {
 }
 
 func LikeComparison(yield Query) {
-	var left = []string{
+	left := []string{
 		`'foobar'`, `'FOOBAR'`,
 		`'1234'`, `1234`,
 		`_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs`,
 		`_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs`,
 	}
-	var right = append([]string{
+	right := append([]string{
 		`'foo%'`, `'FOO%'`, `'foo_ar'`, `'FOO_AR'`,
 		`'12%'`, `'12_4'`,
 		`_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs`,
@@ -1151,7 +1151,7 @@ func StrcmpComparison(yield Query) {
 }
 
 func MultiComparisons(yield Query) {
-	var numbers = []string{
+	numbers := []string{
 		`0`, `-1`, `1`, `0.0`, `1.0`, `-1.0`, `1.0E0`, `-1.0E0`, `0.0E0`,
 		strconv.FormatUint(math.MaxUint64, 10),
 		strconv.FormatUint(math.MaxInt64, 10),
@@ -1217,13 +1217,13 @@ func IntervalStatement(yield Query) {
 }
 
 func IsStatement(yield Query) {
-	var left = []string{
+	left := []string{
 		"NULL", "TRUE", "FALSE",
 		`1`, `0`, `1.0`, `0.0`, `-1`, `666`,
 		`"1"`, `"0"`, `"1.0"`, `"0.0"`, `"-1"`, `"666"`,
 		`"POTATO"`, `""`, `" "`, `"    "`,
 	}
-	var right = []string{
+	right := []string{
 		"NULL",
 		"NOT NULL",
 		"TRUE",
@@ -1240,7 +1240,7 @@ func IsStatement(yield Query) {
 }
 
 func NotStatement(yield Query) {
-	var ops = []string{"NOT", "!"}
+	ops := []string{"NOT", "!"}
 	for _, op := range ops {
 		for _, i := range inputConversions {
 			yield(fmt.Sprintf("%s %s", op, i), nil)
@@ -1249,7 +1249,7 @@ func NotStatement(yield Query) {
 }
 
 func LogicalStatement(yield Query) {
-	var ops = []string{"AND", "&&", "OR", "||", "XOR"}
+	ops := []string{"AND", "&&", "OR", "||", "XOR"}
 	for _, op := range ops {
 		for _, l := range inputConversions {
 			for _, r := range inputConversions {
@@ -1260,8 +1260,8 @@ func LogicalStatement(yield Query) {
 }
 
 func TupleComparisons(yield Query) {
-	var elems = []string{"NULL", "-1", "0", "1"}
-	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
+	elems := []string{"NULL", "-1", "0", "1"}
+	operators := []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
 
 	var tuples []string
 	perm(elems, func(t []string) {
@@ -1278,7 +1278,7 @@ func TupleComparisons(yield Query) {
 }
 
 func Comparisons(yield Query) {
-	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
+	operators := []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
 	for _, op := range operators {
 		for _, l := range inputComparisonElement {
 			for _, r := range inputComparisonElement {
@@ -1295,7 +1295,7 @@ func Comparisons(yield Query) {
 }
 
 func JSONExtract(yield Query) {
-	var cases = []struct {
+	cases := []struct {
 		Operator string
 		Path     string
 	}{
@@ -1314,7 +1314,7 @@ func JSONExtract(yield Query) {
 		{Operator: `->>`, Path: "$[*].a"},
 	}
 
-	var rows = []sqltypes.Value{
+	rows := []sqltypes.Value{
 		mustJSON(`[ { "a": 1 }, { "a": 2 } ]`),
 		mustJSON(`{ "a" : "foo", "b" : [ true, { "c" : 123, "c" : 456 } ] }`),
 		mustJSON(`{ "a" : "foo", "b" : [ true, { "c" : "123" } ] }`),
@@ -1783,7 +1783,7 @@ func FnHex(yield Query) {
 }
 
 func FnUnhex(yield Query) {
-	var inputs = []string{
+	inputs := []string{
 		`'f'`,
 		`'fe'`,
 		`'fea'`,

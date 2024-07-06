@@ -76,17 +76,17 @@ var (
 	ErrMigrationNotFound = errors.New("migration not found")
 )
 
-var (
-	// fixCompletedTimestampDone fixes a nil `completed_timestamp` columns, see
-	// https://github.com/vitessio/vitess/issues/13927
-	// The fix is in release-18.0
-	// TODO: remove in release-19.0
-	fixCompletedTimestampDone bool
-)
+// fixCompletedTimestampDone fixes a nil `completed_timestamp` columns, see
+// https://github.com/vitessio/vitess/issues/13927
+// The fix is in release-18.0
+// TODO: remove in release-19.0
+var fixCompletedTimestampDone bool
 
-var emptyResult = &sqltypes.Result{}
-var acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
-var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
+var (
+	emptyResult                           = &sqltypes.Result{}
+	acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
+	copyAlgorithm                         = sqlparser.AlgorithmValue(sqlparser.CopyStr)
+)
 
 var (
 	ghostBinaryPath         = "gh-ost"
@@ -145,12 +145,10 @@ const (
 	ForeignKeyConstraintType
 )
 
-var (
-	constraintIndicatorMap = map[int]string{
-		int(CheckConstraintType):      "chk",
-		int(ForeignKeyConstraintType): "fk",
-	}
-)
+var constraintIndicatorMap = map[int]string{
+	int(CheckConstraintType):      "chk",
+	int(ForeignKeyConstraintType): "fk",
+}
 
 func GetConstraintType(constraintInfo sqlparser.ConstraintInfo) ConstraintType {
 	if _, ok := constraintInfo.(*sqlparser.CheckConstraintDefinition); ok {
@@ -662,7 +660,6 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 		defer conn.ExecuteFetch("SET foreign_key_checks=@vt_onlineddl_foreign_key_checks", 0, false)
 	}
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
-
 	if err != nil {
 		// let's see if this error is actually acceptable
 		if merr, ok := err.(*sqlerror.SQLError); ok {
@@ -2115,7 +2112,6 @@ export MYSQL_PWD
 }
 
 func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *schema.OnlineDDL, row sqltypes.RowNamedValues, err error) {
-
 	query, err := sqlparser.ParseAndBind(sqlSelectMigration,
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -2781,7 +2777,6 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 // - empty, in which case the migration is noop and implicitly successful, or
 // - non-empty, in which case the migration turns to be an ALTER
 func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (diff schemadiff.EntityDiff, err error) {
-
 	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
@@ -4489,7 +4484,8 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 	addedUniqueKeys, removedUniqueKeys int, removedUniqueKeyNames string,
 	removedForeignKeyNames string,
 	droppedNoDefaultColumnNames string, expandedColumnNames string,
-	revertibleNotes string) error {
+	revertibleNotes string,
+) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
 		sqltypes.Int64BindVariable(int64(removedUniqueKeys)),
@@ -5124,7 +5120,6 @@ func (e *Executor) SubmitMigration(
 	)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "submitting migration %v", onlineDDL.UUID)
-
 	}
 	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 
@@ -5193,7 +5188,8 @@ func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMi
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
 func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
-	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string) (err error) {
+	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string,
+) (err error) {
 	if dryRun && status != schema.OnlineDDLStatusFailed {
 		// We don't consider dry-run reports unless there's a failure
 		return nil
@@ -5252,7 +5248,8 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
 
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
 func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
-	uuidParam, statusParam, dryrunParam, progressParam, etaParam, rowsCopiedParam, hint string) (err error) {
+	uuidParam, statusParam, dryrunParam, progressParam, etaParam, rowsCopiedParam, hint string,
+) (err error) {
 	status := schema.OnlineDDLStatus(statusParam)
 	dryRun := (dryrunParam == "true")
 	var progressPct float64

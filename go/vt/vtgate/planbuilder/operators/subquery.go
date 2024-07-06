@@ -225,8 +225,10 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 	return sq.settleFilter(ctx, outer)
 }
 
-var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
-var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
+var (
+	correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
+	subqueryNotAtTopErr   = vterrors.VT12001("unmergable subquery can not be inside complex expression")
+)
 
 func (sq *SubQuery) addLimit() {
 	// for a correlated subquery, we can add a limit 1 to the subquery

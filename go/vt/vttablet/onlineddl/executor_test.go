@@ -36,9 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var (
-	testMySQLVersion = "8.0.34"
-)
+var testMySQLVersion = "8.0.34"
 
 func TestGetConstraintType(t *testing.T) {
 	{

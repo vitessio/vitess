@@ -71,9 +71,11 @@ func createUncertain(direct TableSet, recursive TableSet) *uncertain {
 	}
 }
 
-var _ dependencies = (*nothing)(nil)
-var _ dependencies = (*certain)(nil)
-var _ dependencies = (*uncertain)(nil)
+var (
+	_ dependencies = (*nothing)(nil)
+	_ dependencies = (*certain)(nil)
+	_ dependencies = (*uncertain)(nil)
+)
 
 func (u *uncertain) empty() bool {
 	return false

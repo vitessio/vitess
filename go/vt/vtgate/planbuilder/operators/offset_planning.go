@@ -118,7 +118,6 @@ func findAggregatorInSource(op Operator) *Aggregator {
 // addColumnsToInput adds columns needed by an operator to its input.
 // This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
 func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator {
-
 	addColumnsNeededByFilter := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		addedCols := false
 		filter, ok := in.(*Filter)

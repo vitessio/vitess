@@ -141,7 +141,7 @@ func TestExpandCells(t *testing.T) {
 	defer cancel()
 	var cells []string
 	var err error
-	var allCells = "cell1,cell2,cell3"
+	allCells := "cell1,cell2,cell3"
 	type testCase struct {
 		name      string
 		cellsIn   string

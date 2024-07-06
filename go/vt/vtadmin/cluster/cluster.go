@@ -1908,7 +1908,6 @@ func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.Sr
 	sv, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
 		Cell: cell,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -1971,7 +1970,6 @@ func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.V
 	vschema, err := c.Vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
 		Keyspace: keyspace,
 	})
-
 	if err != nil {
 		return nil, err
 	}

@@ -55,8 +55,10 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vtgate.sandbox_test", "sandbox")
 }
 
-var sandboxMu sync.Mutex
-var ksToSandbox map[string]*sandbox
+var (
+	sandboxMu   sync.Mutex
+	ksToSandbox map[string]*sandbox
+)
 
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()

@@ -101,11 +101,13 @@ func TestNoBlob(t *testing.T) {
 		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
 		{"update t1 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t2 values (1, 'text1', 'aaa')", nil},
 		{"update t2 set val = 'bbb'", nil},
 		{"commit", nil},
-	}, {{"begin", nil},
+	}, {
+		{"begin", nil},
 		{"insert into t3 values (1, 'text1', 'aaa')", nil},
 		{"update t3 set val = 'bbb'", nil},
 		{"commit", nil},
@@ -162,7 +164,8 @@ func TestCellValuePadding(t *testing.T) {
 		ddls: []string{
 			"create table t1(id int, val binary(4), primary key(val))",
 			"create table t2(id int, val char(4), primary key(val))",
-			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))"},
+			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))",
+		},
 	}
 	defer ts.Close()
 	ts.Init()
@@ -277,7 +280,6 @@ func TestSetForeignKeyCheck(t *testing.T) {
 		{"commit", nil},
 	}}
 	ts.Run()
-
 }
 
 func TestStmtComment(t *testing.T) {
@@ -296,9 +298,11 @@ func TestStmtComment(t *testing.T) {
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa')", nil},
 		{"commit", nil},
-		{"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", []TestRowEvent{
-			{restart: true, event: "gtid"},
-			{event: "other"}},
+		{
+			"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", []TestRowEvent{
+				{restart: true, event: "gtid"},
+				{event: "other"},
+			},
 		},
 	}}
 	ts.Run()
@@ -341,9 +345,11 @@ func TestVersion(t *testing.T) {
 		// External table events don't get sent.
 		output: [][]string{{
 			`begin`,
-			`type:VERSION`}, {
+			`type:VERSION`,
+		}, {
 			`gtid`,
-			`commit`}},
+			`commit`,
+		}},
 	}}
 	runCases(t, nil, testcases, "", nil)
 	mt, err := env.SchemaEngine.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid)
@@ -551,7 +557,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		fe.enumSetStrings = true
 	}
 
-	var expectedEvents = []string{
+	expectedEvents := []string{
 		"begin",
 		t1FieldEvent.String(),
 		"gtid",

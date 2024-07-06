@@ -217,6 +217,7 @@ func (vm *VSchemaManager) updateViewInfo(ks *vindexes.KeyspaceSchema, ksName str
 		}
 	}
 }
+
 func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexes.KeyspaceSchema, ksName string) {
 	m := vm.schema.Tables(ksName)
 	// Before we add the foreign key definitions in the tables, we need to make sure that all the tables

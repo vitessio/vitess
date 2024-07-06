@@ -93,7 +93,6 @@ func trySimplifyDistinct(in sqlparser.SelectStatement, test func(statement sqlpa
 	sqlparser.SafeRewrite(in, alwaysVisitChildren, up)
 
 	if simplified {
-
 		return in
 	}
 	// we found no simplifications
@@ -186,7 +185,6 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 	sqlparser.SafeRewrite(in, alwaysVisitChildren, up)
 
 	if simplified {
-
 		return in
 	}
 	// we found no simplifications

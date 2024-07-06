@@ -76,6 +76,7 @@ func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]s
 func GetShardRoutingRuleKey(fromKeyspace, shard string) string {
 	return fmt.Sprintf("%s.%s", fromKeyspace, shard)
 }
+
 func ParseShardRoutingRuleKey(key string) (string, string) {
 	arr := strings.Split(key, ".")
 	return arr[0], arr[1]
@@ -179,7 +180,8 @@ func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules 
 // error. When the routing rules already exist, it will acquire a RoutingRulesLock and
 // then modify the keyspace routing rules in-place.
 func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string,
-	update func(ctx context.Context, rules *map[string]string) error) (err error) {
+	update func(ctx context.Context, rules *map[string]string) error,
+) (err error) {
 	lockCtx, unlock, lockErr := ts.LockRoutingRules(ctx, reason)
 	if lockErr != nil {
 		// If the key does not yet exist then let's create it.

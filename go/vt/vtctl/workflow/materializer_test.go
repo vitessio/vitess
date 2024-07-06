@@ -52,9 +52,7 @@ const (
 	insertPrefix         = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options\) values `
 )
 
-var (
-	defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
-)
+var defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 
 func TestStripForeignKeys(t *testing.T) {
 	tcs := []struct {
@@ -528,7 +526,8 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.ws.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
-	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
+	want := []string{
+		`keyspaces:{key:"sourceks" value:{}}`,
 		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
 		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
 		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,

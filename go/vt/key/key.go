@@ -29,9 +29,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	KeyRangePattern = regexp.MustCompile(`^(0|([0-9a-fA-F]{2})*-([0-9a-fA-F]{2})*)$`)
-)
+var KeyRangePattern = regexp.MustCompile(`^(0|([0-9a-fA-F]{2})*-([0-9a-fA-F]{2})*)$`)
 
 //
 // Uint64Key definitions

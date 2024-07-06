@@ -175,7 +175,6 @@ func generateConsulDatacenter(component string, cluster *vtadminpb.Cluster, tmpl
 	}{
 		Cluster: cluster,
 	})
-
 	if err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}

@@ -35,9 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var (
-	testWaitReplicasTimeout = 10 * time.Second
-)
+var testWaitReplicasTimeout = 10 * time.Second
 
 func TestTabletExecutorOpen(t *testing.T) {
 	executor := newFakeExecutor(t)

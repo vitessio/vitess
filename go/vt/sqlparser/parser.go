@@ -102,7 +102,7 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 
 // ConvertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
 func ConvertMySQLVersionToCommentVersion(version string) (string, error) {
-	var res = make([]int, 3)
+	res := make([]int, 3)
 	idx := 0
 	val := ""
 	for _, c := range version {

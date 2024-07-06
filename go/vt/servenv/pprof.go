@@ -171,7 +171,7 @@ func (prof *profile) mkprofile() io.WriteCloser {
 
 	if prof.path != "" {
 		path = prof.path
-		err = os.MkdirAll(path, 0777)
+		err = os.MkdirAll(path, 0o777)
 	} else {
 		path, err = os.MkdirTemp("", "profile")
 	}

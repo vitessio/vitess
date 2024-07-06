@@ -33,9 +33,11 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-const rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN' and workflow_sub_type != 1"
-const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options\) values `
-const eol = "$"
+const (
+	rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN' and workflow_sub_type != 1"
+	insertPrefix        = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options\) values `
+	eol                 = "$"
+)
 
 func TestResharderOneToMany(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -60,7 +62,7 @@ func TestResharderOneToMany(t *testing.T) {
 		cells       string
 		tabletTypes string
 	}
-	var newTestCase = func(cells, tabletTypes string) *testCase {
+	newTestCase := func(cells, tabletTypes string) *testCase {
 		return &testCase{
 			cells:       cells,
 			tabletTypes: tabletTypes,

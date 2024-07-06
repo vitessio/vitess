@@ -49,7 +49,7 @@ func TestTranslateSimplification(t *testing.T) {
 		return ast{err: in}
 	}
 
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		converted  ast
 		simplified ast
@@ -63,19 +63,23 @@ func TestTranslateSimplification(t *testing.T) {
 			ok(`'foo' COLLATE utf8mb4_general_ci in ('bar' COLLATE latin1_swedish_ci, 'baz')`),
 			err("COLLATION 'latin1_swedish_ci' is not valid for CHARACTER SET 'utf8mb4'"),
 		},
-		{`"pokemon" in ("bulbasaur", "venusaur", "charizard")`,
+		{
+			`"pokemon" in ("bulbasaur", "venusaur", "charizard")`,
 			ok(`'pokemon' in ('bulbasaur', 'venusaur', 'charizard')`),
 			ok("0"),
 		},
-		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon")`,
+		{
+			`"pokemon" in ("bulbasaur", "venusaur", "pokemon")`,
 			ok(`'pokemon' in ('bulbasaur', 'venusaur', 'pokemon')`),
 			ok("1"),
 		},
-		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
+		{
+			`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
 			ok(`'pokemon' in ('bulbasaur', 'venusaur', 'pokemon', null)`),
 			ok(`1`),
 		},
-		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
+		{
+			`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
 			ok(`'pokemon' in ('bulbasaur', 'venusaur', null)`),
 			ok(`null`),
 		},
@@ -403,7 +407,6 @@ func TestTranslationFailures(t *testing.T) {
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
-
 }
 
 func TestCardinalityWithBindVariables(t *testing.T) {

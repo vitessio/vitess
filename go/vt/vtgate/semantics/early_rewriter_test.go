@@ -301,7 +301,6 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestGroupByColumnName(t *testing.T) {
@@ -758,7 +757,8 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 				Type: sqltypes.VarChar,
 			}},
 			ColumnListAuthoritative: true,
-		}}}
+		},
+	}}
 	tcases := []struct {
 		sql         string
 		expSQL      string

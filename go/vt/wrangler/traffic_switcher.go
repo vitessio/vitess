@@ -256,7 +256,6 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		// We assume a consistent state, so only choose routing rule for one table.
 		if len(ts.Tables()) == 0 {
 			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", targetKeyspace, workflowName)
-
 		}
 		table := ts.Tables()[0]
 
@@ -332,7 +331,8 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
 func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowName string, servedTypes []topodatapb.TabletType,
-	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool) (*[]string, error) {
+	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool,
+) (*[]string, error) {
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
 		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
@@ -475,7 +475,8 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration,
-	cancel, reverse, reverseReplication bool, dryRun, initializeTargetSequences bool) (journalID int64, dryRunResults *[]string, err error) {
+	cancel, reverse, reverseReplication bool, dryRun, initializeTargetSequences bool,
+) (journalID int64, dryRunResults *[]string, err error) {
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
 		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
@@ -755,7 +756,8 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw
 // finalizeMigrateWorkflow deletes the streams for the Migrate workflow.
 // We only cleanup the target for external sources.
 func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, workflow, tableSpecs string,
-	cancel, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
+	cancel, keepData, keepRoutingRules, dryRun bool,
+) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -891,7 +893,6 @@ func (wr *Wrangler) getShardSubset(ctx context.Context, keyspace string, shardSu
 	log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
 		keyspace, len(shardSubset), len(allShards), shardSubset)
 	return shardSubset, nil
-
 }
 
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {
@@ -1027,7 +1028,6 @@ func (ts *trafficSwitcher) getSourceAndTargetShardsNames() ([]string, []string) 
 // same number of shards, is not covering the entire shard range, and has
 // one-to-one shards in source and target.
 func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []string) (bool, error) {
-
 	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
 		return false, nil
 	}
@@ -1518,7 +1518,6 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 				Keyspace: source.GetShard().Keyspace(),
 				Shard:    shard,
 			})
-
 		}
 		log.Infof("Creating journal %v", journal)
 		ts.Logger().Infof("Creating journal: %v", journal)
@@ -1764,7 +1763,6 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		return fmt.Errorf("%s", strings.Join(rec.ErrorStrings(), "\n"))
 	}
 	return nil
-
 }
 
 func getRenameFileName(tableName string) string {

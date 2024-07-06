@@ -119,7 +119,6 @@ func init() {
 
 func validateSchemaDefinition(name, schema string, parser *sqlparser.Parser) (string, error) {
 	stmt, err := parser.ParseStrictDDL(schema)
-
 	if err != nil {
 		return "", err
 	}

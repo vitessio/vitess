@@ -17,11 +17,10 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"path"
 	"strings"
 	"sync"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"

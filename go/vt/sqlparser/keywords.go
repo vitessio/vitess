@@ -792,8 +792,10 @@ var keywords = []keyword{
 }
 
 // keywordStrings contains the reverse mapping of token to keyword strings
-var keywordStrings = map[int]string{}
-var keywordVals = map[string]int{}
+var (
+	keywordStrings = map[int]string{}
+	keywordVals    = map[string]int{}
+)
 
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
 var keywordLookupTable *caseInsensitiveTable
@@ -849,8 +851,10 @@ func KeywordString(id int) string {
 	return str
 }
 
-const offset64 = uint64(14695981039346656037)
-const prime64 = uint64(1099511628211)
+const (
+	offset64 = uint64(14695981039346656037)
+	prime64  = uint64(1099511628211)
+)
 
 func fnv1aIstr(h uint64, s string) uint64 {
 	for i := 0; i < len(s); i++ {

@@ -26,10 +26,10 @@ import (
 )
 
 func TestParsing(t *testing.T) {
-
 	path := []string{
 		"/tmp/something.foo/zkocc.goedel.szopa.log.INFO.20130806-151006.10530",
-		"/tmp/something.foo/zkocc.goedel.szopa.test.log.ERROR.20130806-151006.10530"}
+		"/tmp/something.foo/zkocc.goedel.szopa.test.log.ERROR.20130806-151006.10530",
+	}
 
 	for _, filepath := range path {
 		ts, err := parseCreatedTimestamp(filepath)
@@ -37,7 +37,7 @@ func TestParsing(t *testing.T) {
 			t.Fatalf("parse: %v", err)
 		}
 
-		if want := time.Date(2013, 8, 6, 15, 10, 06, 0, time.Now().Location()); ts != want {
+		if want := time.Date(2013, 8, 6, 15, 10, 0o6, 0, time.Now().Location()); ts != want {
 			t.Errorf("timestamp: want %v, got %v", want, ts)
 		}
 	}
@@ -45,12 +45,12 @@ func TestParsing(t *testing.T) {
 
 func TestPurgeByCtime(t *testing.T) {
 	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
-	if err := os.MkdirAll(logDir, 0777); err != nil {
+	if err := os.MkdirAll(logDir, 0o777); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 	defer os.RemoveAll(logDir)
 
-	now := time.Date(2013, 8, 6, 15, 10, 06, 0, time.Now().Location())
+	now := time.Date(2013, 8, 6, 15, 10, 0o6, 0, time.Now().Location())
 	files := []string{
 		"zkocc.goedel.szopa.log.INFO.20130806-121006.10530",
 		"zkocc.goedel.szopa.log.INFO.20130806-131006.10530",
@@ -85,7 +85,7 @@ func TestPurgeByCtime(t *testing.T) {
 
 func TestPurgeByMtime(t *testing.T) {
 	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
-	if err := os.MkdirAll(logDir, 0777); err != nil {
+	if err := os.MkdirAll(logDir, 0o777); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 	defer os.RemoveAll(logDir)

@@ -35,7 +35,6 @@ type fakeConn struct {
 func (st *fakeConn) ListDir(ctx context.Context, dirPath string, full bool) (res []DirEntry, err error) {
 	if dirPath == "error" {
 		return res, fmt.Errorf("Dummy error")
-
 	}
 	return res, err
 }
@@ -47,7 +46,6 @@ func (st *fakeConn) Create(ctx context.Context, filePath string, contents []byte
 	}
 	if filePath == "error" {
 		return ver, fmt.Errorf("Dummy error")
-
 	}
 	return ver, err
 }
@@ -59,7 +57,6 @@ func (st *fakeConn) Update(ctx context.Context, filePath string, contents []byte
 	}
 	if filePath == "error" {
 		return ver, fmt.Errorf("Dummy error")
-
 	}
 	return ver, err
 }
@@ -68,7 +65,6 @@ func (st *fakeConn) Update(ctx context.Context, filePath string, contents []byte
 func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver Version, err error) {
 	if filePath == "error" {
 		return bytes, ver, fmt.Errorf("Dummy error")
-
 	}
 	return bytes, ver, err
 }
@@ -77,7 +73,6 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 func (st *fakeConn) GetVersion(ctx context.Context, filePath string, version int64) (bytes []byte, err error) {
 	if filePath == "error" {
 		return bytes, fmt.Errorf("Dummy error")
-
 	}
 	return bytes, err
 }
@@ -108,7 +103,6 @@ func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock Lo
 	}
 	if dirPath == "error" {
 		return lock, fmt.Errorf("dummy error")
-
 	}
 	return lock, err
 }
@@ -121,7 +115,6 @@ func (st *fakeConn) TryLock(ctx context.Context, dirPath, contents string) (lock
 	}
 	if dirPath == "error" {
 		return lock, fmt.Errorf("dummy error")
-
 	}
 	return lock, err
 }
@@ -140,7 +133,6 @@ func (st *fakeConn) WatchRecursive(ctx context.Context, path string) (current []
 func (st *fakeConn) NewLeaderParticipation(name, id string) (mp LeaderParticipation, err error) {
 	if name == "error" {
 		return mp, fmt.Errorf("dummy error")
-
 	}
 	return mp, err
 }
@@ -332,7 +324,6 @@ func TestStatsConnTopoWatch(t *testing.T) {
 	if got, want := timingCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
-
 }
 
 // TestStatsConnTopoNewLeaderParticipation emits stats on NewLeaderParticipation

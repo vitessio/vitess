@@ -25,16 +25,13 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
-var (
-	Db DB = (*vtorcDB)(nil)
-)
+var Db DB = (*vtorcDB)(nil)
 
 type DB interface {
 	QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error
 }
 
-type vtorcDB struct {
-}
+type vtorcDB struct{}
 
 var _ DB = (*vtorcDB)(nil)
 

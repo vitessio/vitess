@@ -32,11 +32,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-var (
-	// ErrBinlogUnavailable is returned by this library when we
-	// cannot find a suitable binlog to satisfy the request.
-	ErrBinlogUnavailable = fmt.Errorf("cannot find relevant binlogs on this server")
-)
+// ErrBinlogUnavailable is returned by this library when we
+// cannot find a suitable binlog to satisfy the request.
+var ErrBinlogUnavailable = fmt.Errorf("cannot find relevant binlogs on this server")
 
 // BinlogConnection represents a connection to mysqld that pretends to be a replica
 // connecting for replication. Each such connection must identify itself to

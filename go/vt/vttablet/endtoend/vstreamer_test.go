@@ -82,14 +82,15 @@ func TestSchemaVersioning(t *testing.T) {
 		}},
 	}
 
-	var cases = []test{
+	cases := []test{
 		{
 			query: "create table vitess_version (\n\tid1 int,\n\tid2 int\n)",
 			output: append(append([]string{
-				`gtid`, //gtid+other => vstream current pos
+				`gtid`, // gtid+other => vstream current pos
 				`other`,
-				`gtid`, //gtid+ddl => actual query
-				`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)"`},
+				`gtid`, // gtid+ddl => actual query
+				`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)"`,
+			},
 				getSchemaVersionTableCreationEvents()...),
 				`version`,
 				`gtid`,
@@ -102,7 +103,8 @@ func TestSchemaVersioning(t *testing.T) {
 				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 values:"110"}}}`,
 				`gtid`,
 			},
-		}, {
+		},
+		{
 			query: "alter table vitess_version add column id3 int",
 			output: []string{
 				`gtid`,
@@ -110,14 +112,16 @@ func TestSchemaVersioning(t *testing.T) {
 				`version`,
 				`gtid`,
 			},
-		}, {
+		},
+		{
 			query: "insert into vitess_version values(2, 20, 200)",
 			output: []string{
 				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:11 charset:63 column_type:"int"}}`,
 				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"220200"}}}`,
 				`gtid`,
 			},
-		}, {
+		},
+		{
 			query: "alter table vitess_version modify column id3 varbinary(16)",
 			output: []string{
 				`gtid`,
@@ -125,7 +129,8 @@ func TestSchemaVersioning(t *testing.T) {
 				`version`,
 				`gtid`,
 			},
-		}, {
+		},
+		{
 			query: "insert into vitess_version values(3, 30, 'TTT')",
 			output: []string{
 				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
@@ -173,10 +178,10 @@ func TestSchemaVersioning(t *testing.T) {
 	tsv.SetTracking(false)
 	cases = []test{
 		{
-			//comment prefix required so we don't look for ddl in schema_version
+			// comment prefix required so we don't look for ddl in schema_version
 			query: "/**/alter table vitess_version add column id4 varbinary(16)",
 			output: []string{
-				`gtid`, //no tracker, so no insert into schema_version or version event
+				`gtid`, // no tracker, so no insert into schema_version or version event
 				`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
 			},
 		}, {
@@ -233,7 +238,8 @@ func TestSchemaVersioning(t *testing.T) {
 	// playing events from the past: same events as original since historian is providing the latest schema
 	output := append(append([]string{
 		`gtid`,
-		`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)"`},
+		`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)"`,
+	},
 		getSchemaVersionTableCreationEvents()...),
 		`version`,
 		`gtid`,
@@ -308,7 +314,8 @@ func TestSchemaVersioning(t *testing.T) {
 	// playing events from the past: same as earlier except one below, see comments
 	output = append(append([]string{
 		`gtid`,
-		`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)"`},
+		`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)"`,
+	},
 		getSchemaVersionTableCreationEvents()...),
 		`version`,
 		`gtid`,

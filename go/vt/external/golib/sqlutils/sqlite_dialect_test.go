@@ -124,7 +124,6 @@ func TestToSqlite3AlterTable(t *testing.T) {
 				on topology_recovery (last_detection_id)
 			`))
 	}
-
 }
 
 func TestCreateIndex(t *testing.T) {

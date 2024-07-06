@@ -282,7 +282,7 @@ func NewLocalTestEnv(basePort int) (*LocalTestEnv, error) {
 // environment with a directory explicitly specified.
 func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv, error) {
 	if _, err := os.Stat(path.Join(directory, "logs")); os.IsNotExist(err) {
-		err := os.Mkdir(path.Join(directory, "logs"), 0700)
+		err := os.Mkdir(path.Join(directory, "logs"), 0o700)
 		if err != nil {
 			return nil, err
 		}

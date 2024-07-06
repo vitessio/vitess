@@ -56,47 +56,47 @@ type fakeRPCTM struct {
 }
 
 func (fra *fakeRPCTM) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (fra *fakeRPCTM) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (fra *fakeRPCTM) HasVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (fra *fakeRPCTM) ReadVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (fra *fakeRPCTM) ReadVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (fra *fakeRPCTM) UpdateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (fra *fakeRPCTM) UpdateVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (fra *fakeRPCTM) ResetSequences(ctx context.Context, tables []string) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (fra *fakeRPCTM) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -293,32 +293,34 @@ func tmRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.Tabl
 	}
 }
 
-var testGetSchemaTables = []string{"table1", "table2"}
-var testGetSchemaExcludeTables = []string{"etable1", "etable2", "etable3"}
-var testGetSchemaReq = &tabletmanagerdatapb.GetSchemaRequest{Tables: testGetSchemaTables, ExcludeTables: testGetSchemaExcludeTables, IncludeViews: true}
-var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
-	DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
-	TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-		{
-			Name:              "table_name",
-			Schema:            "create table_name",
-			Columns:           []string{"col1", "col2"},
-			PrimaryKeyColumns: []string{"col1"},
-			Type:              tmutils.TableView,
-			DataLength:        12,
-			RowCount:          6,
+var (
+	testGetSchemaTables        = []string{"table1", "table2"}
+	testGetSchemaExcludeTables = []string{"etable1", "etable2", "etable3"}
+	testGetSchemaReq           = &tabletmanagerdatapb.GetSchemaRequest{Tables: testGetSchemaTables, ExcludeTables: testGetSchemaExcludeTables, IncludeViews: true}
+	testGetSchemaReply         = &tabletmanagerdatapb.SchemaDefinition{
+		DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:              "table_name",
+				Schema:            "create table_name",
+				Columns:           []string{"col1", "col2"},
+				PrimaryKeyColumns: []string{"col1"},
+				Type:              tmutils.TableView,
+				DataLength:        12,
+				RowCount:          6,
+			},
+			{
+				Name:              "table_name2",
+				Schema:            "create table_name2",
+				Columns:           []string{"col1"},
+				PrimaryKeyColumns: []string{"col1"},
+				Type:              tmutils.TableBaseTable,
+				DataLength:        12,
+				RowCount:          6,
+			},
 		},
-		{
-			Name:              "table_name2",
-			Schema:            "create table_name2",
-			Columns:           []string{"col1"},
-			PrimaryKeyColumns: []string{"col1"},
-			Type:              tmutils.TableBaseTable,
-			DataLength:        12,
-			RowCount:          6,
-		},
-	},
-}
+	}
+)
 
 func (fra *fakeRPCTM) GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fra.panics {
@@ -491,6 +493,7 @@ var testExecuteHookHook = &hook.Hook{
 		"sea":  "red",
 	},
 }
+
 var testExecuteHookHookResult = &hook.HookResult{
 	ExitStatus: hook.HOOK_STAT_FAILED,
 	Stdout:     "out",
@@ -589,13 +592,15 @@ func tmRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmclie
 	expectHandleRPCPanic(t, "ReloadSchema", false /*verbose*/, err)
 }
 
-var testPreflightSchema = []string{"change table add table cloth"}
-var testSchemaChangeResult = []*tabletmanagerdatapb.SchemaChangeResult{
-	{
-		BeforeSchema: testGetSchemaReply,
-		AfterSchema:  testGetSchemaReply,
-	},
-}
+var (
+	testPreflightSchema    = []string{"change table add table cloth"}
+	testSchemaChangeResult = []*tabletmanagerdatapb.SchemaChangeResult{
+		{
+			BeforeSchema: testGetSchemaReply,
+			AfterSchema:  testGetSchemaReply,
+		},
+	}
+)
 
 func (fra *fakeRPCTM) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fra.panics {
@@ -654,33 +659,35 @@ func (fra *fakeRPCTM) ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb
 	return testExecuteFetchResult, nil
 }
 
-var testExecuteFetchQuery = []byte("fetch this invalid utf8 character \x80")
-var testExecuteFetchMaxRows = uint64(100)
-var testExecuteFetchResult = &querypb.QueryResult{
-	Fields: []*querypb.Field{
-		{
-			Name: "column1",
-			Type: sqltypes.Blob,
-		},
-		{
-			Name: "column2",
-			Type: sqltypes.Datetime,
-		},
-	},
-	RowsAffected: 10,
-	InsertId:     32,
-	Rows: []*querypb.Row{
-		{
-			Lengths: []int64{
-				3,
-				-1,
+var (
+	testExecuteFetchQuery   = []byte("fetch this invalid utf8 character \x80")
+	testExecuteFetchMaxRows = uint64(100)
+	testExecuteFetchResult  = &querypb.QueryResult{
+		Fields: []*querypb.Field{
+			{
+				Name: "column1",
+				Type: sqltypes.Blob,
 			},
-			Values: []byte{
-				'A', 'B', 'C',
+			{
+				Name: "column2",
+				Type: sqltypes.Datetime,
 			},
 		},
-	},
-}
+		RowsAffected: 10,
+		InsertId:     32,
+		Rows: []*querypb.Row{
+			{
+				Lengths: []int64{
+					3,
+					-1,
+				},
+				Values: []byte{
+					'A', 'B', 'C',
+				},
+			},
+		},
+	}
+)
 
 func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
@@ -760,7 +767,6 @@ func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.Ta
 		ReloadSchema: true,
 	})
 	compareError(t, "ExecuteFetchAsAllPrivs", err, qr, testExecuteFetchResult)
-
 }
 
 func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -1060,14 +1066,16 @@ func tmRPCTestInitPrimaryPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "InitPrimary", true /*verbose*/, err)
 }
 
-var testPopulateReparentJournalCalled = false
-var testTimeCreatedNS int64 = 4569900
-var testWaitPosition = "test wait position"
-var testActionName = "TestActionName"
-var testPrimaryAlias = &topodatapb.TabletAlias{
-	Cell: "ce",
-	Uid:  372,
-}
+var (
+	testPopulateReparentJournalCalled       = false
+	testTimeCreatedNS                 int64 = 4569900
+	testWaitPosition                        = "test wait position"
+	testActionName                          = "TestActionName"
+	testPrimaryAlias                        = &topodatapb.TabletAlias{
+		Cell: "ce",
+		Uid:  372,
+	}
+)
 
 func (fra *fakeRPCTM) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, position string) error {
 	if fra.panics {
@@ -1198,9 +1206,11 @@ func tmRPCTestResetReplicationParametersPanic(ctx context.Context, t *testing.T,
 	expectHandleRPCPanic(t, "ResetReplicationParameters", true /*verbose*/, err)
 }
 
-var testSetReplicationSourceCalled = false
-var testForceStartReplica = true
-var testHeartbeatInterval float64 = 4.2
+var (
+	testSetReplicationSourceCalled         = false
+	testForceStartReplica                  = true
+	testHeartbeatInterval          float64 = 4.2
+)
 
 func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplica bool, semiSync bool, heartbeatInterval float64) error {
 	if fra.panics {
@@ -1295,10 +1305,12 @@ func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmcl
 // Backup / restore related methods
 //
 
-var testBackupConcurrency = int32(24)
-var testBackupAllowPrimary = false
-var testBackupCalled = false
-var testRestoreFromBackupCalled = false
+var (
+	testBackupConcurrency       = int32(24)
+	testBackupAllowPrimary      = false
+	testBackupCalled            = false
+	testRestoreFromBackupCalled = false
+)
 
 func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error {
 	if fra.panics {
@@ -1348,7 +1360,7 @@ func (fra *fakeRPCTM) CheckThrottler(ctx context.Context, req *tabletmanagerdata
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 

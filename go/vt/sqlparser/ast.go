@@ -565,8 +565,7 @@ type (
 	DDLAction int8
 
 	// Load represents a LOAD statement
-	Load struct {
-	}
+	Load struct{}
 
 	// PurgeBinaryLogs represents a PURGE BINARY LOGS statement
 	PurgeBinaryLogs struct {
@@ -718,9 +717,11 @@ type (
 	IndexType int8
 )
 
-var _ OrderAndLimit = (*Select)(nil)
-var _ OrderAndLimit = (*Update)(nil)
-var _ OrderAndLimit = (*Delete)(nil)
+var (
+	_ OrderAndLimit = (*Select)(nil)
+	_ OrderAndLimit = (*Update)(nil)
+	_ OrderAndLimit = (*Delete)(nil)
+)
 
 func (*Union) iStatement()               {}
 func (*Select) iStatement()              {}
@@ -3480,6 +3481,7 @@ func (count *Count) SetArgs(exprs Exprs) error {
 	count.Args = exprs
 	return nil
 }
+
 func (grpConcat *GroupConcatExpr) SetArgs(exprs Exprs) error {
 	grpConcat.Exprs = exprs
 	return nil

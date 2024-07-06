@@ -106,7 +106,7 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	}()
 
 	waitUntil := time.Now().Add(10 * time.Second)
-	var firstTime = true
+	firstTime := true
 	// after attempting the `TryLock` and getting an error `NodeExists`, we will cancel the context deliberately
 	// and expect `context canceled` error in next iteration of `for` loop.
 	for {

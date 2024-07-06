@@ -31,7 +31,6 @@ import (
 )
 
 func TestRemovedForeignKeyNames(t *testing.T) {
-
 	tcases := []struct {
 		before string
 		after  string

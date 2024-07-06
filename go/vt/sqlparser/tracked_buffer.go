@@ -335,7 +335,6 @@ func UnescapedString(node SQLNode) string {
 	buf.SetEscapeNoIdentifier()
 	node.Format(buf)
 	return buf.String()
-
 }
 
 // CanonicalString returns a canonical string representation of an SQLNode where all identifiers

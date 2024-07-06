@@ -18,10 +18,9 @@ package zk2topo
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"path"
-
-	"context"
 
 	"github.com/z-division/go-zookeeper/zk"
 

@@ -193,7 +193,7 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 }
 
 func TestQueryPlanCache(t *testing.T) {
-	var cachedPlanSize = int((&tabletserver.TabletPlan{}).CachedSize(true))
+	cachedPlanSize := int((&tabletserver.TabletPlan{}).CachedSize(true))
 
 	// sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
 	framework.Server.WaitForSchemaReset(2 * time.Second)

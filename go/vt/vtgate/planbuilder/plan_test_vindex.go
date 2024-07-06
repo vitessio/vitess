@@ -36,9 +36,11 @@ func (*hashIndex) NeedsVCursor() bool { return false }
 func (*hashIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*hashIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
+
 func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &hashIndex{name: name}, nil
 }
@@ -53,18 +55,23 @@ func (*lookupIndex) NeedsVCursor() bool { return false }
 func (*lookupIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*lookupIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
+
 func (*lookupIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
 	return nil
 }
+
 func (*lookupIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
 	return nil
 }
+
 func (*lookupIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
+
 func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &lookupIndex{name: name}, nil
 }
@@ -87,21 +94,27 @@ func (*nameLkpIndex) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.Com
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*nameLkpIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
+
 func (*nameLkpIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
 	return nil
 }
+
 func (*nameLkpIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
 	return nil
 }
+
 func (*nameLkpIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
+
 func (*nameLkpIndex) Query() (string, []string) {
 	return "select name, keyspace_id from name_user_vdx where name in ::name", []string{"name"}
 }
+
 func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -116,10 +129,12 @@ func newNameLkpIndex(name string, m map[string]string) (vindexes.Vindex, error) 
 	return vdx, nil
 }
 
-var _ vindexes.Vindex = (*nameLkpIndex)(nil)
-var _ vindexes.Lookup = (*nameLkpIndex)(nil)
-var _ vindexes.LookupPlanable = (*nameLkpIndex)(nil)
-var _ vindexes.LookupBackfill = (*nameLkpIndex)(nil)
+var (
+	_ vindexes.Vindex         = (*nameLkpIndex)(nil)
+	_ vindexes.Lookup         = (*nameLkpIndex)(nil)
+	_ vindexes.LookupPlanable = (*nameLkpIndex)(nil)
+	_ vindexes.LookupBackfill = (*nameLkpIndex)(nil)
+)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }
@@ -131,24 +146,31 @@ func (*costlyIndex) NeedsVCursor() bool { return false }
 func (*costlyIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*costlyIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
+
 func (*costlyIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
 	return nil
 }
+
 func (*costlyIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
 	return nil
 }
+
 func (*costlyIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
+
 func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &costlyIndex{name: name}, nil
 }
 
-var _ vindexes.Vindex = (*costlyIndex)(nil)
-var _ vindexes.Lookup = (*costlyIndex)(nil)
+var (
+	_ vindexes.Vindex = (*costlyIndex)(nil)
+	_ vindexes.Lookup = (*costlyIndex)(nil)
+)
 
 // multiColIndex satisfies multi column vindex.
 type multiColIndex struct{ name string }
@@ -160,6 +182,7 @@ func (*multiColIndex) NeedsVCursor() bool { return false }
 func (*multiColIndex) Map(ctx context.Context, vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
+
 func (*multiColIndex) Verify(ctx context.Context, vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -187,21 +210,27 @@ func (*unqLkpVdxBackfill) GetCommitOrder() vtgatepb.CommitOrder { return vtgatep
 func (*unqLkpVdxBackfill) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*unqLkpVdxBackfill) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
+
 func (*unqLkpVdxBackfill) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
 	return nil
 }
+
 func (*unqLkpVdxBackfill) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
 	return nil
 }
+
 func (*unqLkpVdxBackfill) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
+
 func (*unqLkpVdxBackfill) Query() (string, []string) {
 	return "select unq_key, keyspace_id from unq_lkp_idx where unq_key in ::unq_key", []string{"unq_key"}
 }
+
 func (*unqLkpVdxBackfill) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -218,10 +247,12 @@ func newUnqLkpVdxBackfill(name string, m map[string]string) (vindexes.Vindex, er
 	return vdx, nil
 }
 
-var _ vindexes.Vindex = (*unqLkpVdxBackfill)(nil)
-var _ vindexes.Lookup = (*unqLkpVdxBackfill)(nil)
-var _ vindexes.LookupPlanable = (*unqLkpVdxBackfill)(nil)
-var _ vindexes.LookupBackfill = (*unqLkpVdxBackfill)(nil)
+var (
+	_ vindexes.Vindex         = (*unqLkpVdxBackfill)(nil)
+	_ vindexes.Lookup         = (*unqLkpVdxBackfill)(nil)
+	_ vindexes.LookupPlanable = (*unqLkpVdxBackfill)(nil)
+	_ vindexes.LookupBackfill = (*unqLkpVdxBackfill)(nil)
+)
 
 func init() {
 	vindexes.Register("hash_test", newHashIndex)

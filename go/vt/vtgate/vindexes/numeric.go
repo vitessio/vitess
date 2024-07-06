@@ -97,7 +97,7 @@ func (vind *Numeric) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Va
 
 // ReverseMap returns the associated ids for the ksids.
 func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
-	var reverseIds = make([]sqltypes.Value, len(ksids))
+	reverseIds := make([]sqltypes.Value, len(ksids))
 	for i, keyspaceID := range ksids {
 		if len(keyspaceID) != 8 {
 			return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspaceId is not 8: %d", len(keyspaceID))

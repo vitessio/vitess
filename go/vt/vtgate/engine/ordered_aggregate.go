@@ -355,6 +355,7 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 	}
 	return currentKey, false, nil
 }
+
 func aggregateParamsToString(in any) string {
 	return in.(*AggregateParams).String()
 }

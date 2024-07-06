@@ -466,7 +466,6 @@ func resolveShards(ctx context.Context, vcursor VCursor, vindex vindexes.SingleC
 	destinations, err := vindex.Map(ctx, vcursor, vindexKeys)
 	if err != nil {
 		return nil, nil, err
-
 	}
 
 	// And use the Resolver to map to ResolvedShards.

@@ -78,10 +78,12 @@ type TestState struct {
 
 var testState = &TestState{}
 
-var positions map[string]string
-var allEvents []*binlogdatapb.VEvent
-var muAllEvents sync.Mutex
-var callbacks map[string]func()
+var (
+	positions   map[string]string
+	allEvents   []*binlogdatapb.VEvent
+	muAllEvents sync.Mutex
+	callbacks   map[string]func()
+)
 
 func TestVStreamCopyFilterValidations(t *testing.T) {
 	if testing.Short() {
@@ -103,7 +105,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	var getUVStreamer = func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
+	getUVStreamer := func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
 		uvs := &uvstreamer{
 			ctx:        ctx,
 			cancel:     cancel,
@@ -119,7 +121,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 		}
 		return uvs
 	}
-	var testFilter = func(rules []*binlogdatapb.Rule, tablePKs []*binlogdatapb.TableLastPK, expected []string, expectedError string) {
+	testFilter := func(rules []*binlogdatapb.Rule, tablePKs []*binlogdatapb.TableLastPK, expected []string, expectedError string) {
 		uvs := getUVStreamer(&binlogdatapb.Filter{Rules: rules}, tablePKs)
 		if expectedError == "" {
 			require.NoError(t, uvs.init())
@@ -217,7 +219,6 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		log.Infof("Position after second insert into t1: %s", primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted row for fast forward to find, unlocked tables")
-
 	}
 
 	callbacks[fmt.Sprintf("OTHER.*%s t3", copyPhaseStart)] = func() {
@@ -232,7 +233,6 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		log.Infof("Position after third insert into t1: %s", primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted rows for fast forward to find, unlocked tables")
-
 	}
 
 	callbacks["COPY_COMPLETED"] = func() {
@@ -454,7 +454,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 	pos := ""
 	go func() {
 		err := engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
-			//t.Logf("Received events: %v", evs)
+			// t.Logf("Received events: %v", evs)
 			muAllEvents.Lock()
 			defer muAllEvents.Unlock()
 			for _, ev := range evs {
@@ -503,7 +503,7 @@ var expectedEvents = []string{
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"11110\"}}}",
 	"type:GTID",
-	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
+	"type:COMMIT", // insert for t2 done along with t1 does not generate an event since t2 is not yet copied
 	fmt.Sprintf("type:OTHER gtid:\"%s t2\"", copyPhaseStart),
 	"type:BEGIN",
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",

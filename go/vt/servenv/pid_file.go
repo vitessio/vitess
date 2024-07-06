@@ -34,7 +34,7 @@ func init() {
 			return
 		}
 
-		file, err := os.OpenFile(pidFile, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+		file, err := os.OpenFile(pidFile, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
 		if err != nil {
 			log.Errorf("Unable to create pid file '%s': %v", pidFile, err)
 			return

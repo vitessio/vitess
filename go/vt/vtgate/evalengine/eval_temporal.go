@@ -413,5 +413,7 @@ func evalToDate(e eval, now time.Time, allowZero bool) *evalTemporal {
 	return nil
 }
 
-var _ eval = (*evalTemporal)(nil)
-var _ hashable = (*evalTemporal)(nil)
+var (
+	_ eval     = (*evalTemporal)(nil)
+	_ hashable = (*evalTemporal)(nil)
+)

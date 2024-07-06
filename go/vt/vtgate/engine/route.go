@@ -42,12 +42,10 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
-var (
-	replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
-		"ReplicaWarmingReadsMirrored",
-		"Number of reads mirrored to replicas to warm their bufferpools",
-		[]string{"Keyspace"})
-)
+var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
+	"ReplicaWarmingReadsMirrored",
+	"Number of reads mirrored to replicas to warm their bufferpools",
+	[]string{"Keyspace"})
 
 // Route represents the instructions to route a read query to
 // one or many vttablets.
@@ -109,9 +107,7 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 	}
 }
 
-var (
-	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
-)
+var partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {

@@ -159,7 +159,6 @@ func FilterStatsByReplicationLag(tabletHealthList []*TabletHealth) []*TabletHeal
 		res = filterStatsByLagWithLegacyAlgorithm(res)
 	}
 	return res
-
 }
 
 func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
@@ -172,7 +171,8 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 		// Save the current replication lag for a stable sort later.
 		list = append(list, tabletLagSnapshot{
 			ts:     ts,
-			replag: ts.Stats.ReplicationLagSeconds})
+			replag: ts.Stats.ReplicationLagSeconds,
+		})
 	}
 
 	// Sort by replication lag.
@@ -235,7 +235,8 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 		if !IsReplicationLagVeryHigh(ts) {
 			snapshots = append(snapshots, tabletLagSnapshot{
 				ts:     ts,
-				replag: ts.Stats.ReplicationLagSeconds})
+				replag: ts.Stats.ReplicationLagSeconds,
+			})
 		}
 	}
 	if len(snapshots) == 0 {
@@ -249,7 +250,8 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 		for _, ts := range list {
 			snapshots = append(snapshots, tabletLagSnapshot{
 				ts:     ts,
-				replag: ts.Stats.ReplicationLagSeconds})
+				replag: ts.Stats.ReplicationLagSeconds,
+			})
 		}
 	}
 

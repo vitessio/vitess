@@ -25,11 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-var (
-	// socketFile has the flag used when calling
-	// RegisterDefaultSocketFileFlags.
-	socketFile string
-)
+// socketFile has the flag used when calling
+// RegisterDefaultSocketFileFlags.
+var socketFile string
 
 // serveSocketFile listen to the named socket and serves RPCs on it.
 func serveSocketFile() {

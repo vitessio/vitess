@@ -68,7 +68,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&keyPath, "topo_zk_tls_key", keyPath, "the key to use to connect to the zk topo server, enables TLS")
 	fs.StringVar(&caPath, "topo_zk_tls_ca", caPath, "the server ca to use to validate servers when connecting to the zk topo server")
 	fs.StringVar(&authFile, "topo_zk_auth_file", authFile, "auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass")
-
 }
 
 // Time returns a time.Time from a ZK int64 milliseconds since Epoch time.
@@ -234,7 +233,6 @@ func (c *ZkConn) Close() error {
 //
 // https://issues.apache.org/jira/browse/ZOOKEEPER-22
 func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error) (err error) {
-
 	// Handle concurrent access to a Zookeeper server here.
 	err = c.sem.Acquire(ctx, 1)
 	if err != nil {

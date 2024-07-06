@@ -109,7 +109,7 @@ func TestStreamConsolidation(t *testing.T) {
 		framework.Server.SetStreamConsolidationBlocking(false)
 	}()
 
-	var start = make(chan struct{})
+	start := make(chan struct{})
 	var finish sync.WaitGroup
 
 	// Spawn N workers at the same time to stress test the stream consolidator
@@ -178,7 +178,8 @@ func TestStreamBigData(t *testing.T) {
 		"10",
 		"10",
 		"10",
-		"10"}
+		"10",
+	}
 	if !reflect.DeepEqual(row10, want) {
 		t.Errorf("Row10: \n%#v, want \n%#v", row10, want)
 	}
@@ -226,7 +227,8 @@ func TestStreamBigDataInTx(t *testing.T) {
 		"10",
 		"10",
 		"10",
-		"10"}
+		"10",
+	}
 	if !reflect.DeepEqual(row10, want) {
 		t.Errorf("Row10: \n%#v, want \n%#v", row10, want)
 	}

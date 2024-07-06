@@ -92,8 +92,7 @@ var (
 // it implements the BackupEngine interface and contains all the logic
 // required to implement a backup/restore by copying files from and to
 // the correct location / storage bucket
-type BuiltinBackupEngine struct {
-}
+type BuiltinBackupEngine struct{}
 
 // builtinBackupManifest represents the backup. It lists all the files, the
 // Position that the backup was taken at, the compression engine used, etc.
@@ -393,7 +392,6 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 // executeFullBackup returns a BackupResult that indicates the usability of the backup,
 // and an overall error.
 func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
-
 	if params.IncrementalFromPos != "" {
 		return be.executeIncrementalBackup(ctx, params, bh)
 	}
@@ -968,7 +966,6 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 // we return the position from which replication should start
 // otherwise an error is returned
 func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-
 	var bm builtinBackupManifest
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return nil, err
@@ -1108,7 +1105,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Create the uncompresser if needed.
 	if !bm.SkipCompress {
 		var decompressor io.ReadCloser
-		var deCompressionEngine = bm.CompressionEngine
+		deCompressionEngine := bm.CompressionEngine
 
 		if deCompressionEngine == "" {
 			// for backward compatibility

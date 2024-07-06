@@ -350,7 +350,6 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
-
 }
 
 func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
@@ -585,7 +584,6 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} sharded.20-: dummy_update {} true false`,
 	})
-
 }
 
 func TestUpdateIn(t *testing.T) {
@@ -599,7 +597,8 @@ func TestUpdateIn(t *testing.T) {
 				Values: []evalengine.Expr{evalengine.TupleExpr{
 					evalengine.NewLiteralInt(1),
 					evalengine.NewLiteralInt(2),
-				}}},
+				}},
+			},
 			Query: "dummy_update",
 		},
 	}
@@ -624,7 +623,8 @@ func TestUpdateInStreamExecute(t *testing.T) {
 			Values: []evalengine.Expr{evalengine.TupleExpr{
 				evalengine.NewLiteralInt(1),
 				evalengine.NewLiteralInt(2),
-			}}},
+			}},
+		},
 		Query: "dummy_update",
 	}}
 
@@ -935,7 +935,8 @@ func TestUpdateInUnique(t *testing.T) {
 					evalengine.NewLiteralInt(1),
 					evalengine.NewLiteralInt(2),
 					evalengine.NewLiteralInt(4),
-				}}},
+				}},
+			},
 			Query: "update t set n = 'b' where id in ::__vals",
 		},
 	}

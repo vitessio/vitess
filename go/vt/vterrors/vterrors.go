@@ -100,8 +100,10 @@ import (
 
 // logErrStacks controls whether printing errors includes the
 // embedded stack trace in the output.
-var logErrStacks bool
-var muLogErrStacks sync.Mutex
+var (
+	logErrStacks   bool
+	muLogErrStacks sync.Mutex
+)
 
 func getLogErrStacks() bool {
 	muLogErrStacks.Lock()

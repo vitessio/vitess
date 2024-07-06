@@ -41,13 +41,11 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var (
-	// MessageStats tracks stats for messages.
-	MessageStats = stats.NewGaugesWithMultiLabels(
-		"Messages",
-		"Stats for messages",
-		[]string{"TableName", "Metric"})
-)
+// MessageStats tracks stats for messages.
+var MessageStats = stats.NewGaugesWithMultiLabels(
+	"Messages",
+	"Stats for messages",
+	[]string{"TableName", "Metric"})
 
 type QueryGenerator interface {
 	GenerateAckQuery(ids []string) (string, map[string]*querypb.BindVariable)

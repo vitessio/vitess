@@ -33,9 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var (
-	leaseTTL = 30
-)
+var leaseTTL = 30
 
 func init() {
 	for _, cmd := range topo.FlagBinaries {

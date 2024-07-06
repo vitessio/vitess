@@ -42,7 +42,6 @@ var (
 func init() {
 	servenv.OnParseFor("vttablet", registerFlags)
 	servenv.OnParseFor("vtcombo", registerFlags)
-
 }
 
 func registerFlags(fs *pflag.FlagSet) {

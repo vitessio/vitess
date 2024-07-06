@@ -202,7 +202,8 @@ func TestAndExpressions(t *testing.T) {
 			name:           "empty input",
 			expressions:    nil,
 			expectedOutput: nil,
-		}, {
+		},
+		{
 			name: "two equal inputs",
 			expressions: Exprs{
 				greaterThanExpr,

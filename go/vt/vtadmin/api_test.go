@@ -2928,7 +2928,6 @@ func TestGetSrvVSchema(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-
 			name:       "cell doesn't exist",
 			srvVSchema: nil,
 			req: &vtadminpb.GetSrvVSchemaRequest{

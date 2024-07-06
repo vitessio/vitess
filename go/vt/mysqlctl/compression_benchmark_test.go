@@ -150,7 +150,7 @@ func downloadData(url, localPath string, maxBytes int64) error {
 	}
 
 	// Create a local file to write the HTTP response to.
-	file, err := os.OpenFile(localPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(localPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o666)
 	if err != nil {
 		return err
 	}

@@ -17,10 +17,9 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"fmt"
 	"testing"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 )

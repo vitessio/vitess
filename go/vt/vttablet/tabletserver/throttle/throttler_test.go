@@ -75,8 +75,7 @@ func (c *fakeTMClient) AppNames() []string {
 	return c.appNames
 }
 
-type FakeTopoServer struct {
-}
+type FakeTopoServer struct{}
 
 func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
 	tabletType := topodatapb.TabletType_PRIMARY
@@ -221,7 +220,6 @@ func TestIsAppThrottled(t *testing.T) {
 }
 
 func TestIsAppExempted(t *testing.T) {
-
 	throttler := Throttler{
 		throttledApps:   cache.New(cache.NoExpiration, 0),
 		heartbeatWriter: &FakeHeartbeatWriter{},

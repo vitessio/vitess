@@ -88,7 +88,7 @@ func (ts *Server) GetExternalVitessCluster(ctx context.Context, clusterName stri
 
 // UpdateExternalVitessCluster updates the topo record for the named vitess cluster
 func (ts *Server) UpdateExternalVitessCluster(ctx context.Context, vc *ExternalVitessClusterInfo) error {
-	//FIXME: check for cluster lock
+	// FIXME: check for cluster lock
 	data, err := vc.ExternalVitessCluster.MarshalVT()
 	if err != nil {
 		return err

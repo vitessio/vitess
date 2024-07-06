@@ -35,9 +35,7 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-var (
-	sanitizeLogMessages = false
-)
+var sanitizeLogMessages = false
 
 func init() {
 	for _, cmd := range []string{"vtcombo", "vtctld"} {

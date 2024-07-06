@@ -123,11 +123,15 @@ func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings 
 
 // _______________________________________________
 
-type PlanCacheKey = theine.StringKey
-type PlanCache = theine.Store[PlanCacheKey, *TabletPlan]
+type (
+	PlanCacheKey = theine.StringKey
+	PlanCache    = theine.Store[PlanCacheKey, *TabletPlan]
+)
 
-type SettingsCacheKey = theine.StringKey
-type SettingsCache = theine.Store[SettingsCacheKey, *smartconnpool.Setting]
+type (
+	SettingsCacheKey = theine.StringKey
+	SettingsCache    = theine.Store[SettingsCacheKey, *smartconnpool.Setting]
+)
 
 type currentSchema struct {
 	tables map[string]*schema.Table
@@ -217,7 +221,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	// cache for connection settings: default to 1/4th of the size for the query cache and do
 	// not use a doorkeeper because custom connection settings are rarely one-off and we always
 	// want to cache them
-	var settingsCacheMemory = config.QueryCacheMemory / 4
+	settingsCacheMemory := config.QueryCacheMemory / 4
 	qe.settings = theine.NewStore[SettingsCacheKey, *smartconnpool.Setting](settingsCacheMemory, false)
 
 	qe.schema.Store(&currentSchema{
@@ -416,7 +420,6 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	}
 
 	splan, err := planbuilder.BuildStreaming(statement, curSchema.tables)
-
 	if err != nil {
 		return nil, err
 	}

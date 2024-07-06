@@ -316,14 +316,14 @@ func (mysqld *Mysqld) SetReadOnly(ctx context.Context, on bool) error {
 func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
 	//  return function for switching `OFF` super_read_only
 	var resetFunc ResetSuperReadOnlyFunc
-	var disableFunc = func() error {
+	disableFunc := func() error {
 		query := "SET GLOBAL super_read_only = 'OFF'"
 		err := mysqld.ExecuteSuperQuery(context.Background(), query)
 		return err
 	}
 
 	//  return function for switching `ON` super_read_only.
-	var enableFunc = func() error {
+	enableFunc := func() error {
 		query := "SET GLOBAL super_read_only = 'ON'"
 		err := mysqld.ExecuteSuperQuery(context.Background(), query)
 		return err

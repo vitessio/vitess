@@ -64,6 +64,7 @@ func TestGetGCUUID(t *testing.T) {
 	}
 	assert.Equal(t, count, len(uuids))
 }
+
 func TestGetActionStr(t *testing.T) {
 	tt := []struct {
 		statement string

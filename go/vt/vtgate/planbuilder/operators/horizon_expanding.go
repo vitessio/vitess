@@ -293,7 +293,6 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 		}
 		return ae, nil
 	})
-
 	if err != nil {
 		// if we have unexpanded expressions, we take this shortcut and hope we don't need any offsets from this plan
 		return newStarProjection(src, qp)

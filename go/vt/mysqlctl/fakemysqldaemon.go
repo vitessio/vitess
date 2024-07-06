@@ -69,7 +69,7 @@ type FakeMysqlDaemon struct {
 	// Replicating is updated when calling StartReplication /
 	// StopReplication (it is not used at all when calling
 	// ReplicationStatus, it is the test owner responsibility
-	//to have these two match)
+	// to have these two match)
 	Replicating bool
 
 	// IOThreadRunning is always true except in one testcase where
@@ -667,7 +667,8 @@ func (fmd *FakeMysqlDaemon) ApplySchemaChange(ctx context.Context, dbName string
 
 	return &tabletmanagerdatapb.SchemaChangeResult{
 		BeforeSchema: beforeSchema,
-		AfterSchema:  afterSchema}, nil
+		AfterSchema:  afterSchema,
+	}, nil
 }
 
 // GetAppConnection is part of the MysqlDaemon interface.

@@ -710,16 +710,18 @@ func TestVDiffUnsharded(t *testing.T) {
 			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
-					Source: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-						"c2": sqltypes.NewInt64(3),
-					},
+					Source: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+							"c2": sqltypes.NewInt64(3),
+						},
 						Query: "",
 					},
-					Target: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-						"c2": sqltypes.NewInt64(4),
-					},
+					Target: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+							"c2": sqltypes.NewInt64(4),
+						},
 						Query: "",
 					},
 				},
@@ -747,14 +749,16 @@ func TestVDiffUnsharded(t *testing.T) {
 			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
-					Source: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-					},
+					Source: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+						},
 						Query: "",
 					},
-					Target: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-					},
+					Target: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+						},
 						Query: "",
 					},
 				},
@@ -782,16 +786,18 @@ func TestVDiffUnsharded(t *testing.T) {
 			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
-					Source: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-						"c2": sqltypes.NewInt64(3),
-					},
+					Source: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+							"c2": sqltypes.NewInt64(3),
+						},
 						Query: "select c1, c2 from t1 where c1=2;",
 					},
-					Target: &RowDiff{Row: map[string]sqltypes.Value{
-						"c1": sqltypes.NewInt64(2),
-						"c2": sqltypes.NewInt64(4),
-					},
+					Target: &RowDiff{
+						Row: map[string]sqltypes.Value{
+							"c1": sqltypes.NewInt64(2),
+							"c2": sqltypes.NewInt64(4),
+						},
 						Query: "select c1, c2 from t1 where c1=2;",
 					},
 				},
@@ -823,20 +829,22 @@ func TestVDiffSharded(t *testing.T) {
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-			Name:              "t1",
-			Columns:           []string{"c1", "c2"},
-			PrimaryKeyColumns: []string{"c1"},
-			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
-			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
-		},
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2"},
+				PrimaryKeyColumns: []string{"c1"},
+				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+				Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
+			},
 			{
 				Name:              "_t1_gho",
 				Columns:           []string{"c1", "c2", "c3"},
 				PrimaryKeyColumns: []string{"c2"},
 				Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
 				Schema:            "create table _t1_gho(c1 bigint, c2 bigint, c3 bigint, primary key(c2))",
-			}},
+			},
+		},
 	}
 
 	env.tmc.schema = schm
@@ -1052,7 +1060,6 @@ func TestVDiffReplicationWait(t *testing.T) {
 }
 
 func TestVDiffFindPKs(t *testing.T) {
-
 	testcases := []struct {
 		name         string
 		table        *tabletmanagerdatapb.TableDefinition
@@ -1126,7 +1133,6 @@ func TestVDiffFindPKs(t *testing.T) {
 			require.EqualValues(t, tc.tdOut, tc.tdIn)
 		})
 	}
-
 }
 
 func TestVDiffPlanInclude(t *testing.T) {

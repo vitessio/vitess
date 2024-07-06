@@ -100,7 +100,6 @@ func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.T
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
 		typ, _ := ctx.TypeForExpr(aggr.Func.GetArg())
 		return typ
-
 	}
 	return evalengine.Type{}
 }

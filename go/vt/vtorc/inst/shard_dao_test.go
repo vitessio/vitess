@@ -56,7 +56,8 @@ func TestSaveAndReadShard(t *testing.T) {
 			},
 			primaryTimestampWanted: "2023-07-24 06:00:05.000001 +0000 UTC",
 			primaryAliasWanted:     "zone1-0000000301",
-		}, {
+		},
+		{
 			name:         "Success with empty primary alias",
 			keyspaceName: "ks1",
 			shardName:    "-",
@@ -65,7 +66,8 @@ func TestSaveAndReadShard(t *testing.T) {
 			},
 			primaryTimestampWanted: "2023-07-24 05:00:05.000001 +0000 UTC",
 			primaryAliasWanted:     "",
-		}, {
+		},
+		{
 			name:         "Success with empty primary term start time",
 			keyspaceName: "ks1",
 			shardName:    "80-",

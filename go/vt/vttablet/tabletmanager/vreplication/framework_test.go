@@ -486,7 +486,7 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		globalDBQueries <- query
 	} else if testSetForeignKeyQueries && strings.Contains(query, "set foreign_key_checks") {
 		globalDBQueries <- query
-	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
+	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { // allow select/set for foreign_key_checks
 		globalDBQueries <- query
 	}
 	return qr, err
@@ -757,8 +757,8 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 }
 
 func compareQueryResults(t *testing.T, query string, values [][]string,
-	exec func(ctx context.Context, query string) (*sqltypes.Result, error)) error {
-
+	exec func(ctx context.Context, query string) (*sqltypes.Result, error),
+) error {
 	t.Helper()
 	qr, err := exec(context.Background(), query)
 	if err != nil {

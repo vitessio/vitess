@@ -514,7 +514,6 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
@@ -1221,7 +1220,6 @@ func TestResolveVStreamParams(t *testing.T) {
 			require.Equal(t, minimizeSkew, flags2.MinimizeSkew)
 		})
 	}
-
 }
 
 func TestVStreamIdleHeartbeat(t *testing.T) {

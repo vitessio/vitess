@@ -83,7 +83,6 @@ func (upd *Update) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 		return err
 	}
 	return callback(res)
-
 }
 
 // GetFields fetches the field info.

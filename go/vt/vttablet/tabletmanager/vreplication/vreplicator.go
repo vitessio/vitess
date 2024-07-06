@@ -237,7 +237,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	if err := vr.getSettingFKCheck(); err != nil {
 		return err
 	}
-	//defensive guard, should be a no-op since it should happen after copy is done
+	// defensive guard, should be a no-op since it should happen after copy is done
 	defer vr.resetFKCheckAfterCopy(vr.dbClient)
 
 	vr.throttleUpdatesRateLimiter = timer.NewRateLimiter(time.Second)

@@ -32,7 +32,7 @@ import (
 )
 
 func TestHashCodes(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		static, dynamic sqltypes.Value
 		equal           bool
 		err             error
@@ -111,7 +111,7 @@ func (e equality) String() string {
 }
 
 func TestHashCodes128(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		static, dynamic sqltypes.Value
 		equal           bool
 		err             error

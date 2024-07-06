@@ -89,10 +89,11 @@ func TestUpdateEqual(t *testing.T) {
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.Queries = nil
-	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname|name_lastname_keyspace_id_map", "int64|int32|varchar|int64"),
-		"1|1|foo|0",
-	),
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|name|lastname|name_lastname_keyspace_id_map", "int64|int32|varchar|int64"),
+			"1|1|foo|0",
+		),
 	})
 
 	_, err = executorExec(ctx, executor, session, "update user2 set `name`='myname', lastname='mylastname' where id = 1", nil)
@@ -192,7 +193,8 @@ func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
 		}, {
 			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2",
 			BindVariables: map[string]*querypb.BindVariable{},
-		}}
+		},
+	}
 
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, wantQueries)
@@ -725,10 +727,11 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.Queries = nil
 	sbclookup.Queries = nil
-	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
-		"1|1|foo",
-	),
+	sbc.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
+			"1|1|foo",
+		),
 	})
 	_, err = executorExec(ctx, executor, session, "delete from user2 where id = 1", nil)
 	require.NoError(t, err)
@@ -820,7 +823,8 @@ func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {
 		}, {
 			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
-		}}
+		},
+	}
 
 	vars, _ := sqltypes.BuildBindVariable([]any{
 		sqltypes.NewInt64(1),
@@ -880,7 +884,8 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
 			},
-		}}
+		},
+	}
 
 	vars, _ := sqltypes.BuildBindVariable([]any{
 		sqltypes.NewInt64(1),
@@ -943,7 +948,8 @@ func TestDeleteEqualWithNoVerifyAndWriteOnlyLookupUniqueVindex(t *testing.T) {
 		}, {
 			Sql:           "delete from t2_lookup where wo_lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
-		}}
+		},
+	}
 
 	bq1 := &querypb.BoundQuery{
 		Sql: "delete from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
@@ -1030,7 +1036,8 @@ func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
 		}, {
 			Sql:           "delete from t2_lookup where wo_lu_col = 1 and lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
-		}}
+		},
+	}
 
 	vars, _ := sqltypes.BuildBindVariable([]any{
 		sqltypes.NewInt64(1),
@@ -1115,7 +1122,8 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
 			},
-		}}
+		},
+	}
 
 	vars, _ := sqltypes.BuildBindVariable([]any{
 		sqltypes.NewInt64(1),
@@ -1414,7 +1422,6 @@ func TestInsertShardedKeyrange(t *testing.T) {
 }
 
 func TestInsertShardedAutocommitLookup(t *testing.T) {
-
 	vschema := `
 {
 	"sharded": true,
@@ -1516,22 +1523,28 @@ func TestInsertShardedIgnore(t *testing.T) {
 	uint1 := sqltypes.Uint64BindVariable(1)
 	uint3 := sqltypes.Uint64BindVariable(3)
 
-	var1 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+	var1 := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
 		Values: []*querypb.Value{{Type: int1.Type, Value: int1.Value}},
 	}
-	var2 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+	var2 := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
 		Values: []*querypb.Value{{Type: int2.Type, Value: int2.Value}},
 	}
-	var3 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+	var3 := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
 		Values: []*querypb.Value{{Type: int3.Type, Value: int3.Value}},
 	}
-	var4 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+	var4 := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
 		Values: []*querypb.Value{{Type: int4.Type, Value: int4.Value}},
 	}
-	var5 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+	var5 := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
 		Values: []*querypb.Value{{Type: int5.Type, Value: int5.Value}},
 	}
-	var6 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+	var6 := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
 		Values: []*querypb.Value{{Type: int6.Type, Value: int6.Value}},
 	}
 	fields := sqltypes.MakeTestFields("b|a", "int64|int64")
@@ -2111,7 +2124,8 @@ func TestInsertPartialFail2(t *testing.T) {
 		}, {
 			Sql:           "rollback to x",
 			BindVariables: map[string]*querypb.BindVariable{},
-		}}
+		},
+	}
 	assertQueriesWithSavepoint(t, sbc1, wantQueries)
 }
 
@@ -2351,7 +2365,6 @@ func TestInsertBadAutoInc(t *testing.T) {
 }
 
 func TestKeyDestRangeQuery(t *testing.T) {
-
 	type testCase struct {
 		inputQuery, targetString string
 		expectedSbc1Query        string
@@ -2473,6 +2486,7 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 	assertQueries(t, sbc2, nil)
 	assertQueries(t, sbc1, nil)
 }
+
 func TestInsertShardedWithPrepare(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 
@@ -2531,7 +2545,8 @@ func TestUpdateLastInsertID(t *testing.T) {
 		Sql: "update `user` set a = :__lastInsertId where id = :id /* INT64 */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__lastInsertId": sqltypes.Uint64BindVariable(43),
-			"id":             sqltypes.Int64BindVariable(1)},
+			"id":             sqltypes.Int64BindVariable(1),
+		},
 	}}
 
 	assertQueries(t, sbc1, wantQueries)
@@ -3111,7 +3126,8 @@ func TestDeleteMultiTable(t *testing.T) {
 		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
 		bq, bq, bq, bq, bq, bq, bq, bq,
 		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
-		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), int64(1)}), "dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}}}
+		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), int64(1)}), "dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+	}
 	assertQueries(t, sbc1, wantQueries)
 
 	wantQueries = []*querypb.BoundQuery{
@@ -3126,7 +3142,8 @@ func TestDeleteMultiTable(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"name":    sqltypes.StringBindVariable("foo"),
 			"user_id": sqltypes.Uint64BindVariable(1),
-		}}
+		},
+	}
 	wantQueries = []*querypb.BoundQuery{
 		bq, bq, bq, bq, bq, bq, bq, bq,
 	}

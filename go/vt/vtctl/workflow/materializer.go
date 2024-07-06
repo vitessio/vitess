@@ -319,7 +319,6 @@ func (mz *materializer) deploySchema() error {
 					}
 					if sourceTableName.Name.String() != ts.TargetTable {
 						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
-
 					}
 				}
 

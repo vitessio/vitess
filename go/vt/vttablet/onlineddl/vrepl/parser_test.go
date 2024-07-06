@@ -58,7 +58,6 @@ func TestParseAlterStatementTrivialRename(t *testing.T) {
 }
 
 func TestParseAlterStatementWithAutoIncrement(t *testing.T) {
-
 	statements := []string{
 		"auto_increment=7",
 		"auto_increment = 7",
@@ -120,7 +119,6 @@ func TestParseAlterStatementNonTrivial(t *testing.T) {
 }
 
 func TestParseAlterStatementDroppedColumns(t *testing.T) {
-
 	{
 		parser := NewAlterTableParser()
 		statement := "alter table t drop column b"

@@ -364,7 +364,8 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 					sqlparser.NewColName("col"),
 					&sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")},
 				},
-			}}},
+			}},
+		},
 	)
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1675,12 +1676,19 @@ func TestInsertSelectSimple(t *testing.T) {
 			"sharded": {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
-					"hash": {Type: "hash"}},
+					"hash": {Type: "hash"},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
-							Columns: []string{"id"}}}}}}}}
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
@@ -1691,7 +1699,9 @@ func TestInsertSelectSimple(t *testing.T) {
 		FieldQuery: "dummy_field_query",
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
-			Keyspace: ks.Keyspace}}
+			Keyspace: ks.Keyspace,
+		},
+	}
 	ins := newInsertSelect(false, ks.Keyspace, ks.Tables["t1"], "prefix ", nil, [][]int{{1}}, rb)
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -1703,7 +1713,8 @@ func TestInsertSelectSimple(t *testing.T) {
 				"varchar|int64"),
 			"a|1",
 			"a|3",
-			"b|2")}
+			"b|2"),
+	}
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -1720,7 +1731,8 @@ func TestInsertSelectSimple(t *testing.T) {
 			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1"` +
 			` _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
 			`sharded.-20: prefix values (:_c1_0, :_c1_1)` +
-			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
+			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`,
+	})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -1740,7 +1752,8 @@ func TestInsertSelectSimple(t *testing.T) {
 			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1"` +
 			` _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
 			`sharded.-20: prefix values (:_c1_0, :_c1_1)` +
-			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
+			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`,
+	})
 }
 
 func TestInsertSelectOwned(t *testing.T) {
@@ -1755,15 +1768,25 @@ func TestInsertSelectOwned(t *testing.T) {
 						Params: map[string]string{
 							"table": "lkp1",
 							"from":  "from",
-							"to":    "toc"},
-						Owner: "t1"}},
+							"to":    "toc",
+						},
+						Owner: "t1",
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
-							Columns: []string{"id"}}, {
+							Columns: []string{"id"},
+						}, {
 							Name:    "onecol",
-							Columns: []string{"c3"}}}}}}}}
+							Columns: []string{"c3"},
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
@@ -1773,7 +1796,9 @@ func TestInsertSelectOwned(t *testing.T) {
 		FieldQuery: "dummy_field_query",
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
-			Keyspace: ks.Keyspace}}
+			Keyspace: ks.Keyspace,
+		},
+	}
 
 	ins := newInsertSelect(
 		false,
@@ -1782,8 +1807,9 @@ func TestInsertSelectOwned(t *testing.T) {
 		"prefix ",
 		nil,
 		[][]int{
-			{1},  // The primary vindex has a single column as sharding key
-			{0}}, // the onecol vindex uses the 'name' column
+			{1}, // The primary vindex has a single column as sharding key
+			{0},
+		}, // the onecol vindex uses the 'name' column
 		rb,
 	)
 
@@ -1796,7 +1822,8 @@ func TestInsertSelectOwned(t *testing.T) {
 				"varchar|int64"),
 			"a|1",
 			"a|3",
-			"b|2")}
+			"b|2"),
+	}
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -1821,7 +1848,8 @@ func TestInsertSelectOwned(t *testing.T) {
 			// next we insert one row on the -20 shard
 			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
 			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} ` +
-			`true false`})
+			`true false`,
+	})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -1849,7 +1877,8 @@ func TestInsertSelectOwned(t *testing.T) {
 			// next we insert one row on the -20 shard
 			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
 			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} ` +
-			`true false`})
+			`true false`,
+	})
 }
 
 func TestInsertSelectGenerate(t *testing.T) {
@@ -1859,12 +1888,20 @@ func TestInsertSelectGenerate(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"hash": {
-						Type: "hash"}},
+						Type: "hash",
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
-							Columns: []string{"id"}}}}}}}}
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
@@ -1874,7 +1911,9 @@ func TestInsertSelectGenerate(t *testing.T) {
 		FieldQuery: "dummy_field_query",
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
-			Keyspace: ks.Keyspace}}
+			Keyspace: ks.Keyspace,
+		},
+	}
 
 	ins := newInsertSelect(
 		false,
@@ -1951,12 +1990,20 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"hash": {
-						Type: "hash"}},
+						Type: "hash",
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
-							Columns: []string{"id"}}}}}}}}
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
@@ -1966,7 +2013,9 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		FieldQuery: "dummy_field_query",
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
-			Keyspace: ks.Keyspace}}
+			Keyspace: ks.Keyspace,
+		},
+	}
 
 	ins := newInsertSelect(
 		false,
@@ -1975,7 +2024,8 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		"prefix ",
 		nil,
 		[][]int{
-			{1}}, // The primary vindex has a single column as sharding key
+			{1},
+		}, // The primary vindex has a single column as sharding key
 		rb,
 	)
 	ins.Generate = &Generate{
@@ -2048,12 +2098,20 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"hash": {
-						Type: "hash"}},
+						Type: "hash",
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
-							Columns: []string{"id"}}}}}}}}
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
@@ -2063,7 +2121,9 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		FieldQuery: "dummy_field_query",
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
-			Keyspace: ks.Keyspace}}
+			Keyspace: ks.Keyspace,
+		},
+	}
 	ins := newInsertSelect(
 		false,
 		ks.Keyspace,
@@ -2135,12 +2195,20 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"hash": {
-						Type: "hash"}},
+						Type: "hash",
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
-							Columns: []string{"id"}}}}}}}}
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
@@ -2150,7 +2218,9 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		FieldQuery: "dummy_field_query",
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
-			Keyspace: ks.Keyspace}}
+			Keyspace: ks.Keyspace,
+		},
+	}
 	ins := newInsertSelect(
 		false,
 		ks.Keyspace,
@@ -2231,13 +2301,22 @@ func TestInsertSelectUnowned(t *testing.T) {
 						Params: map[string]string{
 							"table": "lkp1",
 							"from":  "from",
-							"to":    "toc"},
-						Owner: "t1"}},
+							"to":    "toc",
+						},
+						Owner: "t1",
+					},
+				},
 				Tables: map[string]*vschemapb.Table{
 					"t2": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "onecol",
-							Columns: []string{"id"}}}}}}}}
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
 
 	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
@@ -2247,7 +2326,9 @@ func TestInsertSelectUnowned(t *testing.T) {
 		FieldQuery: "dummy_field_query",
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
-			Keyspace: ks.Keyspace}}
+			Keyspace: ks.Keyspace,
+		},
+	}
 	ins := newInsertSelect(
 		false,
 		ks.Keyspace,
@@ -2289,7 +2370,8 @@ func TestInsertSelectUnowned(t *testing.T) {
 			// next we insert one row on the -20 shard
 			`sharded.-20: prefix values (:_c1_0) ` +
 			`{_c1_0: type:INT64 value:"3"} ` +
-			`true false`})
+			`true false`,
+	})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2317,7 +2399,8 @@ func TestInsertSelectUnowned(t *testing.T) {
 			// next we insert one row on the -20 shard
 			`sharded.-20: prefix values (:_c1_0) ` +
 			`{_c1_0: type:INT64 value:"3"} ` +
-			`true false`})
+			`true false`,
+	})
 }
 
 func TestInsertSelectShardingCases(t *testing.T) {
@@ -2330,7 +2413,11 @@ func TestInsertSelectShardingCases(t *testing.T) {
 					"s1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
-							Columns: []string{"id"}}}}}},
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
 			"sks2": {
 				Sharded:  true,
 				Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
@@ -2338,10 +2425,15 @@ func TestInsertSelectShardingCases(t *testing.T) {
 					"s2": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
-							Columns: []string{"id"}}}}}},
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
 			"uks1": {Tables: map[string]*vschemapb.Table{"u1": {}}},
 			"uks2": {Tables: map[string]*vschemapb.Table{"u2": {}}},
-		}}
+		},
+	}
 
 	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	sks1 := vs.Keyspaces["sks1"]
@@ -2353,13 +2445,15 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	sRoute := &Route{
 		Query:             "dummy_select",
 		FieldQuery:        "dummy_field_query",
-		RoutingParameters: &RoutingParameters{Opcode: Scatter, Keyspace: sks2.Keyspace}}
+		RoutingParameters: &RoutingParameters{Opcode: Scatter, Keyspace: sks2.Keyspace},
+	}
 
 	// unsharded input route.
 	uRoute := &Route{
 		Query:             "dummy_select",
 		FieldQuery:        "dummy_field_query",
-		RoutingParameters: &RoutingParameters{Opcode: Unsharded, Keyspace: uks2.Keyspace}}
+		RoutingParameters: &RoutingParameters{Opcode: Unsharded, Keyspace: uks2.Keyspace},
+	}
 
 	// sks1 and sks2
 	ins := newInsertSelect(
@@ -2382,7 +2476,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		},
 	}
 	vc.results = []*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1")}
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	}
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -2393,7 +2488,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`,
+	})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2407,7 +2503,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`,
+	})
 
 	// sks1 and uks2
 	ins.Input = uRoute
@@ -2422,7 +2519,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`,
+	})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2436,7 +2534,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`,
+	})
 
 	// uks1 and sks2
 	ins = newInsertSelect(
@@ -2459,7 +2558,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`,
+	})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2473,7 +2573,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`,
+	})
 
 	// uks1 and uks2
 	ins.Input = uRoute
@@ -2488,7 +2589,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`,
+	})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2502,5 +2604,6 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`,
+	})
 }

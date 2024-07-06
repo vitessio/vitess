@@ -596,7 +596,6 @@ func (a *Aggregator) checkForInvalidAggregations() {
 				panic(vterrors.VT03001(sqlparser.String(node)))
 			}
 			return true, nil
-
 		}, aggr.Original.Expr)
 	}
 }

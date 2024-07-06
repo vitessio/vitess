@@ -28,8 +28,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-const mockClientUNameFiltered = "Filtered"
-const mockClientUNameDba = "Dba"
+const (
+	mockClientUNameFiltered = "Filtered"
+	mockClientUNameDba      = "Dba"
+)
 
 // MockDBClient mocks a DBClient.
 // It must be configured to expect requests in a specific order.

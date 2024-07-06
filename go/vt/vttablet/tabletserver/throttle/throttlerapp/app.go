@@ -65,13 +65,11 @@ const (
 	SchemaTrackerName Name = "schema-tracker"
 )
 
-var (
-	exemptFromChecks = map[string]bool{
-		BinlogWatcherName.String(): true,
-		MessagerName.String():      true,
-		SchemaTrackerName.String(): true,
-	}
-)
+var exemptFromChecks = map[string]bool{
+	BinlogWatcherName.String(): true,
+	MessagerName.String():      true,
+	SchemaTrackerName.String(): true,
+}
 
 // ExemptFromChecks returns 'true' for apps that should skip the throttler checks. The throttler should
 // always respond with automated "OK" to those apps, without delay. These apps also do not cause a heartbeat renewal.

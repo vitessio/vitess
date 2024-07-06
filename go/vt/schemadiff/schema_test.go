@@ -385,7 +385,7 @@ func TestInvalidSchema(t *testing.T) {
 			//      t10
 			//       ^
 			//       |
-			//t12<->t11<-t13
+			// t12<->t11<-t13
 			schema: `
 				create table t10(id int primary key);
 				create table t11 (id int primary key, i int, i10 int, constraint f111205 foreign key (i) references t12 (id) on delete restrict, constraint f111005 foreign key (i10) references t10 (id) on delete restrict);
@@ -525,7 +525,6 @@ func TestInvalidSchema(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.schema, func(t *testing.T) {
-
 			_, err := NewSchemaFromSQL(NewTestEnv(), ts.schema)
 			if ts.expectErr == nil {
 				assert.NoError(t, err)
@@ -597,7 +596,7 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 }
 
 func TestGetEntityColumnNames(t *testing.T) {
-	var queries = []string{
+	queries := []string{
 		"create table t1(id int, state int, some char(5))",
 		"create table t2(id int primary key, c char(5))",
 		"create view v1 as select id as id from t1",

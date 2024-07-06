@@ -486,7 +486,7 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 	if opt != nil && opt.Concurrency > 0 {
 		concurrency = opt.Concurrency
 	}
-	var sem = semaphore.NewWeighted(int64(concurrency))
+	sem := semaphore.NewWeighted(int64(concurrency))
 
 	for _, tabletAlias := range tabletAliases {
 		wg.Add(1)

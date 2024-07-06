@@ -362,7 +362,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 		targetType := aggr.typ(sourceType)
 
 		var ag aggregator
-		var distinct = -1
+		distinct := -1
 
 		if aggr.Opcode.IsDistinct() {
 			distinct = aggr.KeyCol

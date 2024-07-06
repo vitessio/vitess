@@ -72,7 +72,8 @@ func (conn *FakeVTGateConn) AddQuery(
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
 	session *vtgatepb.Session,
-	expectedResult *sqltypes.Result) {
+	expectedResult *sqltypes.Result,
+) {
 	conn.execMap[sql] = &queryResponse{
 		execQuery: &queryExecute{
 			SQL:           sql,
@@ -189,8 +190,8 @@ func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string)
 
 // VStream streams binlog events.
 func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
-
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (vtgateconn.VStreamReader, error) {
 	return nil, fmt.Errorf("NYI")
 }
 
@@ -202,7 +203,8 @@ func newSession(
 	inTransaction bool,
 	keyspace string,
 	shards []string,
-	tabletType topodatapb.TabletType) *vtgatepb.Session {
+	tabletType topodatapb.TabletType,
+) *vtgatepb.Session {
 	shardSessions := make([]*vtgatepb.Session_ShardSession, len(shards))
 	for _, shard := range shards {
 		shardSessions = append(shardSessions, &vtgatepb.Session_ShardSession{

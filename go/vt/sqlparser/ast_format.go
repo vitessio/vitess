@@ -133,7 +133,6 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 			node.Comments, node.Ignore.ToString(),
 			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.RowAlias, node.OnDup)
 	}
-
 }
 
 // Format formats the node.
@@ -702,7 +701,6 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 
 	if ct.Length != nil && ct.Scale != nil {
 		buf.astPrintf(ct, "(%d,%d)", *ct.Length, *ct.Scale)
-
 	} else if ct.Length != nil {
 		buf.astPrintf(ct, "(%d)", *ct.Length)
 	}
@@ -1011,7 +1009,6 @@ func (node *Begin) Format(buf *TrackedBuffer) {
 		}
 		buf.astPrintf(node, ", %s", accessMode.ToString())
 	}
-
 }
 
 // Format formats the node.
@@ -1673,19 +1670,16 @@ func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *JSONPrettyExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_pretty(%v)", node.JSONVal)
-
 }
 
 // Format formats the node
 func (node *JSONStorageFreeExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_storage_free(%v)", node.JSONVal)
-
 }
 
 // Format formats the node
 func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_storage_size(%v)", node.JSONVal)
-
 }
 
 // Format formats the node
@@ -2346,7 +2340,6 @@ func (node *AddIndexDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AddColumns) Format(buf *TrackedBuffer) {
-
 	if len(node.Columns) == 1 {
 		buf.astPrintf(node, "add column %v", node.Columns[0])
 		if node.First {
@@ -2445,7 +2438,6 @@ func (node *KeyState) Format(buf *TrackedBuffer) {
 	} else {
 		buf.literal("disable keys")
 	}
-
 }
 
 // Format formats the node
@@ -2647,7 +2639,6 @@ func (node *JSONObjectExpr) Format(buf *TrackedBuffer) {
 		for i, p := range node.Params {
 			if i != 0 {
 				buf.astPrintf(node, ", ")
-
 			}
 			buf.astPrintf(node, "%v", p)
 		}

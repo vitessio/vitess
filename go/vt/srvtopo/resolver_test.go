@@ -123,7 +123,7 @@ func TestResolveDestinations(t *testing.T) {
 		End:   []byte{0x30},
 	}
 
-	var testCases = []struct {
+	testCases := []struct {
 		name           string
 		keyspace       string
 		ids            []*querypb.Value

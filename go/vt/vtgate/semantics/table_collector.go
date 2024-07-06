@@ -66,7 +66,6 @@ func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) {
 			etc.withTables[cte.ID] = nil
 		}
 	}
-
 }
 
 func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) {

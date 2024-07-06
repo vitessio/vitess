@@ -179,7 +179,8 @@ func (qrs *Rules) GetAction(
 	action Action,
 	cancelCtx context.Context,
 	timeout time.Duration,
-	desc string) {
+	desc string,
+) {
 	for _, qr := range qrs.rules {
 		if act := qr.GetAction(ip, user, bindVars, marginComments); act != QRContinue {
 			return act, qr.cancelCtx, qr.timeout, qr.Description

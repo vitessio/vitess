@@ -172,7 +172,6 @@ func StreamMigratorFinalize(ctx context.Context, ts ITrafficSwitcher, workflows 
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
-
 	if err != nil {
 		return err
 	}
@@ -478,7 +477,6 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 		streams[source.GetShard().ShardName()] = tabletStreams
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +515,6 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 
 				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
 			}()
-
 			if err != nil {
 				return nil, err
 			}
@@ -585,7 +582,6 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 		streams[source.GetShard().ShardName()] = tabletStreams
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -624,7 +620,6 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 
 				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
 			}()
-
 			if err != nil {
 				return nil, err
 			}
@@ -670,7 +665,6 @@ func (sm *StreamMigrator) legacyStopSourceStreams(ctx context.Context) error {
 
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -760,7 +754,6 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -873,7 +866,6 @@ func (sm *StreamMigrator) legacyVerifyStreamPositions(ctx context.Context, stopP
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -936,7 +928,6 @@ func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositio
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -1064,7 +1055,6 @@ func (sm *StreamMigrator) deleteTargetStreams(ctx context.Context) error {
 		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().Alias, query)
 		return err
 	})
-
 	if err != nil {
 		sm.logger.Warningf("Could not delete migrated streams: %v", err)
 	}

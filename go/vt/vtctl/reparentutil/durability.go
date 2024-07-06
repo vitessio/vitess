@@ -32,10 +32,8 @@ import (
 // register a NewDurabler function.
 type NewDurabler func() Durabler
 
-var (
-	// durabilityPolicies is a map that stores the functions needed to create a new Durabler
-	durabilityPolicies = make(map[string]NewDurabler)
-)
+// durabilityPolicies is a map that stores the functions needed to create a new Durabler
+var durabilityPolicies = make(map[string]NewDurabler)
 
 func init() {
 	// register all the durability rules with their functions to create them

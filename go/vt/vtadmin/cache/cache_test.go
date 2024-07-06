@@ -208,7 +208,7 @@ func TestEnqueueBackfillTimeout(t *testing.T) {
 		BackfillEnqueueWaitTime: time.Millisecond * 10,
 	})
 
-	var enqueues = []struct {
+	enqueues := []struct {
 		shouldFail bool
 		msg        string
 	}{

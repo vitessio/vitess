@@ -256,8 +256,8 @@ func (a *vstreamAdapter) Recv() ([]*binlogdatapb.VEvent, error) {
 }
 
 func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
-
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (vtgateconn.VStreamReader, error) {
 	req := &vtgatepb.VStreamRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		TabletType: tabletType,

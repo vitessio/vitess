@@ -342,7 +342,6 @@ func TestSetAutocommitOFF(t *testing.T) {
 	default:
 		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
-
 }
 
 func TestWhere(t *testing.T) {
@@ -673,13 +672,15 @@ func TestColumns_FindColumn(t *testing.T) {
 	testcases := []struct {
 		in  string
 		out int
-	}{{
-		in:  "a",
-		out: 0,
-	}, {
-		in:  "b",
-		out: 2,
-	},
+	}{
+		{
+			in:  "a",
+			out: 0,
+		},
+		{
+			in:  "b",
+			out: 2,
+		},
 		{
 			in:  "0",
 			out: 3,
@@ -687,7 +688,8 @@ func TestColumns_FindColumn(t *testing.T) {
 		{
 			in:  "f",
 			out: -1,
-		}}
+		},
+	}
 
 	for _, tc := range testcases {
 		val := cols.FindColumn(NewIdentifierCI(tc.in))
@@ -772,55 +774,56 @@ func TestSplitStatementToPieces(t *testing.T) {
 	testcases := []struct {
 		input  string
 		output string
-	}{{
-		input:  "select * from table1; \t; \n; \n\t\t ;select * from table1;",
-		output: "select * from table1;select * from table1",
-	}, {
-		input: "select * from table",
-	}, {
-		input:  "select * from table;",
-		output: "select * from table",
-	}, {
-		input:  "select * from table;   ",
-		output: "select * from table",
-	}, {
-		input:  "select * from table1; select * from table2;",
-		output: "select * from table1; select * from table2",
-	}, {
-		input:  "select * from /* comment ; */ table;",
-		output: "select * from /* comment ; */ table",
-	}, {
-		input:  "select * from table where semi = ';';",
-		output: "select * from table where semi = ';'",
-	}, {
-		input:  "select * from table1;--comment;\nselect * from table2;",
-		output: "select * from table1;--comment;\nselect * from table2",
-	}, {
-		input: "CREATE TABLE `total_data` (`id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id', " +
-			"`region` varchar(32) NOT NULL COMMENT 'region name, like zh; th; kepler'," +
-			"`data_size` bigint NOT NULL DEFAULT '0' COMMENT 'data size;'," +
-			"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
-			"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
-			"PRIMARY KEY (`id`))",
-	}, {
-		input:  "create table t1 (id int primary key); create table t2 (id int primary key);",
-		output: "create table t1 (id int primary key); create table t2 (id int primary key)",
-	}, {
-		input:  ";;; create table t1 (id int primary key);;; ;create table t2 (id int primary key);",
-		output: " create table t1 (id int primary key);create table t2 (id int primary key)",
-	}, {
-		// The input doesn't have to be valid SQL statements!
-		input:  ";create table t1 ;create table t2 (id;",
-		output: "create table t1 ;create table t2 (id",
-	}, {
-		// Ignore quoted semicolon
-		input:  ";create table t1 ';';;;create table t2 (id;",
-		output: "create table t1 ';';create table t2 (id",
-	}, {
-		// Ignore quoted semicolon
-		input:  "stop replica; start replica",
-		output: "stop replica; start replica",
-	},
+	}{
+		{
+			input:  "select * from table1; \t; \n; \n\t\t ;select * from table1;",
+			output: "select * from table1;select * from table1",
+		}, {
+			input: "select * from table",
+		}, {
+			input:  "select * from table;",
+			output: "select * from table",
+		}, {
+			input:  "select * from table;   ",
+			output: "select * from table",
+		}, {
+			input:  "select * from table1; select * from table2;",
+			output: "select * from table1; select * from table2",
+		}, {
+			input:  "select * from /* comment ; */ table;",
+			output: "select * from /* comment ; */ table",
+		}, {
+			input:  "select * from table where semi = ';';",
+			output: "select * from table where semi = ';'",
+		}, {
+			input:  "select * from table1;--comment;\nselect * from table2;",
+			output: "select * from table1;--comment;\nselect * from table2",
+		}, {
+			input: "CREATE TABLE `total_data` (`id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id', " +
+				"`region` varchar(32) NOT NULL COMMENT 'region name, like zh; th; kepler'," +
+				"`data_size` bigint NOT NULL DEFAULT '0' COMMENT 'data size;'," +
+				"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
+				"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
+				"PRIMARY KEY (`id`))",
+		}, {
+			input:  "create table t1 (id int primary key); create table t2 (id int primary key);",
+			output: "create table t1 (id int primary key); create table t2 (id int primary key)",
+		}, {
+			input:  ";;; create table t1 (id int primary key);;; ;create table t2 (id int primary key);",
+			output: " create table t1 (id int primary key);create table t2 (id int primary key)",
+		}, {
+			// The input doesn't have to be valid SQL statements!
+			input:  ";create table t1 ;create table t2 (id;",
+			output: "create table t1 ;create table t2 (id",
+		}, {
+			// Ignore quoted semicolon
+			input:  ";create table t1 ';';;;create table t2 (id;",
+			output: "create table t1 ';';create table t2 (id",
+		}, {
+			// Ignore quoted semicolon
+			input:  "stop replica; start replica",
+			output: "stop replica; start replica",
+		},
 	}
 
 	parser := NewTestParser()

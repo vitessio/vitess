@@ -84,7 +84,6 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	return dte.inTransaction(func(localConn *StatefulConnection) error {
 		return dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, conn.TxProperties().Queries)
 	})
-
 }
 
 // CommitPrepared commits a prepared transaction. If the operation

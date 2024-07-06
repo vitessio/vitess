@@ -178,8 +178,10 @@ var (
 		cellsToAliases: make(map[string]string),
 	}
 
-	FlagBinaries = []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtgate",
-		"vtorc", "vtbackup"}
+	FlagBinaries = []string{
+		"vttablet", "vtctl", "vtctld", "vtcombo", "vtgate",
+		"vtorc", "vtbackup",
+	}
 )
 
 func init() {

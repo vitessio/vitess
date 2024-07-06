@@ -645,7 +645,6 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	// // check it's there
 
 	targets = []*querypb.Target{
-
 		{
 			Keyspace:   tablet.Keyspace,
 			Shard:      tablet.Shard,
@@ -657,7 +656,6 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	assert.Nil(t, err, "error should be nil. Targets are found")
 
 	targets = []*querypb.Target{
-
 		{
 			Keyspace:   tablet.Keyspace,
 			Shard:      tablet.Shard,

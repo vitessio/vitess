@@ -269,7 +269,7 @@ func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.orExpr(genConfig) },
 		func() Expr { return g.comparison(genConfig.intTypeConfig()) },
 		func() Expr { return g.comparison(genConfig.stringTypeConfig()) },
-		//func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
+		// func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
 		func() Expr { return g.inExpr(genConfig) },
 		func() Expr { return g.existsExpr(genConfig) },
 		func() Expr { return g.between(genConfig.intTypeConfig()) },

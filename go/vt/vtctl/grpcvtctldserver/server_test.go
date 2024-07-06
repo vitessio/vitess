@@ -2570,7 +2570,8 @@ func TestCreateKeyspace(t *testing.T) {
 			vschemaShouldExist: false,
 			expectedVSchema:    nil,
 			shouldErr:          false,
-		}, {
+		},
+		{
 			name: "keyspace with durability policy specified",
 			topo: nil,
 			req: &vtctldatapb.CreateKeyspaceRequest{
@@ -5581,7 +5582,7 @@ func TestGetKeyspaces(t *testing.T) {
 func TestGetPermissions(t *testing.T) {
 	t.Parallel()
 
-	var testGetPermissionsReply = &tabletmanagerdatapb.Permissions{
+	testGetPermissionsReply := &tabletmanagerdatapb.Permissions{
 		UserPermissions: []*tabletmanagerdatapb.UserPermission{
 			{
 				Host: "host1",
@@ -14259,6 +14260,7 @@ func TestValidateShard(t *testing.T) {
 		})
 	}
 }
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())

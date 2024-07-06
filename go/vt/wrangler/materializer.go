@@ -133,7 +133,8 @@ func shouldInclude(table string, excludes []string) bool {
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string,
-	sourceShards []string, noRoutingRules bool, atomicCopy bool) (err error) {
+	sourceShards []string, noRoutingRules bool, atomicCopy bool,
+) (err error) {
 	// FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -1226,7 +1227,6 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 					}
 					if sourceTableName.Name.String() != ts.TargetTable {
 						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
-
 					}
 				}
 

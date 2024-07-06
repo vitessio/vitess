@@ -102,7 +102,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARCHAR value:\"routedTable\"} false false"},
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARCHAR value:\"routedTable\"} false false",
+		},
 	}, {
 		testName:    "both schema and table predicates - not routed",
 		tableSchema: []string{"schema"},
@@ -111,7 +112,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARCHAR value:\"table\"} false false"},
+			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARCHAR value:\"table\"} false false",
+		},
 	}, {
 		testName:    "multiple schema and table predicates",
 		tableSchema: []string{"schema", "schema", "schema"},
@@ -122,7 +124,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 			"FindTable(`schema`.`table`)",
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" t1: type:VARCHAR value:\"table\" t2: type:VARCHAR value:\"table\" t3: type:VARCHAR value:\"table\"} false false"},
+			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" t1: type:VARCHAR value:\"table\" t2: type:VARCHAR value:\"table\" t3: type:VARCHAR value:\"table\"} false false",
+		},
 	}, {
 		testName:  "table name predicate - routed table",
 		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.SystemCollation)},
@@ -130,7 +133,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard routedKeyspace.1: dummy_select {__vtschemaname: type:VARCHAR table_name: type:VARCHAR value:\"routedTable\"} false false"},
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {__vtschemaname: type:VARCHAR table_name: type:VARCHAR value:\"routedTable\"} false false",
+		},
 	}, {
 		testName:  "table name predicate - not routed",
 		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.SystemCollation)},
@@ -138,24 +142,28 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR table_name: type:VARCHAR value:\"tableName\"} false false"},
+			"ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR table_name: type:VARCHAR value:\"tableName\"} false false",
+		},
 	}, {
 		testName:    "schema predicate",
 		tableSchema: []string{"myKeyspace"},
 		expectedLog: []string{
 			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\"} false false"},
+			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\"} false false",
+		},
 	}, {
 		testName:    "multiple schema predicates",
 		tableSchema: []string{"myKeyspace", "myKeyspace", "myKeyspace", "myKeyspace"},
 		expectedLog: []string{
 			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\"} false false"},
+			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\"} false false",
+		},
 	}, {
 		testName: "no predicates",
 		expectedLog: []string{
 			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard ks.1: dummy_select {} false false"},
+			"ExecuteMultiShard ks.1: dummy_select {} false false",
+		},
 	}}
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
@@ -181,7 +189,8 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 					tbl: &vindexes.Table{
 						Name:     sqlparser.NewIdentifierCS("routedTable"),
 						Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
-					}}
+					},
+				}
 			}
 			_, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
@@ -704,7 +713,6 @@ func TestSelectLike(t *testing.T) {
 		`StreamExecuteMulti dummy_select ks.0c80-0d: {} `,
 	})
 	expectResult(t, result, defaultSelectResult)
-
 }
 
 func TestSelectNext(t *testing.T) {
@@ -1345,7 +1353,6 @@ func TestParamsFail(t *testing.T) {
 }
 
 func TestExecFail(t *testing.T) {
-
 	t.Run("unsharded", func(t *testing.T) {
 		// Unsharded error
 		sel := NewRoute(
@@ -1687,16 +1694,18 @@ func TestBuildMultiColumnVindexValues(t *testing.T) {
 				},
 			},
 		}, {
-			input: [][][]sqltypes.Value{{
-				{sqltypes.NewInt64(10), sqltypes.NewInt64(10), sqltypes.NewInt64(1)},
-				{sqltypes.NewInt64(20), sqltypes.NewInt64(20), sqltypes.NewInt64(1)},
+			input: [][][]sqltypes.Value{
+				{
+					{sqltypes.NewInt64(10), sqltypes.NewInt64(10), sqltypes.NewInt64(1)},
+					{sqltypes.NewInt64(20), sqltypes.NewInt64(20), sqltypes.NewInt64(1)},
+				},
 			},
-			},
-			output: [][][]*querypb.Value{{
-				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
-				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
-				{sqltypes.ValueToProto(sqltypes.NewInt64(1))},
-			},
+			output: [][][]*querypb.Value{
+				{
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+					{sqltypes.ValueToProto(sqltypes.NewInt64(1))},
+				},
 			},
 		},
 	}

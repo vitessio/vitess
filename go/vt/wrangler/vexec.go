@@ -91,7 +91,7 @@ func newVExec(ctx context.Context, workflow, keyspace, query string, wr *Wrangle
 
 // QueryResultForRowsAffected aggregates results into row-type results (fields + values)
 func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	qr.Fields = []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
@@ -111,7 +111,7 @@ func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sql
 
 // QueryResultForTabletResults aggregates given results into a "rows-affected" type result (no row data)
 func (wr *Wrangler) QueryResultForTabletResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	defaultFields := []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
@@ -170,8 +170,8 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 // runVexec is the main function that runs a dry or wet execution of 'query' on backend shards.
 func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string,
 	callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error),
-	dryRun bool, shards []string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
-
+	dryRun bool, shards []string,
+) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
 	if err := vx.getPrimaries(shards); err != nil {
@@ -343,7 +343,8 @@ func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletI
 // that is only the update action. When using the SQL interface this is ignored and
 // you can pass nil.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any,
-	shards []string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	shards []string,
+) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	switch action {
 	case "show":
 		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace, shards)
@@ -413,7 +414,8 @@ func (wr *Wrangler) canRestartWorkflow(ctx context.Context, workflow, keyspace s
 }
 
 func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any,
-	shards []string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	shards []string,
+) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error) = nil
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {

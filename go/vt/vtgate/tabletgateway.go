@@ -229,8 +229,8 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 // withRetry also adds shard information to errors returned from the inner QueryService, so
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
-	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
-
+	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
 	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
@@ -349,7 +349,8 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 // withShardError adds shard information to errors returned from the inner QueryService.
 func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
-	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+) error {
 	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
 }
@@ -377,7 +378,6 @@ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatu
 }
 
 func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.TabletHealth) {
-
 	// Randomly shuffle the list of tablets, putting the same-cell hosts at the front
 	// of the list and the other-cell hosts at the back
 	//

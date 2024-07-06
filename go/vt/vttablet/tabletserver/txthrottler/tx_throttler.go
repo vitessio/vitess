@@ -41,8 +41,10 @@ import (
 // These vars store the functions used to create the topo server, healthcheck,
 // and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
-type healthCheckFactoryFunc func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck
-type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
+type (
+	healthCheckFactoryFunc func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck
+	throttlerFactoryFunc   func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
+)
 
 var (
 	healthCheckFactory healthCheckFactoryFunc
@@ -314,7 +316,6 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) {
 	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.healthCheckCells)
 	ts.healthCheckChan = ts.healthCheck.Subscribe()
-
 }
 
 func (ts *txThrottlerStateImpl) closeHealthCheckStream() {

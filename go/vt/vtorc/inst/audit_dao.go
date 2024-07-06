@@ -41,7 +41,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 	if config.Config.AuditLogFile != "" {
 		auditWrittenToFile = true
 		go func() {
-			f, err := os.OpenFile(config.Config.AuditLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0640)
+			f, err := os.OpenFile(config.Config.AuditLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o640)
 			if err != nil {
 				log.Error(err)
 				return

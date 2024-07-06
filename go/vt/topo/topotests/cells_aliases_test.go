@@ -59,7 +59,6 @@ func TestCellsAliases(t *testing.T) {
 
 	if len(aliasesName) != 2 {
 		t.Fatalf("Expected to have 2 aliases. Got %v", len(aliasesName))
-
 	}
 
 	if aliasesName[0] != "alias" {

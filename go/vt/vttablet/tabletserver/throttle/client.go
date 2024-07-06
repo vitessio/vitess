@@ -30,8 +30,10 @@ const (
 	throttleCheckDuration = 250 * time.Millisecond
 )
 
-var throttleTicks int64
-var throttleInit sync.Once
+var (
+	throttleTicks int64
+	throttleInit  sync.Once
+)
 
 func initThrottleTicker() {
 	throttleInit.Do(func() {
@@ -98,7 +100,6 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	}
 	c.lastSuccessfulThrottle = atomic.LoadInt64(&throttleTicks)
 	return true
-
 }
 
 // ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' immediately,

@@ -279,7 +279,6 @@ func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLState
 		var table *vindexes.Table
 		var err error
 		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
-
 		if err != nil {
 			var notFoundError vindexes.NotFoundError
 			isNotFound := errors.As(err, &notFoundError)
@@ -323,7 +322,6 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 		var table *vindexes.Table
 		var err error
 		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
-
 		if err != nil {
 			var notFoundError vindexes.NotFoundError
 			isNotFound := errors.As(err, &notFoundError)

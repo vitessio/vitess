@@ -24,7 +24,6 @@ func TestShouldRetry(t *testing.T) {
 		fallbackPolicy bool
 		expected       bool
 	}{
-
 		{
 			name: "non retryable request",
 			r: &request.Request{

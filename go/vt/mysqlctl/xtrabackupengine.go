@@ -46,8 +46,7 @@ import (
 // it implements the BackupEngine interface and contains all the logic
 // required to implement a backup/restore by invoking xtrabackup with
 // the appropriate parameters
-type XtrabackupEngine struct {
-}
+type XtrabackupEngine struct{}
 
 var (
 	// path where backup engine program is located
@@ -292,9 +291,9 @@ func (be *XtrabackupEngine) backupFiles(
 	numStripes int,
 	flavor string,
 ) (replicationPosition replication.Position, finalErr error) {
-
 	backupProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
-	flagsToExec := []string{"--defaults-file=" + params.Cnf.Path,
+	flagsToExec := []string{
+		"--defaults-file=" + params.Cnf.Path,
 		"--backup",
 		"--socket=" + params.Cnf.SocketFile,
 		"--slave-info",
@@ -473,7 +472,6 @@ func (be *XtrabackupEngine) backupFiles(
 
 // ExecuteRestore restores from a backup. Any error is returned.
 func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-
 	var bm xtraBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
@@ -536,7 +534,8 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	logger.Infof("Restore: Preparing the extracted files")
 	// prepare the backup
 	restoreProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
-	flagsToExec := []string{"--defaults-file=" + cnf.Path,
+	flagsToExec := []string{
+		"--defaults-file=" + cnf.Path,
 		"--prepare",
 		"--target-dir=" + tempDir,
 	}
@@ -571,7 +570,8 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	// then move-back
 	logger.Infof("Restore: Move extracted and prepared files to final locations")
 
-	flagsToExec = []string{"--defaults-file=" + cnf.Path,
+	flagsToExec = []string{
+		"--defaults-file=" + cnf.Path,
 		"--move-back",
 		"--target-dir=" + tempDir,
 	}
@@ -638,7 +638,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// Create the decompressor if needed.
 		if compressed {
 			var decompressor io.ReadCloser
-			var deCompressionEngine = bm.CompressionEngine
+			deCompressionEngine := bm.CompressionEngine
 			if deCompressionEngine == "" {
 				// For backward compatibility. Incase if Manifest is from N-1 binary
 				// then we assign the default value of compressionEngine.

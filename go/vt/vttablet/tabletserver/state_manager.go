@@ -63,8 +63,10 @@ func (state servingState) String() string {
 }
 
 // transitionRetryInterval is for tests.
-var transitionRetryInterval = 1 * time.Second
-var logInitTime sync.Once
+var (
+	transitionRetryInterval = 1 * time.Second
+	logInitTime             sync.Once
+)
 
 var ErrNoTarget = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 

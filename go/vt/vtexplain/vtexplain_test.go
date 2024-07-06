@@ -135,7 +135,7 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 			testOutputTempDir, err := os.MkdirTemp("testdata", "plan_test")
 			require.NoError(t, err)
 			gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
-			os.WriteFile(gotFile, []byte(explainText), 0644)
+			os.WriteFile(gotFile, []byte(explainText), 0o644)
 
 			t.Logf("run the following command to update the expected output:")
 			t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(textOutFile))

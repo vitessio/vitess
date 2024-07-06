@@ -17,10 +17,9 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"fmt"
 	"path"
-
-	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

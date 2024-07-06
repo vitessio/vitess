@@ -62,6 +62,7 @@ func defaultCollation() collations.TypedCollation {
 		Repertoire:   collations.RepertoireASCII,
 	}
 }
+
 func (tc testCase) run(t *testing.T) {
 	if tc.bv == nil {
 		tc.bv = map[string]*querypb.BindVariable{}
@@ -1295,23 +1296,23 @@ func TestNullsafeCompareCollate(t *testing.T) {
 }
 
 func BenchmarkNullSafeComparison(b *testing.B) {
-	var collnames = []string{
+	collnames := []string{
 		"utf8mb4_0900_ai_ci",
 		"utf8mb4_0900_as_cs",
 		"utf8mb4_general_ci",
 		"utf8mb4_0900_bin",
 	}
 
-	var lengths = []int{1, 16}
+	lengths := []int{1, 16}
 
 	for _, collation := range collnames {
 		for _, length := range lengths {
 			b.Run(fmt.Sprintf("Strings/%s/%d", collation, length), func(b *testing.B) {
-				var collid = getCollationID(collation)
-				var long = func(in string) string {
+				collid := getCollationID(collation)
+				long := func(in string) string {
 					return strings.Repeat(in, length)
 				}
-				var inputs = []sqltypes.Value{
+				inputs := []sqltypes.Value{
 					TestValue(sqltypes.VarChar, long("abCd")),
 					TestValue(sqltypes.VarChar, long("aBcd")),
 					TestValue(sqltypes.VarChar, long("ǍḄÇ")),
@@ -1334,7 +1335,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 	}
 
 	b.Run("Numeric", func(b *testing.B) {
-		var inputs = []sqltypes.Value{
+		inputs := []sqltypes.Value{
 			TestValue(sqltypes.Int64, "123456789"),
 			TestValue(sqltypes.Uint64, "123456789"),
 			TestValue(sqltypes.Int64, "-123456789"),
@@ -1363,7 +1364,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 }
 
 func TestCompareSorter(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		Count  int
 		Limit  int
 		Random sqltypes.RandomGenerator
@@ -1425,5 +1426,4 @@ func TestCompareSorter(t *testing.T) {
 			}
 		})
 	}
-
 }

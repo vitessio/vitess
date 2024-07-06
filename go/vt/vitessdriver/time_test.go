@@ -35,7 +35,6 @@ func DateValue(str string) sqltypes.Value {
 }
 
 func TestDatetimeToNative(t *testing.T) {
-
 	tcases := []struct {
 		val sqltypes.Value
 		loc *time.Location

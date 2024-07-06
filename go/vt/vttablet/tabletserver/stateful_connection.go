@@ -264,7 +264,7 @@ func (sc *StatefulConnection) IsTainted() bool {
 // LogTransaction logs transaction related stats
 func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	if sc.txProps == nil {
-		return //Nothing to log as no transaction exists on this connection.
+		return // Nothing to log as no transaction exists on this connection.
 	}
 	sc.txProps.Conclusion = reason.Name()
 	sc.txProps.EndTime = time.Now()
@@ -288,7 +288,7 @@ func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
 // logReservedConn logs reserved connection related stats.
 func (sc *StatefulConnection) logReservedConn() {
 	if sc.reservedProps == nil {
-		return //Nothing to log as this connection is not reserved.
+		return // Nothing to log as this connection is not reserved.
 	}
 	duration := time.Since(sc.reservedProps.StartTime)
 	username := sc.getUsername()

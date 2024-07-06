@@ -123,7 +123,6 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		return buildVschemaVindexesPlan(show, vschema)
 	}
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown SHOW query type %s", show.Command.ToString()))
-
 }
 
 func buildShowTargetPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
@@ -312,7 +311,6 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (en
 		}
 	}
 	return plan, nil
-
 }
 
 func buildVarCharFields(names ...string) []*querypb.Field {
@@ -382,8 +380,10 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter) ([][]sqltypes.Value, 
 	return charsets(), nil
 }
 
-var once sync.Once
-var charsetRows [][]sqltypes.Value
+var (
+	once        sync.Once
+	charsetRows [][]sqltypes.Value
+)
 
 func charsets() [][]sqltypes.Value {
 	once.Do(func() {
@@ -517,7 +517,6 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema)
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}, nil
-
 }
 
 func buildCreatePlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (engine.Primitive, error) {
@@ -551,7 +550,6 @@ func buildCreatePlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (e
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}, nil
-
 }
 
 func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
@@ -590,7 +588,6 @@ func buildShowGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (
 }
 
 func buildWarnings() (engine.Primitive, error) {
-
 	f := func(sa engine.SessionActions) (*sqltypes.Result, error) {
 		fields := []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar, Charset: uint32(collations.SystemCollation.Collation)},
@@ -764,5 +761,4 @@ func buildVschemaVindexesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 	return engine.NewRowsPrimitive(rows,
 		buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 	), nil
-
 }

@@ -318,8 +318,7 @@ func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io
 }
 
 // AZBlobBackupStorage structs implements the BackupStorage interface for AZBlob
-type AZBlobBackupStorage struct {
-}
+type AZBlobBackupStorage struct{}
 
 func (bs *AZBlobBackupStorage) containerURL() (*azblob.ContainerURL, error) {
 	credentials, err := azCredentials()
@@ -355,7 +354,6 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 			Prefix:     searchPrefix,
 			MaxResults: 0,
 		})
-
 		if err != nil {
 			return nil, err
 		}
@@ -413,7 +411,6 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 			Prefix:     searchPrefix,
 			MaxResults: 0,
 		})
-
 		if err != nil {
 			return err
 		}

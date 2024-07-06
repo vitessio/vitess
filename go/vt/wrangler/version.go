@@ -17,9 +17,8 @@ limitations under the License.
 package wrangler
 
 import (
-	"fmt"
-
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"

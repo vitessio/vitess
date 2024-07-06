@@ -515,7 +515,6 @@ func TestLimitStreamExecuteAsync(t *testing.T) {
 		}
 		require.Len(t, results.Rows, expRows)
 	}
-
 }
 
 func TestOffsetStreamExecute(t *testing.T) {

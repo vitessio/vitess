@@ -288,7 +288,6 @@ func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify
 		Verify: verify,
 		Exec:   inputLP,
 	}, nil
-
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (engine.Primitive, error) {
@@ -451,7 +450,6 @@ func getEvalEngineExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr)
 	default:
 		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
 	}
-
 }
 
 // newSimpleProjection creates a simple projections

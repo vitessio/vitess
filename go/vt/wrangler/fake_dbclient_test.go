@@ -190,7 +190,7 @@ func (dc *fakeDBClient) executeFetch(query string, maxrows int) (*sqltypes.Resul
 	if result := dc.invariants[query]; result != nil {
 		return result, nil
 	}
-	for q, result := range dc.invariants { //supports allowing just a prefix of an expected query
+	for q, result := range dc.invariants { // supports allowing just a prefix of an expected query
 		if strings.Contains(query, q) {
 			return result, nil
 		}

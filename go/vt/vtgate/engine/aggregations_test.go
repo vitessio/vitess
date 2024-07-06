@@ -56,15 +56,15 @@ func benchmarkName(fields []*querypb.Field) string {
 }
 
 func BenchmarkScalarAggregate(b *testing.B) {
-	var rand_i64 = sqltypes.RandomGenerators[sqltypes.Int64]
-	var rand_i64small = func() sqltypes.Value {
+	rand_i64 := sqltypes.RandomGenerators[sqltypes.Int64]
+	rand_i64small := func() sqltypes.Value {
 		return sqltypes.NewInt64(rand.Int64N(1024))
 	}
-	var rand_f64 = sqltypes.RandomGenerators[sqltypes.Float64]
-	var rand_dec = sqltypes.RandomGenerators[sqltypes.Decimal]
-	var rand_bin = sqltypes.RandomGenerators[sqltypes.VarBinary]
+	rand_f64 := sqltypes.RandomGenerators[sqltypes.Float64]
+	rand_dec := sqltypes.RandomGenerators[sqltypes.Decimal]
+	rand_bin := sqltypes.RandomGenerators[sqltypes.VarBinary]
 
-	var cases = []struct {
+	cases := []struct {
 		fields []*querypb.Field
 		gen    []sqltypes.RandomGenerator
 		params []*AggregateParams

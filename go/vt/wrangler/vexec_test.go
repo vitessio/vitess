@@ -55,7 +55,7 @@ func TestVExec(t *testing.T) {
 	query := "update _vt.vreplication set state = 'Running'"
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, time.Now().Unix())
 	defer env.close()
-	var logger = logutil.NewMemoryLogger()
+	logger := logutil.NewMemoryLogger()
 	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
@@ -156,7 +156,6 @@ func TestVExec(t *testing.T) {
 				}
 			} else {
 				require.ErrorContains(t, err, testCase.errorString, "Wrong error, want %s, got %s", testCase.errorString, err.Error())
-
 			}
 		})
 	}
@@ -210,7 +209,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, nil, nil)
 	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
 	logger.Clear()
-	var testCases = []struct {
+	testCases := []struct {
 		shards []string
 		want   string
 	}{
@@ -371,7 +370,8 @@ func TestVExecValidations(t *testing.T) {
 			name:          "other",
 			want:          "",
 			expectedError: fmt.Errorf("invalid action found: other"),
-		}}
+		},
+	}
 
 	for _, a := range actions {
 		t.Run(a.name, func(t *testing.T) {

@@ -92,6 +92,7 @@ func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
+
 func (d *Distinct) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	return d.Source.AddWSColumn(ctx, offset, underRoute)
 }

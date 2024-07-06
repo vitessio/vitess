@@ -90,7 +90,8 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			},
 			expected:  []string{"r1", "r2", "p1"},
 			shouldErr: false,
-		}, {
+		},
+		{
 			name: "success for single tablet",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
@@ -374,7 +375,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 			}},
 			shouldErr: false,
-		}, {
+		},
+		{
 			name:       "success with wait for all tablets",
 			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
@@ -443,7 +445,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			}},
 			waitForAllTablets: true,
 			shouldErr:         false,
-		}, {
+		},
+		{
 			name:       "timing check with wait for all tablets",
 			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
@@ -1128,7 +1131,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			expectedPrimaryStatusMap: nil,
 			expectedTabletsReachable: nil,
 			shouldErr:                true,
-		}, {
+		},
+		{
 			name:       "1 tablets fail StopReplication and 1 has replication stopped",
 			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{

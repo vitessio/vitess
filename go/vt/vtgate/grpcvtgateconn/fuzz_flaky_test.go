@@ -120,8 +120,8 @@ func Fuzz(data []byte) int {
 	ctx = newContext()
 	chunkSize := len(data) / 10
 	for i := 0; i < len(data); i = i + chunkSize {
-		from := i           //lower
-		to := i + chunkSize //upper
+		from := i           // lower
+		to := i + chunkSize // upper
 		_, _ = session.Execute(ctx, string(data[from:to]), nil)
 	}
 	return 1

@@ -60,7 +60,6 @@ type consulLeaderParticipation struct {
 
 // WaitForLeadership is part of the topo.LeaderParticipation interface.
 func (mp *consulLeaderParticipation) WaitForLeadership() (context.Context, error) {
-
 	electionPath := path.Join(mp.s.root, electionsPath, mp.name)
 	l, err := mp.s.client.LockOpts(&api.LockOptions{
 		Key:   electionPath,

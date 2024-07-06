@@ -791,7 +791,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Failure due to timeout",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "timed out after 300ms waiting for the dba user to have the required permissions",
@@ -812,7 +813,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Success for externally managed tablet",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "",
@@ -835,7 +837,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Empty timeout",
 			waitTime:  0,
 			errWanted: "",
@@ -845,7 +848,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 				}
 				return tc, func() {}
 			},
-		}, {
+		},
+		{
 			name:      "Empty config",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "",

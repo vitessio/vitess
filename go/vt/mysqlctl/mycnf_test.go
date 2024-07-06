@@ -76,7 +76,7 @@ func TestMycnf(t *testing.T) {
 	}()
 
 	time.Sleep(waitTime)
-	err = os.WriteFile(MycnfPath, []byte(data), 0666)
+	err = os.WriteFile(MycnfPath, []byte(data), 0o666)
 	require.NoError(t, err, "failed creating my.cnf")
 	_, err = os.ReadFile(MycnfPath)
 	require.NoError(t, err, "failed reading")

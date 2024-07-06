@@ -296,7 +296,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		case !before && after:
 			bindvar = bindvars["a_"+tp.PKReferences[0]]
 		}
-		if bindvar == nil { //should never happen
+		if bindvar == nil { // should never happen
 			return false
 		}
 
@@ -553,6 +553,7 @@ func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariab
 	}
 	return sql, nil
 }
+
 func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	query, err := getQuery(pq, bindvars)
 	if err != nil {

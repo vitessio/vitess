@@ -118,7 +118,6 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	verifyPrimaryAlias(t, "ks3", "80-", "zone_ks3-0000000101", "")
 	verifyKeyspaceInfo(t, "ks4", keyspaceDurabilityTest, "")
 	verifyPrimaryAlias(t, "ks4", "80-", "zone_ks4-0000000101", "")
-
 }
 
 func TestRefreshKeyspace(t *testing.T) {

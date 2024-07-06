@@ -70,7 +70,7 @@ func createTempDir(hint string) (dirName string, err error) {
 func createTempScript(dirName, fileName, text string) (fullName string, err error) {
 	fullName = filepath.Join(dirName, fileName)
 	bytes := []byte(text)
-	err = os.WriteFile(fullName, bytes, 0755)
+	err = os.WriteFile(fullName, bytes, 0o755)
 	return fullName, err
 }
 

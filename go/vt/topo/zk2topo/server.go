@@ -95,6 +95,7 @@ func (zs *Server) Close() {
 	zs.conn.Close()
 	zs.conn = nil
 }
+
 func init() {
 	topo.RegisterFactory("zk2", Factory{})
 }

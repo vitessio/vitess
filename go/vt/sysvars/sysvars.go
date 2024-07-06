@@ -289,8 +289,10 @@ func GetInterestingVariables() []string {
 	return res
 }
 
-var vitessAwareVariableNames map[string]struct{}
-var vitessAwareInit sync.Once
+var (
+	vitessAwareVariableNames map[string]struct{}
+	vitessAwareInit          sync.Once
+)
 
 func IsVitessAware(sysv string) bool {
 	vitessAwareInit.Do(func() {

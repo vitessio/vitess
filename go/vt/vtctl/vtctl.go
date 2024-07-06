@@ -2067,8 +2067,8 @@ func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspa
 // commandVReplicationWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
 // FIXME: this function needs a refactor. Also validations for params should to be done per workflow type
 func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string,
-	workflowType wrangler.VReplicationWorkflowType) error {
-
+	workflowType wrangler.VReplicationWorkflowType,
+) error {
 	const defaultWaitTime = time.Duration(30 * time.Second)
 	// for backward compatibility we default the lag to match the timeout for switching primary traffic
 	// this should probably be much smaller so that target and source are almost in sync before switching traffic
@@ -2679,7 +2679,6 @@ func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		Keyspace:   *keyspaceFilter,
 		TabletType: tabletTypeFilter,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -2892,7 +2891,6 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 		SkipNoPrimary:  *skipNoPrimary,
 		IncludeVschema: *includeVSchema,
 	})
-
 	if err != nil {
 		wr.Logger().Errorf("%s\n", err.Error())
 		return err
@@ -2962,7 +2960,6 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		CallerId:            cID,
 		BatchSize:           *batchSize,
 	})
-
 	if err != nil {
 		wr.Logger().Errorf("%s\n", err.Error())
 		return err
@@ -3066,9 +3063,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 		executeFetchQuery = fmt.Sprintf(`select
 				*
 				from _vt.schema_migrations where %s %s %s`, condition, order, skipLimit)
-	case
-		"retry",
-		"cleanup":
+	case "retry", "cleanup":
 		// Do not support 'ALL' argument
 		applySchemaQuery, err = generateOnlineDDLQuery(command, arg, false)
 	case
@@ -3199,7 +3194,6 @@ func commandValidateVersionKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 
 	keyspace := subFlags.Arg(0)
 	res, err := wr.VtctldServer().ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{Keyspace: keyspace})
-
 	if err != nil {
 		return err
 	}
@@ -4102,7 +4096,7 @@ func PrintAllCommands(logger logutil.Logger) {
 
 // queryResultForTabletResults aggregates given results into a combined result set
 func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	defaultFields := []*querypb.Field{{
 		Name:    "Tablet",
 		Type:    sqltypes.VarBinary,

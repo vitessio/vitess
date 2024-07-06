@@ -65,8 +65,10 @@ const (
 // how long to wait for background operations to complete
 var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
-var ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
-var ErrVDiffStoppedByUser = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
+var (
+	ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
+	ErrVDiffStoppedByUser      = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
+)
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
@@ -291,8 +293,8 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 }
 
 func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace,
-	shard, tabletTypes string, options discovery.TabletPickerOptions) (*topodatapb.Tablet, error) {
-
+	shard, tabletTypes string, options discovery.TabletPickerOptions,
+) (*topodatapb.Tablet, error) {
 	tp, err := discovery.NewTabletPicker(ctx, ts, cells, td.wd.ct.vde.thisTablet.Alias.Cell, keyspace,
 		shard, tabletTypes, options)
 	if err != nil {

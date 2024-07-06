@@ -31,7 +31,7 @@ func errFromCode(c vtrpcpb.Code) error {
 }
 
 func TestAggregateVtGateErrorCodes(t *testing.T) {
-	var testcases = []struct {
+	testcases := []struct {
 		input    []error
 		expected vtrpcpb.Code
 	}{
@@ -71,7 +71,7 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 }
 
 func TestAggregateVtGateErrors(t *testing.T) {
-	var testcases = []struct {
+	testcases := []struct {
 		input    []error
 		expected error
 	}{

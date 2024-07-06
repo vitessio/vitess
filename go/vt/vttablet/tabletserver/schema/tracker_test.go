@@ -57,21 +57,24 @@ func TestTracker(t *testing.T) {
 			{
 				Type: binlogdatapb.VEventType_GTID,
 				Gtid: gtid1,
-			}, {
+			},
+			{
 				Type:      binlogdatapb.VEventType_DDL,
 				Statement: ddl1,
 			},
 			{
 				Type:      binlogdatapb.VEventType_GTID,
 				Statement: "", // This event should cause an error updating schema since gtid is bad
-			}, {
+			},
+			{
 				Type:      binlogdatapb.VEventType_DDL,
 				Statement: ddl1,
 			},
 			{
 				Type: binlogdatapb.VEventType_GTID,
 				Gtid: gtid1,
-			}, {
+			},
+			{
 				Type:      binlogdatapb.VEventType_DDL,
 				Statement: "",
 			},

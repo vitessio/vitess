@@ -17,11 +17,10 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callinfo"

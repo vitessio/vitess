@@ -237,7 +237,7 @@ func WriteInitDBFile(initFile, customSQL, newInitFile string) error {
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get a modified init db sql")
 	}
-	err = os.WriteFile(newInitFile, []byte(sql), 0600)
+	err = os.WriteFile(newInitFile, []byte(sql), 0o600)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to write a modified init db file")
 	}

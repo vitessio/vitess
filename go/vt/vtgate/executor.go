@@ -134,12 +134,16 @@ type Executor struct {
 
 var executorOnce sync.Once
 
-const pathQueryPlans = "/debug/query_plans"
-const pathScatterStats = "/debug/scatter_stats"
-const pathVSchema = "/debug/vschema"
+const (
+	pathQueryPlans   = "/debug/query_plans"
+	pathScatterStats = "/debug/scatter_stats"
+	pathVSchema      = "/debug/vschema"
+)
 
-type PlanCacheKey = theine.HashKey256
-type PlanCache = theine.Store[PlanCacheKey, *engine.Plan]
+type (
+	PlanCacheKey = theine.HashKey256
+	PlanCache    = theine.Store[PlanCacheKey, *engine.Plan]
+)
 
 func DefaultPlanCache() *PlanCache {
 	// when being endtoend tested, disable the doorkeeper to ensure reproducible results
@@ -339,7 +343,6 @@ func (e *Executor) StreamExecute(
 		err := vc.StreamExecutePrimitive(ctx, plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
 			return srr.storeResultStats(plan.Type, qr)
 		})
-
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
 			if !canReturnRows(plan.Type) {

@@ -60,6 +60,7 @@ func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mys
 	}
 	return gconn, conn, mconn, close
 }
+
 func TestVStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -186,7 +187,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 		Lastpk:    qr,
 	}}
 	var shardGtids []*binlogdatapb.ShardGtid
-	var vgtid = &binlogdatapb.VGtid{}
+	vgtid := &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
@@ -343,7 +344,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 			gconn, conn, mconn, closeConnections := initialize(ctx, t)
 			defer closeConnections()
 
-			var vgtid = &binlogdatapb.VGtid{}
+			vgtid := &binlogdatapb.VGtid{}
 			vgtid.ShardGtids = []*binlogdatapb.ShardGtid{c.shardGtid}
 			reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 			_, _ = conn, mconn
@@ -426,7 +427,7 @@ func TestVStreamCopyResume(t *testing.T) {
 	}
 
 	var shardGtids []*binlogdatapb.ShardGtid
-	var vgtid = &binlogdatapb.VGtid{}
+	vgtid := &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
@@ -526,7 +527,7 @@ func TestVStreamCurrent(t *testing.T) {
 	defer closeConnections()
 
 	var shardGtids []*binlogdatapb.ShardGtid
-	var vgtid = &binlogdatapb.VGtid{}
+	vgtid := &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
@@ -580,7 +581,7 @@ func TestVStreamSharded(t *testing.T) {
 	defer closeConnections()
 
 	var shardGtids []*binlogdatapb.ShardGtid
-	var vgtid = &binlogdatapb.VGtid{}
+	vgtid := &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
@@ -665,7 +666,6 @@ func TestVStreamSharded(t *testing.T) {
 			t.Fatalf("remote error: %v\n", err)
 		}
 	}
-
 }
 
 // TestVStreamCopyTransactions tests that we are properly wrapping
@@ -822,9 +822,11 @@ type VEventSorter []*binlogdatapb.VEvent
 func (v VEventSorter) Len() int {
 	return len(v)
 }
+
 func (v VEventSorter) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
+
 func (v VEventSorter) Less(i, j int) bool {
 	valsI := v[i].GetRowEvent().RowChanges[0].After
 	if valsI == nil {

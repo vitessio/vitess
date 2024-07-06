@@ -553,7 +553,8 @@ func TestElectNewPrimary(t *testing.T) {
 				Uid:  101,
 			},
 			errContains: nil,
-		}, {
+		},
+		{
 			name: "avoid primary alias and shard primary are nil",
 			tmc: &chooseNewPrimaryTestTMClient{
 				replicationStatuses: map[string]*replicationdatapb.Status{

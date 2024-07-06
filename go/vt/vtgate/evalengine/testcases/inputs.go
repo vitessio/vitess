@@ -390,7 +390,8 @@ var uuidInputs = []string{
 	"0x11EDF26609DB81F6A6F920FC8FD6830E",
 }
 
-var inputIntervals = []string{"day",
+var inputIntervals = []string{
+	"day",
 	"week",
 	"month",
 	"year",

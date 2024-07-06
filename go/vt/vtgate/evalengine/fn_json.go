@@ -59,14 +59,16 @@ type (
 	}
 )
 
-var _ IR = (*builtinJSONExtract)(nil)
-var _ IR = (*builtinJSONUnquote)(nil)
-var _ IR = (*builtinJSONObject)(nil)
-var _ IR = (*builtinJSONArray)(nil)
-var _ IR = (*builtinJSONDepth)(nil)
-var _ IR = (*builtinJSONLength)(nil)
-var _ IR = (*builtinJSONContainsPath)(nil)
-var _ IR = (*builtinJSONKeys)(nil)
+var (
+	_ IR = (*builtinJSONExtract)(nil)
+	_ IR = (*builtinJSONUnquote)(nil)
+	_ IR = (*builtinJSONObject)(nil)
+	_ IR = (*builtinJSONArray)(nil)
+	_ IR = (*builtinJSONDepth)(nil)
+	_ IR = (*builtinJSONLength)(nil)
+	_ IR = (*builtinJSONContainsPath)(nil)
+	_ IR = (*builtinJSONKeys)(nil)
+)
 
 var errInvalidPathForTransform = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "In this situation, path expressions may not contain the * and ** tokens or an array range.")
 

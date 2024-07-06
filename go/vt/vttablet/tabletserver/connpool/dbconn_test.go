@@ -442,7 +442,8 @@ func testContextError(t *testing.T,
 	ctx context.Context,
 	exec func(context.Context, string, *Conn) error,
 	expErrMsg string,
-	expDuration time.Duration) {
+	expDuration time.Duration,
+) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()

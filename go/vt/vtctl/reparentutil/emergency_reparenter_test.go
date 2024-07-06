@@ -1814,7 +1814,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -3324,7 +3323,8 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			keyspace:  "testkeyspace",
 			shard:     "-",
 			shouldErr: false,
-		}, {
+		},
+		{
 			name:                 "single replica failing to SetReplicationSource does not fail the promotion",
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
@@ -3467,7 +3467,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 					Shard: &topodatapb.Shard{
 						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone1",
-							Uid:  000,
+							Uid:  0o00,
 						},
 					},
 				},
@@ -3608,7 +3608,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 						Uid:  100,
 					},
 					Hostname: "primary-elect",
-				}, {
+				},
+				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,
@@ -3629,7 +3630,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 						Uid:  100,
 					},
 					Hostname: "primary-elect",
-				}, {
+				},
+				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,
@@ -3738,7 +3740,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 					},
 				},
 			},
-		}, {
+		},
+		{
 			name:                 "success - only 2 tablets and they error",
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
@@ -3853,7 +3856,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 						Uid:  100,
 					},
 					Hostname: "primary-elect",
-				}, {
+				},
+				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,
@@ -3923,7 +3927,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 						Uid:  100,
 					},
 					Hostname: "primary-elect",
-				}, {
+				},
+				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,

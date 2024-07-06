@@ -54,7 +54,6 @@ func parseCreatedTimestamp(filename string) (timestamp time.Time, err error) {
 		return time.Time{}, fmt.Errorf("malformed logfile name: %v", filename)
 	}
 	return time.ParseInLocation("20060102-150405", parts[len(parts)-2], time.Now().Location())
-
 }
 
 func getModifiedTimestamp(filename string) (timestamp time.Time, err error) {

@@ -29,8 +29,10 @@ var randomString = []string{
 }
 
 // some random base timestamp
-var ts = time.Date(2016, 12, 27, 13, 36, 40, 0, time.Local)
-var ts2 = ts.AddDate(-1, 0, 0)
+var (
+	ts  = time.Date(2016, 12, 27, 13, 36, 40, 0, time.Local)
+	ts2 = ts.AddDate(-1, 0, 0)
+)
 
 // TestCreateOrReturn tests the creation of a named Collection
 func TestCreateOrReturnCollection(t *testing.T) {
@@ -62,15 +64,13 @@ func TestCreateOrReturnCollection(t *testing.T) {
 }
 
 // dummy structure for testing
-type testMetric struct {
-}
+type testMetric struct{}
 
 func (tm *testMetric) When() time.Time {
 	return ts
 }
 
-type testMetric2 struct {
-}
+type testMetric2 struct{}
 
 func (tm *testMetric2) When() time.Time {
 	return ts2

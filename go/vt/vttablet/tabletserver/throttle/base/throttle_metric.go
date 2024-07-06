@@ -56,8 +56,10 @@ type MetricResult interface {
 type MetricResultFunc func() (metricResult MetricResult, threshold float64)
 
 // ErrThresholdExceeded is the common error one may get checking on metric result
-var ErrThresholdExceeded = errors.New("Threshold exceeded")
-var errNoResultYet = errors.New("Metric not collected yet")
+var (
+	ErrThresholdExceeded = errors.New("Threshold exceeded")
+	errNoResultYet       = errors.New("Metric not collected yet")
+)
 
 // ErrNoSuchMetric is for when a user requests a metric by an unknown metric name
 var ErrNoSuchMetric = errors.New("No such metric")

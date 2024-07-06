@@ -83,18 +83,20 @@ type (
 	}
 )
 
-var _ IR = (*builtinInetAton)(nil)
-var _ IR = (*builtinInetNtoa)(nil)
-var _ IR = (*builtinInet6Aton)(nil)
-var _ IR = (*builtinInet6Ntoa)(nil)
-var _ IR = (*builtinIsIPV4)(nil)
-var _ IR = (*builtinIsIPV4Compat)(nil)
-var _ IR = (*builtinIsIPV4Mapped)(nil)
-var _ IR = (*builtinIsIPV6)(nil)
-var _ IR = (*builtinBinToUUID)(nil)
-var _ IR = (*builtinIsUUID)(nil)
-var _ IR = (*builtinUUID)(nil)
-var _ IR = (*builtinUUIDToBin)(nil)
+var (
+	_ IR = (*builtinInetAton)(nil)
+	_ IR = (*builtinInetNtoa)(nil)
+	_ IR = (*builtinInet6Aton)(nil)
+	_ IR = (*builtinInet6Ntoa)(nil)
+	_ IR = (*builtinIsIPV4)(nil)
+	_ IR = (*builtinIsIPV4Compat)(nil)
+	_ IR = (*builtinIsIPV4Mapped)(nil)
+	_ IR = (*builtinIsIPV6)(nil)
+	_ IR = (*builtinBinToUUID)(nil)
+	_ IR = (*builtinIsUUID)(nil)
+	_ IR = (*builtinUUID)(nil)
+	_ IR = (*builtinUUIDToBin)(nil)
+)
 
 func (call *builtinInetAton) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)

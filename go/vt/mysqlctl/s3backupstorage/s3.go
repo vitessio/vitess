@@ -406,7 +406,6 @@ func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) e
 				Quiet:   &quiet,
 			},
 		})
-
 		if err != nil {
 			return err
 		}

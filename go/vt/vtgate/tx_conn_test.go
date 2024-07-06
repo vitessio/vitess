@@ -41,9 +41,11 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var queries = []*querypb.BoundQuery{{Sql: "query1"}}
-var twoQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}}
-var threeQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}, {Sql: "query1"}}
+var (
+	queries      = []*querypb.BoundQuery{{Sql: "query1"}}
+	twoQueries   = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}}
+	threeQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}, {Sql: "query1"}}
+)
 
 func TestTxConnBegin(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)

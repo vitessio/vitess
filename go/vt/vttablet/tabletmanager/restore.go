@@ -132,7 +132,8 @@ func (tm *TabletManager) RestoreData(
 	backupTime time.Time,
 	restoreToTimetamp time.Time,
 	restoreToPos string,
-	mysqlShutdownTimeout time.Duration) error {
+	mysqlShutdownTimeout time.Duration,
+) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -189,7 +190,6 @@ func (tm *TabletManager) RestoreData(
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
-
 	tablet := tm.Tablet()
 	originalType := tablet.Type
 	// Try to restore. Depending on the reason for failure, we may be ok.

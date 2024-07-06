@@ -256,6 +256,7 @@ func (ts *trafficSwitcher) Logger() logutil.Logger {
 	}
 	return ts.logger
 }
+
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	return ts.ws.VReplicationExec(ctx, alias, query)
 }
@@ -690,7 +691,6 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 				Keyspace: source.GetShard().Keyspace(),
 				Shard:    shard,
 			})
-
 		}
 		log.Infof("Creating journal %v", journal)
 		ts.Logger().Infof("Creating journal: %v", journal)

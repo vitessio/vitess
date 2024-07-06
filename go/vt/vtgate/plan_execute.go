@@ -34,8 +34,10 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
-type txResult func(sqlparser.StatementType, *sqltypes.Result) error
+type (
+	planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
+	txResult func(sqlparser.StatementType, *sqltypes.Result) error
+)
 
 func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time, timeout time.Duration) bool {
 	pollingInterval := 10 * time.Millisecond
@@ -316,7 +318,6 @@ func (e *Executor) executePlan(
 	logStats *logstats.LogStats,
 	execStart time.Time,
 ) (*sqltypes.Result, error) {
-
 	// 4: Execute!
 	qr, err := vcursor.ExecutePrimitive(ctx, plan.Instructions, bindVars, true)
 

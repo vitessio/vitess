@@ -54,8 +54,10 @@ type Queue struct {
 // DiscoveryQueue contains the discovery queue which can then be accessed via an API call for monitoring.
 // Currently this is accessed by ContinuousDiscovery() but also from http api calls.
 // I may need to protect this better?
-var discoveryQueue map[string](*Queue)
-var dcLock sync.Mutex
+var (
+	discoveryQueue map[string](*Queue)
+	dcLock         sync.Mutex
+)
 
 func init() {
 	discoveryQueue = make(map[string](*Queue))

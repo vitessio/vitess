@@ -594,7 +594,6 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		return fmt.Errorf("%s", strings.Join(rec.ErrorStrings(), "\n"))
 	}
 	return nil
-
 }
 
 // ReverseWorkflowName returns the "reversed" name of a workflow. For a
@@ -688,8 +687,8 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string,
-	targetShards []string) (*TargetInfo, error) {
-
+	targetShards []string,
+) (*TargetInfo, error) {
 	var (
 		frozen          bool
 		optCells        string
@@ -812,7 +811,8 @@ func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
 }
 
 func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
-	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser) (*sqlparser.Expr, error) {
+	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser,
+) (*sqlparser.Expr, error) {
 	if vrOptions.TenantId == "" {
 		return nil, nil
 	}
@@ -851,7 +851,8 @@ func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 }
 
 func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []topodatapb.TabletType,
-	sourceKeyspace, targetKeyspace, reason string) error {
+	sourceKeyspace, targetKeyspace, reason string,
+) error {
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypes {
 		suffix := getTabletTypeSuffix(tabletType)

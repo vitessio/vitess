@@ -26,8 +26,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const foreignKeyConstraintValues = "fkc_vals"
-const foreignKeyUpdateExpr = "fkc_upd"
+const (
+	foreignKeyConstraintValues = "fkc_vals"
+	foreignKeyUpdateExpr       = "fkc_upd"
+)
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) Operator {

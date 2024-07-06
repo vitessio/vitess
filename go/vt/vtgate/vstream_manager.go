@@ -149,7 +149,8 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 }
 
 func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func(events []*binlogdatapb.VEvent) error) error {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func(events []*binlogdatapb.VEvent) error,
+) error {
 	vgtid, filter, flags, err := vsm.resolveParams(ctx, tabletType, vgtid, filter, flags)
 	if err != nil {
 		return err
@@ -189,8 +190,8 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 
 // resolveParams provides defaults for the inputs if they're not specified.
 func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (*binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags, error) {
-
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (*binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags, error) {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -269,7 +270,7 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 		}
 	}
 
-	//TODO add tablepk validations
+	// TODO add tablepk validations
 
 	return newvgtid, filter, flags, nil
 }
@@ -361,7 +362,6 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 	go func() {
 		defer vs.wg.Done()
 		err := vs.streamFromTablet(ctx, sgtid)
-
 		// Set the error on exit. First one wins.
 		if err != nil {
 			log.Errorf("Error in vstream for %+v: %s", sgtid, err)
@@ -773,7 +773,7 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 					Shard:    event.Shard,
 				}
 			} else if event.Type == binlogdatapb.VEventType_LASTPK {
-				var foundIndex = -1
+				foundIndex := -1
 				eventTablePK := event.LastPKEvent.TableLastPK
 				for idx, pk := range sgtid.TablePKs {
 					if pk.TableName == eventTablePK.TableName {

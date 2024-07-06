@@ -63,7 +63,7 @@ func (s *planTestSuite) SetupSuite() {
 	dir := getTestExpectationDir()
 	err := os.RemoveAll(dir)
 	require.NoError(s.T(), err)
-	err = os.Mkdir(dir, 0755)
+	err = os.Mkdir(dir, 0o755)
 	require.NoError(s.T(), err)
 	s.outputDir = dir
 }
@@ -200,8 +200,10 @@ func (s *planTestSuite) setFks(vschema *vindexes.VSchema) {
 
 		// FK from tbl_auth referencing tbl20 that is shard scoped of CASCADE types.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl_auth", createFkDefinition([]string{"id"}, "tbl20", []string{"col2"}, sqlparser.Cascade, sqlparser.Cascade))
-		s.addPKs(vschema, "sharded_fk_allow", []string{"tbl1", "tbl2", "tbl3", "tbl4", "tbl5", "tbl6", "tbl7", "tbl9", "tbl10",
-			"multicol_tbl1", "multicol_tbl2", "tbl_auth", "tblrefDef", "tbl20"})
+		s.addPKs(vschema, "sharded_fk_allow", []string{
+			"tbl1", "tbl2", "tbl3", "tbl4", "tbl5", "tbl6", "tbl7", "tbl9", "tbl10",
+			"multicol_tbl1", "multicol_tbl2", "tbl_auth", "tblrefDef", "tbl20",
+		})
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
 		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.
@@ -240,10 +242,11 @@ func (s *planTestSuite) setFks(vschema *vindexes.VSchema) {
 		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
 		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", sqlparser.Exprs{sqlparser.NewColName("col8")})
 
-		s.addPKs(vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11",
-			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
+		s.addPKs(vschema, "unsharded_fk_allow", []string{
+			"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11",
+			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3",
+		})
 	}
-
 }
 
 func (s *planTestSuite) addPKs(vschema *vindexes.VSchema, ks string, tbls []string) {

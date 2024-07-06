@@ -367,8 +367,7 @@ func TestStateManagerNotConnectedType(t *testing.T) {
 	assert.Equal(t, StateNotConnected, sm.state)
 }
 
-type delayedTxEngine struct {
-}
+type delayedTxEngine struct{}
 
 func (te *delayedTxEngine) AcceptReadWrite() {
 }
