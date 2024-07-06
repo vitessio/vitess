@@ -186,6 +186,7 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 			require.Equal(t, tc.want, eventStrs)
 		} else {
 			require.Equal(t, fileDecodingCnt+1, compressedTrxPayloadsUsingFile.Get())
+			require.Len(t, eventStrs, len(tc.want))
 			totalSize := 0
 			for i, want := range tc.want {
 				eventStr := eventStrs[i]

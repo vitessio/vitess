@@ -26,7 +26,6 @@ import (
 	"github.com/klauspost/compress/zstd"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -45,35 +44,38 @@ const (
 	payloadUncompressedSizeField
 )
 
-// Compression algorithms that are supported (only zstd today
-// in MySQL 8.0):
-// https://dev.mysql.com/doc/refman/8.0/en/binary-log-transaction-compression.html
 const (
+	// Compression algorithms that are supported (only zstd today
+	// in MySQL 8.0):
+	// https://dev.mysql.com/doc/refman/8.0/en/binary-log-transaction-compression.html
 	TransactionPayloadCompressionZstd = 0
 	TransactionPayloadCompressionNone = 255
-)
 
-const tmpFilePattern = "binlog-transaction-payload-*"
+	// At what size should we switch from the in-memory buffer
+	// decoding to streaming mode via a temporary file -- which
+	// is much slower, but does not require everything be done
+	// in memory.
+	zstdInMemoryDecompressorMaxSize = 128 << (10 * 2) // 128MiB
+	// When using a temporary file to process the payload use
+	// this file name pattern.
+	tmpFilePattern = "binlog-transaction-payload-*"
+)
 
 var (
 	TransactionPayloadCompressionTypes = map[uint64]string{
 		TransactionPayloadCompressionZstd: "ZSTD",
 		TransactionPayloadCompressionNone: "NONE",
 	}
+
+	// Metrics.
 	compressedTrxPayloadsInMem     = stats.NewCounter("CompressedTransactionPayloadsInMemory", "The number of compressed binlog transaction payloads that were processed in memory")
 	compressedTrxPayloadsUsingFile = stats.NewCounter("CompressedTransactionPayloadsViaFile", "The number of compressed binlog transaction payloads that were processed using a temporary file")
+
+	// Create a reader that caches decompressors. This is used for
+	// smaller events that we want to handle entirely using in-memory
+	// buffers.
+	zstdDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 )
-
-// Create a reader that caches decompressors. This is used for
-// smaller events that we want to handle entirely using in-memory
-// buffers.
-var zstdDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
-
-// At what size should we switch from the in-memory buffer
-// decoding to streaming mode via a temporary file -- which
-// is much slower, but does not require everything be done
-// in memory.
-const zstdInMemoryDecompressorMaxSize = 128 << (10 * 2) // 128MiB
 
 type TransactionPayload struct {
 	size             uint64
@@ -207,7 +209,7 @@ func (tp *TransactionPayload) read(data []byte) error {
 
 // decode decompresses the payload and extracts the internal binlog
 // events, assigning the iterator to a function that can then be used
-// to retrieve the events from the compressed transaction one by one.
+// to retrieve the events from the decompressed transaction one by one.
 func (tp *TransactionPayload) decode() error {
 	if tp.compressionType != TransactionPayloadCompressionZstd {
 		return vterrors.New(vtrpcpb.Code_INTERNAL,
@@ -215,32 +217,27 @@ func (tp *TransactionPayload) decode() error {
 	}
 
 	decompressedPayload, decompressedFile, err := tp.decompress()
+	if decompressedFile != nil && len(decompressedPayload) > 0 { // Should never happen
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"[BUG] error uncompressing transaction payload: illegal mix of in-memory and file-based decompression")
+	}
 
 	// Processing large payloads via a temporary file.
 	if decompressedFile != nil {
-		fstat, err := decompressedFile.Stat()
-		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"error getting stats on temporary file %s used to store the uncompressed transaction payload: %v",
-				decompressedFile.Name(), err)
-		}
-		log.Errorf("Decompressed transaction payload to temporary file %s of size %d MiB",
-			decompressedFile.Name(), fstat.Size()/1024/1024)
 		// Read from the temporary file.
 		headerLen := int64(BinlogEventLenOffset + 4)
 		header := make([]byte, headerLen)
 		if _, err := decompressedFile.Seek(0, io.SeekStart); err != nil {
-			return vterrors.Wrapf(err, "error seeking to the beginning decompressed transaction payload in the %s file",
+			return vterrors.Wrapf(err, "error seeking to the beginning of the decompressed transaction payload in the %s file",
 				decompressedFile.Name())
 		}
-		compressedTrxPayloadsUsingFile.Add(1)
 		tp.iterator = func() (ble BinlogEvent, err error) {
 			defer func() {
 				if err != nil {
 					decompressedFile.Close() // We've already deleted the FS path
 				}
 			}()
-			i, err := decompressedFile.Read(header)
+			bytesRead, err := decompressedFile.Read(header)
 			if err != nil {
 				if err == io.EOF {
 					return nil, io.EOF
@@ -248,27 +245,28 @@ func (tp *TransactionPayload) decode() error {
 				return nil, vterrors.Wrapf(err, "error reading event header from decompressed transaction payload in the %s file",
 					decompressedFile.Name())
 			}
-			if int64(i) != headerLen {
+			if int64(bytesRead) != headerLen {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected header length of %d but only read %d bytes",
-					headerLen, i)
+					headerLen, bytesRead)
 			}
 			eventLen := uint64(binary.LittleEndian.Uint32(header[BinlogEventLenOffset:headerLen]))
 			eventData := make([]byte, eventLen)
 			// The event includes the header, so we move back to the start of the event.
 			if _, err := decompressedFile.Seek(-headerLen, 1); err != nil {
-				return nil, vterrors.Wrapf(err, "error seeking to the beginning of the %s file", decompressedFile.Name())
+				return nil, vterrors.Wrapf(err, "error seeking to the beginning of the binlog event in the %s file", decompressedFile.Name())
 			}
-			i, err = decompressedFile.Read(eventData)
+			bytesRead, err = decompressedFile.Read(eventData)
 			if err != nil && err != io.EOF {
-				return nil, vterrors.Wrapf(err, "error reading event data from decompressed transaction payload in the %s file",
+				return nil, vterrors.Wrapf(err, "error reading binlog event data from decompressed transaction payload in the %s file",
 					decompressedFile.Name())
 			}
-			if uint64(i) != eventLen {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected event length of %d but only read %d bytes",
-					eventLen, i)
+			if uint64(bytesRead) != eventLen {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected binlog event length of %d but only read %d bytes",
+					eventLen, bytesRead)
 			}
 			return NewMysql56BinlogEvent(eventData), nil
 		}
+		compressedTrxPayloadsUsingFile.Add(1)
 		return nil
 	}
 
@@ -278,7 +276,6 @@ func (tp *TransactionPayload) decode() error {
 		return vterrors.Wrapf(err, "error decompressing transaction payload")
 	}
 	pos := uint64(0)
-	compressedTrxPayloadsInMem.Add(1)
 	tp.iterator = func() (BinlogEvent, error) {
 		eventLenPosEnd := pos + BinlogEventLenOffset + 4
 		if eventLenPosEnd > decompressedPayloadLen { // No more events in the payload
@@ -287,29 +284,30 @@ func (tp *TransactionPayload) decode() error {
 		eventLen := uint64(binary.LittleEndian.Uint32(decompressedPayload[pos+BinlogEventLenOffset : eventLenPosEnd]))
 		if pos+eventLen > decompressedPayloadLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"[BUG] event length of %d at pos %d in decompressed transaction payload is beyond the expected payload length of %d",
+				"[BUG] event length of %d at pos %d in in-memory decompressed transaction payload is beyond the expected payload length of %d",
 				eventLen, pos, decompressedPayloadLen)
 		}
 		eventData := decompressedPayload[pos : pos+eventLen]
 		pos += eventLen
 		return NewMysql56BinlogEvent(eventData), nil
 	}
+	compressedTrxPayloadsInMem.Add(1)
 	return nil
 }
 
 // decompress decompresses the payload. If the payload is larger than
 // zstdInMemoryDecompressorMaxSize then we stream the decompression
 // to a temporary file and a non-nil file struct is returned that can
-// be used to read the events. Otherwise we do everything in memory
-// and return the decompressed events bytes.
+// be used to read the events one by one. Otherwise we do everything
+// in memory and return the decompressed event's bytes.
 func (tp *TransactionPayload) decompress() ([]byte, *os.File, error) {
 	if len(tp.payload) == 0 {
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty payload")
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty compressed transaction payload")
 	}
 
-	// Switch to slower but less memory intensive stream mode for larger payloads.
-	// We perform the decompression as a stream and write the output to a
-	// temporary file.
+	// Switch to slower but less memory intensive stream mode for larger
+	// payloads. We perform the decompression as a stream and write the
+	// output to a temporary file.
 	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
 		// Create a temporary file to stream the uncompressed payload to.
 		tmpFile, err := os.CreateTemp("", tmpFilePattern)
@@ -317,8 +315,9 @@ func (tp *TransactionPayload) decompress() ([]byte, *os.File, error) {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"error creating temporary file to store uncompressed transaction payload: %v", err)
 		}
-		// Delete the file path on the FS. It will then be fully removed when we
-		// close our open file descriptor after trying to read it in decode().
+		// Delete the file path on the FS. It will then be fully removed
+		// when we close our open file descriptor after trying to read
+		// it in decode().
 		defer os.Remove(tmpFile.Name())
 		in := bytes.NewReader(tp.payload)
 		streamDecoder, err := zstd.NewReader(in, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
@@ -334,17 +333,15 @@ func (tp *TransactionPayload) decompress() ([]byte, *os.File, error) {
 		return nil, tmpFile, nil
 	}
 
-	// Process smaller payloads using in-memory buffers.
+	// Process smaller payloads using only in-memory buffers.
 	decompressedBytes, err := zstdDecoder.DecodeAll(tp.payload, nil)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	if uint64(len(decompressedBytes)) != tp.uncompressedSize {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"decompressed size %d does not match expected size %d", len(decompressedBytes), tp.uncompressedSize)
+			"uncompressed transaction payload size %d does not match expected size %d", len(decompressedBytes), tp.uncompressedSize)
 	}
-
 	return decompressedBytes, nil, nil
 }
 
