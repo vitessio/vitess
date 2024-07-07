@@ -20,7 +20,6 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -99,8 +98,6 @@ func TestMysql56GTID(t *testing.T) {
 func TestMysql56DecodeTransactionPayload(t *testing.T) {
 	format := NewMySQL56BinlogFormat()
 	tableMap := &TableMap{}
-	tmpDir := os.TempDir()
-	tmpFilePrefix := tmpFilePattern[0 : len(tmpFilePattern)-1] // Without the trailing *
 
 	testCases := []struct {
 		name     string
@@ -146,7 +143,7 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 
 	for _, tc := range testCases {
 		memDecodingCnt := compressedTrxPayloadsInMem.Get()
-		fileDecodingCnt := compressedTrxPayloadsUsingFile.Get()
+		streamDecodingCnt := compressedTrxPayloadsUsingStream.Get()
 
 		require.True(t, tc.event.IsTransactionPayload())
 		iter, err := tc.event.TransactionPayload(format)
@@ -158,7 +155,7 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 				if err == io.EOF {
 					break
 				}
-				require.Fail(t, "unexpected error: %v", err)
+				require.Fail(t, fmt.Sprintf("unexpected error: %v", err))
 			}
 			switch {
 			case ev.IsTableMap():
@@ -185,7 +182,7 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 			require.Equal(t, memDecodingCnt+1, compressedTrxPayloadsInMem.Get())
 			require.Equal(t, tc.want, eventStrs)
 		} else {
-			require.Equal(t, fileDecodingCnt+1, compressedTrxPayloadsUsingFile.Get())
+			require.Equal(t, streamDecodingCnt+1, compressedTrxPayloadsUsingStream.Get())
 			require.Len(t, eventStrs, len(tc.want))
 			totalSize := 0
 			for i, want := range tc.want {
@@ -194,11 +191,6 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 				require.True(t, strings.HasPrefix(eventStr, want))
 			}
 			require.Greater(t, totalSize, zstdInMemoryDecompressorMaxSize)
-			tmpFiles, err := os.ReadDir(tmpDir)
-			require.NoError(t, err)
-			for _, tmpFile := range tmpFiles {
-				require.False(t, strings.HasPrefix(tmpFile.Name(), tmpFilePrefix), "temporary file %s not deleted", tmpFile.Name())
-			}
 		}
 	}
 }

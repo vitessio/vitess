@@ -21,10 +21,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/klauspost/compress/zstd"
-	"golang.org/x/exp/mmap"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -56,13 +54,9 @@ const (
 	headerLen = int64(BinlogEventLenOffset + 4)
 
 	// At what size should we switch from the in-memory buffer
-	// decoding to streaming mode via a temporary file -- which
-	// is much slower, but does not require everything be done
-	// in memory.
+	// decoding to streaming mode which is much slower, but does
+	// not require everything be done in memory.
 	zstdInMemoryDecompressorMaxSize = 128 << (10 * 2) // 128MiB
-	// When using a temporary file to process the payload use
-	// this file name pattern.
-	tmpFilePattern = "binlog-transaction-payload-*"
 )
 
 var (
@@ -72,8 +66,8 @@ var (
 	}
 
 	// Metrics.
-	compressedTrxPayloadsInMem     = stats.NewCounter("CompressedTransactionPayloadsInMemory", "The number of compressed binlog transaction payloads that were processed in memory")
-	compressedTrxPayloadsUsingFile = stats.NewCounter("CompressedTransactionPayloadsViaFile", "The number of compressed binlog transaction payloads that were processed using a temporary file")
+	compressedTrxPayloadsInMem       = stats.NewCounter("CompressedTransactionPayloadsInMemory", "The number of compressed binlog transaction payloads that were processed in memory")
+	compressedTrxPayloadsUsingStream = stats.NewCounter("CompressedTransactionPayloadsViaStream", "The number of compressed binlog transaction payloads that were processed using a stream")
 
 	// Create a reader that caches decompressors. This is used for
 	// smaller events that we want to handle entirely using in-memory
@@ -226,9 +220,18 @@ func (tp *TransactionPayload) decode() error {
 	}
 
 	header := make([]byte, headerLen)
-	pos := int64(0)
 	tp.iterator = func() (ble BinlogEvent, err error) {
-		bytesRead, err := decompressedReader.ReadAt(header, pos)
+		defer func() {
+			if err != nil {
+				switch decompressedReader := decompressedReader.(type) {
+				case *bytes.Reader:
+					decompressedReader = nil
+				case io.ReadCloser:
+					decompressedReader.Close()
+				}
+			}
+		}()
+		bytesRead, err := io.ReadFull(decompressedReader, header)
 		if err != nil {
 			if err == io.EOF {
 				return nil, io.EOF
@@ -239,73 +242,42 @@ func (tp *TransactionPayload) decode() error {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected header length of %d but only read %d bytes",
 				headerLen, bytesRead)
 		}
-		// The event includes the header so we don't move the pos.
 		eventLen := uint64(binary.LittleEndian.Uint32(header[BinlogEventLenOffset:headerLen]))
 		eventData := make([]byte, eventLen)
-		bytesRead, err = decompressedReader.ReadAt(eventData, pos)
+		copy(eventData, header) // The event includes the header
+		bytesRead, err = io.ReadFull(decompressedReader, eventData[headerLen:])
 		if err != nil && err != io.EOF {
 			return nil, vterrors.Wrapf(err, "error reading binlog event data from decompressed transaction payload")
 		}
-		if uint64(bytesRead) != eventLen {
+		if uint64(bytesRead)+uint64(headerLen) != eventLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected binlog event length of %d but only read %d bytes",
 				eventLen, bytesRead)
 		}
-		pos += int64(eventLen)
 		return NewMysql56BinlogEvent(eventData), nil
 	}
 	return nil
 }
 
 // decompress decompresses the payload. If the payload is larger than
-// zstdInMemoryDecompressorMaxSize then we stream the decompression
-// to a temporary file and mmap it, otherwise we use in-memory buffers.
-// In either case, we return an io.ReaderAt that can be used to read the
+// zstdInMemoryDecompressorMaxSize then we stream the decompression,
+// otherwise we use in-memory buffers.
+// In either case, we return an io.Reader that can be used to read the
 // events in the decompressed payload.
-func (tp *TransactionPayload) decompress() (io.ReaderAt, error) {
+func (tp *TransactionPayload) decompress() (io.Reader, error) {
 	if len(tp.payload) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty compressed transaction payload")
 	}
 
 	// Switch to slower but less memory intensive stream mode for larger
-	// payloads. We perform the decompression as a stream and write the
-	// output to a temporary file which we then mmap.
+	// payloads.
 	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
-		// Create a temporary file to stream the uncompressed payload to.
-		tmpFile, err := os.CreateTemp("", tmpFilePattern)
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"error creating temporary file to store uncompressed transaction payload: %v", err)
-		}
-		// Close the initial FD and delete the file path on the FS. It
-		// will then be fully removed when the finalizer runs on our
-		// returned mmap.ReaderAt.
-		defer func() {
-			tmpFile.Close()
-			os.Remove(tmpFile.Name())
-		}()
 		in := bytes.NewReader(tp.payload)
 		streamDecoder, err := zstd.NewReader(in, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
 		if err != nil {
 			return nil, err
 		}
-		defer streamDecoder.Close()
-		out := io.Writer(tmpFile)
-		_, err = io.Copy(out, streamDecoder)
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"error copying %s uncompressed bytes to temporary file %s: %v",
-				TransactionPayloadCompressionTypes[tp.compressionType], tmpFile.Name(), err)
-		}
-		// Open adds a finalizer for the garbage collector to munmap
-		// the data in the reader when it frees the object.
-		reader, err := mmap.Open(tmpFile.Name())
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"error mmapping temporary file %s storing uncompressed transaction payload: %v",
-				tmpFile.Name(), err)
-		}
-		compressedTrxPayloadsUsingFile.Add(1)
-		return reader, nil
+		compressedTrxPayloadsUsingStream.Add(1)
+		return streamDecoder.IOReadCloser(), nil
 	}
 
 	// Process smaller payloads using only in-memory buffers.
