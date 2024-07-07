@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/exec"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -16,11 +17,57 @@ import (
 
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
 )
+
+func TestCreateDefaultShardRoutingRules(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceShard := "0"
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{sourceShard},
+	}
+	targetKeyspace :=
+		&testKeyspace{
+			KeyspaceName: "targetks",
+			ShardNames:   []string{"-80", "80-"},
+		}
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	ms := &vtctldata.MaterializeSettings{
+		Workflow:       "wf1",
+		SourceKeyspace: sourceKeyspace.KeyspaceName,
+		TargetKeyspace: targetKeyspace.KeyspaceName,
+		TableSettings: []*vtctldata.TableMaterializeSettings{
+			{
+				TargetTable:      "t1",
+				SourceExpression: "select * from t1",
+			},
+			{
+				TargetTable:      "t2",
+				SourceExpression: "select * from t2",
+			},
+		},
+		Cell:         "zone1",
+		SourceShards: []string{sourceShard},
+	}
+	err := createDefaultShardRoutingRules(ctx, ms, env.ts)
+	require.NoError(t, err)
+	rules, err := topotools.GetShardRoutingRules(ctx, env.ts)
+	require.NoError(t, err)
+	require.Len(t, rules, 1)
+	want := map[string]string{
+		fmt.Sprintf("%s.%s", targetKeyspace.KeyspaceName, sourceShard): sourceKeyspace.KeyspaceName,
+	}
+	if !reflect.DeepEqual(want, rules) {
+		require.FailNow(t, "unexpected rules", rules)
+	}
+}
 
 // TestUpdateKeyspaceRoutingRule confirms that the keyspace routing rules are updated correctly.
 func TestUpdateKeyspaceRoutingRule(t *testing.T) {
