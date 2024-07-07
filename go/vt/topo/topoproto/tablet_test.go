@@ -129,3 +129,36 @@ func TestIsTabletsInList(t *testing.T) {
 		})
 	}
 }
+
+func TestParsePromotionRule(t *testing.T) {
+	testcases := []struct {
+		name         string
+		rule         string
+		expectedRule topodatapb.PromotionRule
+		errContains  string
+	}{
+		{
+			name:         "success",
+			rule:         "prefer_not",
+			expectedRule: topodatapb.PromotionRule_PREFER_NOT,
+		},
+		{
+			name:         "invalid",
+			rule:         "this_should_fail",
+			expectedRule: topodatapb.PromotionRule_NONE,
+			errContains:  "unknown PromotionRule",
+		},
+	}
+
+	for _, testcase := range testcases {
+		testcase := testcase
+		t.Run(testcase.name, func(t *testing.T) {
+			t.Parallel()
+			rule, err := ParsePromotionRule(testcase.rule)
+			if testcase.errContains != "" {
+				assert.ErrorContains(t, err, testcase.errContains)
+			}
+			assert.Equal(t, testcase.expectedRule, rule)
+		})
+	}
+}

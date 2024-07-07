@@ -331,3 +331,27 @@ func TestDurabilityTest(t *testing.T) {
 		})
 	}
 }
+
+func TestPromotionRule(t *testing.T) {
+	cellName := "zone3"
+	durabler := &durabilityNone{}
+
+	// test --promotion-rule override
+	assert.Equal(t, promotionrule.MustNot, PromotionRule(durabler, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cellName,
+			Uid:  4,
+		},
+		Type:          topodatapb.TabletType_REPLICA,
+		PromotionRule: topodatapb.PromotionRule_MUST_NOT,
+	}))
+
+	// default
+	assert.Equal(t, promotionrule.Neutral, PromotionRule(durabler, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cellName,
+			Uid:  5,
+		},
+		Type: topodatapb.TabletType_REPLICA,
+	}))
+}

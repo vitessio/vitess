@@ -102,6 +102,27 @@ enum TabletType {
   DRAINED = 8;
 }
 
+// PromotionRule represents a Durability Policy override for an instance of vttablet.
+enum PromotionRule {
+  // NONE represents an undefined promotion rule.
+  NONE = 0;
+
+  // MUST represents a must promotion rule.
+  MUST = 1;
+
+  // NEUTRAL represents a neutral promotion rule.
+  NEUTRAL = 2;
+
+  // PREFER represents a prefer promotion rule.
+  PREFER = 3;
+
+  // PREFER_NOT represents a prefer_not promotion rule.
+  PREFER_NOT = 4;
+
+  // MUST_NOT represents a must_not promotion rule.
+  MUST_NOT = 5;
+}
+
 // Tablet represents information about a running instance of vttablet.
 message Tablet {
   // alias is the unique name of the tablet.
@@ -159,6 +180,10 @@ message Tablet {
 
   // default_conn_collation is the default connection collation used by this tablet.
   uint32 default_conn_collation = 16;
+
+  // promotion_rule specified the desired Promotion Rule for this tablet. If set,
+  // this overrides the Promotion Rule of the Durability Policy.
+  PromotionRule promotion_rule = 17;
 
   // OBSOLETE: ip and tablet health information
   // string ip = 3;

@@ -90,6 +90,7 @@ var (
 	initDbNameOverride string
 	skipBuildInfoTags  = "/.*/"
 	initTags           flagutil.StringMapValue
+	promotionRule      topodatapb.PromotionRule
 
 	initTimeout          = 1 * time.Minute
 	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
@@ -105,6 +106,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "timeout to use when MySQL is being shut down.")
+	fs.Var((*topoproto.PromotionRuleFlag)(&promotionRule), "promotion-rule", "The override Promotion Rule for this tablet. Use 'must_not' with caution as it can lead to issues with reparenting.")
 }
 
 var (
@@ -273,6 +275,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		DbNameOverride:       initDbNameOverride,
 		Tags:                 mergeTags(buildTags, initTags),
 		DefaultConnCollation: uint32(charset),
+		PromotionRule:        promotionRule,
 	}, nil
 }
 

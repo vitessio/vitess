@@ -15726,6 +15726,16 @@ export namespace topodata {
         DRAINED = 8
     }
 
+    /** PromotionRule enum. */
+    enum PromotionRule {
+        NONE = 0,
+        MUST = 1,
+        NEUTRAL = 2,
+        PREFER = 3,
+        PREFER_NOT = 4,
+        MUST_NOT = 5
+    }
+
     /** Properties of a Tablet. */
     interface ITablet {
 
@@ -15767,6 +15777,9 @@ export namespace topodata {
 
         /** Tablet default_conn_collation */
         default_conn_collation?: (number|null);
+
+        /** Tablet promotion_rule */
+        promotion_rule?: (topodata.PromotionRule|null);
     }
 
     /** Represents a Tablet. */
@@ -15816,6 +15829,9 @@ export namespace topodata {
 
         /** Tablet default_conn_collation. */
         public default_conn_collation: number;
+
+        /** Tablet promotion_rule. */
+        public promotion_rule: topodata.PromotionRule;
 
         /**
          * Creates a new Tablet instance using the specified properties.

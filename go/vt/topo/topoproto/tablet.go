@@ -295,3 +295,12 @@ func IsServingType(tabletType topodatapb.TabletType) bool {
 		return false
 	}
 }
+
+// ParsePromotionRule parses the tablet promotion rule.
+func ParsePromotionRule(param string) (topodatapb.PromotionRule, error) {
+	value, ok := topodatapb.PromotionRule_value[strings.ToUpper(param)]
+	if !ok {
+		return topodatapb.PromotionRule_NONE, fmt.Errorf("unknown PromotionRule %v", param)
+	}
+	return topodatapb.PromotionRule(value), nil
+}

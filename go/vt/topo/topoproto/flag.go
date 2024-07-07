@@ -17,6 +17,7 @@ limitations under the License.
 package topoproto
 
 import (
+	"fmt"
 	"strings"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -59,3 +60,25 @@ func (ttf *TabletTypeFlag) Set(v string) error {
 
 // Type is part of the pflag.Value interface.
 func (*TabletTypeFlag) Type() string { return "topodatapb.TabletType" }
+
+// PromotionRuleFlag implements the pflag.Value interface, for parsing a command-line value into a PromotionRule.
+type PromotionRuleFlag topodatapb.PromotionRule
+
+// String is part of the pflag.Value interfaces.
+func (ttf *PromotionRuleFlag) String() string {
+	promotionRule := topodatapb.PromotionRule(*ttf)
+	return strings.ToLower(promotionRule.String())
+}
+
+// Set is part of the pflag.Value interfaces.
+func (ttf *PromotionRuleFlag) Set(v string) error {
+	t, err := ParsePromotionRule(v)
+	if t == topodatapb.PromotionRule_MUST {
+		return fmt.Errorf("promotion rule %v not supported yet", t)
+	}
+	*ttf = PromotionRuleFlag(t)
+	return err
+}
+
+// Type is part of the pflag.Value interface.
+func (*PromotionRuleFlag) Type() string { return "topodatapb.PromotionRule" }
