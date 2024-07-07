@@ -309,7 +309,8 @@ func (tp *TransactionPayload) decompress() (io.ReaderAt, error) {
 	}
 
 	// Process smaller payloads using only in-memory buffers.
-	decompressedBytes, err := zstdDecoder.DecodeAll(tp.payload, nil)
+	decompressedBytes := make([]byte, 0, tp.uncompressedSize) // Perform a single pre-allocation
+	decompressedBytes, err := zstdDecoder.DecodeAll(tp.payload, decompressedBytes[:0])
 	if err != nil {
 		return nil, err
 	}
