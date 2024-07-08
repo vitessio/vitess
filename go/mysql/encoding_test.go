@@ -96,7 +96,6 @@ func TestEncUint16(t *testing.T) {
 
 	_, _, ok = readUint16(data, 9)
 	assert.False(t, ok, "readUint16 returned ok=true for shorter value")
-
 }
 
 func TestEncBytes(t *testing.T) {
@@ -122,7 +121,6 @@ func TestEncBytes(t *testing.T) {
 
 	_, _, ok = readBytes(data, 9, 2)
 	assert.False(t, ok, "readBytes returned ok=true for shorter value")
-
 }
 
 func TestEncUint32(t *testing.T) {
@@ -145,7 +143,6 @@ func TestEncUint32(t *testing.T) {
 
 	_, _, ok = readUint32(data, 7)
 	assert.False(t, ok, "readUint32 returned ok=true for shorter value")
-
 }
 
 func TestEncUint64(t *testing.T) {
@@ -169,7 +166,6 @@ func TestEncUint64(t *testing.T) {
 
 	_, _, ok = readUint64(data, 7)
 	assert.False(t, ok, "readUint64 returned ok=true for shorter value")
-
 }
 
 func TestEncString(t *testing.T) {
@@ -316,4 +312,142 @@ func TestEncString(t *testing.T) {
 			t.Errorf("readEOFString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.eofEncoded), true)
 		}
 	}
+}
+
+func TestWriteZeroes(t *testing.T) {
+	buf := make([]byte, 32)
+	resetBuf := func() {
+		t.Helper()
+		for i := range len(buf) {
+			buf[i] = 'f'
+		}
+	}
+
+	allMatch := func(b []byte, c byte) bool {
+		for i := range b {
+			if b[i] != c {
+				return false
+			}
+		}
+		return true
+	}
+
+	t.Run("0-offset", func(t *testing.T) {
+		for _, size := range []int{4, 10, 23, 24, 25, 26, 27} {
+			resetBuf()
+			pos := writeZeroes(buf, 0, size)
+			assert.Equal(t, size, pos, "expected to advance pos to %d, got %d", size, pos)
+			assert.True(t, allMatch(buf[:pos], 0), "buffer should be zeroes, %v", buf[:pos])
+			assert.True(t, allMatch(buf[pos:], 'f'), "buffer should be dirty, %v", buf[pos:])
+		}
+	})
+
+	t.Run("3-offset", func(t *testing.T) {
+		offset := 3
+		for _, size := range []int{4, 10, 23, 24, 25, 26, 27} {
+			resetBuf()
+			pos := writeZeroes(buf, offset, size)
+			assert.Equal(t, offset+size, pos, "expected to advance pos to %d, got %d", offset+size, pos)
+			assert.True(t, allMatch(buf[:offset], 'f'), "buffer should be dirty, %v", buf[offset:pos])
+			assert.True(t, allMatch(buf[offset:pos], 0), "buffer should be zeroes, %v", buf[:pos])
+			assert.True(t, allMatch(buf[pos:], 'f'), "buffer should be dirty, %v", buf[pos:])
+		}
+	})
+}
+
+func BenchmarkEncWriteInt(b *testing.B) {
+	buf := make([]byte, 16)
+
+	b.Run("16-bit", func(b *testing.B) {
+		value := uint16(0x0100)
+		for range b.N {
+			_ = writeUint16(buf, 0, value)
+		}
+	})
+
+	b.Run("16-bit-lenencoded", func(b *testing.B) {
+		value := uint64(0x0100)
+		for range b.N {
+			_ = writeLenEncInt(buf, 0, value)
+		}
+	})
+
+	b.Run("24-bit-lenencoded", func(b *testing.B) {
+		value := uint64(0xabcdef)
+		for range b.N {
+			_ = writeLenEncInt(buf, 0, value)
+		}
+	})
+
+	b.Run("32-bit", func(b *testing.B) {
+		value := uint32(0xabcdef)
+		for range b.N {
+			_ = writeUint32(buf, 0, value)
+		}
+	})
+
+	b.Run("64-bit", func(b *testing.B) {
+		value := uint64(0xa0a1a2a3a4a5a6a7)
+		for range b.N {
+			_ = writeUint64(buf, 0, value)
+		}
+	})
+
+	b.Run("64-bit-lenencoded", func(b *testing.B) {
+		value := uint64(0xa0a1a2a3a4a5a6a7)
+		for range b.N {
+			_ = writeLenEncInt(buf, 0, value)
+		}
+	})
+}
+
+func BenchmarkEncWriteZeroes(b *testing.B) {
+	buf := make([]byte, 128)
+
+	b.Run("4-bytes", func(b *testing.B) {
+		for range b.N {
+			_ = writeZeroes(buf, 16, 4)
+		}
+	})
+
+	b.Run("10-bytes", func(b *testing.B) {
+		for range b.N {
+			_ = writeZeroes(buf, 16, 10)
+		}
+	})
+
+	b.Run("23-bytes", func(b *testing.B) {
+		for range b.N {
+			_ = writeZeroes(buf, 16, 23)
+		}
+	})
+
+	b.Run("55-bytes", func(b *testing.B) {
+		for range b.N {
+			_ = writeZeroes(buf, 16, 55)
+		}
+	})
+}
+
+func BenchmarkEncReadInt(b *testing.B) {
+	b.Run("16-bit", func(b *testing.B) {
+		data := []byte{0xfc, 0xfb, 0x00}
+		for range b.N {
+			_, _, _ = readLenEncInt(data, 0)
+		}
+	})
+
+	b.Run("24-bit", func(b *testing.B) {
+		data := []byte{0xfd, 0x00, 0x00, 0x01}
+		for range b.N {
+			_, _, _ = readLenEncInt(data, 0)
+		}
+	})
+
+	b.Run("64-bit", func(b *testing.B) {
+		data := []byte{0xfe, 0xa7, 0xa6, 0xa5, 0xa4, 0xa3, 0xa2, 0xa1, 0xa0}
+		for range b.N {
+			_, _, _ = readLenEncInt(data, 0)
+		}
+	})
 }
