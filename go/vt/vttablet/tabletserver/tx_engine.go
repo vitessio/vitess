@@ -480,14 +480,6 @@ func (te *TxEngine) startWatchdog() {
 			return
 		}
 
-		coordConn, err := vtgateconn.Dial(ctx, te.coordinatorAddress)
-		if err != nil {
-			te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
-			log.Errorf("Error connecting to coordinator '%v': %v", te.coordinatorAddress, err)
-			return
-		}
-		defer coordConn.Close()
-
 		var wg sync.WaitGroup
 		for tx := range txs {
 			wg.Add(1)

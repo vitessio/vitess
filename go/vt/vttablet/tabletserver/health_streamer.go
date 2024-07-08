@@ -74,6 +74,7 @@ type healthStreamer struct {
 	// isServingPrimary stores if this tablet is currently the serving primary or not.
 	isServingPrimary bool
 
+	te      *TxEngine
 	se      *schema.Engine
 	history *history.History
 
