@@ -384,4 +384,26 @@ func TestTopologyChanged(t *testing.T) {
 			t.Errorf("shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
 		}
 	}
+
+	// Run again with a node in the topology replaced.
+	newTablet := createTestTablet("b")
+	allTablets[2] = newTablet
+	for i := 0; i < N; i++ {
+		th := b.Pick(target, allTablets)
+
+		allocation, totalAllocation := b.getAllocation(target, allTablets)
+
+		if totalAllocation != ALLOCATION/2 {
+			t.Errorf("totalAllocation mismatch %s", b.print())
+		}
+
+		if allocation[th.Tablet.Alias.Uid] != ALLOCATION/4 {
+			t.Errorf("allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
+		}
+
+		if th.Tablet.Alias.Cell != "b" {
+			t.Errorf("shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
+		}
+	}
+
 }
