@@ -29,7 +29,7 @@ jobs:
           if [[ "${{github.event.pull_request}}" ==  "" ]]; then
             push='true'
           fi
-          echo Push ${skip}
+          echo Push='${push}'
           echo "skip_push=${push}" >> $GITHUB_OUTPUT
 
   build_and_push_vttestserver:
