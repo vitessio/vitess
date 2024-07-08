@@ -57,6 +57,6 @@ We are adding a new way to terminate VTGate in v21 by using a connection drain t
 The goal of this new drain is to disallow new connections when VTGate is shutting down, but keep allowing idle/actives
 connections to execute queries until they disconnect or until the `--onterm_timeout` is reached.
 
-This new connection drain can be enabled by setting the `--mysql_server_drain_onterm` VTGate flag to `true`.
+This new connection drain can be enabled by setting the `--mysql-server-drain-onterm` VTGate flag to `true`.
 
 See more information about this change by [reading its RFC](https://github.com/vitessio/vitess/issues/15971).
