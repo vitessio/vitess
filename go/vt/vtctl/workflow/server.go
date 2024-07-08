@@ -3280,12 +3280,6 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		ksLockTTL = DefaultTimeout
 	}
 
-	// Remove mirror rules for the specified tablet types.
-	if err := sw.mirrorTableTraffic(ctx, roTabletTypes, 0); err != nil {
-		return handleError(fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for read-only tablet types",
-			ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
-	}
-
 	// For reads, locking the source keyspace is sufficient.
 	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
 	if lockErr != nil {
@@ -3300,6 +3294,12 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.SourceKeyspaceName())
 		}
 		return nil
+	}
+
+	// Remove mirror rules for the specified tablet types.
+	if err := sw.mirrorTableTraffic(ctx, roTabletTypes, 0); err != nil {
+		return handleError(fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for read-only tablet types",
+			ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
 	}
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
@@ -3387,18 +3387,13 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	// existing streams, waiting for replication to catch up, and initializing
 	// the target sequences -- to be sure the lock is not lost.
 	ksLockTTL := waitTimeout * 3
+
 	// Need to lock both source and target keyspaces.
 	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTTL))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer sourceUnlock(&err)
-
-	// Remove mirror rules for the primary tablet type.
-	if err := sw.mirrorTableTraffic(ctx, []topodata.TabletType{topodatapb.TabletType_PRIMARY}, 0); err != nil {
-		return handleError(fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for primary tablet type",
-			ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
-	}
 
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
 		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTTL))
@@ -3419,6 +3414,12 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return vterrors.Wrapf(err, "%s keyspace lock was lost", ts.TargetKeyspaceName())
 		}
 		return nil
+	}
+
+	// Remove mirror rules for the primary tablet type.
+	if err := sw.mirrorTableTraffic(ctx, []topodata.TabletType{topodatapb.TabletType_PRIMARY}, 0); err != nil {
+		return handleError(fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for primary tablet type",
+			ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
 	}
 
 	// Find out if the target is using any sequence tables for auto_increment

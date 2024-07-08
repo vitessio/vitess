@@ -1747,8 +1747,6 @@ func (ts *trafficSwitcher) IsMultiTenantMigration() bool {
 }
 
 func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topodatapb.TabletType, percent float32) error {
-	log.Infof("mirrorTableTraffic")
-
 	mrs, err := topotools.GetMirrorRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
