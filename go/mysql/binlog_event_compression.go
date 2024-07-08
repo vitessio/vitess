@@ -320,7 +320,7 @@ func (tp *TransactionPayload) GetNextEvent() (BinlogEvent, error) {
 // Events returns an iterator over the internal binlog events that
 // were contained within the compressed transaction payload/event.
 // It returns a single-use iterator.
-// TODO: come back to this when main is on go 1.23. See:
+// TODO(mattlord): implement this when main is on go 1.23. See:
 // - https://tip.golang.org/wiki/RangefuncExperiment
 // - https://github.com/golang/go/blob/release-branch.go1.23/src/iter/iter.go
 //func (tp *TransactionPayload) Events() iter.Seq[BinlogEvent] {
