@@ -101,7 +101,7 @@ func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 		case sqlparser.AggrFunc:
 			aggr = createAggrFromAggrFunc(e, expr)
 		case *sqlparser.FuncExpr:
-			if IsAggr(ctx, e) {
+			if ctx.IsAggr(e) {
 				aggr = NewAggr(opcode.AggregateUDF, nil, expr, expr.As.String())
 			} else {
 				aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
@@ -379,7 +379,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			a.Grouping[idx].ColOffset = offset
 			gb.ColOffset = offset
 		}
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
+		if gb.WSOffset != -1 || !ctx.NeedsWeightString(gb.Inner) {
 			continue
 		}
 
@@ -391,8 +391,16 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		if !aggr.NeedsWeightString(ctx) {
 			continue
 		}
-		arg := aggr.getPushColumn()
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), true)
+		var offset int
+		if aggr.PushedDown {
+			// if we have already pushed down aggregation, we need to use
+			// the weight string of the aggregation and not the argument
+			offset = a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func)), false)
+		} else {
+			// If we have not pushed down the aggregation, we need the weight_string of the argument
+			arg := aggr.getPushColumn()
+			offset = a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), true)
+		}
 		a.Aggregations[idx].WSOffset = offset
 	}
 	return nil
@@ -508,7 +516,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			a.Grouping[idx].ColOffset = offset
 		}
 
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
+		if gb.WSOffset != -1 || !ctx.NeedsWeightString(gb.Inner) {
 			continue
 		}
 

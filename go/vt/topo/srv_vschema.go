@@ -210,6 +210,12 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 	}
 	srvVSchema.KeyspaceRoutingRules = krr
 
+	mr, err := ts.GetMirrorRules(ctx)
+	if err != nil {
+		return fmt.Errorf("GetMirrorRules failed: %v", err)
+	}
+	srvVSchema.MirrorRules = mr
+
 	// now save the SrvVSchema in all cells in parallel
 	for _, cell := range cells {
 		wg.Add(1)

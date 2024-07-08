@@ -47,31 +47,37 @@ func lenEncIntSize(i uint64) int {
 }
 
 func writeLenEncInt(data []byte, pos int, i uint64) int {
+	// reslice at pos to avoid doing arithmetic below
+	data = data[pos:]
+
 	switch {
 	case i < 251:
-		data[pos] = byte(i)
+		data[0] = byte(i)
 		return pos + 1
 	case i < 1<<16:
-		data[pos] = 0xfc
-		data[pos+1] = byte(i)
-		data[pos+2] = byte(i >> 8)
+		_ = data[2] // early bounds check
+		data[0] = 0xfc
+		data[1] = byte(i)
+		data[2] = byte(i >> 8)
 		return pos + 3
 	case i < 1<<24:
-		data[pos] = 0xfd
-		data[pos+1] = byte(i)
-		data[pos+2] = byte(i >> 8)
-		data[pos+3] = byte(i >> 16)
+		_ = data[3] // early bounds check
+		data[0] = 0xfd
+		data[1] = byte(i)
+		data[2] = byte(i >> 8)
+		data[3] = byte(i >> 16)
 		return pos + 4
 	default:
-		data[pos] = 0xfe
-		data[pos+1] = byte(i)
-		data[pos+2] = byte(i >> 8)
-		data[pos+3] = byte(i >> 16)
-		data[pos+4] = byte(i >> 24)
-		data[pos+5] = byte(i >> 32)
-		data[pos+6] = byte(i >> 40)
-		data[pos+7] = byte(i >> 48)
-		data[pos+8] = byte(i >> 56)
+		_ = data[8] // early bounds check
+		data[0] = 0xfe
+		data[1] = byte(i)
+		data[2] = byte(i >> 8)
+		data[3] = byte(i >> 16)
+		data[4] = byte(i >> 24)
+		data[5] = byte(i >> 32)
+		data[6] = byte(i >> 40)
+		data[7] = byte(i >> 48)
+		data[8] = byte(i >> 56)
 		return pos + 9
 	}
 }
@@ -101,28 +107,17 @@ func writeByte(data []byte, pos int, value byte) int {
 }
 
 func writeUint16(data []byte, pos int, value uint16) int {
-	data[pos] = byte(value)
-	data[pos+1] = byte(value >> 8)
+	binary.LittleEndian.PutUint16(data[pos:], value)
 	return pos + 2
 }
 
 func writeUint32(data []byte, pos int, value uint32) int {
-	data[pos] = byte(value)
-	data[pos+1] = byte(value >> 8)
-	data[pos+2] = byte(value >> 16)
-	data[pos+3] = byte(value >> 24)
+	binary.LittleEndian.PutUint32(data[pos:], value)
 	return pos + 4
 }
 
 func writeUint64(data []byte, pos int, value uint64) int {
-	data[pos] = byte(value)
-	data[pos+1] = byte(value >> 8)
-	data[pos+2] = byte(value >> 16)
-	data[pos+3] = byte(value >> 24)
-	data[pos+4] = byte(value >> 32)
-	data[pos+5] = byte(value >> 40)
-	data[pos+6] = byte(value >> 48)
-	data[pos+7] = byte(value >> 56)
+	binary.LittleEndian.PutUint64(data[pos:], value)
 	return pos + 8
 }
 
@@ -137,10 +132,16 @@ func writeLenEncString(data []byte, pos int, value string) int {
 }
 
 func writeZeroes(data []byte, pos int, len int) int {
-	for i := 0; i < len; i++ {
-		data[pos+i] = 0
+	// XXX: This implementation is optimized to leverage
+	// the go compiler's memclr pattern, see: https://github.com/golang/go/issues/5373
+	end := pos + len
+	data = data[pos:end]
+
+	for i := range data {
+		data[i] = 0
 	}
-	return pos + len
+
+	return end
 }
 
 //
@@ -228,6 +229,7 @@ func readFixedLenUint64(data []byte) (uint64, bool) {
 	case 3: // 2 bytes
 		return uint64(binary.LittleEndian.Uint16(data[1:])), true
 	case 4: // 3 bytes
+		_ = data[3] // early bounds check
 		return uint64(data[1]) |
 			uint64(data[2])<<8 |
 			uint64(data[3])<<16, true
@@ -242,37 +244,42 @@ func readLenEncInt(data []byte, pos int) (uint64, int, bool) {
 	if pos >= len(data) {
 		return 0, 0, false
 	}
-	switch data[pos] {
+
+	// reslice to avoid arithmetic below
+	data = data[pos:]
+
+	switch data[0] {
 	case 0xfc:
 		// Encoded in the next 2 bytes.
-		if pos+2 >= len(data) {
+		if 2 >= len(data) {
 			return 0, 0, false
 		}
-		return uint64(data[pos+1]) |
-			uint64(data[pos+2])<<8, pos + 3, true
+		return uint64(data[1]) |
+			uint64(data[2])<<8, pos + 3, true
 	case 0xfd:
 		// Encoded in the next 3 bytes.
-		if pos+3 >= len(data) {
+		if 3 >= len(data) {
 			return 0, 0, false
 		}
-		return uint64(data[pos+1]) |
-			uint64(data[pos+2])<<8 |
-			uint64(data[pos+3])<<16, pos + 4, true
+		return uint64(data[1]) |
+			uint64(data[2])<<8 |
+			uint64(data[3])<<16, pos + 4, true
 	case 0xfe:
 		// Encoded in the next 8 bytes.
-		if pos+8 >= len(data) {
+		if 8 >= len(data) {
 			return 0, 0, false
 		}
-		return uint64(data[pos+1]) |
-			uint64(data[pos+2])<<8 |
-			uint64(data[pos+3])<<16 |
-			uint64(data[pos+4])<<24 |
-			uint64(data[pos+5])<<32 |
-			uint64(data[pos+6])<<40 |
-			uint64(data[pos+7])<<48 |
-			uint64(data[pos+8])<<56, pos + 9, true
+		return uint64(data[1]) |
+			uint64(data[2])<<8 |
+			uint64(data[3])<<16 |
+			uint64(data[4])<<24 |
+			uint64(data[5])<<32 |
+			uint64(data[6])<<40 |
+			uint64(data[7])<<48 |
+			uint64(data[8])<<56, pos + 9, true
+	default:
+		return uint64(data[0]), pos + 1, true
 	}
-	return uint64(data[pos]), pos + 1, true
 }
 
 func readLenEncString(data []byte, pos int) (string, int, bool) {

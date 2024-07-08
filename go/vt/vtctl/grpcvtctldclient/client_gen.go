@@ -362,6 +362,15 @@ func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatap
 	return client.c.GetKeyspaces(ctx, in, opts...)
 }
 
+// GetMirrorRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetMirrorRules(ctx context.Context, in *vtctldatapb.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetMirrorRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetMirrorRules(ctx, in, opts...)
+}
+
 // GetPermissions is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetPermissions(ctx context.Context, in *vtctldatapb.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetPermissionsResponse, error) {
 	if client.c == nil {
@@ -1053,6 +1062,15 @@ func (client *gRPCVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldat
 	}
 
 	return client.c.WorkflowDelete(ctx, in, opts...)
+}
+
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) WorkflowMirrorTraffic(ctx context.Context, in *vtctldatapb.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowMirrorTrafficResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.WorkflowMirrorTraffic(ctx, in, opts...)
 }
 
 // WorkflowStatus is part of the vtctlservicepb.VtctldClient interface.

@@ -64,6 +64,17 @@ func (dr *switcherDryRun) deleteKeyspaceRoutingRules(ctx context.Context) error 
 	return nil
 }
 
+func (dr *switcherDryRun) mirrorTableTraffic(ctx context.Context, types []topodatapb.TabletType, percent float32) error {
+	var tabletTypes []string
+	for _, servedType := range types {
+		tabletTypes = append(tabletTypes, servedType.String())
+	}
+	dr.drLog.Logf("Mirroring %.2f percent of traffic from keyspace %s to keyspace %s for tablet types [%s]",
+		percent, dr.ts.SourceKeyspaceName(), dr.ts.TargetKeyspaceName(), strings.Join(tabletTypes, ","))
+
+	return nil
+}
+
 func (dr *switcherDryRun) switchKeyspaceReads(ctx context.Context, types []topodatapb.TabletType) error {
 	var tabletTypes []string
 	for _, servedType := range types {

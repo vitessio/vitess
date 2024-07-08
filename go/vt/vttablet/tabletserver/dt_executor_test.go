@@ -71,6 +71,22 @@ func TestTxExecutorPrepare(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestTxExecutorPrepareResevedConn tests the case where a reserved connection is used for prepare.
+func TestDTExecutorPrepareResevedConn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+	txid := newTxForPrep(ctx, tsv)
+
+	// Reserve a connection
+	txe.te.Reserve(ctx, nil, txid, nil)
+
+	err := txe.Prepare(txid, "aa")
+	require.ErrorContains(t, err, "VT12001: unsupported: cannot prepare the transaction on a reserved connection")
+}
+
 func TestTxExecutorPrepareNotInTx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -533,7 +549,7 @@ func TestNoTwopc(t *testing.T) {
 	}
 }
 
-func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
@@ -542,7 +558,7 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv 
 	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
-	return &TxExecutor{
+	return &DTExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
@@ -550,7 +566,7 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv 
 }
 
 // newShortAgeExecutor is same as newTestTxExecutor, but shorter transaction abandon age.
-func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
@@ -559,7 +575,7 @@ func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, ts
 	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
-	return &TxExecutor{
+	return &DTExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
@@ -567,11 +583,11 @@ func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, ts
 }
 
 // newNoTwopcExecutor is same as newTestTxExecutor, but 2pc disabled.
-func newNoTwopcExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newNoTwopcExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, noTwopc, db)
-	return &TxExecutor{
+	return &DTExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,

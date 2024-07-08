@@ -36,6 +36,7 @@ type iswitcher interface {
 	createJournals(ctx context.Context, sourceWorkflows []string) error
 	allowTargetWrites(ctx context.Context) error
 	changeRouting(ctx context.Context) error
+	mirrorTableTraffic(ctx context.Context, types []topodatapb.TabletType, percent float32) error
 	streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error
 	startReverseVReplication(ctx context.Context) error
 	switchKeyspaceReads(ctx context.Context, types []topodatapb.TabletType) error
