@@ -334,7 +334,7 @@ docker_lite:
 docker_mini:
 	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
-DOCKER_VTTESTSERVER_SUFFIX = mysql57 mysql80
+DOCKER_VTTESTSERVER_SUFFIX = mysql80
 DOCKER_VTTESTSERVER_TARGETS = $(addprefix docker_vttestserver_,$(DOCKER_VTTESTSERVER_SUFFIX))
 $(DOCKER_VTTESTSERVER_TARGETS): docker_vttestserver_%:
 	${call build_docker_image,docker/vttestserver/Dockerfile.$*,vitess/vttestserver:$*}
