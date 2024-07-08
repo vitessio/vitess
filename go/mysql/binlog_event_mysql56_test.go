@@ -146,11 +146,12 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 		streamDecodingCnt := compressedTrxPayloadsUsingStream.Get()
 
 		require.True(t, tc.event.IsTransactionPayload())
-		iter, err := tc.event.TransactionPayload(format)
+		tp, err := tc.event.TransactionPayload(format)
 		require.NoError(t, err)
+		defer tp.Close()
 		eventStrs := []string{}
 		for {
-			ev, err := iter()
+			ev, err := tp.GetNextEvent()
 			if err != nil {
 				if err == io.EOF {
 					break

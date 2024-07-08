@@ -69,8 +69,8 @@ var (
 	compressedTrxPayloadsInMem       = stats.NewCounter("CompressedTransactionPayloadsInMemory", "The number of compressed binlog transaction payloads that were processed in memory")
 	compressedTrxPayloadsUsingStream = stats.NewCounter("CompressedTransactionPayloadsViaStream", "The number of compressed binlog transaction payloads that were processed using a stream")
 
-	// Create a reader that caches decompressors. This is used for
-	// smaller events that we want to handle entirely using in-memory
+	// Create a stateless reader that caches decompressors. This is used
+	// for smaller events that we want to handle entirely using in-memory
 	// buffers.
 	zstdDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 )
@@ -80,6 +80,7 @@ type TransactionPayload struct {
 	compressionType  uint64
 	uncompressedSize uint64
 	payload          []byte
+	reader           io.Reader
 	iterator         func() (BinlogEvent, error)
 }
 
@@ -89,10 +90,11 @@ func (ev binlogEvent) IsTransactionPayload() bool {
 	return ev.Type() == eTransactionPayloadEvent
 }
 
-// TransactionPayload processes the payload and returns an iterator that
-// should be used in a loop to read BinlogEvents one by one that were in
-// the compressed transaction. The iterator function will return io.EOF
-// when there are no more events left in the payload.
+// TransactionPayload processes the payload and provides a GetNextEvent()
+// method which should be used in a loop to read BinlogEvents one by one
+// that were in the compressed transaction. This function will return
+// io.EOF when there are no more events left in the payload. You must
+// call Close() in a defer when you are done processing the payload.
 // The following event types are compressed as part of the
 // transaction payload:
 //
@@ -142,16 +144,18 @@ func (ev binlogEvent) IsTransactionPayload() bool {
 // We need to extract the compressed transaction payload from the GTID
 // event, decompress it with zstd, and then process the internal events
 // (e.g. Query and Row events) that make up the transaction.
-func (ev binlogEvent) TransactionPayload(format BinlogFormat) (func() (BinlogEvent, error), error) {
+func (ev binlogEvent) TransactionPayload(format BinlogFormat) (*TransactionPayload, error) {
 	tp := &TransactionPayload{}
-	if err := tp.Decode(ev.Bytes()[format.HeaderLength:]); err != nil {
+	if err := tp.process(ev.Bytes()[format.HeaderLength:]); err != nil {
 		return nil, vterrors.Wrapf(err, "error decoding transaction payload event")
 	}
-	return tp.iterator, nil
+	return tp, nil
 }
 
-// Decode decodes and decompresses the payload.
-func (tp *TransactionPayload) Decode(data []byte) error {
+// process reads and decompresses the payload, setting up the iterator
+// that can then be used in GetNextEvent() to read the binlog events
+// from the uncompressed payload one at a time.
+func (tp *TransactionPayload) process(data []byte) error {
 	if err := tp.read(data); err != nil {
 		return err
 	}
@@ -160,7 +164,8 @@ func (tp *TransactionPayload) Decode(data []byte) error {
 
 // read unmarshalls the transaction payload event into the
 // TransactionPayload struct. The compressed payload itself will still
-// need to be decoded -- meaning decompressing it and extracting the
+// need to be decoded -- meaning decompressing it and setting up the
+// iterator that can then be used by GetNextEvent() to extract the
 // internal events.
 func (tp *TransactionPayload) read(data []byte) error {
 	pos := uint64(0)
@@ -205,33 +210,23 @@ func (tp *TransactionPayload) read(data []byte) error {
 	}
 }
 
-// decode decompresses the payload and extracts the internal binlog
-// events, assigning the iterator to a function that can then be used
-// to retrieve the events from the uncompressed transaction one by one.
+// decode decompresses the payload and assigns the iterator to a
+// function that can then be used to retrieve the events from the
+// uncompressed transaction one at a time.
 func (tp *TransactionPayload) decode() error {
 	if tp.compressionType != TransactionPayloadCompressionZstd {
 		return vterrors.New(vtrpcpb.Code_INTERNAL,
 			fmt.Sprintf("TransactionPayload has unsupported compression type of %d", tp.compressionType))
 	}
 
-	decompressedReader, err := tp.decompress()
-	if err != nil {
+	err := tp.decompress()
+	if err != nil || tp.reader == nil {
 		return vterrors.Wrapf(err, "error decompressing transaction payload")
 	}
 
 	header := make([]byte, headerLen)
 	tp.iterator = func() (ble BinlogEvent, err error) {
-		defer func() {
-			if err != nil {
-				switch decompressedReader := decompressedReader.(type) {
-				case *bytes.Reader:
-					decompressedReader = nil
-				case io.ReadCloser:
-					decompressedReader.Close()
-				}
-			}
-		}()
-		bytesRead, err := io.ReadFull(decompressedReader, header)
+		bytesRead, err := io.ReadFull(tp.reader, header)
 		if err != nil {
 			if err == io.EOF {
 				return nil, io.EOF
@@ -245,7 +240,7 @@ func (tp *TransactionPayload) decode() error {
 		eventLen := int64(binary.LittleEndian.Uint32(header[BinlogEventLenOffset:headerLen]))
 		eventData := make([]byte, eventLen)
 		copy(eventData, header) // The event includes the header
-		bytesRead, err = io.ReadFull(decompressedReader, eventData[headerLen:])
+		bytesRead, err = io.ReadFull(tp.reader, eventData[headerLen:])
 		if err != nil && err != io.EOF {
 			return nil, vterrors.Wrapf(err, "error reading binlog event data from decompressed transaction payload")
 		}
@@ -259,13 +254,15 @@ func (tp *TransactionPayload) decode() error {
 }
 
 // decompress decompresses the payload. If the payload is larger than
-// zstdInMemoryDecompressorMaxSize then we stream the decompression,
-// otherwise we use in-memory buffers.
-// In either case, we return an io.Reader that can be used to read the
-// events in the decompressed payload.
-func (tp *TransactionPayload) decompress() (io.Reader, error) {
+// zstdInMemoryDecompressorMaxSize then we stream the decompression via
+// a new zstd.Decoder, otherwise we use in-memory buffers with the
+// package's stateless zstdDecoder.
+// In either case, we setup the reader that can be used within the
+// iterator to read the events one at a time from the decompressed
+// payload in GetNextEvent().
+func (tp *TransactionPayload) decompress() error {
 	if len(tp.payload) == 0 {
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty compressed transaction payload")
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty compressed transaction payload")
 	}
 
 	// Switch to slower but less memory intensive stream mode for
@@ -274,24 +271,49 @@ func (tp *TransactionPayload) decompress() (io.Reader, error) {
 		in := bytes.NewReader(tp.payload)
 		streamDecoder, err := zstd.NewReader(in, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		compressedTrxPayloadsUsingStream.Add(1)
-		return streamDecoder.IOReadCloser(), nil
+		tp.reader = streamDecoder.IOReadCloser()
+		return nil
 	}
 
 	// Process smaller payloads using only in-memory buffers.
 	decompressedBytes := make([]byte, 0, tp.uncompressedSize) // Perform a single pre-allocation
 	decompressedBytes, err := zstdDecoder.DecodeAll(tp.payload, decompressedBytes[:0])
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if uint64(len(decompressedBytes)) != tp.uncompressedSize {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"uncompressed transaction payload size %d does not match expected size %d", len(decompressedBytes), tp.uncompressedSize)
 	}
 	compressedTrxPayloadsInMem.Add(1)
-	return bytes.NewReader(decompressedBytes), nil
+	tp.reader = bytes.NewReader(decompressedBytes)
+	return nil
+}
+
+// Close should be called in a defer where the TransactionPayload is
+// used to ensure that the underlying reader and related resources
+// are cleaned up.
+func (tp *TransactionPayload) Close() {
+	switch reader := tp.reader.(type) {
+	case *bytes.Reader:
+		reader = nil
+	case io.ReadCloser:
+		reader.Close()
+	}
+	tp.iterator = nil
+}
+
+// GetNextEvent returns the next binlog event that was contained within
+// the compressed transaction payload. It will return io.EOF when there
+// are no more events left in the payload.
+func (tp *TransactionPayload) GetNextEvent() (BinlogEvent, error) {
+	if tp == nil || tp.iterator == nil {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "TransactionPayload has been closed")
+	}
+	return tp.iterator()
 }
 
 // Events returns an iterator over the internal binlog events that
