@@ -22,19 +22,17 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
 const (
@@ -51,12 +49,18 @@ const (
 
 	sqlReadAllRedo = `select t.dtid, t.state, t.time_created, s.statement
 	from %s.redo_state t
-  join %s.redo_statement s on t.dtid = s.dtid
+    join %s.redo_statement s on t.dtid = s.dtid
 	order by t.dtid, s.id`
 
 	sqlReadAllTransactions = `select t.dtid, t.state, t.time_created, p.keyspace, p.shard
 	from %s.dt_state t
-  join %s.dt_participant p on t.dtid = p.dtid
+    join %s.dt_participant p on t.dtid = p.dtid
+	order by t.dtid, p.id`
+
+	sqlReadAllUnresolvedTransactions = `select t.dtid, t.state, p.keyspace, p.shard
+	from %s.dt_state t
+    join %s.dt_participant p on t.dtid = p.dtid
+    where time_created < %a
 	order by t.dtid, p.id`
 )
 
@@ -72,15 +76,16 @@ type TwoPC struct {
 	readAllRedo         string
 	countUnresolvedRedo *sqlparser.ParsedQuery
 
-	insertTransaction   *sqlparser.ParsedQuery
-	insertParticipants  *sqlparser.ParsedQuery
-	transition          *sqlparser.ParsedQuery
-	deleteTransaction   *sqlparser.ParsedQuery
-	deleteParticipants  *sqlparser.ParsedQuery
-	readTransaction     *sqlparser.ParsedQuery
-	readParticipants    *sqlparser.ParsedQuery
-	readAbandoned       *sqlparser.ParsedQuery
-	readAllTransactions string
+	insertTransaction          *sqlparser.ParsedQuery
+	insertParticipants         *sqlparser.ParsedQuery
+	transition                 *sqlparser.ParsedQuery
+	deleteTransaction          *sqlparser.ParsedQuery
+	deleteParticipants         *sqlparser.ParsedQuery
+	readTransaction            *sqlparser.ParsedQuery
+	readParticipants           *sqlparser.ParsedQuery
+	readAbandoned              *sqlparser.ParsedQuery
+	readUnresolvedTransactions *sqlparser.ParsedQuery
+	readAllTransactions        string
 }
 
 // NewTwoPC creates a TwoPC variable.
@@ -136,6 +141,8 @@ func (tpc *TwoPC) initializeQueries() {
 		"select dtid, time_created from %s.dt_state where time_created < %a",
 		dbname, ":time_created")
 	tpc.readAllTransactions = fmt.Sprintf(sqlReadAllTransactions, dbname, dbname)
+	tpc.readUnresolvedTransactions = sqlparser.BuildParsedQuery(sqlReadAllUnresolvedTransactions,
+		dbname, dbname, ":time_created")
 }
 
 // Open starts the TwoPC service.
@@ -475,5 +482,56 @@ func (tpc *TwoPC) read(ctx context.Context, conn *connpool.Conn, pq *sqlparser.P
 	if err != nil {
 		return nil, err
 	}
+	// TODO: check back for limit, 10k is too high already to have unresolved transactions.
 	return conn.Exec(ctx, q, 10000, false)
+}
+
+// UnresolvedTransactions returns the list of unresolved transactions
+func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.Time) ([]*querypb.TransactionMetadata, error) {
+	conn, err := tpc.readPool.Get(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	bindVars := map[string]*querypb.BindVariable{
+		"time_created": sqltypes.Int64BindVariable(abandonTime.UnixNano()),
+	}
+	qr, err := tpc.read(ctx, conn.Conn, tpc.readUnresolvedTransactions, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	var txs []*querypb.TransactionMetadata
+	var participants []*querypb.Target
+	var currentDtid string
+	var currentDtidState querypb.TransactionState
+	for _, row := range qr.Rows {
+		dtid := row[0].ToString()
+		if currentDtid != dtid {
+			if currentDtid != "" {
+				txs = append(txs, &querypb.TransactionMetadata{
+					Dtid:         currentDtid,
+					State:        currentDtidState,
+					Participants: participants,
+				})
+			}
+			currentDtid = dtid
+			sID, _ := row[1].ToInt()
+			currentDtidState = querypb.TransactionState(sID)
+			participants = nil
+		}
+		participants = append(participants, &querypb.Target{
+			Keyspace: row[2].ToString(),
+			Shard:    row[3].ToString(),
+		})
+	}
+	// This is for the last list which is not added to the Transaction Metadata.
+	if currentDtid != "" {
+		txs = append(txs, &querypb.TransactionMetadata{
+			Dtid:         currentDtid,
+			State:        currentDtidState,
+			Participants: participants,
+		})
+	}
+	return txs, nil
 }
