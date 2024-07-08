@@ -66,7 +66,6 @@ BASE_PACKAGES=(
     zstd
 )
 
-percona-release enable-only tools
 apt-get update
 apt-get install -y --no-install-recommends "${BASE_PACKAGES[@]}"
 
