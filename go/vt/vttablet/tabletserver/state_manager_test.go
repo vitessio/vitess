@@ -31,8 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 
-	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -69,7 +67,7 @@ func TestStateManagerStateByName(t *testing.T) {
 }
 
 func TestStateManagerServePrimary(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	sm.EnterLameduck()
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
@@ -100,7 +98,7 @@ func TestStateManagerServePrimary(t *testing.T) {
 }
 
 func TestStateManagerServeNonPrimary(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
@@ -125,7 +123,7 @@ func TestStateManagerServeNonPrimary(t *testing.T) {
 }
 
 func TestStateManagerUnservePrimary(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateNotServing, "")
 	require.NoError(t, err)
@@ -150,7 +148,7 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 }
 
 func TestStateManagerUnserveNonPrimary(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, "")
 	require.NoError(t, err)
@@ -177,7 +175,7 @@ func TestStateManagerUnserveNonPrimary(t *testing.T) {
 }
 
 func TestStateManagerClose(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotConnected, "")
 	require.NoError(t, err)
@@ -201,7 +199,7 @@ func TestStateManagerClose(t *testing.T) {
 }
 
 func TestStateManagerStopService(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
@@ -215,7 +213,7 @@ func TestStateManagerStopService(t *testing.T) {
 }
 
 func TestStateManagerGracePeriod(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	sm.transitionGracePeriod = 10 * time.Millisecond
 
@@ -269,7 +267,7 @@ func (te *testWatcher) Close() {
 func TestStateManagerSetServingTypeRace(t *testing.T) {
 	// We don't call StopService because that in turn
 	// will call Close again on testWatcher.
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	te := &testWatcher{
 		t:  t,
 		sm: sm,
@@ -288,7 +286,7 @@ func TestStateManagerSetServingTypeRace(t *testing.T) {
 
 func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	log.Infof("starting")
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
@@ -319,7 +317,7 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	defer func(saved time.Duration) { transitionRetryInterval = saved }(transitionRetryInterval)
 	transitionRetryInterval = 10 * time.Millisecond
 
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	sm.se.(*testSchemaEngine).failMySQL = true
 
@@ -351,7 +349,7 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 }
 
 func TestStateManagerNotConnectedType(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	sm.EnterLameduck()
 	err := sm.SetServingType(topodatapb.TabletType_RESTORE, testNow, StateNotServing, "")
@@ -404,7 +402,7 @@ func (k *killableConn) SQLParser() *sqlparser.Parser {
 }
 
 func TestStateManagerShutdownGracePeriod(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 
 	sm.te = &delayedTxEngine{}
@@ -459,7 +457,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	defer func(saved time.Duration) { transitionRetryInterval = saved }(transitionRetryInterval)
 	transitionRetryInterval = 10 * time.Millisecond
 
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
@@ -527,7 +525,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 func TestStateManagerValidations(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	sm.target = target.CloneVT()
 	err := sm.StartRequest(ctx, target, false)
@@ -590,7 +588,7 @@ func TestStateManagerValidations(t *testing.T) {
 func TestStateManagerWaitForRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	sm.target = target
@@ -630,7 +628,7 @@ func TestStateManagerWaitForRequests(t *testing.T) {
 }
 
 func TestStateManagerNotify(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 
 	blpFunc = testBlpFunc
@@ -669,7 +667,7 @@ func TestStateManagerNotify(t *testing.T) {
 }
 
 func TestRefreshReplHealthLocked(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	defer sm.StopService()
 	rt := sm.rt.(*testReplTracker)
 
@@ -705,7 +703,7 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 
 // TestPanicInWait tests that we don't panic when we wait for requests if more StartRequest calls come up after we start waiting.
 func TestPanicInWait(t *testing.T) {
-	sm := newTestStateManager(t)
+	sm := newTestStateManager()
 	sm.wantState = StateServing
 	sm.state = StateServing
 	sm.replHealthy = true
@@ -732,7 +730,7 @@ func verifySubcomponent(t *testing.T, order int64, component any, state testStat
 	assert.Equal(t, state, tos.State())
 }
 
-func newTestStateManager(t *testing.T) *stateManager {
+func newTestStateManager() *stateManager {
 	order.Store(0)
 	cfg := tabletenv.NewDefaultConfig()
 	parser := sqlparser.NewTestParser()
@@ -757,7 +755,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		rw:          newRequestsWaiter(),
 	}
 	sm.Init(env, &querypb.Target{})
-	sm.hs.InitDBConfig(&querypb.Target{}, dbconfigs.New(fakesqldb.New(t).ConnParams()))
+	sm.hs.InitDBConfig(&querypb.Target{})
 	log.Infof("returning sm: %p", sm)
 	return sm
 }
