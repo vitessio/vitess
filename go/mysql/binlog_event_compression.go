@@ -51,7 +51,7 @@ const (
 	TransactionPayloadCompressionNone = 255
 
 	// Length of the binlog event header in the transaction payload.
-	headerLen = int64(BinlogEventLenOffset + 4)
+	headerLen = BinlogEventLenOffset + 4
 
 	// At what size should we switch from the in-memory buffer
 	// decoding to streaming mode which is much slower, but does
@@ -238,18 +238,18 @@ func (tp *TransactionPayload) decode() error {
 			}
 			return nil, vterrors.Wrapf(err, "error reading event header from decompressed transaction payload")
 		}
-		if int64(bytesRead) != headerLen {
+		if bytesRead != headerLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected header length of %d but only read %d bytes",
 				headerLen, bytesRead)
 		}
-		eventLen := uint64(binary.LittleEndian.Uint32(header[BinlogEventLenOffset:headerLen]))
+		eventLen := int64(binary.LittleEndian.Uint32(header[BinlogEventLenOffset:headerLen]))
 		eventData := make([]byte, eventLen)
 		copy(eventData, header) // The event includes the header
 		bytesRead, err = io.ReadFull(decompressedReader, eventData[headerLen:])
 		if err != nil && err != io.EOF {
 			return nil, vterrors.Wrapf(err, "error reading binlog event data from decompressed transaction payload")
 		}
-		if uint64(bytesRead)+uint64(headerLen) != eventLen {
+		if int64(bytesRead+headerLen) != eventLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected binlog event length of %d but only read %d bytes",
 				eventLen, bytesRead)
 		}
@@ -268,8 +268,8 @@ func (tp *TransactionPayload) decompress() (io.Reader, error) {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty compressed transaction payload")
 	}
 
-	// Switch to slower but less memory intensive stream mode for larger
-	// payloads.
+	// Switch to slower but less memory intensive stream mode for
+	// larger payloads.
 	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
 		in := bytes.NewReader(tp.payload)
 		streamDecoder, err := zstd.NewReader(in, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
