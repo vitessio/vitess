@@ -587,96 +587,79 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 
 	// if at least one column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	derived, op, ok, offsets := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	derived, op, ok, offset := addColumnToInput(ctx, r.Source, expr, reuse, gb)
 	r.Source = op
 	if ok {
-		return offsets[0]
+		return offset
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
 	src := createProjection(ctx, r.Source, derived)
 	r.Source = src
 
-	offsets = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
-	return offsets[0]
+	return src.addColumnWithoutPushing(ctx, expr, gb)
 }
 
 type selectExpressions interface {
 	Operator
 	addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int
-	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) []int
 	derivedName() string
 }
 
 // addColumnToInput adds columns to an operator without pushing them down
-func addMultipleColumnsToInput(
+func addColumnToInput(
 	ctx *plancontext.PlanningContext,
 	operator Operator,
-	reuse bool,
-	addToGroupBy []bool,
-	exprs []*sqlparser.AliasedExpr,
-) (derivedName string, // if we found a derived table, this will contain its name
-	projection Operator, // if an operator needed to be built, it will be returned here
-	found bool, // whether a matching op was found or not
-	offsets []int, // the offsets the expressions received
-) {
+	expr *sqlparser.AliasedExpr,
+	reuse, addToGroupBy bool,
+) (derivedName string, projection Operator, found bool, offset int) {
+	var src Operator
+	var updateSrc func(Operator)
 	switch op := operator.(type) {
+
+	// Pass through operators - we can just add the columns to their source
 	case *SubQuery:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, exprs)
-		if added {
-			op.Outer = src
-		}
-		return derivedName, op, added, offset
-
+		src, updateSrc = op.Outer, func(newSrc Operator) { op.Outer = newSrc }
 	case *Distinct:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
-		if added {
-			op.Source = src
-		}
-		return derivedName, op, added, offset
-
+		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
 	case *Limit:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
-		if added {
-			op.Source = src
-		}
-		return derivedName, op, added, offset
-
+		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
 	case *Ordering:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
-		if added {
-			op.Source = src
-		}
-		return derivedName, op, added, offset
-
+		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
 	case *LockAndComment:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
-		if added {
-			op.Source = src
-		}
-		return derivedName, op, added, offset
+		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
 
+	// Union needs special handling, we can't really add new columns to all inputs
+	case *Union:
+		proj := wrapInDerivedProjection(ctx, op)
+		return addColumnToInput(ctx, proj, expr, reuse, addToGroupBy)
+
+	// Horizon is another one of these - we can't really add new columns to it
 	case *Horizon:
-		// if the horizon has an alias, then it is a derived table,
-		// we have to add a new projection and can't build on this one
-		return op.Alias, op, false, nil
+		return op.Alias, op, false, 0
 
 	case selectExpressions:
 		name := op.derivedName()
 		if name != "" {
 			// if the only thing we can push to is a derived table,
 			// we have to add a new projection and can't build on this one
-			return name, op, false, nil
+			return name, op, false, 0
 		}
-		offset := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
+		offset := op.addColumnWithoutPushing(ctx, expr, addToGroupBy)
 		return "", op, true, offset
 
-	case *Union:
-		proj := addDerivedProj(ctx, op)
-		return addMultipleColumnsToInput(ctx, proj, reuse, addToGroupBy, exprs)
 	default:
-		return "", op, false, nil
+		return "", op, false, 0
 	}
+
+	// Handle the case where we have a pass-through operator
+	var added bool
+	derivedName, src, added, offset = addColumnToInput(ctx, src, expr, reuse, addToGroupBy)
+	if added {
+		updateSrc(src)
+	}
+	return derivedName, operator, added, offset
+
 }
 
 func (r *Route) AddWSColumn(ctx *plancontext.PlanningContext, offset int, _ bool) int {
@@ -691,7 +674,7 @@ func (r *Route) AddWSColumn(ctx *plancontext.PlanningContext, offset int, _ bool
 
 	ok, foundOffset := addWSColumnToInput(ctx, r.Source, offset)
 	if !ok {
-		src := addDerivedProj(ctx, r.Source)
+		src := wrapInDerivedProjection(ctx, r.Source)
 		r.Source = src
 		return src.AddWSColumn(ctx, offset, true)
 	}
@@ -714,7 +697,8 @@ func addWSColumnToInput(ctx *plancontext.PlanningContext, source Operator, offse
 	return false, -1
 }
 
-func addDerivedProj(
+// wrapInDerivedProjection wraps the input in a derived table projection named "dt"
+func wrapInDerivedProjection(
 	ctx *plancontext.PlanningContext,
 	op Operator,
 ) (projection *Projection) {
