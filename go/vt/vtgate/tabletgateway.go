@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -37,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/balancer"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -54,6 +57,11 @@ var (
 	// retryCount is the number of times a query will be retried on error
 	retryCount = 2
 
+	// configuration flags for the tablet balancer
+	balancerEnabled     bool
+	balancerVtgateCells []string
+	balancerKeyspaces   []string
+
 	logCollations = logutil.NewThrottledLogger("CollationInconsistent", 1*time.Minute)
 )
 
@@ -62,6 +70,9 @@ func init() {
 		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
+		fs.BoolVar(&balancerEnabled, "balancer_enabled", false, "Whether to enable the tablet balancer to evenly spread query load")
+		fs.StringSliceVar(&balancerVtgateCells, "balancer_vtgate_cells", []string{}, "When in balanced mode, a comma-separated list of cells that contain vtgates (required)")
+		fs.StringSliceVar(&balancerKeyspaces, "balancer_keyspaces", []string{}, "When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)")
 	})
 }
 
@@ -84,6 +95,9 @@ type TabletGateway struct {
 
 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
+
+	// balancer used for routing to tablets
+	balancer balancer.TabletBalancer
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
@@ -112,6 +126,9 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
+	if balancerEnabled {
+		gw.setupBalancer(ctx)
+	}
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
@@ -143,6 +160,13 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 			}
 		}
 	}(bufferCtx, ksChan, gw.buffer)
+}
+
+func (gw *TabletGateway) setupBalancer(ctx context.Context) {
+	if len(balancerVtgateCells) == 0 {
+		log.Exitf("balancer_vtgate_cells is required for balanced mode")
+	}
+	gw.balancer = balancer.NewTabletBalancer(gw.localCell, balancerVtgateCells)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -218,6 +242,15 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 	gw.mu.Unlock()
 	sort.Sort(res)
 	return res
+}
+
+func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Request) {
+	if balancerEnabled {
+		gw.balancer.DebugHandler(w, r)
+	} else {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("not enabled"))
+	}
 }
 
 // withRetry gets available connections and executes the action. If there are retryable errors,
@@ -306,16 +339,35 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
-		gw.shuffleTablets(gw.localCell, tablets)
-
 		var th *discovery.TabletHealth
-		// skip tablets we tried before
-		for _, t := range tablets {
-			if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
-				th = t
-				break
+
+		useBalancer := balancerEnabled
+		if balancerEnabled && len(balancerKeyspaces) > 0 {
+			useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
+		}
+		if useBalancer {
+			// filter out the tablets that we've tried before (if any), then pick the best one
+			if len(invalidTablets) > 0 {
+				tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
+					_, isInvalid := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]
+					return isInvalid
+				})
+			}
+
+			th = gw.balancer.Pick(target, tablets)
+
+		} else {
+			gw.shuffleTablets(gw.localCell, tablets)
+
+			// skip tablets we tried before
+			for _, t := range tablets {
+				if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
+					th = t
+					break
+				}
 			}
 		}
+
 		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {
