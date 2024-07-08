@@ -132,15 +132,8 @@ func writeLenEncString(data []byte, pos int, value string) int {
 }
 
 func writeZeroes(data []byte, pos int, len int) int {
-	// XXX: This implementation is optimized to leverage
-	// the go compiler's memclr pattern, see: https://github.com/golang/go/issues/5373
 	end := pos + len
-	data = data[pos:end]
-
-	for i := range data {
-		data[i] = 0
-	}
-
+	clear(data[pos:end])
 	return end
 }
 
