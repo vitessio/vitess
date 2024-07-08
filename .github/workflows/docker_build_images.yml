@@ -1,5 +1,6 @@
 name: Docker Build Images
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -24,6 +25,16 @@ jobs:
         branch: [ latest, percona80 ]
 
     steps:
+      - name: Define if we want to push the images
+        id: skip-push
+        run: |
+          push='false'
+          if [[ "${{github.event.pull_request}}" ==  "" ]]; then
+            push='true'
+          fi
+          echo Push ${skip}
+          echo "skip-push=${push}" >> $GITHUB_OUTPUT
+
       - name: Check out code
         uses: actions/checkout@v4
 
@@ -42,12 +53,12 @@ jobs:
           fi
 
       - name: Build and push on main
-        if: github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/') == false
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: ${{ steps.skip-push.outputs.skip-push }}
           tags: vitess/lite:${{ matrix.branch }}
 
       ######
@@ -88,6 +99,16 @@ jobs:
         component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, vtctldclient, logrotate, logtail, vtbackup, vtexplain ]
 
     steps:
+      - name: Define if we want to push the images
+        id: skip-push
+        run: |
+          push='false'
+          if [[ "${{github.event.pull_request}}" ==  "" ]]; then
+            push='true'
+          fi
+          echo Push ${skip}
+          echo "skip-push=${push}" >> $GITHUB_OUTPUT
+
       - name: Check out code
         uses: actions/checkout@v4
 
@@ -102,22 +123,22 @@ jobs:
           echo "DOCKER_CTX=./docker/binaries/${{ matrix.component }}" >> $GITHUB_ENV
 
       - name: Build and push on main latest tag
-        if: github.ref == 'refs/heads/main' && matrix.debian == 'bookworm'
+        if: startsWith(github.ref, 'refs/tags/') == false && matrix.debian == 'bookworm'
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: ${{ steps.skip-push.outputs.skip-push }}
           tags: vitess/${{ matrix.component }}:latest
           build-args: |
             VT_BASE_VER=latest
             DEBIAN_VER=${{ matrix.debian }}-slim
 
       - name: Build and push on main debian specific tag
-        if: github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/') == false
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: ${{ steps.skip-push.outputs.skip-push }}
           tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args: |
             VT_BASE_VER=latest
