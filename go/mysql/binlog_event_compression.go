@@ -92,9 +92,10 @@ func (ev binlogEvent) IsTransactionPayload() bool {
 
 // TransactionPayload processes the payload and provides a GetNextEvent()
 // method which should be used in a loop to read BinlogEvents one by one
-// that were in the compressed transaction. This function will return
+// that were within the compressed transaction. That function will return
 // io.EOF when there are no more events left in the payload. You must
-// call Close() in a defer when you are done processing the payload.
+// call Close() when you are done with the TransactionPayload to ensure
+// that the underlying reader and related resources are cleaned up.
 // The following event types are compressed as part of the
 // transaction payload:
 //
@@ -231,7 +232,7 @@ func (tp *TransactionPayload) decode() error {
 			if err == io.EOF {
 				return nil, io.EOF
 			}
-			return nil, vterrors.Wrapf(err, "error reading event header from decompressed transaction payload")
+			return nil, vterrors.Wrapf(err, "error reading event header from uncompressed transaction payload")
 		}
 		if bytesRead != headerLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected header length of %d but only read %d bytes",
@@ -242,7 +243,7 @@ func (tp *TransactionPayload) decode() error {
 		copy(eventData, header) // The event includes the header
 		bytesRead, err = io.ReadFull(tp.reader, eventData[headerLen:])
 		if err != nil && err != io.EOF {
-			return nil, vterrors.Wrapf(err, "error reading binlog event data from decompressed transaction payload")
+			return nil, vterrors.Wrapf(err, "error reading binlog event data from uncompressed transaction payload")
 		}
 		if int64(bytesRead+headerLen) != eventLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected binlog event length of %d but only read %d bytes",
@@ -295,7 +296,7 @@ func (tp *TransactionPayload) decompress() error {
 
 // Close should be called in a defer where the TransactionPayload is
 // used to ensure that the underlying reader and related resources
-// are cleaned up.
+// used are cleaned up.
 func (tp *TransactionPayload) Close() {
 	switch reader := tp.reader.(type) {
 	case *bytes.Reader:
