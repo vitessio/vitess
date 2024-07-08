@@ -5,19 +5,97 @@ on:
     branches:
       - main
     tags:
-      - 'v[2-9][0-9]*.*' # run only on tags greater or equal to v20.0.0 where this new way of building docker image was changed
+      - '*'
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Images (v20+)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Images')
   cancel-in-progress: true
 
 permissions: read-all
 
 jobs:
+  skip_push:
+    name: Set skip_push if we are on a Pull Request
+    runs-on: ubuntu-20.04
+    if: github.repository == 'vitessio/vitess'
+    outputs:
+      skip_push: ${{ steps.skip_push.outputs.skip_push }}
+
+    steps:
+      - name: Set skip_push
+        id: skip_push
+        run: |
+          push='false'
+          if [[ "${{github.event.pull_request}}" ==  "" ]]; then
+            push='true'
+          fi
+          echo Push ${skip}
+          echo "skip_push=${push}" >> $GITHUB_OUTPUT
+
+  build_and_push_vttestserver:
+    name: Build and push vitess/vttestserver Docker images
+    runs-on: gh-hosted-runners-16cores-1
+    if: github.repository == 'vitessio/vitess' && needs.skip_push.result == 'success'
+    needs:
+      - skip_push
+
+    strategy:
+      fail-fast: true
+      matrix:
+        branch: [ mysql80 ]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        if: needs.skip_push.outputs.skip_push == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set Dockerfile path
+        run: |
+          echo "DOCKERFILE=./docker/vttestserver/Dockerfile.${{ matrix.branch }}" >> $GITHUB_ENV
+
+      - name: Build and push on main
+        if: startsWith(github.ref, 'refs/tags/') == false
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          push: ${{ needs.skip_push.outputs.skip_push }}
+          tags: vitess/vttestserver:${{ matrix.branch }}
+
+      ######
+      # All code below only applies to new tags
+      ######
+      - name: Get the Git tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Set Docker tag name
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "DOCKER_TAG=vitess/vttestserver:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
+
+      - name: Build and push on tags
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          tags: ${{ env.DOCKER_TAG }}
+
+
   build_and_push_lite:
     name: Build and push vitess/lite Docker images
     runs-on: gh-hosted-runners-16cores-1
-    if: github.repository == 'vitessio/vitess'
+    if: github.repository == 'vitessio/vitess' && needs.skip_push.result == 'success'
+    needs:
+      - skip_push
 
     strategy:
       fail-fast: true
@@ -25,21 +103,11 @@ jobs:
         branch: [ latest, percona80 ]
 
     steps:
-      - name: Define if we want to push the images
-        id: skip-push
-        run: |
-          push='false'
-          if [[ "${{github.event.pull_request}}" ==  "" ]]; then
-            push='true'
-          fi
-          echo Push ${skip}
-          echo "skip-push=${push}" >> $GITHUB_OUTPUT
-
       - name: Check out code
         uses: actions/checkout@v4
 
       - name: Login to Docker Hub
-        if: steps.skip-push.outputs.skip-push == 'true'
+        if: needs.skip_push.outputs.skip_push == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -59,7 +127,7 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: ${{ steps.skip-push.outputs.skip-push }}
+          push: ${{ needs.skip_push.outputs.skip_push }}
           tags: vitess/lite:${{ matrix.branch }}
 
       ######
@@ -89,9 +157,11 @@ jobs:
 
   build_and_push_components:
     name: Build and push vitess components Docker images
-    needs: build_and_push_lite
     runs-on: gh-hosted-runners-16cores-1
-    if: github.repository == 'vitessio/vitess'
+    if: github.repository == 'vitessio/vitess' && needs.skip_push.result == 'success' && needs.build_and_push_lite.result == 'success'
+    needs:
+      - skip_push
+      - build_and_push_lite
 
     strategy:
       fail-fast: true
@@ -100,21 +170,11 @@ jobs:
         component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, vtctldclient, logrotate, logtail, vtbackup, vtexplain ]
 
     steps:
-      - name: Define if we want to push the images
-        id: skip-push
-        run: |
-          push='false'
-          if [[ "${{github.event.pull_request}}" ==  "" ]]; then
-            push='true'
-          fi
-          echo Push ${skip}
-          echo "skip-push=${push}" >> $GITHUB_OUTPUT
-
       - name: Check out code
         uses: actions/checkout@v4
 
       - name: Login to Docker Hub
-        if: steps.skip-push.outputs.skip-push == 'true'
+        if: needs.skip_push.outputs.skip_push == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -129,7 +189,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: ${{ steps.skip-push.outputs.skip-push }}
+          push: ${{ needs.skip_push.outputs.skip_push }}
           tags: vitess/${{ matrix.component }}:latest
           build-args: |
             VT_BASE_VER=latest
@@ -140,7 +200,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: ${{ steps.skip-push.outputs.skip-push }}
+          push: ${{ needs.skip_push.outputs.skip_push }}
           tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args: |
             VT_BASE_VER=latest
