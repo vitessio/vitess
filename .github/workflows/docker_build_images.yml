@@ -8,7 +8,7 @@ on:
       - '*'
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Images')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Build Docker Images')
   cancel-in-progress: true
 
 permissions: read-all
@@ -91,7 +91,7 @@ jobs:
 
 
   build_and_push_lite:
-    name: Build and push vitess/lite
+    name: Build and push lite
     runs-on: gh-hosted-runners-16cores-1
     if: github.repository == 'vitessio/vitess' && needs.skip_push.result == 'success'
     needs:
