@@ -61,7 +61,7 @@ func setupCluster(t *testing.T) (*cluster.LocalProcessCluster, mysql.ConnParams)
 	require.NoError(t, err)
 
 	// Start vtgate
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql_server_drain_onterm", "--onterm_timeout", "30s")
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql-server-drain-onterm", "--onterm_timeout", "30s")
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
