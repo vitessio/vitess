@@ -661,7 +661,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 			tpvevents, err := vs.parseEvent(tpevent)
 			if err != nil {
-				return nil, vterrors.Wrap(err, "failed to parse compressed transaction payload's internal event")
+				return nil, vterrors.Wrap(err, "failed to parse uncompressed transaction payload's internal event")
 			}
 			vevents = append(vevents, tpvevents...)
 		}
