@@ -130,21 +130,21 @@ var locksKey locksKeyType
 type LockType int
 
 const (
-	Blocking LockType = iota
-	NonBlocking
-	Named
+	// Blocking is the default lock type when no other valid type
+	// is specified.
+	Blocking    LockType = iota
+	NonBlocking          // Uses TryLock
+	Named                // Uses LockName
 )
 
 func (lt LockType) String() string {
 	switch lt {
-	case Blocking:
-		return "blocking"
 	case NonBlocking:
 		return "non blocking"
 	case Named:
 		return "named"
 	default:
-		return "unknown"
+		return "blocking"
 	}
 }
 
