@@ -1,4 +1,4 @@
-name: Docker Build Images
+name: Build Docker Images
 on:
   pull_request:
   push:
@@ -33,7 +33,7 @@ jobs:
           echo "skip_push=${push}" >> $GITHUB_OUTPUT
 
   build_and_push_vttestserver:
-    name: Build and push vitess/vttestserver Docker images
+    name: Build and push vttestserver
     runs-on: gh-hosted-runners-16cores-1
     if: github.repository == 'vitessio/vitess' && needs.skip_push.result == 'success'
     needs:
@@ -91,7 +91,7 @@ jobs:
 
 
   build_and_push_lite:
-    name: Build and push vitess/lite Docker images
+    name: Build and push vitess/lite
     runs-on: gh-hosted-runners-16cores-1
     if: github.repository == 'vitessio/vitess' && needs.skip_push.result == 'success'
     needs:
@@ -156,7 +156,7 @@ jobs:
           tags: ${{ env.DOCKER_TAG }}
 
   build_and_push_components:
-    name: Build and push vitess components Docker images
+    name: Build and push
     runs-on: gh-hosted-runners-16cores-1
     if: github.repository == 'vitessio/vitess' && needs.skip_push.result == 'success' && needs.build_and_push_lite.result == 'success'
     needs:
