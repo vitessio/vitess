@@ -1743,6 +1743,47 @@
     }
   },
   {
+    "comment": "Unneeded ORDER BY inside derived table removed",
+    "query": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt1.id from (select id from `user` where 1 != 1) as dt1 where 1 != 1",
+            "Query": "select dt1.id from (select id from `user`) as dt1",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt2.id from (select id from `user` where 1 != 1) as dt2 where 1 != 1",
+            "Query": "select dt2.id from (select id from `user`) as dt2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "join of information_schema with normal table",
     "query": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
     "plan": {
