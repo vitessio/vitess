@@ -553,6 +553,12 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 	return metadata, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// UnresolvedTransactions is part of queryservice.QueryService
+func (itc *internalTabletConn) UnresolvedTransactions(ctx context.Context, target *querypb.Target) (transactions []*querypb.TransactionMetadata, err error) {
+	transactions, err = itc.tablet.qsc.QueryService().UnresolvedTransactions(ctx, target)
+	return transactions, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 // BeginExecute is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginExecute(
 	ctx context.Context,

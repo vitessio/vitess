@@ -289,6 +289,7 @@ func (dte *DTExecutor) inTransaction(f func(*StatefulConnection) error) error {
 	return nil
 }
 
+// UnresolvedTransactions returns the list of unresolved distributed transactions.
 func (dte *DTExecutor) UnresolvedTransactions() ([]*querypb.TransactionMetadata, error) {
 	return dte.te.twoPC.UnresolvedTransactions(dte.ctx, time.Now().Add(-dte.te.abandonAge))
 }
