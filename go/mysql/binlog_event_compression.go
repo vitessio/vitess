@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"runtime"
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
@@ -88,6 +89,13 @@ var (
 		New: func() any {
 			d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
 			log.Errorf("Error creating stateful decoder: %v", err)
+			// Help the GC clean up the resources when there are no more
+			// references.
+			if d != nil {
+				runtime.SetFinalizer(d, func(d *zstd.Decoder) {
+					d.Close()
+				})
+			}
 			return d
 		},
 	}
@@ -294,7 +302,7 @@ func (tp *TransactionPayload) decompress() error {
 		}
 		streamDecoder.Reset(in)
 		compressedTrxPayloadsUsingStream.Add(1)
-		tp.reader = streamDecoder.IOReadCloser()
+		tp.reader = streamDecoder
 		return nil
 	}
 
