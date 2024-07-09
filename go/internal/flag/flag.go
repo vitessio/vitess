@@ -29,9 +29,12 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 
 	flag "github.com/spf13/pflag"
 )
+
+var flagsMu sync.Mutex
 
 // Parse wraps the standard library's flag.Parse to perform some sanity checking
 // and issue deprecation warnings in advance of our move to pflag.
@@ -42,6 +45,8 @@ import (
 //
 // See VEP-4, phase 1 for details: https://github.com/vitessio/enhancements/blob/c766ea905e55409cddeb666d6073cd2ac4c9783e/veps/vep-4.md#phase-1-preparation
 func Parse(fs *flag.FlagSet) {
+	flagsMu.Lock()
+	defer flagsMu.Unlock()
 	PreventGlogVFlagFromClobberingVersionFlagShorthand(fs)
 	fs.AddGoFlagSet(goflag.CommandLine)
 
@@ -70,6 +75,8 @@ func Parse(fs *flag.FlagSet) {
 
 // IsFlagProvided returns if the given flag has been provided by the user explicitly or not
 func IsFlagProvided(name string) bool {
+	flagsMu.Lock()
+	defer flagsMu.Unlock()
 	fl := flag.Lookup(name)
 	if fl != nil {
 		return fl.Changed
@@ -167,6 +174,8 @@ func filterTestFlags() ([]string, []string) {
 // handle `go test` flags correctly. We need to separately parse the test flags using goflags. Additionally flags
 // like test.Short() require that goflag.Parse() is called first.
 func ParseFlagsForTest() {
+	flagsMu.Lock()
+	defer flagsMu.Unlock()
 	// We need to split up the test flags and the regular app pflags.
 	// Then hand them off the std flags and pflags parsers respectively.
 	args, testFlags := filterTestFlags()
@@ -198,6 +207,8 @@ func Parsed() bool {
 // standard library `flag` CommandLine. If found in the latter, it is converted
 // to a pflag.Flag first. If found in neither, this function returns nil.
 func Lookup(name string) *flag.Flag {
+	flagsMu.Lock()
+	defer flagsMu.Unlock()
 	if f := flag.Lookup(name); f != nil {
 		return f
 	}
@@ -213,6 +224,8 @@ func Lookup(name string) *flag.Flag {
 // removed. If no double-dash was specified on the command-line, this is
 // equivalent to flag.Args() from the standard library flag package.
 func Args() (args []string) {
+	flagsMu.Lock()
+	defer flagsMu.Unlock()
 	doubleDashIdx := -1
 	for i, arg := range flag.Args() {
 		if arg == "--" {

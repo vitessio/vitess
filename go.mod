@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.22.3
+go 1.22.5
 
 require (
 	cloud.google.com/go/storage v1.39.0
@@ -96,6 +96,7 @@ require (
 	github.com/bndr/gotabulate v1.1.2
 	github.com/gammazero/deque v0.2.1
 	github.com/google/safehtml v0.1.0
+	github.com/hashicorp/go-cleanhttp v0.5.2
 	github.com/hashicorp/go-version v1.6.0
 	github.com/kr/pretty v0.3.1
 	github.com/kr/text v0.2.0
@@ -142,7 +143,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.12.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.6.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect

@@ -19,9 +19,6 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
@@ -52,7 +49,7 @@ jobs:
       uses: actions/setup-go@v5
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
       with:
-        go-version: 1.22.3
+        go-version: 1.22.5
 
     - name: Setup Node
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'

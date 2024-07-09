@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/go-cleanhttp"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
@@ -40,7 +41,10 @@ var (
 	// serfHealth is the default check from consul
 	consulLockSessionChecks = "serfHealth"
 	consulLockSessionTTL    string
-	consulLockDelay         = 15 * time.Second
+	consulLockDelay             = 15 * time.Second
+	consulMaxConnsPerHost   int = 250 // do not use client default of 0/unlimited
+	consulMaxIdleConns      int
+	consulIdleConnTimeout   time.Duration
 )
 
 func init() {
@@ -48,10 +52,18 @@ func init() {
 }
 
 func registerServerFlags(fs *pflag.FlagSet) {
+	// cleanhttp.DefaultPooledTransport() is used by the consul api client
+	// as an *http.Transport. We call it here just to get the default
+	// values the consul api client will inherit from it later.
+	defaultConsulPooledTransport := cleanhttp.DefaultPooledTransport()
+
 	fs.StringVar(&consulAuthClientStaticFile, "consul_auth_static_file", consulAuthClientStaticFile, "JSON File to read the topos/tokens from.")
 	fs.StringVar(&consulLockSessionChecks, "topo_consul_lock_session_checks", consulLockSessionChecks, "List of checks for consul session.")
 	fs.StringVar(&consulLockSessionTTL, "topo_consul_lock_session_ttl", consulLockSessionTTL, "TTL for consul session.")
 	fs.DurationVar(&consulLockDelay, "topo_consul_lock_delay", consulLockDelay, "LockDelay for consul session.")
+	fs.IntVar(&consulMaxConnsPerHost, "topo_consul_max_conns_per_host", consulMaxConnsPerHost, "Maximum number of consul connections per host.")
+	fs.IntVar(&consulMaxIdleConns, "topo_consul_max_idle_conns", defaultConsulPooledTransport.MaxIdleConns, "Maximum number of idle consul connections.")
+	fs.DurationVar(&consulIdleConnTimeout, "topo_consul_idle_conn_timeout", defaultConsulPooledTransport.IdleConnTimeout, "Maximum amount of time to pool idle connections.")
 }
 
 // ClientAuthCred credential to use for consul clusters
@@ -132,6 +144,9 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 	}
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
+	cfg.Transport.MaxConnsPerHost = consulMaxConnsPerHost
+	cfg.Transport.MaxIdleConns = consulMaxIdleConns
+	cfg.Transport.IdleConnTimeout = consulIdleConnTimeout
 	if creds != nil {
 		if creds[cell] != nil {
 			cfg.Token = creds[cell].ACLToken

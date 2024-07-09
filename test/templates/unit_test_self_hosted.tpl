@@ -8,7 +8,8 @@ permissions: read-all
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on:
+      group: vitess-ubuntu20
 
     steps:
       - name: Skip CI
@@ -22,9 +23,6 @@ jobs:
         id: skip-workflow
         run: |
           skip='false'
-          if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
-            skip='true'
-          fi
           echo Skip ${skip}
           echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 

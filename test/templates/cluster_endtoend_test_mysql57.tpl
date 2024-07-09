@@ -19,7 +19,8 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1{{else}}gh-hosted-runners-4cores-1{{end}}
+    runs-on:
+      group: vitess-ubuntu20
 
     steps:
     - name: Skip CI
@@ -33,9 +34,6 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
@@ -79,7 +77,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.3
+        go-version: 1.22.5
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -134,6 +132,7 @@ jobs:
         wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get install -y gnupg2
         sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
+        sudo percona-release enable-only pxb-24
         sudo apt-get update
         if [[ -n $XTRABACKUP_VERSION ]]; then
           debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"

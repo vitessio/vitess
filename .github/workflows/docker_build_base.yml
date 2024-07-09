@@ -15,7 +15,8 @@ permissions: read-all
 jobs:
   build_and_push_base:
     name: Build and push vitess/base Docker images
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on:
+      group: vitess-ubuntu20
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -77,7 +78,8 @@ jobs:
   build_and_push_k8s:
     needs: build_and_push_base
     name: Build and push vitess/k8s image
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on:
+      group: vitess-ubuntu20
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -170,7 +172,8 @@ jobs:
   build_and_push_components:
     needs: build_and_push_k8s
     name: Build and push vitess components Docker images
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on:
+      group: vitess-ubuntu20
     if: github.repository == 'vitessio/vitess'
 
     strategy:
