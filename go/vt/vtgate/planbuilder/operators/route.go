@@ -587,9 +587,11 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 
 	// if at least one column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	derived, op, ok, offset := addColumnToInput(ctx, r.Source, expr, reuse, gb)
-	r.Source = op
-	if ok {
+	derived, op, offset := addColumnToInput(ctx, r.Source, expr, reuse, gb)
+	if op != nil {
+		r.Source = op
+	}
+	if offset >= 0 {
 		return offset
 	}
 
@@ -612,7 +614,11 @@ func addColumnToInput(
 	operator Operator,
 	expr *sqlparser.AliasedExpr,
 	reuse, addToGroupBy bool,
-) (derivedName string, projection Operator, found bool, offset int) {
+) (
+	derivedName string, // if we found a derived table, this will contain its name
+	projection Operator, // if an operator needed to be built, it will be returned here
+	offset int, // the offset of the expression, -1 if not found
+) {
 	var src Operator
 	var updateSrc func(Operator)
 	switch op := operator.(type) {
@@ -632,34 +638,36 @@ func addColumnToInput(
 	// Union needs special handling, we can't really add new columns to all inputs
 	case *Union:
 		proj := wrapInDerivedProjection(ctx, op)
-		return addColumnToInput(ctx, proj, expr, reuse, addToGroupBy)
+		dtName, newOp, offset := addColumnToInput(ctx, proj, expr, reuse, addToGroupBy)
+		if newOp == nil {
+			newOp = proj
+		}
+		return dtName, newOp, offset
 
 	// Horizon is another one of these - we can't really add new columns to it
 	case *Horizon:
-		return op.Alias, op, false, 0
+		return op.Alias, nil, -1
 
 	case selectExpressions:
 		name := op.derivedName()
 		if name != "" {
 			// if the only thing we can push to is a derived table,
 			// we have to add a new projection and can't build on this one
-			return name, op, false, 0
+			return name, nil, -1
 		}
 		offset := op.addColumnWithoutPushing(ctx, expr, addToGroupBy)
-		return "", op, true, offset
+		return "", nil, offset
 
 	default:
-		return "", op, false, 0
+		return "", nil, -1
 	}
 
 	// Handle the case where we have a pass-through operator
-	var added bool
-	derivedName, src, added, offset = addColumnToInput(ctx, src, expr, reuse, addToGroupBy)
-	if added {
+	derivedName, src, offset = addColumnToInput(ctx, src, expr, reuse, addToGroupBy)
+	if src != nil {
 		updateSrc(src)
 	}
-	return derivedName, operator, added, offset
-
+	return derivedName, nil, offset
 }
 
 func (r *Route) AddWSColumn(ctx *plancontext.PlanningContext, offset int, _ bool) int {
