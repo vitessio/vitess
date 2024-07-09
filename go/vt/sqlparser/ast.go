@@ -149,7 +149,7 @@ func ParseOneWithOptions(ctx context.Context, sql string, options ParserOptions)
 		}
 	}
 
-	return tree, tokenizer.Position, nil
+	return tree, tokenizer.Position-1, nil
 }
 
 func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
