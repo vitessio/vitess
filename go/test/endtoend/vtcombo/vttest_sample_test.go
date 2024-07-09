@@ -168,7 +168,7 @@ func assertVSchemaExists(t *testing.T, grpcAddress string) {
 	log.Infof("Running vtctldclient with command: %v", tmpCmd.Args)
 
 	output, err := tmpCmd.CombinedOutput()
-	require.Nil(t, err, fmt.Sprintf("Output:\n%v", string(output)))
+	require.NoError(t, err, fmt.Sprintf("Output:\n%v", string(output)))
 
 	assert.Equal(t, "{}\n", string(output))
 }
