@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/test/utils"
 )
 
 // Sample event data for MySQL 5.6.
@@ -98,6 +99,7 @@ func TestMysql56GTID(t *testing.T) {
 func TestMysql56DecodeTransactionPayload(t *testing.T) {
 	format := NewMySQL56BinlogFormat()
 	tableMap := &TableMap{}
+	_ = utils.LeakCheckContext(t)
 
 	testCases := []struct {
 		name     string

@@ -88,9 +88,12 @@ var (
 	statefulDecodersPool = sync.Pool{
 		New: func() any {
 			d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
-			log.Errorf("Error creating stateful decoder: %v", err)
+			if err != nil {
+				log.Errorf("Error creating stateful decoder: %v", err)
+			}
 			// Help the GC clean up the resources when there are no more
-			// references.
+			// references. If Close is not called then you will leak
+			// goroutines.
 			if d != nil {
 				runtime.SetFinalizer(d, func(d *zstd.Decoder) {
 					d.Close()
@@ -174,7 +177,7 @@ func (ev binlogEvent) IsTransactionPayload() bool {
 func (ev binlogEvent) TransactionPayload(format BinlogFormat) (*TransactionPayload, error) {
 	tp := &TransactionPayload{}
 	if err := tp.process(ev.Bytes()[format.HeaderLength:]); err != nil {
-		return nil, vterrors.Wrapf(err, "error decoding transaction payload event")
+		return nil, vterrors.Wrap(err, "error decoding transaction payload event")
 	}
 	return tp, nil
 }
@@ -248,7 +251,7 @@ func (tp *TransactionPayload) decode() error {
 
 	err := tp.decompress()
 	if err != nil || tp.reader == nil {
-		return vterrors.Wrapf(err, "error decompressing transaction payload")
+		return vterrors.Wrap(err, "error decompressing transaction payload")
 	}
 
 	header := make([]byte, headerLen)
@@ -258,7 +261,7 @@ func (tp *TransactionPayload) decode() error {
 			if err == io.EOF {
 				return nil, io.EOF
 			}
-			return nil, vterrors.Wrapf(err, "error reading event header from uncompressed transaction payload")
+			return nil, vterrors.Wrap(err, "error reading event header from uncompressed transaction payload")
 		}
 		if bytesRead != headerLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected header length of %d but only read %d bytes",
@@ -269,7 +272,7 @@ func (tp *TransactionPayload) decode() error {
 		copy(eventData, header) // The event includes the header
 		bytesRead, err = io.ReadFull(tp.reader, eventData[headerLen:])
 		if err != nil && err != io.EOF {
-			return nil, vterrors.Wrapf(err, "error reading binlog event data from uncompressed transaction payload")
+			return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
 		}
 		if int64(bytesRead+headerLen) != eventLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected binlog event length of %d but only read %d bytes",
@@ -282,8 +285,8 @@ func (tp *TransactionPayload) decode() error {
 
 // decompress decompresses the payload. If the payload is larger than
 // zstdInMemoryDecompressorMaxSize then we stream the decompression via
-// a new zstd.Decoder, otherwise we use in-memory buffers with the
-// package's stateless zstdDecoder.
+// a pooled zstd.Decoder, otherwise we use in-memory buffers with the
+// package's stateless decoder.
 // In either case, we setup the reader that can be used within the
 // iterator to read the events one at a time from the decompressed
 // payload in GetNextEvent().
@@ -296,11 +299,13 @@ func (tp *TransactionPayload) decompress() error {
 	// larger payloads.
 	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
 		in := bytes.NewReader(tp.payload)
-		streamDecoder := statefulDecodersPool.Get().(*zstd.Decoder)
-		if streamDecoder == nil {
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] error creating stateful stream decoder")
+		streamDecoder, ok := statefulDecodersPool.Get().(*zstd.Decoder)
+		if streamDecoder == nil || !ok {
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateful stream decoder")
 		}
-		streamDecoder.Reset(in)
+		if err := streamDecoder.Reset(in); err != nil {
+			return vterrors.Wrap(err, "error resetting stateful stream decoder")
+		}
 		compressedTrxPayloadsUsingStream.Add(1)
 		tp.reader = streamDecoder
 		return nil
@@ -308,7 +313,7 @@ func (tp *TransactionPayload) decompress() error {
 
 	// Process smaller payloads using only in-memory buffers.
 	if statelessDecoder == nil { // Should never happen
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] error creating stateless decoder")
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateless decoder")
 	}
 	decompressedBytes := make([]byte, 0, tp.uncompressedSize) // Perform a single pre-allocation
 	decompressedBytes, err := statelessDecoder.DecodeAll(tp.payload, decompressedBytes[:0])
@@ -329,11 +334,12 @@ func (tp *TransactionPayload) decompress() error {
 // used are cleaned up.
 func (tp *TransactionPayload) Close() {
 	switch reader := tp.reader.(type) {
-	case *bytes.Reader:
-		reader = nil
 	case *zstd.Decoder:
-		reader.Reset(nil)
-		readersPool.Put(reader)
+		if err := reader.Reset(nil); err == nil {
+			readersPool.Put(reader)
+		}
+	default:
+		reader = nil
 	}
 	tp.iterator = nil
 }
