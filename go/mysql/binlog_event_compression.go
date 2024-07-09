@@ -19,7 +19,6 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 
 	"github.com/klauspost/compress/zstd"
@@ -216,8 +215,8 @@ func (tp *TransactionPayload) read(data []byte) error {
 // uncompressed transaction one at a time.
 func (tp *TransactionPayload) decode() error {
 	if tp.compressionType != TransactionPayloadCompressionZstd {
-		return vterrors.New(vtrpcpb.Code_INTERNAL,
-			fmt.Sprintf("TransactionPayload has unsupported compression type of %d", tp.compressionType))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"TransactionPayload has unsupported compression type of %d", tp.compressionType)
 	}
 
 	err := tp.decompress()
