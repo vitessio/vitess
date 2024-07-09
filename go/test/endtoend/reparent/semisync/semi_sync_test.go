@@ -24,12 +24,46 @@ func TestSemiSyncUpgradeDowngrade(t *testing.T) {
 	// Verify we are using the correct vttablet version.
 	verifyVttabletVersion(t, replica, 20)
 	// Check the plugin loaded in vttablet.
-	require.EqualValues(t, mysql.SemiSyncTypeSource, semiSyncExtensionLoaded(t, replica))
+	require.EqualValues(t, mysql.SemiSyncTypeMaster, semiSyncExtensionLoaded(t, replica))
 
-	// change vttablet binary and downgrade it.
-	changeVttabletBinary(t, replica, "vttabletold")
-	// Verify we are using the older vttablet version.
-	verifyVttabletVersion(t, replica, 19)
+	t.Run("Downgrade to v19", func(t *testing.T) {
+		// change vttablet binary and downgrade it.
+		changeVttabletBinary(t, replica, "vttabletold")
+		// Verify we are using the older vttablet version.
+		verifyVttabletVersion(t, replica, 19)
+		// Verify that replication is running as intended.
+		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+		// Check the plugin loaded in vttablet.
+		require.EqualValues(t, mysql.SemiSyncTypeMaster, semiSyncExtensionLoaded(t, replica))
+	})
+
+	t.Run("Upgrade to v19", func(t *testing.T) {
+		// change vttablet binary and downgrade it.
+		changeVttabletBinary(t, replica, "vttablet")
+		// Verify we are using the older vttablet version.
+		verifyVttabletVersion(t, replica, 20)
+		// Verify that replication is running as intended.
+		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+		// Check the plugin loaded in vttablet.
+		require.EqualValues(t, mysql.SemiSyncTypeMaster, semiSyncExtensionLoaded(t, replica))
+	})
+
+	t.Run("Change the semi-sync plugin", func(t *testing.T) {
+		// Change MySQL plugins loaded.
+		utils.RunSQLs(context.Background(), t, []string{
+			`SET GLOBAL READ_ONLY=OFF`,
+			`STOP REPLICA;`,
+			`UNINSTALL PLUGIN rpl_semi_sync_master;`,
+			`UNINSTALL PLUGIN rpl_semi_sync_slave;`,
+			`INSTALL PLUGIN rpl_semi_sync_source SONAME 'semisync_source.so';`,
+			`INSTALL PLUGIN rpl_semi_sync_replica SONAME 'semisync_replica.so';`,
+			`START REPLICA;`,
+		}, replica)
+		// Check the plugin loaded in vttablet.
+		require.EqualValues(t, mysql.SemiSyncTypeSource, semiSyncExtensionLoaded(t, replica))
+		// Verify that replication is running as intended.
+		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+	})
 }
 
 // semiSyncExtensionLoaded checks if the semisync extension has been loaded.
