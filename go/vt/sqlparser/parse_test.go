@@ -4662,6 +4662,10 @@ func TestParseOne(t *testing.T) {
 	}
 	cases := []tc{
 		{
+			"select 1;select 64 * 10;",
+			"select 64 * 10;",
+		},
+		{
 			"select 1; select 64 * 10;",
 			"select 64 * 10;",
 		},
@@ -4722,6 +4726,7 @@ func TestParseOne(t *testing.T) {
 			var rest string
 			if resti < len(c.input) {
 				rest = c.input[resti:]
+				rest = strings.Trim(rest, " \n")
 			}
 			require.Equal(t, c.remainder, rest)
 		})
@@ -5134,7 +5139,7 @@ end`,
 		t.Run(tcase.query+" ParseOne", func(t *testing.T) {
 			tree, remainder, err := ParseOne(context.Background(), tcase.query)
 			require.Nil(t, err)
-			require.Equal(t, len(tcase.query)+1, remainder)
+			require.Equal(t, len(tcase.query), remainder)
 
 			ddl, ok := tree.(*DDL)
 			require.True(t, ok, "Expected DDL when parsing (%q)", tcase.query)
