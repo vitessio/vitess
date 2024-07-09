@@ -26,14 +26,15 @@ import (
 )
 
 // The datatype for CallerID Context Keys
-type callerIDKey int
+type callerIDContextKey struct{}
 
-var (
-	// internal Context key for immediate CallerID
-	immediateCallerIDKey callerIDKey
-	// internal Context key for effective CallerID
-	effectiveCallerIDKey callerIDKey = 1
-)
+// callerIDContext is a tuple containing the entirety
+// of the "callerid" such that both pointers can be
+// stored together.
+type callerIDContext struct {
+	ef *vtrpcpb.CallerID
+	im *querypb.VTGateCallerID
+}
 
 // NewImmediateCallerID creates a querypb.VTGateCallerID initialized with username
 func NewImmediateCallerID(username string) *querypb.VTGateCallerID {
@@ -90,20 +91,14 @@ func GetSubcomponent(ef *vtrpcpb.CallerID) string {
 // NewContext adds the provided EffectiveCallerID(vtrpcpb.CallerID) and ImmediateCallerID(querypb.VTGateCallerID)
 // into the Context
 func NewContext(ctx context.Context, ef *vtrpcpb.CallerID, im *querypb.VTGateCallerID) context.Context {
-	ctx = context.WithValue(
-		context.WithValue(ctx, effectiveCallerIDKey, ef),
-		immediateCallerIDKey,
-		im,
-	)
-	return ctx
+	return context.WithValue(ctx, callerIDContextKey{}, callerIDContext{ef, im})
 }
 
 // EffectiveCallerIDFromContext returns the EffectiveCallerID(vtrpcpb.CallerID)
 // stored in the Context, if any
 func EffectiveCallerIDFromContext(ctx context.Context) *vtrpcpb.CallerID {
-	ef, ok := ctx.Value(effectiveCallerIDKey).(*vtrpcpb.CallerID)
-	if ok && ef != nil {
-		return ef
+	if cid, ok := ctx.Value(callerIDContextKey{}).(callerIDContext); ok {
+		return cid.ef
 	}
 	return nil
 }
@@ -111,9 +106,8 @@ func EffectiveCallerIDFromContext(ctx context.Context) *vtrpcpb.CallerID {
 // ImmediateCallerIDFromContext returns the ImmediateCallerID(querypb.VTGateCallerID)
 // stored in the Context, if any
 func ImmediateCallerIDFromContext(ctx context.Context) *querypb.VTGateCallerID {
-	im, ok := ctx.Value(immediateCallerIDKey).(*querypb.VTGateCallerID)
-	if ok && im != nil {
-		return im
+	if cid, ok := ctx.Value(callerIDContextKey{}).(callerIDContext); ok {
+		return cid.im
 	}
 	return nil
 }
