@@ -265,10 +265,10 @@ func TestReplicaTransactions(t *testing.T) {
 	_ = replicaTablet.VttabletProcess.TearDown()
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	utils.AssertContainsError(t, readConn, fetchAllCustomers, "is either down or nonexistent")
+	utils.AssertContainsError(t, readConn, fetchAllCustomers, "connect: connection refused")
 
 	// bring up the tablet again
-	// trying to use the same session/transaction should fail as the vtgate has
+	// trying to use the same session/transaction should fail as the vttablet has
 	// been restarted and the session lost
 	replicaTablet.VttabletProcess.ServingStatus = "SERVING"
 	err = replicaTablet.VttabletProcess.Setup()
