@@ -275,8 +275,8 @@ func (tp *TransactionPayload) decode() error {
 
 // decompress decompresses the payload. If the payload is larger than
 // zstdInMemoryDecompressorMaxSize then we stream the decompression via
-// a new zstd.Decoder, otherwise we use in-memory buffers with the
-// package's statelessDecoder.
+// the package's pool of zstd.Decoders, otherwise we use in-memory
+// buffers with the package's concurrent statelessDecoder.
 // In either case, we setup the reader that can be used within the
 // iterator to read the events one at a time from the decompressed
 // payload in GetNextEvent().
