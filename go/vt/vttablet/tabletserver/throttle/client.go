@@ -148,9 +148,7 @@ func (c *Client) ThrottleCheckOKOrWait(ctx context.Context) bool {
 // The function sleeps between throttle checks.
 // The function is not thread safe.
 func (c *Client) Throttle(ctx context.Context) {
-	for {
-		if c.ThrottleCheckOKOrWait(ctx) {
-			return
-		}
+	for !c.ThrottleCheckOKOrWait(ctx) {
+		// The function incorporates a bit of sleep so this is not a busy wait.
 	}
 }
