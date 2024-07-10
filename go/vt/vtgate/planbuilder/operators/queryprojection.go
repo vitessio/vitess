@@ -743,6 +743,23 @@ func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningCont
 	return true
 }
 
+// addColumn adds a column to the QueryProjection if it is not already present
+func (qp *QueryProjection) addColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+	for _, selectExpr := range qp.SelectExprs {
+		getExpr, err := selectExpr.GetExpr()
+		if err != nil {
+			continue
+		}
+		if ctx.SemTable.EqualsExprWithDeps(getExpr, expr) {
+			return
+		}
+	}
+	qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
+		Col:  aeWrap(expr),
+		Aggr: containsAggr(expr),
+	})
+}
+
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
