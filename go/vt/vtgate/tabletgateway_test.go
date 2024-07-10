@@ -178,6 +178,19 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 }
 
 func testTabletGatewayGeneric(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error) {
+
+	testTabletGatewayGenericHelper(t, ctx, f)
+
+	// test again with the balancer enabled assuming vtgates in both cells where there
+	// are tablets, so that it will still route to the local cell always, but this way
+	// it will test both implementations of skipping invalid tablets for retry
+	balancerEnabled = true
+	balancerVtgateCells = []string{"cell", "cell2"}
+	testTabletGatewayGenericHelper(t, ctx, f)
+	balancerEnabled = false
+}
+
+func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error) {
 	t.Helper()
 	keyspace := "ks"
 	shard := "0"
@@ -193,7 +206,6 @@ func testTabletGatewayGeneric(t *testing.T, ctx context.Context, f func(ctx cont
 	ts := &fakeTopoServer{}
 	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
-
 	// no tablet
 	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
 	err := f(ctx, tg, target)
@@ -217,31 +229,50 @@ func testTabletGatewayGeneric(t *testing.T, ctx context.Context, f func(ctx cont
 	sc2 := hc.AddTestTablet("cell", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-
 	err = f(ctx, tg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.Equal(t, int64(1), sc1.ExecCount.Load())
+	assert.Equal(t, int64(1), sc2.ExecCount.Load())
 
 	// fatal error
 	hc.Reset()
 	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
-	sc2 = hc.AddTestTablet("cell", host, port+1, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	err = f(ctx, tg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.Equal(t, int64(1), sc1.ExecCount.Load())
+	assert.Equal(t, int64(1), sc2.ExecCount.Load())
 
 	// server error - no retry
 	hc.Reset()
 	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err = f(ctx, tg, target)
 	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	assert.Equal(t, int64(1), sc1.ExecCount.Load())
+	assert.Equal(t, int64(0), sc2.ExecCount.Load())
 
 	// no failure
 	hc.Reset()
-	hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port, keyspace, shard, tabletType, true, 10, nil)
 	err = f(ctx, tg, target)
 	assert.NoError(t, err)
+	assert.Equal(t, int64(0), sc1.ExecCount.Load())
+	assert.Equal(t, int64(1), sc2.ExecCount.Load())
+
+	// retry successful to other cell
+	hc.Reset()
+	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	err = f(ctx, tg, target)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), sc1.ExecCount.Load())
+	assert.Equal(t, int64(1), sc2.ExecCount.Load())
 }
 
 func testTabletGatewayTransact(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error) {
