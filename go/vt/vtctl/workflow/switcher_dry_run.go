@@ -27,6 +27,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/topo"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -304,7 +305,7 @@ func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *StreamMigrato
 	dr.drLog.Log("Cancel migration as requested")
 }
 
-func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), error) {
+func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string, _ ...topo.LockOption) (context.Context, func(*error), error) {
 	dr.drLog.Logf("Lock keyspace %s", keyspace)
 	return ctx, func(e *error) {
 		dr.drLog.Logf("Unlock keyspace %s", keyspace)

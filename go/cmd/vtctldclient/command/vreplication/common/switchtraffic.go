@@ -48,6 +48,9 @@ func GetSwitchTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 					topodatapb.TabletType_RDONLY,
 				}
 			}
+			if SwitchTrafficOptions.Timeout.Seconds() < 1 {
+				return fmt.Errorf("timeout value must be at least 1 second")
+			}
 			return nil
 		},
 		RunE: commandSwitchTraffic,
