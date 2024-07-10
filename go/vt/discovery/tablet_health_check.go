@@ -356,6 +356,9 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 }
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
+	thc.connMu.Lock()
+	defer thc.connMu.Unlock()
+
 	log.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet, err)
 	thc.setServingState(false, err.Error())
 	thc.LastError = err
@@ -366,6 +369,9 @@ func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
 // finalizeConn closes the health checking connection.
 // To be called only on exit from checkConn().
 func (thc *tabletHealthCheck) finalizeConn() {
+	thc.connMu.Lock()
+	defer thc.connMu.Unlock()
+
 	thc.setServingState(false, "finalizeConn closing connection")
 	// Note: checkConn() exits only when thc.ctx.Done() is closed. Thus it's
 	// safe to simply get Err() value here and assign to LastError.

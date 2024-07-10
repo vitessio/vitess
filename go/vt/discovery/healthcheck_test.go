@@ -63,6 +63,78 @@ func init() {
 	refreshInterval = time.Minute
 }
 
+func TestHealthCheckRace(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// reset error counters
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// close healthcheck
+	defer hc.Close()
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_REPLICA
+
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+	shr := &querypb.StreamHealthResponse{
+		TabletAlias: tablet.Alias,
+		Target:      target,
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+	}
+
+	input := make(chan *querypb.StreamHealthResponse)
+	fc := createFakeConn(tablet, input)
+	fc.errCh = make(chan error)
+
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				input <- shr
+
+			}
+		}
+	}()
+
+	hc.AddTablet(tablet)
+
+	// Wait for the tablet to become healthy
+	time.Sleep(30 * time.Millisecond)
+
+	// This goroutine simulates accessing the tablet connection
+	go func() {
+		ticker := time.NewTicker(5 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				conn, err := hc.TabletConnection(context.Background(), tablet.Alias, target)
+
+				assert.NoError(t, err)
+				assert.NotNil(t, conn)
+			}
+		}
+	}()
+
+	// Inject connection failures to simulate `closeConnection` being called
+	for i := 0; i < 10; i++ {
+		fc.errCh <- fmt.Errorf("some stream error")
+		time.Sleep(30 * time.Millisecond)
+	}
+}
+
 func TestHealthCheck(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	// reset error counters
