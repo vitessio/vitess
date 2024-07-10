@@ -1513,7 +1513,6 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		cfg.EnableOnlineDDL = true
 	}
-	cfg.TwoPCCoordinatorAddress = "fake"
 	if flags&shortTwopcAge > 0 {
 		cfg.TwoPCAbandonAge = 0.5
 	} else {

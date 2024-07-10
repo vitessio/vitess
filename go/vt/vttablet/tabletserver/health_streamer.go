@@ -287,12 +287,14 @@ func (hs *healthStreamer) MakePrimary(serving bool) {
 	hs.isServingPrimary = serving
 	// We register for notifications from the schema Engine only when schema tracking is enabled,
 	// and we are going to a serving primary state.
-	if serving && hs.signalWhenSchemaChange {
-		hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []*schema.Table, udfsChanged bool) {
-			if err := hs.reload(created, altered, dropped, udfsChanged); err != nil {
-				log.Errorf("periodic schema reload failed in health stream: %v", err)
-			}
-		}, false)
+	if serving {
+		if hs.signalWhenSchemaChange {
+			hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []*schema.Table, udfsChanged bool) {
+				if err := hs.reload(created, altered, dropped, udfsChanged); err != nil {
+					log.Errorf("periodic schema reload failed in health stream: %v", err)
+				}
+			}, false)
+		}
 	}
 }
 
@@ -345,4 +347,19 @@ func (hs *healthStreamer) reload(created, altered, dropped []*schema.Table, udfs
 	hs.state.RealtimeStats.ViewSchemaChanged = nil
 	hs.state.RealtimeStats.UdfsChanged = false
 	return nil
+}
+
+// sendUnresolvedTransactionSignal sends broadcast message about unresolved transactions.
+func (hs *healthStreamer) sendUnresolvedTransactionSignal() {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	// send signal only when primary is serving.
+	if !hs.isServingPrimary {
+		return
+	}
+
+	hs.state.RealtimeStats.TxUnresolved = true
+	shr := hs.state.CloneVT()
+	hs.broadCastToClients(shr)
+	hs.state.RealtimeStats.TxUnresolved = false
 }

@@ -261,8 +261,8 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 	return prepared, failed, nil
 }
 
-// CountUnresolvedRedo returns the number of prepared transactions that are still unresolved.
-func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.Time) (int64, error) {
+// CountUnresolvedTransactions returns the number of prepared transactions that are still unresolved.
+func (tpc *TwoPC) CountUnresolvedTransactions(ctx context.Context, unresolvedTime time.Time) (int64, error) {
 	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -276,9 +276,7 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 	if err != nil {
 		return 0, err
 	}
-	if len(qr.Rows) < 1 {
-		return 0, nil
-	}
+	// executed query is a scalar aggregation, so we can safely assume that the result is a single row.
 	v, _ := qr.Rows[0][0].ToCastInt64()
 	return v, nil
 }
@@ -393,33 +391,6 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	}
 	result.Participants = participants
 	return result, nil
-}
-
-// ReadAbandoned returns the list of abandoned transactions
-// and their associated start time.
-func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map[string]time.Time, error) {
-	conn, err := tpc.readPool.Get(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Recycle()
-
-	bindVars := map[string]*querypb.BindVariable{
-		"time_created": sqltypes.Int64BindVariable(abandonTime.UnixNano()),
-	}
-	qr, err := tpc.read(ctx, conn.Conn, tpc.readAbandoned, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	txs := make(map[string]time.Time, len(qr.Rows))
-	for _, row := range qr.Rows {
-		t, err := row[1].ToCastInt64()
-		if err != nil {
-			return nil, err
-		}
-		txs[row[0].ToString()] = time.Unix(0, t)
-	}
-	return txs, nil
 }
 
 // ReadAllTransactions returns info about all distributed transactions.
