@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/vt/env"
 )
 
 type FileSystemManager interface {
@@ -17,7 +15,7 @@ type FileSystemManager interface {
 }
 
 func newFileSystemManager(ctx context.Context) FileSystemManager {
-	if !enableStalledDiskCheck {
+	if stalledDiskWriteDir == "" {
 		return newNoopFilesystemManager()
 	}
 
@@ -27,7 +25,7 @@ func newFileSystemManager(ctx context.Context) FileSystemManager {
 type writeFunction func() error
 
 func attemptFileWrite() error {
-	file, err := os.Create(path.Join(env.VtDataRoot(), ".stalled_disk_check"))
+	file, err := os.Create(path.Join(stalledDiskWriteDir, ".stalled_disk_check"))
 	if err != nil {
 		return err
 	}

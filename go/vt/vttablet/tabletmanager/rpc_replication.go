@@ -57,7 +57,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	}
 
 	// Return error if the disk is stalled or rejecting writes.
-	// Noop by default, must be enabled with the flag "enable_stalled_disk_check".
+	// Noop by default, must be enabled with the flag "stalled-disk-write-dir".
 	if tm.fsManager.IsDiskStalled() {
 		return nil, errors.New("stalled disk")
 	}

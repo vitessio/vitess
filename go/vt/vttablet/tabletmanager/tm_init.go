@@ -93,9 +93,9 @@ var (
 
 	initTimeout              = 1 * time.Minute
 	mysqlShutdownTimeout     = mysqlctl.DefaultShutdownTimeout
-	enableStalledDiskCheck   = false
+	stalledDiskWriteDir      = ""
 	stalledDiskWriteTimeout  = 30 * time.Second
-	stalledDiskWriteInterval = 31 * time.Second
+	stalledDiskWriteInterval = 5 * time.Second
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -108,9 +108,9 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "timeout to use when MySQL is being shut down.")
-	fs.BoolVar(&enableStalledDiskCheck, "enable_stalled_disk_check", enableStalledDiskCheck, "if true, tablet will check if disk is stalled or rejecting writes")
-	fs.DurationVar(&stalledDiskWriteTimeout, "stalled_disk_write_timeout", stalledDiskWriteTimeout, "if writes exceed this duration, the disk is considered stalled")
-	fs.DurationVar(&stalledDiskWriteInterval, "stalled_disk_write_interval", stalledDiskWriteInterval, "how often to write to the disk to check whether it is stalled")
+	fs.StringVar(&stalledDiskWriteDir, "stalled-disk-write-dir", stalledDiskWriteDir, "if provided, tablet will attempt to write a file to this directory to check if the disk is stalled")
+	fs.DurationVar(&stalledDiskWriteTimeout, "stalled-disk-write-timeout", stalledDiskWriteTimeout, "if writes exceed this duration, the disk is considered stalled")
+	fs.DurationVar(&stalledDiskWriteInterval, "stalled-disk-write-interval", stalledDiskWriteInterval, "how often to write to the disk to check whether it is stalled")
 }
 
 var (
