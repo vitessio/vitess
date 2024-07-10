@@ -295,3 +295,35 @@ func TestCanonicalOutput(t *testing.T) {
 		})
 	}
 }
+
+func TestTrackedBufferMyprintf(t *testing.T) {
+	testcases := []struct {
+		input  string
+		output string
+		args   []any
+	}{
+		{
+			input:  "nothing",
+			output: "nothing",
+			args:   []any{},
+		},
+		{
+			input:  "my name is %s",
+			output: "my name is Homer",
+			args:   []any{"Homer"},
+		},
+		{
+			input:  "%d %d %d %d %d %d %d %d %d %d %d",
+			output: "1 2 3 4 5 6 7 8 9 10 11",
+			args:   []any{int(1), int8(2), int16(3), int32(4), int64(5), uint(6), uint8(7), uint16(8), uint32(9), uint64(10), uintptr(11)},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.input, func(t *testing.T) {
+			buf := NewTrackedBuffer(nil)
+			buf.Myprintf(tc.input, tc.args...)
+			got := buf.String()
+			assert.Equal(t, tc.output, got)
+		})
+	}
+}
