@@ -1392,7 +1392,7 @@ func (throttler *Throttler) IsAppThrottled(appName string) bool {
 			// throttling cleanup hasn't purged yet, but it is expired.
 			return false
 		}
-		// From this point on, we condier that this app has some throttling configuration
+		// From this point on, we consider that this app has some throttling configuration
 		// of any sort.
 		appFound = true
 		if appThrottle.Exempt {
