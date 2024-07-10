@@ -487,6 +487,12 @@ func (tpc *TwoPC) read(ctx context.Context, conn *connpool.Conn, pq *sqlparser.P
 }
 
 // UnresolvedTransactions returns the list of unresolved transactions
+// the list from database is retrieved as
+// dtid | state   | keyspace | shard
+// 1    | PREPARE | ks       | 40-80
+// 1    | PREPARE | ks       | 80-c0
+// 2    | COMMIT  | ks       | -40
+// Here there are 2 dtids with 2 participants for dtid:1 and 1 participant for dtid:2.
 func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.Time) ([]*querypb.TransactionMetadata, error) {
 	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
@@ -501,37 +507,45 @@ func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.T
 	if err != nil {
 		return nil, err
 	}
-	var txs []*querypb.TransactionMetadata
-	var participants []*querypb.Target
-	var currentDtid string
-	var currentDtidState querypb.TransactionState
-	for _, row := range qr.Rows {
-		dtid := row[0].ToString()
-		if currentDtid != dtid {
-			if currentDtid != "" {
-				txs = append(txs, &querypb.TransactionMetadata{
-					Dtid:         currentDtid,
-					State:        currentDtidState,
-					Participants: participants,
-				})
-			}
-			currentDtid = dtid
-			sID, _ := row[1].ToInt()
-			currentDtidState = querypb.TransactionState(sID)
-			participants = nil
+
+	var (
+		txs       []*querypb.TransactionMetadata
+		currentTx *querypb.TransactionMetadata
+	)
+
+	appendCurrentTx := func() {
+		if currentTx != nil {
+			txs = append(txs, currentTx)
 		}
-		participants = append(participants, &querypb.Target{
+	}
+
+	for _, row := range qr.Rows {
+		// Extract the distributed transaction ID from the row
+		dtid := row[0].ToString()
+
+		// Check if we are starting a new transaction
+		if currentTx == nil || currentTx.Dtid != dtid {
+			// If we have an existing transaction, append it to the list
+			appendCurrentTx()
+
+			// Extract the transaction state and initialize a new TransactionMetadata
+			stateID, _ := row[1].ToInt()
+			currentTx = &querypb.TransactionMetadata{
+				Dtid:         dtid,
+				State:        querypb.TransactionState(stateID),
+				Participants: []*querypb.Target{},
+			}
+		}
+
+		// Add the current participant (keyspace and shard) to the transaction
+		currentTx.Participants = append(currentTx.Participants, &querypb.Target{
 			Keyspace: row[2].ToString(),
 			Shard:    row[3].ToString(),
 		})
 	}
-	// This is for the last list which is not added to the Transaction Metadata.
-	if currentDtid != "" {
-		txs = append(txs, &querypb.TransactionMetadata{
-			Dtid:         currentDtid,
-			State:        currentDtidState,
-			Participants: participants,
-		})
-	}
+
+	// Append the last transaction if it exists
+	appendCurrentTx()
+
 	return txs, nil
 }

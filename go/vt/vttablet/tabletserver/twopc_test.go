@@ -398,7 +398,8 @@ func jsonStr(v any) string {
 	return string(out)
 }
 
-// TestUnresolvedTransactions tests the UnresolvedTransactions method.
+// TestUnresolvedTransactions tests the retrieval of unresolved transactions from the database and
+// providing the output in proto format.
 func TestUnresolvedTransactions(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
