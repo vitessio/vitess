@@ -154,9 +154,12 @@ func ReadThrottleMetrics(ctx context.Context, probe *Probe, metricsFunc func(con
 	go func(metrics MySQLThrottleMetrics, started time.Time) {
 		stats.GetOrNewGauge("ThrottlerProbesLatency", "probes latency").Set(time.Since(started).Nanoseconds())
 		stats.GetOrNewCounter("ThrottlerProbesTotal", "total probes").Add(1)
-		// if metric.Err != nil {
-		// 	stats.GetOrNewCounter("ThrottlerProbesError", "total probes errors").Add(1)
-		// }
+		for _, metric := range metrics {
+			if metric.Err != nil {
+				stats.GetOrNewCounter("ThrottlerProbesError", "total probes errors").Add(1)
+				break
+			}
+		}
 	}(mySQLThrottleMetrics, started)
 
 	return cacheMySQLThrottleMetric(probe, mySQLThrottleMetrics)
