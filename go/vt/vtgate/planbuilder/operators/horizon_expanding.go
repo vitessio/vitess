@@ -79,16 +79,23 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 }
 
 func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (ops.Operator, *rewrite.ApplyResult, error) {
-	op, err := createProjectionFromSelect(ctx, horizon)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	if horizon.IsDerived() {
+		// if we are dealing with a derived table, we need to make sure that the ordering columns
+		// are available outside the derived table
+		for _, order := range horizon.Query.GetOrderBy() {
+			qp.addColumn(ctx, order.Expr)
+		}
+	}
+
+	op, err := createProjectionFromSelect(ctx, horizon)
+	if err != nil {
+		return nil, nil, err
+	}
 	var extracted []string
 	if qp.HasAggr {
 		extracted = append(extracted, "Aggregation")

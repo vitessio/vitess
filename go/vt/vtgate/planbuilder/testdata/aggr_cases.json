@@ -6414,6 +6414,44 @@
     }
   },
   {
+    "comment": "Aggregation over a ORDER BY/LIMIT inside a derived table",
+    "query": "SELECT COUNT(*) FROM (SELECT 1 AS one FROM `user` WHERE `user`.`is_not_deleted` = true ORDER BY id DESC LIMIT 25 OFFSET 0) subquery_for_count",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT COUNT(*) FROM (SELECT 1 AS one FROM `user` WHERE `user`.`is_not_deleted` = true ORDER BY id DESC LIMIT 25 OFFSET 0) subquery_for_count",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_star(0) AS count(*)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "INT64(25)",
+            "Offset": "INT64(0)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, id, weight_string(id) from (select 1 as one, id from `user` where 1 != 1) as subquery_for_count where 1 != 1",
+                "OrderBy": "(1|2) DESC",
+                "Query": "select 1, id, weight_string(id) from (select 1 as one, id from `user` where `user`.is_not_deleted = true) as subquery_for_count order by id desc limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "baz in the HAVING clause can't be accessed because of the GROUP BY",
     "query": "select foo, count(bar) as x from user group by foo having baz > avg(baz) order by x",
     "plan": "Unknown column 'baz' in 'having clause'"
