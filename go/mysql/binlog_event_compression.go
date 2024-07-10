@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"sync"
 
 	"github.com/klauspost/compress/zstd"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -72,6 +74,24 @@ var (
 	// This is used for smaller events that we want to handle entirely
 	// using in-memory buffers via DecodeAll.
 	statelessDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+
+	// Use a pool of stateful decoders for larger payloads that we want
+	// to stream. The number of large (> zstdInMemoryDecompressorMaxSize)
+	// payloads should typically be relatively low, but there may be times
+	// where there are many of them -- and users like vstreamer may have
+	// N concurrent streams per vttablet which could lead to a lot of
+	// allocations and GC overhead so this pool allows us to handle
+	// concurrent cases better while still scaling to 0 when there's no
+	// usage.
+	statefulDecoderPool = sync.Pool{
+		New: func() any {
+			d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
+			if err != nil { // Should only happen e.g. due to ENOMEM
+				log.Errorf("Error creating stateful decoder: %v", err)
+			}
+			return d
+		},
+	}
 )
 
 type TransactionPayload struct {
@@ -269,9 +289,12 @@ func (tp *TransactionPayload) decompress() error {
 	// larger payloads.
 	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
 		in := bytes.NewReader(tp.payload)
-		streamDecoder, err := zstd.NewReader(in, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
-		if err != nil { // Should only happen e.g. due to ENOMEM
+		streamDecoder, ok := statefulDecoderPool.Get().(*zstd.Decoder)
+		if streamDecoder == nil || !ok {
 			return vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateful stream decoder")
+		}
+		if err := streamDecoder.Reset(in); err != nil {
+			return vterrors.Wrap(err, "error resetting stateful stream decoder")
 		}
 		compressedTrxPayloadsUsingStream.Add(1)
 		tp.reader = streamDecoder
@@ -302,7 +325,9 @@ func (tp *TransactionPayload) decompress() error {
 func (tp *TransactionPayload) Close() {
 	switch reader := tp.reader.(type) {
 	case *zstd.Decoder:
-		reader.Close()
+		if err := reader.Reset(nil); err == nil || err == io.EOF {
+			readersPool.Put(reader)
+		}
 	default:
 		reader = nil
 	}
