@@ -1032,9 +1032,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
+            "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by a, b, c, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
             "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc",
+            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by a, b, c, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc",
             "Table": "`user`"
           }
         ]
@@ -1064,9 +1064,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
+            "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by c, b, a, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
             "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc",
+            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by c, b, a, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc",
             "Table": "`user`"
           }
         ]
@@ -1096,9 +1096,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` where 1 != 1 group by a, c, b, weight_string(a), weight_string(c), weight_string(b)",
+            "FieldQuery": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` where 1 != 1 group by c, b, a, weight_string(a), weight_string(c), weight_string(b)",
             "OrderBy": "(0|4) DESC, (2|5) DESC, (1|6) ASC",
-            "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by a, c, b, weight_string(a), weight_string(c), weight_string(b) order by a desc, c desc, `user`.b asc",
+            "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by c, b, a, weight_string(a), weight_string(c), weight_string(b) order by a desc, c desc, `user`.b asc",
             "Table": "`user`"
           }
         ]
@@ -1675,8 +1675,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(1) AS count(*)",
-        "GroupBy": "(0|2)",
-        "ResultColumns": 2,
+        "GroupBy": "0 COLLATE latin1_swedish_ci",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1685,9 +1684,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select lower(col1) as v, count(*), weight_string(lower(col1)) from authoritative where 1 != 1 group by lower(col1), weight_string(lower(col1))",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select lower(col1) as v, count(*), weight_string(lower(col1)) from authoritative group by lower(col1), weight_string(lower(col1)) order by lower(col1) asc",
+            "FieldQuery": "select lower(col1) as v, count(*) from authoritative where 1 != 1 group by lower(col1)",
+            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+            "Query": "select lower(col1) as v, count(*) from authoritative group by lower(col1) order by lower(col1) asc",
             "Table": "authoritative"
           }
         ]
@@ -1707,8 +1706,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(1) AS count(*)",
-        "GroupBy": "(0|2)",
-        "ResultColumns": 2,
+        "GroupBy": "0",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1717,9 +1715,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select char_length(col1) as a, count(*), weight_string(char_length(col1)) from authoritative where 1 != 1 group by char_length(col1), weight_string(char_length(col1))",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select char_length(col1) as a, count(*), weight_string(char_length(col1)) from authoritative group by char_length(col1), weight_string(char_length(col1)) order by char_length(authoritative.col1) asc",
+            "FieldQuery": "select char_length(col1) as a, count(*) from authoritative where 1 != 1 group by char_length(col1)",
+            "OrderBy": "0 ASC",
+            "Query": "select char_length(col1) as a, count(*) from authoritative group by char_length(col1) order by char_length(authoritative.col1) asc",
             "Table": "authoritative"
           }
         ]
@@ -4085,13 +4083,13 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "(2|3) ASC",
+        "OrderBy": "2 ASC",
         "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*), any_value(2) AS col + 1, any_value(3)",
+            "Aggregates": "sum_count_star(1) AS count(*), any_value(2) AS col + 1",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -4101,9 +4099,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select col, count(*), col + 1, weight_string(col + 1) from `user` where 1 != 1 group by col",
+                "FieldQuery": "select col, count(*), col + 1 from `user` where 1 != 1 group by col",
                 "OrderBy": "0 ASC",
-                "Query": "select col, count(*), col + 1, weight_string(col + 1) from `user` group by col order by col asc",
+                "Query": "select col, count(*), col + 1 from `user` group by col order by col asc",
                 "Table": "`user`"
               }
             ]
@@ -4759,8 +4757,8 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              ":3 as col",
-              ":2 as intcol",
+              ":2 as col",
+              ":3 as intcol",
               "count(*) * count(*) as count(*)"
             ],
             "Inputs": [
@@ -4777,9 +4775,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(*), u.intcol, u.col from `user` as u where 1 != 1 group by u.intcol, u.col",
-                    "OrderBy": "1 ASC, 2 ASC",
-                    "Query": "select count(*), u.intcol, u.col from `user` as u group by u.intcol, u.col order by u.intcol asc, u.col asc",
+                    "FieldQuery": "select count(*), u.col, u.intcol from `user` as u where 1 != 1 group by u.col, u.intcol",
+                    "OrderBy": "2 ASC, 1 ASC",
+                    "Query": "select count(*), u.col, u.intcol from `user` as u group by u.col, u.intcol order by u.intcol asc, u.col asc",
                     "Table": "`user`"
                   },
                   {
@@ -5324,8 +5322,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra where 1 != 1 group by :user_id + user_extra.id",
-                        "Query": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra group by :user_id + user_extra.id",
+                        "FieldQuery": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra where 1 != 1 group by :user_id + user_extra.id, weight_string(:user_id + user_extra.id)",
+                        "Query": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra group by :user_id + user_extra.id, weight_string(:user_id + user_extra.id)",
                         "Table": "user_extra"
                       }
                     ]
@@ -7143,6 +7141,120 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Aggregation over a ORDER BY/LIMIT inside a derived table",
+    "query": "SELECT COUNT(*) FROM (SELECT 1 AS one FROM `user` WHERE `user`.`is_not_deleted` = true ORDER BY id DESC LIMIT 25 OFFSET 0) subquery_for_count",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT COUNT(*) FROM (SELECT 1 AS one FROM `user` WHERE `user`.`is_not_deleted` = true ORDER BY id DESC LIMIT 25 OFFSET 0) subquery_for_count",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": "2",
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "25",
+                "Offset": "0",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select subquery_for_count.one, subquery_for_count.id, 1, weight_string(subquery_for_count.id) from (select 1 as one, id from `user` where 1 != 1) as subquery_for_count where 1 != 1",
+                    "OrderBy": "(1|3) DESC",
+                    "Query": "select subquery_for_count.one, subquery_for_count.id, 1, weight_string(subquery_for_count.id) from (select 1 as one, id from `user` where `user`.is_not_deleted = true) as subquery_for_count order by id desc limit 25",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "should be able to push down aggregation",
+    "query": "select sum(user.type) from user join user_extra on user.team_id = user_extra.id group by user_extra.id order by user_extra.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(user.type) from user join user_extra on user.team_id = user_extra.id group by user_extra.id order by user_extra.id",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum(0) AS sum(`user`.type)",
+        "GroupBy": "(1|2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "sum(`user`.type) * count(*) as sum(`user`.type)",
+              ":2 as id",
+              ":3 as weight_string(user_extra.id)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(2|3) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
+                    "JoinVars": {
+                      "user_team_id": 1
+                    },
+                    "TableName": "`user`_user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select sum(`user`.type), `user`.team_id from `user` where 1 != 1 group by `user`.team_id",
+                        "Query": "select sum(`user`.type), `user`.team_id from `user` group by `user`.team_id",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), user_extra.id, weight_string(user_extra.id) from user_extra where 1 != 1 group by user_extra.id, weight_string(user_extra.id)",
+                        "Query": "select count(*), user_extra.id, weight_string(user_extra.id) from user_extra where user_extra.id = :user_team_id group by user_extra.id, weight_string(user_extra.id)",
+                        "Table": "user_extra"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
       ]
     }
   }

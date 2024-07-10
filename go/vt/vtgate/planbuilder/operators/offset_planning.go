@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -96,62 +95,68 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operat
 	return rewritten.(sqlparser.Expr)
 }
 
+func findAggregatorInSource(op Operator) *Aggregator {
+	// we'll just loop through the inputs until we find the aggregator
+	for {
+		aggr, ok := op.(*Aggregator)
+		if ok {
+			return aggr
+		}
+		inputs := op.Inputs()
+		if len(inputs) != 1 {
+			panic(vterrors.VT13001("unexpected multiple inputs"))
+		}
+		src := inputs[0]
+		_, isRoute := src.(*Route)
+		if isRoute {
+			panic(vterrors.VT13001("failed to find the aggregator"))
+		}
+		op = src
+	}
+}
+
+// addColumnsToInput adds columns needed by an operator to its input.
+// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
 func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator {
-	// addColumnsToInput adds columns needed by an operator to its input.
-	// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
+
 	addColumnsNeededByFilter := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		addedCols := false
 		filter, ok := in.(*Filter)
 		if !ok {
 			return in, NoRewrite
 		}
 
-		proj, areOnTopOfProj := filter.Source.(selectExpressions)
-		if !areOnTopOfProj {
-			// not much we can do here
-			return in, NoRewrite
-		}
-		addedColumns := false
-		found := func(expr sqlparser.Expr, i int) {}
-		notFound := func(e sqlparser.Expr) {
-			_, addToGroupBy := e.(*sqlparser.ColName)
-			proj.addColumnWithoutPushing(ctx, aeWrap(e), addToGroupBy)
-			addedColumns = true
-		}
-		visitor := getOffsetRewritingVisitor(ctx, proj.FindCol, found, notFound)
-
-		for _, expr := range filter.Predicates {
-			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopySemanticInfo)
-		}
-		if addedColumns {
-			return in, Rewrote("added columns because filter needs it")
-		}
-
-		return in, NoRewrite
-	}
-
-	// while we are out here walking the operator tree, if we find a UDF in an aggregation, we should fail
-	failUDFAggregation := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
-		aggrOp, ok := in.(*Aggregator)
-		if !ok {
-			return in, NoRewrite
-		}
-		for _, aggr := range aggrOp.Aggregations {
-			if aggr.OpCode == opcode.AggregateUDF {
-				// we don't support UDFs in aggregation if it's still above a route
-				message := fmt.Sprintf("Aggregate UDF '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
-				panic(vterrors.VT12001(message))
+		var neededAggrs []sqlparser.Expr
+		extractAggrs := func(cursor *sqlparser.CopyOnWriteCursor) {
+			node := cursor.Node()
+			if ctx.IsAggr(node) {
+				neededAggrs = append(neededAggrs, node.(sqlparser.Expr))
 			}
 		}
+
+		for _, expr := range filter.Predicates {
+			_ = sqlparser.CopyOnRewrite(expr, dontEnterSubqueries, extractAggrs, nil)
+		}
+
+		if neededAggrs == nil {
+			return in, NoRewrite
+		}
+
+		aggregator := findAggregatorInSource(filter.Source)
+		for _, aggr := range neededAggrs {
+			if aggregator.FindCol(ctx, aggr, false) == -1 {
+				aggregator.addColumnWithoutPushing(ctx, aeWrap(aggr), false)
+				addedCols = true
+			}
+		}
+
+		if addedCols {
+			return in, Rewrote("added columns because filter needs it")
+		}
 		return in, NoRewrite
 	}
 
-	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
-		out, res := addColumnsNeededByFilter(in, semantics.EmptyTableSet(), isRoot)
-		failUDFAggregation(in, semantics.EmptyTableSet(), isRoot)
-		return out, res
-	}
-
-	return TopDown(root, TableID, visitor, stopAtRoute)
+	return TopDown(root, TableID, addColumnsNeededByFilter, stopAtRoute)
 }
 
 // isolateDistinctFromUnion will pull out the distinct from a union operator

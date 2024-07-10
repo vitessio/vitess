@@ -49,6 +49,10 @@ var (
 	successResult          = "success"
 )
 
+const (
+	lostTopologyLockMsg = "lost topology lock, aborting"
+)
+
 // ElectNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias. The

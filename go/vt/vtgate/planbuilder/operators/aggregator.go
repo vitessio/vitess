@@ -101,7 +101,7 @@ func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 		case sqlparser.AggrFunc:
 			aggr = createAggrFromAggrFunc(e, expr)
 		case *sqlparser.FuncExpr:
-			if IsAggr(ctx, e) {
+			if ctx.IsAggr(e) {
 				aggr = NewAggr(opcode.AggregateUDF, nil, expr, expr.As.String())
 			} else {
 				aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
@@ -113,14 +113,6 @@ func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 		a.Aggregations = append(a.Aggregations, aggr)
 	}
 	return offset
-}
-
-func (a *Aggregator) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, groupby []bool, exprs []*sqlparser.AliasedExpr) (offsets []int) {
-	for i, ae := range exprs {
-		offset := a.addColumnWithoutPushing(ctx, ae, groupby[i])
-		offsets = append(offsets, offset)
-	}
-	return
 }
 
 func (a *Aggregator) isDerived() bool {
@@ -379,7 +371,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			a.Grouping[idx].ColOffset = offset
 			gb.ColOffset = offset
 		}
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
+		if gb.WSOffset != -1 || !ctx.NeedsWeightString(gb.Inner) {
 			continue
 		}
 
@@ -516,7 +508,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			a.Grouping[idx].ColOffset = offset
 		}
 
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
+		if gb.WSOffset != -1 || !ctx.NeedsWeightString(gb.Inner) {
 			continue
 		}
 
