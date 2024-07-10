@@ -43,67 +43,81 @@ func attemptFileWrite() error {
 }
 
 type pollingFileSystemManager struct {
-	mu              sync.RWMutex
-	stalled         bool
-	writeFunc       writeFunction
-	pollingInterval time.Duration
-	writeTimeout    time.Duration
+	stalledMutex         sync.RWMutex
+	stalled              bool
+	writeInProgressMutex sync.RWMutex
+	writeInProgress      bool
+	writeFunc            writeFunction
+	pollingInterval      time.Duration
+	writeTimeout         time.Duration
 }
 
 var _ FileSystemManager = &pollingFileSystemManager{}
 
-func newPollingFileSystemManager(ctx context.Context, writeFunc writeFunction, pollingInterval, waitPeriod time.Duration) *pollingFileSystemManager {
+func newPollingFileSystemManager(ctx context.Context, writeFunc writeFunction, pollingInterval, writeTimeout time.Duration) *pollingFileSystemManager {
 	fs := &pollingFileSystemManager{
-		mu:              sync.RWMutex{},
-		stalled:         false,
-		writeFunc:       writeFunc,
-		pollingInterval: pollingInterval,
-		writeTimeout:    waitPeriod,
+		stalledMutex:         sync.RWMutex{},
+		stalled:              false,
+		writeInProgressMutex: sync.RWMutex{},
+		writeInProgress:      false,
+		writeFunc:            writeFunc,
+		pollingInterval:      pollingInterval,
+		writeTimeout:         writeTimeout,
 	}
 	go fs.poll(ctx)
 	return fs
 }
 
-func (f *pollingFileSystemManager) poll(ctx context.Context) {
-	checkInProgress := false
+func (fs *pollingFileSystemManager) poll(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(f.pollingInterval):
-			f.mu.Lock()
-			if checkInProgress {
-				f.mu.Unlock()
+		case <-time.After(fs.pollingInterval):
+			if fs.isWriteInProgress() {
 				continue
 			}
-			checkInProgress = true
-			f.mu.Unlock()
 
 			ch := make(chan error, 1)
 			go func() {
-				ch <- f.writeFunc()
+				fs.setIsWriteInProgress(true)
+				err := fs.writeFunc()
+				fs.setIsWriteInProgress(false)
+				ch <- err
 			}()
 
 			select {
-			case <-time.After(f.writeTimeout):
-				f.mu.Lock()
-				f.stalled = true
-				checkInProgress = false
-				f.mu.Unlock()
+			case <-time.After(fs.writeTimeout):
+				fs.setIsDiskStalled(true)
 			case err := <-ch:
-				f.mu.Lock()
-				f.stalled = err != nil
-				checkInProgress = false
-				f.mu.Unlock()
+				fs.setIsDiskStalled(err != nil)
 			}
 		}
 	}
 }
 
 func (fs *pollingFileSystemManager) IsDiskStalled() bool {
-	fs.mu.RLock()
-	defer fs.mu.RUnlock()
+	fs.stalledMutex.RLock()
+	defer fs.stalledMutex.RUnlock()
 	return fs.stalled
+}
+
+func (fs *pollingFileSystemManager) setIsDiskStalled(isStalled bool) {
+	fs.stalledMutex.Lock()
+	defer fs.stalledMutex.Unlock()
+	fs.stalled = isStalled
+}
+
+func (fs *pollingFileSystemManager) isWriteInProgress() bool {
+	fs.writeInProgressMutex.RLock()
+	defer fs.writeInProgressMutex.RUnlock()
+	return fs.writeInProgress
+}
+
+func (fs *pollingFileSystemManager) setIsWriteInProgress(isInProgress bool) {
+	fs.writeInProgressMutex.Lock()
+	defer fs.writeInProgressMutex.Unlock()
+	fs.writeInProgress = isInProgress
 }
 
 type noopFileSystemManager struct{}
