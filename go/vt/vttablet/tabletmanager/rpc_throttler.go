@@ -86,7 +86,7 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 	return resp, nil
 }
 
-// CheckThrottler executes a throttler check
+// GetThrottlerStatus returns a detailed breakdown of the throttler status
 func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
 	statsThrottlerStatusRequests.Add(1)
 	status := tm.QueryServiceControl.GetThrottlerStatus(ctx)
