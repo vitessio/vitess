@@ -51,8 +51,14 @@ const (
 	TransactionPayloadCompressionZstd = 0
 	TransactionPayloadCompressionNone = 255
 
-	// Length of the binlog event header in the transaction payload.
-	headerLen = BinlogEventLenOffset + 4
+	// Bytes used to store the internal event length as a uint32 at
+	// the end of the binlog event header.
+	eventLenBytes = 4
+	// Offset from 0 where the eventLenBytes are stored.
+	binlogEventLenOffset = 9
+	// Length of the binlog event header for internal events within
+	// the transaction payload.
+	headerLen = binlogEventLenOffset + eventLenBytes
 
 	// At what size should we switch from the in-memory buffer
 	// decoding to streaming mode which is much slower, but does
@@ -70,19 +76,28 @@ var (
 	compressedTrxPayloadsInMem       = stats.NewCounter("CompressedTransactionPayloadsInMemory", "The number of compressed binlog transaction payloads that were processed in memory")
 	compressedTrxPayloadsUsingStream = stats.NewCounter("CompressedTransactionPayloadsViaStream", "The number of compressed binlog transaction payloads that were processed using a stream")
 
-	// Create a concurrent stateless decoder that caches decompressors.
-	// This is used for smaller events that we want to handle entirely
-	// using in-memory buffers via DecodeAll.
-	statelessDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+	// A concurrent stateless decoder that caches decompressors. This is
+	// used for smaller payloads that we want to handle entirely using
+	// in-memory buffers via DecodeAll.
+	statelessDecoder *zstd.Decoder
 
-	// Use a pool of stateful decoders for larger payloads that we want
-	// to stream. The number of large (> zstdInMemoryDecompressorMaxSize)
+	// A pool of stateful decoders for larger payloads that we want to
+	// stream. The number of large (> zstdInMemoryDecompressorMaxSize)
 	// payloads should typically be relatively low, but there may be times
 	// where there are many of them -- and users like vstreamer may have
-	// N concurrent streams per vttablet which could lead to a lot of
+	// N concurrent streams per tablet which could lead to a lot of
 	// allocations and GC overhead so this pool allows us to handle
 	// concurrent cases better while still scaling to 0 when there's no
 	// usage.
+	statefulDecoderPool sync.Pool
+)
+
+func init() {
+	var err error
+	statelessDecoder, err = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+	if err != nil { // Should only happen e.g. due to ENOMEM
+		log.Errorf("Error creating stateless decoder: %v", err)
+	}
 	statefulDecoderPool = sync.Pool{
 		New: func() any {
 			d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
@@ -92,7 +107,7 @@ var (
 			return d
 		},
 	}
-)
+}
 
 type TransactionPayload struct {
 	size             uint64
@@ -257,7 +272,7 @@ func (tp *TransactionPayload) decode() error {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected header length of %d but only read %d bytes",
 				headerLen, bytesRead)
 		}
-		eventLen := int64(binary.LittleEndian.Uint32(header[BinlogEventLenOffset:headerLen]))
+		eventLen := int64(binary.LittleEndian.Uint32(header[binlogEventLenOffset:headerLen]))
 		eventData := make([]byte, eventLen)
 		copy(eventData, header) // The event includes the header
 		bytesRead, err = io.ReadFull(tp.reader, eventData[headerLen:])
@@ -289,8 +304,8 @@ func (tp *TransactionPayload) decompress() error {
 	// larger payloads.
 	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
 		in := bytes.NewReader(tp.payload)
-		streamDecoder, ok := statefulDecoderPool.Get().(*zstd.Decoder)
-		if streamDecoder == nil || !ok {
+		streamDecoder := statefulDecoderPool.Get().(*zstd.Decoder)
+		if streamDecoder == nil {
 			return vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateful stream decoder")
 		}
 		if err := streamDecoder.Reset(in); err != nil {
