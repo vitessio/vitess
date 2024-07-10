@@ -61,6 +61,7 @@ Flags:
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
+      --structured-logging                                               enable structured logging
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version

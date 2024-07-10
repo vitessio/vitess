@@ -24,7 +24,11 @@ import (
 	"sync"
 	"time"
 
+	noglog "github.com/slok/noglog"
+	"go.uber.org/zap"
+
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/log"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
@@ -382,4 +386,47 @@ func fileAndLine(depth int) (string, int64) {
 		file = file[slash+1:]
 	}
 	return file, int64(line)
+}
+
+type StructuredLogger zap.SugaredLogger
+
+// SetStructuredLogger in-place noglog replacement with Zap's logger.
+func SetStructuredLogger(conf *zap.Config) (vtSLogger *zap.SugaredLogger, err error) {
+	var l *zap.Logger
+
+	// Use the passed configuration instead of the default configuration
+	if conf == nil {
+		defaultProdConf := zap.NewProductionConfig()
+		conf = &defaultProdConf
+	}
+
+	// Build configuration and generate a sugared logger
+	l, err = conf.Build()
+	vtSLogger = l.Sugar()
+
+	noglog.SetLogger(&noglog.LoggerFunc{
+		DebugfFunc: func(f string, a ...interface{}) { vtSLogger.Debugf(f, a...) },
+		InfofFunc:  func(f string, a ...interface{}) { vtSLogger.Infof(f, a...) },
+		WarnfFunc:  func(f string, a ...interface{}) { vtSLogger.Warnf(f, a...) },
+		ErrorfFunc: func(f string, a ...interface{}) { vtSLogger.Errorf(f, a...) },
+	})
+
+	log.Flush = noglog.Flush
+	log.Info = noglog.Info
+	log.Infof = noglog.Infof
+	log.InfoDepth = noglog.InfoDepth
+	log.Warning = noglog.Warning
+	log.Warningf = noglog.Warningf
+	log.WarningDepth = noglog.WarningDepth
+	log.Error = noglog.Error
+	log.Errorf = noglog.Errorf
+	log.ErrorDepth = noglog.ErrorDepth
+	log.Exit = noglog.Exit
+	log.Exitf = noglog.Exitf
+	log.ExitDepth = noglog.ExitDepth
+	log.Fatal = noglog.Fatal
+	log.Fatalf = noglog.Fatalf
+	log.FatalDepth = noglog.FatalDepth
+
+	return
 }

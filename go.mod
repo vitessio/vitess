@@ -102,10 +102,12 @@ require (
 	github.com/kr/text v0.2.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
+	github.com/slok/noglog v0.2.0
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/jwalterweatherman v1.1.0
 	github.com/xlab/treeprint v1.2.0
 	go.uber.org/goleak v1.3.0
+	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 	golang.org/x/sync v0.6.0
 	gonum.org/v1/gonum v0.14.0
@@ -183,7 +185,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240304212257-790db918fca8 // indirect
