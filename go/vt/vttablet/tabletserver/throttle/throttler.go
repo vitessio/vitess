@@ -120,7 +120,6 @@ var (
 
 var (
 	statsThrottlerHeartbeatRequests    = stats.NewCounter("ThrottlerHeartbeatRequests", "heartbeat requests")
-	statsThrottlerRecentlyChecked      = stats.NewCounter("ThrottlerRecentlyChecked", "recently checked")
 	statsThrottlerProbeRecentlyChecked = stats.NewCounter("ThrottlerProbeRecentlyChecked", "probe recently checked")
 )
 
@@ -1595,7 +1594,6 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
 		checkResult.RecentlyChecked = true
-		statsThrottlerRecentlyChecked.Add(1)
 	}
 	if !checkResult.RecentlyChecked {
 		checkResult.RecentlyChecked = throttler.recentlyChecked()
