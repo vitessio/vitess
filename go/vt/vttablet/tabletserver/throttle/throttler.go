@@ -192,12 +192,12 @@ type Throttler struct {
 	MetricsThreshold   atomic.Uint64
 	checkAsCheckSelf   atomic.Bool
 
-	mysqlMetricThresholds *cache.Cache
-	aggregatedMetrics     *cache.Cache
-	throttledApps         *cache.Cache
-	recentApps            *cache.Cache
-	metricsHealth         *cache.Cache
-	appCheckedMetrics     *cache.Cache
+	metricThresholds  *cache.Cache
+	aggregatedMetrics *cache.Cache
+	throttledApps     *cache.Cache
+	recentApps        *cache.Cache
+	metricsHealth     *cache.Cache
+	appCheckedMetrics *cache.Cache
 
 	initMutex           sync.Mutex
 	enableMutex         sync.Mutex
@@ -258,7 +258,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.mysqlInventory = mysql.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
-	throttler.mysqlMetricThresholds = cache.New(cache.NoExpiration, 0)
+	throttler.metricThresholds = cache.New(cache.NoExpiration, 0)
 	throttler.aggregatedMetrics = cache.New(aggregatedMetricsExpiration, 0)
 	throttler.recentApps = cache.New(recentAppsExpiration, recentAppsExpiration)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
@@ -426,14 +426,14 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 //   - throttler config. This can be a list of zero or more entries. These metrics override the inventory.
 func (throttler *Throttler) convergeMetricThresholds() {
 	for _, metricName := range base.KnownMetricNames {
-		if val, ok := throttler.mysqlMetricThresholds.Get(throttlerConfigPrefix + metricName.String()); ok {
+		if val, ok := throttler.metricThresholds.Get(throttlerConfigPrefix + metricName.String()); ok {
 			// Value supplied by throttler config takes precedence
-			throttler.mysqlMetricThresholds.Set(metricName.String(), val, cache.DefaultExpiration)
+			throttler.metricThresholds.Set(metricName.String(), val, cache.DefaultExpiration)
 			continue
 		}
 		// metric not indicated in the throttler config, therefore we should use the default threshold for that metric
-		if val, ok := throttler.mysqlMetricThresholds.Get(inventoryPrefix + metricName.String()); ok {
-			throttler.mysqlMetricThresholds.Set(metricName.String(), val, cache.DefaultExpiration)
+		if val, ok := throttler.metricThresholds.Get(inventoryPrefix + metricName.String()); ok {
+			throttler.metricThresholds.Set(metricName.String(), val, cache.DefaultExpiration)
 		}
 	}
 }
@@ -502,13 +502,13 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	{
 		// Metric thresholds
 		for metricName, threshold := range throttlerConfig.MetricThresholds {
-			throttler.mysqlMetricThresholds.Set(throttlerConfigPrefix+metricName, threshold, cache.DefaultExpiration)
+			throttler.metricThresholds.Set(throttlerConfigPrefix+metricName, threshold, cache.DefaultExpiration)
 		}
 		for _, metricName := range base.KnownMetricNames {
 			if _, ok := throttlerConfig.MetricThresholds[metricName.String()]; !ok {
 				// metric not indicated in the throttler config, therefore should be removed from the map
 				// so that we know to apply the inventory default threshold
-				throttler.mysqlMetricThresholds.Delete(throttlerConfigPrefix + metricName.String())
+				throttler.metricThresholds.Delete(throttlerConfigPrefix + metricName.String())
 			}
 		}
 		throttler.convergeMetricThresholds()
@@ -1181,7 +1181,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			threshold = metricsThreshold
 		}
 
-		throttler.mysqlMetricThresholds.Set(inventoryPrefix+metricName.String(), math.Float64frombits(threshold), cache.DefaultExpiration)
+		throttler.metricThresholds.Set(inventoryPrefix+metricName.String(), math.Float64frombits(threshold), cache.DefaultExpiration)
 	}
 	throttler.convergeMetricThresholds()
 	clusterSettingsCopy := *mysqlSettings
@@ -1284,7 +1284,7 @@ func (throttler *Throttler) getAggregatedMetric(aggregatedName string) base.Metr
 }
 
 func (throttler *Throttler) getMySQLStoreMetric(ctx context.Context, scope base.Scope, metricName base.MetricName) (base.MetricResult, float64) {
-	thresholdVal, found := throttler.mysqlMetricThresholds.Get(metricName.String())
+	thresholdVal, found := throttler.metricThresholds.Get(metricName.String())
 	if !found {
 		return base.NoSuchMetric, 0
 	}
@@ -1295,7 +1295,7 @@ func (throttler *Throttler) getMySQLStoreMetric(ctx context.Context, scope base.
 
 func (throttler *Throttler) mysqlMetricThresholdsSnapshot() map[string]float64 {
 	snapshot := make(map[string]float64)
-	for key, value := range throttler.mysqlMetricThresholds.Items() {
+	for key, value := range throttler.metricThresholds.Items() {
 		threshold, _ := value.Object.(float64)
 		snapshot[key] = threshold
 	}

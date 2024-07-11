@@ -253,7 +253,7 @@ func newTestThrottler() *Throttler {
 	throttler.mysqlInventory = mysql.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
-	throttler.mysqlMetricThresholds = cache.New(cache.NoExpiration, 0)
+	throttler.metricThresholds = cache.New(cache.NoExpiration, 0)
 	throttler.aggregatedMetrics = cache.New(10*aggregatedMetricsExpiration, 0)
 	throttler.recentApps = cache.New(recentAppsExpiration, 0)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
@@ -380,17 +380,17 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	})
 	t.Run("metric thresholds", func(t *testing.T) {
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("lag")
+			val, ok := throttler.metricThresholds.Get("lag")
 			require.True(t, ok)
 			assert.Equal(t, float64(0.75), val)
 		}
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("threads_running")
+			val, ok := throttler.metricThresholds.Get("threads_running")
 			require.True(t, ok)
 			assert.Equal(t, float64(3.0), val)
 		}
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("loadavg")
+			val, ok := throttler.metricThresholds.Get("loadavg")
 			require.True(t, ok)
 			assert.Equal(t, float64(1.0), val)
 		}
@@ -432,7 +432,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 		t.Run("check low threshold", func(t *testing.T) {
 			sleepTillThresholdApplies()
 			{
-				_, ok := throttler.mysqlMetricThresholds.Get("config/lag")
+				_, ok := throttler.metricThresholds.Get("config/lag")
 				assert.False(t, ok)
 			}
 			assert.Equal(t, float64(0.0033), throttler.GetMetricsThreshold())
@@ -455,7 +455,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 		t.Run("check with high 'lag' threshold", func(t *testing.T) {
 			sleepTillThresholdApplies()
 			{
-				val, ok := throttler.mysqlMetricThresholds.Get("config/lag")
+				val, ok := throttler.metricThresholds.Get("config/lag")
 				require.True(t, ok)
 				assert.Equal(t, float64(4444), val)
 			}
@@ -471,17 +471,17 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 	assert.Equal(t, float64(0.0033), throttler.GetMetricsThreshold())
 	t.Run("metric thresholds", func(t *testing.T) {
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("config/lag")
+			val, ok := throttler.metricThresholds.Get("config/lag")
 			require.True(t, ok)
 			assert.Equal(t, float64(4444), val)
 		}
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("inventory/lag")
+			val, ok := throttler.metricThresholds.Get("inventory/lag")
 			require.True(t, ok)
 			assert.Equal(t, float64(0.0033), val)
 		}
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("lag")
+			val, ok := throttler.metricThresholds.Get("lag")
 			require.True(t, ok)
 			assert.Equal(t, float64(4444), val)
 		}
@@ -903,7 +903,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 
 	throttler := &Throttler{
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
-		mysqlMetricThresholds:  cache.New(cache.NoExpiration, 0),
+		metricThresholds:       cache.New(cache.NoExpiration, 0),
 		ts:                     &FakeTopoServer{},
 		mysqlInventory:         mysql.NewInventory(),
 	}
