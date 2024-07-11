@@ -784,6 +784,14 @@ func TestRemoveTablet(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
+// When an external primary failover is performed,
+// the demoted primary will advertise itself as a `PRIMARY`
+// tablet until it recognizes that it was demoted,
+// and until all in-flight operations have either finished
+// (successfully or unsuccessfully, see `--shutdown_grace_period` flag).
+//
+// During this time, operations like `RemoveTablet` should not lead
+// to multiple tablets becoming valid targets for `PRIMARY`.
 func TestTabletRemoveDuringExternalReparenting(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
@@ -825,15 +833,15 @@ func TestTabletRemoveDuringExternalReparenting(t *testing.T) {
 	<-resultChan
 	<-resultChan
 
-	firstTabletPromotionTime := time.Now().Unix() - 10
+	firstTabletPrimaryTermStartTimestamp := time.Now().Unix() - 10
 
 	firstTabletHealthStream <- &querypb.StreamHealthResponse{
 		TabletAlias: firstTablet.Alias,
 		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:     true,
 
-		PrimaryTermStartTimestamp: firstTabletPromotionTime,
-		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+		PrimaryTermStartTimestamp: firstTabletPrimaryTermStartTimestamp,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
 	}
 
 	secondTabletHealthStream <- &querypb.StreamHealthResponse{
@@ -858,14 +866,16 @@ func TestTabletRemoveDuringExternalReparenting(t *testing.T) {
 	<-resultChan
 	<-resultChan
 
+	secondTabletPrimaryTermStartTimestamp := time.Now().Unix()
+
 	// Simulate a failover
 	firstTabletHealthStream <- &querypb.StreamHealthResponse{
 		TabletAlias: firstTablet.Alias,
 		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:     true,
 
-		PrimaryTermStartTimestamp: 0,
-		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+		PrimaryTermStartTimestamp: firstTabletPrimaryTermStartTimestamp,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
 	}
 
 	secondTabletHealthStream <- &querypb.StreamHealthResponse{
@@ -873,8 +883,8 @@ func TestTabletRemoveDuringExternalReparenting(t *testing.T) {
 		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:     true,
 
-		PrimaryTermStartTimestamp: time.Now().Unix(),
-		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+		PrimaryTermStartTimestamp: secondTabletPrimaryTermStartTimestamp,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
 	}
 
 	<-resultChan
@@ -888,7 +898,7 @@ func TestTabletRemoveDuringExternalReparenting(t *testing.T) {
 		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:              true,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
-		PrimaryTermStartTime: 10,
+		PrimaryTermStartTime: secondTabletPrimaryTermStartTimestamp,
 	}}
 
 	actualTabletStats := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})

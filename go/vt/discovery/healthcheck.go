@@ -37,6 +37,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
+	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -467,10 +468,16 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 				continue
 			}
 			delete(ths, tabletAlias)
-			// delete from healthy list
+
 			healthy, ok := hc.healthy[key]
 			if ok && len(healthy) > 0 {
-				hc.recomputeHealthy(key)
+				if tabletType == topodata.TabletType_PRIMARY {
+					// If tablet type is primary, we should only have one tablet in the healthy list.
+					hc.recomputeHealthyPrimary(key)
+				} else {
+					// Simply recompute the list of healthy tablets for all other tablet types.
+					hc.recomputeHealthy(key)
+				}
 			}
 		}
 	}()
@@ -596,6 +603,18 @@ func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 		}
 	}
 	hc.healthy[key] = FilterStatsByReplicationLag(allArray)
+}
+
+// Recompute the healthy primary tablet for the given key.
+func (hc *HealthCheckImpl) recomputeHealthyPrimary(key KeyspaceShardTabletType) {
+	highestPrimaryTermStartTime := int64(math.MinInt64)
+
+	for _, s := range hc.healthData[key] {
+		if s.PrimaryTermStartTime >= highestPrimaryTermStartTime {
+			highestPrimaryTermStartTime = s.PrimaryTermStartTime
+			hc.healthy[key][0] = s
+		}
+	}
 }
 
 // Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
