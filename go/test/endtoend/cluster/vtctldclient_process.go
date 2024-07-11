@@ -66,13 +66,13 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 		pArgs = append(pArgs, "--test.coverprofile="+getCoveragePath("vtctldclient-"+args[0]+".out"), "--test.v")
 	}
 	pArgs = append(pArgs, args...)
-	for i := 1; i <= retries; i++ {
+	for i := range retries {
 		tmpProcess := exec.Command(
 			vtctldclient.Binary,
 			filterDoubleDashArgs(pArgs, vtctldclient.VtctldClientMajorVersion)...,
 		)
 		msg := binlogplayer.LimitString(strings.Join(tmpProcess.Args, " "), 256) // limit log line length
-		log.Infof("Executing vtctldclient with command: %v (attempt %d of %d)", msg, i, retries)
+		log.Infof("Executing vtctldclient with command: %v (attempt %d of %d)", msg, i+1, retries)
 		resultByte, err = tmpProcess.CombinedOutput()
 		resultStr = string(resultByte)
 		if err == nil || !shouldRetry(resultStr) {

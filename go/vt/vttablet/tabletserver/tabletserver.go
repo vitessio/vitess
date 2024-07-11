@@ -62,6 +62,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
@@ -1663,7 +1664,13 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 
 // CheckThrottler issues a self check
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	r := tsv.lagThrottler.CheckByType(ctx, appName, "", flags, throttle.ThrottleCheckSelf)
+	r := tsv.lagThrottler.Check(ctx, appName, nil, flags)
+	return r
+}
+
+// GetThrottlerStatus gets the status of the tablet throttler
+func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus {
+	r := tsv.lagThrottler.Status()
 	return r
 }
 
@@ -1765,22 +1772,20 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 
 // registerThrottlerCheckHandlers registers throttler "check" requests
 func (tsv *TabletServer) registerThrottlerCheckHandlers() {
-	handle := func(path string, checkType throttle.ThrottleCheckType) {
+	handle := func(path string, scope base.Scope) {
 		tsv.exporter.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			ctx := tabletenv.LocalContext()
-			remoteAddr := r.Header.Get("X-Forwarded-For")
-			if remoteAddr == "" {
-				remoteAddr = r.RemoteAddr
-				remoteAddr = strings.Split(remoteAddr, ":")[0]
-			}
 			appName := r.URL.Query().Get("app")
 			if appName == "" {
-				appName = throttlerapp.DefaultName.String()
+				appName = throttlerapp.VitessName.String()
 			}
 			flags := &throttle.CheckFlags{
+				Scope:                 scope,
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
+				MultiMetricsEnabled:   true,
 			}
-			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, remoteAddr, flags, checkType)
+			metricNames := tsv.lagThrottler.MetricNames(r.URL.Query()["m"])
+			checkResult := tsv.lagThrottler.Check(ctx, appName, metricNames, flags)
 			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
 				checkResult.StatusCode = http.StatusOK // 200
 			}
@@ -1794,8 +1799,8 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 		})
 	}
-	handle("/throttler/check", throttle.ThrottleCheckPrimaryWrite)
-	handle("/throttler/check-self", throttle.ThrottleCheckSelf)
+	handle("/throttler/check", base.ShardScope)
+	handle("/throttler/check-self", base.SelfScope)
 }
 
 // registerThrottlerStatusHandler registers a throttler "status" request
