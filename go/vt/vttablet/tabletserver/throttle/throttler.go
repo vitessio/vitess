@@ -861,10 +861,10 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 		return t
 	}
 	leaderCheckTicker := addTicker(throttler.leaderCheckInterval)
-	mysqlCollectTicker := addTicker(throttler.activeCollectInterval)
-	mysqlDormantCollectTicker := addTicker(throttler.dormantCollectInterval)
-	mysqlRefreshTicker := addTicker(throttler.inventoryRefreshInterval)
-	mysqlAggregateTicker := addTicker(throttler.metricsAggregateInterval)
+	activeCollectTicker := addTicker(throttler.activeCollectInterval)
+	dormantCollectTicker := addTicker(throttler.dormantCollectInterval)
+	inventoryRefreshTicker := addTicker(throttler.inventoryRefreshInterval)
+	metricsAggregateTicker := addTicker(throttler.metricsAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
 	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
 	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
@@ -923,11 +923,11 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 
 					if transitionedIntoLeader {
 						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
-						go mysqlRefreshTicker.TickNow()
+						go inventoryRefreshTicker.TickNow()
 						throttler.requestHeartbeats()
 					}
 				}()
-			case <-mysqlCollectTicker.C:
+			case <-activeCollectTicker.C:
 				if throttler.IsOpen() {
 					// frequent
 					// Always collect self metrics:
@@ -955,7 +955,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					}
 
 				}
-			case <-mysqlDormantCollectTicker.C:
+			case <-dormantCollectTicker.C:
 				if throttler.IsOpen() {
 					// infrequent
 					if throttler.isDormant() {
@@ -963,14 +963,14 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					}
 				}
 			case metric := <-throttler.throttleMetricChan:
-				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
+				// incoming metric, frequent, as result of collectMetrics()
 				metricResultsMap, ok := throttler.inventory.TabletMetrics[metric.GetTabletAlias()]
 				if !ok {
 					metricResultsMap = base.NewMetricResultMap()
 					throttler.inventory.TabletMetrics[metric.GetTabletAlias()] = metricResultsMap
 				}
 				metricResultsMap[metric.Name] = metric
-			case <-mysqlRefreshTicker.C:
+			case <-inventoryRefreshTicker.C:
 				// sparse
 				if throttler.IsOpen() {
 					throttler.refreshInventory(ctx)
@@ -978,7 +978,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 			case probes := <-throttler.clusterProbesChan:
 				// incoming structural update, sparse, as result of refreshInventory()
 				throttler.updateClusterProbes(ctx, probes)
-			case <-mysqlAggregateTicker.C:
+			case <-metricsAggregateTicker.C:
 				if throttler.IsOpen() {
 					throttler.aggregateMetrics()
 				}
