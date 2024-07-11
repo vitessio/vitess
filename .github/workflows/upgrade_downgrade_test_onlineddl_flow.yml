@@ -140,6 +140,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
+        echo "building last release: $(git rev-parse HEAD)"
         source build.env
         make build
         mkdir -p /tmp/vitess-build-last/
@@ -162,6 +163,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
+        echo "building next release: $(git rev-parse HEAD)"
         source build.env
         NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-next/
@@ -182,6 +184,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
+        echo "building this SHA: $(git rev-parse HEAD)"
         source build.env
         make build
         mkdir -p /tmp/vitess-build-current/

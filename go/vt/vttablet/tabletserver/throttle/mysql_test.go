@@ -59,57 +59,71 @@ var (
 	alias5 = "zone1-0005"
 )
 
+const (
+	nonexistentMetricName base.MetricName = "nonexistent"
+)
+
+func newMetricResultMap(val float64) base.MetricResultMap {
+	return base.MetricResultMap{
+		base.DefaultMetricName: base.NewSimpleMetricResult(val),
+		base.LagMetricName:     base.NewSimpleMetricResult(val),
+		base.LoadAvgMetricName: base.NewSimpleMetricResult(3.14),
+	}
+}
+func noSuchMetricMap() base.MetricResultMap {
+	result := make(base.MetricResultMap)
+	for _, metricName := range base.KnownMetricNames {
+		result[metricName] = base.NoSuchMetric
+	}
+	return result
+}
+
 func TestAggregateMySQLProbesNoErrors(t *testing.T) {
 	ctx := context.Background()
-	clusterName := "c0"
-	key1cluster := mysql.GetClusterTablet(clusterName, alias1)
-	key2cluster := mysql.GetClusterTablet(clusterName, alias2)
-	key3cluster := mysql.GetClusterTablet(clusterName, alias3)
-	key4cluster := mysql.GetClusterTablet(clusterName, alias4)
-	key5cluster := mysql.GetClusterTablet(clusterName, alias5)
 	tabletResultsMap := mysql.TabletResultMap{
-		key1cluster: base.NewSimpleMetricResult(1.2),
-		key2cluster: base.NewSimpleMetricResult(1.7),
-		key3cluster: base.NewSimpleMetricResult(0.3),
-		key4cluster: base.NewSimpleMetricResult(0.6),
-		key5cluster: base.NewSimpleMetricResult(1.1),
+		alias1: newMetricResultMap(1.2),
+		alias2: newMetricResultMap(1.7),
+		alias3: newMetricResultMap(0.3),
+		alias4: newMetricResultMap(0.6),
+		alias5: newMetricResultMap(1.1),
 	}
 	var probes mysql.Probes = map[string](*mysql.Probe){}
 	for clusterKey := range tabletResultsMap {
-		probes[clusterKey.Alias] = &mysql.Probe{Alias: clusterKey.Alias}
+		probes[clusterKey] = &mysql.Probe{Alias: clusterKey}
 	}
+
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 0, false, 0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 0, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.7)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 1, false, 0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 1, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.2)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 2, false, 0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.1)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 3, false, 0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 3, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.6)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 4, false, 0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 4, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.3)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 5, false, 0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 5, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.3)
@@ -118,55 +132,49 @@ func TestAggregateMySQLProbesNoErrors(t *testing.T) {
 
 func TestAggregateMySQLProbesNoErrorsIgnoreHostsThreshold(t *testing.T) {
 	ctx := context.Background()
-	clusterName := "c0"
-	key1cluster := mysql.GetClusterTablet(clusterName, alias1)
-	key2cluster := mysql.GetClusterTablet(clusterName, alias2)
-	key3cluster := mysql.GetClusterTablet(clusterName, alias3)
-	key4cluster := mysql.GetClusterTablet(clusterName, alias4)
-	key5cluster := mysql.GetClusterTablet(clusterName, alias5)
-	tableteResultsMap := mysql.TabletResultMap{
-		key1cluster: base.NewSimpleMetricResult(1.2),
-		key2cluster: base.NewSimpleMetricResult(1.7),
-		key3cluster: base.NewSimpleMetricResult(0.3),
-		key4cluster: base.NewSimpleMetricResult(0.6),
-		key5cluster: base.NewSimpleMetricResult(1.1),
+	tabletResultsMap := mysql.TabletResultMap{
+		alias1: newMetricResultMap(1.2),
+		alias2: newMetricResultMap(1.7),
+		alias3: newMetricResultMap(0.3),
+		alias4: newMetricResultMap(0.6),
+		alias5: newMetricResultMap(1.1),
 	}
 	var probes mysql.Probes = map[string](*mysql.Probe){}
-	for clusterKey := range tableteResultsMap {
-		probes[clusterKey.Alias] = &mysql.Probe{Alias: clusterKey.Alias}
+	for clusterKey := range tabletResultsMap {
+		probes[clusterKey] = &mysql.Probe{Alias: clusterKey}
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tableteResultsMap, 0, false, 1.0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 0, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.7)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tableteResultsMap, 1, false, 1.0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 1, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.2)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tableteResultsMap, 2, false, 1.0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 2, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.1)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tableteResultsMap, 3, false, 1.0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 3, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.6)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tableteResultsMap, 4, false, 1.0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 4, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.6)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tableteResultsMap, 5, false, 1.0)
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 5, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.6)
@@ -175,59 +183,60 @@ func TestAggregateMySQLProbesNoErrorsIgnoreHostsThreshold(t *testing.T) {
 
 func TestAggregateMySQLProbesWithErrors(t *testing.T) {
 	ctx := context.Background()
-	clusterName := "c0"
-	key1cluster := mysql.GetClusterTablet(clusterName, alias1)
-	key2cluster := mysql.GetClusterTablet(clusterName, alias2)
-	key3cluster := mysql.GetClusterTablet(clusterName, alias3)
-	key4cluster := mysql.GetClusterTablet(clusterName, alias4)
-	key5cluster := mysql.GetClusterTablet(clusterName, alias5)
 	tabletResultsMap := mysql.TabletResultMap{
-		key1cluster: base.NewSimpleMetricResult(1.2),
-		key2cluster: base.NewSimpleMetricResult(1.7),
-		key3cluster: base.NewSimpleMetricResult(0.3),
-		key4cluster: base.NoSuchMetric,
-		key5cluster: base.NewSimpleMetricResult(1.1),
+		alias1: newMetricResultMap(1.2),
+		alias2: newMetricResultMap(1.7),
+		alias3: newMetricResultMap(0.3),
+		alias4: noSuchMetricMap(),
+		alias5: newMetricResultMap(1.1),
 	}
 	var probes mysql.Probes = map[string](*mysql.Probe){}
 	for clusterKey := range tabletResultsMap {
-		probes[clusterKey.Alias] = &mysql.Probe{Alias: clusterKey.Alias}
-	}
-	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 0, false, 0)
-		_, err := worstMetric.Get()
-		assert.Error(t, err)
-		assert.Equal(t, err, base.ErrNoSuchMetric)
-	}
-	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 1, false, 0)
-		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 1.7)
-	}
-	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 2, false, 0)
-		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 1.2)
+		probes[clusterKey] = &mysql.Probe{Alias: clusterKey}
 	}
 
-	tabletResultsMap[key1cluster] = base.NoSuchMetric
-	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 0, false, 0)
+	t.Run("nonexistent", func(t *testing.T) {
+		worstMetric := aggregateMySQLProbes(ctx, nonexistentMetricName, tabletResultsMap, 0, false, 0)
 		_, err := worstMetric.Get()
 		assert.Error(t, err)
-		assert.Equal(t, err, base.ErrNoSuchMetric)
-	}
-	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 1, false, 0)
+		assert.Equal(t, base.ErrNoSuchMetric, err)
+	})
+	t.Run("no ignore", func(t *testing.T) {
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 0, false, 0)
 		_, err := worstMetric.Get()
 		assert.Error(t, err)
-		assert.Equal(t, err, base.ErrNoSuchMetric)
-	}
-	{
-		worstMetric := aggregateMySQLProbes(ctx, probes, clusterName, tabletResultsMap, 2, false, 0)
+		assert.Equal(t, base.ErrNoSuchMetric, err)
+	})
+	t.Run("ignore 1", func(t *testing.T) {
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 1, false, 0)
+		value, err := worstMetric.Get()
+		assert.NoError(t, err)
+		assert.Equal(t, 1.7, value)
+	})
+	t.Run("ignore 2", func(t *testing.T) {
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 2, false, 0)
+		value, err := worstMetric.Get()
+		assert.NoError(t, err)
+		assert.Equal(t, 1.2, value)
+	})
+
+	tabletResultsMap[alias1][base.DefaultMetricName] = base.NoSuchMetric
+	t.Run("no such metric", func(t *testing.T) {
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 0, false, 0)
+		_, err := worstMetric.Get()
+		assert.Error(t, err)
+		assert.Equal(t, base.ErrNoSuchMetric, err)
+	})
+	t.Run("no such metric, ignore 1", func(t *testing.T) {
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 1, false, 0)
+		_, err := worstMetric.Get()
+		assert.Error(t, err)
+		assert.Equal(t, base.ErrNoSuchMetric, err)
+	})
+	t.Run("metric found", func(t *testing.T) {
+		worstMetric := aggregateMySQLProbes(ctx, base.DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.7)
-	}
+	})
 }

@@ -46,15 +46,17 @@ import (
 
 // RecentApp indicates when an app was last checked
 type RecentApp struct {
-	CheckedAtEpoch      int64
-	MinutesSinceChecked int64
+	AppName    string
+	CheckedAt  time.Time
+	StatusCode int
 }
 
 // NewRecentApp creates a RecentApp
-func NewRecentApp(checkedAt time.Time) *RecentApp {
+func NewRecentApp(appName string, statusCode int) *RecentApp {
 	result := &RecentApp{
-		CheckedAtEpoch:      checkedAt.Unix(),
-		MinutesSinceChecked: int64(time.Since(checkedAt).Minutes()),
+		AppName:    appName,
+		CheckedAt:  time.Now(),
+		StatusCode: statusCode,
 	}
 	return result
 }
