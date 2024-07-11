@@ -988,8 +988,8 @@ message StreamHealthResponse {
 enum TransactionState {
   UNKNOWN = 0;
   PREPARE = 1;
-  COMMIT = 2;
-  ROLLBACK = 3;
+  ROLLBACK = 2;
+  COMMIT = 3;
 }
 
 // TransactionMetadata contains the metadata for a distributed transaction.

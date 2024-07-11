@@ -42956,8 +42956,8 @@ export namespace query {
     enum TransactionState {
         UNKNOWN = 0,
         PREPARE = 1,
-        COMMIT = 2,
-        ROLLBACK = 3
+        ROLLBACK = 2,
+        COMMIT = 3
     }
 
     /** Properties of a TransactionMetadata. */

@@ -47,21 +47,27 @@ const (
 	// DTStateRollback represents the ROLLBACK state for dt_state.
 	DTStateRollback = querypb.TransactionState_ROLLBACK
 
-	sqlReadAllRedo = `select t.dtid, t.state, t.time_created, s.statement
+	readAllRedo = `select t.dtid, t.state, t.time_created, s.statement
 	from %s.redo_state t
     join %s.redo_statement s on t.dtid = s.dtid
 	order by t.dtid, s.id`
 
-	sqlReadAllTransactions = `select t.dtid, t.state, t.time_created, p.keyspace, p.shard
+	readAllTransactions = `select t.dtid, t.state, t.time_created, p.keyspace, p.shard
 	from %s.dt_state t
     join %s.dt_participant p on t.dtid = p.dtid
 	order by t.dtid, p.id`
 
-	sqlReadAllUnresolvedTransactions = `select t.dtid, t.state, p.keyspace, p.shard
+	// Ordering by state in descending order to retrieve COMMIT, ROLLBACK, PREPARE in that sequence.
+	// Resolving COMMIT first is crucial because we need to address transactions where a commit decision has already been made but remains unresolved.
+	// For transactions with a commit decision, applications are already aware of the outcome and are waiting for the resolution.
+	// By addressing these first, we ensure atomic commits and improve user experience. For other transactions, the decision is typically to rollback.
+	readUnresolvedTransactions = `select t.dtid, t.state, p.keyspace, p.shard
 	from %s.dt_state t
     join %s.dt_participant p on t.dtid = p.dtid
     where time_created < %a
-	order by t.dtid, p.id`
+	order by t.state desc, t.dtid`
+
+	countUnresolvedTransactions = `select count(*) from %s.dt_state where time_created < %a`
 )
 
 // TwoPC performs 2PC metadata management (MM) functions.
@@ -83,9 +89,9 @@ type TwoPC struct {
 	deleteParticipants         *sqlparser.ParsedQuery
 	readTransaction            *sqlparser.ParsedQuery
 	readParticipants           *sqlparser.ParsedQuery
-	readAbandoned              *sqlparser.ParsedQuery
 	readUnresolvedTransactions *sqlparser.ParsedQuery
 	readAllTransactions        string
+	countUnresolvedTransaction *sqlparser.ParsedQuery
 }
 
 // NewTwoPC creates a TwoPC variable.
@@ -111,7 +117,7 @@ func (tpc *TwoPC) initializeQueries() {
 	tpc.deleteRedoStmt = sqlparser.BuildParsedQuery(
 		"delete from %s.redo_statement where dtid = %a",
 		dbname, ":dtid")
-	tpc.readAllRedo = fmt.Sprintf(sqlReadAllRedo, dbname, dbname)
+	tpc.readAllRedo = fmt.Sprintf(readAllRedo, dbname, dbname)
 	tpc.countUnresolvedRedo = sqlparser.BuildParsedQuery(
 		"select count(*) from %s.redo_state where time_created < %a",
 		dbname, ":time_created")
@@ -137,12 +143,11 @@ func (tpc *TwoPC) initializeQueries() {
 	tpc.readParticipants = sqlparser.BuildParsedQuery(
 		"select keyspace, shard from %s.dt_participant where dtid = %a",
 		dbname, ":dtid")
-	tpc.readAbandoned = sqlparser.BuildParsedQuery(
-		"select dtid, time_created from %s.dt_state where time_created < %a",
-		dbname, ":time_created")
-	tpc.readAllTransactions = fmt.Sprintf(sqlReadAllTransactions, dbname, dbname)
-	tpc.readUnresolvedTransactions = sqlparser.BuildParsedQuery(sqlReadAllUnresolvedTransactions,
+	tpc.readAllTransactions = fmt.Sprintf(readAllTransactions, dbname, dbname)
+	tpc.readUnresolvedTransactions = sqlparser.BuildParsedQuery(readUnresolvedTransactions,
 		dbname, dbname, ":time_created")
+	tpc.countUnresolvedTransaction = sqlparser.BuildParsedQuery(countUnresolvedTransactions,
+		dbname, ":time_created")
 }
 
 // Open starts the TwoPC service.
@@ -261,8 +266,8 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 	return prepared, failed, nil
 }
 
-// CountUnresolvedTransactions returns the number of prepared transactions that are still unresolved.
-func (tpc *TwoPC) CountUnresolvedTransactions(ctx context.Context, unresolvedTime time.Time) (int64, error) {
+// CountUnresolvedRedo returns the number of prepared transactions from dt_redo that are older than the supplied time.
+func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.Time) (int64, error) {
 	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -519,4 +524,24 @@ func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.T
 	appendCurrentTx()
 
 	return txs, nil
+}
+
+// CountUnresolvedTransaction returns the number of transactions from dt_state that are older than the given time.
+func (tpc *TwoPC) CountUnresolvedTransaction(ctx context.Context, unresolvedTime time.Time) (int64, error) {
+	conn, err := tpc.readPool.Get(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Recycle()
+
+	bindVars := map[string]*querypb.BindVariable{
+		"time_created": sqltypes.Int64BindVariable(unresolvedTime.UnixNano()),
+	}
+	qr, err := tpc.read(ctx, conn.Conn, tpc.countUnresolvedTransaction, bindVars)
+	if err != nil {
+		return 0, err
+	}
+	// executed query is a scalar aggregation, so we can safely assume that the result is a single row.
+	v, _ := qr.Rows[0][0].ToCastInt64()
+	return v, nil
 }

@@ -456,18 +456,18 @@ func (te *TxEngine) startWatchdog() {
 		defer cancel()
 
 		// Raise alerts on prepares that have been unresolved for too long.
-		// Use 5x abandonAge to give opportunity for transaction coordinator to resolve these.
-		count, err := te.twoPC.CountUnresolvedTransactions(ctx, time.Now().Add(-te.abandonAge*5))
+		// Use 5x abandonAge to give opportunity for transaction coordinator to resolve these redo logs.
+		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
 		if err != nil {
-			te.env.Stats().InternalErrors.Add("DistributedTransactionWatcherFail", 1)
-			log.Errorf("Error reading unresolved transactions: %v", err)
+			te.env.Stats().InternalErrors.Add("RedoWatcherFail", 1)
+			log.Errorf("Error reading prepared transactions: %v", err)
 		}
 		te.env.Stats().Unresolved.Set("Prepares", count)
 
 		// Notify lingering distributed transactions.
-		count, err = te.twoPC.CountUnresolvedTransactions(ctx, time.Now().Add(-te.abandonAge))
+		count, err = te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
-			te.env.Stats().InternalErrors.Add("DistributedTransactionWatcherFail", 1)
+			te.env.Stats().InternalErrors.Add("TransactionWatcherFail", 1)
 			log.Errorf("Error reading unresolved transactions: %v", err)
 			return
 		}
