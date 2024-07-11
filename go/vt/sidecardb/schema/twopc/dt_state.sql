@@ -20,5 +20,5 @@ CREATE TABLE IF NOT EXISTS dt_state
   state bigint NOT NULL,
   time_created bigint NOT NULL,
   primary key(dtid),
-  key (time_created),
+  key (time_created)
 ) ENGINE = InnoDB
