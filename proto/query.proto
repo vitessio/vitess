@@ -638,6 +638,18 @@ message ReadTransactionResponse {
   TransactionMetadata metadata = 1;
 }
 
+// UnresolvedTransactionsRequest is the payload to UnresolvedTransactions
+message UnresolvedTransactionsRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+}
+
+// UnresolvedTransactionsResponse is the returned value from UnresolvedTransactions
+message UnresolvedTransactionsResponse {
+  repeated TransactionMetadata transactions = 1;
+}
+
 // BeginExecuteRequest is the payload to BeginExecute
 message BeginExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
