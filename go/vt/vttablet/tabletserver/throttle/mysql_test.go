@@ -76,7 +76,7 @@ func noSuchMetricMap() base.MetricResultMap {
 	return result
 }
 
-func TestAggregateMetricResultsNoErrors(t *testing.T) {
+func TestAggregateTabletMetricResultsNoErrors(t *testing.T) {
 	tabletResultsMap := base.TabletResultMap{
 		alias1: newMetricResultMap(1.2),
 		alias2: newMetricResultMap(1.7),
@@ -86,44 +86,44 @@ func TestAggregateMetricResultsNoErrors(t *testing.T) {
 	}
 
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 0, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 0, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.7)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 1, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 1, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.2)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 2, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.1)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 3, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 3, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.6)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 4, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 4, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.3)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 5, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 5, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.3)
 	}
 }
 
-func TestAggregateMetricResultsNoErrorsIgnoreHostsThreshold(t *testing.T) {
+func TestAggregateTabletMetricResultsNoErrorsIgnoreHostsThreshold(t *testing.T) {
 	tabletResultsMap := base.TabletResultMap{
 		alias1: newMetricResultMap(1.2),
 		alias2: newMetricResultMap(1.7),
@@ -133,44 +133,44 @@ func TestAggregateMetricResultsNoErrorsIgnoreHostsThreshold(t *testing.T) {
 	}
 
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 0, false, 1.0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 0, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.7)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 1, false, 1.0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 1, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.2)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 2, false, 1.0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 2, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.1)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 3, false, 1.0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 3, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.6)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 4, false, 1.0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 4, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.6)
 	}
 	{
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 5, false, 1.0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 5, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 0.6)
 	}
 }
 
-func TestAggregateMetricResultsWithErrors(t *testing.T) {
+func TestAggregateTabletMetricResultsWithErrors(t *testing.T) {
 	tabletResultsMap := base.TabletResultMap{
 		alias1: newMetricResultMap(1.2),
 		alias2: newMetricResultMap(1.7),
@@ -180,25 +180,25 @@ func TestAggregateMetricResultsWithErrors(t *testing.T) {
 	}
 
 	t.Run("nonexistent", func(t *testing.T) {
-		worstMetric := aggregateMetricResults(nonexistentMetricName, tabletResultsMap, 0, false, 0)
+		worstMetric := aggregateTabletMetricResults(nonexistentMetricName, tabletResultsMap, 0, false, 0)
 		_, err := worstMetric.Get()
 		assert.Error(t, err)
 		assert.Equal(t, base.ErrNoSuchMetric, err)
 	})
 	t.Run("no ignore", func(t *testing.T) {
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 0, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 0, false, 0)
 		_, err := worstMetric.Get()
 		assert.Error(t, err)
 		assert.Equal(t, base.ErrNoSuchMetric, err)
 	})
 	t.Run("ignore 1", func(t *testing.T) {
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 1, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 1, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, 1.7, value)
 	})
 	t.Run("ignore 2", func(t *testing.T) {
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 2, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, 1.2, value)
@@ -206,19 +206,19 @@ func TestAggregateMetricResultsWithErrors(t *testing.T) {
 
 	tabletResultsMap[alias1][base.DefaultMetricName] = base.NoSuchMetric
 	t.Run("no such metric", func(t *testing.T) {
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 0, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 0, false, 0)
 		_, err := worstMetric.Get()
 		assert.Error(t, err)
 		assert.Equal(t, base.ErrNoSuchMetric, err)
 	})
 	t.Run("no such metric, ignore 1", func(t *testing.T) {
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 1, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 1, false, 0)
 		_, err := worstMetric.Get()
 		assert.Error(t, err)
 		assert.Equal(t, base.ErrNoSuchMetric, err)
 	})
 	t.Run("metric found", func(t *testing.T) {
-		worstMetric := aggregateMetricResults(base.DefaultMetricName, tabletResultsMap, 2, false, 0)
+		worstMetric := aggregateTabletMetricResults(base.DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
 		assert.Equal(t, value, 1.7)

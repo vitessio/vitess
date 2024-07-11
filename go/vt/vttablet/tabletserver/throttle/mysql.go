@@ -47,7 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
-func aggregateMetricResults(
+func aggregateTabletMetricResults(
 	metricName base.MetricName,
 	tabletResultsMap base.TabletResultMap,
 	ignoreHostsCount int,
