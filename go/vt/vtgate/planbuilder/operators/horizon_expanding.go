@@ -108,7 +108,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if len(qp.OrderExprs) > 0 {
-		op = expandOrderBy(ctx, op, qp)
+		op = expandOrderBy(ctx, op, qp, horizon.Alias)
 		extracted = append(extracted, "Ordering")
 	}
 
@@ -124,7 +124,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")))
 }
 
-func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection) Operator {
+func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection, derived string) Operator {
 	var newOrder []OrderBy
 	sqc := &SubQueryBuilder{}
 	proj, ok := op.(*Projection)
@@ -134,6 +134,9 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr.SimplifiedExpr, TableID(op), false)
 		if newExpr == nil {
 			// If no subqueries are found, retain the original order expression
+			if derived != "" {
+				exposeOrderingColumn(ctx, qp, expr, derived)
+			}
 			newOrder = append(newOrder, expr)
 			continue
 		}
@@ -164,6 +167,22 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 	return &Ordering{
 		Source: op,
 		Order:  newOrder,
+	}
+}
+
+// exposeOrderingColumn will expose the ordering column to the outer query
+func exposeOrderingColumn(ctx *plancontext.PlanningContext, qp *QueryProjection, expr OrderBy, derived string) {
+	for _, se := range qp.SelectExprs {
+		aliasedExpr, err := se.GetAliasedExpr()
+		if err == nil {
+			// if we get an error, we'll just use the whatever was in the AST
+			if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, expr.SimplifiedExpr) {
+				newExpr := sqlparser.NewColNameWithQualifier(aliasedExpr.ColumnName(), sqlparser.NewTableName(derived))
+				ctx.SemTable.CopySemanticInfo(expr.SimplifiedExpr, newExpr)
+				expr.SimplifiedExpr = newExpr
+				continue
+			}
+		}
 	}
 }
 
