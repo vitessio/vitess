@@ -263,10 +263,10 @@ func newTestThrottler() *Throttler {
 
 	// High contention & racy intervals:
 	throttler.leaderCheckInterval = 10 * time.Millisecond
-	throttler.mysqlCollectInterval = 10 * time.Millisecond
-	throttler.mysqlDormantCollectInterval = 10 * time.Millisecond
-	throttler.mysqlRefreshInterval = 10 * time.Millisecond
-	throttler.mysqlAggregateInterval = 10 * time.Millisecond
+	throttler.activeCollectInterval = 10 * time.Millisecond
+	throttler.dormantCollectInterval = 10 * time.Millisecond
+	throttler.inventoryRefreshInterval = 10 * time.Millisecond
+	throttler.metricsAggregateInterval = 10 * time.Millisecond
 	throttler.throttledAppsSnapshotInterval = 10 * time.Millisecond
 	throttler.dormantPeriod = 5 * time.Second
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)

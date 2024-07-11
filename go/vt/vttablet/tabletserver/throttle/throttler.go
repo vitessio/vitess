@@ -157,10 +157,10 @@ type Throttler struct {
 	isOpen    atomic.Bool
 
 	leaderCheckInterval           time.Duration
-	mysqlCollectInterval          time.Duration
-	mysqlDormantCollectInterval   time.Duration
-	mysqlRefreshInterval          time.Duration
-	mysqlAggregateInterval        time.Duration
+	activeCollectInterval         time.Duration
+	dormantCollectInterval        time.Duration
+	inventoryRefreshInterval      time.Duration
+	metricsAggregateInterval      time.Duration
 	throttledAppsSnapshotInterval time.Duration
 	dormantPeriod                 time.Duration
 
@@ -269,10 +269,10 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.check = NewThrottlerCheck(throttler)
 
 	throttler.leaderCheckInterval = leaderCheckInterval
-	throttler.mysqlCollectInterval = activeCollectInterval
-	throttler.mysqlDormantCollectInterval = dormantCollectInterval
-	throttler.mysqlRefreshInterval = inventoryRefreshInterval
-	throttler.mysqlAggregateInterval = metricsAggregateInterval
+	throttler.activeCollectInterval = activeCollectInterval
+	throttler.dormantCollectInterval = dormantCollectInterval
+	throttler.inventoryRefreshInterval = inventoryRefreshInterval
+	throttler.metricsAggregateInterval = metricsAggregateInterval
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
 	throttler.dormantPeriod = dormantPeriod
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
@@ -862,10 +862,10 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 		return t
 	}
 	leaderCheckTicker := addTicker(throttler.leaderCheckInterval)
-	mysqlCollectTicker := addTicker(throttler.mysqlCollectInterval)
-	mysqlDormantCollectTicker := addTicker(throttler.mysqlDormantCollectInterval)
-	mysqlRefreshTicker := addTicker(throttler.mysqlRefreshInterval)
-	mysqlAggregateTicker := addTicker(throttler.mysqlAggregateInterval)
+	mysqlCollectTicker := addTicker(throttler.activeCollectInterval)
+	mysqlDormantCollectTicker := addTicker(throttler.dormantCollectInterval)
+	mysqlRefreshTicker := addTicker(throttler.inventoryRefreshInterval)
+	mysqlAggregateTicker := addTicker(throttler.metricsAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
 	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
 	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
