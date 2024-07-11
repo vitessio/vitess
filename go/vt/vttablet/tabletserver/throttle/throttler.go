@@ -980,7 +980,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				throttler.updateMySQLClusterProbes(ctx, probes)
 			case <-mysqlAggregateTicker.C:
 				if throttler.IsOpen() {
-					throttler.aggregateMySQLMetrics(ctx)
+					throttler.aggregateMySQLMetrics()
 				}
 			case <-throttledAppsTicker.C:
 				if throttler.IsOpen() {
@@ -1247,7 +1247,7 @@ func (throttler *Throttler) metricNameUsedAsDefault() base.MetricName {
 }
 
 // synchronous aggregation of collected data
-func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
+func (throttler *Throttler) aggregateMySQLMetrics() error {
 	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
 	aggregateTabletsMetrics := func(scope base.Scope, metricName base.MetricName, tabletResultsMap base.TabletResultMap) {
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount

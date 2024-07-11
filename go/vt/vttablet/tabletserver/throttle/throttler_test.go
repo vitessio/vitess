@@ -1142,7 +1142,7 @@ func TestProbesWhileOperating(t *testing.T) {
 			// as opposed to choosing the "lag" metric results.
 			throttler.customMetricsQuery.Store("select non_empty")
 			<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-				throttler.aggregateMySQLMetrics(ctx)
+				throttler.aggregateMySQLMetrics()
 			})
 			assert.Equal(t, base.CustomMetricName, throttler.metricNameUsedAsDefault())
 			// throttler.aggregateMySQLMetrics(ctx)
