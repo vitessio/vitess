@@ -62,8 +62,6 @@ var (
 	statsThrottlerCheckAnyError = stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks")
 )
 
-type ThrottlePriority int
-
 // CheckFlags provide hints for a check
 type CheckFlags struct {
 	Scope                 base.Scope
