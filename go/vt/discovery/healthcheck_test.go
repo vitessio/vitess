@@ -784,6 +784,117 @@ func TestRemoveTablet(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
+func TestTabletRemoveDuringExternalReparenting(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// reset error counters
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// close healthcheck
+	defer hc.Close()
+
+	firstTablet := createTestTablet(0, "cell", "a")
+	firstTablet.Type = topodatapb.TabletType_PRIMARY
+
+	secondTablet := createTestTablet(1, "cell", "b")
+	secondTablet.Type = topodatapb.TabletType_REPLICA
+
+	thirdTablet := createTestTablet(2, "cell", "c")
+	thirdTablet.Type = topodatapb.TabletType_REPLICA
+
+	firstTabletHealthStream := make(chan *querypb.StreamHealthResponse)
+	firstTabletConn := createFakeConn(firstTablet, firstTabletHealthStream)
+	firstTabletConn.errCh = make(chan error)
+
+	secondTabletHealthStream := make(chan *querypb.StreamHealthResponse)
+	secondTabletConn := createFakeConn(secondTablet, secondTabletHealthStream)
+	secondTabletConn.errCh = make(chan error)
+
+	thirdTabletHealthStream := make(chan *querypb.StreamHealthResponse)
+	thirdTabletConn := createFakeConn(thirdTablet, thirdTabletHealthStream)
+	thirdTabletConn.errCh = make(chan error)
+
+	resultChan := hc.Subscribe()
+
+	hc.AddTablet(firstTablet)
+	hc.AddTablet(secondTablet)
+	hc.AddTablet(thirdTablet)
+
+	<-resultChan
+	<-resultChan
+
+	firstTabletPromotionTime := time.Now().Unix() - 10
+
+	firstTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: firstTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: firstTabletPromotionTime,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+	}
+
+	secondTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: secondTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+	}
+
+	thirdTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: thirdTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+	}
+
+	<-resultChan
+	<-resultChan
+	<-resultChan
+
+	// Simulate a failover
+	firstTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: firstTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+	}
+
+	secondTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: secondTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: time.Now().Unix(),
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+	}
+
+	<-resultChan
+	<-resultChan
+
+	hc.RemoveTablet(thirdTablet)
+
+	// tablet 1 is the primary now
+	expectedTabletStats := []*TabletHealth{{
+		Tablet:               secondTablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
+		PrimaryTermStartTime: 10,
+	}}
+
+	actualTabletStats := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
+	mustMatch(t, expectedTabletStats, actualTabletStats, "unexpected result")
+}
+
 // TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
 func TestGetHealthyTablets(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
