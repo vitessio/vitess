@@ -233,23 +233,23 @@ func newTestThrottler() *Throttler {
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TabletServerTest")
 	throttler := &Throttler{
-		mysqlClusterProbesChan: make(chan *base.ClusterProbes),
-		heartbeatWriter:        &FakeHeartbeatWriter{},
-		ts:                     &FakeTopoServer{},
-		mysqlInventory:         base.NewInventory(),
-		pool:                   connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{}),
-		tabletTypeFunc:         func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
-		overrideTmClient:       &fakeTMClient{},
+		clusterProbesChan: make(chan *base.ClusterProbes),
+		heartbeatWriter:   &FakeHeartbeatWriter{},
+		ts:                &FakeTopoServer{},
+		inventory:         base.NewInventory(),
+		pool:              connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{}),
+		tabletTypeFunc:    func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
+		overrideTmClient:  &fakeTMClient{},
 	}
 	throttler.metricsQuery.Store(metricsQuery)
 	throttler.MetricsThreshold.Store(math.Float64bits(0.75))
 	throttler.configSettings = config.NewConfigurationSettings()
 	throttler.initConfig()
 	throttler.throttleMetricChan = make(chan *base.ThrottleMetric)
-	throttler.mysqlClusterProbesChan = make(chan *base.ClusterProbes)
+	throttler.clusterProbesChan = make(chan *base.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.serialFuncChan = make(chan func())
-	throttler.mysqlInventory = base.NewInventory()
+	throttler.inventory = base.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
 	throttler.metricThresholds = cache.New(cache.NoExpiration, 0)
@@ -887,12 +887,12 @@ func TestIsAppExempted(t *testing.T) {
 	assert.True(t, throttler.IsAppExempted("schema-tracker"))
 }
 
-// TestRefreshMySQLInventory tests the behavior of the throttler's RefreshMySQLInventory() function, which
+// TestRefreshInventory tests the behavior of the throttler's RefreshInventory() function, which
 // is called periodically in actual throttler. For a given cluster name, it generates a list of probes
 // the throttler will use to check metrics.
 // On a replica tablet, that list is expect to probe the tablet itself.
 // On the PRIMARY, the list includes all shard tablets, including the PRIMARY itself.
-func TestRefreshMySQLInventory(t *testing.T) {
+func TestRefreshInventory(t *testing.T) {
 	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -901,10 +901,10 @@ func TestRefreshMySQLInventory(t *testing.T) {
 	configSettings := config.NewConfigurationSettings()
 
 	throttler := &Throttler{
-		mysqlClusterProbesChan: make(chan *base.ClusterProbes),
-		metricThresholds:       cache.New(cache.NoExpiration, 0),
-		ts:                     &FakeTopoServer{},
-		mysqlInventory:         base.NewInventory(),
+		clusterProbesChan: make(chan *base.ClusterProbes),
+		metricThresholds:  cache.New(cache.NoExpiration, 0),
+		ts:                &FakeTopoServer{},
+		inventory:         base.NewInventory(),
 	}
 	throttler.metricsQuery.Store(metricsQuery)
 	throttler.configSettings = configSettings
@@ -927,12 +927,12 @@ func TestRefreshMySQLInventory(t *testing.T) {
 				defer cancel()
 				for {
 					select {
-					case probes := <-throttler.mysqlClusterProbesChan:
+					case probes := <-throttler.clusterProbesChan:
 						// Worth noting that in this unit test, the throttler is _closed_ and _disabled_. Its own Operate() function does
-						// not run, and therefore there is none but us to both populate `mysqlClusterProbesChan` as well as
+						// not run, and therefore there is none but us to both populate `clusterProbesChan` as well as
 						// read from it. We do not compete here with any other goroutine.
 						assert.NotNil(t, probes)
-						throttler.updateMySQLClusterProbes(ctx, probes)
+						throttler.updateClusterProbes(ctx, probes)
 						validateProbesCount(t, probes.TabletProbes)
 						// Achieved our goal
 						return
@@ -942,7 +942,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 				}
 			})
 			t.Run("validating probes", func(t *testing.T) {
-				probes := throttler.mysqlInventory.ClustersProbes
+				probes := throttler.inventory.ClustersProbes
 				validateProbesCount(t, probes)
 			})
 		})
@@ -950,19 +950,19 @@ func TestRefreshMySQLInventory(t *testing.T) {
 
 	t.Run("initial, not leader", func(t *testing.T) {
 		throttler.isLeader.Store(false)
-		throttler.refreshMySQLInventory(ctx)
+		throttler.refreshInventory(ctx)
 		validateClusterProbes(t, ctx)
 	})
 
 	t.Run("promote", func(t *testing.T) {
 		throttler.isLeader.Store(true)
-		throttler.refreshMySQLInventory(ctx)
+		throttler.refreshInventory(ctx)
 		validateClusterProbes(t, ctx)
 	})
 
 	t.Run("demote, expect cleanup", func(t *testing.T) {
 		throttler.isLeader.Store(false)
-		throttler.refreshMySQLInventory(ctx)
+		throttler.refreshInventory(ctx)
 		validateClusterProbes(t, ctx)
 	})
 }
@@ -1103,7 +1103,7 @@ func TestProbesWhileOperating(t *testing.T) {
 				client := NewBackgroundClient(throttler, testAppName, base.UndefinedScope)
 				t.Run("threshold exceeded", func(t *testing.T) {
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
 						checkOK := client.ThrottleCheckOK(ctx, "")
@@ -1115,7 +1115,7 @@ func TestProbesWhileOperating(t *testing.T) {
 				t.Run("adjust threshold", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(math.Float64bits(0.95))
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
 						checkOK := client.ThrottleCheckOK(ctx, "")
@@ -1125,7 +1125,7 @@ func TestProbesWhileOperating(t *testing.T) {
 				t.Run("restore threshold", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(savedThreshold)
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					client.clearSuccessfulResultsCache() // ensure we don't read the successful result from the test above
 					{
@@ -1142,10 +1142,9 @@ func TestProbesWhileOperating(t *testing.T) {
 			// as opposed to choosing the "lag" metric results.
 			throttler.customMetricsQuery.Store("select non_empty")
 			<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-				throttler.aggregateMySQLMetrics()
+				throttler.aggregateMetrics()
 			})
 			assert.Equal(t, base.CustomMetricName, throttler.metricNameUsedAsDefault())
-			// throttler.aggregateMySQLMetrics(ctx)
 			aggr := throttler.aggregatedMetricsSnapshot()
 			assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
 			assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
@@ -1193,7 +1192,7 @@ func TestProbesWhileOperating(t *testing.T) {
 				client := NewBackgroundClient(throttler, testAppName, base.UndefinedScope)
 				t.Run("threshold exceeded", func(t *testing.T) {
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
 						checkOK := client.ThrottleCheckOK(ctx, "")
@@ -1205,7 +1204,7 @@ func TestProbesWhileOperating(t *testing.T) {
 				t.Run("adjust threshold, too low", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(math.Float64bits(0.95))
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
 						checkOK := client.ThrottleCheckOK(ctx, "")
@@ -1215,7 +1214,7 @@ func TestProbesWhileOperating(t *testing.T) {
 				t.Run("adjust threshold, still too low", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(math.Float64bits(15))
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
 						checkOK := client.ThrottleCheckOK(ctx, "")
@@ -1225,7 +1224,7 @@ func TestProbesWhileOperating(t *testing.T) {
 				t.Run("adjust threshold", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(math.Float64bits(18))
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
 						checkOK := client.ThrottleCheckOK(ctx, "")
@@ -1235,7 +1234,7 @@ func TestProbesWhileOperating(t *testing.T) {
 				t.Run("restore threshold", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(savedThreshold)
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					client.clearSuccessfulResultsCache() // ensure we don't read the successful result from the test above
 					{
@@ -1340,7 +1339,7 @@ func TestProbesPostDisable(t *testing.T) {
 	throttler := newTestThrottler()
 	runThrottler(t, ctx, throttler, 2*time.Second, nil)
 
-	probes := throttler.mysqlInventory.ClustersProbes
+	probes := throttler.inventory.ClustersProbes
 
 	<-time.After(1 * time.Second) // throttler's context was cancelled, but still some functionality needs to complete
 	t.Run("probes", func(t *testing.T) {
@@ -1360,7 +1359,7 @@ func TestProbesPostDisable(t *testing.T) {
 	})
 
 	t.Run("metrics", func(t *testing.T) {
-		assert.Equal(t, 3, len(throttler.mysqlInventory.TabletMetrics)) // 1 self tablet + 2 shard tablets
+		assert.Equal(t, 3, len(throttler.inventory.TabletMetrics)) // 1 self tablet + 2 shard tablets
 	})
 
 	t.Run("aggregated", func(t *testing.T) {
@@ -1868,7 +1867,7 @@ func TestReplica(t *testing.T) {
 				// Change custom threshold
 				throttler.MetricsThreshold.Store(math.Float64bits(0.1))
 				<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-					throttler.refreshMySQLInventory(ctx)
+					throttler.refreshInventory(ctx)
 				})
 				checkResult = throttler.Check(ctx, testAppName.String(), base.KnownMetricNames, flags)
 				require.NotNil(t, checkResult)

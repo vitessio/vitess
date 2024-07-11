@@ -179,12 +179,12 @@ type Throttler struct {
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
-	throttleMetricChan     chan *base.ThrottleMetric
-	mysqlClusterProbesChan chan *base.ClusterProbes
-	throttlerConfigChan    chan *topodatapb.ThrottlerConfig
-	serialFuncChan         chan func() // Used by unit tests to inject non-racy behavior
+	throttleMetricChan  chan *base.ThrottleMetric
+	clusterProbesChan   chan *base.ClusterProbes
+	throttlerConfigChan chan *topodatapb.ThrottlerConfig
+	serialFuncChan      chan func() // Used by unit tests to inject non-racy behavior
 
-	mysqlInventory *base.Inventory
+	inventory *base.Inventory
 
 	metricsQuery       atomic.Value
 	customMetricsQuery atomic.Value
@@ -251,10 +251,10 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	}
 
 	throttler.throttleMetricChan = make(chan *base.ThrottleMetric)
-	throttler.mysqlClusterProbesChan = make(chan *base.ClusterProbes)
+	throttler.clusterProbesChan = make(chan *base.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.serialFuncChan = make(chan func())
-	throttler.mysqlInventory = base.NewInventory()
+	throttler.inventory = base.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
 	throttler.metricThresholds = cache.New(cache.NoExpiration, 0)
@@ -778,8 +778,8 @@ func (throttler *Throttler) readSelfLoadAvgPerCore(ctx context.Context) *base.Th
 	return metric
 }
 
-// readSelfThrottleMetric reads the mysql metric from thi very tablet's backend mysql.
-func (throttler *Throttler) readSelfThrottleMetric(ctx context.Context, query string) *base.ThrottleMetric {
+// readSelfMySQLThrottleMetric reads the metric from this very tablet or from its backend mysql.
+func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, query string) *base.ThrottleMetric {
 	metric := &base.ThrottleMetric{
 		Scope: base.SelfScope,
 		Alias: throttler.tabletAlias,
@@ -931,9 +931,9 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				if throttler.IsOpen() {
 					// frequent
 					// Always collect self metrics:
-					throttler.collectSelfMySQLMetrics(ctx, tmClient)
+					throttler.collectSelfMetrics(ctx)
 					if !throttler.isDormant() {
-						throttler.collectShardMySQLMetrics(ctx, tmClient)
+						throttler.collectShardMetrics(ctx, tmClient)
 					}
 					//
 					if throttler.recentlyChecked() {
@@ -959,28 +959,28 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				if throttler.IsOpen() {
 					// infrequent
 					if throttler.isDormant() {
-						throttler.collectShardMySQLMetrics(ctx, tmClient)
+						throttler.collectShardMetrics(ctx, tmClient)
 					}
 				}
 			case metric := <-throttler.throttleMetricChan:
 				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
-				metricResultsMap, ok := throttler.mysqlInventory.TabletMetrics[metric.GetTabletAlias()]
+				metricResultsMap, ok := throttler.inventory.TabletMetrics[metric.GetTabletAlias()]
 				if !ok {
 					metricResultsMap = base.NewMetricResultMap()
-					throttler.mysqlInventory.TabletMetrics[metric.GetTabletAlias()] = metricResultsMap
+					throttler.inventory.TabletMetrics[metric.GetTabletAlias()] = metricResultsMap
 				}
 				metricResultsMap[metric.Name] = metric
 			case <-mysqlRefreshTicker.C:
 				// sparse
 				if throttler.IsOpen() {
-					throttler.refreshMySQLInventory(ctx)
+					throttler.refreshInventory(ctx)
 				}
-			case probes := <-throttler.mysqlClusterProbesChan:
-				// incoming structural update, sparse, as result of refreshMySQLInventory()
-				throttler.updateMySQLClusterProbes(ctx, probes)
+			case probes := <-throttler.clusterProbesChan:
+				// incoming structural update, sparse, as result of refreshInventory()
+				throttler.updateClusterProbes(ctx, probes)
 			case <-mysqlAggregateTicker.C:
 				if throttler.IsOpen() {
-					throttler.aggregateMySQLMetrics()
+					throttler.aggregateMetrics()
 				}
 			case <-throttledAppsTicker.C:
 				if throttler.IsOpen() {
@@ -1073,15 +1073,15 @@ func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context)
 		}
 	}
 
-	go writeMetric(base.LagMetricName, throttler.readSelfThrottleMetric(ctx, sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecar.GetIdentifier()).Query))
-	go writeMetric(base.ThreadsRunningMetricName, throttler.readSelfThrottleMetric(ctx, threadsRunningQuery))
-	go writeMetric(base.CustomMetricName, throttler.readSelfThrottleMetric(ctx, throttler.GetCustomMetricsQuery()))
+	go writeMetric(base.LagMetricName, throttler.readSelfMySQLThrottleMetric(ctx, sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecar.GetIdentifier()).Query))
+	go writeMetric(base.ThreadsRunningMetricName, throttler.readSelfMySQLThrottleMetric(ctx, threadsRunningQuery))
+	go writeMetric(base.CustomMetricName, throttler.readSelfMySQLThrottleMetric(ctx, throttler.GetCustomMetricsQuery()))
 	go writeMetric(base.LoadAvgMetricName, throttler.readSelfLoadAvgPerCore(ctx))
 	return nil
 }
 
-func (throttler *Throttler) collectSelfMySQLMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient) {
-	probe := throttler.mysqlInventory.ClustersProbes[throttler.tabletAlias]
+func (throttler *Throttler) collectSelfMetrics(ctx context.Context) {
+	probe := throttler.inventory.ClustersProbes[throttler.tabletAlias]
 	if probe == nil {
 		// probe not created yet
 		return
@@ -1099,10 +1099,10 @@ func (throttler *Throttler) collectSelfMySQLMetrics(ctx context.Context, tmClien
 	}()
 }
 
-func (throttler *Throttler) collectShardMySQLMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient) {
+func (throttler *Throttler) collectShardMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient) {
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
-	for _, probe := range throttler.mysqlInventory.ClustersProbes {
+	for _, probe := range throttler.inventory.ClustersProbes {
 		if probe.Alias == throttler.tabletAlias {
 			// We skip collecting our own metrics
 			continue
@@ -1130,8 +1130,8 @@ func (throttler *Throttler) collectShardMySQLMetrics(ctx context.Context, tmClie
 	}
 }
 
-// refreshMySQLInventory will re-structure the inventory based on reading config settings
-func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
+// refreshInventory will re-structure the inventory based on reading config settings
+func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
 	addProbe := func(alias string, tablet *topodatapb.Tablet, scope base.Scope, mysqlSettings *config.MySQLConfigurationSettings, probes base.Probes) bool {
 		for _, ignore := range mysqlSettings.IgnoreHosts {
@@ -1164,7 +1164,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case throttler.mysqlClusterProbesChan <- clusterProbes:
+		case throttler.clusterProbesChan <- clusterProbes:
 			return nil
 		}
 	}
@@ -1198,8 +1198,8 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			// of previous clusters it used to probe. It may have recollection of specific probes for such clusters.
 			// This now ensures any existing cluster probes are overridden with an empty list of probes.
 			// `clusterProbes` was created above as empty, and identifiable via `scope`. This will in turn
-			// be used to overwrite throttler.mysqlInventory.ClustersProbes[clusterProbes.scope] in
-			// updateMySQLClusterProbes().
+			// be used to overwrite throttler.inventory.ClustersProbes[clusterProbes.scope] in
+			// updateClusterProbes().
 			return attemptWriteProbes(clusterProbes)
 			// not the leader (primary tablet)? Then no more work for us.
 		}
@@ -1225,17 +1225,17 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	}
 	go func() {
 		if err := collect(); err != nil {
-			log.Errorf("refreshMySQLInventory: %+v", err)
+			log.Errorf("refreshInventory: %+v", err)
 		}
 	}()
 	return nil
 }
 
 // synchronous update of inventory
-func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, clusterProbes *base.ClusterProbes) error {
-	throttler.mysqlInventory.ClustersProbes = clusterProbes.TabletProbes
-	throttler.mysqlInventory.IgnoreHostsCount = clusterProbes.IgnoreHostsCount
-	throttler.mysqlInventory.IgnoreHostsThreshold = clusterProbes.IgnoreHostsThreshold
+func (throttler *Throttler) updateClusterProbes(ctx context.Context, clusterProbes *base.ClusterProbes) error {
+	throttler.inventory.ClustersProbes = clusterProbes.TabletProbes
+	throttler.inventory.IgnoreHostsCount = clusterProbes.IgnoreHostsCount
+	throttler.inventory.IgnoreHostsThreshold = clusterProbes.IgnoreHostsThreshold
 	return nil
 }
 
@@ -1247,11 +1247,11 @@ func (throttler *Throttler) metricNameUsedAsDefault() base.MetricName {
 }
 
 // synchronous aggregation of collected data
-func (throttler *Throttler) aggregateMySQLMetrics() error {
+func (throttler *Throttler) aggregateMetrics() error {
 	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
 	aggregateTabletsMetrics := func(scope base.Scope, metricName base.MetricName, tabletResultsMap base.TabletResultMap) {
-		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount
-		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold
+		ignoreHostsCount := throttler.inventory.IgnoreHostsCount
+		ignoreHostsThreshold := throttler.inventory.IgnoreHostsThreshold
 		ignoreDialTCPErrors := throttler.configSettings.MySQLStore.IgnoreDialTCPErrors
 
 		aggregatedMetric := base.AggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreDialTCPErrors, ignoreHostsThreshold)
@@ -1268,7 +1268,7 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 			// is to be stored as "default"
 			continue
 		}
-		selfResultsMap, shardResultsMap := throttler.mysqlInventory.TabletMetrics.Split(throttler.tabletAlias)
+		selfResultsMap, shardResultsMap := throttler.inventory.TabletMetrics.Split(throttler.tabletAlias)
 		aggregateTabletsMetrics(base.SelfScope, metricName, selfResultsMap)
 		aggregateTabletsMetrics(base.ShardScope, metricName, shardResultsMap)
 	}
