@@ -1293,7 +1293,7 @@ func (throttler *Throttler) getMySQLStoreMetric(ctx context.Context, scope base.
 	return throttler.getAggregatedMetric(aggregatedName), threshold
 }
 
-func (throttler *Throttler) mysqlMetricThresholdsSnapshot() map[string]float64 {
+func (throttler *Throttler) metricThresholdsSnapshot() map[string]float64 {
 	snapshot := make(map[string]float64)
 	for key, value := range throttler.metricThresholds.Items() {
 		threshold, _ := value.Object.(float64)
@@ -1650,7 +1650,7 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		MetricNameUsedAsDefault: throttler.metricNameUsedAsDefault().String(),
 
 		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
-		MetricsThresholds: throttler.mysqlMetricThresholdsSnapshot(),
+		MetricsThresholds: throttler.metricThresholdsSnapshot(),
 		MetricsHealth:     throttler.metricsHealthSnapshot(),
 		ThrottledApps:     throttler.ThrottledApps(),
 		AppCheckedMetrics: throttler.appCheckedMetricsSnapshot(),
