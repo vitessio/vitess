@@ -41,17 +41,6 @@ limitations under the License.
 
 package base
 
-// TabletResultMap maps a tablet to a result
-type TabletResultMap map[string]MetricResultMap
-
-func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, all TabletResultMap) {
-	withAlias = make(TabletResultMap)
-	if val, ok := m[alias]; ok {
-		withAlias[alias] = val
-	}
-	return withAlias, m
-}
-
 // Inventory has the operational data about probes, their metrics, and relevant configuration
 type Inventory struct {
 	ClustersProbes       Probes

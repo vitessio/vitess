@@ -1254,7 +1254,7 @@ func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold
 		ignoreDialTCPErrors := throttler.configSettings.MySQLStore.IgnoreDialTCPErrors
 
-		aggregatedMetric := aggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreDialTCPErrors, ignoreHostsThreshold)
+		aggregatedMetric := base.AggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreDialTCPErrors, ignoreHostsThreshold)
 		aggregatedMetricName := metricName.AggregatedName(scope)
 		throttler.aggregatedMetrics.Set(aggregatedMetricName, aggregatedMetric, cache.DefaultExpiration)
 		if metricName == metricNameUsedAsDefault {
