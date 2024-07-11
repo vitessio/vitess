@@ -85,10 +85,10 @@ import (
 
 const (
 	leaderCheckInterval            = 5 * time.Second
-	mysqlCollectInterval           = 250 * time.Millisecond // PRIMARY polls replicas
-	mysqlDormantCollectInterval    = 5 * time.Second        // PRIMARY polls replicas when dormant (no recent checks)
-	mysqlRefreshInterval           = 10 * time.Second       // Refreshing tablet inventory
-	mysqlAggregateInterval         = 125 * time.Millisecond
+	activeCollectInterval          = 250 * time.Millisecond // PRIMARY polls replicas
+	dormantCollectInterval         = 5 * time.Second        // PRIMARY polls replicas when dormant (no recent checks)
+	inventoryRefreshInterval       = 10 * time.Second       // Refreshing tablet inventory
+	metricsAggregateInterval       = 125 * time.Millisecond
 	throttledAppsSnapshotInterval  = 5 * time.Second
 	recentCheckRateLimiterInterval = 1 * time.Second // Ticker assisting in determining when the throttler was last checked
 
@@ -264,15 +264,15 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
 	throttler.appCheckedMetrics = cache.New(cache.NoExpiration, 0)
 
-	throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
+	throttler.httpClient = base.SetupHTTPClient(2 * activeCollectInterval)
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
 	throttler.leaderCheckInterval = leaderCheckInterval
-	throttler.mysqlCollectInterval = mysqlCollectInterval
-	throttler.mysqlDormantCollectInterval = mysqlDormantCollectInterval
-	throttler.mysqlRefreshInterval = mysqlRefreshInterval
-	throttler.mysqlAggregateInterval = mysqlAggregateInterval
+	throttler.mysqlCollectInterval = activeCollectInterval
+	throttler.mysqlDormantCollectInterval = dormantCollectInterval
+	throttler.mysqlRefreshInterval = inventoryRefreshInterval
+	throttler.mysqlAggregateInterval = metricsAggregateInterval
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
 	throttler.dormantPeriod = dormantPeriod
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
@@ -1012,7 +1012,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 	}
 	return func(ctx context.Context) mysql.MySQLThrottleMetrics {
 		// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
-		ctx, cancel := context.WithTimeout(ctx, 4*mysqlCollectInterval)
+		ctx, cancel := context.WithTimeout(ctx, 4*activeCollectInterval)
 		defer cancel()
 
 		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
@@ -1205,7 +1205,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			// not the leader (primary tablet)? Then no more work for us.
 		}
 		// The primary tablet is also in charge of collecting the shard's metrics
-		ctx, cancel := context.WithTimeout(ctx, mysqlRefreshInterval)
+		ctx, cancel := context.WithTimeout(ctx, inventoryRefreshInterval)
 		defer cancel()
 
 		tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
