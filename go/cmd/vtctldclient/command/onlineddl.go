@@ -33,6 +33,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -307,7 +308,7 @@ func throttleCommandHelper(cmd *cobra.Command, throttleType bool) error {
 		rule.ExpiresAt = protoutil.TimeToProto(time.Now().Add(throttle.DefaultAppThrottleDuration))
 	} else {
 		rule.Ratio = 0
-		rule.ExpiresAt = protoutil.TimeToProto(time.Now())
+		rule.ExpiresAt = &vttime.Time{} // zero
 	}
 
 	if strings.ToLower(uuid) == AllMigrationsIndicator {

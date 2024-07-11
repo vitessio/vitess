@@ -393,6 +393,9 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 		"./test/templates",
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
+		"./docker/lite/Dockerfile",
+		"./docker/lite/Dockerfile.percona80",
+		"./docker/vttestserver/Dockerfile.mysql80",
 	}
 	if workflowUpdate {
 		explore = append(explore, "./.github/workflows")
@@ -435,9 +438,6 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 		return nil
 	}
 	files, err := getListOfFilesInPaths([]string{
-		"./docker/lite",
-		"./docker/local",
-		"./docker/vttestserver",
 		"./Makefile",
 		"./test/templates",
 	})

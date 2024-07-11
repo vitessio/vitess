@@ -81,6 +81,10 @@ func (v *EnumSetValues) Equal(other *EnumSetValues) bool {
 	return slices.Equal(*v, *other)
 }
 
+func NewUnknownType() Type {
+	return NewType(sqltypes.Unknown, collations.Unknown)
+}
+
 func NewType(t sqltypes.Type, collation collations.ID) Type {
 	// New types default to being nullable
 	return NewTypeEx(t, collation, true, 0, 0, nil)

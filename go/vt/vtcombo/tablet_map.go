@@ -165,6 +165,23 @@ func InitRoutingRules(
 	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
+// InitMirrorRules saves the mirror rules into ts and reloads the vschema.
+func InitMirrorRules(
+	ctx context.Context,
+	ts *topo.Server,
+	mr *vschemapb.MirrorRules,
+) error {
+	if mr == nil {
+		return nil
+	}
+
+	if err := ts.SaveMirrorRules(ctx, mr); err != nil {
+		return err
+	}
+
+	return ts.RebuildSrvVSchema(ctx, nil)
+}
+
 // InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(
@@ -955,6 +972,10 @@ func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *top
 }
 
 func (itmc *internalTabletManagerClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) GetThrottlerStatus(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

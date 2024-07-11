@@ -585,7 +585,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select m1.col from unsharded as m1 where 1 != 1",
-                "Query": "select m1.col from unsharded as m1 where m1.col = :user_col",
+                "Query": "select m1.col from unsharded as m1 where m1.col = :user_col /* INT16 */",
                 "Table": "unsharded"
               }
             ]
@@ -651,7 +651,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select e.col from user_extra as e where 1 != 1",
-                "Query": "select e.col from user_extra as e where e.col = :user_col",
+                "Query": "select e.col from user_extra as e where e.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               },
               {
@@ -662,7 +662,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
-                "Query": "select 1 from unsharded as m1 where m1.col = :e_col",
+                "Query": "select 1 from unsharded as m1 where m1.col = :e_col /* INT16 */",
                 "Table": "unsharded"
               }
             ]
@@ -1221,7 +1221,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user` where `user`.id = :user_extra_col",
+            "Query": "select `user`.col from `user` where `user`.id = :user_extra_col /* INT16 */",
             "Table": "`user`",
             "Values": [
               ":user_extra_col"
@@ -1743,6 +1743,47 @@
     }
   },
   {
+    "comment": "Unneeded ORDER BY inside derived table removed",
+    "query": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt1.id from (select id from `user` where 1 != 1) as dt1 where 1 != 1",
+            "Query": "select dt1.id from (select id from `user`) as dt1",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt2.id from (select id from `user` where 1 != 1) as dt2 where 1 != 1",
+            "Query": "select dt2.id from (select id from `user`) as dt2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "join of information_schema with normal table",
     "query": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
     "plan": {
@@ -1924,7 +1965,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */",
             "Table": "user_extra"
           }
         ]
@@ -2842,6 +2883,62 @@
     }
   },
   {
+    "comment": "Hash join has to be used since we have LIMIT on both sides",
+    "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "HashJoin",
+        "ComparisonType": "-1",
+        "JoinColumnIndexes": "-1",
+        "Predicate": "u.id = ue.user_id",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "10",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.id from (select id from `user` where 1 != 1) as u where 1 != 1",
+                "Query": "select u.id from (select id from `user`) as u limit 10",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Limit",
+            "Count": "10",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                "Query": "select ue.user_id from (select user_id from user_extra) as ue limit 10",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "alias on column from derived table. TODO: to support alias in SimpleProjection engine primitive.",
     "query": "select a as k from (select count(*) as a from user) t",
     "plan": {
@@ -3244,7 +3341,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as uu where 1 != 1",
-            "Query": "select 1 from `user` as uu where uu.intcol = :u_intcol",
+            "Query": "select 1 from `user` as uu where uu.intcol = :u_intcol /* INT16 */",
             "Table": "`user`"
           }
         ]
@@ -3357,7 +3454,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
@@ -3594,7 +3691,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
@@ -3654,7 +3751,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                    "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                    "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                     "Table": "user_extra"
                   }
                 ]
@@ -3720,7 +3817,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
@@ -3799,7 +3896,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded_authoritative.col2 from unsharded_authoritative where 1 != 1",
-            "Query": "select unsharded_authoritative.col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1",
+            "Query": "select unsharded_authoritative.col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1 /* VARCHAR */",
             "Table": "unsharded_authoritative"
           }
         ]
@@ -3921,7 +4018,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                "Query": "select user_extra.col from user_extra where user_extra.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
@@ -4430,7 +4527,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from music as m where 1 != 1",
-            "Query": "select 1 from music as m where m.user_id = 5 and m.id = 20 and m.col = :u_col",
+            "Query": "select 1 from music as m where m.user_id = 5 and m.id = 20 and m.col = :u_col /* INT16 */",
             "Table": "music",
             "Values": [
               "20"

@@ -177,6 +177,7 @@ func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, 
 		if !aggr.Distinct || canPushDistinctAggr {
 			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggr)
 			aggregateTheAggregate(aggregator, i)
+			aggregator.Aggregations[i].PushedDown = true
 			continue
 		}
 
@@ -369,7 +370,6 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 
 	columns := &applyJoinColumns{}
 	output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, !join.JoinType.IsInner(), columns, lhs, rhs)
-	join.JoinColumns = columns
 	if err != nil {
 		// if we get this error, we just abort the splitting and fall back on simpler ways of solving the same query
 		if errors.Is(err, errAbortAggrPushing) {
@@ -377,6 +377,7 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 		}
 		panic(err)
 	}
+	join.JoinColumns = columns
 
 	splitGroupingToLeftAndRight(ctx, rootAggr, lhs, rhs, join.JoinColumns)
 

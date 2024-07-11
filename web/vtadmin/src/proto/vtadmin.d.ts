@@ -45018,6 +45018,9 @@ export namespace vschema {
 
         /** SrvVSchema keyspace_routing_rules */
         keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
+
+        /** SrvVSchema mirror_rules */
+        mirror_rules?: (vschema.IMirrorRules|null);
     }
 
     /** Represents a SrvVSchema. */
@@ -45040,6 +45043,9 @@ export namespace vschema {
 
         /** SrvVSchema keyspace_routing_rules. */
         public keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
+
+        /** SrvVSchema mirror_rules. */
+        public mirror_rules?: (vschema.IMirrorRules|null);
 
         /**
          * Creates a new SrvVSchema instance using the specified properties.
@@ -45519,6 +45525,212 @@ export namespace vschema {
 
         /**
          * Gets the default type url for KeyspaceRoutingRule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MirrorRules. */
+    interface IMirrorRules {
+
+        /** MirrorRules rules */
+        rules?: (vschema.IMirrorRule[]|null);
+    }
+
+    /** Represents a MirrorRules. */
+    class MirrorRules implements IMirrorRules {
+
+        /**
+         * Constructs a new MirrorRules.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IMirrorRules);
+
+        /** MirrorRules rules. */
+        public rules: vschema.IMirrorRule[];
+
+        /**
+         * Creates a new MirrorRules instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MirrorRules instance
+         */
+        public static create(properties?: vschema.IMirrorRules): vschema.MirrorRules;
+
+        /**
+         * Encodes the specified MirrorRules message. Does not implicitly {@link vschema.MirrorRules.verify|verify} messages.
+         * @param message MirrorRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IMirrorRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MirrorRules message, length delimited. Does not implicitly {@link vschema.MirrorRules.verify|verify} messages.
+         * @param message MirrorRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IMirrorRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MirrorRules message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MirrorRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.MirrorRules;
+
+        /**
+         * Decodes a MirrorRules message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MirrorRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.MirrorRules;
+
+        /**
+         * Verifies a MirrorRules message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MirrorRules message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MirrorRules
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.MirrorRules;
+
+        /**
+         * Creates a plain object from a MirrorRules message. Also converts values to other types if specified.
+         * @param message MirrorRules
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.MirrorRules, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MirrorRules to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MirrorRules
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MirrorRule. */
+    interface IMirrorRule {
+
+        /** MirrorRule from_table */
+        from_table?: (string|null);
+
+        /** MirrorRule to_table */
+        to_table?: (string|null);
+
+        /** MirrorRule percent */
+        percent?: (number|null);
+    }
+
+    /** Represents a MirrorRule. */
+    class MirrorRule implements IMirrorRule {
+
+        /**
+         * Constructs a new MirrorRule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IMirrorRule);
+
+        /** MirrorRule from_table. */
+        public from_table: string;
+
+        /** MirrorRule to_table. */
+        public to_table: string;
+
+        /** MirrorRule percent. */
+        public percent: number;
+
+        /**
+         * Creates a new MirrorRule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MirrorRule instance
+         */
+        public static create(properties?: vschema.IMirrorRule): vschema.MirrorRule;
+
+        /**
+         * Encodes the specified MirrorRule message. Does not implicitly {@link vschema.MirrorRule.verify|verify} messages.
+         * @param message MirrorRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IMirrorRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MirrorRule message, length delimited. Does not implicitly {@link vschema.MirrorRule.verify|verify} messages.
+         * @param message MirrorRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IMirrorRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MirrorRule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MirrorRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.MirrorRule;
+
+        /**
+         * Decodes a MirrorRule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MirrorRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.MirrorRule;
+
+        /**
+         * Verifies a MirrorRule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MirrorRule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MirrorRule
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.MirrorRule;
+
+        /**
+         * Creates a plain object from a MirrorRule message. Also converts values to other types if specified.
+         * @param message MirrorRule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.MirrorRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MirrorRule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MirrorRule
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -50214,26 +50426,11 @@ export namespace vtctldata {
     /** Properties of a CheckThrottlerResponse. */
     interface ICheckThrottlerResponse {
 
-        /** CheckThrottlerResponse status_code */
-        status_code?: (number|null);
+        /** CheckThrottlerResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
 
-        /** CheckThrottlerResponse value */
-        value?: (number|null);
-
-        /** CheckThrottlerResponse threshold */
-        threshold?: (number|null);
-
-        /** CheckThrottlerResponse error */
-        error?: (string|null);
-
-        /** CheckThrottlerResponse message */
-        message?: (string|null);
-
-        /** CheckThrottlerResponse recently_checked */
-        recently_checked?: (boolean|null);
-
-        /** CheckThrottlerResponse metrics */
-        metrics?: ({ [k: string]: vtctldata.CheckThrottlerResponse.IMetric }|null);
+        /** CheckThrottlerResponse Check */
+        Check?: (tabletmanagerdata.ICheckThrottlerResponse|null);
     }
 
     /** Represents a CheckThrottlerResponse. */
@@ -50245,26 +50442,11 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ICheckThrottlerResponse);
 
-        /** CheckThrottlerResponse status_code. */
-        public status_code: number;
+        /** CheckThrottlerResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
 
-        /** CheckThrottlerResponse value. */
-        public value: number;
-
-        /** CheckThrottlerResponse threshold. */
-        public threshold: number;
-
-        /** CheckThrottlerResponse error. */
-        public error: string;
-
-        /** CheckThrottlerResponse message. */
-        public message: string;
-
-        /** CheckThrottlerResponse recently_checked. */
-        public recently_checked: boolean;
-
-        /** CheckThrottlerResponse metrics. */
-        public metrics: { [k: string]: vtctldata.CheckThrottlerResponse.IMetric };
+        /** CheckThrottlerResponse Check. */
+        public Check?: (tabletmanagerdata.ICheckThrottlerResponse|null);
 
         /**
          * Creates a new CheckThrottlerResponse instance using the specified properties.
@@ -50342,142 +50524,6 @@ export namespace vtctldata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace CheckThrottlerResponse {
-
-        /** Properties of a Metric. */
-        interface IMetric {
-
-            /** Metric name */
-            name?: (string|null);
-
-            /** Metric status_code */
-            status_code?: (number|null);
-
-            /** Metric value */
-            value?: (number|null);
-
-            /** Metric threshold */
-            threshold?: (number|null);
-
-            /** Metric error */
-            error?: (string|null);
-
-            /** Metric message */
-            message?: (string|null);
-
-            /** Metric scope */
-            scope?: (string|null);
-        }
-
-        /** Represents a Metric. */
-        class Metric implements IMetric {
-
-            /**
-             * Constructs a new Metric.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: vtctldata.CheckThrottlerResponse.IMetric);
-
-            /** Metric name. */
-            public name: string;
-
-            /** Metric status_code. */
-            public status_code: number;
-
-            /** Metric value. */
-            public value: number;
-
-            /** Metric threshold. */
-            public threshold: number;
-
-            /** Metric error. */
-            public error: string;
-
-            /** Metric message. */
-            public message: string;
-
-            /** Metric scope. */
-            public scope: string;
-
-            /**
-             * Creates a new Metric instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns Metric instance
-             */
-            public static create(properties?: vtctldata.CheckThrottlerResponse.IMetric): vtctldata.CheckThrottlerResponse.Metric;
-
-            /**
-             * Encodes the specified Metric message. Does not implicitly {@link vtctldata.CheckThrottlerResponse.Metric.verify|verify} messages.
-             * @param message Metric message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: vtctldata.CheckThrottlerResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified Metric message, length delimited. Does not implicitly {@link vtctldata.CheckThrottlerResponse.Metric.verify|verify} messages.
-             * @param message Metric message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: vtctldata.CheckThrottlerResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a Metric message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns Metric
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CheckThrottlerResponse.Metric;
-
-            /**
-             * Decodes a Metric message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns Metric
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CheckThrottlerResponse.Metric;
-
-            /**
-             * Verifies a Metric message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a Metric message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns Metric
-             */
-            public static fromObject(object: { [k: string]: any }): vtctldata.CheckThrottlerResponse.Metric;
-
-            /**
-             * Creates a plain object from a Metric message. Also converts values to other types if specified.
-             * @param message Metric
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: vtctldata.CheckThrottlerResponse.Metric, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this Metric to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for Metric
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
     }
 
     /** Properties of a CleanupSchemaMigrationRequest. */
@@ -58648,59 +58694,8 @@ export namespace vtctldata {
     /** Properties of a GetThrottlerStatusResponse. */
     interface IGetThrottlerStatusResponse {
 
-        /** GetThrottlerStatusResponse tablet_alias */
-        tablet_alias?: (string|null);
-
-        /** GetThrottlerStatusResponse keyspace */
-        keyspace?: (string|null);
-
-        /** GetThrottlerStatusResponse shard */
-        shard?: (string|null);
-
-        /** GetThrottlerStatusResponse is_leader */
-        is_leader?: (boolean|null);
-
-        /** GetThrottlerStatusResponse is_open */
-        is_open?: (boolean|null);
-
-        /** GetThrottlerStatusResponse is_enabled */
-        is_enabled?: (boolean|null);
-
-        /** GetThrottlerStatusResponse is_dormant */
-        is_dormant?: (boolean|null);
-
-        /** GetThrottlerStatusResponse lag_metric_query */
-        lag_metric_query?: (string|null);
-
-        /** GetThrottlerStatusResponse custom_metric_query */
-        custom_metric_query?: (string|null);
-
-        /** GetThrottlerStatusResponse default_threshold */
-        default_threshold?: (number|null);
-
-        /** GetThrottlerStatusResponse metric_name_used_as_default */
-        metric_name_used_as_default?: (string|null);
-
-        /** GetThrottlerStatusResponse aggregated_metrics */
-        aggregated_metrics?: ({ [k: string]: vtctldata.GetThrottlerStatusResponse.IMetricResult }|null);
-
-        /** GetThrottlerStatusResponse metric_thresholds */
-        metric_thresholds?: ({ [k: string]: number }|null);
-
-        /** GetThrottlerStatusResponse metrics_health */
-        metrics_health?: ({ [k: string]: vtctldata.GetThrottlerStatusResponse.IMetricHealth }|null);
-
-        /** GetThrottlerStatusResponse throttled_apps */
-        throttled_apps?: ({ [k: string]: topodata.IThrottledAppRule }|null);
-
-        /** GetThrottlerStatusResponse app_checked_metrics */
-        app_checked_metrics?: ({ [k: string]: string }|null);
-
-        /** GetThrottlerStatusResponse recently_checked */
-        recently_checked?: (boolean|null);
-
-        /** GetThrottlerStatusResponse recent_apps */
-        recent_apps?: ({ [k: string]: vtctldata.GetThrottlerStatusResponse.IRecentApp }|null);
+        /** GetThrottlerStatusResponse status */
+        status?: (tabletmanagerdata.IGetThrottlerStatusResponse|null);
     }
 
     /** Represents a GetThrottlerStatusResponse. */
@@ -58712,59 +58707,8 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.IGetThrottlerStatusResponse);
 
-        /** GetThrottlerStatusResponse tablet_alias. */
-        public tablet_alias: string;
-
-        /** GetThrottlerStatusResponse keyspace. */
-        public keyspace: string;
-
-        /** GetThrottlerStatusResponse shard. */
-        public shard: string;
-
-        /** GetThrottlerStatusResponse is_leader. */
-        public is_leader: boolean;
-
-        /** GetThrottlerStatusResponse is_open. */
-        public is_open: boolean;
-
-        /** GetThrottlerStatusResponse is_enabled. */
-        public is_enabled: boolean;
-
-        /** GetThrottlerStatusResponse is_dormant. */
-        public is_dormant: boolean;
-
-        /** GetThrottlerStatusResponse lag_metric_query. */
-        public lag_metric_query: string;
-
-        /** GetThrottlerStatusResponse custom_metric_query. */
-        public custom_metric_query: string;
-
-        /** GetThrottlerStatusResponse default_threshold. */
-        public default_threshold: number;
-
-        /** GetThrottlerStatusResponse metric_name_used_as_default. */
-        public metric_name_used_as_default: string;
-
-        /** GetThrottlerStatusResponse aggregated_metrics. */
-        public aggregated_metrics: { [k: string]: vtctldata.GetThrottlerStatusResponse.IMetricResult };
-
-        /** GetThrottlerStatusResponse metric_thresholds. */
-        public metric_thresholds: { [k: string]: number };
-
-        /** GetThrottlerStatusResponse metrics_health. */
-        public metrics_health: { [k: string]: vtctldata.GetThrottlerStatusResponse.IMetricHealth };
-
-        /** GetThrottlerStatusResponse throttled_apps. */
-        public throttled_apps: { [k: string]: topodata.IThrottledAppRule };
-
-        /** GetThrottlerStatusResponse app_checked_metrics. */
-        public app_checked_metrics: { [k: string]: string };
-
-        /** GetThrottlerStatusResponse recently_checked. */
-        public recently_checked: boolean;
-
-        /** GetThrottlerStatusResponse recent_apps. */
-        public recent_apps: { [k: string]: vtctldata.GetThrottlerStatusResponse.IRecentApp };
+        /** GetThrottlerStatusResponse status. */
+        public status?: (tabletmanagerdata.IGetThrottlerStatusResponse|null);
 
         /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
@@ -58842,318 +58786,6 @@ export namespace vtctldata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace GetThrottlerStatusResponse {
-
-        /** Properties of a MetricResult. */
-        interface IMetricResult {
-
-            /** MetricResult value */
-            value?: (number|null);
-
-            /** MetricResult error */
-            error?: (string|null);
-        }
-
-        /** Represents a MetricResult. */
-        class MetricResult implements IMetricResult {
-
-            /**
-             * Constructs a new MetricResult.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: vtctldata.GetThrottlerStatusResponse.IMetricResult);
-
-            /** MetricResult value. */
-            public value: number;
-
-            /** MetricResult error. */
-            public error: string;
-
-            /**
-             * Creates a new MetricResult instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns MetricResult instance
-             */
-            public static create(properties?: vtctldata.GetThrottlerStatusResponse.IMetricResult): vtctldata.GetThrottlerStatusResponse.MetricResult;
-
-            /**
-             * Encodes the specified MetricResult message. Does not implicitly {@link vtctldata.GetThrottlerStatusResponse.MetricResult.verify|verify} messages.
-             * @param message MetricResult message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: vtctldata.GetThrottlerStatusResponse.IMetricResult, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified MetricResult message, length delimited. Does not implicitly {@link vtctldata.GetThrottlerStatusResponse.MetricResult.verify|verify} messages.
-             * @param message MetricResult message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: vtctldata.GetThrottlerStatusResponse.IMetricResult, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a MetricResult message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns MetricResult
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetThrottlerStatusResponse.MetricResult;
-
-            /**
-             * Decodes a MetricResult message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns MetricResult
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetThrottlerStatusResponse.MetricResult;
-
-            /**
-             * Verifies a MetricResult message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a MetricResult message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns MetricResult
-             */
-            public static fromObject(object: { [k: string]: any }): vtctldata.GetThrottlerStatusResponse.MetricResult;
-
-            /**
-             * Creates a plain object from a MetricResult message. Also converts values to other types if specified.
-             * @param message MetricResult
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: vtctldata.GetThrottlerStatusResponse.MetricResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this MetricResult to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for MetricResult
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-
-        /** Properties of a MetricHealth. */
-        interface IMetricHealth {
-
-            /** MetricHealth last_healthy_at */
-            last_healthy_at?: (vttime.ITime|null);
-
-            /** MetricHealth seconds_since_last_healthy */
-            seconds_since_last_healthy?: (number|Long|null);
-        }
-
-        /** Represents a MetricHealth. */
-        class MetricHealth implements IMetricHealth {
-
-            /**
-             * Constructs a new MetricHealth.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: vtctldata.GetThrottlerStatusResponse.IMetricHealth);
-
-            /** MetricHealth last_healthy_at. */
-            public last_healthy_at?: (vttime.ITime|null);
-
-            /** MetricHealth seconds_since_last_healthy. */
-            public seconds_since_last_healthy: (number|Long);
-
-            /**
-             * Creates a new MetricHealth instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns MetricHealth instance
-             */
-            public static create(properties?: vtctldata.GetThrottlerStatusResponse.IMetricHealth): vtctldata.GetThrottlerStatusResponse.MetricHealth;
-
-            /**
-             * Encodes the specified MetricHealth message. Does not implicitly {@link vtctldata.GetThrottlerStatusResponse.MetricHealth.verify|verify} messages.
-             * @param message MetricHealth message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: vtctldata.GetThrottlerStatusResponse.IMetricHealth, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified MetricHealth message, length delimited. Does not implicitly {@link vtctldata.GetThrottlerStatusResponse.MetricHealth.verify|verify} messages.
-             * @param message MetricHealth message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: vtctldata.GetThrottlerStatusResponse.IMetricHealth, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a MetricHealth message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns MetricHealth
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetThrottlerStatusResponse.MetricHealth;
-
-            /**
-             * Decodes a MetricHealth message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns MetricHealth
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetThrottlerStatusResponse.MetricHealth;
-
-            /**
-             * Verifies a MetricHealth message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a MetricHealth message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns MetricHealth
-             */
-            public static fromObject(object: { [k: string]: any }): vtctldata.GetThrottlerStatusResponse.MetricHealth;
-
-            /**
-             * Creates a plain object from a MetricHealth message. Also converts values to other types if specified.
-             * @param message MetricHealth
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: vtctldata.GetThrottlerStatusResponse.MetricHealth, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this MetricHealth to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for MetricHealth
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-
-        /** Properties of a RecentApp. */
-        interface IRecentApp {
-
-            /** RecentApp checked_at */
-            checked_at?: (vttime.ITime|null);
-
-            /** RecentApp status_code */
-            status_code?: (number|null);
-        }
-
-        /** Represents a RecentApp. */
-        class RecentApp implements IRecentApp {
-
-            /**
-             * Constructs a new RecentApp.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: vtctldata.GetThrottlerStatusResponse.IRecentApp);
-
-            /** RecentApp checked_at. */
-            public checked_at?: (vttime.ITime|null);
-
-            /** RecentApp status_code. */
-            public status_code: number;
-
-            /**
-             * Creates a new RecentApp instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns RecentApp instance
-             */
-            public static create(properties?: vtctldata.GetThrottlerStatusResponse.IRecentApp): vtctldata.GetThrottlerStatusResponse.RecentApp;
-
-            /**
-             * Encodes the specified RecentApp message. Does not implicitly {@link vtctldata.GetThrottlerStatusResponse.RecentApp.verify|verify} messages.
-             * @param message RecentApp message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: vtctldata.GetThrottlerStatusResponse.IRecentApp, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified RecentApp message, length delimited. Does not implicitly {@link vtctldata.GetThrottlerStatusResponse.RecentApp.verify|verify} messages.
-             * @param message RecentApp message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: vtctldata.GetThrottlerStatusResponse.IRecentApp, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a RecentApp message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns RecentApp
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetThrottlerStatusResponse.RecentApp;
-
-            /**
-             * Decodes a RecentApp message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns RecentApp
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetThrottlerStatusResponse.RecentApp;
-
-            /**
-             * Verifies a RecentApp message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a RecentApp message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns RecentApp
-             */
-            public static fromObject(object: { [k: string]: any }): vtctldata.GetThrottlerStatusResponse.RecentApp;
-
-            /**
-             * Creates a plain object from a RecentApp message. Also converts values to other types if specified.
-             * @param message RecentApp
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: vtctldata.GetThrottlerStatusResponse.RecentApp, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this RecentApp to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for RecentApp
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
     }
 
     /** Properties of a GetTopologyPathRequest. */
@@ -73975,5 +73607,417 @@ export namespace vtctldata {
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
+    }
+
+    /** Properties of a GetMirrorRulesRequest. */
+    interface IGetMirrorRulesRequest {
+    }
+
+    /** Represents a GetMirrorRulesRequest. */
+    class GetMirrorRulesRequest implements IGetMirrorRulesRequest {
+
+        /**
+         * Constructs a new GetMirrorRulesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetMirrorRulesRequest);
+
+        /**
+         * Creates a new GetMirrorRulesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetMirrorRulesRequest instance
+         */
+        public static create(properties?: vtctldata.IGetMirrorRulesRequest): vtctldata.GetMirrorRulesRequest;
+
+        /**
+         * Encodes the specified GetMirrorRulesRequest message. Does not implicitly {@link vtctldata.GetMirrorRulesRequest.verify|verify} messages.
+         * @param message GetMirrorRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetMirrorRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetMirrorRulesRequest message, length delimited. Does not implicitly {@link vtctldata.GetMirrorRulesRequest.verify|verify} messages.
+         * @param message GetMirrorRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetMirrorRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetMirrorRulesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetMirrorRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetMirrorRulesRequest;
+
+        /**
+         * Decodes a GetMirrorRulesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetMirrorRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetMirrorRulesRequest;
+
+        /**
+         * Verifies a GetMirrorRulesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetMirrorRulesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetMirrorRulesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetMirrorRulesRequest;
+
+        /**
+         * Creates a plain object from a GetMirrorRulesRequest message. Also converts values to other types if specified.
+         * @param message GetMirrorRulesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetMirrorRulesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetMirrorRulesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetMirrorRulesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetMirrorRulesResponse. */
+    interface IGetMirrorRulesResponse {
+
+        /** GetMirrorRulesResponse mirror_rules */
+        mirror_rules?: (vschema.IMirrorRules|null);
+    }
+
+    /** Represents a GetMirrorRulesResponse. */
+    class GetMirrorRulesResponse implements IGetMirrorRulesResponse {
+
+        /**
+         * Constructs a new GetMirrorRulesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetMirrorRulesResponse);
+
+        /** GetMirrorRulesResponse mirror_rules. */
+        public mirror_rules?: (vschema.IMirrorRules|null);
+
+        /**
+         * Creates a new GetMirrorRulesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetMirrorRulesResponse instance
+         */
+        public static create(properties?: vtctldata.IGetMirrorRulesResponse): vtctldata.GetMirrorRulesResponse;
+
+        /**
+         * Encodes the specified GetMirrorRulesResponse message. Does not implicitly {@link vtctldata.GetMirrorRulesResponse.verify|verify} messages.
+         * @param message GetMirrorRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetMirrorRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetMirrorRulesResponse message, length delimited. Does not implicitly {@link vtctldata.GetMirrorRulesResponse.verify|verify} messages.
+         * @param message GetMirrorRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetMirrorRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetMirrorRulesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetMirrorRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetMirrorRulesResponse;
+
+        /**
+         * Decodes a GetMirrorRulesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetMirrorRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetMirrorRulesResponse;
+
+        /**
+         * Verifies a GetMirrorRulesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetMirrorRulesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetMirrorRulesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetMirrorRulesResponse;
+
+        /**
+         * Creates a plain object from a GetMirrorRulesResponse message. Also converts values to other types if specified.
+         * @param message GetMirrorRulesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetMirrorRulesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetMirrorRulesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetMirrorRulesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a WorkflowMirrorTrafficRequest. */
+    interface IWorkflowMirrorTrafficRequest {
+
+        /** WorkflowMirrorTrafficRequest keyspace */
+        keyspace?: (string|null);
+
+        /** WorkflowMirrorTrafficRequest workflow */
+        workflow?: (string|null);
+
+        /** WorkflowMirrorTrafficRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** WorkflowMirrorTrafficRequest percent */
+        percent?: (number|null);
+    }
+
+    /** Represents a WorkflowMirrorTrafficRequest. */
+    class WorkflowMirrorTrafficRequest implements IWorkflowMirrorTrafficRequest {
+
+        /**
+         * Constructs a new WorkflowMirrorTrafficRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowMirrorTrafficRequest);
+
+        /** WorkflowMirrorTrafficRequest keyspace. */
+        public keyspace: string;
+
+        /** WorkflowMirrorTrafficRequest workflow. */
+        public workflow: string;
+
+        /** WorkflowMirrorTrafficRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /** WorkflowMirrorTrafficRequest percent. */
+        public percent: number;
+
+        /**
+         * Creates a new WorkflowMirrorTrafficRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowMirrorTrafficRequest instance
+         */
+        public static create(properties?: vtctldata.IWorkflowMirrorTrafficRequest): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficRequest message. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficRequest.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowMirrorTrafficRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficRequest.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowMirrorTrafficRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowMirrorTrafficRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowMirrorTrafficRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Verifies a WorkflowMirrorTrafficRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowMirrorTrafficRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowMirrorTrafficRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Creates a plain object from a WorkflowMirrorTrafficRequest message. Also converts values to other types if specified.
+         * @param message WorkflowMirrorTrafficRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowMirrorTrafficRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowMirrorTrafficRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowMirrorTrafficRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a WorkflowMirrorTrafficResponse. */
+    interface IWorkflowMirrorTrafficResponse {
+
+        /** WorkflowMirrorTrafficResponse summary */
+        summary?: (string|null);
+
+        /** WorkflowMirrorTrafficResponse start_state */
+        start_state?: (string|null);
+
+        /** WorkflowMirrorTrafficResponse current_state */
+        current_state?: (string|null);
+    }
+
+    /** Represents a WorkflowMirrorTrafficResponse. */
+    class WorkflowMirrorTrafficResponse implements IWorkflowMirrorTrafficResponse {
+
+        /**
+         * Constructs a new WorkflowMirrorTrafficResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowMirrorTrafficResponse);
+
+        /** WorkflowMirrorTrafficResponse summary. */
+        public summary: string;
+
+        /** WorkflowMirrorTrafficResponse start_state. */
+        public start_state: string;
+
+        /** WorkflowMirrorTrafficResponse current_state. */
+        public current_state: string;
+
+        /**
+         * Creates a new WorkflowMirrorTrafficResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowMirrorTrafficResponse instance
+         */
+        public static create(properties?: vtctldata.IWorkflowMirrorTrafficResponse): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficResponse message. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficResponse.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowMirrorTrafficResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficResponse.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowMirrorTrafficResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowMirrorTrafficResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowMirrorTrafficResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Verifies a WorkflowMirrorTrafficResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowMirrorTrafficResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowMirrorTrafficResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Creates a plain object from a WorkflowMirrorTrafficResponse message. Also converts values to other types if specified.
+         * @param message WorkflowMirrorTrafficResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowMirrorTrafficResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowMirrorTrafficResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowMirrorTrafficResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }

@@ -50,7 +50,6 @@ import (
 // Probe is the minimal configuration required to connect to a MySQL server
 type Probe struct {
 	Alias           string
-	MetricQuery     string
 	Tablet          *topodatapb.Tablet
 	CacheMillis     int
 	QueryInProgress int64
@@ -61,7 +60,6 @@ type Probes map[string](*Probe)
 
 // ClusterProbes has the probes for a specific cluster
 type ClusterProbes struct {
-	ClusterName          string
 	IgnoreHostsCount     int
 	IgnoreHostsThreshold float64
 	TabletProbes         Probes

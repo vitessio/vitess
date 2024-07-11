@@ -61,6 +61,7 @@ type State struct {
 	SourceKeyspace string
 	TargetKeyspace string
 	WorkflowType   Type
+	IsReverse      bool
 
 	ReplicaCellsSwitched    []string
 	ReplicaCellsNotSwitched []string

@@ -467,6 +467,63 @@
     }
   },
   {
+    "comment": "json_arrayagg in single sharded query",
+    "query": "select count(1) from user where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(1) from user where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(1) from `user` where 1 != 1 group by n_id",
+        "Query": "select count(1) from `user` where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+        "Table": "`user`",
+        "Values": [
+          "'abc'"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_objectagg in single sharded query",
+    "query": "select count(1) from user where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(1) from user where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(1) from `user` where 1 != 1 group by n_id",
+        "Query": "select count(1) from `user` where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
+        "Table": "`user`",
+        "Values": [
+          "'abc'"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "unsupported json aggregation expressions in scatter query",
+    "query": "select count(1) from user where cola = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+    "plan": "VT12001: unsupported: in scatter query: aggregation function 'json_arrayagg(a_id)'"
+  },
+  {
     "comment": "Cannot auto-resolve for cross-shard joins",
     "query": "select col from user join user_extra",
     "plan": "Column 'col' in field list is ambiguous"
@@ -1361,8 +1418,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, :__sq1 as `(select col from ``user``)` from unsharded where 1 != 1",
-            "Query": "select a, :__sq1 as `(select col from ``user``)` from unsharded",
+            "FieldQuery": "select a, :__sq1 /* INT16 */ as `(select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, :__sq1 /* INT16 */ as `(select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -1406,8 +1463,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded where 1 != 1",
-            "Query": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded",
+            "FieldQuery": "select a, 1 + :__sq1 /* INT16 */ as `1 + (select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, 1 + :__sq1 /* INT16 */ as `1 + (select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -2176,7 +2233,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user` where `user`.col = :t_title and `user`.id <= 4",
+            "Query": "select `user`.col from `user` where `user`.col = :t_title /* VARCHAR */ and `user`.id <= 4",
             "Table": "`user`"
           }
         ]
@@ -2453,8 +2510,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select t.a from (select :__sq1 as a from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select t.a from (select :__sq1 as a from `user`) as t",
+                "FieldQuery": "select t.a from (select :__sq1 /* INT16 */ as a from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.a from (select :__sq1 /* INT16 */ as a from `user`) as t",
                 "Table": "`user`"
               }
             ]
@@ -2523,8 +2580,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
-                "Query": "select :__sq1 as a from `user`",
+                "FieldQuery": "select :__sq1 /* INT16 */ as a from `user` where 1 != 1",
+                "Query": "select :__sq1 /* INT16 */ as a from `user`",
                 "Table": "`user`"
               }
             ]
@@ -2650,6 +2707,58 @@
             },
             "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
             "Query": "select user_extra.user_id from user_extra where user_extra.foo = :user_id",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "PullOut subquery with an aggregation that should be typed in the final output",
+    "query": "select (select sum(col) from user) from user_extra",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select (select sum(col) from user) from user_extra",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS sum(col)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(col) from `user` where 1 != 1",
+                "Query": "select sum(col) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from ``user``)` from user_extra where 1 != 1",
+            "Query": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from ``user``)` from user_extra",
             "Table": "user_extra"
           }
         ]
@@ -2858,7 +2967,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                    "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col limit 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u1_col /* INT16 */ and ue.col = :u2_col /* INT16 */ limit 1",
                     "Table": "user_extra"
                   }
                 ]
@@ -2915,7 +3024,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                    "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col limit 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u_col /* INT16 */ and ue.col2 = :u_col /* INT16 */ limit 1",
                     "Table": "user_extra"
                   }
                 ]
@@ -3054,8 +3163,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where 1 != 1",
-            "Query": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where `user`.id = :user_extra_id",
+            "FieldQuery": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + ``user``.col` from `user` where 1 != 1",
+            "Query": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + ``user``.col` from `user` where `user`.id = :user_extra_id",
             "Table": "`user`",
             "Values": [
               ":user_extra_id"
@@ -3632,7 +3741,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_metadata.user_id from user_extra, user_metadata where 1 != 1",
-            "Query": "select user_metadata.user_id from user_extra, user_metadata where user_extra.col = :user_col and user_extra.user_id = user_metadata.user_id",
+            "Query": "select user_metadata.user_id from user_extra, user_metadata where user_extra.col = :user_col /* INT16 */ and user_extra.user_id = user_metadata.user_id",
             "Table": "user_extra, user_metadata"
           }
         ]
@@ -4241,8 +4350,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(music.id), weight_string(music.id) from music where 1 != 1 group by weight_string(music.id)",
-                "Query": "select max(music.id), weight_string(music.id) from music where music.user_id in ::__vals group by weight_string(music.id)",
+                "FieldQuery": "select max(music.id), weight_string(max(music.id)) from music where 1 != 1",
+                "Query": "select max(music.id), weight_string(max(music.id)) from music where music.user_id in ::__vals",
                 "Table": "music",
                 "Values": [
                   "(5, 6)"

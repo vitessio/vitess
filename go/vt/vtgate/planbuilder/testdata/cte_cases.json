@@ -488,9 +488,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo), weight_string(baz)",
+                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user`) as f group by foo, weight_string(foo), weight_string(baz) order by foo asc",
+                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
                 "Table": "`user`"
               }
             ]
@@ -1132,7 +1132,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */",
             "Table": "user_extra"
           }
         ]

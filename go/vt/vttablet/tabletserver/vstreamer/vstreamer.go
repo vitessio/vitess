@@ -642,15 +642,23 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
 				vs.vse.env.Config().DB.Flavor)
 		}
-		tpevents, err := ev.TransactionPayload(vs.format)
+		tp, err := ev.TransactionPayload(vs.format)
 		if err != nil {
 			return nil, err
 		}
+		defer tp.Close()
 		// Events inside the payload don't have their own checksum.
 		ogca := vs.format.ChecksumAlgorithm
 		defer func() { vs.format.ChecksumAlgorithm = ogca }()
 		vs.format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
-		for _, tpevent := range tpevents {
+		for {
+			tpevent, err := tp.GetNextEvent()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, err
+			}
 			tpvevents, err := vs.parseEvent(tpevent)
 			if err != nil {
 				return nil, vterrors.Wrap(err, "failed to parse transaction payload's internal event")
