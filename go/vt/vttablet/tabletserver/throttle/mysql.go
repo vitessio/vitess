@@ -46,13 +46,12 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
 )
 
 func aggregateMetricResults(
 	ctx context.Context,
 	metricName base.MetricName,
-	tabletResultsMap mysql.TabletResultMap,
+	tabletResultsMap base.TabletResultMap,
 	ignoreHostsCount int,
 	IgnoreDialTCPErrors bool,
 	ignoreHostsThreshold float64,

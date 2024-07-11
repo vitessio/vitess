@@ -78,7 +78,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -180,12 +179,12 @@ type Throttler struct {
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
-	throttleMetricChan     chan *mysql.ThrottleMetric
-	mysqlClusterProbesChan chan *mysql.ClusterProbes
+	throttleMetricChan     chan *base.ThrottleMetric
+	mysqlClusterProbesChan chan *base.ClusterProbes
 	throttlerConfigChan    chan *topodatapb.ThrottlerConfig
 	serialFuncChan         chan func() // Used by unit tests to inject non-racy behavior
 
-	mysqlInventory *mysql.Inventory
+	mysqlInventory *base.Inventory
 
 	metricsQuery       atomic.Value
 	customMetricsQuery atomic.Value
@@ -205,7 +204,7 @@ type Throttler struct {
 	cancelEnableContext context.CancelFunc
 	throttledAppsMutex  sync.Mutex
 
-	readSelfThrottleMetrics func(context.Context) mysql.ThrottleMetrics // overwritten by unit test
+	readSelfThrottleMetrics func(context.Context) base.ThrottleMetrics // overwritten by unit test
 
 	httpClient *http.Client
 
@@ -251,11 +250,11 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		}),
 	}
 
-	throttler.throttleMetricChan = make(chan *mysql.ThrottleMetric)
-	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
+	throttler.throttleMetricChan = make(chan *base.ThrottleMetric)
+	throttler.mysqlClusterProbesChan = make(chan *base.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.serialFuncChan = make(chan func())
-	throttler.mysqlInventory = mysql.NewInventory()
+	throttler.mysqlInventory = base.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
 	throttler.metricThresholds = cache.New(cache.NoExpiration, 0)
@@ -282,7 +281,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	}
 
 	throttler.StoreMetricsThreshold(defaultThresholds[base.LagMetricName])
-	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.ThrottleMetrics {
+	throttler.readSelfThrottleMetrics = func(ctx context.Context) base.ThrottleMetrics {
 		return throttler.readSelfThrottleMetricsInternal(ctx)
 	}
 
@@ -727,8 +726,8 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 	return nil
 }
 
-func (throttler *Throttler) readSelfLoadAvgPerCore(ctx context.Context) *mysql.ThrottleMetric {
-	metric := &mysql.ThrottleMetric{
+func (throttler *Throttler) readSelfLoadAvgPerCore(ctx context.Context) *base.ThrottleMetric {
+	metric := &base.ThrottleMetric{
 		Scope: base.SelfScope,
 		Alias: throttler.tabletAlias,
 	}
@@ -780,8 +779,8 @@ func (throttler *Throttler) readSelfLoadAvgPerCore(ctx context.Context) *mysql.T
 }
 
 // readSelfThrottleMetric reads the mysql metric from thi very tablet's backend mysql.
-func (throttler *Throttler) readSelfThrottleMetric(ctx context.Context, query string) *mysql.ThrottleMetric {
-	metric := &mysql.ThrottleMetric{
+func (throttler *Throttler) readSelfThrottleMetric(ctx context.Context, query string) *base.ThrottleMetric {
+	metric := &base.ThrottleMetric{
 		Scope: base.SelfScope,
 		Alias: throttler.tabletAlias,
 	}
@@ -803,15 +802,15 @@ func (throttler *Throttler) readSelfThrottleMetric(ctx context.Context, query st
 		return metric.WithError(fmt.Errorf("no results for readSelfThrottleMetric"))
 	}
 
-	metricsQueryType := mysql.GetMetricsQueryType(query)
+	metricsQueryType := base.GetMetricsQueryType(query)
 	switch metricsQueryType {
-	case mysql.MetricsQueryTypeSelect:
+	case base.MetricsQueryTypeSelect:
 		// We expect a single row, single column result.
 		// The "for" iteration below is just a way to get first result without knowing column name
 		for k := range row {
 			metric.Value, metric.Err = row.ToFloat64(k)
 		}
-	case mysql.MetricsQueryTypeShowGlobal:
+	case base.MetricsQueryTypeShowGlobal:
 		metric.Value, metric.Err = strconv.ParseFloat(row["Value"].ToString(), 64)
 	default:
 		metric.Err = fmt.Errorf("Unsupported metrics query type for query: %s", throttler.GetMetricsQuery())
@@ -997,11 +996,11 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	}()
 }
 
-func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClient tmclient.TabletManagerClient, probe *mysql.Probe) (probeFunc func(context.Context) mysql.ThrottleMetrics) {
-	metricsWithError := func(err error) mysql.ThrottleMetrics {
-		metrics := mysql.ThrottleMetrics{}
+func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClient tmclient.TabletManagerClient, probe *base.Probe) (probeFunc func(context.Context) base.ThrottleMetrics) {
+	metricsWithError := func(err error) base.ThrottleMetrics {
+		metrics := base.ThrottleMetrics{}
 		for _, metricName := range base.KnownMetricNames {
-			metrics[metricName] = &mysql.ThrottleMetric{
+			metrics[metricName] = &base.ThrottleMetric{
 				Name:  metricName,
 				Scope: scope,
 				Alias: probe.Alias,
@@ -1010,13 +1009,13 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		}
 		return metrics
 	}
-	return func(ctx context.Context) mysql.ThrottleMetrics {
+	return func(ctx context.Context) base.ThrottleMetrics {
 		// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
 		ctx, cancel := context.WithTimeout(ctx, 4*activeCollectInterval)
 		defer cancel()
 
 		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a ThrottleMetric
-		throttleMetric := mysql.NewThrottleMetric()
+		throttleMetric := base.NewThrottleMetric()
 		throttleMetric.Name = base.DefaultMetricName
 		throttleMetric.Scope = scope
 		throttleMetric.Alias = probe.Alias
@@ -1024,7 +1023,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		if probe.Tablet == nil {
 			return metricsWithError(fmt.Errorf("found nil tablet reference for alias '%v'", probe.Alias))
 		}
-		metrics := make(mysql.ThrottleMetrics)
+		metrics := make(base.ThrottleMetrics)
 
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{MultiMetricsEnabled: true} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
@@ -1043,7 +1042,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		}
 		for name, metric := range resp.Metrics {
 			metricName := base.MetricName(name)
-			metrics[metricName] = &mysql.ThrottleMetric{
+			metrics[metricName] = &base.ThrottleMetric{
 				Name:  metricName,
 				Scope: scope,
 				Alias: probe.Alias,
@@ -1063,9 +1062,9 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 	}
 }
 
-func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context) mysql.ThrottleMetrics {
+func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context) base.ThrottleMetrics {
 
-	writeMetric := func(metricName base.MetricName, metric *mysql.ThrottleMetric) {
+	writeMetric := func(metricName base.MetricName, metric *base.ThrottleMetric) {
 		metric.Name = metricName
 		select {
 		case <-ctx.Done():
@@ -1096,7 +1095,7 @@ func (throttler *Throttler) collectSelfMySQLMetrics(ctx context.Context, tmClien
 		defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
 		// Throttler is probing its own tablet's metrics:
-		_ = mysql.ReadThrottleMetrics(ctx, probe, throttler.readSelfThrottleMetrics)
+		_ = base.ReadThrottleMetrics(ctx, probe, throttler.readSelfThrottleMetrics)
 	}()
 }
 
@@ -1108,7 +1107,7 @@ func (throttler *Throttler) collectShardMySQLMetrics(ctx context.Context, tmClie
 			// We skip collecting our own metrics
 			continue
 		}
-		go func(probe *mysql.Probe) {
+		go func(probe *base.Probe) {
 			// Avoid querying the same server twice at the same time. If previous read is still there,
 			// we avoid re-reading it.
 			if !atomic.CompareAndSwapInt64(&probe.QueryInProgress, 0, 1) {
@@ -1119,7 +1118,7 @@ func (throttler *Throttler) collectShardMySQLMetrics(ctx context.Context, tmClie
 			// Throttler probing other tablets:
 			throttleMetricFunc := throttler.generateTabletProbeFunction(base.ShardScope, tmClient, probe)
 
-			throttleMetrics := mysql.ReadThrottleMetrics(ctx, probe, throttleMetricFunc)
+			throttleMetrics := base.ReadThrottleMetrics(ctx, probe, throttleMetricFunc)
 			for _, metric := range throttleMetrics {
 				select {
 				case <-ctx.Done():
@@ -1134,7 +1133,7 @@ func (throttler *Throttler) collectShardMySQLMetrics(ctx context.Context, tmClie
 // refreshMySQLInventory will re-structure the inventory based on reading config settings
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
-	addProbe := func(alias string, tablet *topodatapb.Tablet, scope base.Scope, mysqlSettings *config.MySQLConfigurationSettings, probes mysql.Probes) bool {
+	addProbe := func(alias string, tablet *topodatapb.Tablet, scope base.Scope, mysqlSettings *config.MySQLConfigurationSettings, probes base.Probes) bool {
 		for _, ignore := range mysqlSettings.IgnoreHosts {
 			if strings.Contains(alias, ignore) {
 				log.Infof("Throttler: tablet ignored: %+v", alias)
@@ -1152,7 +1151,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			}
 		}
 
-		probe := &mysql.Probe{
+		probe := &base.Probe{
 			Alias:       alias,
 			Tablet:      tablet,
 			CacheMillis: mysqlSettings.CacheMillis,
@@ -1161,7 +1160,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		return true
 	}
 
-	attemptWriteProbes := func(clusterProbes *mysql.ClusterProbes) error {
+	attemptWriteProbes := func(clusterProbes *base.ClusterProbes) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1188,9 +1187,9 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)
 	// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 	collect := func() error {
-		clusterProbes := &mysql.ClusterProbes{
+		clusterProbes := &base.ClusterProbes{
 			IgnoreHostsCount: clusterSettingsCopy.IgnoreHostsCount,
-			TabletProbes:     mysql.NewProbes(),
+			TabletProbes:     base.NewProbes(),
 		}
 		// self tablet
 		addProbe(throttler.tabletAlias, nil, base.SelfScope, &clusterSettingsCopy, clusterProbes.TabletProbes)
@@ -1233,7 +1232,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 }
 
 // synchronous update of inventory
-func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, clusterProbes *mysql.ClusterProbes) error {
+func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, clusterProbes *base.ClusterProbes) error {
 	throttler.mysqlInventory.ClustersProbes = clusterProbes.TabletProbes
 	throttler.mysqlInventory.IgnoreHostsCount = clusterProbes.IgnoreHostsCount
 	throttler.mysqlInventory.IgnoreHostsThreshold = clusterProbes.IgnoreHostsThreshold
@@ -1250,7 +1249,7 @@ func (throttler *Throttler) metricNameUsedAsDefault() base.MetricName {
 // synchronous aggregation of collected data
 func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
-	aggregateTabletsMetrics := func(scope base.Scope, metricName base.MetricName, tabletResultsMap mysql.TabletResultMap) {
+	aggregateTabletsMetrics := func(scope base.Scope, metricName base.MetricName, tabletResultsMap base.TabletResultMap) {
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold
 		ignoreDialTCPErrors := throttler.configSettings.MySQLStore.IgnoreDialTCPErrors

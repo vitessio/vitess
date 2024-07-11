@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -47,26 +46,26 @@ import (
 )
 
 var (
-	selfMetrics = mysql.ThrottleMetrics{
-		base.LagMetricName: &mysql.ThrottleMetric{
+	selfMetrics = base.ThrottleMetrics{
+		base.LagMetricName: &base.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 0.3,
 			Err:   nil,
 		},
-		base.ThreadsRunningMetricName: &mysql.ThrottleMetric{
+		base.ThreadsRunningMetricName: &base.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 26,
 			Err:   nil,
 		},
-		base.CustomMetricName: &mysql.ThrottleMetric{
+		base.CustomMetricName: &base.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 17,
 			Err:   nil,
 		},
-		base.LoadAvgMetricName: &mysql.ThrottleMetric{
+		base.LoadAvgMetricName: &base.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 2.718,
@@ -234,10 +233,10 @@ func newTestThrottler() *Throttler {
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TabletServerTest")
 	throttler := &Throttler{
-		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
+		mysqlClusterProbesChan: make(chan *base.ClusterProbes),
 		heartbeatWriter:        &FakeHeartbeatWriter{},
 		ts:                     &FakeTopoServer{},
-		mysqlInventory:         mysql.NewInventory(),
+		mysqlInventory:         base.NewInventory(),
 		pool:                   connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{}),
 		tabletTypeFunc:         func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
 		overrideTmClient:       &fakeTMClient{},
@@ -246,11 +245,11 @@ func newTestThrottler() *Throttler {
 	throttler.MetricsThreshold.Store(math.Float64bits(0.75))
 	throttler.configSettings = config.NewConfigurationSettings()
 	throttler.initConfig()
-	throttler.throttleMetricChan = make(chan *mysql.ThrottleMetric)
-	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
+	throttler.throttleMetricChan = make(chan *base.ThrottleMetric)
+	throttler.mysqlClusterProbesChan = make(chan *base.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.serialFuncChan = make(chan func())
-	throttler.mysqlInventory = mysql.NewInventory()
+	throttler.mysqlInventory = base.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
 	throttler.metricThresholds = cache.New(cache.NoExpiration, 0)
@@ -272,7 +271,7 @@ func newTestThrottler() *Throttler {
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 	throttler.recentCheckDiff = int64(3 * time.Second / recentCheckRateLimiterInterval)
 
-	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.ThrottleMetrics {
+	throttler.readSelfThrottleMetrics = func(ctx context.Context) base.ThrottleMetrics {
 		for _, metric := range selfMetrics {
 			go func() {
 				select {
@@ -902,10 +901,10 @@ func TestRefreshMySQLInventory(t *testing.T) {
 	configSettings := config.NewConfigurationSettings()
 
 	throttler := &Throttler{
-		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
+		mysqlClusterProbesChan: make(chan *base.ClusterProbes),
 		metricThresholds:       cache.New(cache.NoExpiration, 0),
 		ts:                     &FakeTopoServer{},
-		mysqlInventory:         mysql.NewInventory(),
+		mysqlInventory:         base.NewInventory(),
 	}
 	throttler.metricsQuery.Store(metricsQuery)
 	throttler.configSettings = configSettings
@@ -916,7 +915,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 		testName := fmt.Sprintf("leader=%t", throttler.isLeader.Load())
 		t.Run(testName, func(t *testing.T) {
 			// validateProbesCount expects number of probes according to cluster name and throttler's leadership status
-			validateProbesCount := func(t *testing.T, probes mysql.Probes) {
+			validateProbesCount := func(t *testing.T, probes base.Probes) {
 				if throttler.isLeader.Load() {
 					assert.Equal(t, 3, len(probes))
 				} else {

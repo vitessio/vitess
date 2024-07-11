@@ -39,7 +39,7 @@ limitations under the License.
 	SOFTWARE.
 */
 
-package mysql
+package base
 
 import (
 	"context"
@@ -49,7 +49,6 @@ import (
 	"github.com/patrickmn/go-cache"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
 // MetricsQueryType indicates the type of metrics query on MySQL backend. See following.
@@ -111,14 +110,14 @@ func GetMetricsQueryType(query string) MetricsQueryType {
 
 // ThrottleMetric has the probed metric for a tablet
 type ThrottleMetric struct { // nolint:revive
-	Name  base.MetricName
-	Scope base.Scope
+	Name  MetricName
+	Scope Scope
 	Alias string
 	Value float64
 	Err   error
 }
 
-type ThrottleMetrics map[base.MetricName]*ThrottleMetric // nolint:revive
+type ThrottleMetrics map[MetricName]*ThrottleMetric // nolint:revive
 
 // NewThrottleMetric creates a new ThrottleMetric
 func NewThrottleMetric() *ThrottleMetric {

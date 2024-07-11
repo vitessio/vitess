@@ -39,14 +39,10 @@ limitations under the License.
 	SOFTWARE.
 */
 
-package mysql
-
-import (
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
-)
+package base
 
 // TabletResultMap maps a tablet to a result
-type TabletResultMap map[string]base.MetricResultMap
+type TabletResultMap map[string]MetricResultMap
 
 func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, all TabletResultMap) {
 	withAlias = make(TabletResultMap)

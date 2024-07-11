@@ -46,7 +46,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -80,7 +79,7 @@ func noSuchMetricMap() base.MetricResultMap {
 
 func TestAggregateMetricResultsNoErrors(t *testing.T) {
 	ctx := context.Background()
-	tabletResultsMap := mysql.TabletResultMap{
+	tabletResultsMap := base.TabletResultMap{
 		alias1: newMetricResultMap(1.2),
 		alias2: newMetricResultMap(1.7),
 		alias3: newMetricResultMap(0.3),
@@ -128,7 +127,7 @@ func TestAggregateMetricResultsNoErrors(t *testing.T) {
 
 func TestAggregateMetricResultsNoErrorsIgnoreHostsThreshold(t *testing.T) {
 	ctx := context.Background()
-	tabletResultsMap := mysql.TabletResultMap{
+	tabletResultsMap := base.TabletResultMap{
 		alias1: newMetricResultMap(1.2),
 		alias2: newMetricResultMap(1.7),
 		alias3: newMetricResultMap(0.3),
@@ -176,7 +175,7 @@ func TestAggregateMetricResultsNoErrorsIgnoreHostsThreshold(t *testing.T) {
 
 func TestAggregateMetricResultsWithErrors(t *testing.T) {
 	ctx := context.Background()
-	tabletResultsMap := mysql.TabletResultMap{
+	tabletResultsMap := base.TabletResultMap{
 		alias1: newMetricResultMap(1.2),
 		alias2: newMetricResultMap(1.7),
 		alias3: newMetricResultMap(0.3),
