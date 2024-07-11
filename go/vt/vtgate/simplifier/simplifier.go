@@ -142,12 +142,15 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 }
 
 func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) (res sqlparser.SelectStatement) {
+	unionDescr := sqlparser.String(in)
 	if union, ok := in.(*sqlparser.Union); ok {
 		// the root object is an UNION
 		if test(sqlparser.Clone(union.Left)) {
+			log.Errorf("simplified UNION: %s -> %s", unionDescr, sqlparser.String(union.Left))
 			return union.Left
 		}
 		if test(sqlparser.Clone(union.Right)) {
+			log.Errorf("simplified UNION: %s -> %s", unionDescr, sqlparser.String(union.Right))
 			return union.Right
 		}
 	}
@@ -186,7 +189,7 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 	sqlparser.SafeRewrite(in, alwaysVisitChildren, up)
 
 	if simplified {
-
+		log.Errorf("simplified UNION: %s -> %s", unionDescr, sqlparser.String(in))
 		return in
 	}
 	// we found no simplifications

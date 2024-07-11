@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -76,6 +77,42 @@ func TestSimplifyPanic(t *testing.T) {
 		vschema.CurrentDb(),
 		vschema,
 		keepPanicking(query, reservedVars, vschema, rewritten.BindVarNeeds),
+	)
+
+	fmt.Println(sqlparser.String(simplified))
+}
+
+func TestSimplifyPlanContainsString(t *testing.T) {
+	t.Skip("run manually to see if any queries can be simplified")
+	query := "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:       loadSchema(t, "vschemas/schema.json", true),
+		Version: Gen4,
+		Env:     vtenv.NewTestEnv(),
+	}
+	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
+	require.NoError(t, err)
+	_, _ = sqlparser.RewriteAST(sqlparser.Clone(stmt), vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+
+	simplified := simplifier.SimplifyStatement(
+		stmt.(sqlparser.SelectStatement),
+		vschema.CurrentDb(),
+		vschema,
+		func(statement sqlparser.SelectStatement) bool {
+			stmt, _, err := sqlparser.NewTestParser().Parse2(query)
+			if err != nil {
+				panic(err)
+			}
+			rewritten, _ := sqlparser.RewriteAST(stmt, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+			ast := rewritten.AST
+			plan, err := BuildFromStmt(context.Background(), query, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
+			if err != nil {
+				return false // if it doesn't build, it's not what we are looking for
+			}
+			planDescr := getPlanOrErrorOutput(nil, plan)
+			return strings.Contains(planDescr, "unsharded_auto")
+		},
 	)
 
 	fmt.Println(sqlparser.String(simplified))
