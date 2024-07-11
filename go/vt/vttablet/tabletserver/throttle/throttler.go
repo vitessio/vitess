@@ -1527,7 +1527,7 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 	return metricResultFunc()
 }
 
-// checkScope checks the aggregated value of given MySQL store
+// checkScope checks the aggregated value of given store
 func (throttler *Throttler) checkScope(ctx context.Context, appName string, scope base.Scope, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
 	if !throttler.IsRunning() {
 		return okMetricCheckResult
