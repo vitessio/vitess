@@ -2529,6 +2529,7 @@ func (m *CheckThrottlerResponse) CloneVT() *CheckThrottlerResponse {
 		Error:           m.Error,
 		Message:         m.Message,
 		RecentlyChecked: m.RecentlyChecked,
+		AppName:         m.AppName,
 	}
 	if rhs := m.Metrics; rhs != nil {
 		tmpContainer := make(map[string]*CheckThrottlerResponse_Metric, len(rhs))
@@ -8833,6 +8834,13 @@ func (m *CheckThrottlerResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.AppName) > 0 {
+		i -= len(m.AppName)
+		copy(dAtA[i:], m.AppName)
+		i = encodeVarint(dAtA, i, uint64(len(m.AppName)))
+		i--
+		dAtA[i] = 0x42
+	}
 	if len(m.Metrics) > 0 {
 		for k := range m.Metrics {
 			v := m.Metrics[k]
@@ -11565,6 +11573,10 @@ func (m *CheckThrottlerResponse) SizeVT() (n int) {
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + l
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
+	}
+	l = len(m.AppName)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -25593,6 +25605,38 @@ func (m *CheckThrottlerResponse) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Metrics[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AppName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AppName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

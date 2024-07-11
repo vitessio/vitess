@@ -30653,6 +30653,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse metrics */
         metrics?: ({ [k: string]: tabletmanagerdata.CheckThrottlerResponse.IMetric }|null);
+
+        /** CheckThrottlerResponse app_name */
+        app_name?: (string|null);
     }
 
     /** Represents a CheckThrottlerResponse. */
@@ -30684,6 +30687,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse metrics. */
         public metrics: { [k: string]: tabletmanagerdata.CheckThrottlerResponse.IMetric };
+
+        /** CheckThrottlerResponse app_name. */
+        public app_name: string;
 
         /**
          * Creates a new CheckThrottlerResponse instance using the specified properties.
