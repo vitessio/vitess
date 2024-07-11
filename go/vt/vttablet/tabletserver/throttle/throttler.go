@@ -1282,7 +1282,7 @@ func (throttler *Throttler) getAggregatedMetric(aggregatedName string) base.Metr
 	return base.NoSuchMetric
 }
 
-func (throttler *Throttler) getMySQLStoreMetric(ctx context.Context, scope base.Scope, metricName base.MetricName) (base.MetricResult, float64) {
+func (throttler *Throttler) getScopedMetric(scope base.Scope, metricName base.MetricName) (base.MetricResult, float64) {
 	thresholdVal, found := throttler.metricThresholds.Get(metricName.String())
 	if !found {
 		return base.NoSuchMetric, 0
