@@ -674,25 +674,6 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 	return evalengine.NewUnknownType(), false
 }
 
-// NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
-func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
-	switch e := e.(type) {
-	case *sqlparser.WeightStringFuncExpr, *sqlparser.Literal:
-		return false
-	default:
-		typ, found := st.ExprTypes[e]
-		if !found {
-			return true
-		}
-
-		if !sqltypes.IsText(typ.Type()) {
-			return false
-		}
-
-		return !st.collEnv.IsSupported(typ.Collation())
-	}
-}
-
 func (st *SemTable) DefaultCollation() collations.ID {
 	return st.Collation
 }

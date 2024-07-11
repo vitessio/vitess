@@ -55,8 +55,6 @@ const (
 	BinlogFixedHeaderLen = 19
 	// The offset from 0 where the type is stored as 1 byte.
 	BinlogEventTypeOffset = 4
-	// Offset from 0 where the 4 byte length is stored.
-	BinlogEventLenOffset = 9
 	// Byte length of the checksum suffix when the CRC32 algorithm is used.
 	BinlogCRC32ChecksumLen = 4
 )

@@ -212,3 +212,39 @@ func (ts *Server) GetKeyspaceRoutingRules(ctx context.Context) (*vschemapb.Keysp
 	}
 	return rules, nil
 }
+
+// GetMirrorRules fetches the mirror rules from the topo.
+func (ts *Server) GetMirrorRules(ctx context.Context) (*vschemapb.MirrorRules, error) {
+	rr := &vschemapb.MirrorRules{}
+	data, _, err := ts.globalCell.Get(ctx, MirrorRulesFile)
+	if err != nil {
+		if IsErrType(err, NoNode) {
+			return rr, nil
+		}
+		return nil, err
+	}
+	err = rr.UnmarshalVT(data)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "bad mirror rules data: %q", data)
+	}
+	return rr, nil
+}
+
+// SaveMirrorRules saves the mirror rules into the topo.
+func (ts *Server) SaveMirrorRules(ctx context.Context, mirrorRules *vschemapb.MirrorRules) error {
+	data, err := mirrorRules.MarshalVT()
+	if err != nil {
+		return err
+	}
+
+	if len(data) == 0 {
+		// No vschema, remove it. So we can remove the keyspace.
+		if err := ts.globalCell.Delete(ctx, MirrorRulesFile, nil); err != nil && !IsErrType(err, NoNode) {
+			return err
+		}
+		return nil
+	}
+
+	_, err = ts.globalCell.Update(ctx, MirrorRulesFile, data, nil)
+	return err
+}

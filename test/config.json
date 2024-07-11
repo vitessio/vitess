@@ -500,6 +500,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vtgate_connectiondrain": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/connectiondrain"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vtgate_queries_derived": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/derived"],

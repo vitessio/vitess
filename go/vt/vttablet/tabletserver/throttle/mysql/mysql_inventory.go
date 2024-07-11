@@ -45,35 +45,29 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
-// ClusterTablet combines a cluster name with a tablet alias
-type ClusterTablet struct {
-	ClusterName string
-	Alias       string
-}
+// TabletResultMap maps a tablet to a result
+type TabletResultMap map[string]base.MetricResultMap
 
-// GetClusterTablet creates a GetClusterTablet object
-func GetClusterTablet(clusterName string, alias string) ClusterTablet {
-	return ClusterTablet{ClusterName: clusterName, Alias: alias}
+func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, all TabletResultMap) {
+	withAlias = make(TabletResultMap)
+	if val, ok := m[alias]; ok {
+		withAlias[alias] = val
+	}
+	return withAlias, m
 }
-
-// TabletResultMap maps a cluster-tablet to a result
-type TabletResultMap map[ClusterTablet]base.MetricResult
 
 // Inventory has the operational data about probes, their metrics, and relevant configuration
 type Inventory struct {
-	ClustersProbes       map[string](Probes)
-	IgnoreHostsCount     map[string]int
-	IgnoreHostsThreshold map[string]float64
+	ClustersProbes       Probes
+	IgnoreHostsCount     int
+	IgnoreHostsThreshold float64
 	TabletMetrics        TabletResultMap
 }
 
 // NewInventory creates a Inventory
 func NewInventory() *Inventory {
 	inventory := &Inventory{
-		ClustersProbes:       make(map[string](Probes)),
-		IgnoreHostsCount:     make(map[string]int),
-		IgnoreHostsThreshold: make(map[string]float64),
-		TabletMetrics:        make(map[ClusterTablet]base.MetricResult),
+		TabletMetrics: make(TabletResultMap),
 	}
 	return inventory
 }
