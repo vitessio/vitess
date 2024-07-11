@@ -318,6 +318,11 @@ func CreateKs(
 			return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
 		}
 
+		// make sure a valid vschema has been loaded
+		if err := ts.EnsureVSchema(ctx, keyspace); err != nil {
+			return 0, fmt.Errorf("EnsureVSchema(%v) failed: %v", keyspace, err)
+		}
+
 		// iterate through the shards
 		for _, spb := range kpb.Shards {
 			shard := spb.Name
