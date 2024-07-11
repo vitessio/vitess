@@ -94,13 +94,13 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 	// Handle deprioritized app logic
 	denyApp := false
 	//
-	metricResult, threshold := check.throttler.AppRequestMetricResult(ctx, appName, metricResultFunc, denyApp)
+	metricResult, threshold, matchedApp := check.throttler.AppRequestMetricResult(ctx, appName, metricResultFunc, denyApp)
 	if flags.OverrideThreshold > 0 {
 		threshold = flags.OverrideThreshold
 	}
 	value, err := metricResult.Get()
 	if appName == "" {
-		return NewCheckResult(http.StatusExpectationFailed, value, threshold, fmt.Errorf("no app indicated"))
+		return NewCheckResult(http.StatusExpectationFailed, value, threshold, "", fmt.Errorf("no app indicated"))
 	}
 
 	var statusCode int
@@ -123,7 +123,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 		// all good!
 		statusCode = http.StatusOK // 200
 	}
-	return NewCheckResult(statusCode, value, threshold, err)
+	return NewCheckResult(statusCode, value, threshold, matchedApp, err)
 }
 
 // Check is the core function that runs when a user wants to check a metric
@@ -142,6 +142,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		checkResult.Threshold = metric.Threshold
 		checkResult.Error = metric.Error
 		checkResult.Message = metric.Message
+		checkResult.AppName = metric.AppName
 	}
 	for _, metricName := range metricNames {
 		// Make sure not to modify the given scope. We create a new scope variable to work with.
@@ -190,6 +191,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			Threshold:  metricCheckResult.Threshold,
 			Error:      metricCheckResult.Error,
 			Message:    metricCheckResult.Message,
+			AppName:    metricCheckResult.AppName,
 			Scope:      metricScope.String(), // This reports back the actual scope used for the check
 		}
 		checkResult.Metrics[metricName.String()] = metric

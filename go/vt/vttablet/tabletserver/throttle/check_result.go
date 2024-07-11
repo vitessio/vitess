@@ -54,6 +54,7 @@ type MetricResult struct {
 	Threshold  float64 `json:"Threshold"`
 	Error      error   `json:"-"`
 	Message    string  `json:"Message"`
+	AppName    string  `json:"AppName"`
 }
 
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
@@ -64,15 +65,17 @@ type CheckResult struct {
 	Error           error                    `json:"-"`
 	Message         string                   `json:"Message"`
 	RecentlyChecked bool                     `json:"RecentlyChecked"`
+	AppName         string                   `json:"AppName"`
 	Metrics         map[string]*MetricResult `json:"Metrics"` // New in multi-metrics support. Will eventually replace the above fields.
 }
 
 // NewCheckResult returns a CheckResult
-func NewCheckResult(statusCode int, value float64, threshold float64, err error) *CheckResult {
+func NewCheckResult(statusCode int, value float64, threshold float64, appName string, err error) *CheckResult {
 	result := &CheckResult{
 		StatusCode: statusCode,
 		Value:      value,
 		Threshold:  threshold,
+		AppName:    appName,
 		Error:      err,
 	}
 	if err != nil {
@@ -87,12 +90,10 @@ func (c *CheckResult) IsOK() bool {
 
 // NewErrorCheckResult returns a check result that indicates an error
 func NewErrorCheckResult(statusCode int, err error) *CheckResult {
-	return NewCheckResult(statusCode, 0, 0, err)
+	return NewCheckResult(statusCode, 0, 0, "", err)
 }
 
 // NoSuchMetricCheckResult is a result returns when a metric is unknown
 var NoSuchMetricCheckResult = NewErrorCheckResult(http.StatusNotFound, base.ErrNoSuchMetric)
 
-var okMetricCheckResult = NewCheckResult(http.StatusOK, 0, 0, nil)
-
-var invalidCheckTypeCheckResult = NewErrorCheckResult(http.StatusInternalServerError, base.ErrInvalidCheckType)
+var okMetricCheckResult = NewCheckResult(http.StatusOK, 0, 0, "", nil)

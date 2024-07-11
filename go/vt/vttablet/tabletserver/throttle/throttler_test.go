@@ -790,10 +790,26 @@ func TestIsAppThrottled(t *testing.T) {
 		heartbeatWriter: &FakeHeartbeatWriter{},
 	}
 	t.Run("initial", func(t *testing.T) {
-		assert.False(t, throttler.IsAppThrottled("app1"))
-		assert.False(t, throttler.IsAppThrottled("app2"))
-		assert.False(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.False(t, throttled)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.False(t, throttled)
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled)
+			assert.Equal(t, "app4", app)
+		}
 
 		assert.Equal(t, 0, throttler.throttledApps.ItemCount())
 	})
@@ -803,11 +819,31 @@ func TestIsAppThrottled(t *testing.T) {
 		throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, false) // instantly expire
 		throttler.ThrottleApp("app3", plusOneHour, DefaultThrottleRatio, false)
 		throttler.ThrottleApp("app4", plusOneHour, 0, false)
-		assert.False(t, throttler.IsAppThrottled("app1")) // exempted
-		assert.False(t, throttler.IsAppThrottled("app2")) // expired
-		assert.True(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))      // ratio is zero
-		assert.False(t, throttler.IsAppThrottled("app_other")) // not specified
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled) // exempted
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.False(t, throttled) // expired
+			assert.Equal(t, "app2", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.True(t, throttled)
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled) // ratio is zero
+			assert.Equal(t, "app4", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app_other")
+			assert.False(t, throttled) // not specified
+			assert.Equal(t, "app_other", app)
+		}
 
 		assert.Equal(t, 3, throttler.throttledApps.ItemCount())
 	})
@@ -815,26 +851,67 @@ func TestIsAppThrottled(t *testing.T) {
 		// throttle "all", see how it affects app
 		throttler.ThrottleApp(throttlerapp.AllName.String(), plusOneHour, DefaultThrottleRatio, false)
 		defer throttler.UnthrottleApp(throttlerapp.AllName.String())
-		assert.True(t, throttler.IsAppThrottled("all"))   //
-		assert.False(t, throttler.IsAppThrottled("app1")) // exempted
-		assert.True(t, throttler.IsAppThrottled("app2"))  // expired, so falls under "all"
-		assert.True(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))     // ratio is zero, there is a specific instruction for this app, so it doesn't fall under "all"
-		assert.True(t, throttler.IsAppThrottled("app_other")) // falls under "all"
+		{
+			throttled, app := throttler.IsAppThrottled("all")
+			assert.True(t, throttled) // explicitly throttled
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled) // exempted
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.True(t, throttled) // expired, so falls under "all"
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.True(t, throttled)
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled) // ratio is zero, there is a specific instruction for this app, so it doesn't fall under "all"
+			assert.Equal(t, "app4", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app_other")
+			assert.True(t, throttled) // falls under "all"
+			assert.Equal(t, "all", app)
+		}
 
 		// continuing previous test, we had 3 throttled apps. "all" is a new app being throttled.
 		assert.Equal(t, 4, throttler.throttledApps.ItemCount())
 	})
-	//
+	// 	//
 	t.Run("unthrottle", func(t *testing.T) {
 		throttler.UnthrottleApp("app1")
 		throttler.UnthrottleApp("app2")
 		throttler.UnthrottleApp("app3")
 		throttler.UnthrottleApp("app4")
-		assert.False(t, throttler.IsAppThrottled("app1"))
-		assert.False(t, throttler.IsAppThrottled("app2"))
-		assert.False(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))
+
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.False(t, throttled)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.False(t, throttled)
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled)
+			assert.Equal(t, "app4", app)
+		}
 
 		// we've manually unthrottled everything
 		assert.Equal(t, 0, throttler.throttledApps.ItemCount())
@@ -843,12 +920,37 @@ func TestIsAppThrottled(t *testing.T) {
 		// throttle "all", see how it affects app
 		throttler.ThrottleApp(throttlerapp.AllName.String(), plusOneHour, DefaultThrottleRatio, false)
 		defer throttler.UnthrottleApp(throttlerapp.AllName.String())
-		assert.True(t, throttler.IsAppThrottled("all"))
-		assert.True(t, throttler.IsAppThrottled("app1"))
-		assert.True(t, throttler.IsAppThrottled("app2"))
-		assert.True(t, throttler.IsAppThrottled("app3"))
-		assert.True(t, throttler.IsAppThrottled("app4"))
-		assert.True(t, throttler.IsAppThrottled("app_other"))
+
+		{
+			throttled, app := throttler.IsAppThrottled("all")
+			assert.True(t, throttled) // explicitly throttled
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app_other")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
 
 		// one rule, for "all" app
 		assert.Equal(t, 1, throttler.throttledApps.ItemCount())
@@ -858,43 +960,120 @@ func TestIsAppThrottled(t *testing.T) {
 		throttler.ThrottleApp("app3", plusOneHour, DefaultThrottleRatio, false)
 		throttler.ThrottleApp(throttlerapp.AllName.String(), plusOneHour, DefaultThrottleRatio, true)
 		defer throttler.UnthrottleApp(throttlerapp.AllName.String())
-		assert.False(t, throttler.IsAppThrottled("all"))
-		assert.False(t, throttler.IsAppThrottled("app1"))
-		assert.False(t, throttler.IsAppThrottled("app2"))
-		assert.True(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))
-		assert.False(t, throttler.IsAppThrottled("app_other"))
 
+		{
+			throttled, app := throttler.IsAppThrottled("all")
+			assert.False(t, throttled) // explicitly throttled
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.False(t, throttled)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.True(t, throttled) // explicitly throttled
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled)
+			assert.Equal(t, "app4", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app_other")
+			assert.False(t, throttled)
+			assert.Equal(t, "app_other", app)
+		}
 		assert.Equal(t, 2, throttler.throttledApps.ItemCount())
 	})
 }
 
 func TestIsAppExempted(t *testing.T) {
-
+	plusOneHour := time.Now().Add(time.Hour)
 	throttler := Throttler{
 		throttledApps:   cache.New(cache.NoExpiration, 0),
 		heartbeatWriter: &FakeHeartbeatWriter{},
 	}
-	assert.False(t, throttler.IsAppExempted("app1"))
-	assert.False(t, throttler.IsAppExempted("app2"))
-	assert.False(t, throttler.IsAppExempted("app3"))
-	//
-	throttler.ThrottleApp("app1", time.Now().Add(time.Hour), DefaultThrottleRatio, true)
-	throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, true) // instantly expire
-	assert.True(t, throttler.IsAppExempted("app1"))
-	assert.True(t, throttler.IsAppExempted("app1:other-tag"))
-	assert.False(t, throttler.IsAppExempted("app2")) // expired
-	assert.False(t, throttler.IsAppExempted("app3"))
-	//
-	throttler.UnthrottleApp("app1")
-	throttler.ThrottleApp("app2", time.Now().Add(time.Hour), DefaultThrottleRatio, false)
-	assert.False(t, throttler.IsAppExempted("app1"))
-	assert.False(t, throttler.IsAppExempted("app2"))
-	assert.False(t, throttler.IsAppExempted("app3"))
-	//
-	assert.True(t, throttler.IsAppExempted("schema-tracker"))
-	throttler.UnthrottleApp("schema-tracker") // meaningless. App is statically exempted
-	assert.True(t, throttler.IsAppExempted("schema-tracker"))
+	t.Run("initial", func(t *testing.T) {
+		{
+			exempted, app := throttler.IsAppExempted("app1")
+			assert.False(t, exempted)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app2")
+			assert.False(t, exempted)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app3")
+			assert.False(t, exempted)
+			assert.Equal(t, "app3", app)
+		}
+	})
+	t.Run("exempt", func(t *testing.T) {
+		throttler.ThrottleApp("app1", time.Now().Add(time.Hour), DefaultThrottleRatio, true)
+		throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, true) // instantly expire
+		{
+			exempted, app := throttler.IsAppExempted("app1")
+			assert.True(t, exempted)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app1:other-tag")
+			assert.True(t, exempted)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app2")
+			assert.False(t, exempted)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app3")
+			assert.False(t, exempted)
+			assert.Equal(t, "app3", app)
+		}
+	})
+	t.Run("throttle", func(t *testing.T) {
+		throttler.UnthrottleApp("app1")
+		throttler.ThrottleApp("app2", time.Now().Add(time.Hour), DefaultThrottleRatio, false)
+		{
+			exempted, app := throttler.IsAppExempted("app1")
+			assert.False(t, exempted)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app2")
+			assert.False(t, exempted)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app3")
+			assert.False(t, exempted)
+			assert.Equal(t, "app3", app)
+		}
+	})
+	t.Run("special", func(t *testing.T) {
+		{
+			exempted, app := throttler.IsAppExempted("schema-tracker")
+			assert.True(t, exempted)
+			assert.Equal(t, "schema-tracker", app)
+		}
+		throttler.ThrottleApp("schema-tracker", plusOneHour, 1.0, false) // meaningless. App is statically exempted
+		{
+			exempted, app := throttler.IsAppExempted("schema-tracker")
+			assert.True(t, exempted)
+			assert.Equal(t, "schema-tracker", app)
+		}
+	})
 }
 
 // TestRefreshInventory tests the behavior of the throttler's RefreshInventory() function, which
@@ -1502,6 +1681,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Len(t, checkResult.Metrics, 1)
 			})
 			t.Run("explicit names", func(t *testing.T) {
@@ -1513,6 +1693,7 @@ func TestChecks(t *testing.T) {
 						t.Logf("%s: %+v", k, v)
 					}
 				}
+				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
 				assert.EqualValues(t, 0.3, checkResult.Metrics[base.LagMetricName.String()].Value)           // self lag value, because flags.Scope is set
@@ -1533,6 +1714,7 @@ func TestChecks(t *testing.T) {
 			t.Run("implicit names, always all known", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 				// "vitess" app always checks all known metrics:
+				assert.Equal(t, throttlerapp.VitessName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 			})
 			t.Run("explicit names, irrelevant, always all known", func(t *testing.T) {
@@ -1543,6 +1725,7 @@ func TestChecks(t *testing.T) {
 
 				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), metricNames, flags)
 				require.NotNil(t, checkResult)
+				assert.Equal(t, throttlerapp.VitessName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 			})
 		})
@@ -1558,6 +1741,7 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Len(t, checkResult.Metrics, 1)
 			})
 			t.Run("explicit names", func(t *testing.T) {
@@ -1566,6 +1750,7 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
 				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)           // shard lag value, because flags.Scope is set
