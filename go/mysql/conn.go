@@ -1464,6 +1464,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 	}
 	if err := binlogReplicaHandler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
 		log.Error(err.Error())
+		c.writeErrorPacketFromError(err)
 		return false
 	}
 	return kontinue
