@@ -82,7 +82,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		// if we are dealing with a derived table, we need to make sure that the ordering columns
 		// are available outside the derived table
 		for _, order := range horizon.Query.GetOrderBy() {
-			qp.addColumn(ctx, order.Expr)
+			qp.addDerivedColumn(ctx, order.Expr)
 		}
 	}
 
@@ -135,7 +135,7 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 		if newExpr == nil {
 			// If no subqueries are found, retain the original order expression
 			if derived != "" {
-				exposeOrderingColumn(ctx, qp, expr, derived)
+				expr = exposeOrderingColumn(ctx, qp, expr, derived)
 			}
 			newOrder = append(newOrder, expr)
 			continue
@@ -171,19 +171,21 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 }
 
 // exposeOrderingColumn will expose the ordering column to the outer query
-func exposeOrderingColumn(ctx *plancontext.PlanningContext, qp *QueryProjection, expr OrderBy, derived string) {
+func exposeOrderingColumn(ctx *plancontext.PlanningContext, qp *QueryProjection, orderBy OrderBy, derived string) OrderBy {
 	for _, se := range qp.SelectExprs {
 		aliasedExpr, err := se.GetAliasedExpr()
 		if err == nil {
 			// if we get an error, we'll just use the whatever was in the AST
-			if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, expr.SimplifiedExpr) {
+			if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, orderBy.SimplifiedExpr) {
 				newExpr := sqlparser.NewColNameWithQualifier(aliasedExpr.ColumnName(), sqlparser.NewTableName(derived))
-				ctx.SemTable.CopySemanticInfo(expr.SimplifiedExpr, newExpr)
-				expr.SimplifiedExpr = newExpr
-				continue
+				ctx.SemTable.CopySemanticInfo(orderBy.SimplifiedExpr, newExpr)
+				orderBy.SimplifiedExpr = newExpr
+				break
 			}
 		}
 	}
+
+	return orderBy
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) Operator {
