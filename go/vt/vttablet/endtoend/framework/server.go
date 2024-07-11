@@ -118,7 +118,6 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	config.StrictTableACL = true
 	config.TwoPCEnable = true
 	config.TwoPCAbandonAge = 1
-	config.TwoPCCoordinatorAddress = "fake"
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
 	config.GracePeriods.Shutdown = 2 * time.Second
