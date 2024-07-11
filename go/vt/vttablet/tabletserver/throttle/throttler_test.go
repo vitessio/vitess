@@ -771,6 +771,16 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.Len(t, checkResult.Metrics, 1)
 			})
 		})
+
+		t.Run("Disable", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled:           false,
+				MetricThresholds:  map[string]float64{},
+				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			sleepTillThresholdApplies()
+		})
 	})
 }
 
