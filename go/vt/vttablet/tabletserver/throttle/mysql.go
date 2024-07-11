@@ -42,14 +42,12 @@ limitations under the License.
 package throttle
 
 import (
-	"context"
 	"sort"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
 func aggregateMetricResults(
-	ctx context.Context,
 	metricName base.MetricName,
 	tabletResultsMap base.TabletResultMap,
 	ignoreHostsCount int,
