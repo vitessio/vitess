@@ -44,6 +44,10 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -67,11 +71,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // logPoolFull is for throttling transaction / query pool full messages in the log.
@@ -746,6 +745,21 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 		},
 	)
 	return metadata, err
+}
+
+// UnresolvedTransactions returns the unresolved distributed transaction record.
+func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *querypb.Target) (transactions []*querypb.TransactionMetadata, err error) {
+	err = tsv.execRequest(
+		ctx, tsv.loadQueryTimeout(),
+		"UnresolvedTransactions", "unresolved_transaction", nil,
+		target, nil, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			transactions, err = txe.UnresolvedTransactions()
+			return err
+		},
+	)
+	return
 }
 
 // Execute executes the query and returns the result as response.

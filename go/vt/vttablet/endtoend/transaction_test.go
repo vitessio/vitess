@@ -737,3 +737,32 @@ func TestManualTwopcz(t *testing.T) {
 	fmt.Print("Sleeping for 30 seconds\n")
 	time.Sleep(30 * time.Second)
 }
+
+// TestUnresolvedTransactions tests the UnresolvedTransactions API.
+func TestUnresolvedTransactions(t *testing.T) {
+	client := framework.NewClient()
+
+	participants := []*querypb.Target{
+		{Keyspace: "ks1", Shard: "-80"},
+		{Keyspace: "ks1", Shard: "80-"},
+	}
+	err := client.CreateTransaction("dtid01", participants)
+	require.NoError(t, err)
+
+	// expected no transaction to show here, as 1 second not passed.
+	transactions, err := client.UnresolvedTransactions()
+	require.NoError(t, err)
+	require.Empty(t, transactions)
+
+	// abandon age is 1 second.
+	time.Sleep(2 * time.Second)
+
+	transactions, err = client.UnresolvedTransactions()
+	require.NoError(t, err)
+	want := []*querypb.TransactionMetadata{{
+		Dtid:         "dtid01",
+		State:        querypb.TransactionState_PREPARE,
+		Participants: participants,
+	}}
+	utils.MustMatch(t, want, transactions)
+}

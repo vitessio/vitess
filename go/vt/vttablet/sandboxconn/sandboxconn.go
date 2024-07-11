@@ -427,6 +427,12 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 	return nil, nil
 }
 
+// UnresolvedTransactions is part of the QueryService interface.
+func (sbc *SandboxConn) UnresolvedTransactions(context.Context, *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 // BeginExecute is part of the QueryService interface.
 func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	sbc.panicIfNeeded()
