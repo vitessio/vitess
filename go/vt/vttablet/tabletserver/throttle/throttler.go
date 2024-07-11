@@ -180,10 +180,10 @@ type Throttler struct {
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
-	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
-	mysqlClusterProbesChan  chan *mysql.ClusterProbes
-	throttlerConfigChan     chan *topodatapb.ThrottlerConfig
-	serialFuncChan          chan func() // Used by unit tests to inject non-racy behavior
+	throttleMetricChan     chan *mysql.ThrottleMetric
+	mysqlClusterProbesChan chan *mysql.ClusterProbes
+	throttlerConfigChan    chan *topodatapb.ThrottlerConfig
+	serialFuncChan         chan func() // Used by unit tests to inject non-racy behavior
 
 	mysqlInventory *mysql.Inventory
 
@@ -205,7 +205,7 @@ type Throttler struct {
 	cancelEnableContext context.CancelFunc
 	throttledAppsMutex  sync.Mutex
 
-	readSelfThrottleMetrics func(context.Context) mysql.MySQLThrottleMetrics // overwritten by unit test
+	readSelfThrottleMetrics func(context.Context) mysql.ThrottleMetrics // overwritten by unit test
 
 	httpClient *http.Client
 
@@ -251,7 +251,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		}),
 	}
 
-	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
+	throttler.throttleMetricChan = make(chan *mysql.ThrottleMetric)
 	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.serialFuncChan = make(chan func())
@@ -282,7 +282,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	}
 
 	throttler.StoreMetricsThreshold(defaultThresholds[base.LagMetricName])
-	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.MySQLThrottleMetrics {
+	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.ThrottleMetrics {
 		return throttler.readSelfThrottleMetricsInternal(ctx)
 	}
 
@@ -727,8 +727,8 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 	return nil
 }
 
-func (throttler *Throttler) readSelfLoadAvgPerCore(ctx context.Context) *mysql.MySQLThrottleMetric {
-	metric := &mysql.MySQLThrottleMetric{
+func (throttler *Throttler) readSelfLoadAvgPerCore(ctx context.Context) *mysql.ThrottleMetric {
+	metric := &mysql.ThrottleMetric{
 		Scope: base.SelfScope,
 		Alias: throttler.tabletAlias,
 	}
@@ -779,9 +779,9 @@ func (throttler *Throttler) readSelfLoadAvgPerCore(ctx context.Context) *mysql.M
 	return metric
 }
 
-// readSelfMySQLThrottleMetric reads the mysql metric from thi very tablet's backend mysql.
-func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, query string) *mysql.MySQLThrottleMetric {
-	metric := &mysql.MySQLThrottleMetric{
+// readSelfThrottleMetric reads the mysql metric from thi very tablet's backend mysql.
+func (throttler *Throttler) readSelfThrottleMetric(ctx context.Context, query string) *mysql.ThrottleMetric {
+	metric := &mysql.ThrottleMetric{
 		Scope: base.SelfScope,
 		Alias: throttler.tabletAlias,
 	}
@@ -800,7 +800,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, que
 	}
 	row := tm.Named().Row()
 	if row == nil {
-		return metric.WithError(fmt.Errorf("no results for readSelfMySQLThrottleMetric"))
+		return metric.WithError(fmt.Errorf("no results for readSelfThrottleMetric"))
 	}
 
 	metricsQueryType := mysql.GetMetricsQueryType(query)
@@ -963,7 +963,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 						throttler.collectShardMySQLMetrics(ctx, tmClient)
 					}
 				}
-			case metric := <-throttler.mysqlThrottleMetricChan:
+			case metric := <-throttler.throttleMetricChan:
 				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
 				metricResultsMap, ok := throttler.mysqlInventory.TabletMetrics[metric.GetTabletAlias()]
 				if !ok {
@@ -997,11 +997,11 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	}()
 }
 
-func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClient tmclient.TabletManagerClient, probe *mysql.Probe) (probeFunc func(context.Context) mysql.MySQLThrottleMetrics) {
-	metricsWithError := func(err error) mysql.MySQLThrottleMetrics {
-		metrics := mysql.MySQLThrottleMetrics{}
+func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClient tmclient.TabletManagerClient, probe *mysql.Probe) (probeFunc func(context.Context) mysql.ThrottleMetrics) {
+	metricsWithError := func(err error) mysql.ThrottleMetrics {
+		metrics := mysql.ThrottleMetrics{}
 		for _, metricName := range base.KnownMetricNames {
-			metrics[metricName] = &mysql.MySQLThrottleMetric{
+			metrics[metricName] = &mysql.ThrottleMetric{
 				Name:  metricName,
 				Scope: scope,
 				Alias: probe.Alias,
@@ -1010,30 +1010,30 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		}
 		return metrics
 	}
-	return func(ctx context.Context) mysql.MySQLThrottleMetrics {
+	return func(ctx context.Context) mysql.ThrottleMetrics {
 		// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
 		ctx, cancel := context.WithTimeout(ctx, 4*activeCollectInterval)
 		defer cancel()
 
-		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
-		mySQLThrottleMetric := mysql.NewMySQLThrottleMetric()
-		mySQLThrottleMetric.Name = base.DefaultMetricName
-		mySQLThrottleMetric.Scope = scope
-		mySQLThrottleMetric.Alias = probe.Alias
+		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a ThrottleMetric
+		throttleMetric := mysql.NewThrottleMetric()
+		throttleMetric.Name = base.DefaultMetricName
+		throttleMetric.Scope = scope
+		throttleMetric.Alias = probe.Alias
 
 		if probe.Tablet == nil {
 			return metricsWithError(fmt.Errorf("found nil tablet reference for alias '%v'", probe.Alias))
 		}
-		metrics := make(mysql.MySQLThrottleMetrics)
+		metrics := make(mysql.ThrottleMetrics)
 
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{MultiMetricsEnabled: true} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if gRPCErr != nil {
 			return metricsWithError(fmt.Errorf("gRPC error accessing tablet %v. Err=%v", probe.Alias, gRPCErr))
 		}
-		mySQLThrottleMetric.Value = resp.Value
+		throttleMetric.Value = resp.Value
 		if resp.StatusCode == http.StatusInternalServerError {
-			mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", resp.StatusCode)
+			throttleMetric.Err = fmt.Errorf("Status code: %d", resp.StatusCode)
 		}
 		if resp.RecentlyChecked {
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
@@ -1043,7 +1043,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		}
 		for name, metric := range resp.Metrics {
 			metricName := base.MetricName(name)
-			metrics[metricName] = &mysql.MySQLThrottleMetric{
+			metrics[metricName] = &mysql.ThrottleMetric{
 				Name:  metricName,
 				Scope: scope,
 				Alias: probe.Alias,
@@ -1055,28 +1055,28 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		}
 		if len(resp.Metrics) == 0 {
 			// Backwards compatibility to v20. v20 does not report multi metrics.
-			mySQLThrottleMetric.Name = throttler.metricNameUsedAsDefault()
-			metrics[mySQLThrottleMetric.Name] = mySQLThrottleMetric
+			throttleMetric.Name = throttler.metricNameUsedAsDefault()
+			metrics[throttleMetric.Name] = throttleMetric
 		}
 
 		return metrics
 	}
 }
 
-func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context) mysql.MySQLThrottleMetrics {
+func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context) mysql.ThrottleMetrics {
 
-	writeMetric := func(metricName base.MetricName, metric *mysql.MySQLThrottleMetric) {
+	writeMetric := func(metricName base.MetricName, metric *mysql.ThrottleMetric) {
 		metric.Name = metricName
 		select {
 		case <-ctx.Done():
 			return
-		case throttler.mysqlThrottleMetricChan <- metric:
+		case throttler.throttleMetricChan <- metric:
 		}
 	}
 
-	go writeMetric(base.LagMetricName, throttler.readSelfMySQLThrottleMetric(ctx, sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecar.GetIdentifier()).Query))
-	go writeMetric(base.ThreadsRunningMetricName, throttler.readSelfMySQLThrottleMetric(ctx, threadsRunningQuery))
-	go writeMetric(base.CustomMetricName, throttler.readSelfMySQLThrottleMetric(ctx, throttler.GetCustomMetricsQuery()))
+	go writeMetric(base.LagMetricName, throttler.readSelfThrottleMetric(ctx, sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecar.GetIdentifier()).Query))
+	go writeMetric(base.ThreadsRunningMetricName, throttler.readSelfThrottleMetric(ctx, threadsRunningQuery))
+	go writeMetric(base.CustomMetricName, throttler.readSelfThrottleMetric(ctx, throttler.GetCustomMetricsQuery()))
 	go writeMetric(base.LoadAvgMetricName, throttler.readSelfLoadAvgPerCore(ctx))
 	return nil
 }
@@ -1124,7 +1124,7 @@ func (throttler *Throttler) collectShardMySQLMetrics(ctx context.Context, tmClie
 				select {
 				case <-ctx.Done():
 					return
-				case throttler.mysqlThrottleMetricChan <- metric:
+				case throttler.throttleMetricChan <- metric:
 				}
 			}
 		}(probe)

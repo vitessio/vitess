@@ -47,26 +47,26 @@ import (
 )
 
 var (
-	selfMetrics = mysql.MySQLThrottleMetrics{
-		base.LagMetricName: &mysql.MySQLThrottleMetric{
+	selfMetrics = mysql.ThrottleMetrics{
+		base.LagMetricName: &mysql.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 0.3,
 			Err:   nil,
 		},
-		base.ThreadsRunningMetricName: &mysql.MySQLThrottleMetric{
+		base.ThreadsRunningMetricName: &mysql.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 26,
 			Err:   nil,
 		},
-		base.CustomMetricName: &mysql.MySQLThrottleMetric{
+		base.CustomMetricName: &mysql.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 17,
 			Err:   nil,
 		},
-		base.LoadAvgMetricName: &mysql.MySQLThrottleMetric{
+		base.LoadAvgMetricName: &mysql.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 2.718,
@@ -246,7 +246,7 @@ func newTestThrottler() *Throttler {
 	throttler.MetricsThreshold.Store(math.Float64bits(0.75))
 	throttler.configSettings = config.NewConfigurationSettings()
 	throttler.initConfig()
-	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
+	throttler.throttleMetricChan = make(chan *mysql.ThrottleMetric)
 	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.serialFuncChan = make(chan func())
@@ -272,12 +272,12 @@ func newTestThrottler() *Throttler {
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 	throttler.recentCheckDiff = int64(3 * time.Second / recentCheckRateLimiterInterval)
 
-	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.MySQLThrottleMetrics {
+	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.ThrottleMetrics {
 		for _, metric := range selfMetrics {
 			go func() {
 				select {
 				case <-ctx.Done():
-				case throttler.mysqlThrottleMetricChan <- metric:
+				case throttler.throttleMetricChan <- metric:
 				}
 			}()
 		}
