@@ -49,7 +49,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
 )
 
-func aggregateMySQLProbes(
+func aggregateMetricResults(
 	ctx context.Context,
 	metricName base.MetricName,
 	tabletResultsMap mysql.TabletResultMap,
