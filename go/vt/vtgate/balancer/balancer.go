@@ -19,7 +19,7 @@ package balancer
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 
@@ -176,7 +176,7 @@ func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.Table
 
 	allocationMap, totalAllocation := b.getAllocation(target, tablets)
 
-	r := rand.Intn(totalAllocation)
+	r := rand.IntN(totalAllocation)
 	for i := 0; i < numTablets; i++ {
 		flow := allocationMap[tablets[i].Tablet.Alias.Uid]
 		if r < flow {
