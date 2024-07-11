@@ -176,7 +176,7 @@ func (te *TxEngine) transition(state txEngineState) {
 				te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
 				log.Errorf("Could not prepare transactions: %v", err)
 			}
-			te.startWatchdog()
+			te.startTransactionWatcher()
 		}()
 	}
 }
@@ -307,7 +307,7 @@ func (te *TxEngine) shutdownLocked() {
 	// Shut down functions are idempotent.
 	// No need to check if 2pc is enabled.
 	log.Infof("TxEngine - stop watchdog")
-	te.stopWatchdog()
+	te.stopTransactionWatcher()
 
 	poolEmpty := make(chan bool)
 	rollbackDone := make(chan bool)
@@ -448,9 +448,9 @@ func (te *TxEngine) rollbackPrepared() {
 	}
 }
 
-// startWatchdog starts the watchdog goroutine, which looks for abandoned
+// startTransactionWatcher starts the watchdog goroutine, which looks for abandoned
 // transactions and calls the notifier on them.
-func (te *TxEngine) startWatchdog() {
+func (te *TxEngine) startTransactionWatcher() {
 	te.ticks.Start(func() {
 		ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), te.abandonAge/4)
 		defer cancel()
@@ -477,8 +477,8 @@ func (te *TxEngine) startWatchdog() {
 	})
 }
 
-// stopWatchdog stops the watchdog goroutine.
-func (te *TxEngine) stopWatchdog() {
+// stopTransactionWatcher stops the watchdog goroutine.
+func (te *TxEngine) stopTransactionWatcher() {
 	te.ticks.Stop()
 }
 

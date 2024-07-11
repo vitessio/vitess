@@ -266,7 +266,7 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 	return prepared, failed, nil
 }
 
-// CountUnresolvedRedo returns the number of prepared transactions from dt_redo that are older than the supplied time.
+// CountUnresolvedRedo returns the number of prepared transaction recovery log that are older than the supplied time.
 func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.Time) (int64, error) {
 	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
@@ -374,7 +374,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		return nil, vterrors.Wrapf(err, "error parsing state for dtid %s", dtid)
 	}
 	result.State = querypb.TransactionState(st)
-	if result.State < querypb.TransactionState_PREPARE || result.State > querypb.TransactionState_ROLLBACK {
+	if result.State < querypb.TransactionState_PREPARE || result.State > querypb.TransactionState_COMMIT {
 		return nil, fmt.Errorf("unexpected state for dtid %s: %v", dtid, result.State)
 	}
 	// A failure in time parsing will show up as a very old time,
@@ -427,7 +427,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx,
 				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
 			}
 			protostate := querypb.TransactionState(st)
-			if protostate < querypb.TransactionState_UNKNOWN || protostate > querypb.TransactionState_ROLLBACK {
+			if protostate < querypb.TransactionState_PREPARE || protostate > querypb.TransactionState_COMMIT {
 				log.Errorf("Unexpected state for dtid %s: %v.", dtid, protostate)
 			}
 			curTx = &tx.DistributedTx{
@@ -526,7 +526,7 @@ func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.T
 	return txs, nil
 }
 
-// CountUnresolvedTransaction returns the number of transactions from dt_state that are older than the given time.
+// CountUnresolvedTransaction returns the number of transaction record that are older than the given time.
 func (tpc *TwoPC) CountUnresolvedTransaction(ctx context.Context, unresolvedTime time.Time) (int64, error) {
 	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
