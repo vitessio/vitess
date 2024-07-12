@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -44,6 +45,7 @@ var (
 	prsCounter = stats.NewCountersWithMultiLabels("PlannedReparentCounts", "Number of times Planned Reparent Shard has been run",
 		[]string{"Keyspace", "Shard", "Result"},
 	)
+	innodbBufferPoolsDataVar = "Innodb_buffer_pool_pages_data"
 )
 
 // PlannedReparenter performs PlannedReparentShard operations.
@@ -523,7 +525,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
-	err = pr.verifyAllTabletsReachable(ctx, tabletMap)
+	_, err = pr.verifyAllTabletsReachable(ctx, tabletMap)
 	if err != nil {
 		return err
 	}
@@ -730,18 +732,31 @@ func (pr *PlannedReparenter) reparentTablets(
 }
 
 // verifyAllTabletsReachable verifies that all the tablets are reachable when running PRS.
-func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) error {
+func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) (map[string]int, error) {
 	// Create a cancellable context for the entire set of RPCs to verify reachability.
 	verifyCtx, verifyCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer verifyCancel()
 
+	innodbBufferPoolsData := make(map[string]int)
+	var mu sync.Mutex
 	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
-	for _, info := range tabletMap {
+	for tblStr, info := range tabletMap {
 		tablet := info.Tablet
 		errorGroup.Go(func() error {
-			_, err := pr.tmc.PrimaryStatus(groupCtx, tablet)
-			return err
+			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{innodbBufferPoolsDataVar})
+			if err != nil {
+				return err
+			}
+			val, err := strconv.Atoi(statusValues[innodbBufferPoolsDataVar])
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			innodbBufferPoolsData[tblStr] = val
+			return nil
 		})
 	}
-	return errorGroup.Wait()
+	err := errorGroup.Wait()
+	return innodbBufferPoolsData, err
 }

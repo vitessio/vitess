@@ -108,16 +108,19 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -229,16 +232,19 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -318,16 +324,19 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -390,13 +399,14 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 			// thoroughly to cover all the cases.
 			name: "reparent fails",
 			tmc: &testutil.TabletManagerClient{
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -2431,16 +2441,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Error: nil,
 					},
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 				PopulateReparentJournalResults: map[string]error{
@@ -2523,16 +2536,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -2603,16 +2619,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Error: nil,
 					},
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 				PrimaryPositionResults: map[string]struct {
@@ -2715,16 +2734,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil, // called during reparentTablets to make this tablet a replica of newPrimary
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -2808,16 +2830,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil, // called during reparentTablets to make this tablet a replica of newPrimary
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -2867,16 +2892,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "preflight checks determine PRS is no-op",
 			tmc: &testutil.TabletManagerClient{
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -2930,16 +2958,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -2998,16 +3029,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "lost topology lock",
 			tmc: &testutil.TabletManagerClient{
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 				PrimaryPositionResults: map[string]struct {
@@ -3089,16 +3123,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Error:    nil,
 					},
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 				PopulateReparentJournalResults: map[string]error{
@@ -3849,27 +3886,34 @@ func AssertReparentEventsEqual(t *testing.T, expected *events.Reparent, actual *
 // TestPlannedReparenter_verifyAllTabletsReachable tests the functionality of verifyAllTabletsReachable.
 func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 	tests := []struct {
-		name         string
-		tmc          tmclient.TabletManagerClient
-		tabletMap    map[string]*topo.TabletInfo
-		remoteOpTime time.Duration
-		wantErr      string
+		name                string
+		tmc                 tmclient.TabletManagerClient
+		tabletMap           map[string]*topo.TabletInfo
+		remoteOpTime        time.Duration
+		wantErr             string
+		wantBufferPoolsData map[string]int
 	}{
 		{
 			name: "Success",
 			tmc: &testutil.TabletManagerClient{
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000201": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "1234",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "1231",
+						},
 					},
 				},
 			},
@@ -3902,21 +3946,30 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 					},
 				},
 			},
+			wantBufferPoolsData: map[string]int{
+				"zone1-0000000200": 123,
+				"zone1-0000000201": 1234,
+				"zone1-0000000100": 1231,
+			},
 		}, {
 			name: "Failure",
 			tmc: &testutil.TabletManagerClient{
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
 						Error: fmt.Errorf("primary status failed"),
 					},
 					"zone1-0000000201": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "1234",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "1231",
+						},
 					},
 				},
 			},
@@ -3953,21 +4006,27 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 		}, {
 			name: "Timeout",
 			tmc: &testutil.TabletManagerClient{
-				PrimaryStatusDelays: map[string]time.Duration{
+				GetGlobalStatusVarsDelays: map[string]time.Duration{
 					"zone1-0000000100": 20 * time.Second,
 				},
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000201": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "1234",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							innodbBufferPoolsDataVar: "1231",
+						},
 					},
 				},
 			},
@@ -4022,9 +4081,13 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 					topo.RemoteOperationTimeout = oldTime
 				}()
 			}
-			err := pr.verifyAllTabletsReachable(context.Background(), tt.tabletMap)
+			innodbBufferPoolsData, err := pr.verifyAllTabletsReachable(context.Background(), tt.tabletMap)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
+				require.EqualValues(t, len(tt.wantBufferPoolsData), len(innodbBufferPoolsData))
+				for str, val := range tt.wantBufferPoolsData {
+					require.EqualValues(t, val, innodbBufferPoolsData[str])
+				}
 				return
 			}
 			require.ErrorContains(t, err, tt.wantErr)
@@ -4055,16 +4118,19 @@ func TestPlannedReparenterStats(t *testing.T) {
 		SetReadWriteResults: map[string]error{
 			"zone1-0000000100": nil,
 		},
-		// This is only needed to verify reachability, so empty results are fine.
-		PrimaryStatusResults: map[string]struct {
-			Status *replicationdatapb.PrimaryStatus
-			Error  error
+		GetGlobalStatusVarsResults: map[string]struct {
+			Statuses map[string]string
+			Error    error
 		}{
 			"zone1-0000000101": {
-				Status: &replicationdatapb.PrimaryStatus{},
+				Statuses: map[string]string{
+					innodbBufferPoolsDataVar: "123",
+				},
 			},
 			"zone1-0000000100": {
-				Status: &replicationdatapb.PrimaryStatus{},
+				Statuses: map[string]string{
+					innodbBufferPoolsDataVar: "123",
+				},
 			},
 		},
 	}
