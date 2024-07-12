@@ -792,7 +792,7 @@ func TestRemoveTablet(t *testing.T) {
 //
 // During this time, operations like `RemoveTablet` should not lead
 // to multiple tablets becoming valid targets for `PRIMARY`.
-func TestTabletRemoveDuringExternalReparenting(t *testing.T) {
+func TestRemoveTabletDuringExternalReparenting(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	// reset error counters

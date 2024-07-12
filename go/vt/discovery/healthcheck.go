@@ -608,12 +608,19 @@ func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 // Recompute the healthy primary tablet for the given key.
 func (hc *HealthCheckImpl) recomputeHealthyPrimary(key KeyspaceShardTabletType) {
 	highestPrimaryTermStartTime := int64(math.MinInt64)
+	var newestPrimary *TabletHealth
 
 	for _, s := range hc.healthData[key] {
 		if s.PrimaryTermStartTime >= highestPrimaryTermStartTime {
 			highestPrimaryTermStartTime = s.PrimaryTermStartTime
-			hc.healthy[key][0] = s
+			newestPrimary = s
 		}
+	}
+
+	if newestPrimary != nil {
+		hc.healthy[key] = []*TabletHealth{newestPrimary}
+	} else {
+		hc.healthy[key] = []*TabletHealth{}
 	}
 }
 
