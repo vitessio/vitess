@@ -28,6 +28,11 @@ import (
 )
 
 func TestSemiSyncUpgradeDowngrade(t *testing.T) {
+	ver, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if ver != 21 {
+		t.Skip("We only want to run this test for v21 release")
+	}
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
