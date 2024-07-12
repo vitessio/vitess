@@ -206,7 +206,7 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&config.EnableSystemSettings, "enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 
 	cmd.Flags().StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
-	cmd.Flags().Float64Var(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 0, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
+	cmd.Flags().DurationVar(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 30*time.Second, "query server transaction timeout, a transaction will be killed if it takes longer than this value")
 
 	cmd.Flags().StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
 
