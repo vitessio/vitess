@@ -76,7 +76,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.4
+        go-version: 1.22.5
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -122,8 +122,9 @@ jobs:
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo percona-release enable-only tools
         sudo apt-get update
-        sudo apt-get install -y percona-xtrabackup-24
+        sudo apt-get install -y percona-xtrabackup-80
 
     # Checkout to the last release of Vitess
     - name: Checkout to the other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})

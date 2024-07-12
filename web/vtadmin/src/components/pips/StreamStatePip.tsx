@@ -25,6 +25,7 @@ const STREAM_STATES: { [key: string]: PipState } = {
     Error: 'danger',
     Running: 'success',
     Stopped: null,
+    Throttled: 'throttled',
 };
 
 export const StreamStatePip = ({ state }: Props) => {

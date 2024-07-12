@@ -376,9 +376,8 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:1)"
+          "0"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -387,8 +386,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select id from music where 1 != 1 union select 1 from dual where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select id from music union select 1 from dual) as dt(c0)",
+            "FieldQuery": "select id from `user` where 1 != 1 union select id from music where 1 != 1 union select 1 from dual where 1 != 1",
+            "Query": "select id from `user` union select id from music union select 1 from dual",
             "Table": "`user`, dual, music"
           }
         ]
@@ -526,9 +525,8 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:1)"
+          "0"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -537,8 +535,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as `1`, weight_string(dt.c0) from (select 1 from dual where 1 != 1 union select null from dual where 1 != 1 union select 1.0 from dual where 1 != 1 union select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1 union select 2.0 from `user` where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as `1`, weight_string(dt.c0) from (select 1 from dual union select null from dual union select 1.0 from dual union select '1' from dual union select 2 from dual union select 2.0 from `user`) as dt(c0)",
+            "FieldQuery": "select 1 from dual where 1 != 1 union select null from dual where 1 != 1 union select 1.0 from dual where 1 != 1 union select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1 union select 2.0 from `user` where 1 != 1",
+            "Query": "select 1 from dual union select null from dual union select 1.0 from dual union select '1' from dual union select 2 from dual union select 2.0 from `user`",
             "Table": "`user`, dual"
           }
         ]
@@ -840,9 +838,8 @@
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "(0:1)"
+              "0"
             ],
-            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -851,8 +848,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt(c0) where 1 != 1",
-                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select 3 from dual limit :__upper_limit) as dt(c0)",
+                "FieldQuery": "select id from `user` where 1 != 1 union select 3 from dual where 1 != 1",
+                "Query": "select id from `user` union select 3 from dual limit :__upper_limit",
                 "Table": "`user`, dual"
               }
             ]
@@ -1092,7 +1089,7 @@
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "(0:1)",
+              "0",
               "1"
             ],
             "Inputs": [
@@ -1663,9 +1660,8 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:1)"
+          "0"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1674,8 +1670,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as col1, weight_string(dt.c0) from (select col1 from `user` where 1 != 1 union select 3 from `user` where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as col1, weight_string(dt.c0) from (select col1 from `user` union select 3 from `user`) as dt(c0)",
+            "FieldQuery": "select col1 from `user` where 1 != 1 union select 3 from `user` where 1 != 1",
+            "Query": "select col1 from `user` union select 3 from `user`",
             "Table": "`user`"
           }
         ]
@@ -1694,9 +1690,8 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:1)"
+          "0"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1705,8 +1700,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as `3`, weight_string(dt.c0) from (select 3 from `user` where 1 != 1 union select col1 from `user` where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as `3`, weight_string(dt.c0) from (select 3 from `user` union select col1 from `user`) as dt(c0)",
+            "FieldQuery": "select 3 from `user` where 1 != 1 union select col1 from `user` where 1 != 1",
+            "Query": "select 3 from `user` union select col1 from `user`",
             "Table": "`user`"
           }
         ]
@@ -1725,9 +1720,8 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:1)"
+          "0: binary"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1736,8 +1730,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as `3`, weight_string(dt.c0) from (select 3 from `user` where 1 != 1 union select now() from `user` where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as `3`, weight_string(dt.c0) from (select 3 from `user` union select now() from `user`) as dt(c0)",
+            "FieldQuery": "select 3 from `user` where 1 != 1 union select now() from `user` where 1 != 1",
+            "Query": "select 3 from `user` union select now() from `user`",
             "Table": "`user`"
           }
         ]
@@ -1756,9 +1750,8 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:1)"
+          "0: binary"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1767,8 +1760,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as `now()`, weight_string(dt.c0) from (select now() from `user` where 1 != 1 union select 3 from `user` where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as `now()`, weight_string(dt.c0) from (select now() from `user` union select 3 from `user`) as dt(c0)",
+            "FieldQuery": "select now() from `user` where 1 != 1 union select 3 from `user` where 1 != 1",
+            "Query": "select now() from `user` union select 3 from `user`",
             "Table": "`user`"
           }
         ]
@@ -1787,9 +1780,8 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:1)"
+          "0"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1798,8 +1790,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as `now()`, weight_string(dt.c0) from (select now() from `user` where 1 != 1 union select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as `now()`, weight_string(dt.c0) from (select now() from `user` union select id from `user`) as dt(c0)",
+            "FieldQuery": "select now() from `user` where 1 != 1 union select id from `user` where 1 != 1",
+            "Query": "select now() from `user` union select id from `user`",
             "Table": "`user`"
           }
         ]
