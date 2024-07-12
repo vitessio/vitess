@@ -327,9 +327,9 @@ Flags:
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
-      --stalled-disk-write-dir                                           if provided, tablet will attempt to write a file to this directory to check if the disk is stalled
-      --stalled-disk-write-timeout                                       if writes exceed this duration, the disk is considered stalled
-      --stalled-disk-write-interval                                      how often to write to the disk to check whether it is stalled
+      --stalled-disk-write-dir string                                    if provided, tablet will attempt to write a file to this directory to check if the disk is stalled
+      --stalled-disk-write-timeout duration                              if writes exceed this duration, the disk is considered stalled
+      --stalled-disk-write-interval duration                             how often to write to the disk to check whether it is stalled
       --start_mysql                                                      Should vtcombo also start mysql
       --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
       --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
