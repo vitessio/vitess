@@ -42,7 +42,7 @@ func TestSemiSyncUpgradeDowngrade(t *testing.T) {
 	// Check the plugin loaded in vttablet.
 	require.EqualValues(t, mysql.SemiSyncTypeSource, semiSyncExtensionLoaded(t, replica))
 
-	t.Run("Downgrade to v19", func(t *testing.T) {
+	t.Run("Downgrade to previous release", func(t *testing.T) {
 		// change vttablet binary and downgrade it.
 		changeVttabletBinary(t, replica, "vttabletold")
 		// Verify we are using the older vttablet version.
@@ -53,7 +53,7 @@ func TestSemiSyncUpgradeDowngrade(t *testing.T) {
 		require.EqualValues(t, mysql.SemiSyncTypeSource, semiSyncExtensionLoaded(t, replica))
 	})
 
-	t.Run("Upgrade to v19", func(t *testing.T) {
+	t.Run("Upgrade to current release", func(t *testing.T) {
 		// change vttablet binary and downgrade it.
 		changeVttabletBinary(t, replica, "vttablet")
 		// Verify we are using the older vttablet version.
