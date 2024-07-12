@@ -447,7 +447,9 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 	}
 }
 
-func TestExecutorResolveTransaction(t *testing.T) {
+// TestTransactionNotifier tests that the transaction notifier is called
+// when a transaction watcher receives unresolved transaction count more than zero.
+func TestTransactionNotifier(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -457,17 +459,29 @@ func TestExecutorResolveTransaction(t *testing.T) {
 	db.AddQueryPattern(
 		"select count\\(\\*\\) from _vt\\.redo_state where time_created.*",
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"))
+
+	// zero unresolved transactions
 	db.AddQueryPattern(
 		"select count\\(\\*\\) from _vt\\.dt_state where time_created.*",
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "1"))
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"))
 	notifyCh := make(chan any)
 	tsv.te.dxNotify = func() {
 		notifyCh <- nil
 	}
 	select {
 	case <-notifyCh:
+		t.Error("unresolved transaction notifier call unexpected")
 	case <-time.After(1 * time.Second):
-		t.Error("unresolved transaction notifier not called")
+	}
+
+	// non zero unresolved transactions
+	db.AddQueryPattern(
+		"select count\\(\\*\\) from _vt\\.dt_state where time_created.*",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "1"))
+	select {
+	case <-notifyCh:
+	case <-time.After(1 * time.Second):
+		t.Error("unresolved transaction notifier expected but not received")
 	}
 }
 

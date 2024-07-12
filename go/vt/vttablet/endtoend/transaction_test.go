@@ -612,8 +612,8 @@ func TestMMRollbackFlow(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestTransactionWatcher(t *testing.T) {
-	t.Skip("TODO: need to update this test")
+// TestTransactionWatcherSignal test that unresolved transaction signal is received via health stream.
+func TestTransactionWatcherSignal(t *testing.T) {
 	client := framework.NewClient()
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
@@ -623,44 +623,50 @@ func TestTransactionWatcher(t *testing.T) {
 	_, err = client.Execute(query, nil)
 	require.NoError(t, err)
 
-	start := time.Now()
-	err = client.CreateTransaction("aa", []*querypb.Target{{
-		Keyspace: "test1",
-		Shard:    "0",
-	}, {
-		Keyspace: "test2",
-		Shard:    "1",
-	}})
+	ch := make(chan any)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+			if shr.RealtimeStats.TxUnresolved {
+				ch <- true
+			}
+			return nil
+		})
+		require.NoError(t, err)
+	}()
+
+	err = client.CreateTransaction("aa", []*querypb.Target{
+		{Keyspace: "test1", Shard: "0"},
+		{Keyspace: "test2", Shard: "1"}})
 	require.NoError(t, err)
 
-	// The watchdog should kick in after 1 second.
-	dtid := <-framework.ResolveChan
-	if dtid != "aa" {
-		t.Errorf("dtid: %s, want aa", dtid)
-	}
-	diff := time.Since(start)
-	if diff < 1*time.Second {
-		t.Errorf("diff: %v, want greater than 1s", diff)
+	// wait for unresolved transaction signal
+	select {
+	case <-ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for transaction watcher signal")
 	}
 
 	err = client.SetRollback("aa", 0)
 	require.NoError(t, err)
+
+	// still should receive unresolved transaction signal
+	select {
+	case <-ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for transaction watcher signal")
+	}
+
 	err = client.ConcludeTransaction("aa")
 	require.NoError(t, err)
 
-	// Make sure the watchdog stops sending messages.
-	// Check twice. Sometimes, a race can still cause
-	// a stray message.
-	dtid = ""
-	for i := 0; i < 2; i++ {
-		select {
-		case dtid = <-framework.ResolveChan:
-			continue
-		case <-time.After(2 * time.Second):
-			return
-		}
+	// transaction watcher should stop sending singal now.
+	select {
+	case <-ch:
+		t.Fatal("unexpected signal for unresolved transaction")
+	case <-time.After(2 * time.Second):
 	}
-	t.Errorf("Unexpected message: %s", dtid)
 }
 
 func TestUnresolvedTracking(t *testing.T) {
