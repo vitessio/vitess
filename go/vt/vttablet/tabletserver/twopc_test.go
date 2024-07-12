@@ -437,10 +437,10 @@ func TestUnresolvedTransactions(t *testing.T) {
 		unresolvedTx: sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("dtid|state|keyspace|shard",
 				"VARBINARY|INT64|VARCHAR|VARCHAR"),
-			"dtid0|2|ks01|shard01",
-			"dtid0|2|ks01|shard02",
-			"dtid1|3|ks02|shard03",
-			"dtid1|3|ks01|shard02"),
+			"dtid0|3|ks01|shard01",
+			"dtid0|3|ks01|shard02",
+			"dtid1|2|ks02|shard03",
+			"dtid1|2|ks01|shard02"),
 		expectedTx: []*querypb.TransactionMetadata{{
 			Dtid:  "dtid0",
 			State: querypb.TransactionState_COMMIT,
