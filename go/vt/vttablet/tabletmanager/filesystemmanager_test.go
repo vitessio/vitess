@@ -3,6 +3,7 @@ package tabletmanager
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -14,8 +15,8 @@ func TestFileSystemManager_noStall(t *testing.T) {
 	filesystemManager := newPollingFileSystemManager(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
 	time.Sleep(300 * time.Millisecond)
-	if mockFileWriter.totalCreateCalls != 5 {
-		t.Fatalf("expected 5 calls to createFile, got %d", mockFileWriter.totalCreateCalls)
+	if totalCreateCalls := mockFileWriter.getTotalCreateCalls(); totalCreateCalls != 5 {
+		t.Fatalf("expected 5 calls to createFile, got %d", totalCreateCalls)
 	}
 	if isStalled := filesystemManager.IsDiskStalled(); isStalled {
 		t.Fatalf("expected isStalled to be false")
@@ -29,16 +30,16 @@ func TestFileSystemManager_stallAndRecover(t *testing.T) {
 	filesystemManager := newPollingFileSystemManager(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
 	time.Sleep(300 * time.Millisecond)
-	if mockFileWriter.totalCreateCalls != 2 {
-		t.Fatalf("expected 2 calls to createFile, got %d", mockFileWriter.totalCreateCalls)
+	if totalCreateCalls := mockFileWriter.getTotalCreateCalls(); totalCreateCalls != 2 {
+		t.Fatalf("expected 2 calls to createFile, got %d", totalCreateCalls)
 	}
 	if isStalled := filesystemManager.IsDiskStalled(); !isStalled {
 		t.Fatalf("expected isStalled to be true")
 	}
 
 	time.Sleep(300 * time.Millisecond)
-	if mockFileWriter.totalCreateCalls < 5 {
-		t.Fatalf("expected at least 5 calls to createFile, got %d", mockFileWriter.totalCreateCalls)
+	if totalCreateCalls := mockFileWriter.getTotalCreateCalls(); totalCreateCalls < 5 {
+		t.Fatalf("expected at least 5 calls to createFile, got %d", totalCreateCalls)
 	}
 	if isStalled := filesystemManager.IsDiskStalled(); isStalled {
 		t.Fatalf("expected isStalled to be false")
@@ -52,8 +53,8 @@ func TestFileSystemManager_errorIsStall(t *testing.T) {
 	filesystemManager := newPollingFileSystemManager(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
 	time.Sleep(300 * time.Millisecond)
-	if mockFileWriter.totalCreateCalls != 5 {
-		t.Fatalf("expected 5 calls to createFile, got %d", mockFileWriter.totalCreateCalls)
+	if totalCreateCalls := mockFileWriter.getTotalCreateCalls(); totalCreateCalls != 5 {
+		t.Fatalf("expected 5 calls to createFile, got %d", totalCreateCalls)
 	}
 	if isStalled := filesystemManager.IsDiskStalled(); !isStalled {
 		t.Fatalf("expected isStalled to be true")
@@ -64,12 +65,13 @@ type sequencedMockWriter struct {
 	defaultWriteFunction    writeFunction
 	sequencedWriteFunctions []writeFunction
 
-	totalCreateCalls int
+	totalCreateCalls      int
+	totalCreateCallsMutex sync.RWMutex
 }
 
 func (smw *sequencedMockWriter) mockWriteFunction() error {
-	functionIndex := smw.totalCreateCalls
-	smw.totalCreateCalls += 1
+	functionIndex := smw.getTotalCreateCalls()
+	smw.incrementTotalCreateCalls()
 
 	if functionIndex >= len(smw.sequencedWriteFunctions) {
 		if smw.defaultWriteFunction != nil {
@@ -79,6 +81,18 @@ func (smw *sequencedMockWriter) mockWriteFunction() error {
 	}
 
 	return smw.sequencedWriteFunctions[functionIndex]()
+}
+
+func (smw *sequencedMockWriter) incrementTotalCreateCalls() {
+	smw.totalCreateCallsMutex.Lock()
+	defer smw.totalCreateCallsMutex.Unlock()
+	smw.totalCreateCalls += 1
+}
+
+func (smw *sequencedMockWriter) getTotalCreateCalls() int {
+	smw.totalCreateCallsMutex.RLock()
+	defer smw.totalCreateCallsMutex.RUnlock()
+	return smw.totalCreateCalls
 }
 
 func delayedWriteFunction(delay time.Duration, err error) writeFunction {
