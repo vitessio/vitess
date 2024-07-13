@@ -365,4 +365,9 @@ func (v *vschema) GetAggregateUDFs() []string {
 	panic("implement me")
 }
 
+func (v *vschema) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 var _ VSchema = (*vschema)(nil)
