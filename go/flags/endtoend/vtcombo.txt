@@ -260,7 +260,7 @@ Flags:
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
-      --promotion-rule topodatapb.PromotionRule                          The override Promotion Rule for this tablet. Use 'must_not' with caution as it can lead to issues with reparenting. (default none)
+      --promotion-rule topodatapb.PromotionRule                          Sets the override Promotion Rule for this tablet. Possible values 'none', 'neutral', 'prefer', 'prefer_not' and 'must_not'. Use 'must_not' with caution as it can lead to issues with reparenting. (default none)
       --proto_topo vttest.TopoData                                       vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.
       --proxy_protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
