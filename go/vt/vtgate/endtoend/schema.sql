@@ -80,13 +80,3 @@ create table oltp_test(
     pad char(60) default '' not null,
     primary key (id)
 ) Engine=InnoDB;
-
-create table mirror_tbl1(
-                             id bigint not null,
-                             primary key(id)
-) Engine=InnoDB;
-
-create table mirror_tbl2(
-                             id bigint not null,
-                             primary key(id)
-) Engine=InnoDB;

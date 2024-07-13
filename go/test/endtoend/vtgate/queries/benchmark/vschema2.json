@@ -6,7 +6,7 @@
     }
   },
   "tables": {
-    "tbl_no_lkp_vdx": {
+    "mirror_tbl1": {
       "column_vindexes": [
         {
           "column": "id",

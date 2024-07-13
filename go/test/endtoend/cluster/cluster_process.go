@@ -281,7 +281,6 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 }
 
 func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shardNames []string, movedShard string, replicaCount int, rdonly bool, customizers ...any) (err error) {
-
 	cluster.HasPartialKeyspaces = true
 	routedKeyspace := &Keyspace{
 		Name:      fmt.Sprintf("%s_routed", keyspace.Name),
@@ -1131,7 +1130,8 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 
 // StartVtbackup starts a vtbackup
 func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialBackup bool,
-	keyspace string, shard string, cell string, extraArgs ...string) error {
+	keyspace string, shard string, cell string, extraArgs ...string,
+) error {
 	log.Info("Starting vtbackup")
 	cluster.VtbackupProcess = *VtbackupProcessInstance(
 		cluster.GetAndReserveTabletUID(),
@@ -1146,7 +1146,6 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 		initialBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
 	return cluster.VtbackupProcess.Setup()
-
 }
 
 // GetAndReservePort gives port for required process
@@ -1162,7 +1161,6 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
 		log.Infof("Attempting to reserve port: %v", cluster.nextPortForProcess)
 		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cluster.nextPortForProcess)))
-
 		if err != nil {
 			log.Errorf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err)
 			continue
