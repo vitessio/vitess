@@ -1605,7 +1605,7 @@ func LoadFormal(filename string) (*vschemapb.SrvVSchema, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = json2.Unmarshal(data, formal)
+	err = json2.UnmarshalPB(data, formal)
 	if err != nil {
 		return nil, err
 	}
@@ -1623,7 +1623,7 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = json2.Unmarshal(data, formal)
+	err = json2.UnmarshalPB(data, formal)
 	if err != nil {
 		return nil, err
 	}

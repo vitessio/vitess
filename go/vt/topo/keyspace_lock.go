@@ -43,10 +43,10 @@ func (s *keyspaceLock) Path() string {
 // - a context with a locksInfo structure for future reference.
 // - an unlock method
 // - an error if anything failed.
-func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
+func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string, opts ...LockOption) (context.Context, func(*error), error) {
 	return ts.internalLock(ctx, &keyspaceLock{
 		keyspace: keyspace,
-	}, action, true)
+	}, action, opts...)
 }
 
 // CheckKeyspaceLocked can be called on a context to make sure we have the lock

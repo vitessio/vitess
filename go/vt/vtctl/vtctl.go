@@ -2507,7 +2507,7 @@ func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFl
 	}
 	keyspace := subFlags.Arg(0)
 	specs := &vschemapb.Keyspace{}
-	if err := json2.Unmarshal([]byte(subFlags.Arg(1)), specs); err != nil {
+	if err := json2.UnmarshalPB([]byte(subFlags.Arg(1)), specs); err != nil {
 		return err
 	}
 	return wr.CreateLookupVindex(ctx, keyspace, specs, *cells, *tabletTypes, *continueAfterCopyWithOwner)
@@ -2533,7 +2533,7 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		return fmt.Errorf("a single argument is required: <json_spec>")
 	}
 	ms := &vtctldatapb.MaterializeSettings{}
-	if err := json2.Unmarshal([]byte(subFlags.Arg(0)), ms); err != nil {
+	if err := json2.UnmarshalPB([]byte(subFlags.Arg(0)), ms); err != nil {
 		return err
 	}
 	ms.Cell = *cells
@@ -3402,7 +3402,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		}
 
 		vs = &vschemapb.Keyspace{}
-		err := json2.Unmarshal(schema, vs)
+		err := json2.UnmarshalPB(schema, vs)
 		if err != nil {
 			return err
 		}
@@ -3490,7 +3490,7 @@ func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFla
 	}
 
 	rr := &vschemapb.RoutingRules{}
-	if err := json2.Unmarshal(rulesBytes, rr); err != nil {
+	if err := json2.UnmarshalPB(rulesBytes, rr); err != nil {
 		return err
 	}
 
@@ -3656,7 +3656,7 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		req.ThrottledApp = &topodatapb.ThrottledAppRule{
 			Name:      *unthrottledApp,
 			Ratio:     0,
-			ExpiresAt: protoutil.TimeToProto(time.Now()),
+			ExpiresAt: &vttime.Time{}, // zero
 		}
 	}
 	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, req)

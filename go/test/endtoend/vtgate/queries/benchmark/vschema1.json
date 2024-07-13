@@ -14,6 +14,22 @@
         }
       ]
     },
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "user_extra": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
     "mirror_tbl1": {
       "column_vindexes": [
         {

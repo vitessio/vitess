@@ -17,9 +17,9 @@ limitations under the License.
 package vreplication
 
 var dryRunResultsSwitchWritesCustomerShard = []string{
-	"Mirroring 0.00 percent of traffic from keyspace product to keyspace customer for tablet types [PRIMARY]",
 	"Lock keyspace product",
 	"Lock keyspace customer",
+	"Mirroring 0.00 percent of traffic from keyspace product to keyspace customer for tablet types [PRIMARY]",
 	"/Stop writes on keyspace product for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]: [keyspace:product;shard:0;position:",
 	"Wait for vreplication on stopped streams to catchup for up to 30s",
 	"Create reverse vreplication workflow p2c_reverse",
@@ -36,8 +36,8 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 }
 
 var dryRunResultsReadCustomerShard = []string{
-	"Mirroring 0.00 percent of traffic from keyspace product to keyspace customer for tablet types [RDONLY,REPLICA]",
 	"Lock keyspace product",
+	"Mirroring 0.00 percent of traffic from keyspace product to keyspace customer for tablet types [RDONLY,REPLICA]",
 	"Switch reads for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] to keyspace customer for tablet types [RDONLY,REPLICA]",
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
 	"Serving VSchema will be rebuilt for the customer keyspace",

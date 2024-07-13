@@ -77,6 +77,14 @@ func (r *RateLimiter) DoEmpty() {
 	_ = r.Do(nil)
 }
 
+// AllowOne allows the next Do() call to run, even if the rate limiter would otherwise skip it.
+func (r *RateLimiter) AllowOne() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.lastDoValue = r.tickerValue.Load() - 1
+}
+
 // Diff returns the logical clock diff between the ticker and the last Do() call.
 func (r *RateLimiter) Diff() int64 {
 	r.mu.Lock()
@@ -87,7 +95,9 @@ func (r *RateLimiter) Diff() int64 {
 
 // Stop terminates rate limiter's operation and will not allow any more Do() executions.
 func (r *RateLimiter) Stop() {
-	r.cancel()
+	if r.cancel != nil {
+		r.cancel()
+	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()

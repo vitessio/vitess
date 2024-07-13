@@ -29,7 +29,6 @@ import (
 	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/history"
@@ -39,7 +38,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -79,23 +77,12 @@ type healthStreamer struct {
 	se      *schema.Engine
 	history *history.History
 
-	dbConfig               dbconfigs.Connector
-	conns                  *connpool.Pool
 	signalWhenSchemaChange bool
-	reloadTimeout          time.Duration
 
 	viewsEnabled bool
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine *schema.Engine) *healthStreamer {
-	var pool *connpool.Pool
-	if env.Config().SignalWhenSchemaChange {
-		// We need one connection for the reloader.
-		pool = connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:        1,
-			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
-		})
-	}
 	hs := &healthStreamer{
 		stats:             env.Stats(),
 		degradedThreshold: env.Config().Healthcheck.DegradedThreshold,
@@ -110,9 +97,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 		},
 
 		history:                history.New(5),
-		conns:                  pool,
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
-		reloadTimeout:          env.Config().SchemaChangeReloadTimeout,
 		viewsEnabled:           env.Config().EnableViews,
 		se:                     engine,
 	}
@@ -120,9 +105,8 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 	return hs
 }
 
-func (hs *healthStreamer) InitDBConfig(target *querypb.Target, cp dbconfigs.Connector) {
+func (hs *healthStreamer) InitDBConfig(target *querypb.Target) {
 	hs.state.Target = target.CloneVT()
-	hs.dbConfig = cp
 }
 
 func (hs *healthStreamer) Open() {
@@ -133,10 +117,6 @@ func (hs *healthStreamer) Open() {
 		return
 	}
 	hs.ctx, hs.cancel = context.WithCancel(context.Background())
-	if hs.conns != nil {
-		// if we don't have a live conns object, it means we are not configured to signal when the schema changes
-		hs.conns.Open(hs.dbConfig, hs.dbConfig, hs.dbConfig)
-	}
 }
 
 func (hs *healthStreamer) Close() {
@@ -147,10 +127,6 @@ func (hs *healthStreamer) Close() {
 		hs.se.UnregisterNotifier("healthStreamer")
 		hs.cancel()
 		hs.cancel = nil
-	}
-	if hs.conns != nil {
-		hs.conns.Close()
-		hs.conns = nil
 	}
 }
 
@@ -337,16 +313,6 @@ func (hs *healthStreamer) reload(created, altered, dropped []*schema.Table, udfs
 	if !hs.isServingPrimary {
 		return nil
 	}
-
-	// add a timeout to prevent unbounded waits
-	ctx, cancel := context.WithTimeout(hs.ctx, hs.reloadTimeout)
-	defer cancel()
-
-	conn, err := hs.conns.Get(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
 
 	// We create lists to store the tables that have schema changes.
 	var tables []string
