@@ -731,24 +731,6 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *Mirror) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(32)
-	}
-	// field Primitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Primitive.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Target vitess.io/vitess/go/vt/vtgate/engine.MirrorTarget
-	if cc, ok := cached.Target.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	return size
-}
 func (cached *NonLiteralUpdateInfo) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -809,20 +791,6 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	return size
-}
-func (cached *PercentMirrorTarget) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(24)
-	}
-	// field Primitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Primitive.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
@@ -1579,6 +1547,24 @@ func (cached *VitessMetadata) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	// field Value string
 	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
+	return size
+}
+func (cached *percentBasedMirror) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field primitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.primitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field target vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.target.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 

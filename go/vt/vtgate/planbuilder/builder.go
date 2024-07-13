@@ -43,9 +43,7 @@ const (
 	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
 )
 
-var (
-	plannerVersions = []plancontext.PlannerVersion{Gen4, Gen4GreedyOnly, Gen4Left2Right}
-)
+var plannerVersions = []plancontext.PlannerVersion{Gen4, Gen4GreedyOnly, Gen4Left2Right}
 
 type (
 	planResult struct {
@@ -212,10 +210,7 @@ func buildRoutePlanWithMirroring(stmt sqlparser.Statement, reservedVars *sqlpars
 	copy(tables[len(plan.tables):], target.tables)
 	operators.SortTableNames(tables)
 	return &planResult{
-		engine.NewMirror(
-			plan.primitive,
-			engine.NewPercentMirrorTarget(percent, target.primitive),
-		),
+		engine.NewPercentBasedMirror(percent, plan.primitive, target.primitive),
 		tables,
 	}, nil
 }

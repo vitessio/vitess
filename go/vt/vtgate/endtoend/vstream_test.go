@@ -60,6 +60,7 @@ func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mys
 	}
 	return gconn, conn, mconn, close
 }
+
 func TestVStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -186,7 +187,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 		Lastpk:    qr,
 	}}
 	var shardGtids []*binlogdatapb.ShardGtid
-	var vgtid = &binlogdatapb.VGtid{}
+	vgtid := &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
@@ -264,25 +265,17 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 	defer cancel()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("insert into t1_copy_all(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
-	if err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, err)
 
 	_, err = conn.ExecuteFetch("insert into t1_copy_all_ks2(id1,id2) values(10,10), (20,20)", 1, false)
-	if err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, err)
 
 	_, err = conn.ExecuteFetch("insert into t1_copy_all_ks3(id1,id2) values(30,30), (40,40)", 1, false)
-	if err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, err)
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -351,13 +344,11 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 			gconn, conn, mconn, closeConnections := initialize(ctx, t)
 			defer closeConnections()
 
-			var vgtid = &binlogdatapb.VGtid{}
+			vgtid := &binlogdatapb.VGtid{}
 			vgtid.ShardGtids = []*binlogdatapb.ShardGtid{c.shardGtid}
 			reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 			_, _ = conn, mconn
-			if err != nil {
-				require.NoError(t, err)
-			}
+			require.NoError(t, err)
 			require.NotNil(t, reader)
 			var evs []*binlogdatapb.VEvent
 			var completedEvs []*binlogdatapb.VEvent
@@ -434,7 +425,7 @@ func TestVStreamCopyResume(t *testing.T) {
 	}
 
 	var shardGtids []*binlogdatapb.ShardGtid
-	var vgtid = &binlogdatapb.VGtid{}
+	vgtid := &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
@@ -534,7 +525,7 @@ func TestVStreamCurrent(t *testing.T) {
 	defer closeConnections()
 
 	var shardGtids []*binlogdatapb.ShardGtid
-	var vgtid = &binlogdatapb.VGtid{}
+	vgtid := &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
@@ -588,7 +579,7 @@ func TestVStreamSharded(t *testing.T) {
 	defer closeConnections()
 
 	var shardGtids []*binlogdatapb.ShardGtid
-	var vgtid = &binlogdatapb.VGtid{}
+	vgtid := &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
@@ -673,7 +664,6 @@ func TestVStreamSharded(t *testing.T) {
 			t.Fatalf("remote error: %v\n", err)
 		}
 	}
-
 }
 
 // TestVStreamCopyTransactions tests that we are properly wrapping
@@ -830,9 +820,11 @@ type VEventSorter []*binlogdatapb.VEvent
 func (v VEventSorter) Len() int {
 	return len(v)
 }
+
 func (v VEventSorter) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
+
 func (v VEventSorter) Less(i, j int) bool {
 	valsI := v[i].GetRowEvent().RowChanges[0].After
 	if valsI == nil {

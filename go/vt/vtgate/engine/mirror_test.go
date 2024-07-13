@@ -58,13 +58,7 @@ func TestMirror(t *testing.T) {
 		evalengine.NewLiteralInt(1),
 	}
 
-	mirror := &Mirror{
-		Primitive: primitive,
-		Target: &PercentMirrorTarget{
-			Percent:   100,
-			Primitive: mirrorPrimitive1,
-		},
-	}
+	mirror := NewPercentBasedMirror(100, primitive, mirrorPrimitive1)
 
 	mirrorVC := &loggingVCursor{
 		shards: []string{"-20", "20-"},

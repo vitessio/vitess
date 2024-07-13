@@ -7,6 +7,8 @@
       "Original": "select t1.id from unsharded_src1.t1 where t1.id = 1",
       "Instructions": {
         "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 50,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -20,22 +22,15 @@
             "Table": "t1"
           },
           {
-            "OperatorType": "MirrorTarget",
-            "Variant": "Percent",
-            "Percent": 50,
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_dst1",
-                  "Sharded": false
-                },
-                "FieldQuery": "select t1.id from t1 where 1 != 1",
-                "Query": "select t1.id from t1 where t1.id = 1",
-                "Table": "t1"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_dst1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t1.id from t1 where 1 != 1",
+            "Query": "select t1.id from t1 where t1.id = 1",
+            "Table": "t1"
           }
         ]
       },
@@ -53,6 +48,8 @@
       "Original": "select t1.id from unsharded_src1.t1 where t1.id = 1",
       "Instructions": {
         "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 50,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -66,22 +63,15 @@
             "Table": "t1"
           },
           {
-            "OperatorType": "MirrorTarget",
-            "Variant": "Percent",
-            "Percent": 50,
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_dst1",
-                  "Sharded": false
-                },
-                "FieldQuery": "select t1.id from t1 where 1 != 1",
-                "Query": "select t1.id from t1 where t1.id = 1",
-                "Table": "t1"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_dst1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t1.id from t1 where 1 != 1",
+            "Query": "select t1.id from t1 where t1.id = 1",
+            "Table": "t1"
           }
         ]
       },
@@ -99,6 +89,8 @@
       "Original": "select t1.id, t2.id from unsharded_src1.t1, unsharded_src1.t2 where t1.id = t2.id",
       "Instructions": {
         "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 50,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -112,46 +104,39 @@
             "Table": "t1, t2"
           },
           {
-            "OperatorType": "MirrorTarget",
-            "Variant": "Percent",
-            "Percent": 50,
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "t1_id": 0
+            },
+            "TableName": "t1_t1",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0",
-                "JoinVars": {
-                  "t1_id": 0
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_dst1",
+                  "Sharded": false
                 },
-                "TableName": "t1_t1",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Unsharded",
-                    "Keyspace": {
-                      "Name": "unsharded_dst1",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select t1.id from t1 where 1 != 1",
-                    "Query": "select t1.id from t1",
-                    "Table": "t1"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "EqualUnique",
-                    "Keyspace": {
-                      "Name": "sharded_dst1",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
-                    "Query": "select t2.id from t1 as t2 where t2.id = :t1_id",
-                    "Table": "t1",
-                    "Values": [
-                      ":t1_id"
-                    ],
-                    "Vindex": "xxhash"
-                  }
-                ]
+                "FieldQuery": "select t1.id from t1 where 1 != 1",
+                "Query": "select t1.id from t1",
+                "Table": "t1"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "sharded_dst1",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
+                "Query": "select t2.id from t1 as t2 where t2.id = :t1_id",
+                "Table": "t1",
+                "Values": [
+                  ":t1_id"
+                ],
+                "Vindex": "xxhash"
               }
             ]
           }
@@ -173,6 +158,8 @@
       "Original": "select t1.id from unsharded_src1.t1 union select t2.id from unsharded_src1.t2",
       "Instructions": {
         "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 50,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -186,43 +173,36 @@
             "Table": "t1, t2"
           },
           {
-            "OperatorType": "MirrorTarget",
-            "Variant": "Percent",
-            "Percent": 50,
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
+            "ResultColumns": 1,
             "Inputs": [
               {
-                "OperatorType": "Distinct",
-                "Collations": [
-                  "(0:1)"
-                ],
-                "ResultColumns": 1,
+                "OperatorType": "Concatenate",
                 "Inputs": [
                   {
-                    "OperatorType": "Concatenate",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Unsharded",
-                        "Keyspace": {
-                          "Name": "unsharded_dst1",
-                          "Sharded": false
-                        },
-                        "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select t1.id from t1 where 1 != 1) as dt(c0) where 1 != 1",
-                        "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t1.id from t1) as dt(c0)",
-                        "Table": "t1"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "sharded_dst1",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select t2.id from t1 as t2 where 1 != 1) as dt(c0) where 1 != 1",
-                        "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t2.id from t1 as t2) as dt(c0)",
-                        "Table": "t1"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_dst1",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select t1.id from t1 where 1 != 1) as dt(c0) where 1 != 1",
+                    "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t1.id from t1) as dt(c0)",
+                    "Table": "t1"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "sharded_dst1",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select t2.id from t1 as t2 where 1 != 1) as dt(c0) where 1 != 1",
+                    "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t2.id from t1 as t2) as dt(c0)",
+                    "Table": "t1"
                   }
                 ]
               }
@@ -334,6 +314,8 @@
       "Original": "select t2.id from unsharded_src2.t2",
       "Instructions": {
         "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 50,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -347,22 +329,15 @@
             "Table": "t2"
           },
           {
-            "OperatorType": "MirrorTarget",
-            "Variant": "Percent",
-            "Percent": 50,
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_dst2",
-                  "Sharded": false
-                },
-                "FieldQuery": "select t2.id from t2 where 1 != 1",
-                "Query": "select t2.id from t2",
-                "Table": "t2"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_dst2",
+              "Sharded": false
+            },
+            "FieldQuery": "select t2.id from t2 where 1 != 1",
+            "Query": "select t2.id from t2",
+            "Table": "t2"
           }
         ]
       },
