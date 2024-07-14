@@ -151,13 +151,7 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 }
 
 func buildRoutePlanWithMirroring(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema plancontext.VSchema) (*planResult, error)) (*planResult, error) {
-	// Building a plan changes the statement, so clone it before we create the
-	// original plan.
-	//
-	// TODO(maxeng): find a way to avoid this work unless all tables have a
-	// mirror rule. At present, we don't know which tables to check until we
-	// plan the original statement.
-	mirrorStmt := sqlparser.CloneStatement(stmt)
+	mirrorStmt := stmt
 
 	plan, err := buildRoutePlan(stmt, reservedVars, vschema, f)
 	if err != nil {

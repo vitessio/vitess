@@ -28,19 +28,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+var emptyIdentifier = sqlparser.NewIdentifierCS("")
+
 func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement, ks *vindexes.Keyspace) (engine.Primitive, []sqlparser.TableName, error) {
-	// this method is used when the query we are handling has all tables in the same unsharded keyspace
-	sqlparser.SafeRewrite(stmt, nil, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case sqlparser.SelectExpr:
-			removeKeyspaceFromSelectExpr(node)
-		case sqlparser.TableName:
-			cursor.Replace(sqlparser.TableName{
-				Name: node.Name,
-			})
-		}
-		return true
-	})
+	ctx.AddNodeTransformer(removeKeyspacesTransformer())
 
 	tableNames, err := getTableNames(ctx.SemTable)
 	if err != nil {
@@ -53,6 +44,7 @@ func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.Se
 		},
 		TableName: strings.Join(escapedTableNames(tableNames), ", "),
 	}
+
 	prim, err := WireupRoute(ctx, eroute, stmt)
 	if err != nil {
 		return nil, nil, err
@@ -99,11 +91,38 @@ func getTableNames(semTable *semantics.SemTable) ([]sqlparser.TableName, error) 
 	return tableNames, nil
 }
 
-func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
-	switch expr := expr.(type) {
-	case *sqlparser.AliasedExpr:
-		sqlparser.RemoveKeyspaceInCol(expr.Expr)
-	case *sqlparser.StarExpr:
-		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
+// removeKeyspacesTransformer returns a NodeTransformer that produces
+// transformed SQLNode stripped of keyspace information.
+func removeKeyspacesTransformer() sqlparser.NodeTransformer {
+	var inAliasedExpr bool
+	var inSelectExpr bool
+
+	return func(node sqlparser.SQLNode, done func(node sqlparser.SQLNode)) {
+		switch node := node.(type) {
+		case *sqlparser.AliasedExpr:
+			inAliasedExpr = true
+			done(node)
+			inAliasedExpr = false
+		case *sqlparser.ColName:
+			if inSelectExpr && inAliasedExpr {
+				if !node.Qualifier.Qualifier.IsEmpty() {
+					node := sqlparser.Clone(node)
+					node.Qualifier.Qualifier = emptyIdentifier
+				}
+			}
+			done(node)
+		case sqlparser.SelectExpr:
+			inSelectExpr = true
+			done(node)
+			inSelectExpr = false
+		case sqlparser.TableName:
+			if !node.Qualifier.IsEmpty() {
+				node = sqlparser.Clone(node)
+				node.Qualifier = emptyIdentifier
+			}
+			done(node)
+		default:
+			done(node)
+		}
 	}
 }

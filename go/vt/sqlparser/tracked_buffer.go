@@ -25,6 +25,44 @@ import (
 // function that can be given to TrackedBuffer for code generation.
 type NodeFormatter func(buf *TrackedBuffer, node SQLNode)
 
+// DefaultFormatter applies default formatting.
+func DefaultFormatter(buf *TrackedBuffer, node SQLNode) {
+	node.Format(buf)
+}
+
+// Transformer is used to make changes to SQLNode during formatting.
+//
+// The transformed SQLNode is supplied via a callback, allowing NodeTransformer
+// to perform internal book-keeping before and after the transformed SQLNode is
+// used.
+type NodeTransformer func(SQLNode, func(SQLNode))
+
+// ComposeTransformers chains multiple NodeTransformer into a composite.
+func ComposeTransformers(transformers ...NodeTransformer) NodeTransformer {
+	return func(node SQLNode, done func(SQLNode)) {
+		currentNode := node
+		wrappedDone := func(newNode SQLNode) {
+			currentNode = newNode
+		}
+		for _, transform := range transformers {
+			transform(currentNode, wrappedDone)
+		}
+		done(currentNode)
+	}
+}
+
+// TransformFormatter produces a NodeFormatter that produces a transforms and
+// then formats a SQLNode.
+//
+// It can be used to influence formatting without mutating the original SQLNode.
+func TransformFormatter(transform NodeTransformer, format NodeFormatter) NodeFormatter {
+	return func(buf *TrackedBuffer, node SQLNode) {
+		transform(node, func(transformedNode SQLNode) {
+			format(buf, transformedNode)
+		})
+	}
+}
+
 // TrackedBuffer is used to rebuild a query from the ast.
 // bindLocations keeps track of locations in the buffer that
 // use bind variables for efficient future substitutions.
@@ -335,7 +373,6 @@ func UnescapedString(node SQLNode) string {
 	buf.SetEscapeNoIdentifier()
 	node.Format(buf)
 	return buf.String()
-
 }
 
 // CanonicalString returns a canonical string representation of an SQLNode where all identifiers

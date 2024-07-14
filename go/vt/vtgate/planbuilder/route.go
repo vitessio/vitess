@@ -26,12 +26,34 @@ import (
 )
 
 // WireupRoute returns an engine primitive for the given route.
-func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sqlparser.SelectStatement) (engine.Primitive, error) {
-	// prepare the queries we will pass down
-	eroute.Query = sqlparser.String(sel)
-	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
-	node := buffer.WriteNode(sel)
-	eroute.FieldQuery = node.ParsedQuery().Query
+func WireupRoute(
+	ctx *plancontext.PlanningContext,
+	eroute *engine.Route,
+	sel sqlparser.SelectStatement,
+) (engine.Primitive, error) {
+	var transform sqlparser.NodeTransformer
+	if len(ctx.NodeTransformers) > 0 {
+		transform = sqlparser.ComposeTransformers(ctx.NodeTransformers...)
+	}
+
+	// prepare the query we will pass down
+	if transform != nil {
+		qfmt := sqlparser.TransformFormatter(transform, sqlparser.DefaultFormatter)
+		qbuf := sqlparser.NewTrackedBuffer(qfmt)
+		qnode := qbuf.WriteNode(sel)
+		eroute.Query = qnode.ParsedQuery().Query
+	} else {
+		eroute.Query = sqlparser.String(sel)
+	}
+
+	// prepare the field query we will pass down
+	ffmt := sqlparser.FormatImpossibleQuery
+	if transform != nil {
+		ffmt = sqlparser.TransformFormatter(transform, ffmt)
+	}
+	fbuf := sqlparser.NewTrackedBuffer(ffmt)
+	fnode := fbuf.WriteNode(sel)
+	eroute.FieldQuery = fnode.ParsedQuery().Query
 
 	// if we have a planable vindex lookup, let's extract it into its own primitive
 	planableVindex, ok := eroute.RoutingParameters.Vindex.(vindexes.LookupPlanable)

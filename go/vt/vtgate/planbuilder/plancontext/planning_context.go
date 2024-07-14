@@ -66,6 +66,10 @@ type PlanningContext struct {
 	// OuterTables contains the tables that are outer to the current query
 	// Used to set the nullable flag on the columns
 	OuterTables semantics.TableSet
+
+	// NodeTransformers are used to influence the formatting of Statement without
+	// making changes to Statement.
+	NodeTransformers []sqlparser.NodeTransformer
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -375,4 +379,8 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 		return true, nil
 	}, e)
 	return
+}
+
+func (ctx *PlanningContext) AddNodeTransformer(transformer sqlparser.NodeTransformer) {
+	ctx.NodeTransformers = append(ctx.NodeTransformers, transformer)
 }
