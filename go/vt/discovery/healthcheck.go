@@ -476,7 +476,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 					hc.recomputeHealthyPrimary(key)
 				} else {
 					// Simply recompute the list of healthy tablets for all other tablet types.
-					hc.recomputeHealthy(key)
+					hc.recomputeHealthyReplicas(key)
 				}
 			}
 		}
@@ -575,11 +575,11 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		// Tablets from other cells for non-primary targets should not trigger a re-sort;
 		// they should also be excluded from healthy list.
 		if th.Target.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) {
-			hc.recomputeHealthy(targetKey)
+			hc.recomputeHealthyReplicas(targetKey)
 		}
 		if targetChanged && prevTarget.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) { // also recompute old target's healthy list
 			oldTargetKey := KeyFromTarget(prevTarget)
-			hc.recomputeHealthy(oldTargetKey)
+			hc.recomputeHealthyReplicas(oldTargetKey)
 		}
 	}
 
@@ -593,7 +593,12 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	hc.broadcast(th)
 }
 
-func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
+// Recomputes the healthy replica tablets for the given key.
+//
+// This filters out replicas that might be healthy, but are not part of the current
+// cell or cell alias. It also performs filtering of tablets based on replication lag,
+// if configured to do so.
+func (hc *HealthCheckImpl) recomputeHealthyReplicas(key KeyspaceShardTabletType) {
 	all := hc.healthData[key]
 	allArray := make([]*TabletHealth, 0, len(all))
 	for _, s := range all {
