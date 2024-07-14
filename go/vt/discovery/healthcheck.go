@@ -46,7 +46,6 @@ import (
 	"github.com/google/safehtml/template"
 	"github.com/google/safehtml/template/uncheckedconversions"
 	"github.com/spf13/pflag"
-	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
@@ -91,9 +90,6 @@ var (
 
 	// refreshKnownTablets tells us whether to process all tablets or only new tablets.
 	refreshKnownTablets = true
-
-	// healthCheckDialConcurrency tells us how many healthcheck connections can be opened to tablets at once. This should be less than the golang max thread limit of 10000.
-	healthCheckDialConcurrency int64 = 1024
 
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
@@ -177,7 +173,6 @@ func registerWebUIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&TabletURLTemplateString, "tablet_url_template", "http://{{.GetTabletHostPort}}", "Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this.")
 	fs.DurationVar(&refreshInterval, "tablet_refresh_interval", 1*time.Minute, "Tablet refresh interval.")
 	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "Whether to reload the tablet's address/port map from topo in case they change.")
-	fs.Int64Var(&healthCheckDialConcurrency, "healthcheck-dial-concurrency", 1024, "Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000.")
 	ParseTabletURLTemplateFromFlag()
 }
 
@@ -297,8 +292,6 @@ type HealthCheckImpl struct {
 	subscribers map[chan *TabletHealth]struct{}
 	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
 	loadTabletsTrigger chan struct{}
-	// healthCheckDialSem is used to limit how many healthcheck connections can be opened to tablets at once.
-	healthCheckDialSem *semaphore.Weighted
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -333,7 +326,6 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		cell:               localCell,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
-		healthCheckDialSem: semaphore.NewWeighted(healthCheckDialConcurrency),
 		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
 		healthData:         make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
@@ -844,7 +836,7 @@ func (hc *HealthCheckImpl) TabletConnection(ctx context.Context, alias *topodata
 		// TODO: test that throws this error
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
-	return thc.Connection(ctx, hc), nil
+	return thc.Connection(ctx), nil
 }
 
 // getAliasByCell should only be called while holding hc.mu

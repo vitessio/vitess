@@ -19,7 +19,6 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,15 +33,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
-
-// withDialerContextOnce ensures grpc.WithDialContext() is added once to the options.
-var withDialerContextOnce sync.Once
 
 // tabletHealthCheck maintains the health status of a tablet. A map of this
 // structure is maintained in HealthCheck.
@@ -127,8 +122,8 @@ func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 }
 
 // stream streams healthcheck responses to callback.
-func (thc *tabletHealthCheck) stream(ctx context.Context, hc *HealthCheckImpl, callback func(*query.StreamHealthResponse) error) error {
-	conn := thc.Connection(ctx, hc)
+func (thc *tabletHealthCheck) stream(ctx context.Context, callback func(*query.StreamHealthResponse) error) error {
+	conn := thc.Connection(ctx)
 	if conn == nil {
 		// This signals the caller to retry
 		return nil
@@ -141,34 +136,14 @@ func (thc *tabletHealthCheck) stream(ctx context.Context, hc *HealthCheckImpl, c
 	return err
 }
 
-func (thc *tabletHealthCheck) Connection(ctx context.Context, hc *HealthCheckImpl) queryservice.QueryService {
+func (thc *tabletHealthCheck) Connection(ctx context.Context) queryservice.QueryService {
 	thc.connMu.Lock()
 	defer thc.connMu.Unlock()
-	return thc.connectionLocked(ctx, hc)
+	return thc.connectionLocked(ctx)
 }
 
-func healthCheckDialerFactory(hc *HealthCheckImpl) func(ctx context.Context, addr string) (net.Conn, error) {
-	return func(ctx context.Context, addr string) (net.Conn, error) {
-		// Limit the number of healthcheck connections opened in parallel to avoid high OS-thread
-		// usage due to blocking networking syscalls (eg: DNS lookups, TCP connection opens,
-		// etc). Without this limit it is possible for vtgates watching >10k tablets to hit
-		// the panic: 'runtime: program exceeds 10000-thread limit'.
-		if err := hc.healthCheckDialSem.Acquire(ctx, 1); err != nil {
-			return nil, err
-		}
-		defer hc.healthCheckDialSem.Release(1)
-		var dialer net.Dialer
-		return dialer.DialContext(ctx, "tcp", addr)
-	}
-}
-
-func (thc *tabletHealthCheck) connectionLocked(ctx context.Context, hc *HealthCheckImpl) queryservice.QueryService {
+func (thc *tabletHealthCheck) connectionLocked(ctx context.Context) queryservice.QueryService {
 	if thc.Conn == nil {
-		withDialerContextOnce.Do(func() {
-			grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-				return append(opts, grpc.WithContextDialer(healthCheckDialerFactory(hc))), nil
-			})
-		})
 		conn, err := tabletconn.GetDialer()(ctx, thc.Tablet, grpcclient.FailFast(true))
 		if err != nil {
 			thc.LastError = err
@@ -297,7 +272,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		}()
 
 		// Read stream health responses.
-		err := thc.stream(streamCtx, hc, func(shr *query.StreamHealthResponse) error {
+		err := thc.stream(streamCtx, func(shr *query.StreamHealthResponse) error {
 			// We received a message. Reset the back-off.
 			retryDelay = hc.retryDelay
 			// Don't block on send to avoid deadlocks.

@@ -21,12 +21,14 @@ package grpcclient
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"sync"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,6 +47,10 @@ var (
 	keepaliveTimeout      = 10 * time.Second
 	initialConnWindowSize int
 	initialWindowSize     int
+
+	// `dialConcurrencyLimit` tells us how many tablet grpc connections can be dialed concurrently.
+	// This should be less than the golang max thread limit of 10000.
+	dialConcurrencyLimit int64 = 1024
 
 	// every vitess binary that makes grpc client-side calls.
 	grpcclientBinaries = []string{
@@ -74,9 +80,24 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&credsFile, "grpc_auth_static_client_creds", credsFile, "When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.")
 }
 
+func RegisterDialConcurrencyFlagsHealthcheck(fs *pflag.FlagSet) {
+	// TODO: Deprecate this and rename it to `grpc-dial-concurrency-limit`
+	fs.Int64Var(&dialConcurrencyLimit, "healthcheck-dial-concurrency", 1024, "Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000.")
+}
+
+func RegisterDialConcurrencyFlags(fs *pflag.FlagSet) {
+	fs.Int64Var(&dialConcurrencyLimit, "grpc-dial-concurrency-limit", 1024, "Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000.")
+}
+
 func init() {
 	for _, cmd := range grpcclientBinaries {
 		servenv.OnParseFor(cmd, RegisterFlags)
+
+		if cmd == "vtgate" || cmd == "vtcombo" || cmd == "vtctld" {
+			servenv.OnParseFor(cmd, RegisterDialConcurrencyFlagsHealthcheck)
+		} else {
+			servenv.OnParseFor(cmd, RegisterDialConcurrencyFlags)
+		}
 	}
 }
 
@@ -129,6 +150,10 @@ func DialContext(ctx context.Context, target string, failFast FailFast, opts ...
 		newopts = append(newopts, grpc.WithInitialWindowSize(int32(initialWindowSize)))
 	}
 
+	if dialConcurrencyLimit > 0 {
+		newopts = append(newopts, dialConcurrencyLimitOption())
+	}
+
 	newopts = append(newopts, opts...)
 	var err error
 	grpcDialOptionsMu.Lock()
@@ -173,6 +198,35 @@ func SecureDialOption(cert, key, ca, crl, name string) (grpc.DialOption, error) 
 	// Create the creds server options.
 	creds := credentials.NewTLS(config)
 	return grpc.WithTransportCredentials(creds), nil
+}
+
+var dialConcurrencyLimitOpt grpc.DialOption
+
+// withDialerContextOnce ensures grpc.WithDialContext() is added once to the options.
+var dialConcurrencyLimitOnce sync.Once
+
+func dialConcurrencyLimitOption() grpc.DialOption {
+	dialConcurrencyLimitOnce.Do(func() {
+		// This semaphore is used to limit how many grpc connections can be dialed to tablets simultanously.
+		// This does not limit how many tablet connections can be open at the same time.
+		sem := semaphore.NewWeighted(dialConcurrencyLimit)
+
+		dialConcurrencyLimitOpt = grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+			// Limit the number of grpc connections opened in parallel to avoid high OS-thread
+			// usage due to blocking networking syscalls (eg: DNS lookups, TCP connection opens,
+			// etc). Without this limit it is possible for vtgates watching >10k tablets to hit
+			// the panic: 'runtime: program exceeds 10000-thread limit'.
+			if err := sem.Acquire(ctx, 1); err != nil {
+				return nil, err
+			}
+			defer sem.Release(1)
+
+			var dialer net.Dialer
+			return dialer.DialContext(ctx, "tcp", addr)
+		})
+	})
+
+	return dialConcurrencyLimitOpt
 }
 
 // Allows for building a chain of interceptors without knowing the total size up front
