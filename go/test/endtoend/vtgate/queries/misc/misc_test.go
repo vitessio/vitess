@@ -104,6 +104,12 @@ func TestInvalidDateTimeTimestampVals(t *testing.T) {
 }
 
 func TestJoinWithThreeTables(t *testing.T) {
+	version, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if version != 20 {
+		t.Skip("cannot run upgrade/downgrade test")
+	}
+
 	mcmp, closer := start(t)
 	defer closer()
 
