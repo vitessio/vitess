@@ -13,6 +13,14 @@
           "name": "hash"
         }
       ]
+    },
+    "tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
     }
   }
 }

@@ -220,7 +220,9 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}
 	}
 
-	qb.addPredicate(onCondition)
+	for _, pred := range sqlparser.SplitAndExpression(nil, onCondition) {
+		qb.addPredicate(pred)
+	}
 }
 
 func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
