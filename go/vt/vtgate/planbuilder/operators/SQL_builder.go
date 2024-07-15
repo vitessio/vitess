@@ -28,31 +28,75 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type (
-	queryBuilder struct {
-		ctx         *plancontext.PlanningContext
-		stmt        sqlparser.Statement
-		tableNames  []string
-		dmlOperator Operator
-	}
-)
-
-func (qb *queryBuilder) asSelectStatement() sqlparser.SelectStatement {
-	return qb.stmt.(sqlparser.SelectStatement)
-}
-func (qb *queryBuilder) asOrderAndLimit() sqlparser.OrderAndLimit {
-	return qb.stmt.(sqlparser.OrderAndLimit)
-}
-
 func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement, _ Operator, err error) {
 	defer PanicHandler(&err)
 
-	q := &queryBuilder{ctx: ctx}
-	buildQuery(op, q)
+	q := newQueryBuilder(ctx)
+	q.buildQuery(op)
 	if ctx.SemTable != nil {
 		q.sortTables()
 	}
 	return q.stmt, q.dmlOperator, nil
+}
+
+// queryBuilder is used by the methods in the `SQL_builder.go` file to build a SQL query.
+type queryBuilder struct {
+	ctx         *plancontext.PlanningContext
+	stmt        sqlparser.Statement
+	tableNames  []string
+	dmlOperator Operator
+}
+
+func newQueryBuilder(ctx *plancontext.PlanningContext) *queryBuilder {
+	return &queryBuilder{
+		ctx: ctx,
+	}
+}
+
+func (qb *queryBuilder) buildQuery(op Operator) {
+	switch op := op.(type) {
+	case *Table:
+		qb.buildTable(op)
+	case *Projection:
+		qb.buildProjection(op)
+	case *ApplyJoin:
+		qb.buildApplyJoin(op)
+	case *Filter:
+		qb.buildFilter(op)
+	case *Horizon:
+		if op.TableId != nil {
+			qb.buildDerived(op)
+			return
+		}
+		qb.buildHorizon(op)
+	case *Limit:
+		qb.buildLimit(op)
+	case *Ordering:
+		qb.buildOrdering(op)
+	case *Aggregator:
+		qb.buildAggregation(op)
+	case *Union:
+		qb.buildUnion(op)
+	case *Distinct:
+		qb.buildQuery(op.Source)
+		qb.asSelectStatement().MakeDistinct()
+	case *Update:
+		qb.buildUpdate(op)
+	case *Delete:
+		qb.buildDelete(op)
+	case *Insert:
+		buildDML(op, qb)
+	default:
+		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
+	}
+}
+
+func (qb *queryBuilder) asSelectStatement() sqlparser.SelectStatement {
+	return qb.stmt.(sqlparser.SelectStatement)
+}
+
+func (qb *queryBuilder) asOrderAndLimit() sqlparser.OrderAndLimit {
+	return qb.stmt.(sqlparser.OrderAndLimit)
 }
 
 func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
@@ -160,37 +204,6 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 	qb.stmt = sel
 }
 
-func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExprs) {
-	for _, col := range exprs {
-		switch col := col.(type) {
-		case *sqlparser.AliasedExpr:
-			expr := sqlparser.NewColName(col.ColumnName())
-			selectExprs = append(selectExprs, &sqlparser.AliasedExpr{Expr: expr})
-		default:
-			selectExprs = append(selectExprs, col)
-		}
-	}
-	return
-}
-
-func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.SelectStatement) {
-	colName := column.Name.String()
-	exprs := sqlparser.GetFirstSelect(sel).SelectExprs
-	offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
-		switch ae := expr.(type) {
-		case *sqlparser.StarExpr:
-			return true
-		case *sqlparser.AliasedExpr:
-			// When accessing columns on top of a UNION, we fall back to this simple strategy of string comparisons
-			return ae.ColumnName() == colName
-		}
-		return false
-	})
-	if offset == -1 {
-		panic(vterrors.VT12001(fmt.Sprintf("did not find column [%s] on UNION", sqlparser.String(column))))
-	}
-}
-
 func (qb *queryBuilder) clearProjections() {
 	sel, isSel := qb.stmt.(*sqlparser.Select)
 	if !isSel {
@@ -206,17 +219,6 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 		Distinct: distinct,
 	}
 }
-
-type FromStatement interface {
-	GetFrom() []sqlparser.TableExpr
-	SetFrom([]sqlparser.TableExpr)
-	GetWherePredicate() sqlparser.Expr
-	SetWherePredicate(sqlparser.Expr)
-}
-
-var _ FromStatement = (*sqlparser.Select)(nil)
-var _ FromStatement = (*sqlparser.Update)(nil)
-var _ FromStatement = (*sqlparser.Delete)(nil)
 
 func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr, joinType sqlparser.JoinType) {
 	stmt := qb.stmt.(FromStatement)
@@ -255,6 +257,272 @@ func (qb *queryBuilder) mergeWhereClauses(stmt, otherStmt FromStatement) {
 	}
 }
 
+func (qb *queryBuilder) sortTables() {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		sel, isSel := node.(*sqlparser.Select)
+		if !isSel {
+			return true, nil
+		}
+		ts := &tableSorter{
+			sel: sel,
+			tbl: qb.ctx.SemTable,
+		}
+		sort.Sort(ts)
+		return true, nil
+	}, qb.stmt)
+}
+
+func (qb *queryBuilder) buildDelete(op *Delete) {
+	qb.stmt = &sqlparser.Delete{
+		Ignore:  op.Ignore,
+		Targets: sqlparser.TableNames{op.Target.Name},
+	}
+	qb.buildQuery(op.Source)
+
+	qb.dmlOperator = op
+}
+
+func (qb *queryBuilder) buildUpdate(op *Update) {
+	updExprs := getUpdateExprs(op)
+	upd := &sqlparser.Update{
+		Ignore: op.Ignore,
+		Exprs:  updExprs,
+	}
+	qb.stmt = upd
+	qb.dmlOperator = op
+	qb.buildQuery(op.Source)
+}
+
+func (qb *queryBuilder) buildAggregation(op *Aggregator) {
+	qb.buildQuery(op.Source)
+
+	qb.clearProjections()
+
+	cols := op.GetColumns(qb.ctx)
+	for _, column := range cols {
+		qb.addProjection(column)
+	}
+
+	for _, by := range op.Grouping {
+		qb.addGroupBy(by.Inner)
+		simplified := by.Inner
+		if by.WSOffset != -1 {
+			qb.addGroupBy(weightStringFor(simplified))
+		}
+	}
+	if op.WithRollup {
+		qb.setWithRollup()
+	}
+
+	if op.DT != nil {
+		sel := qb.asSelectStatement()
+		qb.stmt = nil
+		qb.addTableExpr(op.DT.Alias, op.DT.Alias, TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, op.DT.Columns)
+	}
+}
+
+func (qb *queryBuilder) buildOrdering(op *Ordering) {
+	qb.buildQuery(op.Source)
+
+	for _, order := range op.Order {
+		qb.asOrderAndLimit().AddOrder(order.Inner)
+	}
+}
+
+func (qb *queryBuilder) buildLimit(op *Limit) {
+	qb.buildQuery(op.Source)
+	qb.asOrderAndLimit().SetLimit(op.AST)
+}
+
+func (qb *queryBuilder) buildTable(op *Table) {
+	dbName := ""
+
+	if op.QTable.IsInfSchema {
+		dbName = op.QTable.Table.Qualifier.String()
+	}
+	qb.addTable(dbName, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), TableID(op), op.QTable.Alias.Hints)
+	for _, pred := range op.QTable.Predicates {
+		qb.addPredicate(pred)
+	}
+	for _, name := range op.Columns {
+		qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
+	}
+}
+
+func (qb *queryBuilder) buildProjection(op *Projection) {
+	qb.buildQuery(op.Source)
+
+	_, isSel := qb.stmt.(*sqlparser.Select)
+	if isSel {
+		qb.clearProjections()
+		cols := op.GetSelectExprs(qb.ctx)
+		for _, column := range cols {
+			qb.addProjection(column)
+		}
+	}
+
+	// if the projection is on derived table, we use the select we have
+	// created above and transform it into a derived table
+	if op.DT != nil {
+		sel := qb.asSelectStatement()
+		qb.stmt = nil
+		qb.addTableExpr(op.DT.Alias, op.DT.Alias, TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, op.DT.Columns)
+	}
+
+	if !isSel {
+		cols := op.GetSelectExprs(qb.ctx)
+		for _, column := range cols {
+			qb.addProjection(column)
+		}
+	}
+}
+
+func (qb *queryBuilder) buildApplyJoin(op *ApplyJoin) {
+	predicates := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
+		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
+		err := qb.ctx.SkipJoinPredicates(jc.Original)
+		if err != nil {
+			panic(err)
+		}
+		return jc.Original
+	})
+	pred := sqlparser.AndExpressions(predicates...)
+
+	qb.buildQuery(op.LHS)
+
+	qbR := newQueryBuilder(qb.ctx)
+	qbR.buildQuery(op.RHS)
+	qb.joinWith(qbR, pred, op.JoinType)
+}
+
+func (qb *queryBuilder) buildUnion(op *Union) {
+	// the first input is built first
+	qb.buildQuery(op.Sources[0])
+
+	for i, src := range op.Sources {
+		if i == 0 {
+			continue
+		}
+
+		// now we can go over the remaining inputs and UNION them together
+		qbOther := newQueryBuilder(qb.ctx)
+		qbOther.buildQuery(src)
+		qb.unionWith(qbOther, op.distinct)
+	}
+}
+
+func (qb *queryBuilder) buildFilter(op *Filter) {
+	qb.buildQuery(op.Source)
+
+	for _, pred := range op.Predicates {
+		qb.addPredicate(pred)
+	}
+}
+
+func (qb *queryBuilder) buildDerived(op *Horizon) {
+	qb.buildQuery(op.Source)
+
+	sqlparser.RemoveKeyspaceInCol(op.Query)
+
+	stmt := qb.stmt
+	qb.stmt = nil
+	switch sel := stmt.(type) {
+	case *sqlparser.Select:
+		qb.buildDerivedSelect(op, sel)
+		return
+	case *sqlparser.Union:
+		qb.buildDerivedUnion(op, sel)
+		return
+	}
+	panic(fmt.Sprintf("unknown select statement type: %T", stmt))
+}
+
+func (qb *queryBuilder) buildDerivedUnion(op *Horizon, union *sqlparser.Union) {
+	opQuery, ok := op.Query.(*sqlparser.Union)
+	if !ok {
+		panic(vterrors.VT12001("Horizon contained SELECT but statement was UNION"))
+	}
+
+	union.Limit = opQuery.Limit
+	union.OrderBy = opQuery.OrderBy
+	union.Distinct = opQuery.Distinct
+
+	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+		Select: union,
+	}, nil, op.ColumnAliases)
+}
+
+func (qb *queryBuilder) buildDerivedSelect(op *Horizon, sel *sqlparser.Select) {
+	opQuery, ok := op.Query.(*sqlparser.Select)
+	if !ok {
+		panic(vterrors.VT12001("Horizon contained UNION but statement was SELECT"))
+	}
+	sel.Limit = opQuery.Limit
+	sel.OrderBy = opQuery.OrderBy
+	sel.GroupBy = opQuery.GroupBy
+	sel.Having = mergeHaving(sel.Having, opQuery.Having)
+	sel.SelectExprs = opQuery.SelectExprs
+	sel.Distinct = opQuery.Distinct
+	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+		Select: sel,
+	}, nil, op.ColumnAliases)
+	for _, col := range op.Columns {
+		qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
+	}
+}
+
+func (qb *queryBuilder) buildHorizon(op *Horizon) {
+	qb.buildQuery(op.Source)
+	stripDownQuery(op.Query, qb.asSelectStatement())
+	sqlparser.RemoveKeyspaceInCol(qb.stmt)
+}
+
+func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExprs) {
+	for _, col := range exprs {
+		switch col := col.(type) {
+		case *sqlparser.AliasedExpr:
+			expr := sqlparser.NewColName(col.ColumnName())
+			selectExprs = append(selectExprs, &sqlparser.AliasedExpr{Expr: expr})
+		default:
+			selectExprs = append(selectExprs, col)
+		}
+	}
+	return
+}
+
+func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.SelectStatement) {
+	colName := column.Name.String()
+	exprs := sqlparser.GetFirstSelect(sel).SelectExprs
+	offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
+		switch ae := expr.(type) {
+		case *sqlparser.StarExpr:
+			return true
+		case *sqlparser.AliasedExpr:
+			// When accessing columns on top of a UNION, we fall back to this simple strategy of string comparisons
+			return ae.ColumnName() == colName
+		}
+		return false
+	})
+	if offset == -1 {
+		panic(vterrors.VT12001(fmt.Sprintf("did not find column [%s] on UNION", sqlparser.String(column))))
+	}
+}
+
+type FromStatement interface {
+	GetFrom() []sqlparser.TableExpr
+	SetFrom([]sqlparser.TableExpr)
+	GetWherePredicate() sqlparser.Expr
+	SetWherePredicate(sqlparser.Expr)
+}
+
+var _ FromStatement = (*sqlparser.Select)(nil)
+var _ FromStatement = (*sqlparser.Update)(nil)
+var _ FromStatement = (*sqlparser.Delete)(nil)
+
 func buildJoin(stmt FromStatement, otherStmt FromStatement, onCondition sqlparser.Expr, joinType sqlparser.JoinType) *sqlparser.JoinTableExpr {
 	var lhs sqlparser.TableExpr
 	fromClause := stmt.GetFrom()
@@ -279,22 +547,6 @@ func buildJoin(stmt FromStatement, otherStmt FromStatement, onCondition sqlparse
 			On: onCondition,
 		},
 	}
-}
-
-func (qb *queryBuilder) sortTables() {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		sel, isSel := node.(*sqlparser.Select)
-		if !isSel {
-			return true, nil
-		}
-		ts := &tableSorter{
-			sel: sel,
-			tbl: qb.ctx.SemTable,
-		}
-		sort.Sort(ts)
-		return true, nil
-	}, qb.stmt)
-
 }
 
 type tableSorter struct {
@@ -367,66 +619,6 @@ func stripDownQuery(from, to sqlparser.SelectStatement) {
 	}
 }
 
-// buildQuery recursively builds the query into an AST, from an operator tree
-func buildQuery(op Operator, qb *queryBuilder) {
-	switch op := op.(type) {
-	case *Table:
-		buildTable(op, qb)
-	case *Projection:
-		buildProjection(op, qb)
-	case *ApplyJoin:
-		buildApplyJoin(op, qb)
-	case *Filter:
-		buildFilter(op, qb)
-	case *Horizon:
-		if op.TableId != nil {
-			buildDerived(op, qb)
-			return
-		}
-		buildHorizon(op, qb)
-	case *Limit:
-		buildLimit(op, qb)
-	case *Ordering:
-		buildOrdering(op, qb)
-	case *Aggregator:
-		buildAggregation(op, qb)
-	case *Union:
-		buildUnion(op, qb)
-	case *Distinct:
-		buildQuery(op.Source, qb)
-		qb.asSelectStatement().MakeDistinct()
-	case *Update:
-		buildUpdate(op, qb)
-	case *Delete:
-		buildDelete(op, qb)
-	case *Insert:
-		buildDML(op, qb)
-	default:
-		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
-	}
-}
-
-func buildDelete(op *Delete, qb *queryBuilder) {
-	qb.stmt = &sqlparser.Delete{
-		Ignore:  op.Ignore,
-		Targets: sqlparser.TableNames{op.Target.Name},
-	}
-	buildQuery(op.Source, qb)
-
-	qb.dmlOperator = op
-}
-
-func buildUpdate(op *Update, qb *queryBuilder) {
-	updExprs := getUpdateExprs(op)
-	upd := &sqlparser.Update{
-		Ignore: op.Ignore,
-		Exprs:  updExprs,
-	}
-	qb.stmt = upd
-	qb.dmlOperator = op
-	buildQuery(op.Source, qb)
-}
-
 func getUpdateExprs(op *Update) sqlparser.UpdateExprs {
 	updExprs := make(sqlparser.UpdateExprs, 0, len(op.Assignments))
 	for _, se := range op.Assignments {
@@ -446,194 +638,6 @@ type OpWithAST interface {
 func buildDML(op OpWithAST, qb *queryBuilder) {
 	qb.stmt = op.Statement()
 	qb.dmlOperator = op
-}
-
-func buildAggregation(op *Aggregator, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
-
-	qb.clearProjections()
-
-	cols := op.GetColumns(qb.ctx)
-	for _, column := range cols {
-		qb.addProjection(column)
-	}
-
-	for _, by := range op.Grouping {
-		qb.addGroupBy(by.Inner)
-		simplified := by.Inner
-		if by.WSOffset != -1 {
-			qb.addGroupBy(weightStringFor(simplified))
-		}
-	}
-	if op.WithRollup {
-		qb.setWithRollup()
-	}
-
-	if op.DT != nil {
-		sel := qb.asSelectStatement()
-		qb.stmt = nil
-		qb.addTableExpr(op.DT.Alias, op.DT.Alias, TableID(op), &sqlparser.DerivedTable{
-			Select: sel,
-		}, nil, op.DT.Columns)
-	}
-}
-
-func buildOrdering(op *Ordering, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
-
-	for _, order := range op.Order {
-		qb.asOrderAndLimit().AddOrder(order.Inner)
-	}
-}
-
-func buildLimit(op *Limit, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
-	qb.asOrderAndLimit().SetLimit(op.AST)
-}
-
-func buildTable(op *Table, qb *queryBuilder) {
-	dbName := ""
-
-	if op.QTable.IsInfSchema {
-		dbName = op.QTable.Table.Qualifier.String()
-	}
-	qb.addTable(dbName, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), TableID(op), op.QTable.Alias.Hints)
-	for _, pred := range op.QTable.Predicates {
-		qb.addPredicate(pred)
-	}
-	for _, name := range op.Columns {
-		qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
-	}
-}
-
-func buildProjection(op *Projection, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
-
-	_, isSel := qb.stmt.(*sqlparser.Select)
-	if isSel {
-		qb.clearProjections()
-		cols := op.GetSelectExprs(qb.ctx)
-		for _, column := range cols {
-			qb.addProjection(column)
-		}
-	}
-
-	// if the projection is on derived table, we use the select we have
-	// created above and transform it into a derived table
-	if op.DT != nil {
-		sel := qb.asSelectStatement()
-		qb.stmt = nil
-		qb.addTableExpr(op.DT.Alias, op.DT.Alias, TableID(op), &sqlparser.DerivedTable{
-			Select: sel,
-		}, nil, op.DT.Columns)
-	}
-
-	if !isSel {
-		cols := op.GetSelectExprs(qb.ctx)
-		for _, column := range cols {
-			qb.addProjection(column)
-		}
-	}
-}
-
-func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
-	predicates := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
-		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
-		err := qb.ctx.SkipJoinPredicates(jc.Original)
-		if err != nil {
-			panic(err)
-		}
-		return jc.Original
-	})
-	pred := sqlparser.AndExpressions(predicates...)
-
-	buildQuery(op.LHS, qb)
-
-	qbR := &queryBuilder{ctx: qb.ctx}
-	buildQuery(op.RHS, qbR)
-	qb.joinWith(qbR, pred, op.JoinType)
-}
-
-func buildUnion(op *Union, qb *queryBuilder) {
-	// the first input is built first
-	buildQuery(op.Sources[0], qb)
-
-	for i, src := range op.Sources {
-		if i == 0 {
-			continue
-		}
-
-		// now we can go over the remaining inputs and UNION them together
-		qbOther := &queryBuilder{ctx: qb.ctx}
-		buildQuery(src, qbOther)
-		qb.unionWith(qbOther, op.distinct)
-	}
-}
-
-func buildFilter(op *Filter, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
-
-	for _, pred := range op.Predicates {
-		qb.addPredicate(pred)
-	}
-}
-
-func buildDerived(op *Horizon, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
-
-	sqlparser.RemoveKeyspaceInCol(op.Query)
-
-	stmt := qb.stmt
-	qb.stmt = nil
-	switch sel := stmt.(type) {
-	case *sqlparser.Select:
-		buildDerivedSelect(op, qb, sel)
-		return
-	case *sqlparser.Union:
-		buildDerivedUnion(op, qb, sel)
-		return
-	}
-	panic(fmt.Sprintf("unknown select statement type: %T", stmt))
-}
-
-func buildDerivedUnion(op *Horizon, qb *queryBuilder, union *sqlparser.Union) {
-	opQuery, ok := op.Query.(*sqlparser.Union)
-	if !ok {
-		panic(vterrors.VT12001("Horizon contained SELECT but statement was UNION"))
-	}
-
-	union.Limit = opQuery.Limit
-	union.OrderBy = opQuery.OrderBy
-	union.Distinct = opQuery.Distinct
-
-	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
-		Select: union,
-	}, nil, op.ColumnAliases)
-}
-
-func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) {
-	opQuery, ok := op.Query.(*sqlparser.Select)
-	if !ok {
-		panic(vterrors.VT12001("Horizon contained UNION but statement was SELECT"))
-	}
-	sel.Limit = opQuery.Limit
-	sel.OrderBy = opQuery.OrderBy
-	sel.GroupBy = opQuery.GroupBy
-	sel.Having = mergeHaving(sel.Having, opQuery.Having)
-	sel.SelectExprs = opQuery.SelectExprs
-	sel.Distinct = opQuery.Distinct
-	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
-		Select: sel,
-	}, nil, op.ColumnAliases)
-	for _, col := range op.Columns {
-		qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
-	}
-}
-
-func buildHorizon(op *Horizon, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
-	stripDownQuery(op.Query, qb.asSelectStatement())
-	sqlparser.RemoveKeyspaceInCol(qb.stmt)
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {
