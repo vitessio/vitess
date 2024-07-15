@@ -174,15 +174,15 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 func exposeOrderingColumn(ctx *plancontext.PlanningContext, qp *QueryProjection, orderBy OrderBy, derived string) OrderBy {
 	for _, se := range qp.SelectExprs {
 		aliasedExpr, err := se.GetAliasedExpr()
-		if err == nil {
-			// if we get an error, we'll just use the whatever was in the AST
-			if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, orderBy.SimplifiedExpr) {
-				newExpr := sqlparser.NewColNameWithQualifier(aliasedExpr.ColumnName(), sqlparser.NewTableName(derived))
-				ctx.SemTable.CopySemanticInfo(orderBy.SimplifiedExpr, newExpr)
-				orderBy.SimplifiedExpr = newExpr
-				orderBy.Inner = &sqlparser.Order{Expr: newExpr, Direction: orderBy.Inner.Direction}
-				break
-			}
+		if err != nil {
+			panic(vterrors.VT13001("unexpected expression in select"))
+		}
+		if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, orderBy.SimplifiedExpr) {
+			newExpr := sqlparser.NewColNameWithQualifier(aliasedExpr.ColumnName(), sqlparser.NewTableName(derived))
+			ctx.SemTable.CopySemanticInfo(orderBy.SimplifiedExpr, newExpr)
+			orderBy.SimplifiedExpr = newExpr
+			orderBy.Inner = &sqlparser.Order{Expr: newExpr, Direction: orderBy.Inner.Direction}
+			break
 		}
 	}
 
