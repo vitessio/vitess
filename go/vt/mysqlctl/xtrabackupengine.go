@@ -956,6 +956,8 @@ func (be *XtrabackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.Backup
 	return false
 }
 
+func (be *XtrabackupEngine) Name() string { return xtrabackupEngineName }
+
 func init() {
 	BackupRestoreEngineMap[xtrabackupEngineName] = &XtrabackupEngine{}
 }

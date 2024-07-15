@@ -1184,6 +1184,8 @@ func (be *BuiltinBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.Bac
 	return true
 }
 
+func (be *BuiltinBackupEngine) Name() string { return builtinBackupEngineName }
+
 func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (replication.Position, error) {
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {

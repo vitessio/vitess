@@ -19,6 +19,7 @@ package vtctl
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -58,13 +59,13 @@ func init() {
 	addCommand("Tablets", command{
 		name:   "Backup",
 		method: commandBackup,
-		params: "[--concurrency=4] [--allow_primary=false] [--incremental_from_pos=<pos>] <tablet alias>",
+		params: "[--concurrency=4] [--allow_primary=false] [--incremental_from_pos=<pos>] [--upgrade_safe] [--backup_engine=enginename] <tablet alias>",
 		help:   "Run a full or an incremental backup. Uses the BackupStorage service to store a new backup. With full backup, stops mysqld, takes the backup, starts mysqld and resumes replication. With incremental backup (indicated by '--incremental_from_pos', rotate and copy binary logs without disrupting the mysqld service).",
 	})
 	addCommand("Tablets", command{
 		name:   "RestoreFromBackup",
 		method: commandRestoreFromBackup,
-		params: "[--backup_timestamp=yyyy-MM-dd.HHmmss] [--restore_to_pos=<pos>] [--dry_run] <tablet alias>",
+		params: "[--backup_timestamp=yyyy-MM-dd.HHmmss] [--restore_to_pos=<pos>] [--dry_run] [--ignored_backup_engines=enginename,] <tablet alias>",
 		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time. If '--restore_to_pos' is given, then a point in time restore based on one full backup followed by zero or more incremental backups. dry-run only validates restore steps without actually restoring data",
 	})
 }
@@ -74,6 +75,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 	incrementalFromPos := subFlags.String("incremental_from_pos", "", "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 	upgradeSafe := subFlags.Bool("upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	backupEngine := subFlags.String("backup-engine", "", "Specifies if we want to use a particular backup engine for this backup request")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -93,6 +95,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 		AllowPrimary:       *allowPrimary,
 		IncrementalFromPos: *incrementalFromPos,
 		UpgradeSafe:        *upgradeSafe,
+		BackupEngine:       backupEngine,
 	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 
@@ -209,6 +212,8 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	restoreToPos := subFlags.String("restore_to_pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
 	restoreToTimestampStr := subFlags.String("restore_to_timestamp", "", "Run a point in time recovery that restores up to, and excluding, given timestamp in RFC3339 format (`2006-01-02T15:04:05Z07:00`). This will attempt to use one full backup followed by zero or more incremental backups")
+	ignoredBackupEngines := subFlags.String("ignored_backup_engines", "", "Ignore backups created with this list of backup engines, sepparated by a comma")
+
 	dryRun := subFlags.Bool("dry_run", false, "Only validate restore steps, do not actually restore data")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -246,6 +251,10 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 		RestoreToPos:       *restoreToPos,
 		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimestamp),
 		DryRun:             *dryRun,
+	}
+
+	if ignoredBackupEngines != nil {
+		req.IgnoredBackupEngines = strings.Split(*ignoredBackupEngines, ",")
 	}
 
 	if !backupTime.IsZero() {
