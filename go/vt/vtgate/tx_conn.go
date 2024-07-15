@@ -343,6 +343,52 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 	})
 }
 
+// ResolveTransactions fetches all unresolved transactions and resolves them.
+func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Target) error {
+	transactions, err := txc.tabletGateway.UnresolvedTransactions(ctx, target)
+	if err != nil {
+		return err
+	}
+
+	for _, txRecord := range transactions {
+		// TODO: log / output metric about the transaction not resolved.
+		_ = txc.ResolveTx(ctx, target, txRecord)
+	}
+	return nil
+}
+
+// ResolveTx resolves the specified distributed transaction.
+func (txc *TxConn) ResolveTx(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
+	mmShard, err := dtids.ShardSession(transaction.Dtid)
+	if err != nil {
+		return err
+	}
+
+	switch transaction.State {
+	case querypb.TransactionState_PREPARE:
+		// If state is PREPARE, make a decision to rollback and
+		// fallthrough to the rollback workflow.
+		// TODO : need to fix the usage of transaction ID.
+		//  This might never exists and we never releases that transaction and it's lock.
+		if err := txc.tabletGateway.SetRollback(ctx, target, transaction.Dtid, mmShard.TransactionId); err != nil {
+			return err
+		}
+		fallthrough
+	case querypb.TransactionState_ROLLBACK:
+		if err := txc.resumeRollback(ctx, target, transaction); err != nil {
+			return err
+		}
+	case querypb.TransactionState_COMMIT:
+		if err := txc.resumeCommit(ctx, target, transaction); err != nil {
+			return err
+		}
+	default:
+		// Should never happen.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid state: %v", transaction.State)
+	}
+	return nil
+}
+
 // Resolve resolves the specified 2PC transaction.
 func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 	mmShard, err := dtids.ShardSession(dtid)
