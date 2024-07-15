@@ -498,6 +498,30 @@
     }
   },
   {
+    "comment": "three table join with join predicate touching all tables",
+    "query": "select 42 from user u join user_extra ue on u.id = ue.user_id join music m on m.user_id = u.id where u.foo or m.foo or ue.foo",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 42 from user u join user_extra ue on u.id = ue.user_id join music m on m.user_id = u.id where u.foo or m.foo or ue.foo",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 42 from `user` as u, user_extra as ue, music as m where 1 != 1",
+        "Query": "select 42 from `user` as u, user_extra as ue, music as m where u.id = ue.user_id and m.user_id = u.id and (u.foo or m.foo or ue.foo)",
+        "Table": "`user`, music, user_extra"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Left join, multi-chunk",
     "query": "select u.col from user u left join unsharded m on u.a = m.b",
     "plan": {
