@@ -197,8 +197,8 @@ func TestQueryPlanCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 
-	initialHits := qe.queryPlanCacheHits.Get()
-	initialMisses := qe.queryPlanCacheMisses.Get()
+	initialHits := qe.queryEnginePlanCacheHits.Get()
+	initialMisses := qe.queryEnginePlanCacheMisses.Get()
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
@@ -206,8 +206,8 @@ func TestQueryPlanCache(t *testing.T) {
 
 	assertPlanCacheSize(t, qe, 1)
 
-	require.Equal(t, int64(0), qe.queryPlanCacheHits.Get()-initialHits)
-	require.Equal(t, int64(1), qe.queryPlanCacheMisses.Get()-initialMisses)
+	require.Equal(t, int64(0), qe.queryEnginePlanCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
 
 	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
@@ -215,8 +215,8 @@ func TestQueryPlanCache(t *testing.T) {
 
 	assertPlanCacheSize(t, qe, 1)
 
-	require.Equal(t, int64(1), qe.queryPlanCacheHits.Get()-initialHits)
-	require.Equal(t, int64(1), qe.queryPlanCacheMisses.Get()-initialMisses)
+	require.Equal(t, int64(1), qe.queryEnginePlanCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
 
 	qe.ClearQueryPlanCache()
 }

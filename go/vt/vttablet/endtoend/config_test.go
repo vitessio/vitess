@@ -192,7 +192,7 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	}
 }
 
-func TestQueryPlanCacheSize(t *testing.T) {
+func TestQueryEnginePlanCacheSize(t *testing.T) {
 	var cachedPlanSize = int((&tabletserver.TabletPlan{}).CachedSize(true))
 
 	// sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
@@ -211,19 +211,19 @@ func TestQueryPlanCacheSize(t *testing.T) {
 	assert.Equal(t, 1, framework.Server.QueryPlanCacheLen())
 
 	vend := framework.DebugVars()
-	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryPlanCacheSize"), cachedPlanSize)
+	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryEnginePlanCacheSize"), cachedPlanSize)
 
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
 	require.Equal(t, 2, framework.Server.QueryPlanCacheLen())
 
 	vend = framework.DebugVars()
-	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryPlanCacheSize"), 2*cachedPlanSize)
+	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryEnginePlanCacheSize"), 2*cachedPlanSize)
 
 	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
 	require.Equal(t, 3, framework.Server.QueryPlanCacheLen())
 
 	vend = framework.DebugVars()
-	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryPlanCacheSize"), 3*cachedPlanSize)
+	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryEnginePlanCacheSize"), 3*cachedPlanSize)
 }
 
 func TestMaxResultSize(t *testing.T) {

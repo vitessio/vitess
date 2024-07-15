@@ -45,14 +45,14 @@ It is now deprecated and will be removed in a future release.
 
 The following metrics are now deprecated, if provided please use their replacement.
 
-| Component  |      Metric Name      |        Replaced By        |
-|------------|:---------------------:|:-------------------------:|
-| `vttablet` |  `QueryCacheLength`   |  `QueryPlanCacheLength`   |
-| `vttablet` |   `QueryCacheSize`    |   `QueryPlanCacheSize`    |
-| `vttablet` | `QueryCacheCapacity`  | `QueryPlanCacheCapacity`  |
-| `vttablet` | `QueryCacheEvictions` | `QueryPlanCacheEvictions` |
-| `vttablet` |   `QueryCacheHits`    |   `QueryPlanCacheHits`    |
-| `vttablet` |  `QueryCacheMisses`   |  `QueryPlanCacheMisses`   |
+| Component  |      Metric Name      |           Replaced By           |
+|------------|:---------------------:|:-------------------------------:|
+| `vttablet` |  `QueryCacheLength`   |  `QueryEnginePlanCacheLength`   |
+| `vttablet` |   `QueryCacheSize`    |   `QueryEnginePlanCacheSize`    |
+| `vttablet` | `QueryCacheCapacity`  | `QueryEnginePlanCacheCapacity`  |
+| `vttablet` | `QueryCacheEvictions` | `QueryEnginePlanCacheEvictions` |
+| `vttablet` |   `QueryCacheHits`    |   `QueryEnginePlanCacheHits`    |
+| `vttablet` |  `QueryCacheMisses`   |  `QueryEnginePlanCacheMisses`   |
 
 
 ### <a id="traffic-mirroring"/>Traffic Mirroring
