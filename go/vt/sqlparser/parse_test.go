@@ -2647,8 +2647,23 @@ var (
 		input:  "select sql_no_cache straight_join distinct 'foo' from t",
 		output: "select distinct sql_no_cache straight_join 'foo' from t",
 	}, {
+		input:  "select sql_buffer_result 'foo' from t",
+		output: "select sql_buffer_result 'foo' from t",
+	}, {
+		input:  "select high_priority 'foo' from t",
+		output: "select high_priority 'foo' from t",
+	}, {
 		input:  "select straight_join distinct sql_no_cache 'foo' from t",
 		output: "select distinct sql_no_cache straight_join 'foo' from t",
+	}, {
+		input:  "select sql_small_result 'foo' from t",
+		output: "select sql_small_result 'foo' from t",
+	}, {
+		input:  "select distinct sql_small_result 'foo' from t",
+		output: "select distinct sql_small_result 'foo' from t",
+	}, {
+		input:  "select sql_big_result 'foo' from t",
+		output: "select sql_big_result 'foo' from t",
 	}, {
 		input:  "select sql_calc_found_rows 'foo' from t",
 		output: "select sql_calc_found_rows 'foo' from t",

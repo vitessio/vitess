@@ -262,7 +262,11 @@ type (
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
 		Distinct         bool
+		HighPriority     bool
 		StraightJoinHint bool
+		SQLSmallResult   bool
+		SQLBigResult     bool
+		SQLBufferResult  bool
 		SQLCalcFoundRows bool
 		// The With field needs to come before the FROM clause, so any CTEs have been handled before we analyze it
 		With        *With
