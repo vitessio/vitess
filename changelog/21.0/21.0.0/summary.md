@@ -4,10 +4,10 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
-  - **[Deprecations and Deletions](#deprecations-and-deletions)** 
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deletion of deprecated metrics](#metric-deletion)
     - [VTTablet Flags](#vttablet-flags)
-    - [Metrics](#deprecations-metrics) 
+    - [Metrics](#deprecations-metrics)
   - **[Traffic Mirroring](#traffic-mirroring)**
   - **[New VTGate Shutdown Behavior](#new-vtgate-shutdown-behavior)**
   - **[Tablet Throttler: Multi-Metric support](#tablet-throttler)**
