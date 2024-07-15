@@ -180,6 +180,7 @@ func exposeOrderingColumn(ctx *plancontext.PlanningContext, qp *QueryProjection,
 				newExpr := sqlparser.NewColNameWithQualifier(aliasedExpr.ColumnName(), sqlparser.NewTableName(derived))
 				ctx.SemTable.CopySemanticInfo(orderBy.SimplifiedExpr, newExpr)
 				orderBy.SimplifiedExpr = newExpr
+				orderBy.Inner = &sqlparser.Order{Expr: newExpr, Direction: orderBy.Inner.Direction}
 				break
 			}
 		}
