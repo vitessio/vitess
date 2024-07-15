@@ -189,6 +189,7 @@ type QueryEngine struct {
 	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains error code as an additional dimension
 	queryCounts, queryCountsWithTabletType, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned, queryTextCharsProcessed *stats.CountersWithMultiLabels
 	queryEnginePlanCacheHits, queryEnginePlanCacheMisses                                                                                                          *stats.CounterFunc
+	queryCacheHitsDeprecated, queryCacheMissesDeprecated                                                                                                          *stats.CounterFunc
 
 	// stats flags
 	enablePerWorkloadTableMetrics bool
@@ -302,7 +303,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	})
 
 	// QueryCacheHits is deprecated in v21 and will be removed in >=v22. This metric is replaced by QueryEnginePlanCacheHits.
-	_ = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query plan cache hits (deprecated: please use QueryEnginePlanCacheHits)", func() int64 {
+	qe.queryCacheHitsDeprecated = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query plan cache hits (deprecated: please use QueryEnginePlanCacheHits)", func() int64 {
 		return qe.plans.Metrics.Hits()
 	})
 	qe.queryEnginePlanCacheHits = env.Exporter().NewCounterFunc("QueryEnginePlanCacheHits", "Query engine query plan cache hits", func() int64 {
@@ -310,7 +311,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	})
 
 	// QueryCacheMisses is deprecated in v21 and will be removed in >=v22. This metric is replaced by QueryEnginePlanCacheMisses.
-	_ = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query plan cache misses (deprecated: please use QueryEnginePlanCacheMisses)", func() int64 {
+	qe.queryCacheMissesDeprecated = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query plan cache misses (deprecated: please use QueryEnginePlanCacheMisses)", func() int64 {
 		return qe.plans.Metrics.Misses()
 	})
 	qe.queryEnginePlanCacheMisses = env.Exporter().NewCounterFunc("QueryEnginePlanCacheMisses", "Query engine query plan cache misses", func() int64 {
