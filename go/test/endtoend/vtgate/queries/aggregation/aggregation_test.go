@@ -441,10 +441,12 @@ func TestOrderByCount(t *testing.T) {
 	defer closer()
 
 	mcmp.Exec("insert into t9(id1, id2, id3) values(1, '1', '1'), (2, '2', '2'), (3, '2', '2'), (4, '3', '3'), (5, '3', '3'), (6, '3', '3')")
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'b1','bar',200)")
 
 	mcmp.Exec("SELECT t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC")
 	if utils.BinaryIsAtLeastAtVersion(20, "vtgate") {
 		mcmp.Exec("select COUNT(*) from (select 1 as one FROM t9 WHERE id3 = 3 ORDER BY id1 DESC LIMIT 3 OFFSET 0) subquery_for_count")
+		mcmp.Exec("select t.id1, t1.name, t.leCount from (select id1, count(*) as leCount from t9 group by 1 order by 2 desc limit 20) t join t1 on t.id1 = t1.t1_id")
 	}
 }
 
