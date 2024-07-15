@@ -54,6 +54,7 @@ func init() {
 		fmt.Fprintf(buf, " and v%d = '%d%s'", i, i, baseval.String())
 	}
 	benchQuery = buf.String()
+	// fmt.Printf("len: %d\n", len(benchQuery))
 }
 
 func BenchmarkWithNormalizer(b *testing.B) {

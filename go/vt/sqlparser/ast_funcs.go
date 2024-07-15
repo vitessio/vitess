@@ -2734,7 +2734,6 @@ func (node *Select) SetWherePredicate(expr Expr) {
 		Expr: expr,
 	}
 }
-
 func (node *Delete) GetFrom() []TableExpr {
 	return node.TableExprs
 }
