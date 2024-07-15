@@ -612,6 +612,41 @@ func TestMMRollbackFlow(t *testing.T) {
 	require.NoError(t, err)
 }
 
+type AsyncChecker struct {
+	t  *testing.T
+	ch chan bool
+}
+
+func newAsyncChecker(t *testing.T) *AsyncChecker {
+	return &AsyncChecker{
+		t:  t,
+		ch: make(chan bool),
+	}
+}
+
+func (ac *AsyncChecker) check() {
+	ac.ch <- true
+}
+
+func (ac *AsyncChecker) shouldNotify(timeout time.Duration, message string) {
+	select {
+	case <-ac.ch:
+		// notified, all is well
+	case <-time.After(timeout):
+		// timed out waiting for notification
+		ac.t.Error(message)
+	}
+}
+func (ac *AsyncChecker) shouldNotNotify(timeout time.Duration, message string) {
+	select {
+	case <-ac.ch:
+		// notified - not expected
+		ac.t.Error(message)
+	case <-time.After(timeout):
+		// timed out waiting for notification, which is expected
+	}
+}
+
 // TestTransactionWatcherSignal test that unresolved transaction signal is received via health stream.
 func TestTransactionWatcherSignal(t *testing.T) {
 	client := framework.NewClient()
@@ -623,13 +658,13 @@ func TestTransactionWatcherSignal(t *testing.T) {
 	_, err = client.Execute(query, nil)
 	require.NoError(t, err)
 
-	ch := make(chan any)
+	ch := newAsyncChecker(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
 		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			if shr.RealtimeStats.TxUnresolved {
-				ch <- true
+				ch.check()
 			}
 			return nil
 		})
@@ -642,31 +677,19 @@ func TestTransactionWatcherSignal(t *testing.T) {
 	require.NoError(t, err)
 
 	// wait for unresolved transaction signal
-	select {
-	case <-ch:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for transaction watcher signal")
-	}
+	ch.shouldNotify(2*time.Second, "timed out waiting for transaction watcher signal")
 
 	err = client.SetRollback("aa", 0)
 	require.NoError(t, err)
 
 	// still should receive unresolved transaction signal
-	select {
-	case <-ch:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for transaction watcher signal")
-	}
+	ch.shouldNotify(2*time.Second, "timed out waiting for transaction watcher signal")
 
 	err = client.ConcludeTransaction("aa")
 	require.NoError(t, err)
 
 	// transaction watcher should stop sending singal now.
-	select {
-	case <-ch:
-		t.Fatal("unexpected signal for unresolved transaction")
-	case <-time.After(2 * time.Second):
-	}
+	ch.shouldNotNotify(2*time.Second, "unexpected signal for resolved transaction")
 }
 
 func TestUnresolvedTracking(t *testing.T) {
