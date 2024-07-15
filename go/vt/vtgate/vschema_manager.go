@@ -22,7 +22,6 @@ import (
 
 	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -229,19 +228,20 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 	// Now that we have ensured that all the tables are created, we can start populating the foreign keys
 	// in the tables.
 	for tblName, tblInfo := range m {
-		rTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
-		if err != nil {
-			log.Errorf("error finding routed table %s: %v", tblName, err)
+		rTbl := ks.Tables[tblName]
+		if rTbl == nil {
+			log.Errorf("unable to find table %s in %s", tblName, ksName)
 			continue
 		}
 		for _, fkDef := range tblInfo.ForeignKeys {
+			parentTableName := fkDef.ReferenceDefinition.ReferencedTable.Name.String()
 			// Ignore internal tables as part of foreign key references.
-			if schema.IsInternalOperationTableName(fkDef.ReferenceDefinition.ReferencedTable.Name.String()) {
+			if schema.IsInternalOperationTableName(parentTableName) {
 				continue
 			}
-			parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
-			if err != nil {
-				log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
+			parentTbl := ks.Tables[parentTableName]
+			if parentTbl == nil {
+				log.Errorf("unable to find table %s in %s", parentTableName, ksName)
 				continue
 			}
 			rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
