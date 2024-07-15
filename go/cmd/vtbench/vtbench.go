@@ -103,10 +103,7 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&sql, "sql", sql, "SQL statement to execute")
 	fs.IntVar(&threads, "threads", threads, "Number of parallel threads to run")
 	fs.IntVar(&count, "count", count, "Number of queries per thread")
-
 	grpccommon.RegisterFlags(fs)
-	log.RegisterFlags(fs)
-	logutil.RegisterFlags(fs)
 	acl.RegisterFlags(fs)
 	servenv.RegisterMySQLServerFlags(fs)
 }
