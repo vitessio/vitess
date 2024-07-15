@@ -465,6 +465,13 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 			qb.addGroupBy(weightStringFor(simplified))
 		}
 	}
+	if op.DT != nil {
+		sel := qb.asSelectStatement()
+		qb.stmt = nil
+		qb.addTableExpr(op.DT.Alias, op.DT.Alias, TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, op.DT.Columns)
+	}
 }
 
 func buildOrdering(op *Ordering, qb *queryBuilder) {
