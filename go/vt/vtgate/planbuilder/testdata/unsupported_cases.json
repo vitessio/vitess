@@ -50,6 +50,11 @@
     "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: user_index"
   },
   {
+    "comment": "subquery with an aggregation in order by that cannot be merged into a single route",
+    "query": "select col, trim((select user_name from user where col = 'a')) val from user_extra where user_id = 3 group by col order by val",
+    "plan": "VT12001: unsupported: subquery with aggregation in order by"
+  },
+  {
     "comment": "update change in multicol vindex column",
     "query": "update multicol_tbl set colc = 5, colb = 4 where cola = 1 and colb = 2",
     "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: multicolIdx"

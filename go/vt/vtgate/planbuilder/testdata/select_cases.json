@@ -737,6 +737,33 @@
     }
   },
   {
+    "comment": "subquery with an aggregation in order by that can be merged into a single route",
+    "query": "select col, trim((select user_name from user where id = 3)) val from user_extra where user_id = 3 group by col order by val",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col, trim((select user_name from user where id = 3)) val from user_extra where user_id = 3 group by col order by val",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, trim((select user_name from `user` where 1 != 1)) as val from user_extra where 1 != 1 group by col",
+        "Query": "select col, trim((select user_name from `user` where id = 3)) as val from user_extra where user_id = 3 group by col order by trim((select `user`.user_name from `user` where `user`.id = 3)) asc",
+        "Table": "user_extra",
+        "Values": [
+          "3"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Jumbled references",
     "query": "select user.col, user_extra.id, user.col2 from user join user_extra",
     "plan": {
