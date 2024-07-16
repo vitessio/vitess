@@ -254,12 +254,13 @@ func isOnlyDual(sel *sqlparser.Select) bool {
 		limit := sel.Limit.Rowcount
 		switch limit := limit.(type) {
 		case nil:
-			return true
 		case *sqlparser.Literal:
 			if limit.Val == "0" {
 				// A limit with any value other than zero can still return a row
 				return false
 			}
+		default:
+			return false
 		}
 	}
 
