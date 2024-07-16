@@ -15,8 +15,7 @@
 # limitations under the License.
 
 # github.base_ref $1
-
-target_release=""
+# github.ref $2
 
 base_release_branch=$(echo "$1" | grep -E 'release-[0-9]*.0$')
 if [ "$base_release_branch" == "" ]; then
@@ -25,16 +24,14 @@ fi
 if [ "$base_release_branch" != "" ]; then
   latest_major_release=$(git show-ref | grep -E 'refs/remotes/origin/release-[0-9]*\.0$' | sed 's/[a-z0-9]* refs\/remotes\/origin\/release-//' | sed 's/\.0//' | sort -nr | head -n1)
   major_release=$(echo "$base_release_branch" | sed 's/release-*//' | sed 's/\.0//')
-  target_major_release=$((major_release+1))
-  target_release_number=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.[0-9]*$' | sed 's/[a-z0-9]* refs\/tags\/v//' | awk -v FS=. -v RELEASE="$target_major_release" '{if ($1 == RELEASE) print; }' | sort -nr | head -n1)
-  target_release="v$target_release_number"
-  if [ -z "$target_release_number" ]
-  then
-    target_release="release-$target_major_release.0"
-  fi
+
+  # If these two are equal it means we are standing on the highest release branch possible, the next release is 'main'
   if [ "$major_release" == "$latest_major_release" ]; then
-    target_release="main"
+    echo "main"
+    exit 0
   fi
+
+  target_major_release="release-$((major_release+1)).0"
 fi
 
-echo "$target_release"
+echo "$target_major_release"
