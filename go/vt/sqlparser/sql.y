@@ -8513,6 +8513,7 @@ non_reserved_keyword:
 | SNAPSHOT
 | SOME %prec ANY_SOME
 | SQL
+| SQL_BUFFER_RESULT
 | SQL_TSI_DAY
 | SQL_TSI_HOUR
 | SQL_TSI_MINUTE
