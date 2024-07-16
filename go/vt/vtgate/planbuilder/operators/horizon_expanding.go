@@ -141,13 +141,18 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 			continue
 		}
 
-		// If the operator is not a projection, we cannot handle subqueries with aggregation
+		// If the operator is not a projection, we cannot handle subqueries with aggregation if we are unable to push everything into a single route.
 		if !ok {
-			panic(vterrors.VT12001("subquery with aggregation in order by"))
+			ctx.SemTable.NotSingleRouteErr = vterrors.VT12001("subquery with aggregation in order by")
+			return &Ordering{
+				Source: op,
+				Order:  qp.OrderExprs,
+			}
+		} else {
+			// Add the new subquery expression to the projection
+			proj.addSubqueryExpr(ctx, aeWrap(newExpr), newExpr, subqs...)
 		}
 
-		// Add the new subquery expression to the projection
-		proj.addSubqueryExpr(ctx, aeWrap(newExpr), newExpr, subqs...)
 		// Replace the original order expression with the new expression containing subqueries
 		newOrder = append(newOrder, OrderBy{
 			Inner: &sqlparser.Order{
