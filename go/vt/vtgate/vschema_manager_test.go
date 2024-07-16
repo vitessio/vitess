@@ -1,6 +1,7 @@
 package vtgate
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -334,6 +335,48 @@ func TestVSchemaUpdate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRoutingRules tests that the vschema manager uses the correct tables despite the routing rules.
+func TestRoutingRules(t *testing.T) {
+	cols1 := []vindexes.Column{{
+		Name: sqlparser.NewIdentifierCI("id"),
+		Type: querypb.Type_INT64,
+	}}
+	// Create a vschema manager with a fake vschema that returns a table with a column and a primary key.
+	vm := &VSchemaManager{}
+	vm.schema = &fakeSchema{t: map[string]*vindexes.TableInfo{
+		"t1": {
+			Columns: cols1,
+			Indexes: []*sqlparser.IndexDefinition{
+				{
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypePrimary},
+					Columns: []*sqlparser.IndexColumn{
+						{
+							Column: sqlparser.NewIdentifierCI("id"),
+						},
+					},
+				},
+			},
+		},
+	}}
+	// Define a vschema that has a keyspace routing rule.
+	vs := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			"ks": {
+				Tables:   map[string]*vindexes.Table{},
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+			},
+		},
+		RoutingRules: map[string]*vindexes.RoutingRule{
+			"ks.t1": {
+				Error: fmt.Errorf("error in routing rules"),
+			},
+		},
+	}
+	// Ensure that updating the vschema manager from the vschema doesn't cause a panic.
+	vm.updateFromSchema(vs)
+	require.Len(t, vs.Keyspaces["ks"].Tables["t1"].PrimaryKey, 1)
 }
 
 func TestRebuildVSchema(t *testing.T) {
