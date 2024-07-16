@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -234,14 +235,13 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 			continue
 		}
 		for _, fkDef := range tblInfo.ForeignKeys {
-			parentTableName := fkDef.ReferenceDefinition.ReferencedTable.Name.String()
 			// Ignore internal tables as part of foreign key references.
-			if schema.IsInternalOperationTableName(parentTableName) {
+			if schema.IsInternalOperationTableName(fkDef.ReferenceDefinition.ReferencedTable.Name.String()) {
 				continue
 			}
-			parentTbl := ks.Tables[parentTableName]
-			if parentTbl == nil {
-				log.Errorf("unable to find table %s in %s", parentTableName, ksName)
+			parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
+			if err != nil || parentTbl == nil {
+				log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
 				continue
 			}
 			rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
