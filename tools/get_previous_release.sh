@@ -30,4 +30,4 @@ else
   target_major_release=$major_release
 fi
 
-echo "release-$target_major_release.O"
+echo "release-$target_major_release.0"
