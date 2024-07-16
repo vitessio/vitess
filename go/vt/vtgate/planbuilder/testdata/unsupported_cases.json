@@ -20,6 +20,7 @@
     "plan": "VT12001: unsupported: subqueries in GROUP BY"
   },
   {
+<<<<<<< HEAD
     "comment": "subqueries in delete",
     "query": "delete from user where col = (select id from unsharded)",
     "plan": "VT12001: unsupported: subqueries in DML"
@@ -43,6 +44,11 @@
     "comment": "scatter update with limit clause",
     "query": "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1",
     "plan": "VT12001: unsupported: multi shard UPDATE with LIMIT"
+=======
+    "comment": "user defined functions used in having clause that needs evaluation on vtgate",
+    "query": "select col1, udf_aggr( col2 ) r from user group by col1 having r >= 0.3",
+    "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(col2)' must be pushed down to MySQL"
+>>>>>>> af8f42af13 (Fix panic in user defined aggregation functions planning (#16398))
   },
   {
     "comment": "update changes primary vindex column",

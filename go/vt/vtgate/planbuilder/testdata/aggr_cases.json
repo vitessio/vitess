@@ -2115,6 +2115,54 @@
     }
   },
   {
+    "comment": "User defined aggregation expression being used in order by of a query that is single sharded",
+    "query": "select col1, udf_aggr( col2 ) r from user where id = 1 group by col1 having r >= 0.3",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col1, udf_aggr( col2 ) r from user where id = 1 group by col1 having r >= 0.3",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, udf_aggr(col2) as r from `user` where 1 != 1 group by col1",
+        "Query": "select col1, udf_aggr(col2) as r from `user` where id = 1 group by col1 having udf_aggr(`user`.col2) >= 0.3",
+        "Table": "`user`",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "user defined aggregation such that it can pushed to mysql in a scatter route",
+    "query": "select id, udf_aggr( col2 ) r from user group by id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, udf_aggr( col2 ) r from user group by id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, udf_aggr(col2) as r from `user` where 1 != 1 group by id",
+        "Query": "select id, udf_aggr(col2) as r from `user` group by id",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "distinct on text column with collation",
     "query": "select col, count(distinct textcol1) from user group by col",
     "plan": {
