@@ -69,7 +69,7 @@ type (
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
-		Func     sqlparser.AggrFunc // if we are missing a Func, it means this is a AggregateAnyValue
+		Func     sqlparser.AggrFunc // if we are missing a Func, it means this is a AggregateAnyValue or AggregateUDF
 		OpCode   opcode.AggregateOpcode
 
 		// OriginalOpCode will contain opcode.AggregateUnassigned unless we are changing opcode while pushing them down
