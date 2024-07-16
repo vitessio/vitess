@@ -414,8 +414,6 @@ func (cfg *TabletConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.SchemaReloadInterval = 0
 	}
 
 	if tmp.SignalSchemaChangeReloadInterval != "" {
@@ -432,8 +430,6 @@ func (cfg *TabletConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.SchemaChangeReloadTimeout = 0
 	}
 
 	return nil
