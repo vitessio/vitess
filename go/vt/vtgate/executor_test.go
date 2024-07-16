@@ -876,6 +876,10 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
+	query = "show vitess_migrations"
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+
 	query = "show vschema vindexes"
 	qr, err = executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 	require.NoError(t, err)
