@@ -350,11 +350,19 @@ func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Targ
 		return err
 	}
 
+	failedResolution := 0
 	for _, txRecord := range transactions {
-		// TODO: log / output metric about the transaction not resolved.
-		_ = txc.ResolveTx(ctx, target, txRecord)
+		log.Infof("Resolving transaction ID: %s", txRecord.Dtid)
+		err = txc.ResolveTx(ctx, target, txRecord)
+		if err != nil {
+			failedResolution++
+			log.Errorf("Failed to resolve transaction ID: %s with error: %v", txRecord.Dtid, err)
+		}
 	}
-	return nil
+	if failedResolution == 0 {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to resolve %d out of %d transactions", failedResolution, len(transactions))
 }
 
 // ResolveTx resolves the specified distributed transaction.
@@ -368,8 +376,6 @@ func (txc *TxConn) ResolveTx(ctx context.Context, target *querypb.Target, transa
 	case querypb.TransactionState_PREPARE:
 		// If state is PREPARE, make a decision to rollback and
 		// fallthrough to the rollback workflow.
-		// TODO : need to fix the usage of transaction ID.
-		//  This might never exists and we never releases that transaction and it's lock.
 		if err := txc.tabletGateway.SetRollback(ctx, target, transaction.Dtid, mmShard.TransactionId); err != nil {
 			return err
 		}

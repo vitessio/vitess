@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -36,12 +37,13 @@ type TxResolver struct {
 }
 
 type TxConnection interface {
-	ResolveTransactions(target *querypb.Target)
+	ResolveTransactions(ctx context.Context, target *querypb.Target) error
 }
 
-func NewTxResolver(ch chan *discovery.TabletHealth) *TxResolver {
+func NewTxResolver(ch chan *discovery.TabletHealth, txConn TxConnection) *TxResolver {
 	return &TxResolver{
 		ch:      ch,
+		txConn:  txConn,
 		resolve: make(map[string]bool),
 	}
 }
@@ -66,6 +68,7 @@ func (tr *TxResolver) Start() {
 
 func (tr *TxResolver) Stop() {
 	if tr.cancel != nil {
+		log.Info("Stopping transaction resolver")
 		tr.cancel()
 	}
 }
@@ -75,13 +78,19 @@ func (tr *TxResolver) resolveTransactions(ctx context.Context, target *querypb.T
 	if !tr.tryLockTarget(dest) {
 		return
 	}
+	log.Infof("resolving transactions for shard: %s", dest)
 
 	defer func() {
 		tr.mu.Lock()
 		delete(tr.resolve, dest)
 		tr.mu.Unlock()
 	}()
-	tr.txConn.ResolveTransactions(target)
+	err := tr.txConn.ResolveTransactions(ctx, target)
+	if err != nil {
+		log.Errorf("failed to resolve transactions for shard: %s, %v", dest, err)
+		return
+	}
+	log.Infof("successfully resolved all the transactions for shard: %s", dest)
 }
 
 func (tr *TxResolver) tryLockTarget(dest string) bool {
