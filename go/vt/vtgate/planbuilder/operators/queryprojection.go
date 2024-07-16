@@ -68,7 +68,7 @@ type (
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
 		Original *sqlparser.AliasedExpr // The original SQL expression for the aggregation
-		Func     sqlparser.AggrFunc     // The aggregation function (e.g., COUNT, SUM). If nil, it means AggregateAnyValue is used
+		Func     sqlparser.AggrFunc     // The aggregation function (e.g., COUNT, SUM). If nil, it means AggregateAnyValue or AggregateUDF is used
 		OpCode   opcode.AggregateOpcode // The opcode representing the type of aggregation being performed
 
 		// OriginalOpCode will contain opcode.AggregateUnassigned unless we are changing the opcode while pushing them down
