@@ -19,7 +19,6 @@ package operators
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"slices"
 	"sort"
 	"strings"
@@ -84,11 +83,13 @@ type (
 		WSOffset  int // Offset for the weight string of the column
 
 		SubQueryExpression []*SubQuery // Subqueries associated with this aggregation
+
+		PushedDown bool // Whether the aggregation has been pushed down to the next layer
 	}
 )
 
 func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
-	return aggr.OpCode.NeedsComparableValues() && ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
+	return aggr.OpCode.NeedsComparableValues() && ctx.NeedsWeightString(aggr.Func.GetArg())
 }
 
 func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.Type {
@@ -167,7 +168,7 @@ func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 	qp.addGroupBy(ctx, sel.GroupBy)
 	qp.addOrderBy(ctx, sel.OrderBy)
 	if !qp.HasAggr && sel.Having != nil {
-		qp.HasAggr = ContainsAggr(ctx, sel.Having.Expr)
+		qp.HasAggr = ctx.ContainsAggr(sel.Having.Expr)
 	}
 	qp.calculateDistinct(ctx)
 
@@ -181,7 +182,7 @@ func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext
 			col := SelectExpr{
 				Col: selExp,
 			}
-			if ContainsAggr(ctx, selExp.Expr) {
+			if ctx.ContainsAggr(selExp.Expr) {
 				col.Aggr = true
 				qp.HasAggr = true
 			}
@@ -196,41 +197,6 @@ func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext
 			panic(vterrors.VT13001(fmt.Sprintf("%T in select list", selExp)))
 		}
 	}
-}
-
-func IsAggr(ctx *plancontext.PlanningContext, e sqlparser.SQLNode) bool {
-	switch node := e.(type) {
-	case sqlparser.AggrFunc:
-		return true
-	case *sqlparser.FuncExpr:
-		return node.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs())
-	}
-
-	return false
-}
-
-func ContainsAggr(ctx *plancontext.PlanningContext, e sqlparser.SQLNode) (hasAggr bool) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node.(type) {
-		case *sqlparser.Offset:
-			// offsets here indicate that a possible aggregation has already been handled by an input,
-			// so we don't need to worry about aggregation in the original
-			return false, nil
-		case sqlparser.AggrFunc:
-			hasAggr = true
-			return false, io.EOF
-		case *sqlparser.Subquery:
-			return false, nil
-		case *sqlparser.FuncExpr:
-			if IsAggr(ctx, node) {
-				hasAggr = true
-				return false, io.EOF
-			}
-		}
-
-		return true, nil
-	}, e)
-	return
 }
 
 // createQPFromUnion creates the QueryProjection for the input *sqlparser.Union
@@ -275,7 +241,7 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 			Inner:          ctx.SemTable.Clone(order).(*sqlparser.Order),
 			SimplifiedExpr: order.Expr,
 		})
-		canPushSorting = canPushSorting && !ContainsAggr(ctx, order.Expr)
+		canPushSorting = canPushSorting && !ctx.ContainsAggr(order.Expr)
 	}
 }
 
@@ -444,7 +410,7 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 			panic(err)
 		}
 
-		if !ContainsAggr(ctx, expr.Col) {
+		if !ctx.ContainsAggr(expr.Col) {
 			getExpr, err := expr.GetExpr()
 			if err != nil {
 				panic(err)
@@ -455,7 +421,7 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 			}
 			continue
 		}
-		if !IsAggr(ctx, aliasedExpr.Expr) && !allowComplexExpression {
+		if !ctx.IsAggr(aliasedExpr.Expr) && !allowComplexExpression {
 			panic(vterrors.VT12001("in scatter query: complex aggregate expression"))
 		}
 
@@ -484,14 +450,14 @@ func (qp *QueryProjection) extractAggr(
 			addAggr(aggrFunc)
 			return false
 		}
-		if IsAggr(ctx, node) {
+		if ctx.IsAggr(node) {
 			// If we are here, we have a function that is an aggregation but not parsed into an AggrFunc.
 			// This is the case for UDFs - we have to be careful with these because we can't evaluate them in VTGate.
 			aggr := NewAggr(opcode.AggregateUDF, nil, aeWrap(ex), "")
 			addAggr(aggr)
 			return false
 		}
-		if ContainsAggr(ctx, node) {
+		if ctx.ContainsAggr(node) {
 			makeComplex()
 			return true
 		}
@@ -519,7 +485,7 @@ orderBy:
 		}
 		qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
 			Col:  &sqlparser.AliasedExpr{Expr: orderExpr},
-			Aggr: ContainsAggr(ctx, orderExpr),
+			Aggr: ctx.ContainsAggr(orderExpr),
 		})
 		qp.AddedColumn++
 	}
@@ -698,9 +664,27 @@ func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningCont
 	return true
 }
 
+// addColumn adds a column to the QueryProjection if it is not already present.
+// It will use a column name that is available on the outside of the derived table
+func (qp *QueryProjection) addDerivedColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+	for _, selectExpr := range qp.SelectExprs {
+		getExpr, err := selectExpr.GetExpr()
+		if err != nil {
+			continue
+		}
+		if ctx.SemTable.EqualsExprWithDeps(getExpr, expr) {
+			return
+		}
+	}
+	qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
+		Col:  aeWrap(expr),
+		Aggr: ctx.ContainsAggr(expr),
+	})
+}
+
 func checkForInvalidGroupingExpressions(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if IsAggr(ctx, node) {
+		if ctx.IsAggr(node) {
 			panic(vterrors.VT03005(sqlparser.String(expr)))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)

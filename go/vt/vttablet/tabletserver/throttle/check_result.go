@@ -47,14 +47,24 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
+type MetricResult struct {
+	StatusCode int     `json:"StatusCode"`
+	Scope      string  `json:"Scope"`
+	Value      float64 `json:"Value"`
+	Threshold  float64 `json:"Threshold"`
+	Error      error   `json:"-"`
+	Message    string  `json:"Message"`
+}
+
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
 type CheckResult struct {
-	StatusCode      int     `json:"StatusCode"`
-	Value           float64 `json:"Value"`
-	Threshold       float64 `json:"Threshold"`
-	Error           error   `json:"-"`
-	Message         string  `json:"Message"`
-	RecentlyChecked bool    `json:"RecentlyChecked"`
+	StatusCode      int                      `json:"StatusCode"`
+	Value           float64                  `json:"Value"`
+	Threshold       float64                  `json:"Threshold"`
+	Error           error                    `json:"-"`
+	Message         string                   `json:"Message"`
+	RecentlyChecked bool                     `json:"RecentlyChecked"`
+	Metrics         map[string]*MetricResult `json:"Metrics"` // New in multi-metrics support. Will eventually replace the above fields.
 }
 
 // NewCheckResult returns a CheckResult
@@ -69,6 +79,10 @@ func NewCheckResult(statusCode int, value float64, threshold float64, err error)
 		result.Message = err.Error()
 	}
 	return result
+}
+
+func (c *CheckResult) IsOK() bool {
+	return c.StatusCode == http.StatusOK
 }
 
 // NewErrorCheckResult returns a check result that indicates an error

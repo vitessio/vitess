@@ -71,9 +71,9 @@ type testRevertMigrationParams struct {
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	primaryTablet   *cluster.Vttablet
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
-	primary         *cluster.Vttablet
 
 	normalWaitTime            = 20 * time.Second
 	extendedWaitTime          = 60 * time.Second
@@ -209,20 +209,32 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+
+	var lastMessage string
 	for {
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
-			message := row.AsString("message", "")
-			if strings.Contains(message, messageSubstring) {
+			lastMessage = row.AsString("message", "")
+			if strings.Contains(lastMessage, messageSubstring) {
 				return
 			}
 		}
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
+			{
+				resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.TestingName, nil)
+				assert.NoError(t, err)
+				fmt.Println("Throttler check response: ", resp)
+
+				output, err := throttler.GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, primaryTablet)
+				assert.NoError(t, err)
+				fmt.Println("Throttler status response: ", output)
+			}
+			require.Failf(t, "timeout waiting for message", "expected: %s. Last seen: %s", messageSubstring, lastMessage)
+			return
 		}
-		require.NoError(t, ctx.Err())
 	}
 }
 
@@ -279,6 +291,7 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+		primaryTablet = clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 
 		return m.Run(), nil
 	}()
@@ -293,7 +306,7 @@ func TestMain(m *testing.M) {
 
 func TestSchemaChange(t *testing.T) {
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("scheduler", testScheduler)
 	t.Run("singleton", testSingleton)
@@ -311,7 +324,6 @@ func testScheduler(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
-	primary = shards[0].PrimaryTablet()
 
 	ddlStrategy := "vitess"
 
@@ -336,7 +348,7 @@ func testScheduler(t *testing.T) {
 		}
 	}
 
-	mysqlVersion := onlineddl.GetMySQLVersion(t, primary)
+	mysqlVersion := onlineddl.GetMySQLVersion(t, primaryTablet)
 	require.NotEmpty(t, mysqlVersion)
 	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
@@ -565,7 +577,7 @@ func testScheduler(t *testing.T) {
 	require.NoError(t, err)
 	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*2)
+			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
@@ -588,7 +600,21 @@ func testScheduler(t *testing.T) {
 			commitTransactionChan := make(chan any)
 			transactionErrorChan := make(chan error)
 			t.Run("locking table rows", func(t *testing.T) {
-				go runInTransaction(t, ctx, primary, "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+				go runInTransaction(t, ctx, primaryTablet, "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+			})
+			t.Run("injecting heartbeats asynchronously", func(t *testing.T) {
+				go func() {
+					ticker := time.NewTicker(time.Second)
+					defer ticker.Stop()
+					for {
+						throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil)
+						select {
+						case <-ticker.C:
+						case <-ctx.Done():
+							return
+						}
+					}
+				}()
 			})
 			t.Run("check no force_cutover", func(t *testing.T) {
 				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
@@ -1225,7 +1251,7 @@ func testScheduler(t *testing.T) {
 				// name it `with_constraint_chk_1`. But we expect Online DDL to explicitly
 				// modify the constraint name, specifically to get rid of the <table-name> prefix,
 				// so that we don't get into https://bugs.mysql.com/bug.php?id=107772 situation.
-				createStatement := getCreateTableStatement(t, primary, "with_constraint")
+				createStatement := getCreateTableStatement(t, primaryTablet, "with_constraint")
 				assert.NotContains(t, createStatement, "with_constraint_chk")
 			})
 		})
@@ -1583,6 +1609,7 @@ DROP TABLE IF EXISTS stress_test
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert CREATE TABLE", func(t *testing.T) {
+		require.NotEmpty(t, uuids)
 		// The table existed, so it will now be dropped (renamed)
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vtgate", "", "", false))
 		uuids = append(uuids, uuid)
@@ -2553,7 +2580,7 @@ func testForeignKeys(t *testing.T) {
 		//
 		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
 		// query for this variable, and manipulate it, when starting the migration and when cutting over.
-		rs, err := primary.VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		rs, err := primaryTablet.VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
 		require.NoError(t, err)
 		fkOnlineDDLPossible = len(rs.Rows) > 0
 		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)

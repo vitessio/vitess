@@ -73,6 +73,7 @@ type testcase struct {
 
 var (
 	clusterInstance      *cluster.LocalProcessCluster
+	primaryTablet        *cluster.Vttablet
 	vtParams             mysql.ConnParams
 	evaluatedMysqlParams *mysql.ConnParams
 
@@ -368,6 +369,9 @@ var (
 	truncateStatement = `
 		TRUNCATE TABLE stress_test
 	`
+	setSqlMode = `
+		set @@global.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+	`
 )
 
 const (
@@ -391,17 +395,13 @@ func nextOpOrder() int64 {
 	return opOrder
 }
 
-func getTablet() *cluster.Vttablet {
-	return clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
-}
-
 func mysqlParams() *mysql.ConnParams {
 	if evaluatedMysqlParams != nil {
 		return evaluatedMysqlParams
 	}
 	evaluatedMysqlParams = &mysql.ConnParams{
 		Uname:      "vt_dba",
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", getTablet().TabletUID), "/mysql.sock"),
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", primaryTablet.TabletUID), "/mysql.sock"),
 		DbName:     fmt.Sprintf("vt_%s", keyspaceName),
 	}
 	return evaluatedMysqlParams
@@ -486,8 +486,12 @@ func TestSchemaChange(t *testing.T) {
 
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+	require.Equal(t, 1, len(shards[0].Vttablets))
+	primaryTablet = shards[0].Vttablets[0]
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+	_, err := primaryTablet.VttabletProcess.QueryTablet(setSqlMode, keyspaceName, true)
+	require.NoError(t, err)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	for _, testcase := range testCases {
 		require.NotEmpty(t, testcase.name)
@@ -500,7 +504,7 @@ func TestSchemaChange(t *testing.T) {
 				}
 			})
 			t.Run("create schema", func(t *testing.T) {
-				assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
+				assert.Len(t, shards, 1)
 				testWithInitialSchema(t)
 			})
 			t.Run("prepare table", func(t *testing.T) {
@@ -596,8 +600,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 // checkTable checks the number of tables in the first two shards.
 func checkTable(t *testing.T, showTableName string) {
-	for i := range clusterInstance.Keyspaces[0].Shards {
-		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, 1)
+	for i := range shards {
+		checkTablesCount(t, shards[i].Vttablets[0], showTableName, 1)
 	}
 }
 
@@ -626,8 +630,8 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
 func checkMigratedTable(t *testing.T, tableName, expectHint string) {
-	for i := range clusterInstance.Keyspaces[0].Shards {
-		createStatement := getCreateTableStatement(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], tableName)
+	for i := range shards {
+		createStatement := getCreateTableStatement(t, shards[i].Vttablets[0], tableName)
 		assert.Contains(t, createStatement, expectHint)
 	}
 }

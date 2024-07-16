@@ -56,15 +56,20 @@ var (
 	beforeTableName       = `onlineddl_test_before`
 	afterTableName        = `onlineddl_test_after`
 	eventName             = `onlineddl_test`
+
+	testsFilter = ""
 )
 
 const (
-	testDataPath = "testdata"
+	testDataPath     = "testdata"
+	testFilterEnvVar = "ONLINEDDL_SUITE_TEST_FILTER"
 )
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
+
+	testsFilter = os.Getenv(testFilterEnvVar)
 
 	exitcode, err := func() (int, error) {
 		clusterInstance = cluster.NewCluster(cell, hostname)
@@ -132,7 +137,7 @@ func TestSchemaChange(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	fkOnlineDDLPossible := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
@@ -183,6 +188,10 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 // testSingle is the main testing function for a single test in the suite.
 // It prepares the grounds, creates the test data, runs a migration, expects results/error, cleans up.
 func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
+	if !strings.Contains(testName, testsFilter) {
+		t.Skipf("Skipping test %s due to filter: %s=%s", testName, testFilterEnvVar, testsFilter)
+		return
+	}
 	if _, exists := readTestFile(t, testName, "require_rename_table_preserve_foreign_key"); exists {
 		if !fkOnlineDDLPossible {
 			t.Skipf("Skipping test due to require_rename_table_preserve_foreign_key")

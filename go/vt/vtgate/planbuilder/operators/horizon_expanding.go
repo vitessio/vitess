@@ -75,9 +75,18 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 }
 
 func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (Operator, *ApplyResult) {
-	op := createProjectionFromSelect(ctx, horizon)
 	qp := horizon.getQP(ctx)
 	var extracted []string
+
+	if horizon.IsDerived() {
+		// if we are dealing with a derived table, we need to make sure that the ordering columns
+		// are available outside the derived table
+		for _, order := range horizon.Query.GetOrderBy() {
+			qp.addDerivedColumn(ctx, order.Expr)
+		}
+	}
+
+	op := createProjectionFromSelect(ctx, horizon)
 	if qp.HasAggr {
 		extracted = append(extracted, "Aggregation")
 	} else {
@@ -99,7 +108,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if len(qp.OrderExprs) > 0 {
-		op = expandOrderBy(ctx, op, qp)
+		op = expandOrderBy(ctx, op, qp, horizon.Alias)
 		extracted = append(extracted, "Ordering")
 	}
 
@@ -115,7 +124,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")))
 }
 
-func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection) Operator {
+func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection, derived string) Operator {
 	var newOrder []OrderBy
 	sqc := &SubQueryBuilder{}
 	proj, ok := op.(*Projection)
@@ -125,6 +134,9 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr.SimplifiedExpr, TableID(op), false)
 		if newExpr == nil {
 			// If no subqueries are found, retain the original order expression
+			if derived != "" {
+				expr = exposeOrderingColumn(ctx, qp, expr, derived)
+			}
 			newOrder = append(newOrder, expr)
 			continue
 		}
@@ -156,6 +168,25 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 		Source: op,
 		Order:  newOrder,
 	}
+}
+
+// exposeOrderingColumn will expose the ordering column to the outer query
+func exposeOrderingColumn(ctx *plancontext.PlanningContext, qp *QueryProjection, orderBy OrderBy, derived string) OrderBy {
+	for _, se := range qp.SelectExprs {
+		aliasedExpr, err := se.GetAliasedExpr()
+		if err != nil {
+			panic(vterrors.VT13001("unexpected expression in select"))
+		}
+		if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, orderBy.SimplifiedExpr) {
+			newExpr := sqlparser.NewColNameWithQualifier(aliasedExpr.ColumnName(), sqlparser.NewTableName(derived))
+			ctx.SemTable.CopySemanticInfo(orderBy.SimplifiedExpr, newExpr)
+			orderBy.SimplifiedExpr = newExpr
+			orderBy.Inner = &sqlparser.Order{Expr: newExpr, Direction: orderBy.Inner.Direction}
+			break
+		}
+	}
+
+	return orderBy
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) Operator {

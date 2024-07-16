@@ -1743,6 +1743,47 @@
     }
   },
   {
+    "comment": "Unneeded ORDER BY inside derived table removed",
+    "query": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt1.id from (select id from `user` where 1 != 1) as dt1 where 1 != 1",
+            "Query": "select dt1.id from (select id from `user`) as dt1",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt2.id from (select id from `user` where 1 != 1) as dt2 where 1 != 1",
+            "Query": "select dt2.id from (select id from `user`) as dt2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "join of information_schema with normal table",
     "query": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
     "plan": {
@@ -1780,6 +1821,30 @@
       },
       "TablesUsed": [
         "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "three table join with join predicate touching all tables",
+    "query": "select 42 from user u join user_extra ue on u.id = ue.user_id join music m on m.user_id = u.id where u.foo or m.foo or ue.foo",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 42 from user u join user_extra ue on u.id = ue.user_id join music m on m.user_id = u.id where u.foo or m.foo or ue.foo",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 42 from `user` as u, user_extra as ue, music as m where 1 != 1",
+        "Query": "select 42 from `user` as u, user_extra as ue, music as m where u.id = ue.user_id and m.user_id = u.id and (u.foo or m.foo or ue.foo)",
+        "Table": "`user`, music, user_extra"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
       ]
     }
   },
@@ -2832,6 +2897,62 @@
               ":ue_id"
             ],
             "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Hash join has to be used since we have LIMIT on both sides",
+    "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "HashJoin",
+        "ComparisonType": "-1",
+        "JoinColumnIndexes": "-1",
+        "Predicate": "u.id = ue.user_id",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "10",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.id from (select id from `user` where 1 != 1) as u where 1 != 1",
+                "Query": "select u.id from (select id from `user`) as u limit 10",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Limit",
+            "Count": "10",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                "Query": "select ue.user_id from (select user_id from user_extra) as ue limit 10",
+                "Table": "user_extra"
+              }
+            ]
           }
         ]
       },

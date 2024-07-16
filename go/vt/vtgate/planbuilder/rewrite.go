@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -88,7 +87,7 @@ func (r *rewriter) rewriteHavingClause(node *sqlparser.Select) {
 	exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
 	node.Having = nil
 	for _, expr := range exprs {
-		if operators.ContainsAggr(r.ctx, expr) {
+		if r.ctx.ContainsAggr(expr) {
 			node.AddHaving(expr)
 		} else {
 			node.AddWhere(expr)

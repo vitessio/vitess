@@ -390,7 +390,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 	if strings.HasPrefix(tableSpecs, "{") { // user defined the vschema snippet, typically for a sharded target
 		wrap := fmt.Sprintf(`{"tables": %s}`, tableSpecs)
 		ks := &vschemapb.Keyspace{}
-		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
+		if err := json2.UnmarshalPB([]byte(wrap), ks); err != nil {
 			return err
 		}
 		for table, vtab := range ks.Tables {
@@ -1747,8 +1747,6 @@ func (ts *trafficSwitcher) IsMultiTenantMigration() bool {
 }
 
 func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topodatapb.TabletType, percent float32) error {
-	log.Infof("mirrorTableTraffic")
-
 	mrs, err := topotools.GetMirrorRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
