@@ -233,7 +233,9 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 	switch joinType {
 	case sqlparser.NormalJoinType:
 		newFromClause = append(stmt.GetFrom(), otherStmt.GetFrom()...)
-		qb.addPredicate(onCondition)
+		for _, pred := range sqlparser.SplitAndExpression(nil, onCondition) {
+			qb.addPredicate(pred)
+		}
 	default:
 		newFromClause = []sqlparser.TableExpr{buildJoin(stmt, otherStmt, onCondition, joinType)}
 	}

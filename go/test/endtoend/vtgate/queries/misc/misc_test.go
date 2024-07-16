@@ -114,6 +114,17 @@ func TestInvalidDateTimeTimestampVals(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestJoinWithThreeTables(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0), (1,1), (2,2)")
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (0,0,0), (1,1,1), (2,2,1)")
+	mcmp.Exec("select 42 from t1 u1, t1 u2, tbl u3 where u1.id1 = u2.id1 and u1.id1 = u3.id and (u1.id2 or u2.id2 or u3.unq_col)")
+}
+
 // TestIntervalWithMathFunctions tests that the Interval keyword can be used with math functions.
 func TestIntervalWithMathFunctions(t *testing.T) {
 	mcmp, closer := start(t)
