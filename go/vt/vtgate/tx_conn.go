@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
@@ -219,6 +220,14 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
+	// Test code to simulate a failure in the middle of a 2PC commit.
+	callerID := callerid.EffectiveCallerIDFromContext(ctx)
+	if callerID != nil && callerID.String() == "MMCommit_FailNow" {
+		log.Errorf("Fail After MM commit")
+		// as commit decision is made. Transaction is a commit.
+		return nil
+
+	}
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
 	})

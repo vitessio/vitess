@@ -75,10 +75,11 @@ func TestMain(m *testing.M) {
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--transaction_mode", "TWOPC",
+			"--grpc_use_effective_callerid",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--twopc_enable",
-			"--twopc_abandon_age", "3600",
+			"--twopc_abandon_age", "1",
 			"--queryserver-config-transaction-cap", "3",
 		)
 
@@ -229,7 +230,7 @@ func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap ma
 			if re.FieldEvent != nil {
 				tableMap[re.FieldEvent.TableName] = re.FieldEvent.Fields
 			}
-		case <-time.After(1 * time.Second):
+		case <-time.After(2 * time.Second):
 			keepWaiting = false
 		}
 	}

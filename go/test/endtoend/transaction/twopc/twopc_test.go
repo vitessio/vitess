@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/callerid"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -520,4 +521,74 @@ func compareMaps(t *testing.T, expected, actual map[string][]string, flexibleExp
 			assert.Equal(t, expectedValue, actualValue, "mismatch in values for key %s: expected: %v, got: %v", key, expectedValue, actualValue)
 		}
 	}
+}
+
+// TestDTResolver tests transaction resolver for distributed transaction on a failure after commit decision is made.
+func TestDTResolver(t *testing.T) {
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *binlogdatapb.VEvent)
+	runVStream(t, ctx, ch, vtgateConn)
+
+	conn := vtgateConn.Session("", nil)
+	qCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Insert into multiple shards
+	_, err = conn.Execute(qCtx, "begin", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(9,'baz')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil)
+	require.NoError(t, err)
+
+	// This setting will return from VTGate after commit happens on metadata manager.
+	// The RMs will be left in PREPARE state to resolve.
+	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("MMCommit_FailNow", "", ""), nil)
+	_, err = conn.Execute(newCtx, "commit", nil)
+	require.NoError(t, err)
+
+	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
+	tableMap := make(map[string][]*querypb.Field)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
+	expectations := map[string][]string{
+		"ks.dt_state:80-": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.dt_participant:80-": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+		},
+		"ks.redo_state:-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:-80": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+		},
+		"ks.twopc_user:-80": {
+			`insert:[INT64(8) VARCHAR("bar")]`,
+			`insert:[INT64(10) VARCHAR("apa")]`,
+		},
+		"ks.twopc_user:80-": {
+			`insert:[INT64(7) VARCHAR("foo")]`,
+			`insert:[INT64(9) VARCHAR("baz")]`,
+		},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
