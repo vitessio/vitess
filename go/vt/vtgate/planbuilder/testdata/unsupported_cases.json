@@ -20,6 +20,11 @@
     "plan": "VT12001: unsupported: subqueries in GROUP BY"
   },
   {
+    "comment": "user defined functions used in having clause that needs evaluation on vtgate",
+    "query": "select col1, udf_aggr( col2 ) r from user group by col1 having r >= 0.3",
+    "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(col2)' must be pushed down to MySQL"
+  },
+  {
     "comment": "update changes primary vindex column",
     "query": "update user set id = 1 where id = 1",
     "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: user_index"
