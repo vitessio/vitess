@@ -32,8 +32,15 @@ ARG BUILD_GIT_REV
 # Allows docker builds to set the BUILD_TIME
 ARG BUILD_TIME
 
+# Allows private repo go dependencies
+ARG GH_ACCESS_TOKEN
+
 # Re-copy sources from working tree
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
+
+# Allow checkout of github.com/slackhq/vitess-addons (private repo)
+ENV GOPRIVATE=github.com/slackhq/vitess-addons
+RUN git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
 USER vitess
 
