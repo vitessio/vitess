@@ -123,6 +123,13 @@ message CharsetConversion {
   string to_charset = 2;
 }
 
+// SnapshotMethod define types of snapshot creation for streamer
+enum StreamerSnapshotMethod {
+  Undefined = 0;
+  LockTables = 1;
+  TrackGtids = 2;
+}
+
 // Rule represents one rule in a Filter.
 message Rule {
   // Match can be a table name or a regular expression.
@@ -177,8 +184,11 @@ message Rule {
   // string format. e.g. the value 0 needs to be converted to '0'.
   map<string, bool> convert_int_to_enum = 8;
 
-   // ForceUniqueKey gives vtreamer a hint for `FORCE INDEX (...)` usage.
-   string force_unique_key = 9;
+  // ForceUniqueKey gives vtreamer a hint for `FORCE INDEX (...)` usage.
+  string force_unique_key = 9;
+
+  // SnapshotMethod dictates the way table snapshot is taken
+  StreamerSnapshotMethod snapshot_method = 10;
 }
 
 // Filter represents a list of ordered rules. The first

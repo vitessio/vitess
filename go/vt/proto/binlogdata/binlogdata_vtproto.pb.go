@@ -202,6 +202,7 @@ func (m *Rule) CloneVT() *Rule {
 		TargetUniqueKeyColumns:       m.TargetUniqueKeyColumns,
 		SourceUniqueKeyTargetColumns: m.SourceUniqueKeyTargetColumns,
 		ForceUniqueKey:               m.ForceUniqueKey,
+		SnapshotMethod:               m.SnapshotMethod,
 	}
 	if rhs := m.ConvertEnumToText; rhs != nil {
 		tmpContainer := make(map[string]string, len(rhs))
@@ -1299,6 +1300,11 @@ func (m *Rule) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.SnapshotMethod != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.SnapshotMethod))
+		i--
+		dAtA[i] = 0x50
 	}
 	if len(m.ForceUniqueKey) > 0 {
 		i -= len(m.ForceUniqueKey)
@@ -3386,6 +3392,9 @@ func (m *Rule) SizeVT() (n int) {
 	l = len(m.ForceUniqueKey)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
+	}
+	if m.SnapshotMethod != 0 {
+		n += 1 + sov(uint64(m.SnapshotMethod))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -5625,6 +5634,25 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ForceUniqueKey = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SnapshotMethod", wireType)
+			}
+			m.SnapshotMethod = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SnapshotMethod |= StreamerSnapshotMethod(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

@@ -32361,6 +32361,13 @@ export namespace binlogdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** StreamerSnapshotMethod enum. */
+    enum StreamerSnapshotMethod {
+        Undefined = 0,
+        LockTables = 1,
+        TrackGtids = 2
+    }
+
     /** Properties of a Rule. */
     interface IRule {
 
@@ -32390,6 +32397,9 @@ export namespace binlogdata {
 
         /** Rule force_unique_key */
         force_unique_key?: (string|null);
+
+        /** Rule snapshot_method */
+        snapshot_method?: (binlogdata.StreamerSnapshotMethod|null);
     }
 
     /** Represents a Rule. */
@@ -32427,6 +32437,9 @@ export namespace binlogdata {
 
         /** Rule force_unique_key. */
         public force_unique_key: string;
+
+        /** Rule snapshot_method. */
+        public snapshot_method: binlogdata.StreamerSnapshotMethod;
 
         /**
          * Creates a new Rule instance using the specified properties.
