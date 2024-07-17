@@ -1190,7 +1190,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, row)
 
 			artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
-			assert.Len(t, artifacts, 1)
+			require.Len(t, artifacts, 1)
 			checkTable(t, artifacts[0], true)
 
 			retainArtifactsSeconds := row.AsInt64("retain_artifacts_seconds", 0)
