@@ -42594,6 +42594,9 @@ export namespace query {
 
         /** RealtimeStats udfs_changed */
         udfs_changed?: (boolean|null);
+
+        /** RealtimeStats tx_unresolved */
+        tx_unresolved?: (boolean|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -42631,6 +42634,9 @@ export namespace query {
 
         /** RealtimeStats udfs_changed. */
         public udfs_changed: boolean;
+
+        /** RealtimeStats tx_unresolved. */
+        public tx_unresolved: boolean;
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
@@ -42950,8 +42956,8 @@ export namespace query {
     enum TransactionState {
         UNKNOWN = 0,
         PREPARE = 1,
-        COMMIT = 2,
-        ROLLBACK = 3
+        ROLLBACK = 2,
+        COMMIT = 3
     }
 
     /** Properties of a TransactionMetadata. */
