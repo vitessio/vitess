@@ -62,8 +62,6 @@ var (
 	statsThrottlerCheckAnyError = stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks")
 )
 
-type ThrottlePriority int
-
 // CheckFlags provide hints for a check
 type CheckFlags struct {
 	Scope                 base.Scope
@@ -165,7 +163,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		}
 
 		metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
-			return check.throttler.getMySQLStoreMetric(ctx, metricScope, metricName)
+			return check.throttler.getScopedMetric(metricScope, metricName)
 		}
 
 		metricCheckResult := check.checkAppMetricResult(ctx, appName, metricResultFunc, flags)
