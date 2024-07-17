@@ -48,23 +48,6 @@ func TestParseAlterTableOptions(t *testing.T) {
 	}
 }
 
-func TestLegacyParseRevertUUID(t *testing.T) {
-
-	{
-		uuid, err := legacyParseRevertUUID("revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
-		assert.NoError(t, err)
-		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", uuid)
-	}
-	{
-		_, err := legacyParseRevertUUID("revert 4e5dcf80_354b_11eb_82cd_f875a4")
-		assert.Error(t, err)
-	}
-	{
-		_, err := legacyParseRevertUUID("revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'")
-		assert.Error(t, err)
-	}
-}
-
 func TestParseEnumValues(t *testing.T) {
 	{
 		inputs := []string{
