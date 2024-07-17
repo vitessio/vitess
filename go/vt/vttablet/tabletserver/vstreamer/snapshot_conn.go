@@ -88,14 +88,7 @@ func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query s
 			query, err)
 	}
 
-	_, err = conn.ExecuteFetch("set session session_track_gtids = START_GTID", 1, false)
-	if err != nil {
-		// session_track_gtids = START_GTID unsupported or cannot execute. Resort to LOCK-based snapshot
-		gtid, err = conn.startSnapshot(ctx, table)
-	} else {
-		// session_track_gtids = START_GTID supported. Get a transaction with consistent GTID without LOCKing tables.
-		gtid, err = conn.startSnapshotWithConsistentGTID(ctx)
-	}
+	gtid, err = conn.startSnapshot(ctx, table)
 	if err != nil {
 		return "", rotatedLog, err
 	}
