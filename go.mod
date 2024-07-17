@@ -102,6 +102,7 @@ require (
 	github.com/kr/text v0.2.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
+	github.com/slackhq/vitess-addons v0.19.0
 	github.com/slok/noglog v0.2.0
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/jwalterweatherman v1.1.0

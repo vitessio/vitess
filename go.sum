@@ -450,6 +450,8 @@ github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6Mwd
 github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/sjmudd/stopwatch v0.1.1 h1:x45OvxFB5OtCkjvYtzRF5fWB857Jzjjk84Oyd5C5ebw=
 github.com/sjmudd/stopwatch v0.1.1/go.mod h1:BLw0oIQJ1YLXBO/q9ufK/SgnKBVIkC2qrm6uy78Zw6U=
+github.com/slackhq/vitess-addons v0.19.0 h1:+dWkQENsu8YYgsKesOKWqb3+vj66OY1WMvYOn9lmZ+I=
+github.com/slackhq/vitess-addons v0.19.0/go.mod h1:E7i+cxyIY+I4An/JAvalQ9Ze2MjKlEx0u2nFXE4fgR0=
 github.com/slok/noglog v0.2.0 h1:1czu4l2EoJ8L92UwdSXXa1Y+c5TIjFAFm2P+mjej95E=
 github.com/slok/noglog v0.2.0/go.mod h1:TfKxwpEZPT+UA83bQ6RME146k0MM4e8mwHLf6bhcGDI=
 github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304/go.mod h1:OnSkiWE9lh6wB0YB77sQom3nweQdgAjqCqsofrRNTgc=

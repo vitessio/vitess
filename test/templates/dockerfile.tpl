@@ -33,6 +33,8 @@ ENV VTROOT /vt/src/vitess.io/vitess
 # Set the vtdataroot such that it uses the volume mount
 ENV VTDATAROOT /vt/vtdataroot
 
+ENV GOPRIVATE github.com/slackhq/vitess-addons
+
 # create the vtdataroot directory
 RUN mkdir -p $VTDATAROOT
 

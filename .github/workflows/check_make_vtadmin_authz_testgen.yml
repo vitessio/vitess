@@ -2,7 +2,9 @@ name: check_make_vtadmin_authz_testgen
 on: [push, pull_request]
 
 permissions: read-all
-
+env:
+  GOPRIVATE: github.com/slackhq/vitess-addons
+  GH_ACCESS_TOKEN: "${{ secrets.GH_ACCESS_TOKEN }}"
 jobs:
   build:
     name: Check Make vtadmin_authz_testgen
@@ -48,6 +50,10 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
       with:
         go-version: 1.22.5
+
+    - name: Setup github.com/slackhq/vitess-addons access token
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
+      run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'

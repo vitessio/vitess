@@ -3,6 +3,10 @@ on: [push, pull_request]
 
 permissions: read-all
 
+env:
+  GOPRIVATE: github.com/slackhq/vitess-addons
+  GH_ACCESS_TOKEN: "${{`{{ secrets.GH_ACCESS_TOKEN }}`}}"
+
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}

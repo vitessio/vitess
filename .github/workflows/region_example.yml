@@ -1,6 +1,9 @@
 name: region_example
 on: [push, pull_request]
 permissions: read-all
+env:
+  GOPRIVATE: github.com/slackhq/vitess-addons
+  GH_ACCESS_TOKEN: "${{ secrets.GH_ACCESS_TOKEN }}"
 jobs:
 
   build:
@@ -56,6 +59,10 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: 1.22.5
+
+    - name: Setup github.com/slackhq/vitess-additions access token
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
+      run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
     - uses: actions/setup-node@v4
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'

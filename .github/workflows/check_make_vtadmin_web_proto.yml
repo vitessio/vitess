@@ -51,6 +51,10 @@ jobs:
       with:
         go-version: 1.22.5
 
+    - name: Setup github.com/slackhq/vitess-addons access token
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
+      run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+
     - name: Setup Node
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
       uses: actions/setup-node@v4

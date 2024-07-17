@@ -10,6 +10,8 @@ env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
+  GOPRIVATE: github.com/slackhq/vitess-addons
+  GH_ACCESS_TOKEN: "${{`{{ secrets.GH_ACCESS_TOKEN }}`}}"
 
 jobs:
   build:
@@ -73,6 +75,10 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: 1.22.5
+
+    - name: Setup github.com/slackhq/vitess-addons access token
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
