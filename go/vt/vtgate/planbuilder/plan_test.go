@@ -603,6 +603,20 @@ func (s *planTestSuite) TestMirrorPlanning() {
 	s.testFile("mirror_cases.json", vschema, false)
 }
 
+func (s *planTestSuite) TestOneMirror() {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(s.T(), "vschemas/mirror_schema.json", true),
+		TabletType_:   topodatapb.TabletType_PRIMARY,
+		SysVarEnabled: true,
+		TestBuilder:   TestBuilder,
+		Env:           vtenv.NewTestEnv(),
+	}
+
+	s.testFile("onecase.json", vschema, false)
+}
+
 func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
 	require.NoError(t, err)
