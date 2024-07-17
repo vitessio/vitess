@@ -17,8 +17,8 @@ limitations under the License.
 package operators
 
 import (
-	"slices"
-	"strings"
+	"fmt"
+	"sort"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -38,6 +38,7 @@ func compact(ctx *plancontext.PlanningContext, op Operator) Operator {
 		if !ok {
 			return op, NoRewrite
 		}
+		fmt.Println("COMPACTING", op.ShortDescription())
 		return newOp.Compact(ctx)
 	}, stopAtRoute)
 	return newOp
@@ -82,15 +83,15 @@ func TableID(op Operator) (result semantics.TableSet) {
 
 // TableUser is used to signal that this operator directly interacts with one or more tables
 type TableUser interface {
-	TablesUsed() []sqlparser.TableName
+	TablesUsed() []string
 }
 
-func TablesUsed(op Operator) []sqlparser.TableName {
-	addTableName, collect := collectSortedUniqueTableNames()
+func TablesUsed(op Operator) []string {
+	addString, collect := collectSortedUniqueStrings()
 	_ = Visit(op, func(this Operator) error {
 		if tbl, ok := this.(TableUser); ok {
 			for _, u := range tbl.TablesUsed() {
-				addTableName(u)
+				addString(u)
 			}
 		}
 		return nil
@@ -116,59 +117,53 @@ func CostOf(op Operator) (cost int) {
 	return
 }
 
-func QualifiedTableNames(ks *vindexes.Keyspace, ts []sqlparser.TableName) []sqlparser.TableName {
-	add, collect := collectSortedUniqueTableNames()
+func QualifiedIdentifier(ks *vindexes.Keyspace, i sqlparser.IdentifierCS) string {
+	return QualifiedString(ks, i.String())
+}
+
+func QualifiedString(ks *vindexes.Keyspace, s string) string {
+	return fmt.Sprintf("%s.%s", ks.Name, s)
+}
+
+func QualifiedTableName(ks *vindexes.Keyspace, t sqlparser.TableName) string {
+	return QualifiedIdentifier(ks, t.Name)
+}
+
+func QualifiedTableNames(ks *vindexes.Keyspace, ts []sqlparser.TableName) []string {
+	add, collect := collectSortedUniqueStrings()
 	for _, t := range ts {
-		add(sqlparser.NewTableNameWithQualifier(t.Name.String(), ks.Name))
+		add(QualifiedTableName(ks, t))
 	}
 	return collect()
 }
 
-func QualifiedTables(ks *vindexes.Keyspace, vts []*vindexes.Table) []sqlparser.TableName {
-	add, collect := collectSortedUniqueTableNames()
+func QualifiedTables(ks *vindexes.Keyspace, vts []*vindexes.Table) []string {
+	add, collect := collectSortedUniqueStrings()
 	for _, vt := range vts {
-		add(sqlparser.NewTableNameWithQualifier(vt.Name.String(), ks.Name))
+		add(QualifiedIdentifier(ks, vt.Name))
 	}
 	return collect()
 }
 
-func SingleTableName(ks *vindexes.Keyspace, i sqlparser.IdentifierCS) []sqlparser.TableName {
-	return []sqlparser.TableName{sqlparser.NewTableNameWithQualifier(i.String(), ks.Name)}
+func SingleQualifiedIdentifier(ks *vindexes.Keyspace, i sqlparser.IdentifierCS) []string {
+	return SingleQualifiedString(ks, i.String())
 }
 
-func SortTableNames(ts []sqlparser.TableName) {
-	slices.SortFunc[[]sqlparser.TableName, sqlparser.TableName](ts, func(a, b sqlparser.TableName) int {
-		if a.Qualifier.NotEmpty() && b.Qualifier.NotEmpty() {
-			if cq := strings.Compare(a.Qualifier.String(), b.Qualifier.String()); cq != 0 {
-				return cq
-			}
-			return strings.Compare(a.Name.String(), b.Name.String())
-		}
-		if a.Qualifier.NotEmpty() {
-			return strings.Compare(a.Qualifier.String(), b.Name.String())
-		}
-		if b.Qualifier.NotEmpty() {
-			return strings.Compare(a.Name.String(), b.Qualifier.String())
-		}
-		return strings.Compare(a.Name.String(), b.Name.String())
-	})
+func SingleQualifiedString(ks *vindexes.Keyspace, s string) []string {
+	return []string{QualifiedString(ks, s)}
 }
 
-func collectSortedUniqueTableNames() (add func(sqlparser.TableName), collect func() []sqlparser.TableName) {
-	uniq := make(map[sqlparser.TableName]any)
-
-	add = func(v sqlparser.TableName) {
+func collectSortedUniqueStrings() (add func(string), collect func() []string) {
+	uniq := make(map[string]any)
+	add = func(v string) {
 		uniq[v] = nil
 	}
-
-	collect = func() []sqlparser.TableName {
-		sorted := make([]sqlparser.TableName, 0, len(uniq))
+	collect = func() []string {
+		sorted := make([]string, 0, len(uniq))
 		for v := range uniq {
 			sorted = append(sorted, v)
 		}
-
-		SortTableNames(sorted)
-
+		sort.Strings(sorted)
 		return sorted
 	}
 

@@ -33,11 +33,6 @@ type Delete struct {
 	noPredicates
 }
 
-var (
-	_ Operator  = (*Delete)(nil)
-	_ TableUser = (*Delete)(nil)
-)
-
 // Clone implements the Operator interface
 func (d *Delete) Clone(inputs []Operator) Operator {
 	newD := *d
@@ -60,8 +55,8 @@ func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (d *Delete) TablesUsed() []sqlparser.TableName {
-	return SingleTableName(d.Target.VTable.Keyspace, d.Target.VTable.Name)
+func (d *Delete) TablesUsed() []string {
+	return SingleQualifiedIdentifier(d.Target.VTable.Keyspace, d.Target.VTable.Name)
 }
 
 func (d *Delete) ShortDescription() string {

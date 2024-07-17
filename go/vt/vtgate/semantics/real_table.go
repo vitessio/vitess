@@ -32,6 +32,7 @@ type RealTable struct {
 	ASTNode           *sqlparser.AliasedTableExpr
 	Table             *vindexes.Table
 	VindexHint        *sqlparser.IndexHint
+	MirrorRule        *vindexes.MirrorRule
 	isInfSchema       bool
 	collationEnv      *collations.Environment
 }
@@ -153,4 +154,9 @@ func (r *RealTable) authoritative() bool {
 // Matches implements the TableInfo interface
 func (r *RealTable) matches(name sqlparser.TableName) bool {
 	return (name.Qualifier.IsEmpty() || name.Qualifier.String() == r.dbName) && r.tableName == name.Name.String()
+}
+
+// GetMirrorRule implements TableInfo.
+func (r *RealTable) GetMirrorRule() *vindexes.MirrorRule {
+	return r.MirrorRule
 }

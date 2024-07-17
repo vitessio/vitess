@@ -754,11 +754,11 @@ func (r *Route) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 
 // TablesUsed returns tables used by MergedWith routes, which are not included
 // in Inputs() and thus not a part of the operator tree
-func (r *Route) TablesUsed() []sqlparser.TableName {
-	addTable, collect := collectSortedUniqueTableNames()
+func (r *Route) TablesUsed() []string {
+	addString, collect := collectSortedUniqueStrings()
 	for _, mw := range r.MergedWith {
 		for _, u := range TablesUsed(mw) {
-			addTable(u)
+			addString(u)
 		}
 	}
 	return collect()

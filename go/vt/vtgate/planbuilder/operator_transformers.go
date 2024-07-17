@@ -77,9 +77,27 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return transformSequential(ctx, op)
 	case *operators.DMLWithInput:
 		return transformDMLWithInput(ctx, op)
+	case *operators.PercentBasedMirror:
+		return transformPercentBasedMirror(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToPrimitive)", op))
+}
+
+func transformPercentBasedMirror(ctx *plancontext.PlanningContext, op *operators.PercentBasedMirror) (engine.Primitive, error) {
+	primitive, err := transformToPrimitive(ctx, op.Operator)
+	if err != nil {
+		return nil, err
+	}
+
+	target, err := transformToPrimitive(ctx.UseMirror(), op.Target)
+	// Mirroring is best-effort. If we encounter an error while building the
+	// mirror target primitive, proceed without mirroring.
+	if err != nil {
+		return primitive, nil
+	}
+
+	return engine.NewPercentBasedMirror(op.Percent, primitive, target), nil
 }
 
 func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWithInput) (engine.Primitive, error) {
@@ -288,7 +306,6 @@ func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify
 		Verify: verify,
 		Exec:   inputLP,
 	}, nil
-
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (engine.Primitive, error) {
@@ -451,7 +468,6 @@ func getEvalEngineExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr)
 	default:
 		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
 	}
-
 }
 
 // newSimpleProjection creates a simple projections

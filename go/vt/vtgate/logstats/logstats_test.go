@@ -40,7 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestMain(m *testing.M) {
@@ -63,10 +62,7 @@ func TestLogStatsFormat(t *testing.T) {
 	logStats := NewLogStats(context.Background(), "test", "sql1", "suuid", nil)
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
-	logStats.TablesUsed = []sqlparser.TableName{
-		sqlparser.NewTableNameWithQualifier("tbl1", "ks1"),
-		sqlparser.NewTableNameWithQualifier("tbl2", "ks2"),
-	}
+	logStats.TablesUsed = []string{"ks1.tbl1", "ks2.tbl2"}
 	logStats.TabletType = "PRIMARY"
 	logStats.ActiveKeyspace = "db"
 	params := map[string][]string{"full": {}}

@@ -251,7 +251,7 @@ func (m *mirrorVSchema) FindMirrorRule(name sqlparser.TableName) (*vindexes.Mirr
 	return nil, "", topodatapb.TabletType_UNKNOWN, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "[BUG] refusing to perform chained traffic mirroring")
 }
 
-// ForMirroring returns a wrapper which returns mirrored versions of values
+// MirrorVSchema returns a wrapper which returns mirrored versions of values
 // return by the wrapped vschema.
 //
 // For example, if the underlying VSchema defines any mirror rules from ks1 to
@@ -259,7 +259,7 @@ func (m *mirrorVSchema) FindMirrorRule(name sqlparser.TableName) (*vindexes.Mirr
 // ks1 will return tables in ks2.
 //
 // The returned VSchema cannot be reflected back again by passing it to
-// ForMirroring. This restriction prevents infinite mirroring loops.
-func ForMirroring(vschema VSchema) VSchema {
+// MirrorVSchema. This restriction prevents infinite mirroring loops.
+func MirrorVSchema(vschema VSchema) VSchema {
 	return &mirrorVSchema{vschema}
 }

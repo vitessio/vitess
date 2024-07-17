@@ -63,6 +63,9 @@ type (
 		dependencies(colName string, org originable) (dependencies, error)
 		getExprFor(s string) (sqlparser.Expr, error)
 		getTableSet(org originable) TableSet
+
+		// GetMirrorRule returns the vschema mirror rule for this TableInfo
+		GetMirrorRule() *vindexes.MirrorRule
 	}
 
 	// ColumnInfo contains information about columns
@@ -83,6 +86,12 @@ type (
 		HashJoin    bool
 		SubQueries  bool
 		Union       bool
+	}
+
+	// MirrorInfo stores information used to produce mirror
+	// operators.
+	MirrorInfo struct {
+		Percent float32
 	}
 
 	// SemTable contains semantic analysis information about the query.
@@ -162,6 +171,7 @@ type (
 		GetForeignKeyChecksState() *bool
 		KeyspaceError(keyspace string) error
 		GetAggregateUDFs() []string
+		FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error)
 	}
 
 	shortCut = int
@@ -173,10 +183,8 @@ const (
 	dependsOnKeyspace
 )
 
-var (
-	// ErrNotSingleTable refers to an error happening when something should be used only for single tables
-	ErrNotSingleTable = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
-)
+// ErrNotSingleTable refers to an error happening when something should be used only for single tables
+var ErrNotSingleTable = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
@@ -733,7 +741,6 @@ func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) sqlparser.
 		col := *node
 		col.Qualifier = sqlparser.TableName{}
 		cursor.Replace(&col)
-
 	}, nil).(sqlparser.Expr)
 }
 
@@ -800,6 +807,7 @@ func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tab
 
 		tables = append(tables, vtbl)
 	}
+
 	return ks, tables
 }
 
@@ -982,4 +990,40 @@ func (st *SemTable) NewTableId() TableSet {
 	tableID := SingleTableSet(len(st.Tables))
 	st.Tables = append(st.Tables, nil)
 	return tableID
+}
+
+func (st *SemTable) CanTakeSelectUnshardedShortcut() (*vindexes.Keyspace, bool) {
+	return canTakeSelectUnshardedShortcut(st.Tables)
+}
+
+func (st *SemTable) CanTakeUnshardedShortcut() (*vindexes.Keyspace, bool) {
+	return canTakeUnshardedShortcut(st.Tables)
+}
+
+func canTakeUnshardedShortcut(tableInfos []TableInfo) (*vindexes.Keyspace, bool) {
+	uks, _ := singleUnshardedKeyspace(tableInfos)
+	return uks, uks != nil
+}
+
+func canTakeSelectUnshardedShortcut(tableInfos []TableInfo) (*vindexes.Keyspace, bool) {
+	if mi := mirrorInfo(tableInfos); mi.Percent > 0 {
+		return nil, false
+	}
+	return canTakeUnshardedShortcut(tableInfos)
+}
+
+func (st *SemTable) GetMirrorInfo() MirrorInfo {
+	return mirrorInfo(st.Tables)
+}
+
+func mirrorInfo(tableInfos []TableInfo) MirrorInfo {
+	mi := MirrorInfo{}
+	for _, t := range tableInfos {
+		if mr := t.GetMirrorRule(); mr != nil {
+			if mi.Percent == 0 || mr.Percent < mi.Percent {
+				mi.Percent = mr.Percent
+			}
+		}
+	}
+	return mi
 }

@@ -74,7 +74,7 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 	}
 	tc := &tableCollector{}
 	for _, tbl := range ddlStatement.AffectedTables() {
-		tc.addTable(sqlparser.NewTableNameWithQualifier(tbl.Name.String(), normalDDLPlan.Keyspace.Name))
+		tc.addASTTable(normalDDLPlan.Keyspace.Name, tbl)
 	}
 
 	return newPlanResult(eddl, tc.getTables()...), nil

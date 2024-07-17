@@ -82,10 +82,7 @@ func (i *Insert) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-var (
-	_ Operator  = (*Insert)(nil)
-	_ TableUser = (*Insert)(nil)
-)
+var _ Operator = (*Insert)(nil)
 
 func (i *Insert) Clone([]Operator) Operator {
 	return &Insert{
@@ -99,8 +96,8 @@ func (i *Insert) Clone([]Operator) Operator {
 	}
 }
 
-func (i *Insert) TablesUsed() []sqlparser.TableName {
-	return SingleTableName(i.VTable.Keyspace, i.VTable.Name)
+func (i *Insert) TablesUsed() []string {
+	return SingleQualifiedIdentifier(i.VTable.Keyspace, i.VTable.Name)
 }
 
 func (i *Insert) Statement() sqlparser.Statement {

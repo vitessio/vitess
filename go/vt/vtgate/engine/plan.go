@@ -19,7 +19,6 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -38,7 +37,7 @@ type Plan struct {
 	Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
 	BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
 	Warnings     []*query.QueryWarning   // Warnings that need to be yielded every time this query runs
-	TablesUsed   sqlparser.TableNames    // TablesUsed is the list of tables that this plan will query
+	TablesUsed   []string                // TablesUsed is the list of tables that this plan will query
 
 	ExecCount    uint64 // Count of times this plan was executed
 	ExecTime     uint64 // Total execution time
@@ -77,15 +76,6 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		instructions = &description
 	}
 
-	tablesUsed := make([]string, len(p.TablesUsed))
-	for i, table := range p.TablesUsed {
-		if table.Qualifier.NotEmpty() {
-			tablesUsed[i] = fmt.Sprintf("%s.%s", table.Qualifier.String(), table.Name.String())
-		} else {
-			tablesUsed[i] = table.Name.String()
-		}
-	}
-
 	marshalPlan := struct {
 		QueryType    string
 		Original     string                `json:",omitempty"`
@@ -107,7 +97,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		RowsAffected: atomic.LoadUint64(&p.RowsAffected),
 		RowsReturned: atomic.LoadUint64(&p.RowsReturned),
 		Errors:       atomic.LoadUint64(&p.Errors),
-		TablesUsed:   tablesUsed,
+		TablesUsed:   p.TablesUsed,
 	}
 
 	b := new(bytes.Buffer)

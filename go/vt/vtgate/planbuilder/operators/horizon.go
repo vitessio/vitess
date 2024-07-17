@@ -18,6 +18,7 @@ package operators
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -205,7 +206,7 @@ func (h *Horizon) getQP(ctx *plancontext.PlanningContext) *QueryProjection {
 }
 
 func (h *Horizon) ShortDescription() string {
-	return h.Alias
+	return fmt.Sprintf("Horizon (Alias: %s)", h.Alias)
 }
 
 func (h *Horizon) introducesTableID() semantics.TableSet {

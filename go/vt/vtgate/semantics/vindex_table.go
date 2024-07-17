@@ -84,3 +84,8 @@ func (v *VindexTable) getColumns(ignoreInvisbleCol bool) []ColumnInfo {
 func (v *VindexTable) IsInfSchema() bool {
 	return v.Table.IsInfSchema()
 }
+
+// GetMirrorRule implements TableInfo.
+func (v *VindexTable) GetMirrorRule() *vindexes.MirrorRule {
+	return nil
+}

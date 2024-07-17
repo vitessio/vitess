@@ -818,11 +818,11 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field TablesUsed vitess.io/vitess/go/vt/sqlparser.TableNames
+	// field TablesUsed []string
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.TablesUsed)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.TablesUsed)) * int64(16))
 		for _, elem := range cached.TablesUsed {
-			size += elem.CachedSize(false)
+			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
 	return size

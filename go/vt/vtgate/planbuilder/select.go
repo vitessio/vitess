@@ -45,12 +45,12 @@ func gen4SelectStmtPlanner(
 			return nil, err
 		}
 		if p != nil {
-			used := sqlparser.NewTableName("dual")
+			used := "dual"
 			keyspace, ksErr := vschema.DefaultKeyspace()
 			if ksErr == nil {
 				// we are just getting the ks to log the correct table use.
 				// no need to fail this if we can't find the default keyspace
-				used = sqlparser.NewTableNameWithQualifier("dual", keyspace.Name)
+				used = keyspace.Name + ".dual"
 			}
 			return newPlanResult(p, used), nil
 		}
@@ -62,7 +62,7 @@ func gen4SelectStmtPlanner(
 		sel.SQLCalcFoundRows = false
 	}
 
-	getPlan := func(selStatement sqlparser.SelectStatement) (engine.Primitive, []sqlparser.TableName, error) {
+	getPlan := func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error) {
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
@@ -123,7 +123,7 @@ func buildSQLCalcFoundRowsPlan(
 	sel *sqlparser.Select,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-) (engine.Primitive, []sqlparser.TableName, error) {
+) (engine.Primitive, []string, error) {
 	limitPlan, _, err := newBuildSelectPlan(sel, reservedVars, vschema, Gen4)
 	if err != nil {
 		return nil, nil, err
@@ -180,7 +180,7 @@ func buildSQLCalcFoundRowsPlan(
 	}, tablesUsed, nil
 }
 
-func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (engine.Primitive, []sqlparser.TableName, error)) (engine.Primitive, []sqlparser.TableName) {
+func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error)) (engine.Primitive, []string) {
 	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
@@ -199,13 +199,13 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (plan engine.Primitive, tablesUsed []sqlparser.TableName, err error) {
+) (plan engine.Primitive, tablesUsed []string, err error) {
 	ctx, err := plancontext.CreatePlanningContext(selStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if ks, _ := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
+	if ks, ok := ctx.SemTable.CanTakeSelectUnshardedShortcut(); ok {
 		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
 			return nil, nil, err
@@ -214,7 +214,6 @@ func newBuildSelectPlan(
 		return plan, tablesUsed, err
 	}
 
-	// From this point on, we know it is not an unsharded query and return the NotUnshardedErr if there is any
 	if ctx.SemTable.NotUnshardedErr != nil {
 		return nil, nil, ctx.SemTable.NotUnshardedErr
 	}

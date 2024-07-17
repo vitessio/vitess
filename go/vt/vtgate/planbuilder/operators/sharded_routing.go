@@ -653,6 +653,7 @@ func tryMergeJoinShardedRouting(
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
+				fmt.Println("MERGING SHARDED ROUTING")
 				return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
 			}
 		}

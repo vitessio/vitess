@@ -67,9 +67,11 @@ type PlanningContext struct {
 	// Used to set the nullable flag on the columns
 	OuterTables semantics.TableSet
 
-	// NodeTransformers are used to influence the formatting of Statement without
-	// making changes to Statement.
-	NodeTransformers []sqlparser.NodeTransformer
+	// mirror contains a mirrored clone of this planning context.
+	mirror *PlanningContext
+
+	// IsMirror indicates that mirrored tables should be used.
+	isMirrored bool
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -381,6 +383,27 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 	return
 }
 
-func (ctx *PlanningContext) AddNodeTransformer(transformer sqlparser.NodeTransformer) {
-	ctx.NodeTransformers = append(ctx.NodeTransformers, transformer)
+func (ctx *PlanningContext) IsMirrored() bool {
+	return ctx.isMirrored
+}
+
+func (ctx *PlanningContext) UseMirror() *PlanningContext {
+	if ctx.isMirrored {
+		panic("bug: cannot mirror already mirrored planning context")
+	}
+	if ctx.mirror != nil {
+		return ctx.mirror
+	}
+	ctx.mirror = &PlanningContext{
+		ReservedVars:      ctx.ReservedVars,
+		SemTable:          ctx.SemTable,
+		VSchema:           MirrorVSchema(ctx.VSchema),
+		joinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
+		skipPredicates:    map[sqlparser.Expr]any{},
+		PlannerVersion:    ctx.PlannerVersion,
+		ReservedArguments: map[sqlparser.Expr]string{},
+		Statement:         ctx.Statement,
+		isMirrored:        true,
+	}
+	return ctx.mirror
 }

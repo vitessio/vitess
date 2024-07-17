@@ -26,8 +26,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const foreignKeyConstraintValues = "fkc_vals"
-const foreignKeyUpdateExpr = "fkc_upd"
+const (
+	foreignKeyConstraintValues = "fkc_vals"
+	foreignKeyUpdateExpr       = "fkc_upd"
+)
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) Operator {
@@ -45,6 +47,20 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 	default:
 		panic(vterrors.VT12001(fmt.Sprintf("operator: %T", selStmt)))
 	}
+}
+
+func translateQueryToOpWithMirroring(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) Operator {
+	op := translateQueryToOp(ctx, stmt)
+
+	switch stmt.(type) {
+	case sqlparser.SelectStatement:
+		if mi := ctx.SemTable.GetMirrorInfo(); mi.Percent > 0 {
+			mirrorOp := translateQueryToOp(ctx.UseMirror(), stmt)
+			op = NewPercentBasedMirror(mi.Percent, op, mirrorOp)
+		}
+	}
+
+	return op
 }
 
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {

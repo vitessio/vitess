@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -78,7 +79,7 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 		TargetDestination: destination,
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
-	}, sqlparser.NewTableNameWithQualifier(explain.Table.Name.String(), keyspace.Name)), nil
+	}, singleTable(keyspace.Name, explain.Table.Name.String())), nil
 }
 
 func buildVExplainVtgatePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
@@ -147,7 +148,7 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 	// Remove keyspace qualifier from columns and tables.
 	sqlparser.RemoveKeyspace(explain.Statement)
 
-	var tables []sqlparser.TableName
+	var tables []string
 	for _, table := range ctx.SemTable.Tables {
 		name, err := table.Name()
 		if err != nil {
@@ -155,7 +156,7 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 			// it's OK to ignore errors here
 			continue
 		}
-		tables = append(tables, sqlparser.NewTableNameWithQualifier(name.Name.String(), ks.Name))
+		tables = append(tables, operators.QualifiedString(ks, name.Name.String()))
 	}
 
 	return newPlanResult(&engine.Send{

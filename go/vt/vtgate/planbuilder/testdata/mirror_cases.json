@@ -108,7 +108,7 @@
             "Variant": "Join",
             "JoinColumnIndexes": "L:0,R:0",
             "JoinVars": {
-              "t1_id": 0
+              "t1_id1": 0
             },
             "TableName": "t1_t1",
             "Inputs": [
@@ -131,10 +131,10 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
-                "Query": "select t2.id from t1 as t2 where t2.id = :t1_id",
+                "Query": "select t2.id from t1 as t2 where t2.id = :t1_id1",
                 "Table": "t1",
                 "Values": [
-                  ":t1_id"
+                  ":t1_id1"
                 ],
                 "Vindex": "xxhash"
               }
@@ -177,7 +177,6 @@
             "Collations": [
               "(0:1)"
             ],
-            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Concatenate",

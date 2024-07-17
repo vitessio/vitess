@@ -41,11 +41,6 @@ type (
 	}
 )
 
-var (
-	_ Operator  = (*Table)(nil)
-	_ TableUser = (*Table)(nil)
-)
-
 // Clone implements the Operator interface
 func (to *Table) Clone([]Operator) Operator {
 	var columns []*sqlparser.ColName
@@ -112,11 +107,11 @@ func (to *Table) AddCol(col *sqlparser.ColName) {
 	to.Columns = append(to.Columns, col)
 }
 
-func (to *Table) TablesUsed() []sqlparser.TableName {
+func (to *Table) TablesUsed() []string {
 	if sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
 		return nil
 	}
-	return SingleTableName(to.VTable.Keyspace, to.VTable.Name)
+	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
 }
 
 func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) int {

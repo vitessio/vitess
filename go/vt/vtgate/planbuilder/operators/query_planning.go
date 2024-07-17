@@ -107,6 +107,13 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		}
 	}
 
+	if pbm, ok := root.(*PercentBasedMirror); ok {
+		root = pbm.Clone([]Operator{
+			runRewriters(ctx, pbm.Operator),
+			runRewriters(ctx.UseMirror(), pbm.Target),
+		})
+	}
+
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
@@ -733,7 +740,6 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 		}
 	}
 	return Swap(filter, projection, "push filter under projection")
-
 }
 
 func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {

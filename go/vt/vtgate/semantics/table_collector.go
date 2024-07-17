@@ -66,7 +66,6 @@ func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) {
 			etc.withTables[cte.ID] = nil
 		}
 	}
-
 }
 
 func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) {
@@ -452,11 +451,14 @@ func createTable(
 		return nil, err
 	}
 
+	mr, _, _, _, _ := si.FindMirrorRule(t)
+
 	table := &RealTable{
 		tableName:    alias.As.String(),
 		ASTNode:      alias,
 		Table:        tbl,
 		VindexHint:   hint,
+		MirrorRule:   mr,
 		isInfSchema:  isInfSchema,
 		collationEnv: si.Environment().CollationEnv(),
 	}

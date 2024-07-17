@@ -79,6 +79,11 @@ func (si *declarativeSchemaInformation) GetForeignKeyChecksState() *bool {
 	return nil
 }
 
+// FindMirrorRule implements semantics.SchemaInformation.
+func (si *declarativeSchemaInformation) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error) {
+	return nil, "", topodatapb.TabletType_UNKNOWN, nil, nil
+}
+
 // addTable adds a fake table with an empty column list
 func (si *declarativeSchemaInformation) addTable(tableName string) {
 	tbl := &vindexes.Table{

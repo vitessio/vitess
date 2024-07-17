@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -143,6 +145,7 @@ func (sqb *SubQueryBuilder) inspectSelect(
 
 	// then we use the updated AST structs to build the operator
 	// these AST elements have any subqueries replace by arguments
+	fmt.Println("REPLACING WHERE WITH NEW WHERE", sqlparser.String(sel.Where), sqlparser.String(newWhere))
 	sel.Where = newWhere
 	sel.Having = newHaving
 	sel.From = newFrom
