@@ -242,6 +242,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // predicates as column modifiers, shifting on a '(' conflicts with reducing the keywords to a non_reserved_keyword. Since we want shifting to
 // take precedence, we add this precedence to the reduction rules.
 %nonassoc <str> ANY_SOME
+// SELECT_OPTIONS is used to resolve shift-reduce conflicts occurring due to select options that are non-reserved keywords.
+// When parsing select_options_opt if we encounter a select option like `SQL_BUFFER_RESULT`, we can either reduce select_options_opt and use it as a table name
+// or we can shift and use it as a select option. Since we want the latter option, we want to prioritize shifting over reducing.
+// Adding no precedence also works, since shifting is the default, but it reports some conflicts
+// We need to add a lower precedence to reducing the select_options_opt rule than shifting.
+%nonassoc <str> SELECT_OPTIONS
 
 %token LEX_ERROR
 %left <str> UNION
@@ -253,12 +259,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
 %token <str> VALUES LAST_INSERT_ID
 %token <str> NEXT VALUE SHARE MODE
-%token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS SQL_SMALL_RESULT SQL_BIG_RESULT SQL_BUFFER_RESULT HIGH_PRIORITY
+%token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS SQL_SMALL_RESULT SQL_BIG_RESULT HIGH_PRIORITY
 %left <str> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <str> ON USING INPLACE COPY INSTANT ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
-%nonassoc <str> STRING
+%nonassoc <str> STRING SQL_BUFFER_RESULT
 %token <str> ID AT_ID AT_AT_ID HEX NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
 %token <str> VALUE_ARG LIST_ARG OFFSET_ARG
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
@@ -4795,10 +4801,10 @@ deallocate_statement:
   }
 
 select_options_opt:
-  {
+  %prec SELECT_OPTIONS {
     $$ = nil
   }
-| select_options
+| select_options %prec SELECT_OPTIONS
   {
     $$ = $1
   }
