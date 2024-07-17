@@ -27,14 +27,13 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 // nonAtomicCommitWarnMaxShards limits the number of shard names reported in
@@ -208,7 +207,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
 		// including unprepared transactions.
-		if resumeErr := txc.Resolve(ctx, dtid); resumeErr != nil {
+		if resumeErr := txc.rollbackTx(ctx, dtid, mmShard, participants); resumeErr != nil {
 			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
 		}
 		// Return the original error even if the previous operation fails.
@@ -362,7 +361,7 @@ func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Targ
 	failedResolution := 0
 	for _, txRecord := range transactions {
 		log.Infof("Resolving transaction ID: %s", txRecord.Dtid)
-		err = txc.ResolveTx(ctx, target, txRecord)
+		err = txc.resolveTx(ctx, target, txRecord)
 		if err != nil {
 			failedResolution++
 			log.Errorf("Failed to resolve transaction ID: %s with error: %v", txRecord.Dtid, err)
@@ -374,8 +373,8 @@ func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Targ
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to resolve %d out of %d transactions", failedResolution, len(transactions))
 }
 
-// ResolveTx resolves the specified distributed transaction.
-func (txc *TxConn) ResolveTx(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
+// resolveTx resolves the specified distributed transaction.
+func (txc *TxConn) resolveTx(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
 	mmShard, err := dtids.ShardSession(transaction.Dtid)
 	if err != nil {
 		return err
@@ -404,46 +403,23 @@ func (txc *TxConn) ResolveTx(ctx context.Context, target *querypb.Target, transa
 	return nil
 }
 
-// Resolve resolves the specified 2PC transaction.
-func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
-	mmShard, err := dtids.ShardSession(dtid)
+// rollbackTx rollbacks the specified distributed transaction.
+func (txc *TxConn) rollbackTx(ctx context.Context, dtid string, mmShard *vtgatepb.Session_ShardSession, participants []*querypb.Target) error {
+	qs, err := txc.queryService(ctx, mmShard.TabletAlias)
 	if err != nil {
 		return err
 	}
+	if err := qs.SetRollback(ctx, mmShard.Target, dtid, mmShard.TransactionId); err != nil {
+		return err
+	}
+	err = txc.runTargets(participants, func(t *querypb.Target) error {
+		return txc.tabletGateway.RollbackPrepared(ctx, t, dtid, 0)
+	})
+	if err != nil {
+		return err
+	}
+	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
 
-	transaction, err := txc.tabletGateway.ReadTransaction(ctx, mmShard.Target, dtid)
-	if err != nil {
-		return err
-	}
-	if transaction == nil || transaction.Dtid == "" {
-		// It was already resolved.
-		return nil
-	}
-	switch transaction.State {
-	case querypb.TransactionState_PREPARE:
-		// If state is PREPARE, make a decision to rollback and
-		// fallthrough to the rollback workflow.
-		qs, err := txc.queryService(ctx, mmShard.TabletAlias)
-		if err != nil {
-			return err
-		}
-		if err := qs.SetRollback(ctx, mmShard.Target, transaction.Dtid, mmShard.TransactionId); err != nil {
-			return err
-		}
-		fallthrough
-	case querypb.TransactionState_ROLLBACK:
-		if err := txc.resumeRollback(ctx, mmShard.Target, transaction); err != nil {
-			return err
-		}
-	case querypb.TransactionState_COMMIT:
-		if err := txc.resumeCommit(ctx, mmShard.Target, transaction); err != nil {
-			return err
-		}
-	default:
-		// Should never happen.
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid state: %v", transaction.State)
-	}
-	return nil
 }
 
 func (txc *TxConn) resumeRollback(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
