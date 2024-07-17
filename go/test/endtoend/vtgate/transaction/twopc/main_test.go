@@ -78,7 +78,6 @@ func TestMain(m *testing.M) {
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--twopc_enable",
-			"--twopc_coordinator_address", fmt.Sprintf("localhost:%d", clusterInstance.VtgateGrpcPort),
 			"--twopc_abandon_age", "3600",
 			"--queryserver-config-transaction-cap", "3",
 		)
