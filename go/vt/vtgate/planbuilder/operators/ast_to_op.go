@@ -52,10 +52,9 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 func translateQueryToOpWithMirroring(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) Operator {
 	op := translateQueryToOp(ctx, stmt)
 
-	switch stmt.(type) {
-	case sqlparser.SelectStatement:
+	if selStmt, ok := stmt.(sqlparser.SelectStatement); ok {
 		if mi := ctx.SemTable.GetMirrorInfo(); mi.Percent > 0 {
-			mirrorOp := translateQueryToOp(ctx.UseMirror(), stmt)
+			mirrorOp := translateQueryToOp(ctx.UseMirror(), selStmt)
 			op = NewPercentBasedMirror(mi.Percent, op, mirrorOp)
 		}
 	}

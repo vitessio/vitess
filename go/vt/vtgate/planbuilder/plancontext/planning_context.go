@@ -70,7 +70,7 @@ type PlanningContext struct {
 	// mirror contains a mirrored clone of this planning context.
 	mirror *PlanningContext
 
-	// IsMirror indicates that mirrored tables should be used.
+	// isMirrored indicates that mirrored tables should be used.
 	isMirrored bool
 }
 
@@ -381,10 +381,6 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 		return true, nil
 	}, e)
 	return
-}
-
-func (ctx *PlanningContext) IsMirrored() bool {
-	return ctx.isMirrored
 }
 
 func (ctx *PlanningContext) UseMirror() *PlanningContext {
