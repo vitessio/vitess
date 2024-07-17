@@ -229,6 +229,26 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	sendRule := &binlogdatapb.Rule{
 		Match: fromTable,
 	}
+	commentsList := []string{}
+	applyComments := func(sel *sqlparser.Select) bool {
+		if len(commentsList) == 0 {
+			return false
+		}
+		comments := sqlparser.Comments{
+			fmt.Sprintf(`/*vt+ %s */`, strings.Join(commentsList, " ")),
+		}
+		sel.Comments = comments.Parsed()
+		return true
+	}
+
+	switch rule.SnapshotMethod {
+	case binlogdatapb.StreamerSnapshotMethod_LockTables:
+		commentsList = append(commentsList, `snapshotMethod="lock"`)
+	case binlogdatapb.StreamerSnapshotMethod_TrackGtids:
+		commentsList = append(commentsList, `snapshotMethod="track"`)
+	case binlogdatapb.StreamerSnapshotMethod_Undefined:
+		// leave empty
+	}
 
 	if expr, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); ok {
 		// If it's a "select *", we return a partial plan, and complete
@@ -239,7 +259,12 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		if !expr.TableName.IsEmpty() {
 			return nil, planError(fmt.Errorf("unsupported qualifier for '*' expression"), sqlparser.String(expr))
 		}
-		sendRule.Filter = query
+		if applyComments(sel) {
+			sendRule.Filter = sqlparser.String(sel)
+		} else {
+			sendRule.Filter = query
+		}
+
 		tablePlan := &TablePlan{
 			TargetName:       tableName,
 			SendRule:         sendRule,
@@ -310,27 +335,13 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			},
 		})
 	}
-	commentsList := []string{}
 	if rule.SourceUniqueKeyColumns != "" {
 		commentsList = append(commentsList, fmt.Sprintf(`ukColumns="%s"`, rule.SourceUniqueKeyColumns))
 	}
 	if rule.ForceUniqueKey != "" {
 		commentsList = append(commentsList, fmt.Sprintf(`ukForce="%s"`, rule.ForceUniqueKey))
 	}
-	switch rule.SnapshotMethod {
-	case binlogdatapb.StreamerSnapshotMethod_LockTables:
-		commentsList = append(commentsList, `snapshotMethod="lock"`)
-	case binlogdatapb.StreamerSnapshotMethod_TrackGtids:
-		commentsList = append(commentsList, `snapshotMethod="track"`)
-	case binlogdatapb.StreamerSnapshotMethod_Undefined:
-		// leave empty
-	}
-	if len(commentsList) > 0 {
-		comments := sqlparser.Comments{
-			fmt.Sprintf(`/*vt+ %s */`, strings.Join(commentsList, " ")),
-		}
-		tpb.sendSelect.Comments = comments.Parsed()
-	}
+	applyComments(tpb.sendSelect)
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 
 	tablePlan := tpb.generate()

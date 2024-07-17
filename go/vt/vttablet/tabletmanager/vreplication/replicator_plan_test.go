@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -52,10 +53,11 @@ type TestTablePlan struct {
 
 func TestBuildPlayerPlan(t *testing.T) {
 	testcases := []struct {
-		input  *binlogdatapb.Filter
-		plan   *TestReplicatorPlan
-		planpk *TestReplicatorPlan
-		err    string
+		input            *binlogdatapb.Filter
+		plan             *TestReplicatorPlan
+		planpk           *TestReplicatorPlan
+		filterSubstrings []string // expect these to be found in the filter query
+		err              string
 	}{{
 		// Regular expression
 		input: &binlogdatapb.Filter{
@@ -173,15 +175,16 @@ func TestBuildPlayerPlan(t *testing.T) {
 		// Explicit columns
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
-				Match:  "t1",
-				Filter: "select c1, c2 from t2",
+				Match:          "t1",
+				Filter:         "select c1, c2 from t2",
+				SnapshotMethod: binlogdatapb.StreamerSnapshotMethod_TrackGtids,
 			}},
 		},
 		plan: &TestReplicatorPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
-					Filter: "select c1, c2 from t2",
+					Filter: "select /*vt+ snapshotMethod=\"track\" */ c1, c2 from t2",
 				}},
 			},
 			TargetTables: []string{"t1"},
@@ -202,7 +205,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
-					Filter: "select c1, c2, pk1, pk2 from t2",
+					Filter: "select /*vt+ snapshotMethod=\"track\" */ c1, c2, pk1, pk2 from t2",
 				}},
 			},
 			TargetTables: []string{"t1"},
@@ -223,15 +226,16 @@ func TestBuildPlayerPlan(t *testing.T) {
 		// partial group by
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
-				Match:  "t1",
-				Filter: "select c1, c2, c3 from t2 group by c3, c1",
+				Match:          "t1",
+				Filter:         "select c1, c2, c3 from t2 group by c3, c1",
+				SnapshotMethod: binlogdatapb.StreamerSnapshotMethod_LockTables,
 			}},
 		},
 		plan: &TestReplicatorPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
-					Filter: "select c1, c2, c3 from t2",
+					Filter: "select /*vt+ snapshotMethod=\"lock\" */ c1, c2, c3 from t2",
 				}},
 			},
 			TargetTables: []string{"t1"},
@@ -253,7 +257,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
-					Filter: "select c1, c2, c3, pk1, pk2 from t2",
+					Filter: "select /*vt+ snapshotMethod=\"lock\" */ c1, c2, c3, pk1, pk2 from t2",
 				}},
 			},
 			TargetTables: []string{"t1"},
@@ -275,8 +279,9 @@ func TestBuildPlayerPlan(t *testing.T) {
 		// full group by
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
-				Match:  "t1",
-				Filter: "select c1, c2, c3 from t2 group by c3, c1, c2",
+				Match:          "t1",
+				Filter:         "select c1, c2, c3 from t2 group by c3, c1, c2",
+				SnapshotMethod: binlogdatapb.StreamerSnapshotMethod_Undefined, // nothing special
 			}},
 		},
 		plan: &TestReplicatorPlan{
@@ -567,6 +572,47 @@ func TestBuildPlayerPlan(t *testing.T) {
 			},
 		},
 	}, {
+		// Regular expression, snapshotMethod
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:          "/.*",
+				SnapshotMethod: binlogdatapb.StreamerSnapshotMethod_TrackGtids,
+			}},
+		},
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select /*vt+ snapshotMethod=\"track\" */ * from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName: "t1",
+					SendRule:   "t1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select /*vt+ snapshotMethod=\"track\" */ * from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName: "t1",
+					SendRule:   "t1",
+				},
+			},
+		},
+		filterSubstrings: []string{
+			`snapshotMethod="track"`,
+		},
+	}, {
 		// syntax error
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -735,24 +781,34 @@ func TestBuildPlayerPlan(t *testing.T) {
 		),
 	}
 
-	for _, tcase := range testcases {
-		plan, err := buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
-		gotErr := ""
-		if err != nil {
-			gotErr = err.Error()
-		}
-		require.Equal(t, tcase.err, gotErr, "Filter err(%v): %s, want %v", tcase.input, gotErr, tcase.err)
-		gotPlan, _ := json.Marshal(plan)
-		wantPlan, _ := json.Marshal(tcase.plan)
-		require.Equal(t, string(wantPlan), string(gotPlan), "Filter(%v):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
+	for i, tcase := range testcases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			plan, err := buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+			gotErr := ""
+			if err != nil {
+				gotErr = err.Error()
+			}
+			require.Equal(t, tcase.err, gotErr, "Filter err(%v): %s, want %v", tcase.input, gotErr, tcase.err)
+			gotPlan, _ := json.Marshal(plan)
+			wantPlan, _ := json.Marshal(tcase.plan)
+			require.Equal(t, string(wantPlan), string(gotPlan), "Filter(%v):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
+			for _, s := range tcase.filterSubstrings {
+				for _, rule := range plan.VStreamFilter.Rules {
+					assert.Contains(t, rule.Filter, s)
+				}
+				for _, tablePlan := range plan.TablePlans {
+					assert.Contains(t, tablePlan.SendRule.Filter, s)
+				}
+			}
 
-		plan, err = buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
-		if err != nil {
-			continue
-		}
-		gotPlan, _ = json.Marshal(plan)
-		wantPlan, _ = json.Marshal(tcase.planpk)
-		require.Equal(t, string(wantPlan), string(gotPlan), "Filter(%v,copyState):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
+			plan, err = buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+			if err != nil {
+				return
+			}
+			gotPlan, _ = json.Marshal(plan)
+			wantPlan, _ = json.Marshal(tcase.planpk)
+			require.Equal(t, string(wantPlan), string(gotPlan), "Filter(%v,copyState):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
+		})
 	}
 }
 
