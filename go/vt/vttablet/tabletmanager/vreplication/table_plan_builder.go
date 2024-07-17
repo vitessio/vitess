@@ -317,6 +317,14 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	if rule.ForceUniqueKey != "" {
 		commentsList = append(commentsList, fmt.Sprintf(`ukForce="%s"`, rule.ForceUniqueKey))
 	}
+	switch rule.SnapshotMethod {
+	case binlogdatapb.StreamerSnapshotMethod_LockTables:
+		commentsList = append(commentsList, `snapshotMethod="lock"`)
+	case binlogdatapb.StreamerSnapshotMethod_TrackGtids:
+		commentsList = append(commentsList, `snapshotMethod="track"`)
+	case binlogdatapb.StreamerSnapshotMethod_Undefined:
+		// leave empty
+	}
 	if len(commentsList) > 0 {
 		comments := sqlparser.Comments{
 			fmt.Sprintf(`/*vt+ %s */`, strings.Join(commentsList, " ")),

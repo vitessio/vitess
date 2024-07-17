@@ -46,6 +46,7 @@ func TestRowStreamerQuery(t *testing.T) {
 		type testCase struct {
 			directives      string
 			sendQuerySuffix string
+			snapshotMethod  binlogdatapb.StreamerSnapshotMethod
 		}
 		queryTemplate := "select %s id, uk1, val from t1"
 		getQuery := func(directives string) string {
@@ -53,10 +54,12 @@ func TestRowStreamerQuery(t *testing.T) {
 		}
 		sendQueryPrefix := "select /*+ MAX_EXECUTION_TIME(3600000) */ id, uk1, val from t1"
 		testCases := []testCase{
-			{"", "force index (`PRIMARY`) order by id"},
-			{"/*vt+ ukColumns=\"uk1\" ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
-			{"/*vt+ ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
-			{"/*vt+ ukColumns=\"uk1\" */", "order by uk1"},
+			{"/*vt+ snapshotMethod=\"lock\" */", "force index (`PRIMARY`) order by id", binlogdatapb.StreamerSnapshotMethod_LockTables},
+			{"/*vt+ snapshotMethod=\"track\" */", "force index (`PRIMARY`) order by id", binlogdatapb.StreamerSnapshotMethod_TrackGtids},
+			{"", "force index (`PRIMARY`) order by id", binlogdatapb.StreamerSnapshotMethod_Undefined},
+			{"/*vt+ ukColumns=\"uk1\" ukForce=\"uk2\" */", "force index (`uk2`) order by uk1", binlogdatapb.StreamerSnapshotMethod_Undefined},
+			{"/*vt+ ukForce=\"uk2\" */", "force index (`uk2`) order by uk1", binlogdatapb.StreamerSnapshotMethod_Undefined},
+			{"/*vt+ ukColumns=\"uk1\" */", "order by uk1", binlogdatapb.StreamerSnapshotMethod_Undefined},
 		}
 
 		for _, tc := range testCases {
@@ -76,6 +79,7 @@ func TestRowStreamerQuery(t *testing.T) {
 				require.NoError(t, err)
 				want := fmt.Sprintf("%s %s", sendQueryPrefix, tc.sendQuerySuffix)
 				require.Equal(t, want, rs.sendQuery)
+				require.Equal(t, tc.snapshotMethod, rs.snapshotMethod)
 			})
 		}
 		return nil

@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -71,7 +72,7 @@ func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn
 
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
 // It returns the GTID set from the time when the snapshot was taken.
-func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, rotatedLog bool, err error) {
+func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string, snapshotMethod binlogdatapb.StreamerSnapshotMethod) (gtid string, rotatedLog bool, err error) {
 	// Rotate the binary log if needed to limit the GTID auto positioning overhead.
 	// This may be needed as the currently open binary log (which can be up to 1G in
 	// size by default) will need to be scanned and empty events will be streamed for
@@ -88,14 +89,25 @@ func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query s
 			query, err)
 	}
 
-	_, err = conn.ExecuteFetch("set session session_track_gtids = START_GTID", 1, false)
-	if err != nil {
-		// session_track_gtids = START_GTID unsupported or cannot execute. Resort to LOCK-based snapshot
-		gtid, err = conn.startSnapshot(ctx, table)
-	} else {
-		// session_track_gtids = START_GTID supported. Get a transaction with consistent GTID without LOCKing tables.
-		gtid, err = conn.startSnapshotWithConsistentGTID(ctx)
+	startSnapshot := func() (string, error) {
+		if snapshotMethod == binlogdatapb.StreamerSnapshotMethod_LockTables {
+			// Explicitly requested a LOCK-based snapshot.
+			fmt.Println("QQQQ force lock")
+			return conn.startSnapshotWithLockTables(ctx, table)
+		}
+		_, err := conn.ExecuteFetch("set session session_track_gtids = START_GTID", 1, false)
+		if err == nil {
+			return conn.startSnapshotWithConsistentGTID(ctx)
+		}
+		// session_track_gtids does not support START_GTID.
+		if snapshotMethod == binlogdatapb.StreamerSnapshotMethod_TrackGtids {
+			// Tracking GTIDs was explicitly required. Can't do that.
+			return "", err
+		}
+		// Resort to locking snpshot
+		return conn.startSnapshotWithLockTables(ctx, table)
 	}
+	gtid, err = startSnapshot()
 	if err != nil {
 		return "", rotatedLog, err
 	}
@@ -106,7 +118,7 @@ func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query s
 }
 
 // snapshot performs the snapshotting.
-func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid string, err error) {
+func (conn *snapshotConn) startSnapshotWithLockTables(ctx context.Context, table string) (gtid string, err error) {
 	lockConn, err := mysqlConnect(ctx, conn.cp)
 	if err != nil {
 		return "", err

@@ -81,6 +81,8 @@ type rowStreamer struct {
 
 	mode RowStreamerMode
 	conn *snapshotConn
+
+	snapshotMethod binlogdatapb.StreamerSnapshotMethod
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
@@ -181,6 +183,14 @@ func (rs *rowStreamer) buildPlan() error {
 		if err != nil {
 			return err
 		}
+	}
+	switch s, _ := directives.GetString("snapshotMethod", ""); s {
+	case "lock":
+		rs.snapshotMethod = binlogdatapb.StreamerSnapshotMethod_LockTables
+	case "track":
+		rs.snapshotMethod = binlogdatapb.StreamerSnapshotMethod_TrackGtids
+	default:
+		rs.snapshotMethod = binlogdatapb.StreamerSnapshotMethod_Undefined
 	}
 	rs.pkColumns, err = rs.buildPKColumns(st)
 	if err != nil {
@@ -320,7 +330,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	)
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
 	if rs.mode == RowStreamerModeSingleTable {
-		gtid, rotatedLog, err = rs.conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+		gtid, rotatedLog, err = rs.conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery, rs.snapshotMethod)
 		if err != nil {
 			return err
 		}

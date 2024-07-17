@@ -44,7 +44,7 @@ func TestStartSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	conn.startSnapshot(ctx, "t1")
+	conn.startSnapshotWithLockTables(ctx, "t1")
 
 	// This second row should not be in the result.
 	execStatement(t, "insert into t1 values(2, 'bbb')")
