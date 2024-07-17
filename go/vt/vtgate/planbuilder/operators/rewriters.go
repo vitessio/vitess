@@ -50,7 +50,9 @@ type (
 	VisitRule bool
 )
 
-var NoRewrite *ApplyResult = nil
+var (
+	NoRewrite *ApplyResult = nil
+)
 
 const (
 	VisitChildren VisitRule = true

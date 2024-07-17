@@ -38,7 +38,6 @@ func compact(ctx *plancontext.PlanningContext, op Operator) Operator {
 		if !ok {
 			return op, NoRewrite
 		}
-		fmt.Println("COMPACTING", op.ShortDescription())
 		return newOp.Compact(ctx)
 	}, stopAtRoute)
 	return newOp
