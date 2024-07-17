@@ -556,11 +556,6 @@ func (vtg *VTGate) CloseSession(ctx context.Context, session *vtgatepb.Session) 
 	return vtg.executor.CloseSession(ctx, NewSafeSession(session))
 }
 
-// ResolveTransaction resolves the specified 2PC transaction.
-func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
-	return formatError(vtg.txConn.Resolve(ctx, dtid))
-}
-
 // Prepare supports non-streaming prepare statement query with multi shards
 func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
 	// In this context, we don't care if we can't fully parse destination
