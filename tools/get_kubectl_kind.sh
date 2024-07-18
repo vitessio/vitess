@@ -28,7 +28,7 @@ ln -sf "kubectl-${KUBE_VERSION}" kubectl
 if ! command -v kind &> /dev/null
 then
     echo "Downloading kind..."
-    curl -L https://kind.sigs.k8s.io/dl/v0.12.0/kind-linux-amd64 > "kind"
+    curl -L https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 > "kind"
     chmod +x "kind"
     echo "Installed kind"
 else
