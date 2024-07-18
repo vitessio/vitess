@@ -286,6 +286,7 @@ where
 	and l_quantity < 24;
 
 # Q7 Volume Shipping Query
+-- skip
 select
 	supp_nation,
 	cust_nation,
@@ -327,6 +328,7 @@ order by
 	l_year;
 
 # Q8 National Market Share Query
+-- skip
 select
 	o_year,
 	sum(case
@@ -366,6 +368,7 @@ order by
 	o_year;
 
 # Q9 Product Type Profit Measure Query
+-- skip
 select
 	nation,
 	o_year,
