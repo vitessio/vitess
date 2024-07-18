@@ -3640,6 +3640,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		timeHeartbeat:        row.AsInt64("time_heartbeat", 0),
 		timeThrottled:        row.AsInt64("time_throttled", 0),
 		componentThrottled:   row.AsString("component_throttled", ""),
+		reasonThrottled:      row.AsString("reason_throttled", ""),
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
 		state:                binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row.AsString("state", "")]),
 		message:              row.AsString("message", ""),
@@ -3872,7 +3873,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
 				if s.timeThrottled != 0 {
 					// Avoid creating a 0000-00-00 00:00:00 timestamp
-					_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled)
+					_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled, s.reasonThrottled)
 				}
 				if onlineDDL.StrategySetting().IsInOrderCompletion() {
 					// We will fail an in-order migration if there's _prior_ migrations within the same migration-context
@@ -4575,10 +4576,17 @@ func (e *Executor) updateMigrationETASecondsByProgress(ctx context.Context, uuid
 	return err
 }
 
-func (e *Executor) updateMigrationLastThrottled(ctx context.Context, uuid string, lastThrottledTime time.Time, throttledCompnent string) error {
+func (e *Executor) updateMigrationLastThrottled(
+	ctx context.Context,
+	uuid string,
+	lastThrottledTime time.Time,
+	throttledCompnent string,
+	reasonThrottled string,
+) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateLastThrottled,
 		sqltypes.StringBindVariable(lastThrottledTime.Format(sqltypes.TimestampFormat)),
 		sqltypes.StringBindVariable(throttledCompnent),
+		sqltypes.StringBindVariable(reasonThrottled),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
