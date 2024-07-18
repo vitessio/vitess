@@ -30656,6 +30656,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse app_name */
         app_name?: (string|null);
+
+        /** CheckThrottlerResponse summary */
+        summary?: (string|null);
     }
 
     /** Represents a CheckThrottlerResponse. */
@@ -30690,6 +30693,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse app_name. */
         public app_name: string;
+
+        /** CheckThrottlerResponse summary. */
+        public summary: string;
 
         /**
          * Creates a new CheckThrottlerResponse instance using the specified properties.

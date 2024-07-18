@@ -774,6 +774,9 @@ message CheckThrottlerResponse {
 
   // AppName is the name of app that was matched by the throttler
   string app_name = 8;
+
+  // Summary is a human readable analysis of the result
+  string summary = 9;
 }
 
 message GetThrottlerStatusRequest {
