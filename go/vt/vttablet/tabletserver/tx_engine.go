@@ -32,7 +32,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -89,10 +88,11 @@ type TxEngine struct {
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
 	twoPCReady   sync.WaitGroup
+	dxNotify     func()
 }
 
 // NewTxEngine creates a new TxEngine.
-func NewTxEngine(env tabletenv.Env) *TxEngine {
+func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	config := env.Config()
 	te := &TxEngine{
 		env:                 env,
@@ -103,16 +103,11 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	te.txPool = NewTxPool(env, limiter)
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
-		if config.TwoPCCoordinatorAddress == "" {
-			log.Error("Coordinator address not specified: Disabling 2PC")
-			te.twopcEnabled = false
-		}
 		if config.TwoPCAbandonAge <= 0 {
 			log.Error("2PC abandon age not specified: Disabling 2PC")
 			te.twopcEnabled = false
 		}
 	}
-	te.coordinatorAddress = config.TwoPCCoordinatorAddress
 	te.abandonAge = config.TwoPCAbandonAge.Get()
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
@@ -127,6 +122,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 		IdleTimeout: env.Config().TxPool.IdleTimeout,
 	})
 	te.twoPC = NewTwoPC(readPool)
+	te.dxNotify = dxNotifier
 	te.state = NotServing
 	return te
 }
@@ -180,7 +176,7 @@ func (te *TxEngine) transition(state txEngineState) {
 				te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
 				log.Errorf("Could not prepare transactions: %v", err)
 			}
-			te.startWatchdog()
+			te.startTransactionWatcher()
 		}()
 	}
 }
@@ -311,7 +307,7 @@ func (te *TxEngine) shutdownLocked() {
 	// Shut down functions are idempotent.
 	// No need to check if 2pc is enabled.
 	log.Infof("TxEngine - stop watchdog")
-	te.stopWatchdog()
+	te.stopTransactionWatcher()
 
 	poolEmpty := make(chan bool)
 	rollbackDone := make(chan bool)
@@ -452,58 +448,37 @@ func (te *TxEngine) rollbackPrepared() {
 	}
 }
 
-// startWatchdog starts the watchdog goroutine, which looks for abandoned
+// startTransactionWatcher starts the watchdog goroutine, which looks for abandoned
 // transactions and calls the notifier on them.
-func (te *TxEngine) startWatchdog() {
+func (te *TxEngine) startTransactionWatcher() {
 	te.ticks.Start(func() {
 		ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), te.abandonAge/4)
 		defer cancel()
 
 		// Raise alerts on prepares that have been unresolved for too long.
-		// Use 5x abandonAge to give opportunity for watchdog to resolve these.
+		// Use 5x abandonAge to give opportunity for transaction coordinator to resolve these redo logs.
 		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
 		if err != nil {
-			te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
-			log.Errorf("Error reading unresolved prepares: '%v': %v", te.coordinatorAddress, err)
+			te.env.Stats().InternalErrors.Add("RedoWatcherFail", 1)
+			log.Errorf("Error reading prepared transactions: %v", err)
 		}
 		te.env.Stats().Unresolved.Set("Prepares", count)
 
-		// Resolve lingering distributed transactions.
-		txs, err := te.twoPC.ReadAbandoned(ctx, time.Now().Add(-te.abandonAge))
+		// Notify lingering distributed transactions.
+		count, err = te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
-			te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
-			log.Errorf("Error reading transactions for 2pc watchdog: %v", err)
+			te.env.Stats().InternalErrors.Add("TransactionWatcherFail", 1)
+			log.Errorf("Error reading unresolved transactions: %v", err)
 			return
 		}
-		if len(txs) == 0 {
-			return
+		if count > 0 {
+			te.dxNotify()
 		}
-
-		coordConn, err := vtgateconn.Dial(ctx, te.coordinatorAddress)
-		if err != nil {
-			te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
-			log.Errorf("Error connecting to coordinator '%v': %v", te.coordinatorAddress, err)
-			return
-		}
-		defer coordConn.Close()
-
-		var wg sync.WaitGroup
-		for tx := range txs {
-			wg.Add(1)
-			go func(dtid string) {
-				defer wg.Done()
-				if err := coordConn.ResolveTransaction(ctx, dtid); err != nil {
-					te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
-					log.Errorf("Error notifying for dtid %s: %v", dtid, err)
-				}
-			}(tx)
-		}
-		wg.Wait()
 	})
 }
 
-// stopWatchdog stops the watchdog goroutine.
-func (te *TxEngine) stopWatchdog() {
+// stopTransactionWatcher stops the watchdog goroutine.
+func (te *TxEngine) stopTransactionWatcher() {
 	te.ticks.Stop()
 }
 
