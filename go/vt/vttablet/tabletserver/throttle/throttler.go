@@ -206,8 +206,6 @@ type Throttler struct {
 
 	readSelfThrottleMetrics func(context.Context) base.ThrottleMetrics // overwritten by unit test
 
-	httpClient *http.Client
-
 	hostCpuCoreCount atomic.Int32
 }
 
@@ -263,7 +261,6 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
 	throttler.appCheckedMetrics = cache.New(cache.NoExpiration, 0)
 
-	throttler.httpClient = base.SetupHTTPClient(2 * activeCollectInterval)
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
