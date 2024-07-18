@@ -39,41 +39,43 @@ limitations under the License.
 	SOFTWARE.
 */
 
-package mysql
+package base
 
 import (
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"fmt"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// ClusterTablet combines a cluster name with a tablet alias
-type ClusterTablet struct {
-	ClusterName string
-	Alias       string
+// Probe is the minimal configuration required to connect to a MySQL server
+type Probe struct {
+	Alias           string
+	Tablet          *topodatapb.Tablet
+	CacheMillis     int
+	QueryInProgress int64
 }
 
-// GetClusterTablet creates a GetClusterTablet object
-func GetClusterTablet(clusterName string, alias string) ClusterTablet {
-	return ClusterTablet{ClusterName: clusterName, Alias: alias}
+// Probes maps tablet aliases to probe(s)
+type Probes map[string](*Probe)
+
+// ClusterProbes has the probes for a specific cluster
+type ClusterProbes struct {
+	IgnoreHostsCount     int
+	IgnoreHostsThreshold float64
+	TabletProbes         Probes
 }
 
-// TabletResultMap maps a cluster-tablet to a result
-type TabletResultMap map[ClusterTablet]base.MetricResult
-
-// Inventory has the operational data about probes, their metrics, and relevant configuration
-type Inventory struct {
-	ClustersProbes       map[string](Probes)
-	IgnoreHostsCount     map[string]int
-	IgnoreHostsThreshold map[string]float64
-	TabletMetrics        TabletResultMap
+// NewProbes creates Probes
+func NewProbes() Probes {
+	return Probes{}
 }
 
-// NewInventory creates a Inventory
-func NewInventory() *Inventory {
-	inventory := &Inventory{
-		ClustersProbes:       make(map[string](Probes)),
-		IgnoreHostsCount:     make(map[string]int),
-		IgnoreHostsThreshold: make(map[string]float64),
-		TabletMetrics:        make(map[ClusterTablet]base.MetricResult),
-	}
-	return inventory
+// NewProbe creates Probe
+func NewProbe() *Probe {
+	return &Probe{}
+}
+
+// String returns a human readable string of this struct
+func (p *Probe) String() string {
+	return fmt.Sprintf("probe alias=%s", p.Alias)
 }

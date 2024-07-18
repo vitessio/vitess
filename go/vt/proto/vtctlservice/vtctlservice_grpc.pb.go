@@ -464,6 +464,9 @@ type VtctldClient interface {
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
+	// GetMirrorRules returns the VSchema routing rules.
+	GetMirrorRules(ctx context.Context, in *vtctldata.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetMirrorRulesResponse, error)
+	WorkflowMirrorTraffic(ctx context.Context, in *vtctldata.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowMirrorTrafficResponse, error)
 }
 
 type vtctldClient struct {
@@ -1596,6 +1599,24 @@ func (c *vtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldata.Workflo
 	return out, nil
 }
 
+func (c *vtctldClient) GetMirrorRules(ctx context.Context, in *vtctldata.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetMirrorRulesResponse, error) {
+	out := new(vtctldata.GetMirrorRulesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetMirrorRules", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) WorkflowMirrorTraffic(ctx context.Context, in *vtctldata.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowMirrorTrafficResponse, error) {
+	out := new(vtctldata.WorkflowMirrorTrafficResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowMirrorTraffic", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VtctldServer is the server API for Vtctld service.
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility
@@ -1928,6 +1949,9 @@ type VtctldServer interface {
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error)
+	// GetMirrorRules returns the VSchema routing rules.
+	GetMirrorRules(context.Context, *vtctldata.GetMirrorRulesRequest) (*vtctldata.GetMirrorRulesResponse, error)
+	WorkflowMirrorTraffic(context.Context, *vtctldata.WorkflowMirrorTrafficRequest) (*vtctldata.WorkflowMirrorTrafficResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -2285,6 +2309,12 @@ func (UnimplementedVtctldServer) WorkflowSwitchTraffic(context.Context, *vtctlda
 }
 func (UnimplementedVtctldServer) WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowUpdate not implemented")
+}
+func (UnimplementedVtctldServer) GetMirrorRules(context.Context, *vtctldata.GetMirrorRulesRequest) (*vtctldata.GetMirrorRulesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMirrorRules not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowMirrorTraffic(context.Context, *vtctldata.WorkflowMirrorTrafficRequest) (*vtctldata.WorkflowMirrorTrafficResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowMirrorTraffic not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -4414,6 +4444,42 @@ func _Vtctld_WorkflowUpdate_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_GetMirrorRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetMirrorRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetMirrorRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetMirrorRules",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetMirrorRules(ctx, req.(*vtctldata.GetMirrorRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_WorkflowMirrorTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowMirrorTrafficRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowMirrorTraffic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowMirrorTraffic",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowMirrorTraffic(ctx, req.(*vtctldata.WorkflowMirrorTrafficRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vtctld_ServiceDesc is the grpc.ServiceDesc for Vtctld service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -4876,6 +4942,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WorkflowUpdate",
 			Handler:    _Vtctld_WorkflowUpdate_Handler,
+		},
+		{
+			MethodName: "GetMirrorRules",
+			Handler:    _Vtctld_GetMirrorRules_Handler,
+		},
+		{
+			MethodName: "WorkflowMirrorTraffic",
+			Handler:    _Vtctld_WorkflowMirrorTraffic_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

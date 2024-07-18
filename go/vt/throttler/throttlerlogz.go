@@ -159,7 +159,7 @@ func showThrottlerLog(w http.ResponseWriter, m *managerImpl, name string) {
 			colorLevel = "high"
 		}
 		data := struct {
-			result
+			Result
 			ColorLevel string
 		}{r, colorLevel}
 

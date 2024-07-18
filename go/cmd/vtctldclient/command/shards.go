@@ -671,10 +671,10 @@ func init() {
 
 	Root.AddCommand(SetShardIsPrimaryServing)
 
-	SetShardTabletControl.Flags().StringSliceVarP(&setShardTabletControlOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to update.")
-	SetShardTabletControl.Flags().StringSliceVar(&setShardTabletControlOptions.DeniedTables, "denied-tables", nil, "Specifies a comma-separated list of tables to add to the denylist (for MoveTables). Each table name is either an exact match, or a regular expression of the form '/regexp/'.")
-	SetShardTabletControl.Flags().BoolVarP(&setShardTabletControlOptions.Remove, "remove", "r", false, "Removes the specified cells for MoveTables operations.")
-	SetShardTabletControl.Flags().BoolVar(&setShardTabletControlOptions.DisableQueryService, "disable-query-service", false, "Sets the DisableQueryService flag in the specified cells. This flag requires --denied-tables and --remove to be unset; if either is set, this flag is ignored.")
+	SetShardTabletControl.Flags().StringSliceVarP(&setShardTabletControlOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to update (all cells will be used by default).")
+	SetShardTabletControl.Flags().StringSliceVar(&setShardTabletControlOptions.DeniedTables, "denied-tables", nil, "Specifies a comma-separated list of tables to add to the DeniedTables list, or remove from the list if --remove is also specified, in the Shard records (MoveTables). Each table name is either an exact match, or a regular expression of the form '/regexp/'.")
+	SetShardTabletControl.Flags().BoolVarP(&setShardTabletControlOptions.Remove, "remove", "r", false, "Removes the TabletControl field and its DeniedTables entries, or if specified with --denied-tables then only remove the specified tables from the DeniedTables list, in the Shard records (MoveTables) in the specified cells (using all cells by default).")
+	SetShardTabletControl.Flags().BoolVar(&setShardTabletControlOptions.DisableQueryService, "disable-query-service", false, "Adds or removes the DisableQueryService field in the SrvKeyspace record (Reshard) for the specified cells (using all cells by deefault). This flag requires --denied-tables and --remove to be unset; if either is set, this flag is ignored.")
 	Root.AddCommand(SetShardTabletControl)
 
 	Root.AddCommand(ShardReplicationAdd)

@@ -94,4 +94,7 @@ message VTTestTopology {
 
   // routing rules for the topology.
   vschema.RoutingRules routing_rules = 3;
+
+  // mirror rules for the topology.
+  vschema.MirrorRules mirror_rules = 4;
 }

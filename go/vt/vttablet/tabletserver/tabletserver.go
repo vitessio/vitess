@@ -44,6 +44,10 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -62,15 +66,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // logPoolFull is for throttling transaction / query pool full messages in the log.
@@ -181,7 +181,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
-	tsv.te = NewTxEngine(tsv)
+	tsv.te = NewTxEngine(tsv, tsv.hs.sendUnresolvedTransactionSignal)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tsv.lagThrottler)
@@ -271,7 +271,7 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 	tsv.rt.InitDBConfig(target, mysqld)
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace, target.Shard)
-	tsv.hs.InitDBConfig(target, tsv.config.DB.DbaWithDB())
+	tsv.hs.InitDBConfig(target)
 	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
 	tsv.tableGC.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
@@ -645,11 +645,7 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 		"Prepare", "prepare", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.Prepare(transactionID, dtid)
 		},
 	)
@@ -662,11 +658,7 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 		"CommitPrepared", "commit_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.CommitPrepared(dtid)
 		},
 	)
@@ -679,11 +671,7 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 		"RollbackPrepared", "rollback_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.RollbackPrepared(dtid, originalID)
 		},
 	)
@@ -696,11 +684,7 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 		"CreateTransaction", "create_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.CreateTransaction(dtid, participants)
 		},
 	)
@@ -714,11 +698,7 @@ func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target
 		"StartCommit", "start_commit", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.StartCommit(transactionID, dtid)
 		},
 	)
@@ -732,11 +712,7 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 		"SetRollback", "set_rollback", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.SetRollback(dtid, transactionID)
 		},
 	)
@@ -750,11 +726,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 		"ConcludeTransaction", "conclude_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			return txe.ConcludeTransaction(dtid)
 		},
 	)
@@ -767,16 +739,27 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 		"ReadTransaction", "read_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := &TxExecutor{
-				ctx:      ctx,
-				logStats: logStats,
-				te:       tsv.te,
-			}
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			metadata, err = txe.ReadTransaction(dtid)
 			return err
 		},
 	)
 	return metadata, err
+}
+
+// UnresolvedTransactions returns the unresolved distributed transaction record.
+func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *querypb.Target) (transactions []*querypb.TransactionMetadata, err error) {
+	err = tsv.execRequest(
+		ctx, tsv.loadQueryTimeout(),
+		"UnresolvedTransactions", "unresolved_transaction", nil,
+		target, nil, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			transactions, err = txe.UnresolvedTransactions()
+			return err
+		},
+	)
+	return
 }
 
 // Execute executes the query and returns the result as response.
@@ -1695,7 +1678,13 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 
 // CheckThrottler issues a self check
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	r := tsv.lagThrottler.CheckByType(ctx, appName, "", flags, throttle.ThrottleCheckSelf)
+	r := tsv.lagThrottler.Check(ctx, appName, nil, flags)
+	return r
+}
+
+// GetThrottlerStatus gets the status of the tablet throttler
+func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus {
+	r := tsv.lagThrottler.Status()
 	return r
 }
 
@@ -1778,11 +1767,7 @@ func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
 func (tsv *TabletServer) registerTwopczHandler() {
 	tsv.exporter.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
-		txe := &TxExecutor{
-			ctx:      ctx,
-			logStats: tabletenv.NewLogStats(ctx, "twopcz"),
-			te:       tsv.te,
-		}
+		txe := NewDTExecutor(ctx, tsv.te, tabletenv.NewLogStats(ctx, "twopcz"))
 		twopczHandler(txe, w, r)
 	})
 }
@@ -1801,22 +1786,20 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 
 // registerThrottlerCheckHandlers registers throttler "check" requests
 func (tsv *TabletServer) registerThrottlerCheckHandlers() {
-	handle := func(path string, checkType throttle.ThrottleCheckType) {
+	handle := func(path string, scope base.Scope) {
 		tsv.exporter.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			ctx := tabletenv.LocalContext()
-			remoteAddr := r.Header.Get("X-Forwarded-For")
-			if remoteAddr == "" {
-				remoteAddr = r.RemoteAddr
-				remoteAddr = strings.Split(remoteAddr, ":")[0]
-			}
 			appName := r.URL.Query().Get("app")
 			if appName == "" {
-				appName = throttlerapp.DefaultName.String()
+				appName = throttlerapp.VitessName.String()
 			}
 			flags := &throttle.CheckFlags{
+				Scope:                 scope,
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
+				MultiMetricsEnabled:   true,
 			}
-			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, remoteAddr, flags, checkType)
+			metricNames := tsv.lagThrottler.MetricNames(r.URL.Query()["m"])
+			checkResult := tsv.lagThrottler.Check(ctx, appName, metricNames, flags)
 			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
 				checkResult.StatusCode = http.StatusOK // 200
 			}
@@ -1830,8 +1813,8 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 		})
 	}
-	handle("/throttler/check", throttle.ThrottleCheckPrimaryWrite)
-	handle("/throttler/check-self", throttle.ThrottleCheckSelf)
+	handle("/throttler/check", base.ShardScope)
+	handle("/throttler/check-self", base.SelfScope)
 }
 
 // registerThrottlerStatusHandler registers a throttler "status" request

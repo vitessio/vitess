@@ -39,15 +39,20 @@ limitations under the License.
 	SOFTWARE.
 */
 
-package config
+package base
 
-//
-// General-store configuration
-//
+// Inventory has the operational data about probes, their metrics, and relevant configuration
+type Inventory struct {
+	ClustersProbes       Probes
+	IgnoreHostsCount     int
+	IgnoreHostsThreshold float64
+	TabletMetrics        TabletResultMap
+}
 
-// StoresSettings is a general settings container for specific stores.
-type StoresSettings struct {
-	MySQL MySQLConfigurationSettings // Any and all MySQL setups go here
-
-	// Futuristic stores can come here.
+// NewInventory creates a Inventory
+func NewInventory() *Inventory {
+	inventory := &Inventory{
+		TabletMetrics: make(TabletResultMap),
+	}
+	return inventory
 }

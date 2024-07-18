@@ -39,10 +39,10 @@ limitations under the License.
 	SOFTWARE.
 */
 
-package mysql
+package base
 
 import (
-	"fmt"
+	"context"
 	"strings"
 	"time"
 
@@ -65,29 +65,31 @@ const (
 	MetricsQueryTypeUnknown
 )
 
-var mysqlMetricCache = cache.New(cache.NoExpiration, 10*time.Second)
+var metricCache = cache.New(cache.NoExpiration, 10*time.Second)
 
-func getMySQLMetricCacheKey(probe *Probe) string {
-	return fmt.Sprintf("%s:%s", probe.Alias, probe.MetricQuery)
+func getMetricCacheKey(probe *Probe) string {
+	return probe.Alias
 }
 
-func cacheMySQLThrottleMetric(probe *Probe, mySQLThrottleMetric *MySQLThrottleMetric) *MySQLThrottleMetric {
-	if mySQLThrottleMetric.Err != nil {
-		return mySQLThrottleMetric
+func cacheThrottleMetric(probe *Probe, throttleMetrics ThrottleMetrics) ThrottleMetrics {
+	for _, metric := range throttleMetrics {
+		if metric.Err != nil {
+			return throttleMetrics
+		}
 	}
 	if probe.CacheMillis > 0 {
-		mysqlMetricCache.Set(getMySQLMetricCacheKey(probe), mySQLThrottleMetric, time.Duration(probe.CacheMillis)*time.Millisecond)
+		metricCache.Set(getMetricCacheKey(probe), throttleMetrics, time.Duration(probe.CacheMillis)*time.Millisecond)
 	}
-	return mySQLThrottleMetric
+	return throttleMetrics
 }
 
-func getCachedMySQLThrottleMetric(probe *Probe) *MySQLThrottleMetric {
+func getCachedThrottleMetrics(probe *Probe) ThrottleMetrics {
 	if probe.CacheMillis == 0 {
 		return nil
 	}
-	if metric, found := mysqlMetricCache.Get(getMySQLMetricCacheKey(probe)); found {
-		mySQLThrottleMetric, _ := metric.(*MySQLThrottleMetric)
-		return mySQLThrottleMetric
+	if metrics, found := metricCache.Get(getMetricCacheKey(probe)); found {
+		throttleMetrics, _ := metrics.(ThrottleMetrics)
+		return throttleMetrics
 	}
 	return nil
 }
@@ -106,52 +108,58 @@ func GetMetricsQueryType(query string) MetricsQueryType {
 	return MetricsQueryTypeUnknown
 }
 
-// MySQLThrottleMetric has the probed metric for a tablet
-type MySQLThrottleMetric struct { // nolint:revive
-	ClusterName string
-	Alias       string
-	Value       float64
-	Err         error
+// ThrottleMetric has the probed metric for a tablet
+type ThrottleMetric struct { // nolint:revive
+	Name  MetricName
+	Scope Scope
+	Alias string
+	Value float64
+	Err   error
 }
 
-// NewMySQLThrottleMetric creates a new MySQLThrottleMetric
-func NewMySQLThrottleMetric() *MySQLThrottleMetric {
-	return &MySQLThrottleMetric{Value: 0}
+type ThrottleMetrics map[MetricName]*ThrottleMetric // nolint:revive
+
+// NewThrottleMetric creates a new ThrottleMetric
+func NewThrottleMetric() *ThrottleMetric {
+	return &ThrottleMetric{Value: 0}
 }
 
 // GetClusterTablet returns the ClusterTablet part of the metric
-func (metric *MySQLThrottleMetric) GetClusterTablet() ClusterTablet {
-	return GetClusterTablet(metric.ClusterName, metric.Alias)
+func (metric *ThrottleMetric) GetTabletAlias() string {
+	return metric.Alias
 }
 
 // Get implements MetricResult
-func (metric *MySQLThrottleMetric) Get() (float64, error) {
+func (metric *ThrottleMetric) Get() (float64, error) {
 	return metric.Value, metric.Err
 }
 
-// ReadThrottleMetric returns a metric for the given probe. Either by explicit query
+// WithError returns this metric with given error
+func (metric *ThrottleMetric) WithError(err error) *ThrottleMetric {
+	metric.Err = err
+	return metric
+}
+
+// ReadThrottleMetrics returns a metric for the given probe. Either by explicit query
 // or via SHOW REPLICA STATUS
-func ReadThrottleMetric(probe *Probe, clusterName string, overrideGetMetricFunc func() *MySQLThrottleMetric) (mySQLThrottleMetric *MySQLThrottleMetric) {
-	if mySQLThrottleMetric := getCachedMySQLThrottleMetric(probe); mySQLThrottleMetric != nil {
-		return mySQLThrottleMetric
-		// On cached results we avoid taking latency metrics
+func ReadThrottleMetrics(ctx context.Context, probe *Probe, metricsFunc func(context.Context) ThrottleMetrics) ThrottleMetrics {
+	if metrics := getCachedThrottleMetrics(probe); metrics != nil {
+		return metrics
 	}
 
 	started := time.Now()
-	mySQLThrottleMetric = NewMySQLThrottleMetric()
-	mySQLThrottleMetric.ClusterName = clusterName
-	mySQLThrottleMetric.Alias = probe.Alias
+	throttleMetrics := metricsFunc(ctx)
 
-	defer func(metric *MySQLThrottleMetric, started time.Time) {
-		go func() {
-			stats.GetOrNewGauge("ThrottlerProbesLatency", "probes latency").Set(time.Since(started).Nanoseconds())
-			stats.GetOrNewCounter("ThrottlerProbesTotal", "total probes").Add(1)
+	go func(metrics ThrottleMetrics, started time.Time) {
+		stats.GetOrNewGauge("ThrottlerProbesLatency", "probes latency").Set(time.Since(started).Nanoseconds())
+		stats.GetOrNewCounter("ThrottlerProbesTotal", "total probes").Add(1)
+		for _, metric := range metrics {
 			if metric.Err != nil {
 				stats.GetOrNewCounter("ThrottlerProbesError", "total probes errors").Add(1)
+				break
 			}
-		}()
-	}(mySQLThrottleMetric, started)
+		}
+	}(throttleMetrics, started)
 
-	mySQLThrottleMetric = overrideGetMetricFunc()
-	return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
+	return cacheThrottleMetric(probe, throttleMetrics)
 }

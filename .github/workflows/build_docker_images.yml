@@ -1,22 +1,101 @@
-name: Docker Build Images
+name: Build Docker Images
 on:
+  pull_request:
   push:
     branches:
       - main
     tags:
-      - 'v[2-9][0-9]*.*' # run only on tags greater or equal to v20.0.0 where this new way of building docker image was changed
+      - '*'
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Images (v20+)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Build Docker Images')
   cancel-in-progress: true
 
 permissions: read-all
 
 jobs:
-  build_and_push_lite:
-    name: Build and push vitess/lite Docker images
-    runs-on: gh-hosted-runners-16cores-1
+  push:
+    name: Set push variable
+    runs-on: ubuntu-20.04
     if: github.repository == 'vitessio/vitess'
+    outputs:
+      push: ${{ steps.push.outputs.push }}
+
+    steps:
+      - name: Set push variable
+        id: push
+        run: |
+          push='false'
+          if [[ "${{github.event.pull_request}}" ==  "" ]]; then
+            push='true'
+          fi
+          echo Push ${push}
+          echo "push=${push}" >> $GITHUB_OUTPUT
+
+  build_and_push_vttestserver:
+    name: Build and push vttestserver
+    runs-on: gh-hosted-runners-16cores-1
+    if: github.repository == 'vitessio/vitess' && needs.push.result == 'success'
+    needs:
+      - push
+
+    strategy:
+      fail-fast: true
+      matrix:
+        branch: [ mysql80 ]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        if: needs.push.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set Dockerfile path
+        run: |
+          echo "DOCKERFILE=./docker/vttestserver/Dockerfile.${{ matrix.branch }}" >> $GITHUB_ENV
+
+      - name: Build and push on main
+        if: startsWith(github.ref, 'refs/tags/') == false
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          push: ${{ needs.push.outputs.push }}
+          tags: vitess/vttestserver:${{ matrix.branch }}
+
+      ######
+      # All code below only applies to new tags
+      ######
+      - name: Get the Git tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Set Docker tag name
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "DOCKER_TAG=vitess/vttestserver:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
+
+      - name: Build and push on tags
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          tags: ${{ env.DOCKER_TAG }}
+
+
+  build_and_push_lite:
+    name: Build and push lite
+    runs-on: gh-hosted-runners-16cores-1
+    if: github.repository == 'vitessio/vitess' && needs.push.result == 'success'
+    needs:
+      - push
 
     strategy:
       fail-fast: true
@@ -28,6 +107,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Login to Docker Hub
+        if: needs.push.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -42,12 +122,12 @@ jobs:
           fi
 
       - name: Build and push on main
-        if: github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/') == false
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: ${{ needs.push.outputs.push }}
           tags: vitess/lite:${{ matrix.branch }}
 
       ######
@@ -76,22 +156,25 @@ jobs:
           tags: ${{ env.DOCKER_TAG }}
 
   build_and_push_components:
-    name: Build and push vitess components Docker images
-    needs: build_and_push_lite
+    name: Build and push
     runs-on: gh-hosted-runners-16cores-1
-    if: github.repository == 'vitessio/vitess'
+    if: github.repository == 'vitessio/vitess' && needs.push.result == 'success' && needs.build_and_push_lite.result == 'success'
+    needs:
+      - push
+      - build_and_push_lite
 
     strategy:
       fail-fast: true
       matrix:
         debian: [ bullseye, bookworm ]
-        component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, logrotate, logtail, vtbackup, vtexplain ]
+        component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, vtctldclient, logrotate, logtail, vtbackup, vtexplain ]
 
     steps:
       - name: Check out code
         uses: actions/checkout@v4
 
       - name: Login to Docker Hub
+        if: needs.push.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -102,22 +185,22 @@ jobs:
           echo "DOCKER_CTX=./docker/binaries/${{ matrix.component }}" >> $GITHUB_ENV
 
       - name: Build and push on main latest tag
-        if: github.ref == 'refs/heads/main' && matrix.debian == 'bookworm'
+        if: startsWith(github.ref, 'refs/tags/') == false && matrix.debian == 'bookworm'
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: ${{ needs.push.outputs.push }}
           tags: vitess/${{ matrix.component }}:latest
           build-args: |
             VT_BASE_VER=latest
             DEBIAN_VER=${{ matrix.debian }}-slim
 
       - name: Build and push on main debian specific tag
-        if: github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/') == false
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: ${{ needs.push.outputs.push }}
           tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args: |
             VT_BASE_VER=latest

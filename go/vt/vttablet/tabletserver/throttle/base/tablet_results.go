@@ -14,62 +14,42 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This codebase originates from https://github.com/github/freno, See https://github.com/github/freno/blob/master/LICENSE
-/*
-	MIT License
+package base
 
-	Copyright (c) 2017 GitHub
+import "sort"
 
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
+// TabletResultMap maps a tablet to a result
+type TabletResultMap map[string]MetricResultMap
 
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
+func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, all TabletResultMap) {
+	withAlias = make(TabletResultMap)
+	if val, ok := m[alias]; ok {
+		withAlias[alias] = val
+	}
+	return withAlias, m
+}
 
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-package throttle
-
-import (
-	"context"
-	"sort"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
-)
-
-func aggregateMySQLProbes(
-	ctx context.Context,
-	probes mysql.Probes,
-	clusterName string,
-	tabletResultsMap mysql.TabletResultMap,
+func AggregateTabletMetricResults(
+	metricName MetricName,
+	tabletResultsMap TabletResultMap,
 	ignoreHostsCount int,
 	IgnoreDialTCPErrors bool,
 	ignoreHostsThreshold float64,
-) (worstMetric base.MetricResult) {
+) (worstMetric MetricResult) {
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
 	probeValues := []float64{}
-	for _, probe := range probes {
-		tabletMetricResult, ok := tabletResultsMap[mysql.GetClusterTablet(clusterName, probe.Alias)]
+	for _, tabletMetricResults := range tabletResultsMap {
+		tabletMetricResult, ok := tabletMetricResults[metricName]
 		if !ok {
-			return base.NoMetricResultYet
+			return NoSuchMetric
 		}
-
+		if tabletMetricResult == nil {
+			return NoMetricResultYet
+		}
 		value, err := tabletMetricResult.Get()
 		if err != nil {
-			if IgnoreDialTCPErrors && base.IsDialTCPError(err) {
+			if IgnoreDialTCPErrors && IsDialTCPError(err) {
 				continue
 			}
 			if ignoreHostsCount > 0 {
@@ -84,7 +64,7 @@ func aggregateMySQLProbes(
 		probeValues = append(probeValues, value)
 	}
 	if len(probeValues) == 0 {
-		return base.NoHostsMetricResult
+		return NoHostsMetricResult
 	}
 
 	// If we got here, that means no errors (or good-to-skip errors)
@@ -114,6 +94,6 @@ func aggregateMySQLProbes(
 		ignoreHostsCount = ignoreHostsCount - 1
 	}
 	worstValue := probeValues[len(probeValues)-1]
-	worstMetric = base.NewSimpleMetricResult(worstValue)
+	worstMetric = NewSimpleMetricResult(worstValue)
 	return worstMetric
 }

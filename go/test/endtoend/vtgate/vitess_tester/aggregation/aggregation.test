@@ -9,7 +9,7 @@ CREATE TABLE `t1`
 
 CREATE TABLE `t2`
 (
-    `id`      bigint unsigned NOT NULL AUTO_INCREMENT,
+    `id`    bigint unsigned NOT NULL AUTO_INCREMENT,
     `t1_id` int unsigned NOT NULL,
     PRIMARY KEY (`id`)
 ) ENGINE InnoDB,
@@ -38,7 +38,10 @@ values (1, 1),
 
 insert into t3 (id, name)
 values (1, 'A'),
-       (2, 'B');
+       (2, 'B'),
+       (3, 'B'),
+       (4, 'B'),
+       (5, 'B');
 
 -- wait_authoritative t1
 -- wait_authoritative t2
@@ -48,3 +51,14 @@ from t1
          join t2 on t1.id = t2.t1_id
          left join t3 on t1.id = t3.id
 group by t1.id;
+
+select COUNT(*)
+from (select 1 as one
+      FROM `t3`
+      WHERE `t3`.`name` = 'B'
+      ORDER BY id DESC
+      LIMIT 25 OFFSET 0) subquery_for_count;
+
+select u.id, u.t1_id, t.num_segments
+from (select id, count(*) as num_segments from t1 group by 1 order by 2 desc limit 20) t
+         join t2 u on u.id = t.id;

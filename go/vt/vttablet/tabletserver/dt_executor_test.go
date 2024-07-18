@@ -31,8 +31,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/fakerpcvtgateconn"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -69,6 +67,22 @@ func TestTxExecutorPrepare(t *testing.T) {
 	// A retry  with no original id should also succeed.
 	err = txe.RollbackPrepared("aa", 0)
 	require.NoError(t, err)
+}
+
+// TestTxExecutorPrepareResevedConn tests the case where a reserved connection is used for prepare.
+func TestDTExecutorPrepareResevedConn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+	txid := newTxForPrep(ctx, tsv)
+
+	// Reserve a connection
+	txe.te.Reserve(ctx, nil, txid, nil)
+
+	err := txe.Prepare(txid, "aa")
+	require.ErrorContains(t, err, "VT12001: unsupported: cannot prepare the transaction on a reserved connection")
 }
 
 func TestTxExecutorPrepareNotInTx(t *testing.T) {
@@ -433,51 +447,41 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 	}
 }
 
-// These vars and types are used only for TestExecutorResolveTransaction
-var dtidCh = make(chan string)
-
-type FakeVTGateConn struct {
-	fakerpcvtgateconn.FakeVTGateConn
-}
-
-func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
-	dtidCh <- dtid
-	return nil
-}
-
-func TestExecutorResolveTransaction(t *testing.T) {
+// TestTransactionNotifier tests that the transaction notifier is called
+// when a transaction watcher receives unresolved transaction count more than zero.
+func TestTransactionNotifier(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	protocol := "resolveTest"
-	oldValue := vtgateconn.GetVTGateProtocol()
-	vtgateconn.SetVTGateProtocol(protocol)
-	defer func() {
-		vtgateconn.SetVTGateProtocol(oldValue)
-	}()
-	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
-		return &FakeVTGateConn{
-			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
-		}, nil
-	})
+
 	_, tsv, db := newShortAgeExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	want := "aa"
 	db.AddQueryPattern(
-		"select dtid, time_created from _vt\\.dt_state where time_created.*",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.VarChar},
-				{Type: sqltypes.Int64},
-			},
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary(want),
-				sqltypes.NewVarBinary("1"),
-			}},
-		})
-	got := <-dtidCh
-	if got != want {
-		t.Errorf("ResolveTransaction: %s, want %s", got, want)
+		"select count\\(\\*\\) from _vt\\.redo_state where time_created.*",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"))
+
+	// zero unresolved transactions
+	db.AddQueryPattern(
+		"select count\\(\\*\\) from _vt\\.dt_state where time_created.*",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"))
+	notifyCh := make(chan any)
+	tsv.te.dxNotify = func() {
+		notifyCh <- nil
+	}
+	select {
+	case <-notifyCh:
+		t.Error("unresolved transaction notifier call unexpected")
+	case <-time.After(1 * time.Second):
+	}
+
+	// non zero unresolved transactions
+	db.AddQueryPattern(
+		"select count\\(\\*\\) from _vt\\.dt_state where time_created.*",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "1"))
+	select {
+	case <-notifyCh:
+	case <-time.After(1 * time.Second):
+		t.Error("unresolved transaction notifier expected but not received")
 	}
 }
 
@@ -533,7 +537,7 @@ func TestNoTwopc(t *testing.T) {
 	}
 }
 
-func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
@@ -542,7 +546,7 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv 
 	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
-	return &TxExecutor{
+	return &DTExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
@@ -550,7 +554,7 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv 
 }
 
 // newShortAgeExecutor is same as newTestTxExecutor, but shorter transaction abandon age.
-func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
@@ -559,7 +563,7 @@ func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, ts
 	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
-	return &TxExecutor{
+	return &DTExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
@@ -567,11 +571,11 @@ func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, ts
 }
 
 // newNoTwopcExecutor is same as newTestTxExecutor, but 2pc disabled.
-func newNoTwopcExecutor(t *testing.T, ctx context.Context) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newNoTwopcExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, noTwopc, db)
-	return &TxExecutor{
+	return &DTExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
