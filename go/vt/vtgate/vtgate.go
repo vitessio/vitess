@@ -208,6 +208,11 @@ var (
 		"VtgateApiRowsAffected",
 		"Rows affected by a write (DML) operation through the VTgate API",
 		[]string{"Operation", "Keyspace", "DbType"})
+
+	queryTextCharsProcessed = stats.NewCountersWithMultiLabels(
+		"VtgateQueryTextCharactersProcessed",
+		"Query text characters processed through the VTGate API",
+		[]string{"Operation", "Keyspace", "DbType"})
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -224,9 +229,10 @@ type VTGate struct {
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
 	// are global vars that depend on this member var.
-	timings      *stats.MultiTimings
-	rowsReturned *stats.CountersWithMultiLabels
-	rowsAffected *stats.CountersWithMultiLabels
+	timings                 *stats.MultiTimings
+	rowsReturned            *stats.CountersWithMultiLabels
+	rowsAffected            *stats.CountersWithMultiLabels
+	queryTextCharsProcessed *stats.CountersWithMultiLabels
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute       *logutil.ThrottledLogger
@@ -458,6 +464,7 @@ func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
+		vtg.queryTextCharsProcessed.Add(statsKey, int64(len(sql)))
 		return session, qr, nil
 	}
 
@@ -668,14 +675,15 @@ func (vtg *VTGate) HandlePanic(err *error) {
 
 func newVTGate(executor *Executor, resolver *Resolver, vsm *vstreamManager, tc *TxConn, gw *TabletGateway) *VTGate {
 	return &VTGate{
-		executor:     executor,
-		resolver:     resolver,
-		vsm:          vsm,
-		txConn:       tc,
-		gw:           gw,
-		timings:      timings,
-		rowsReturned: rowsReturned,
-		rowsAffected: rowsAffected,
+		executor:                executor,
+		resolver:                resolver,
+		vsm:                     vsm,
+		txConn:                  tc,
+		gw:                      gw,
+		timings:                 timings,
+		rowsReturned:            rowsReturned,
+		rowsAffected:            rowsAffected,
+		queryTextCharsProcessed: queryTextCharsProcessed,
 
 		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),

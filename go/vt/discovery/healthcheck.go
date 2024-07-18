@@ -48,6 +48,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -81,6 +82,9 @@ var (
 
 	// tabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets.
 	tabletFilters []string
+
+	// tabletFilterTags are the tablet tag filters (as key:value pairs) to apply to the full set of tablets.
+	tabletFilterTags flagutil.StringMapValue
 
 	// refreshInterval is the interval at which healthcheck refreshes its list of tablets from topo.
 	refreshInterval = 1 * time.Minute
@@ -164,6 +168,7 @@ func init() {
 
 func registerDiscoveryFlags(fs *pflag.FlagSet) {
 	fs.StringSliceVar(&tabletFilters, "tablet_filters", []string{}, "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.")
+	fs.Var(&tabletFilterTags, "tablet-filter-tags", "Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.")
 	fs.Var((*topoproto.TabletTypeListFlag)(&AllowedTabletTypes), "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.")
 	fs.StringSliceVar(&KeyspacesToWatch, "keyspaces_to_watch", []string{}, "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.")
 }
@@ -337,13 +342,13 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		loadTabletsTrigger: make(chan struct{}),
 	}
 	var topoWatchers []*TopologyWatcher
-	var filter TabletFilter
 	cells := strings.Split(cellsToWatch, ",")
 	if cellsToWatch == "" {
 		cells = append(cells, localCell)
 	}
 
 	for _, c := range cells {
+		var filters TabletFilters
 		log.Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {
 			continue
@@ -357,11 +362,14 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 			if err != nil {
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
-			filter = fbs
+			filters = append(filters, fbs)
 		} else if len(KeyspacesToWatch) > 0 {
-			filter = NewFilterByKeyspace(KeyspacesToWatch)
+			filters = append(filters, NewFilterByKeyspace(KeyspacesToWatch))
 		}
-		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topo.DefaultConcurrency))
+		if len(tabletFilterTags) > 0 {
+			filters = append(filters, NewFilterByTabletTags(tabletFilterTags))
+		}
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets, topo.DefaultConcurrency))
 	}
 
 	hc.topoWatchers = topoWatchers

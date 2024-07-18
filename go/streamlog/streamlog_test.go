@@ -29,6 +29,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -259,4 +262,132 @@ func TestFile(t *testing.T) {
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)
 	}
+}
+
+func TestShouldSampleQuery(t *testing.T) {
+	queryLogSampleRate = -1
+	assert.False(t, shouldSampleQuery())
+
+	queryLogSampleRate = 0
+	assert.False(t, shouldSampleQuery())
+
+	// for test coverage, can't test a random result
+	queryLogSampleRate = 0.5
+	shouldSampleQuery()
+
+	queryLogSampleRate = 1.0
+	assert.True(t, shouldSampleQuery())
+
+	queryLogSampleRate = 100.0
+	assert.True(t, shouldSampleQuery())
+}
+
+func TestShouldEmitLog(t *testing.T) {
+	origQueryLogFilterTag := queryLogFilterTag
+	origQueryLogRowThreshold := queryLogRowThreshold
+	origQueryLogSampleRate := queryLogSampleRate
+	defer func() {
+		SetQueryLogFilterTag(origQueryLogFilterTag)
+		SetQueryLogRowThreshold(origQueryLogRowThreshold)
+		SetQueryLogSampleRate(origQueryLogSampleRate)
+	}()
+
+	tests := []struct {
+		sql              string
+		qLogFilterTag    string
+		qLogRowThreshold uint64
+		qLogSampleRate   float64
+		rowsAffected     uint64
+		rowsReturned     uint64
+		ok               bool
+	}{
+		{
+			sql:              "queryLogThreshold smaller than affected and returned",
+			qLogFilterTag:    "",
+			qLogRowThreshold: 2,
+			qLogSampleRate:   0.0,
+			rowsAffected:     7,
+			rowsReturned:     7,
+			ok:               true,
+		},
+		{
+			sql:              "queryLogThreshold greater than affected and returned",
+			qLogFilterTag:    "",
+			qLogRowThreshold: 27,
+			qLogSampleRate:   0.0,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               false,
+		},
+		{
+			sql:              "this doesn't contains queryFilterTag: TAG",
+			qLogFilterTag:    "special tag",
+			qLogRowThreshold: 10,
+			qLogSampleRate:   0.0,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               false,
+		},
+		{
+			sql:              "this contains queryFilterTag: TAG",
+			qLogFilterTag:    "TAG",
+			qLogRowThreshold: 0,
+			qLogSampleRate:   0.0,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               true,
+		},
+		{
+			sql:              "this contains querySampleRate: 1.0",
+			qLogFilterTag:    "",
+			qLogRowThreshold: 0,
+			qLogSampleRate:   1.0,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               true,
+		},
+		{
+			sql:              "this contains querySampleRate: 1.0 without expected queryFilterTag",
+			qLogFilterTag:    "TAG",
+			qLogRowThreshold: 0,
+			qLogSampleRate:   1.0,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.sql, func(t *testing.T) {
+			SetQueryLogFilterTag(tt.qLogFilterTag)
+			SetQueryLogRowThreshold(tt.qLogRowThreshold)
+			SetQueryLogSampleRate(tt.qLogSampleRate)
+
+			require.Equal(t, tt.ok, ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned))
+		})
+	}
+}
+
+func BenchmarkShouldEmitLog(b *testing.B) {
+	b.Run("default", func(b *testing.B) {
+		SetQueryLogSampleRate(0.0)
+		for i := 0; i < b.N; i++ {
+			ShouldEmitLog("select * from test where user='someone'", 0, 123)
+		}
+	})
+	b.Run("filter_tag", func(b *testing.B) {
+		SetQueryLogSampleRate(0.0)
+		SetQueryLogFilterTag("LOG_QUERY")
+		defer SetQueryLogFilterTag("")
+		for i := 0; i < b.N; i++ {
+			ShouldEmitLog("select /* LOG_QUERY=1 */ * from test where user='someone'", 0, 123)
+		}
+	})
+	b.Run("50%_sample_rate", func(b *testing.B) {
+		SetQueryLogSampleRate(0.5)
+		defer SetQueryLogSampleRate(0.0)
+		for i := 0; i < b.N; i++ {
+			ShouldEmitLog("select * from test where user='someone'", 0, 123)
+		}
+	})
 }
