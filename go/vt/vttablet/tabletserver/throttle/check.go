@@ -136,13 +136,14 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		metricNames = base.MetricNames{check.throttler.metricNameUsedAsDefault()}
 	}
 	metricNames = metricNames.Unique()
-	applyMetricToCheckResult := func(metric *MetricResult) {
+	applyMetricToCheckResult := func(metricName base.MetricName, metric *MetricResult) {
 		checkResult.StatusCode = metric.StatusCode
 		checkResult.Value = metric.Value
 		checkResult.Threshold = metric.Threshold
 		checkResult.Error = metric.Error
 		checkResult.Message = metric.Message
 		checkResult.AppName = metric.AppName
+		checkResult.MetricName = metricName.String()
 	}
 	for _, metricName := range metricNames {
 		// Make sure not to modify the given scope. We create a new scope variable to work with.
@@ -201,17 +202,18 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			// metrics, because a v20 primary would not know how to deal with it, and is not expecting any of those
 			// metrics.
 			// The only metric we ever report back is the default metric, see below.
-			applyMetricToCheckResult(metric)
+			applyMetricToCheckResult(metricName, metric)
 		}
 	}
-	if metric, ok := checkResult.Metrics[check.throttler.metricNameUsedAsDefault().String()]; ok && checkResult.IsOK() {
-		applyMetricToCheckResult(metric)
+	metricNameUsedAsDefault := check.throttler.metricNameUsedAsDefault()
+	if metric, ok := checkResult.Metrics[metricNameUsedAsDefault.String()]; ok && checkResult.IsOK() {
+		applyMetricToCheckResult(metricNameUsedAsDefault, metric)
 	}
 	if metric, ok := checkResult.Metrics[base.DefaultMetricName.String()]; ok && checkResult.IsOK() {
 		// v20 compatibility: if this v21 server is a replica, reporting to a v20 primary,
 		// then we must supply the v20-flavor check result.
 		// If checkResult is not OK, then we will have populated these fields already by the failing metric.
-		applyMetricToCheckResult(metric)
+		applyMetricToCheckResult(base.DefaultMetricName, metric)
 	}
 	go func(statusCode int) {
 		statsThrottlerCheckAnyTotal.Add(1)

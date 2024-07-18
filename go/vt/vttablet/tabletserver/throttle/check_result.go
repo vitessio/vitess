@@ -42,6 +42,7 @@ limitations under the License.
 package throttle
 
 import (
+	"fmt"
 	"net/http"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -66,6 +67,7 @@ type CheckResult struct {
 	Message         string                   `json:"Message"`
 	RecentlyChecked bool                     `json:"RecentlyChecked"`
 	AppName         string                   `json:"AppName"`
+	MetricName      string                   `json:"MetricName"`
 	Metrics         map[string]*MetricResult `json:"Metrics"` // New in multi-metrics support. Will eventually replace the above fields.
 }
 
@@ -86,6 +88,24 @@ func NewCheckResult(statusCode int, value float64, threshold float64, appName st
 
 func (c *CheckResult) IsOK() bool {
 	return c.StatusCode == http.StatusOK
+}
+
+// Summary returns a human-readable summary of the check result
+func (c *CheckResult) Summary() string {
+	switch c.StatusCode {
+	case http.StatusOK:
+		return fmt.Sprintf("%v is granted access", c.AppName)
+	case http.StatusExpectationFailed:
+		return fmt.Sprintf("%v is explicitly denied access", c.AppName)
+	case http.StatusInternalServerError:
+		return fmt.Sprintf("%v is denied access due to unexpected error: %v", c.AppName, c.Error)
+	case http.StatusTooManyRequests:
+		return fmt.Sprintf("%v is denied access due to %s metric value %v exceeding threshold %v", c.AppName, c.MetricName, c.Value, c.Threshold)
+	case http.StatusNotFound:
+		return fmt.Sprintf("%v is denied access due to unknown or uncollected metric", c.AppName)
+	default:
+		return fmt.Sprintf("unknown status code: %v", c.StatusCode)
+	}
 }
 
 // NewErrorCheckResult returns a check result that indicates an error
