@@ -23,6 +23,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -553,16 +554,15 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil)
 	require.NoError(t, err)
 
-	// This setting will return from VTGate after commit happens on metadata manager.
-	// The RMs will be left in PREPARE state to resolve.
+	// The caller ID is used to simulate the failure at the desired point.
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
 	_, err = conn.Execute(newCtx, "commit", nil)
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "Fail After MM commit")
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
-	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
+	logTable := retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
 	expectations := map[string][]string{
 		"ks.dt_state:80-": {
 			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
@@ -599,8 +599,6 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 // TestDTResolveAfterPrepare tests that transaction is rolled back on recovery
 // failure after RM prepare and before MM commit.
 func TestDTResolveAfterPrepare(t *testing.T) {
-	defer cleanup(t)
-
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
@@ -622,8 +620,7 @@ func TestDTResolveAfterPrepare(t *testing.T) {
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
 	require.NoError(t, err)
 
-	// This setting will return from VTGate after commit happens on metadata manager.
-	// The RMs will be left in PREPARE state to resolve.
+	// The caller ID is used to simulate the failure at the desired point.
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMPrepared_FailNow", "", ""), nil)
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail After RM prepared")
@@ -631,7 +628,7 @@ func TestDTResolveAfterPrepare(t *testing.T) {
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
-	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
+	logTable := retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
 	expectations := map[string][]string{
 		"ks.dt_state:80-": {
 			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
@@ -649,6 +646,54 @@ func TestDTResolveAfterPrepare(t *testing.T) {
 		"ks.redo_statement:-80": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+}
+
+// TestDTResolveAfterTransactionRecord tests that transaction is rolled back on recovery
+// failure after TR created and before RM prepare.
+func TestDTResolveAfterTransactionRecord(t *testing.T) {
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *binlogdatapb.VEvent)
+	runVStream(t, ctx, ch, vtgateConn)
+
+	conn := vtgateConn.Session("", nil)
+	qCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Insert into multiple shards
+	_, err = conn.Execute(qCtx, "begin", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	require.NoError(t, err)
+
+	// The caller ID is used to simulate the failure at the desired point.
+	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("TRCreated_FailNow", "", ""), nil)
+	_, err = conn.Execute(newCtx, "commit", nil)
+	require.ErrorContains(t, err, "Fail After TR created")
+
+	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
+	tableMap := make(map[string][]*querypb.Field)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
+	expectations := map[string][]string{
+		"ks.dt_state:80-": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"ROLLBACK\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"ROLLBACK\")]",
+		},
+		"ks.dt_participant:80-": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
 		},
 	}
 	assert.Equal(t, expectations, logTable,

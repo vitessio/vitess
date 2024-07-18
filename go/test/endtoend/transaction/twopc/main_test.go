@@ -213,6 +213,10 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 }
 
 func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap map[string][]*querypb.Field, dtMap map[string]string) map[string][]string {
+	return retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 1*time.Second)
+}
+
+func retrieveTransitionsWithTimeout(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap map[string][]*querypb.Field, dtMap map[string]string, timeout time.Duration) map[string][]string {
 	logTable := make(map[string][]string)
 
 	keepWaiting := true
@@ -231,7 +235,7 @@ func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap ma
 			if re.FieldEvent != nil {
 				tableMap[re.FieldEvent.TableName] = re.FieldEvent.Fields
 			}
-		case <-time.After(2 * time.Second):
+		case <-time.After(timeout):
 			keepWaiting = false
 		}
 	}

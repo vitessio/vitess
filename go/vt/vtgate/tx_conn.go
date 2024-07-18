@@ -201,6 +201,14 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
+	// retrieve the caller ID to execute the testing flow
+	callerID := callerid.EffectiveCallerIDFromContext(ctx)
+
+	// Test code to simulate a failure after RM prepare
+	if failNow, err := checkTestFailure(callerID, "TRCreated_FailNow"); failNow {
+		return err
+	}
+
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
@@ -213,9 +221,6 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		// Return the original error even if the previous operation fails.
 		return err
 	}
-
-	// retrieve the caller ID to execute the testing flow
-	callerID := callerid.EffectiveCallerIDFromContext(ctx)
 
 	// Test code to simulate a failure after RM prepare
 	if failNow, err := checkTestFailure(callerID, "RMPrepared_FailNow"); failNow {
@@ -247,6 +252,10 @@ func checkTestFailure(callerID *vtrpcpb.CallerID, expectCaller string) (bool, er
 		return false, nil
 	}
 	switch callerID.Principal {
+	case "TRCreated_FailNow":
+		log.Errorf("Fail After TR created")
+		// no commit decision is made. Transaction should be a rolled back.
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After TR created")
 	case "RMPrepared_FailNow":
 		log.Errorf("Fail After RM prepared")
 		// no commit decision is made. Transaction should be a rolled back.
@@ -254,7 +263,7 @@ func checkTestFailure(callerID *vtrpcpb.CallerID, expectCaller string) (bool, er
 	case "MMCommitted_FailNow":
 		log.Errorf("Fail After MM commit")
 		//  commit decision is made. Transaction should be committed.
-		return true, nil
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After MM commit")
 	default:
 		return false, nil
 	}
