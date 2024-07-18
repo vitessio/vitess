@@ -15,14 +15,14 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-19.0, release-18.0, release-17.0, release-16.0 ]
+        branch: [ main, release-20.0, release-19.0, release-18.0 ]
     name: Update Golang Version
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.22.3
+          go-version: 1.22.5
 
       - name: Check out code
         uses: actions/checkout@v4

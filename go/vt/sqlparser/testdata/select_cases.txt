@@ -4286,7 +4286,7 @@ INPUT
 select * from t1 where MATCH a,b AGAINST ('"xt indexes"' IN BOOLEAN MODE);
 END
 OUTPUT
-select * from t1 where match(a, b) against ('\"xt indexes\"' in boolean mode)
+select * from t1 where match(a, b) against ('"xt indexes"' in boolean mode)
 END
 INPUT
 select max(value) from t1 AS m LEFT JOIN t2 AS c1 ON m.c1id = c1.id AND c1.active = 'Yes' LEFT JOIN t3 AS c2 ON m.c2id = c2.id AND c2.active = 'Yes' WHERE m.pid=1 AND (c1.id IS NOT NULL OR c2.id IS NOT NULL);
@@ -5660,7 +5660,7 @@ INPUT
 select * from t1 where MATCH a,b AGAINST ('"text search" "now support"' IN BOOLEAN MODE);
 END
 OUTPUT
-select * from t1 where match(a, b) against ('\"text search\" \"now support\"' in boolean mode)
+select * from t1 where match(a, b) against ('"text search" "now support"' in boolean mode)
 END
 INPUT
 select insert('hello', 1, -18446744073709551616, 'hi');
@@ -8048,7 +8048,7 @@ INPUT
 select * from t1 where MATCH a,b AGAINST ('"text i"' IN BOOLEAN MODE);
 END
 OUTPUT
-select * from t1 where match(a, b) against ('\"text i\"' in boolean mode)
+select * from t1 where match(a, b) against ('"text i"' in boolean mode)
 END
 INPUT
 select column_name,data_type,CHARACTER_OCTET_LENGTH, CHARACTER_MAXIMUM_LENGTH from information_schema.columns where table_name='t1' order by column_name;
@@ -8144,7 +8144,7 @@ INPUT
 select * from t1 where MATCH a,b AGAINST ('"support now"' IN BOOLEAN MODE);
 END
 OUTPUT
-select * from t1 where match(a, b) against ('\"support now\"' in boolean mode)
+select * from t1 where match(a, b) against ('"support now"' in boolean mode)
 END
 INPUT
 select hex(inet_aton('127.1.1'));
@@ -12212,7 +12212,7 @@ INPUT
 select * from t1 where MATCH a,b AGAINST ('"text search" +"now support"' IN BOOLEAN MODE);
 END
 OUTPUT
-select * from t1 where match(a, b) against ('\"text search\" +\"now support\"' in boolean mode)
+select * from t1 where match(a, b) against ('"text search" +"now support"' in boolean mode)
 END
 INPUT
 select trigger_name from information_schema.triggers where event_object_table='t1';
@@ -14750,7 +14750,7 @@ INPUT
 select * from t1 where MATCH a,b AGAINST('"space model' IN BOOLEAN MODE);
 END
 OUTPUT
-select * from t1 where match(a, b) against ('\"space model' in boolean mode)
+select * from t1 where match(a, b) against ('"space model' in boolean mode)
 END
 INPUT
 select @ujis4 = CONVERT(@utf84 USING ujis);
@@ -14906,7 +14906,7 @@ INPUT
 select * from t1 where MATCH a,b AGAINST ('"text search" -"now support"' IN BOOLEAN MODE);
 END
 OUTPUT
-select * from t1 where match(a, b) against ('\"text search\" -\"now support\"' in boolean mode)
+select * from t1 where match(a, b) against ('"text search" -"now support"' in boolean mode)
 END
 INPUT
 select _rowid,t1._rowid,skey,sval from t1;
@@ -17491,8 +17491,8 @@ END
 INPUT
 select 1 from t1 where 1 < some (select cast(a as datetime) from t1);
 END
-ERROR
-syntax error at position 40 near 'select'
+OUTPUT
+select 1 from t1 where 1 < any (select cast(a as datetime) from t1)
 END
 INPUT
 select hex(a) from t1 where a like 'A_' order by a;
@@ -17612,7 +17612,7 @@ INPUT
 select 'aaa','aa''a',"aa""a";
 END
 OUTPUT
-select 'aaa', 'aa\'a', 'aa\"a' from dual
+select 'aaa', 'aa\'a', 'aa"a' from dual
 END
 INPUT
 select cast('18446744073709551615' as signed);
@@ -18542,7 +18542,7 @@ INPUT
 select * from t1 where MATCH a,b AGAINST ('"now support"' IN BOOLEAN MODE);
 END
 OUTPUT
-select * from t1 where match(a, b) against ('\"now support\"' in boolean mode)
+select * from t1 where match(a, b) against ('"now support"' in boolean mode)
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "10000:99:99" HOUR_SECOND);
@@ -22148,7 +22148,7 @@ INPUT
 select * from t1 where MATCH a,b AGAINST ('"Now sUPPort"' IN BOOLEAN MODE);
 END
 OUTPUT
-select * from t1 where match(a, b) against ('\"Now sUPPort\"' in boolean mode)
+select * from t1 where match(a, b) against ('"Now sUPPort"' in boolean mode)
 END
 INPUT
 select sum(all a),count(all a),avg(all a),std(all a),variance(all a),bit_or(all a),bit_and(all a),min(all a),max(all a),min(all c),max(all c) from t1;

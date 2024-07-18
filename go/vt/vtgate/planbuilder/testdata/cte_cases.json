@@ -352,7 +352,7 @@
                     },
                     "FieldQuery": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
                     "OrderBy": "(1|3) ASC",
-                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by `user`.val1 asc limit 2",
+                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2",
                     "Table": "`user`"
                   }
                 ]
@@ -479,6 +479,7 @@
             "Variant": "Ordered",
             "Aggregates": "max(1|3) AS bazo",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -487,9 +488,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo), weight_string(baz)",
+                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(baz) from (select foo, baz from `user`) as f group by foo, weight_string(foo), weight_string(baz) order by foo asc",
+                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
                 "Table": "`user`"
               }
             ]
@@ -517,6 +518,7 @@
             "Variant": "Ordered",
             "Aggregates": "sum_count(1) AS bazo",
             "GroupBy": "(0|2)",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -563,6 +565,7 @@
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "GroupBy": "0, (1|2)",
+                "ResultColumns": 2,
                 "Inputs": [
                   {
                     "OperatorType": "SimpleProjection",
@@ -1129,7 +1132,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */",
             "Table": "user_extra"
           }
         ]

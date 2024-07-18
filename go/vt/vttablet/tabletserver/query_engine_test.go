@@ -114,15 +114,26 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 }
 
 func addSchemaEngineQueries(db *fakesqldb.DB) {
-	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
+	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesWithSizesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow("test_table_01", false, ""),
-			mysql.BaseShowTablesRow("test_table_02", false, ""),
-			mysql.BaseShowTablesRow("test_table_03", false, ""),
-			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_03", false, ""),
+			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesWithSizesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		}})
+	db.AddQuery(mysql.BaseShowTables,
+		&sqltypes.Result{
+			Fields: mysql.BaseShowTablesFields,
+			Rows: [][]sqltypes.Value{
+				mysql.BaseShowTablesRow("test_table_01", false, ""),
+				mysql.BaseShowTablesRow("test_table_02", false, ""),
+				mysql.BaseShowTablesRow("test_table_03", false, ""),
+				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			},
+		})
 	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"Variable_name|Value",
 		"varchar|int64"),
@@ -186,8 +197,10 @@ func TestQueryPlanCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 
-	initialHits := qe.queryCacheHits.Get()
-	initialMisses := qe.queryCacheMisses.Get()
+	initialHits := qe.queryEnginePlanCacheHits.Get()
+	initialMisses := qe.queryEnginePlanCacheMisses.Get()
+	initialHitsDeprecated := qe.queryCacheHitsDeprecated.Get()
+	initialMissesDeprecated := qe.queryCacheMissesDeprecated.Get()
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
@@ -195,8 +208,11 @@ func TestQueryPlanCache(t *testing.T) {
 
 	assertPlanCacheSize(t, qe, 1)
 
-	require.Equal(t, int64(0), qe.queryCacheHits.Get()-initialHits)
-	require.Equal(t, int64(1), qe.queryCacheMisses.Get()-initialMisses)
+	require.Equal(t, int64(0), qe.queryEnginePlanCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
+
+	require.Equal(t, int64(0), qe.queryCacheHitsDeprecated.Get()-initialHitsDeprecated)
+	require.Equal(t, int64(1), qe.queryCacheMissesDeprecated.Get()-initialMissesDeprecated)
 
 	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
@@ -204,8 +220,11 @@ func TestQueryPlanCache(t *testing.T) {
 
 	assertPlanCacheSize(t, qe, 1)
 
-	require.Equal(t, int64(1), qe.queryCacheHits.Get()-initialHits)
-	require.Equal(t, int64(1), qe.queryCacheMisses.Get()-initialMisses)
+	require.Equal(t, int64(1), qe.queryEnginePlanCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
+
+	require.Equal(t, int64(1), qe.queryCacheHitsDeprecated.Get()-initialHitsDeprecated)
+	require.Equal(t, int64(1), qe.queryCacheMissesDeprecated.Get()-initialMissesDeprecated)
 
 	qe.ClearQueryPlanCache()
 }
@@ -635,9 +654,21 @@ func TestPlanCachePollution(t *testing.T) {
 }
 
 func TestAddQueryStats(t *testing.T) {
+	fakeSelectPlan := &TabletPlan{
+		Plan: &planbuilder.Plan{
+			PlanID:    planbuilder.PlanSelect,
+			FullQuery: &sqlparser.ParsedQuery{Query: `select * from something where something=123`}, // 43 length
+		},
+	}
+	fakeInsertPlan := &TabletPlan{
+		Plan: &planbuilder.Plan{
+			PlanID:    planbuilder.PlanInsert,
+			FullQuery: &sqlparser.ParsedQuery{Query: `insert into something (id, msg) values(123, 'hello world!')`}, // 59 length
+		},
+	}
 	testcases := []struct {
 		name                             string
-		planType                         planbuilder.PlanType
+		plan                             *TabletPlan
 		tableName                        string
 		tabletType                       topodata.TabletType
 		queryCount                       int64
@@ -654,12 +685,13 @@ func TestAddQueryStats(t *testing.T) {
 		expectedQueryTimes               string
 		expectedQueryRowsAffected        string
 		expectedQueryRowsReturned        string
+		expectedQueryTextCharsProcessed  string
 		expectedQueryErrorCounts         string
 		expectedQueryErrorCountsWithCode string
 	}{
 		{
 			name:                             "select query",
-			planType:                         planbuilder.PlanSelect,
+			plan:                             fakeSelectPlan,
 			tableName:                        "A",
 			tabletType:                       topodata.TabletType_PRIMARY,
 			queryCount:                       1,
@@ -674,12 +706,13 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select": 15}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
 		}, {
 			name:                             "select query against a replica",
-			planType:                         planbuilder.PlanSelect,
+			plan:                             fakeSelectPlan,
 			tableName:                        "A",
 			tabletType:                       topodata.TabletType_REPLICA,
 			queryCount:                       1,
@@ -694,12 +727,13 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select": 15}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.REPLICA": 1}`,
 		}, {
 			name:                             "select into query",
-			planType:                         planbuilder.PlanSelect,
+			plan:                             fakeSelectPlan,
 			tableName:                        "A",
 			tabletType:                       topodata.TabletType_PRIMARY,
 			queryCount:                       1,
@@ -714,12 +748,13 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select": 10}`,
 			expectedQueryRowsAffected:        `{"A.Select": 15}`,
 			expectedQueryRowsReturned:        `{"A.Select": 0}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
 		}, {
 			name:                             "error",
-			planType:                         planbuilder.PlanSelect,
+			plan:                             fakeSelectPlan,
 			tableName:                        "A",
 			tabletType:                       topodata.TabletType_PRIMARY,
 			queryCount:                       1,
@@ -734,12 +769,13 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select": 0}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select": 1}`,
 			expectedQueryErrorCountsWithCode: `{"A.Select.RESOURCE_EXHAUSTED": 1}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
 		}, {
 			name:                             "insert query",
-			planType:                         planbuilder.PlanInsert,
+			plan:                             fakeInsertPlan,
 			tableName:                        "A",
 			tabletType:                       topodata.TabletType_PRIMARY,
 			queryCount:                       1,
@@ -754,12 +790,13 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Insert": 10}`,
 			expectedQueryRowsAffected:        `{"A.Insert": 15}`,
 			expectedQueryRowsReturned:        `{}`,
+			expectedQueryTextCharsProcessed:  `{"A.Insert": 59}`,
 			expectedQueryErrorCounts:         `{"A.Insert": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Insert.PRIMARY": 1}`,
 		}, {
 			name:                             "select query with per workload metrics",
-			planType:                         planbuilder.PlanSelect,
+			plan:                             fakeSelectPlan,
 			tableName:                        "A",
 			tabletType:                       topodata.TabletType_PRIMARY,
 			queryCount:                       1,
@@ -774,12 +811,13 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select.some-workload": 15}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select.some-workload": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select.some-workload": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
 		}, {
 			name:                             "select into query with per workload metrics",
-			planType:                         planbuilder.PlanSelect,
+			plan:                             fakeSelectPlan,
 			tableName:                        "A",
 			tabletType:                       topodata.TabletType_PRIMARY,
 			queryCount:                       1,
@@ -794,12 +832,13 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:        `{"A.Select.some-workload": 15}`,
 			expectedQueryRowsReturned:        `{"A.Select.some-workload": 0}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select.some-workload": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select.some-workload": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
 		}, {
 			name:                             "error with per workload metrics",
-			planType:                         planbuilder.PlanSelect,
+			plan:                             fakeSelectPlan,
 			tableName:                        "A",
 			tabletType:                       topodata.TabletType_PRIMARY,
 			queryCount:                       1,
@@ -814,12 +853,13 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select.some-workload": 0}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select.some-workload": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select.some-workload": 1}`,
 			expectedQueryErrorCountsWithCode: `{"A.Select.RESOURCE_EXHAUSTED": 1}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
 		}, {
 			name:                             "insert query with per workload metrics",
-			planType:                         planbuilder.PlanInsert,
+			plan:                             fakeInsertPlan,
 			tableName:                        "A",
 			tabletType:                       topodata.TabletType_PRIMARY,
 			queryCount:                       1,
@@ -834,6 +874,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Insert.some-workload": 10}`,
 			expectedQueryRowsAffected:        `{"A.Insert.some-workload": 15}`,
 			expectedQueryRowsReturned:        `{}`,
+			expectedQueryTextCharsProcessed:  `{"A.Insert.some-workload": 59}`,
 			expectedQueryErrorCounts:         `{"A.Insert.some-workload": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Insert.PRIMARY": 1}`,
@@ -849,12 +890,13 @@ func TestAddQueryStats(t *testing.T) {
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestAddQueryStats_"+testcase.name)
 			se := schema.NewEngine(env)
 			qe := NewQueryEngine(env, se)
-			qe.AddStats(testcase.planType, testcase.tableName, testcase.workload, testcase.tabletType, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount, testcase.errorCode)
+			qe.AddStats(testcase.plan, testcase.tableName, testcase.workload, testcase.tabletType, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount, testcase.errorCode)
 			assert.Equal(t, testcase.expectedQueryCounts, qe.queryCounts.String())
 			assert.Equal(t, testcase.expectedQueryCountsWithTableType, qe.queryCountsWithTabletType.String())
 			assert.Equal(t, testcase.expectedQueryTimes, qe.queryTimes.String())
 			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
 			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
+			assert.Equal(t, testcase.expectedQueryTextCharsProcessed, qe.queryTextCharsProcessed.String())
 			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
 			assert.Equal(t, testcase.expectedQueryErrorCountsWithCode, qe.queryErrorCountsWithCode.String())
 		})

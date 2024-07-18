@@ -12,46 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# NOTE: We have to build the Vitess binaries from scratch instead of sharing
-#       a base image because Docker Hub dropped the feature we relied upon to
-#       ensure images contain the right binaries.
-
-# Use a temporary layer for the build stage.
-ARG bootstrap_version=32
-ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
-
-FROM "${image}" AS builder
+FROM --platform=linux/amd64 golang:1.22.5-bullseye AS builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
 
+WORKDIR /vt/src/vitess.io/vitess
+
+# Create vitess user
+RUN groupadd -r vitess && useradd -r -g vitess vitess
+RUN mkdir -p /vt/vtdataroot /home/vitess
+RUN chown -R vitess:vitess /vt /home/vitess
+USER vitess
+
 # Re-copy sources from working tree.
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
-
-# Build and install Vitess in a temporary output directory.
-USER vitess
 
 RUN make install PREFIX=/vt/install
 
 # Start over and build the final image.
-FROM debian:bullseye-slim
+FROM --platform=linux/amd64 debian:bullseye-slim
 
-# Install mysqlbinglog
-RUN apt-get update && apt-get -y install libssl1.1 gnupg
-COPY --from=builder /usr/bin/mysqlbinlog /usr/bin/mysqlbinlog
-
-# Install xtrabackup
-RUN apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5
-RUN echo 'deb http://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
-RUN apt-get update -y
-RUN apt-get install -y percona-xtrabackup-80
+# Install dependencies
+COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh
+RUN /vt/dist/install_dependencies.sh mysql80
 
 # Set up Vitess user and directory tree.
 RUN groupadd -r vitess && useradd -r -g vitess vitess
 RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt/src/vitess.io/vitess
+ENV VTROOT /vt
 ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
 

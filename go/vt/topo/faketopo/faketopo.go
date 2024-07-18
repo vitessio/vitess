@@ -20,6 +20,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -253,6 +254,11 @@ func (f *FakeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Versi
 	return res.contents, memorytopo.NodeVersion(res.version), nil
 }
 
+// GetVersion is part of topo.Conn interface.
+func (f *FakeConn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
+	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in fake topo")
+}
+
 // List is part of the topo.Conn interface.
 func (f *FakeConn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	return nil, topo.NewError(topo.NoImplementation, "List not supported in fake topo")
@@ -281,6 +287,20 @@ var _ topo.LockDescriptor = (*fakeLockDescriptor)(nil)
 
 // Lock implements the Conn interface
 func (f *FakeConn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return &fakeLockDescriptor{}, nil
+}
+
+// LockWithTTL implements the Conn interface.
+func (f *FakeConn) LockWithTTL(ctx context.Context, dirPath, contents string, _ time.Duration) (topo.LockDescriptor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return &fakeLockDescriptor{}, nil
+}
+
+// LockName implements the Conn interface.
+func (f *FakeConn) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return &fakeLockDescriptor{}, nil

@@ -871,6 +871,29 @@
     }
   },
   {
+    "comment": "Merging subqueries should remove keyspace from query",
+    "query": "select u.id from user.user as u where not exists (select 1 from user.user_extra as ue where u.id = ue.user_id)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.id from user.user as u where not exists (select 1 from user.user_extra as ue where u.id = ue.user_id)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u where not exists (select 1 from user_extra as ue where u.id = ue.user_id)",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Single table equality route with unsigned value",
     "query": "select id from user where name = 18446744073709551615",
     "plan": {
@@ -1118,7 +1141,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col /* INT16 */",
             "Table": "user_extra"
           }
         ]
@@ -1190,7 +1213,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra where user_extra.user_id = :user_col and user_extra.col = :user_col",
+            "Query": "select user_extra.id from user_extra where user_extra.user_id = :user_col /* INT16 */ and user_extra.col = :user_col /* INT16 */",
             "Table": "user_extra",
             "Values": [
               ":user_col"
@@ -1239,7 +1262,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and 1 = 1",
+            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col /* INT16 */ and 1 = 1",
             "Table": "user_extra"
           }
         ]
@@ -1591,7 +1614,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col)",
+            "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col /* INT16 */)",
             "Table": "`user`",
             "Values": [
               "(:user_extra_col, 1)"
@@ -1735,7 +1758,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
+            "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col /* INT16 */ and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
             "Table": "`user`",
             "Values": [
               "(:user_extra_col, 1)"
@@ -1991,15 +2014,21 @@
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user`",
-            "Table": "`user`"
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` where 1 != 1",
+                "Query": "select 1 from `user` limit 1",
+                "Table": "`user`"
+              }
+            ]
           },
           {
             "InputName": "Outer",
@@ -2831,7 +2860,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where u2.id = 5",
+            "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
             "Table": "`user`",
             "Values": [
               "5"
@@ -3071,7 +3100,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where `user`.id = :user_extra_col",
+            "Query": "select id from `user` where `user`.id = :user_extra_col /* INT16 */",
             "Table": "`user`",
             "Values": [
               ":user_extra_col"
@@ -3142,7 +3171,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.foobar = 5 and user_extra.col = :user_col",
+            "Query": "select 1 from user_extra where user_extra.foobar = 5 and user_extra.col = :user_col /* INT16 */",
             "Table": "user_extra"
           }
         ]
@@ -3197,7 +3226,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-                "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+                "Query": "select user_extra.id from user_extra where user_extra.col = :user_col /* INT16 */",
                 "Table": "user_extra"
               }
             ]
@@ -4199,7 +4228,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*) from `user` as b where 1 != 1 group by .0",
-                        "Query": "select count(*) from `user` as b where b.textcol2 = :a_textcol1 group by .0",
+                        "Query": "select count(*) from `user` as b where b.textcol2 = :a_textcol1 /* VARCHAR */ group by .0",
                         "Table": "`user`"
                       }
                     ]
@@ -4288,7 +4317,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
-                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar",
+                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar limit 1",
                 "Table": "unsharded"
               }
             ]

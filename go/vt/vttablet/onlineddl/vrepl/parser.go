@@ -23,9 +23,7 @@ package vrepl
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // AlterTableParser is a parser tool for ALTER TABLE statements
@@ -48,13 +46,13 @@ func NewAlterTableParser() *AlterTableParser {
 // NewParserFromAlterStatement creates a new parser with a ALTER TABLE statement
 func NewParserFromAlterStatement(alterTable *sqlparser.AlterTable) *AlterTableParser {
 	parser := NewAlterTableParser()
-	parser.analyzeAlter(alterTable)
+	parser.AnalyzeAlter(alterTable)
 	return parser
 }
 
-// analyzeAlter looks for specific changes in the AlterTable statement, that are relevant
+// AnalyzeAlter looks for specific changes in the AlterTable statement, that are relevant
 // to OnlineDDL/VReplication
-func (p *AlterTableParser) analyzeAlter(alterTable *sqlparser.AlterTable) {
+func (p *AlterTableParser) AnalyzeAlter(alterTable *sqlparser.AlterTable) {
 	for _, opt := range alterTable.AlterOptions {
 		switch opt := opt.(type) {
 		case *sqlparser.RenameTableName:
@@ -75,20 +73,6 @@ func (p *AlterTableParser) analyzeAlter(alterTable *sqlparser.AlterTable) {
 			}
 		}
 	}
-}
-
-// ParseAlterStatement is the main function of th eparser, and parses an ALTER TABLE statement
-func (p *AlterTableParser) ParseAlterStatement(alterQuery string, parser *sqlparser.Parser) (err error) {
-	stmt, err := parser.ParseStrictDDL(alterQuery)
-	if err != nil {
-		return err
-	}
-	alterTable, ok := stmt.(*sqlparser.AlterTable)
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "expected AlterTable statement, got %v", sqlparser.CanonicalString(stmt))
-	}
-	p.analyzeAlter(alterTable)
-	return nil
 }
 
 // GetNonTrivialRenames gets a list of renamed column

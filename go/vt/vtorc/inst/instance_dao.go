@@ -59,8 +59,8 @@ var (
 var forgetAliases *cache.Cache
 
 var (
-	readTopologyInstanceCounter = stats.NewCounter("instance.read_topology", "Number of times an instance was read from the topology")
-	readInstanceCounter         = stats.NewCounter("instance.read", "Number of times an instance was read")
+	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
+	readInstanceCounter         = stats.NewCounter("InstanceRead", "Number of times an instance was read")
 	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
 	writeBufferLatency          = stopwatch.NewNamedStopwatch()
 )

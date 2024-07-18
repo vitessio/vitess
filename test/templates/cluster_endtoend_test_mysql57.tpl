@@ -92,7 +92,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.3
+        go-version: 1.22.5
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -147,6 +147,7 @@ jobs:
         wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get install -y gnupg2
         sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
+        sudo percona-release enable-only tools
         sudo apt-get update
         if [[ -n $XTRABACKUP_VERSION ]]; then
           debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
@@ -224,3 +225,10 @@ jobs:
 
         # print test output
         cat output.txt
+
+    - name: Test Summary
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
+      uses: test-summary/action@v2
+      with:
+        paths: "report.xml"
+        show: "fail, skip"

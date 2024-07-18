@@ -2184,6 +2184,15 @@ func ContainsAggregation(e SQLNode) bool {
 	return hasAggregates
 }
 
+// setFuncArgs sets the arguments for the aggregation function, while checking that there is only one argument
+func setFuncArgs(aggr AggrFunc, exprs Exprs, name string) error {
+	if len(exprs) != 1 {
+		return vterrors.VT03001(name)
+	}
+	aggr.SetArg(exprs[0])
+	return nil
+}
+
 // GetFirstSelect gets the first select statement
 func GetFirstSelect(selStmt SelectStatement) *Select {
 	if selStmt == nil {
@@ -2775,4 +2784,9 @@ func (lock Lock) GetHighestOrderLock(newLock Lock) Lock {
 		return newLock
 	}
 	return lock
+}
+
+// Clone returns a deep copy of the SQLNode, typed as the original type
+func Clone[K SQLNode](x K) K {
+	return CloneSQLNode(x).(K)
 }

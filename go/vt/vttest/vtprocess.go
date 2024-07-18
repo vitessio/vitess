@@ -188,7 +188,6 @@ var QueryServerArgs = []string{
 	"--queryserver-config-schema-reload-time", "60s",
 	"--queryserver-config-stream-pool-size", "4",
 	"--queryserver-config-transaction-cap", "4",
-	"--queryserver-config-transaction-timeout", "300s",
 	"--queryserver-config-txpool-timeout", "300s",
 }
 
@@ -260,7 +259,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionMode}...)
 	}
 	if args.TransactionTimeout != 0 {
-		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%f", args.TransactionTimeout))
+		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%v", args.TransactionTimeout))
 	}
 	if args.TabletHostName != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet_hostname", args.TabletHostName}...)

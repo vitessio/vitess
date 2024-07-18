@@ -478,6 +478,9 @@ const (
 	// KillType strings
 	ConnectionStr = "connection"
 	QueryStr      = "query"
+
+	// GroupConcatDefaultSeparator is the default separator for GroupConcatExpr.
+	GroupConcatDefaultSeparator = ","
 )
 
 // Constants for Enum Type - Insert.Action
@@ -677,8 +680,14 @@ const (
 	NotRegexpOp
 )
 
-func Inverse(in ComparisonExprOperator) ComparisonExprOperator {
-	switch in {
+const (
+	Missing ComparisonModifier = iota
+	Any
+	All
+)
+
+func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
+	switch op {
 	case EqualOp:
 		return NotEqualOp
 	case LessThanOp:
@@ -707,6 +716,15 @@ func Inverse(in ComparisonExprOperator) ComparisonExprOperator {
 		return RegexpOp
 	}
 	panic("unreachable")
+}
+
+func (op ComparisonExprOperator) IsCommutative() bool {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp:
+		return true
+	default:
+		return false
+	}
 }
 
 // Constant for Enum Type - IsExprOperator

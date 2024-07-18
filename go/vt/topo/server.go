@@ -81,6 +81,7 @@ const (
 	ExternalClustersFile   = "ExternalClusters"
 	ShardRoutingRulesFile  = "ShardRoutingRules"
 	CommonRoutingRulesFile = "Rules"
+	MirrorRulesFile        = "MirrorRules"
 )
 
 // Path for all object types.
@@ -94,6 +95,7 @@ const (
 	ExternalClusterVitess    = "vitess"
 	RoutingRulesPath         = "routing_rules"
 	KeyspaceRoutingRulesPath = "keyspace"
+	NamedLocksPath           = "internal/named_locks"
 )
 
 // Factory is a factory interface to create Conn objects.

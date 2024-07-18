@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -35,6 +36,7 @@ var throttleInit sync.Once
 
 func initThrottleTicker() {
 	throttleInit.Do(func() {
+		throttleTicks = 1 // above zero so that `lastSuccessfulThrottle` is initially stale
 		go func() {
 			tick := time.NewTicker(throttleCheckDuration)
 			defer tick.Stop()
@@ -49,38 +51,35 @@ func initThrottleTicker() {
 type Client struct {
 	throttler *Throttler
 	appName   throttlerapp.Name
-	checkType ThrottleCheckType
 	flags     CheckFlags
 
 	lastSuccessfulThrottleMu sync.Mutex
-	lastSuccessfulThrottle   int64
-}
-
-// NewProductionClient creates a client suitable for foreground/production jobs, which have normal priority.
-func NewProductionClient(throttler *Throttler, appName throttlerapp.Name, checkType ThrottleCheckType) *Client {
-	initThrottleTicker()
-	return &Client{
-		throttler: throttler,
-		appName:   appName,
-		checkType: checkType,
-		flags: CheckFlags{
-			LowPriority: false,
-		},
-	}
+	// lastSuccessfulThrottle records the latest tick (value of `throttleTicks`) when the throttler was
+	// satisfied for a given metric. This makes it possible to potentially skip a throttler check.
+	// key is the app name.
+	lastSuccessfulThrottle map[string]int64
 }
 
 // NewBackgroundClient creates a client suitable for background jobs, which have low priority over production traffic,
 // e.g. migration, table pruning, vreplication
-func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkType ThrottleCheckType) *Client {
+func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, scope base.Scope) *Client {
 	initThrottleTicker()
 	return &Client{
 		throttler: throttler,
 		appName:   appName,
-		checkType: checkType,
 		flags: CheckFlags{
-			LowPriority: true,
+			Scope:               scope,
+			MultiMetricsEnabled: true,
 		},
+		lastSuccessfulThrottle: make(map[string]int64),
 	}
+}
+
+// clearSuccessfulResultsCache clears lastSuccessfulThrottleMu, so that the next check will be fresh.
+func (c *Client) clearSuccessfulResultsCache() {
+	c.lastSuccessfulThrottleMu.Lock()
+	defer c.lastSuccessfulThrottleMu.Unlock()
+	c.lastSuccessfulThrottle = make(map[string]int64)
 }
 
 // ThrottleCheckOK checks the throttler, and returns 'true' when the throttler is satisfied.
@@ -97,22 +96,27 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 		// no throttler
 		return true
 	}
-	c.lastSuccessfulThrottleMu.Lock()
-	defer c.lastSuccessfulThrottleMu.Unlock()
-	if c.lastSuccessfulThrottle >= atomic.LoadInt64(&throttleTicks) {
-		// if last check was OK just very recently there is no need to check again
-		return true
-	}
-	// It's time to run a throttler check
 	checkApp := c.appName
 	if overrideAppName != "" {
 		checkApp = overrideAppName
 	}
-	checkResult := c.throttler.CheckByType(ctx, checkApp.String(), "", &c.flags, c.checkType)
+	c.lastSuccessfulThrottleMu.Lock()
+	defer c.lastSuccessfulThrottleMu.Unlock()
+	if c.lastSuccessfulThrottle[checkApp.String()] >= atomic.LoadInt64(&throttleTicks) {
+		// if last check was OK just very recently there is no need to check again
+		return true
+	}
+	// It's time to run a throttler check
+	checkResult := c.throttler.Check(ctx, checkApp.String(), nil, &c.flags)
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}
-	c.lastSuccessfulThrottle = atomic.LoadInt64(&throttleTicks)
+	for _, metricResult := range checkResult.Metrics {
+		if metricResult.StatusCode != http.StatusOK {
+			return false
+		}
+	}
+	c.lastSuccessfulThrottle[checkApp.String()] = atomic.LoadInt64(&throttleTicks)
 	return true
 
 }
@@ -122,11 +126,15 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 // Non-empty appName overrides the default appName.
 // The function is not thread safe.
 func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) bool {
-	ok := c.ThrottleCheckOK(ctx, appName)
-	if !ok {
-		time.Sleep(throttleCheckDuration)
+	if c.ThrottleCheckOK(ctx, appName) {
+		return true
 	}
-	return ok
+	if ctx.Err() != nil {
+		// context expired, skip sleeping
+		return false
+	}
+	time.Sleep(throttleCheckDuration)
+	return false
 }
 
 // ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' immediately,
@@ -140,12 +148,7 @@ func (c *Client) ThrottleCheckOKOrWait(ctx context.Context) bool {
 // The function sleeps between throttle checks.
 // The function is not thread safe.
 func (c *Client) Throttle(ctx context.Context) {
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		if c.ThrottleCheckOKOrWait(ctx) {
-			return
-		}
+	for !c.ThrottleCheckOKOrWait(ctx) {
+		// The function incorporates a bit of sleep so this is not a busy wait.
 	}
 }

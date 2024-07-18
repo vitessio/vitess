@@ -45,6 +45,10 @@ service TabletManager {
   // GetPermissions asks the tablet for its permissions
   rpc GetPermissions(tabletmanagerdata.GetPermissionsRequest) returns (tabletmanagerdata.GetPermissionsResponse) {};
 
+  // GetGlobalStatusVars returns the server's global status variables asked for.
+  // An empty/nil variable name parameter slice means you want all of them.
+  rpc GetGlobalStatusVars(tabletmanagerdata.GetGlobalStatusVarsRequest) returns (tabletmanagerdata.GetGlobalStatusVarsResponse) {};
+
   //
   // Various read-write methods
   //
@@ -183,6 +187,13 @@ service TabletManager {
   // RestoreFromBackup deletes all local data and restores it from the latest backup.
   rpc RestoreFromBackup(tabletmanagerdata.RestoreFromBackupRequest) returns (stream tabletmanagerdata.RestoreFromBackupResponse) {};
 
+  //
+  // Tablet throttler related methods
+  //
+
   // CheckThrottler issues a 'check' on a tablet's throttler
   rpc CheckThrottler(tabletmanagerdata.CheckThrottlerRequest) returns (tabletmanagerdata.CheckThrottlerResponse) {};
+
+  // GetThrottlerStatus gets the status of a tablet throttler
+  rpc GetThrottlerStatus(tabletmanagerdata.GetThrottlerStatusRequest) returns (tabletmanagerdata.GetThrottlerStatusResponse) {};
 }

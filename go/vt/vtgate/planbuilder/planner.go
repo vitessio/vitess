@@ -45,7 +45,7 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 }
 
 // setCommentDirectivesOnPlan adds comments to queries
-func setCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) {
+func setCommentDirectivesOnPlan(plan engine.Primitive, stmt sqlparser.Statement) {
 	var directives *sqlparser.CommentDirectives
 	cmt, ok := stmt.(sqlparser.Commented)
 	if !ok {
@@ -57,28 +57,23 @@ func setCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) {
 	timeout := queryTimeout(directives)
 	multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
 
-	switch plan := plan.(type) {
-	case *route:
-		plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
-		plan.eroute.QueryTimeout = timeout
-	case *primitiveWrapper:
-		setDirective(plan.prim, multiShardAutoCommit, timeout)
-	case *insert:
-		setDirective(plan.eInsert, multiShardAutoCommit, timeout)
-	}
+	setDirective(plan, multiShardAutoCommit, timeout, scatterAsWarns)
 }
 
-func setDirective(prim engine.Primitive, msac bool, timeout int) {
-	switch edml := prim.(type) {
+func setDirective(prim engine.Primitive, msac bool, timeout int, scatterAsWarns bool) {
+	switch prim := prim.(type) {
 	case *engine.Insert:
-		edml.MultiShardAutocommit = msac
-		edml.QueryTimeout = timeout
+		prim.MultiShardAutocommit = msac
+		prim.QueryTimeout = timeout
 	case *engine.Update:
-		edml.MultiShardAutocommit = msac
-		edml.QueryTimeout = timeout
+		prim.MultiShardAutocommit = msac
+		prim.QueryTimeout = timeout
 	case *engine.Delete:
-		edml.MultiShardAutocommit = msac
-		edml.QueryTimeout = timeout
+		prim.MultiShardAutocommit = msac
+		prim.QueryTimeout = timeout
+	case *engine.Route:
+		prim.ScatterErrorsAsWarnings = scatterAsWarns
+		prim.QueryTimeout = timeout
 	}
 }
 

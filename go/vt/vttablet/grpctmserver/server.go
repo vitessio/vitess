@@ -98,6 +98,17 @@ func (s *server) GetPermissions(ctx context.Context, request *tabletmanagerdatap
 	return response, err
 }
 
+func (s *server) GetGlobalStatusVars(ctx context.Context, request *tabletmanagerdatapb.GetGlobalStatusVarsRequest) (response *tabletmanagerdatapb.GetGlobalStatusVarsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetGlobalStatusVars", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.GetGlobalStatusVarsResponse{}
+	serverStatuses, err := s.tm.GetGlobalStatusVars(ctx, request.Variables)
+	if err == nil {
+		response.StatusValues = serverStatuses
+	}
+	return response, err
+}
+
 //
 // Various read-write methods
 //
@@ -582,6 +593,13 @@ func (s *server) CheckThrottler(ctx context.Context, request *tabletmanagerdatap
 	defer s.tm.HandleRPCPanic(ctx, "CheckThrottler", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response, err = s.tm.CheckThrottler(ctx, request)
+	return response, err
+}
+
+func (s *server) GetThrottlerStatus(ctx context.Context, request *tabletmanagerdatapb.GetThrottlerStatusRequest) (response *tabletmanagerdatapb.GetThrottlerStatusResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetThrottlerStatus", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response, err = s.tm.GetThrottlerStatus(ctx, request)
 	return response, err
 }
 

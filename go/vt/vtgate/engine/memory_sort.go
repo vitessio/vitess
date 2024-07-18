@@ -59,11 +59,6 @@ func (ms *MemorySort) GetTableName() string {
 	return ms.Input.GetTableName()
 }
 
-// SetTruncateColumnCount sets the truncate column count.
-func (ms *MemorySort) SetTruncateColumnCount(count int) {
-	ms.TruncateColumnCount = count
-}
-
 // TryExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(ctx, vcursor, bindVars)

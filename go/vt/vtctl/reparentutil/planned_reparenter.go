@@ -41,7 +41,7 @@ import (
 
 // counters for Planned Reparent Shard
 var (
-	prsCounter = stats.NewCountersWithMultiLabels("planned_reparent_counts", "Number of times Planned Reparent Shard has been run",
+	prsCounter = stats.NewCountersWithMultiLabels("PlannedReparentCounts", "Number of times Planned Reparent Shard has been run",
 		[]string{"Keyspace", "Shard", "Result"},
 	)
 )
@@ -157,8 +157,6 @@ func (pr *PlannedReparenter) getLockAction(opts PlannedReparentOptions) string {
 func (pr *PlannedReparenter) preflightChecks(
 	ctx context.Context,
 	ev *events.Reparent,
-	keyspace string,
-	shard string,
 	tabletMap map[string]*topo.TabletInfo,
 	opts *PlannedReparentOptions, // we take a pointer here to set NewPrimaryAlias
 ) (isNoop bool, err error) {
@@ -220,7 +218,6 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	shard string,
 	currentPrimary *topo.TabletInfo,
 	primaryElect *topodatapb.Tablet,
-	tabletMap map[string]*topo.TabletInfo,
 	opts PlannedReparentOptions,
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
@@ -260,7 +257,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 
 	// Verify we still have the topology lock before doing the demotion.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrap(err, "lost topology lock; aborting")
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	// Next up, demote the current primary and get its replication position.
@@ -375,7 +372,6 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	shard string,
 	primaryElect *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
-	opts PlannedReparentOptions,
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
@@ -490,7 +486,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 
 	// Check that we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrap(err, "lost topology lock; aborting")
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 	return nil
 }
@@ -533,10 +529,15 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	}
 
 	// Check invariants that PlannedReparentShard depends on.
-	if isNoop, err := pr.preflightChecks(ctx, ev, keyspace, shard, tabletMap, &opts); err != nil {
+	if isNoop, err := pr.preflightChecks(ctx, ev, tabletMap, &opts); err != nil {
 		return err
 	} else if isNoop {
 		return nil
+	}
+
+	// Before we run any RPCs that change the cluster configuration, we should ensure we still hold the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	currentPrimary := FindCurrentPrimary(tabletMap, pr.logger)
@@ -594,7 +595,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
-		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, opts)
+		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
@@ -604,7 +605,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	default:
 		// Case (4): desired primary and current primary differ. Do a graceful
 		// demotion-then-promotion.
-		err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewPrimary, tabletMap, opts)
+		err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewPrimary, opts)
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true
 	}
@@ -614,7 +615,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	}
 
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrap(err, "lost topology lock, aborting")
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	if err := pr.reparentTablets(ctx, ev, reparentJournalPos, promoteReplicaRequired, tabletMap, opts); err != nil {

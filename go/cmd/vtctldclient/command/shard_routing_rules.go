@@ -87,7 +87,7 @@ func commandApplyShardRoutingRules(cmd *cobra.Command, args []string) error {
 	}
 
 	srr := &vschemapb.ShardRoutingRules{}
-	if err := json2.Unmarshal(rulesBytes, &srr); err != nil {
+	if err := json2.UnmarshalPB(rulesBytes, srr); err != nil {
 		return err
 	}
 	// Round-trip so when we display the result it's readable.

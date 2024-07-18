@@ -165,6 +165,23 @@ func InitRoutingRules(
 	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
+// InitMirrorRules saves the mirror rules into ts and reloads the vschema.
+func InitMirrorRules(
+	ctx context.Context,
+	ts *topo.Server,
+	mr *vschemapb.MirrorRules,
+) error {
+	if mr == nil {
+		return nil
+	}
+
+	if err := ts.SaveMirrorRules(ctx, mr); err != nil {
+		return err
+	}
+
+	return ts.RebuildSrvVSchema(ctx, nil)
+}
+
 // InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(
@@ -303,6 +320,11 @@ func CreateKs(
 	// create a regular keyspace
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
 		return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+	}
+
+	// make sure a valid vschema has been loaded
+	if err := ts.EnsureVSchema(ctx, keyspace); err != nil {
+		return 0, fmt.Errorf("EnsureVSchema(%v) failed: %v", keyspace, err)
 	}
 
 	// iterate through the shards
@@ -536,6 +558,12 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 	return metadata, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// UnresolvedTransactions is part of queryservice.QueryService
+func (itc *internalTabletConn) UnresolvedTransactions(ctx context.Context, target *querypb.Target) (transactions []*querypb.TransactionMetadata, err error) {
+	transactions, err = itc.tablet.qsc.QueryService().UnresolvedTransactions(ctx, target)
+	return transactions, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 // BeginExecute is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginExecute(
 	ctx context.Context,
@@ -762,6 +790,15 @@ func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tab
 	return t.tm.GetPermissions(ctx)
 }
 
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (itmc *internalTabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
+	t, ok := tabletMap[tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", topoproto.TabletAliasString(tablet.Alias))
+	}
+	return t.tm.GetGlobalStatusVars(ctx, variables)
+}
+
 func (itmc *internalTabletManagerClient) SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
@@ -946,6 +983,10 @@ func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *top
 }
 
 func (itmc *internalTabletManagerClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) GetThrottlerStatus(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

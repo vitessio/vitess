@@ -163,7 +163,7 @@ func sinceZero(sinceZero time.Duration) time.Time {
 // threadThrottler.newThreadThrottler() for more details.
 
 // newThrottlerWithClock should only be used for testing.
-func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (Throttler, error) {
 	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
 }
 
@@ -264,14 +264,16 @@ func TestThreadFinished(t *testing.T) {
 
 	// Max rate update to threadThrottlers happens asynchronously. Wait for it.
 	timer := time.NewTimer(2 * time.Second)
+	throttlerImpl, ok := throttler.(*ThrottlerImpl)
+	require.True(t, ok)
 	for {
-		if throttler.threadThrottlers[0].getMaxRate() == 2 {
+		if throttlerImpl.threadThrottlers[0].getMaxRate() == 2 {
 			timer.Stop()
 			break
 		}
 		select {
 		case <-timer.C:
-			t.Fatalf("max rate was not propapgated to threadThrottler[0] in time: %v", throttler.threadThrottlers[0].getMaxRate())
+			t.Fatalf("max rate was not propapgated to threadThrottler[0] in time: %v", throttlerImpl.threadThrottlers[0].getMaxRate())
 		default:
 			// Timer not up yet. Try again.
 		}
@@ -369,7 +371,9 @@ func TestUpdateMaxRate_AllThreadsFinished(t *testing.T) {
 	throttler.ThreadFinished(1)
 
 	// Make sure that there's no division by zero error (threadsRunning == 0).
-	throttler.updateMaxRate()
+	throttlerImpl, ok := throttler.(*ThrottlerImpl)
+	require.True(t, ok)
+	throttlerImpl.updateMaxRate()
 	// We don't care about the Throttler state at this point.
 }
 

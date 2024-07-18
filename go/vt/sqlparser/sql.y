@@ -238,11 +238,16 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of STRING.
 // This precedence should not be used anywhere else other than with non-reserved-keywords that are also used for type-casting a STRING.
 %nonassoc <str> STRING_TYPE_PREFIX_NON_KEYWORD
+// ANY_SOME is used to resolve shift-reduce conflicts occurring due to '(' followed by ANY and SOME keywords. Since ANY and SOME are used in
+// predicates as column modifiers, shifting on a '(' conflicts with reducing the keywords to a non_reserved_keyword. Since we want shifting to
+// take precedence, we add this precedence to the reduction rules.
+%nonassoc <str> ANY_SOME
 
 %token LEX_ERROR
 %left <str> UNION
 %token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
+%token <str> DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
+%left <str> ALL ANY SOME
 %token <str> DISTINCTROW PARSER GENERATED ALWAYS
 %token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
 %token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
@@ -257,6 +262,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> ID AT_ID AT_AT_ID HEX NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
 %token <str> VALUE_ARG LIST_ARG OFFSET_ARG
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
+%token <str> JSON_ARRAYAGG JSON_OBJECTAGG
 %token <str> EXTRACT
 %token <str> NULL UNKNOWN TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -495,7 +501,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <indexHints> index_hint_list index_hint_list_opt
 %type <expr> where_expression_opt
 %type <boolVal> boolean_value
-%type <comparisonExprOperator> compare
+%type <comparisonExprOperator> compare any_all_compare
 %type <ins> insert_data
 %type <expr> num_val
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
@@ -5282,7 +5288,7 @@ null_or_unknown:
 bool_pri:
 bool_pri IS null_or_unknown %prec IS
   {
-	 $$ = &IsExpr{Left: $1, Right: IsNullOp}
+    $$ = &IsExpr{Left: $1, Right: IsNullOp}
   }
 | bool_pri IS NOT null_or_unknown %prec IS
   {
@@ -5291,6 +5297,18 @@ bool_pri IS null_or_unknown %prec IS
 | bool_pri compare predicate
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
+  }
+| bool_pri any_all_compare ANY subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
+  }
+| bool_pri any_all_compare SOME subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
+  }
+| bool_pri any_all_compare ALL subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: All, Right: $4 }
   }
 | predicate %prec EXPRESSION_PREC_SETTER
   {
@@ -5800,6 +5818,16 @@ is_suffix:
   }
 
 compare:
+  any_all_compare %prec ANY_SOME
+  {
+    $$ = $1
+  }
+| NULL_SAFE_EQUAL
+  {
+    $$ = NullSafeEqualOp
+  }
+
+any_all_compare:
   '='
   {
     $$ = EqualOp
@@ -5823,10 +5851,6 @@ compare:
 | NE
   {
     $$ = NotEqualOp
-  }
-| NULL_SAFE_EQUAL
-  {
-    $$ = NullSafeEqualOp
   }
 
 col_tuple:
@@ -6061,6 +6085,14 @@ UTC_DATE func_paren_opt
 | JSON_STORAGE_SIZE openb expression closeb
   {
     $$ = &JSONStorageSizeExpr{ JSONVal: $3}
+  }
+| JSON_ARRAYAGG openb expression closeb over_clause_opt
+  {
+    $$ = &JSONArrayAgg{Expr: $3, OverClause: $5}
+  }
+| JSON_OBJECTAGG openb expression ',' expression closeb over_clause_opt
+  {
+    $$ = &JSONObjectAgg{Key: $3, Value: $5, OverClause: $7}
   }
 | LTRIM openb expression closeb
   {
@@ -8162,6 +8194,7 @@ non_reserved_keyword:
 | AFTER
 | ALGORITHM
 | ALWAYS
+| ANY %prec ANY_SOME
 | ANY_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | ARRAY
 | ASCII
@@ -8293,6 +8326,7 @@ non_reserved_keyword:
 | ISOLATION
 | JSON
 | JSON_ARRAY %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_ARRAYAGG %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_ARRAY_APPEND %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_ARRAY_INSERT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_CONTAINS %prec FUNCTION_CALL_NON_KEYWORD
@@ -8301,6 +8335,7 @@ non_reserved_keyword:
 | JSON_EXTRACT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_INSERT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_KEYS %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_OBJECTAGG %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_MERGE %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_MERGE_PATCH %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_MERGE_PRESERVE %prec FUNCTION_CALL_NON_KEYWORD
@@ -8460,6 +8495,7 @@ non_reserved_keyword:
 | SLOW
 | SMALLINT
 | SNAPSHOT
+| SOME %prec ANY_SOME
 | SQL
 | SQL_TSI_DAY
 | SQL_TSI_HOUR

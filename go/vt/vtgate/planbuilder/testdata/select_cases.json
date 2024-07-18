@@ -467,6 +467,63 @@
     }
   },
   {
+    "comment": "json_arrayagg in single sharded query",
+    "query": "select count(1) from user where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(1) from user where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(1) from `user` where 1 != 1 group by n_id",
+        "Query": "select count(1) from `user` where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+        "Table": "`user`",
+        "Values": [
+          "'abc'"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_objectagg in single sharded query",
+    "query": "select count(1) from user where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(1) from user where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(1) from `user` where 1 != 1 group by n_id",
+        "Query": "select count(1) from `user` where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
+        "Table": "`user`",
+        "Values": [
+          "'abc'"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "unsupported json aggregation expressions in scatter query",
+    "query": "select count(1) from user where cola = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
+    "plan": "VT12001: unsupported: in scatter query: aggregation function 'json_arrayagg(a_id)'"
+  },
+  {
     "comment": "Cannot auto-resolve for cross-shard joins",
     "query": "select col from user join user_extra",
     "plan": "Column 'col' in field list is ambiguous"
@@ -729,6 +786,33 @@
             "Table": "user_extra"
           }
         ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "subquery with an aggregation in order by that can be merged into a single route",
+    "query": "select col, trim((select user_name from user where id = 3)) val from user_extra where user_id = 3 group by col order by val",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col, trim((select user_name from user where id = 3)) val from user_extra where user_id = 3 group by col order by val",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, trim((select user_name from `user` where 1 != 1)) as val from user_extra where 1 != 1 group by col",
+        "Query": "select col, trim((select user_name from `user` where id = 3)) as val from user_extra where user_id = 3 group by col order by trim((select `user`.user_name from `user` where `user`.id = 3)) asc",
+        "Table": "user_extra",
+        "Values": [
+          "3"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user",
@@ -1361,8 +1445,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, :__sq1 as `(select col from ``user``)` from unsharded where 1 != 1",
-            "Query": "select a, :__sq1 as `(select col from ``user``)` from unsharded",
+            "FieldQuery": "select a, :__sq1 /* INT16 */ as `(select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, :__sq1 /* INT16 */ as `(select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -1406,8 +1490,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded where 1 != 1",
-            "Query": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded",
+            "FieldQuery": "select a, 1 + :__sq1 /* INT16 */ as `1 + (select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, 1 + :__sq1 /* INT16 */ as `1 + (select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -1752,6 +1836,7 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum(0) AS avg_col, sum_count(3) AS count(intcol)",
                 "GroupBy": "1 COLLATE latin1_swedish_ci, (2|4) COLLATE ",
+                "ResultColumns": 4,
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -2073,6 +2158,212 @@
     }
   },
   {
+    "comment": "left join with a dual table on left - merge-able",
+    "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id=1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id=1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.title, `user`.col from (select 'hello' as title from dual where 1 != 1) as t left join `user` on `user`.id = 1 where 1 != 1",
+        "Query": "select t.title, `user`.col from (select 'hello' as title from dual) as t left join `user` on `user`.id = 1",
+        "Table": "`user`, dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "left join with a dual table on left - non-merge-able",
+    "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "dual_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select t.title from (select 'hello' as title from dual where 1 != 1) as t where 1 != 1",
+            "Query": "select t.title from (select 'hello' as title from dual) as t",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user` where `user`.id <= 4",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "left join with dual non-merge-able with predicate with cross dependencies",
+    "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "t_title": 0
+        },
+        "TableName": "dual_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select t.title from (select 'hello' as title from dual where 1 != 1) as t where 1 != 1",
+            "Query": "select t.title from (select 'hello' as title from dual) as t",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user` where `user`.col = :t_title /* VARCHAR */ and `user`.id <= 4",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "right join with a dual table on left",
+    "query": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id<=4",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id<=4",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual where 1 != 1) as t on `user`.id <= 4 where 1 != 1",
+        "Query": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual) as t on `user`.id <= 4",
+        "Table": "`user`, dual"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "right join with a dual table on right - merge-able",
+    "query": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id=1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id=1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.title, `user`.col from (select 'hello' as title from dual where 1 != 1) as t left join `user` on `user`.id = 1 where 1 != 1",
+        "Query": "select t.title, `user`.col from (select 'hello' as title from dual) as t left join `user` on `user`.id = 1",
+        "Table": "`user`, dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "right join with a dual table on right - non-merge-able",
+    "query": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "dual_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select t.title from (select 'hello' as title from dual where 1 != 1) as t where 1 != 1",
+            "Query": "select t.title from (select 'hello' as title from dual) as t",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user` where `user`.id >= 4",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Union after into outfile is incorrect",
     "query": "select id from user into outfile 'out_file_name' union all select id from music",
     "plan": "syntax error at position 55 near 'union'"
@@ -2246,8 +2537,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select t.a from (select :__sq1 as a from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select t.a from (select :__sq1 as a from `user`) as t",
+                "FieldQuery": "select t.a from (select :__sq1 /* INT16 */ as a from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.a from (select :__sq1 /* INT16 */ as a from `user`) as t",
                 "Table": "`user`"
               }
             ]
@@ -2272,76 +2563,66 @@
     }
   },
   {
-    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
+    "comment": "ORDER BY subquery",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:a"
-        ],
-        "Columns": "1",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
             "Inputs": [
               {
-                "OperatorType": "UncorrelatedSubquery",
-                "Variant": "PulloutValue",
-                "PulloutVars": [
-                  "__sq1"
-                ],
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
                 "Inputs": [
                   {
-                    "InputName": "SubQuery",
-                    "OperatorType": "Limit",
-                    "Count": "1",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select col from `user` where 1 != 1",
-                        "Query": "select col from `user` limit 1",
-                        "Table": "`user`"
-                      }
-                    ]
-                  },
-                  {
-                    "InputName": "Outer",
                     "OperatorType": "Route",
                     "Variant": "Scatter",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` where 1 != 1",
-                    "OrderBy": "(0|1) ASC",
-                    "Query": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` order by __sq1 asc",
+                    "FieldQuery": "select col from `user` where 1 != 1",
+                    "Query": "select col from `user` limit 1",
                     "Table": "`user`"
                   }
                 ]
               },
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
+                "FieldQuery": "select :__sq1 /* INT16 */ as a from `user` where 1 != 1",
+                "Query": "select :__sq1 /* INT16 */ as a from `user`",
+                "Table": "`user`"
               }
             ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -2464,6 +2745,80 @@
     }
   },
   {
+    "comment": "Dual query should be handled on the vtgate even with a LIMIT",
+    "query": "select last_insert_id() limit 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id() limit 1",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          ":__lastInsertId as last_insert_id()"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "PullOut subquery with an aggregation that should be typed in the final output",
+    "query": "select (select sum(col) from user) from user_extra",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select (select sum(col) from user) from user_extra",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS sum(col)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(col) from `user` where 1 != 1",
+                "Query": "select sum(col) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from ``user``)` from user_extra where 1 != 1",
+            "Query": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from ``user``)` from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Straight Join preserved in MySQL query",
     "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.user_id",
     "plan": {
@@ -2527,7 +2882,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
+                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id limit 1",
                 "Table": "user_extra",
                 "Values": [
                   "3"
@@ -2586,7 +2941,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
+                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id limit 1",
                 "Table": "user_extra",
                 "Values": [
                   "3"
@@ -2650,15 +3005,21 @@
               },
               {
                 "InputName": "SubQuery",
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
-                "Table": "user_extra"
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u1_col /* INT16 */ and ue.col = :u2_col /* INT16 */ limit 1",
+                    "Table": "user_extra"
+                  }
+                ]
               }
             ]
           }
@@ -2701,15 +3062,21 @@
               },
               {
                 "InputName": "SubQuery",
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col",
-                "Table": "user_extra"
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u_col /* INT16 */ and ue.col2 = :u_col /* INT16 */ limit 1",
+                    "Table": "user_extra"
+                  }
+                ]
               }
             ]
           }
@@ -2845,8 +3212,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where 1 != 1",
-            "Query": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where `user`.id = :user_extra_id",
+            "FieldQuery": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + ``user``.col` from `user` where 1 != 1",
+            "Query": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + ``user``.col` from `user` where `user`.id = :user_extra_id",
             "Table": "`user`",
             "Values": [
               ":user_extra_id"
@@ -2986,8 +3353,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual where 1 != 1",
-        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual",
+        "FieldQuery": "select json_quote('null'), json_quote('\"null\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual where 1 != 1",
+        "Query": "select json_quote('null'), json_quote('\"null\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -3087,8 +3454,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_schema_valid('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"'), json_schema_validation_report('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"') from dual where 1 != 1",
-        "Query": "select json_schema_valid('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"'), json_schema_validation_report('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"') from dual",
+        "FieldQuery": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual where 1 != 1",
+        "Query": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -3109,8 +3476,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
-        "Query": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual",
+        "FieldQuery": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')), json_keys('{\"a\": 1, \"b\": {\"c\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\"abc\"]', 'one', 'abc'), json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
+        "Query": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')), json_keys('{\"a\": 1, \"b\": {\"c\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\"abc\"]', 'one', 'abc'), json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -3175,8 +3542,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual where 1 != 1",
-        "Query": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual",
+        "FieldQuery": "select json_depth('{}'), json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), json_type(json_extract('{\"a\": [10, true]}', '$.a')), json_valid('{\"a\": 1}') from dual where 1 != 1",
+        "Query": "select json_depth('{}'), json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), json_type(json_extract('{\"a\": [10, true]}', '$.a')), json_valid('{\"a\": 1}') from dual",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -3197,8 +3564,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual where 1 != 1",
-        "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual",
+        "FieldQuery": "select json_array_append('{\"a\": 1}', '$', 'z'), json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual where 1 != 1",
+        "Query": "select json_array_append('{\"a\": 1}', '$', 'z'), json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -3219,8 +3586,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual where 1 != 1",
-        "Query": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual",
+        "FieldQuery": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}'), json_merge_preserve('[1, 2]', '{\"id\": 47}') from dual where 1 != 1",
+        "Query": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}'), json_merge_preserve('[1, 2]', '{\"id\": 47}') from dual",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -3241,8 +3608,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\\\"abc\\\"') from dual where 1 != 1",
-        "Query": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\\\"abc\\\"') from dual",
+        "FieldQuery": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\"abc\"') from dual where 1 != 1",
+        "Query": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\"abc\"') from dual",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -3423,7 +3790,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_metadata.user_id from user_extra, user_metadata where 1 != 1",
-            "Query": "select user_metadata.user_id from user_extra, user_metadata where user_extra.col = :user_col and user_extra.user_id = user_metadata.user_id",
+            "Query": "select user_metadata.user_id from user_extra, user_metadata where user_extra.col = :user_col /* INT16 */ and user_extra.user_id = user_metadata.user_id",
             "Table": "user_extra, user_metadata"
           }
         ]
@@ -3857,6 +4224,7 @@
             "Variant": "Ordered",
             "Aggregates": "any_value(0) AS id",
             "GroupBy": "(1|2)",
+            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4022,6 +4390,7 @@
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
             "Aggregates": "max(0|1) AS max(music.id)",
+            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4030,8 +4399,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(music.id), weight_string(music.id) from music where 1 != 1 group by weight_string(music.id)",
-                "Query": "select max(music.id), weight_string(music.id) from music where music.user_id in ::__vals group by weight_string(music.id)",
+                "FieldQuery": "select max(music.id), weight_string(max(music.id)) from music where 1 != 1",
+                "Query": "select max(music.id), weight_string(max(music.id)) from music where music.user_id in ::__vals",
                 "Table": "music",
                 "Values": [
                   "(5, 6)"
@@ -4558,6 +4927,7 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum_count_star(1) AS b",
                 "GroupBy": "(2|3), (0|4)",
+                "ResultColumns": 3,
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4744,6 +5114,52 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "SOME modifier on unsharded table works well",
+    "query": "select 1 from unsharded where foo = SOME (select 1 from unsharded_a where foo = 1)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from unsharded where foo = SOME (select 1 from unsharded_a where foo = 1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded where foo = any (select 1 from unsharded_a where foo = 1)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
+      ]
+    }
+  },
+  {
+    "comment": "ALL modifier on unsharded table works well",
+    "query": "select 1 from unsharded where foo = ALL (select 1 from unsharded_a where foo = 1)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from unsharded where foo = ALL (select 1 from unsharded_a where foo = 1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded where foo = all (select 1 from unsharded_a where foo = 1)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
       ]
     }
   },

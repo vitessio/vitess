@@ -43,9 +43,10 @@ type analyzer struct {
 	err          error
 	inProjection int
 
-	projErr                 error
+	notSingleRouteErr       error
 	unshardedErr            error
 	warning                 string
+	canShortcut             bool
 	singleUnshardedKeyspace bool
 	fullAnalysis            bool
 }
@@ -135,14 +136,14 @@ func (a *analyzer) newSemTable(
 		comments = commentedStmt.GetParsedComments()
 	}
 
-	if a.singleUnshardedKeyspace {
+	if a.canShortcut {
 		return &SemTable{
 			Tables:                    a.earlyTables.Tables,
 			Comments:                  comments,
 			Warning:                   a.warning,
 			Collation:                 coll,
 			ExprTypes:                 map[sqlparser.Expr]evalengine.Type{},
-			NotSingleRouteErr:         a.projErr,
+			NotSingleRouteErr:         a.notSingleRouteErr,
 			NotUnshardedErr:           a.unshardedErr,
 			Recursive:                 ExprDependencies{},
 			Direct:                    ExprDependencies{},
@@ -174,7 +175,7 @@ func (a *analyzer) newSemTable(
 		ExprTypes:                 a.typer.m,
 		Tables:                    a.tables.Tables,
 		Targets:                   a.binder.targets,
-		NotSingleRouteErr:         a.projErr,
+		NotSingleRouteErr:         a.notSingleRouteErr,
 		NotUnshardedErr:           a.unshardedErr,
 		Warning:                   a.warning,
 		Comments:                  comments,
@@ -193,13 +194,13 @@ func (a *analyzer) newSemTable(
 
 func (a *analyzer) setError(err error) {
 	switch err := err.(type) {
-	case ProjError:
-		a.projErr = err.Inner
+	case NotSingleRouteErr:
+		a.notSingleRouteErr = err.Inner
 	case ShardedError:
 		a.unshardedErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
-			a.projErr = err
+			a.notSingleRouteErr = err
 		} else {
 			a.err = err
 		}
@@ -386,16 +387,18 @@ func (a *analyzer) reAnalyze(statement sqlparser.SQLNode) error {
 // canShortCut checks if we are dealing with a single unsharded keyspace and no tables that have managed foreign keys
 // if so, we can stop the analyzer early
 func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool) {
-	if a.fullAnalysis {
+	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
+	a.singleUnshardedKeyspace = ks != nil
+	if !a.singleUnshardedKeyspace {
 		return false
 	}
-	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
-	if ks == nil {
+
+	if a.fullAnalysis {
 		return false
 	}
 
 	defer func() {
-		a.singleUnshardedKeyspace = canShortCut
+		a.canShortcut = canShortCut
 	}()
 
 	if !sqlparser.IsDMLStatement(statement) {
@@ -461,8 +464,8 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 
 // getError gets the error stored in the analyzer during previous phases.
 func (a *analyzer) getError() error {
-	if a.projErr != nil {
-		return a.projErr
+	if a.notSingleRouteErr != nil {
+		return a.notSingleRouteErr
 	}
 	if a.unshardedErr != nil {
 		return a.unshardedErr
@@ -470,13 +473,13 @@ func (a *analyzer) getError() error {
 	return a.err
 }
 
-// ProjError is used to mark an error as something that should only be returned
+// NotSingleRouteErr is used to mark an error as something that should only be returned
 // if the planner fails to merge everything down to a single route
-type ProjError struct {
+type NotSingleRouteErr struct {
 	Inner error
 }
 
-func (p ProjError) Error() string {
+func (p NotSingleRouteErr) Error() string {
 	return p.Inner.Error()
 }
 

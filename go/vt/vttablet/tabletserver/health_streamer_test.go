@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -41,9 +40,7 @@ import (
 )
 
 func TestHealthStreamerClosed(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	cfg := newConfig(db)
+	cfg := newConfig(nil)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
@@ -59,18 +56,16 @@ func TestHealthStreamerClosed(t *testing.T) {
 
 func newConfig(db *fakesqldb.DB) *tabletenv.TabletConfig {
 	cfg := tabletenv.NewDefaultConfig()
-	cfg.DB = newDBConfigs(db)
+	if db != nil {
+		cfg.DB = newDBConfigs(db)
+	}
 	return cfg
 }
 
 // TestNotServingPrimaryNoWrite makes sure that the health-streamer doesn't write anything to the database when
 // the state is not serving primary.
 func TestNotServingPrimaryNoWrite(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	cfg := newConfig(db)
-	cfg.SignalWhenSchemaChange = true
-
+	cfg := newConfig(nil)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestNotServingPrimary")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
@@ -79,11 +74,8 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	// Create a new health streamer and set it to a serving primary state
 	hs := newHealthStreamer(env, alias, &schema.Engine{})
 	hs.isServingPrimary = true
-	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, cfg.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
-	target := &querypb.Target{}
-	hs.InitDBConfig(target, dbconfigs.New(db.ConnParams()))
 
 	// Let's say the tablet goes to a non-serving primary state.
 	hs.MakePrimary(false)
@@ -93,13 +85,10 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	t1 := schema.NewTable("t1", schema.NoType)
 	err := hs.reload([]*schema.Table{t1}, nil, nil, false)
 	require.NoError(t, err)
-	require.NoError(t, db.LastError())
 }
 
 func TestHealthStreamerBroadcast(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	cfg := newConfig(db)
+	cfg := newConfig(nil)
 	cfg.SignalWhenSchemaChange = false
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
@@ -109,11 +98,8 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias, &schema.Engine{})
-	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, cfg.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
-	target := &querypb.Target{}
-	hs.InitDBConfig(target, dbconfigs.New(db.ConnParams()))
 
 	ch, cancel := testStream(hs)
 	defer cancel()
@@ -226,9 +212,6 @@ func TestReloadSchema(t *testing.T) {
 			se := schema.NewEngine(env)
 			hs := newHealthStreamer(env, alias, se)
 
-			target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-			configs := cfg.DB
-
 			db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"UNIX_TIMESTAMP(now())",
@@ -249,6 +232,17 @@ func TestReloadSchema(t *testing.T) {
 					"product|BASE TABLE|1684735966||114688|114688",
 					"users|BASE TABLE|1684735966||114688|114688",
 				))
+
+			db.AddQuery(mysql.BaseShowTables,
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT",
+						"varchar|varchar|int64|varchar",
+					),
+					"product|BASE TABLE|1684735966|",
+					"users|BASE TABLE|1684735966|",
+				))
+
 			db.AddQueryPattern("SELECT COLUMN_NAME as column_name.*", sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"column_name",
@@ -271,8 +265,7 @@ func TestReloadSchema(t *testing.T) {
 				"users|id",
 			))
 
-			hs.InitDBConfig(target, configs.DbaWithDB())
-			se.InitDBConfig(configs.DbaWithDB())
+			se.InitDBConfig(cfg.DB.DbaWithDB())
 			hs.Open()
 			defer hs.Close()
 			err := se.Open()
@@ -291,6 +284,16 @@ func TestReloadSchema(t *testing.T) {
 					),
 					"product|BASE TABLE|1684735967||114688|114688",
 					"users|BASE TABLE|1684735967||114688|114688",
+				))
+
+			db.AddQuery(mysql.BaseShowTables,
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT",
+						"varchar|varchar|int64|varchar",
+					),
+					"product|BASE TABLE|1684735967|",
+					"users|BASE TABLE|1684735967|",
 				))
 
 			var wg sync.WaitGroup
@@ -329,7 +332,6 @@ func TestReloadView(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	cfg := newConfig(db)
-	cfg.SignalWhenSchemaChange = true
 	cfg.SchemaReloadInterval = 100 * time.Millisecond
 	cfg.EnableViews = true
 
@@ -337,9 +339,6 @@ func TestReloadView(t *testing.T) {
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
 	se := schema.NewEngine(env)
 	hs := newHealthStreamer(env, alias, se)
-
-	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	configs := cfg.DB
 
 	db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -357,6 +356,13 @@ func TestReloadView(t *testing.T) {
 			sqltypes.MakeTestFields(
 				"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT | SUM(i.file_size) | SUM(i.allocated_size)",
 				"varchar|varchar|int64|varchar|int64|int64",
+			),
+		))
+	db.AddQuery(mysql.BaseShowTables,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT",
+				"varchar|varchar|int64|varchar",
 			),
 		))
 	db.AddQueryPattern("SELECT COLUMN_NAME as column_name.*", sqltypes.MakeTestResult(
@@ -383,8 +389,7 @@ func TestReloadView(t *testing.T) {
 	// adding query pattern for udfs
 	db.AddQueryPattern("SELECT name.*", &sqltypes.Result{})
 
-	hs.InitDBConfig(target, configs.DbaWithDB())
-	se.InitDBConfig(configs.DbaWithDB())
+	se.InitDBConfig(cfg.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
 	err := se.Open()

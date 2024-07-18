@@ -30,19 +30,18 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"vitess.io/vitess/go/mysql"
-
-	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vttablet"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -60,7 +59,7 @@ var (
 		"--buffer_size", "250000", "--buffer_min_time_between_failovers", "1s", "--buffer_max_failover_duration", loadTestBufferingWindowDuration.String(),
 		"--buffer_drain_concurrency", "10"}
 	extraVtctldArgs = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
-	// This variable can be used within specific tests to alter vttablet behavior
+	// This variable can be used within specific tests to alter vttablet behavior.
 	extraVTTabletArgs = []string{}
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
@@ -477,7 +476,8 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	}
 
 	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, throttlerConfig.Threshold, throttlerConfig.Query, nil)
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: throttlerConfig.Threshold, CustomQuery: throttlerConfig.Query}
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, req, nil, nil)
 	require.NoError(t, err, res)
 
 	cellsToWatch := ""
@@ -743,7 +743,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				HTTPPort: tablet.Vttablet.Port,
 			}
 			log.Infof("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType)
-			throttler.WaitForThrottlerStatusEnabled(t, clusterTablet, true, nil, time.Minute)
+			throttler.WaitForThrottlerStatusEnabled(t, vc.VtctldClient, clusterTablet, true, nil, time.Minute)
 		}
 	}
 	log.Infof("Throttler config applied on all shards")

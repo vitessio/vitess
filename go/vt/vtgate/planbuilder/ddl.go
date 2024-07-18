@@ -210,7 +210,7 @@ func buildCreateViewCommon(
 	// because we don't trust the schema tracker to have up-to-date info, we don't want to expand any SELECT * here
 	var expressions []sqlparser.SelectExprs
 	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
-		expressions = append(expressions, sqlparser.CloneSelectExprs(p.SelectExprs))
+		expressions = append(expressions, sqlparser.Clone(p.SelectExprs))
 		return nil
 	})
 	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddlSelect), ddlSelect, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
@@ -230,9 +230,6 @@ func buildCreateViewCommon(
 	sqlparser.RemoveKeyspace(ddl)
 
 	if vschema.IsViewsEnabled() {
-		if keyspace == nil {
-			return nil, nil, vterrors.VT09005()
-		}
 		return destination, keyspace, nil
 	}
 	isRoutePlan, opCode := tryToGetRoutePlan(selectPlan.primitive)

@@ -209,34 +209,6 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 	})
 }
 
-func TestUpdateEqualNoScatter(t *testing.T) {
-	t.Skip("planner does not produces this plan anymore")
-	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
-		"table":      "lkp",
-		"from":       "from",
-		"to":         "toc",
-		"write_only": "true",
-	})
-	upd := &Update{
-		DML: &DML{
-			RoutingParameters: &RoutingParameters{
-				Opcode: Equal,
-				Keyspace: &vindexes.Keyspace{
-					Name:    "ks",
-					Sharded: true,
-				},
-				Vindex: vindex,
-				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
-			},
-			Query: "dummy_update",
-		},
-	}
-
-	vc := newDMLTestVCursor("0")
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `cannot map vindex to unique keyspace id: DestinationKeyRange(-)`)
-}
-
 func TestUpdateEqualChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{

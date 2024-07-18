@@ -128,6 +128,11 @@ func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, table
 	return &tabletmanagerdatapb.Permissions{}, nil
 }
 
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
+	return make(map[string]string), nil
+}
+
 // LockTables is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) LockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
@@ -364,6 +369,10 @@ func (client *FakeTabletManagerClient) RestoreFromBackup(ctx context.Context, ta
 
 func (client *FakeTabletManagerClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
+func (client *FakeTabletManagerClient) GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	return &tabletmanagerdatapb.GetThrottlerStatusResponse{}, nil
 }
 
 //

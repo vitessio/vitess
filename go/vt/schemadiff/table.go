@@ -146,7 +146,7 @@ func (d *AlterTableEntityDiff) Clone() EntityDiff {
 	}
 	ann := *d.annotations
 	clone := &AlterTableEntityDiff{
-		alterTable:           sqlparser.CloneRefOfAlterTable(d.alterTable),
+		alterTable:           sqlparser.Clone(d.alterTable),
 		instantDDLCapability: d.instantDDLCapability,
 		annotations:          &ann,
 	}
@@ -245,7 +245,7 @@ func (d *CreateTableEntityDiff) Clone() EntityDiff {
 		return nil
 	}
 	clone := &CreateTableEntityDiff{
-		createTable: sqlparser.CloneRefOfCreateTable(d.createTable),
+		createTable: sqlparser.Clone(d.createTable),
 	}
 	if d.to != nil {
 		clone.to = d.to.Clone().(*CreateTableEntity)
@@ -336,7 +336,7 @@ func (d *DropTableEntityDiff) Clone() EntityDiff {
 		return nil
 	}
 	clone := &DropTableEntityDiff{
-		dropTable: sqlparser.CloneRefOfDropTable(d.dropTable),
+		dropTable: sqlparser.Clone(d.dropTable),
 	}
 	if d.from != nil {
 		clone.from = d.from.Clone().(*CreateTableEntity)
@@ -428,7 +428,7 @@ func (d *RenameTableEntityDiff) Clone() EntityDiff {
 		return nil
 	}
 	clone := &RenameTableEntityDiff{
-		renameTable: sqlparser.CloneRefOfRenameTable(d.renameTable),
+		renameTable: sqlparser.Clone(d.renameTable),
 	}
 	if d.from != nil {
 		clone.from = d.from.Clone().(*CreateTableEntity)
@@ -452,6 +452,15 @@ func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTa
 	entity := &CreateTableEntity{CreateTable: c, Env: env}
 	entity.normalize()
 	return entity, nil
+}
+
+func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity {
+	cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
+	entities := make([]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
+	for i := range c.CreateTable.TableSpec.Columns {
+		entities[i] = NewColumnDefinitionEntity(c.Env, c.CreateTable.TableSpec.Columns[i], cc)
+	}
+	return entities
 }
 
 // normalize cleans up the table definition:
@@ -526,7 +535,7 @@ func (c *CreateTableEntity) GetCollation() string {
 }
 
 func (c *CreateTableEntity) Clone() Entity {
-	return &CreateTableEntity{CreateTable: sqlparser.CloneRefOfCreateTable(c.CreateTable), Env: c.Env}
+	return &CreateTableEntity{CreateTable: sqlparser.Clone(c.CreateTable), Env: c.Env}
 }
 
 func getTableCharsetCollate(env *Environment, tableOptions *sqlparser.TableOptions) *charsetCollate {
@@ -1601,8 +1610,8 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 // Returns if this is a visibility only change and if true, whether
 // the new visibility is invisible or not.
 func indexOnlyVisibilityChange(t1Key, t2Key *sqlparser.IndexDefinition) (bool, bool) {
-	t1KeyCopy := sqlparser.CloneRefOfIndexDefinition(t1Key)
-	t2KeyCopy := sqlparser.CloneRefOfIndexDefinition(t2Key)
+	t1KeyCopy := sqlparser.Clone(t1Key)
+	t2KeyCopy := sqlparser.Clone(t2Key)
 	t1KeyKeptOptions := make([]*sqlparser.IndexOption, 0, len(t1KeyCopy.Options))
 	t2KeyInvisible := false
 	for _, opt := range t1KeyCopy.Options {
@@ -1731,11 +1740,11 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColName := t2Col.Name.Lowered()
 		// we know that column exists in both tables
 		t1Col := t1ColumnsMap[t2ColName]
-		t1ColEntity := NewColumnDefinitionEntity(t1Col.col)
-		t2ColEntity := NewColumnDefinitionEntity(t2Col)
+		t1ColEntity := NewColumnDefinitionEntity(c.Env, t1Col.col, t1cc)
+		t2ColEntity := NewColumnDefinitionEntity(c.Env, t2Col, t2cc)
 
 		// check diff between before/after columns:
-		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, t1cc, t2cc, hints)
+		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, hints)
 		if err != nil {
 			return err
 		}

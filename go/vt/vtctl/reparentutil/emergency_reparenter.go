@@ -68,15 +68,8 @@ type EmergencyReparentOptions struct {
 }
 
 // counters for Emergency Reparent Shard
-var (
-	// TODO(timvaillancourt): remove legacyERS* gauges in v19+.
-	legacyERSCounter        = stats.NewGauge("ers_counter", "Number of times Emergency Reparent Shard has been run")
-	legacyERSSuccessCounter = stats.NewGauge("ers_success_counter", "Number of times Emergency Reparent Shard has succeeded")
-	legacyERSFailureCounter = stats.NewGauge("ers_failure_counter", "Number of times Emergency Reparent Shard has failed")
-
-	ersCounter = stats.NewCountersWithMultiLabels("emergency_reparent_counts", "Number of times Emergency Reparent Shard has been run",
-		[]string{"Keyspace", "Shard", "Result"},
-	)
+var ersCounter = stats.NewCountersWithMultiLabels("EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
+	[]string{"Keyspace", "Shard", "Result"},
 )
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
@@ -125,11 +118,9 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 		reparentShardOpTimings.Add("EmergencyReparentShard", time.Since(startTime))
 		switch err {
 		case nil:
-			legacyERSSuccessCounter.Add(1)
 			ersCounter.Add(append(statsLabels, successResult), 1)
 			event.DispatchUpdate(ev, "finished EmergencyReparentShard")
 		default:
-			legacyERSFailureCounter.Add(1)
 			ersCounter.Add(append(statsLabels, failureResult), 1)
 			event.DispatchUpdate(ev, "failed EmergencyReparentShard: "+err.Error())
 		}
@@ -154,7 +145,6 @@ func (erp *EmergencyReparenter) getLockAction(newPrimaryAlias *topodatapb.Tablet
 func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, opts EmergencyReparentOptions) (err error) {
 	// log the starting of the operation and increment the counter
 	erp.logger.Infof("will initiate emergency reparent shard in keyspace - %s, shard - %s", keyspace, shard)
-	legacyERSCounter.Add(1)
 
 	var (
 		stoppedReplicationSnapshot *replicationSnapshot
@@ -212,7 +202,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// check that we still have the shard lock. If we don't then we can terminate at this point
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	// find the valid candidates for becoming the primary
@@ -265,8 +255,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	erp.logger.Infof("intermediate source is ideal candidate- %v", isIdeal)
 
 	// Check (again) we still have the topology lock.
-	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	// initialize the newPrimary with the intermediate source, override this value if it is not the ideal candidate
@@ -296,6 +286,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				return err
 			}
 			newPrimary = betterCandidate
+		}
+
+		if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+			return vterrors.Wrap(err, lostTopologyLockMsg)
 		}
 	}
 

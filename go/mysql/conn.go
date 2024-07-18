@@ -787,15 +787,15 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 	// assuming CapabilityClientProtocol41
 	length += 4 // status_flags + warnings
 
+	hasSessionTrack := c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack
+	hasGtidData := hasSessionTrack && packetOk.statusFlags&ServerSessionStateChanged == ServerSessionStateChanged
+
 	var gtidData []byte
-	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+
+	if hasSessionTrack {
 		length += lenEncStringSize(packetOk.info) // info
-		if packetOk.statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
-			gtidData = getLenEncString([]byte(packetOk.sessionStateData))
-			gtidData = append([]byte{0x00}, gtidData...)
-			gtidData = getLenEncString(gtidData)
-			gtidData = append([]byte{0x03}, gtidData...)
-			gtidData = append(getLenEncInt(uint64(len(gtidData))), gtidData...)
+		if hasGtidData {
+			gtidData = encGtidData(packetOk.sessionStateData)
 			length += len(gtidData)
 		}
 	} else {
@@ -809,48 +809,15 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 	data.writeLenEncInt(packetOk.lastInsertID)
 	data.writeUint16(packetOk.statusFlags)
 	data.writeUint16(packetOk.warnings)
-	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+	if hasSessionTrack {
 		data.writeLenEncString(packetOk.info)
-		if packetOk.statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
-			data.writeEOFString(string(gtidData))
+		if hasGtidData {
+			data.writeEOFBytes(gtidData)
 		}
 	} else {
 		data.writeEOFString(packetOk.info)
 	}
 	return c.writeEphemeralPacket()
-}
-
-func getLenEncString(value []byte) []byte {
-	data := getLenEncInt(uint64(len(value)))
-	return append(data, value...)
-}
-
-func getLenEncInt(i uint64) []byte {
-	var data []byte
-	switch {
-	case i < 251:
-		data = append(data, byte(i))
-	case i < 1<<16:
-		data = append(data, 0xfc)
-		data = append(data, byte(i))
-		data = append(data, byte(i>>8))
-	case i < 1<<24:
-		data = append(data, 0xfd)
-		data = append(data, byte(i))
-		data = append(data, byte(i>>8))
-		data = append(data, byte(i>>16))
-	default:
-		data = append(data, 0xfe)
-		data = append(data, byte(i))
-		data = append(data, byte(i>>8))
-		data = append(data, byte(i>>16))
-		data = append(data, byte(i>>24))
-		data = append(data, byte(i>>32))
-		data = append(data, byte(i>>40))
-		data = append(data, byte(i>>48))
-		data = append(data, byte(i>>56))
-	}
-	return data
 }
 
 func (c *Conn) WriteErrorAndLog(format string, args ...interface{}) bool {
@@ -1290,7 +1257,6 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	c.PrepareData[c.StatementID] = prepare
 
 	fld, err := handler.ComPrepare(c, queries[0], bindVars)
-
 	if err != nil {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}

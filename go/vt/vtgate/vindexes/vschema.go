@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/ptr"
-	"vitess.io/vitess/go/vt/topotools"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
@@ -1015,10 +1014,14 @@ func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 
 func buildKeyspaceRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	vschema.KeyspaceRoutingRules = nil
-	if len(source.GetKeyspaceRoutingRules().GetRules()) == 0 {
+	sourceRules := source.GetKeyspaceRoutingRules().GetRules()
+	if len(sourceRules) == 0 {
 		return
 	}
-	rulesMap := topotools.GetKeyspaceRoutingRulesMap(source.KeyspaceRoutingRules)
+	rulesMap := make(map[string]string, len(sourceRules))
+	for _, rr := range sourceRules {
+		rulesMap[rr.FromKeyspace] = rr.ToKeyspace
+	}
 	vschema.KeyspaceRoutingRules = rulesMap
 }
 
@@ -1239,7 +1242,7 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatemen
 	}
 
 	// We do this to make sure there is no shared state between uses of this AST
-	statement = sqlparser.CloneSelectStatement(statement)
+	statement = sqlparser.Clone(statement)
 	sqlparser.SafeRewrite(statement, nil, func(cursor *sqlparser.Cursor) bool {
 		col, ok := cursor.Node().(*sqlparser.ColName)
 		if ok {
@@ -1346,7 +1349,7 @@ func LoadFormal(filename string) (*vschemapb.SrvVSchema, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = json2.Unmarshal(data, formal)
+	err = json2.UnmarshalPB(data, formal)
 	if err != nil {
 		return nil, err
 	}
@@ -1364,7 +1367,7 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = json2.Unmarshal(data, formal)
+	err = json2.UnmarshalPB(data, formal)
 	if err != nil {
 		return nil, err
 	}
@@ -1375,12 +1378,10 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 // the given SQL data type.
 func ChooseVindexForType(typ querypb.Type) (string, error) {
 	switch {
-	case sqltypes.IsIntegral(typ):
+	case sqltypes.IsIntegral(typ) || sqltypes.IsBinary(typ):
 		return "xxhash", nil
 	case sqltypes.IsText(typ):
-		return "unicode_loose_md5", nil
-	case sqltypes.IsBinary(typ):
-		return "binary_md5", nil
+		return "unicode_loose_xxhash", nil
 	}
 	return "", vterrors.Errorf(
 		vtrpcpb.Code_INVALID_ARGUMENT,

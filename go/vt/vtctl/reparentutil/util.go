@@ -44,9 +44,13 @@ import (
 )
 
 var (
-	reparentShardOpTimings = stats.NewTimings("reparent_shard_operation_timings", "Timings of reparent shard operations", "Operation")
+	reparentShardOpTimings = stats.NewTimings("ReparentShardOperationTimings", "Timings of reparent shard operations", "Operation")
 	failureResult          = "failure"
 	successResult          = "success"
+)
+
+const (
+	lostTopologyLockMsg = "lost topology lock, aborting"
 )
 
 // ElectNewPrimary finds a tablet that should become a primary after reparent.

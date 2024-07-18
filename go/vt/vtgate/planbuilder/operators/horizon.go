@@ -59,7 +59,7 @@ func newHorizon(src Operator, query sqlparser.SelectStatement) *Horizon {
 func (h *Horizon) Clone(inputs []Operator) Operator {
 	klone := *h
 	klone.Source = inputs[0]
-	klone.ColumnAliases = sqlparser.CloneColumns(h.ColumnAliases)
+	klone.ColumnAliases = sqlparser.Clone(h.ColumnAliases)
 	klone.Columns = slices.Clone(h.Columns)
 	klone.ColumnsOffset = slices.Clone(h.ColumnsOffset)
 	klone.QP = h.QP
@@ -100,7 +100,7 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 
 	newExpr := ctx.RewriteDerivedTableExpression(expr, tableInfo)
-	if ContainsAggr(ctx, newExpr) {
+	if ctx.ContainsAggr(newExpr) {
 		return newFilter(h, expr)
 	}
 	h.Source = h.Source.AddPredicate(ctx, newExpr)

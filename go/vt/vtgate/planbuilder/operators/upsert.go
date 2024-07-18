@@ -129,7 +129,7 @@ func createUpsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Inser
 		updOp := createOpFromStmt(ctx, upd, false, "")
 
 		// replan insert statement without on duplicate key update.
-		newInsert := sqlparser.CloneRefOfInsert(ins)
+		newInsert := sqlparser.Clone(ins)
 		newInsert.OnDup = nil
 		newInsert.Rows = sqlparser.Values{row}
 		insOp = createOpFromStmt(ctx, newInsert, false, "")
