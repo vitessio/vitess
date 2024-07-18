@@ -523,8 +523,11 @@ func compareMaps(t *testing.T, expected, actual map[string][]string, flexibleExp
 	}
 }
 
-// TestDTResolver tests transaction resolver for distributed transaction on a failure after commit decision is made.
-func TestDTResolver(t *testing.T) {
+// TestDTResolveAfterMMCommit tests that transaction is committed on recovery
+// failure after MM commit.
+func TestDTResolveAfterMMCommit(t *testing.T) {
+	defer cleanup(t)
+
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
@@ -552,7 +555,7 @@ func TestDTResolver(t *testing.T) {
 
 	// This setting will return from VTGate after commit happens on metadata manager.
 	// The RMs will be left in PREPARE state to resolve.
-	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("MMCommit_FailNow", "", ""), nil)
+	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.NoError(t, err)
 
@@ -587,6 +590,65 @@ func TestDTResolver(t *testing.T) {
 		"ks.twopc_user:80-": {
 			`insert:[INT64(7) VARCHAR("foo")]`,
 			`insert:[INT64(9) VARCHAR("baz")]`,
+		},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+}
+
+// TestDTResolveAfterPrepare tests that transaction is rolled back on recovery
+// failure after RM prepare and before MM commit.
+func TestDTResolveAfterPrepare(t *testing.T) {
+	defer cleanup(t)
+
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *binlogdatapb.VEvent)
+	runVStream(t, ctx, ch, vtgateConn)
+
+	conn := vtgateConn.Session("", nil)
+	qCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Insert into multiple shards
+	_, err = conn.Execute(qCtx, "begin", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	require.NoError(t, err)
+
+	// This setting will return from VTGate after commit happens on metadata manager.
+	// The RMs will be left in PREPARE state to resolve.
+	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMPrepared_FailNow", "", ""), nil)
+	_, err = conn.Execute(newCtx, "commit", nil)
+	require.ErrorContains(t, err, "Fail After RM prepared")
+
+	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
+	tableMap := make(map[string][]*querypb.Field)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
+	expectations := map[string][]string{
+		"ks.dt_state:80-": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"ROLLBACK\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"ROLLBACK\")]",
+		},
+		"ks.dt_participant:80-": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+		},
+		"ks.redo_state:-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:-80": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 		},
 	}
 	assert.Equal(t, expectations, logTable,

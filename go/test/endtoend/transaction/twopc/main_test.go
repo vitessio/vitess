@@ -111,20 +111,21 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 
-	deleteAll := func() {
-		tables := []string{"twopc_user"}
-		for _, table := range tables {
-			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
-		}
-	}
-
-	deleteAll()
-
 	return conn, func() {
-		deleteAll()
 		conn.Close()
-		cluster.PanicHandler(t)
+		cleanup(t)
 	}
+}
+
+func cleanup(t *testing.T) {
+	cluster.PanicHandler(t)
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, _ = utils.ExecAllowError(t, conn, "delete from twopc_user")
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value

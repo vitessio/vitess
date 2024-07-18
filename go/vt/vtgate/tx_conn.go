@@ -214,19 +214,24 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
+	// retrieve the caller ID to execute the testing flow
+	callerID := callerid.EffectiveCallerIDFromContext(ctx)
+
+	// Test code to simulate a failure after RM prepare
+	if failNow, err := checkTestFailure(callerID, "RMPrepared_FailNow"); failNow {
+		return err
+	}
+
 	err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
 		return err
 	}
 
-	// Test code to simulate a failure in the middle of a 2PC commit.
-	callerID := callerid.EffectiveCallerIDFromContext(ctx)
-	if callerID != nil && callerID.String() == "MMCommit_FailNow" {
-		log.Errorf("Fail After MM commit")
-		// as commit decision is made. Transaction is a commit.
-		return nil
-
+	// Test code to simulate a failure after MM commit
+	if failNow, err := checkTestFailure(callerID, "MMCommitted_FailNow"); failNow {
+		return err
 	}
+
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
 	})
@@ -235,6 +240,24 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+}
+
+func checkTestFailure(callerID *vtrpcpb.CallerID, expectCaller string) (bool, error) {
+	if callerID == nil || callerID.GetPrincipal() != expectCaller {
+		return false, nil
+	}
+	switch callerID.Principal {
+	case "RMPrepared_FailNow":
+		log.Errorf("Fail After RM prepared")
+		// no commit decision is made. Transaction should be a rolled back.
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After RM prepared")
+	case "MMCommitted_FailNow":
+		log.Errorf("Fail After MM commit")
+		//  commit decision is made. Transaction should be committed.
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
