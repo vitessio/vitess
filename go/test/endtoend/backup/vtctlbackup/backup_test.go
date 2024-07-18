@@ -116,15 +116,12 @@ func TestBackupEngineSelector(t *testing.T) {
 
 // fetch the backup engine used on the last backup triggered by the end-to-end tests.
 func getBackupEngineOfLastBackup(t *testing.T) string {
-	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
-
-	// split the backups response into a slice of strings
-	backups := strings.Split(strings.TrimSpace(output), "\n")
+	lastBackup := getLastBackup(t)
 
 	// open the Manifest and retrieve the backup engine that was used
 	f, err := os.Open(path.Join(localCluster.CurrentVTDATAROOT,
 		"backups", keyspaceName, shardName,
-		backups[len(backups)-1], "MANIFEST",
+		lastBackup, "MANIFEST",
 	))
 	require.NoError(t, err)
 	defer f.Close()
@@ -137,4 +134,70 @@ func getBackupEngineOfLastBackup(t *testing.T) string {
 	require.NoError(t, err)
 
 	return manifest.BackupMethod
+}
+
+func getLastBackup(t *testing.T) string {
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
+	require.NoError(t, err)
+
+	// split the backups response into a slice of strings
+	backups := strings.Split(strings.TrimSpace(output), "\n")
+
+	return backups[len(backups)-1]
+}
+
+func TestRestoreIgnoreBackups(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	defer cluster.PanicHandler(t)
+
+	// launch the custer with xtrabackup as the default engine
+	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"})
+	require.Nilf(t, err, "setup failed with status code %d", code)
+
+	defer TearDownCluster()
+
+	localCluster.DisableVTOrcRecoveries(t)
+	defer func() {
+		localCluster.EnableVTOrcRecoveries(t)
+	}()
+	verifyInitialReplication(t)
+
+	// lets take two backups, each using a different backup engine
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=builtin", primary.Alias)
+	require.NoError(t, err)
+	// firstBackup := getLastBackup(t)
+
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=xtrabackup", primary.Alias)
+	require.NoError(t, err)
+
+	//  insert more data on the primary
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	require.NoError(t, err)
+
+	// now bring up the other replica, letting it restore from backup.
+	restoreWaitForBackup(t, "replica", nil, true)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
+	require.NoError(t, err)
+
+	// check the new replica has the data
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
+
+	// now lets break the last backup in the shard
+	err = os.Remove(path.Join(localCluster.CurrentVTDATAROOT,
+		"backups", keyspaceName, shardName,
+		getLastBackup(t), "backup.xbstream.gz"))
+	require.NoError(t, err)
+
+	// and try to restore from it
+	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", replica2.Alias)
+	require.ErrorContains(t, err, "exit status 1") // this should fail
+
+	// now we retry but trying the earlier backup
+	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", "--ignored-backup-engines=xtrabackup", replica2.Alias)
+	require.NoError(t, err) // this should succeed
+
+	// make sure we are replicating after the restore is done
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
+	require.NoError(t, err)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 }
