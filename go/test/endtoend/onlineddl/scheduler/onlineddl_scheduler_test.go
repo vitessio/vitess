@@ -572,6 +572,11 @@ func testScheduler(t *testing.T) {
 			}
 		})
 	})
+	t.Run("show vitess_migrations in transaction", func(t *testing.T) {
+		// The function validates there is no error
+		rs := onlineddl.VtgateExecQueryInTransaction(t, &vtParams, "show vitess_migrations", "")
+		assert.NotEmpty(t, rs.Rows)
+	})
 
 	forceCutoverCapable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability) // 8.0
 	require.NoError(t, err)
