@@ -104,6 +104,8 @@ func (c *CheckResult) Summary() string {
 		return fmt.Sprintf("%v is denied access due to %s/%s metric value %v exceeding threshold %v", c.AppName, c.Scope, c.MetricName, c.Value, c.Threshold)
 	case http.StatusNotFound:
 		return fmt.Sprintf("%v is denied access due to unknown or uncollected metric", c.AppName)
+	case 0:
+		return ""
 	default:
 		return fmt.Sprintf("unknown status code: %v", c.StatusCode)
 	}

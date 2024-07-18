@@ -1316,8 +1316,10 @@ func TestProbesWhileOperating(t *testing.T) {
 						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK) // we expect threshold exceeded
+						assert.NotNil(t, checkResult)
+						assert.Contains(t, checkResult.Summary(), "test is denied access due to")
 					}
 				})
 
@@ -1328,7 +1330,7 @@ func TestProbesWhileOperating(t *testing.T) {
 						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.True(t, checkOK)
 					}
 				})
@@ -1339,8 +1341,10 @@ func TestProbesWhileOperating(t *testing.T) {
 					})
 					client.clearSuccessfulResultsCache() // ensure we don't read the successful result from the test above
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK)
+						assert.NotNil(t, checkResult)
+						assert.Contains(t, checkResult.Summary(), "test is denied access due to")
 					}
 				})
 			})
@@ -1405,8 +1409,9 @@ func TestProbesWhileOperating(t *testing.T) {
 						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK) // we expect threshold exceeded
+						assert.NotNil(t, checkResult)
 					}
 				})
 
@@ -1417,7 +1422,7 @@ func TestProbesWhileOperating(t *testing.T) {
 						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK) // 0.95 still too low for custom query
 					}
 				})
@@ -1427,7 +1432,7 @@ func TestProbesWhileOperating(t *testing.T) {
 						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK) // 15 still too low for custom query because primary has 17
 					}
 				})
@@ -1437,7 +1442,7 @@ func TestProbesWhileOperating(t *testing.T) {
 						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.True(t, checkOK)
 					}
 				})
@@ -1448,7 +1453,7 @@ func TestProbesWhileOperating(t *testing.T) {
 					})
 					client.clearSuccessfulResultsCache() // ensure we don't read the successful result from the test above
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK)
 					}
 				})
@@ -2055,7 +2060,7 @@ func TestReplica(t *testing.T) {
 			})
 			t.Run("client, OK", func(t *testing.T) {
 				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
-				checkOK := client.ThrottleCheckOK(ctx, "")
+				_, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.True(t, checkOK)
 			})
 			t.Run("client, metrics names mapped, OK", func(t *testing.T) {
@@ -2063,7 +2068,7 @@ func TestReplica(t *testing.T) {
 				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
 				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
-				checkOK := client.ThrottleCheckOK(ctx, "")
+				_, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.True(t, checkOK)
 			})
 			t.Run("client, metrics names mapped, not OK", func(t *testing.T) {
@@ -2071,8 +2076,10 @@ func TestReplica(t *testing.T) {
 				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.LoadAvgMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
 				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
-				checkOK := client.ThrottleCheckOK(ctx, "")
+				checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
+				assert.NotNil(t, checkResult)
+				assert.Contains(t, checkResult.Summary(), "test is denied access due to")
 			})
 
 			t.Run("custom query, metrics", func(t *testing.T) {
@@ -2106,8 +2113,10 @@ func TestReplica(t *testing.T) {
 			})
 			t.Run("client, not OK", func(t *testing.T) {
 				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.SelfScope)
-				checkOK := client.ThrottleCheckOK(ctx, "")
+				checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
+				assert.NotNil(t, checkResult)
+				assert.Contains(t, checkResult.Summary(), "test is denied access due to")
 			})
 		}()
 	})
