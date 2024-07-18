@@ -566,11 +566,12 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 		tmc     tmclient.TabletManagerClient
 		tablets []*topodatapb.Tablet
 
-		ev        *events.Reparent
-		keyspace  string
-		shard     string
-		tabletMap map[string]*topo.TabletInfo
-		opts      *PlannedReparentOptions
+		ev                   *events.Reparent
+		keyspace             string
+		shard                string
+		tabletMap            map[string]*topo.TabletInfo
+		innodbBufferPoolData map[string]int
+		opts                 *PlannedReparentOptions
 
 		expectedIsNoop bool
 		expectedEvent  *events.Reparent
@@ -817,6 +818,104 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 				NewPrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
+				},
+				durability: &durabilityNone{},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "primary selection based on buffer pool",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": { // most advanced position
+						Position: &replicationdatapb.Status{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+					},
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						},
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{
+				"zone1-0000000100": 100,
+				"zone1-0000000101": 200,
+			},
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000500": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  500,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				// Avoid the current primary.
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+				durability: &durabilityNone{},
+			},
+			expectedIsNoop: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			expectedOpts: &PlannedReparentOptions{
+				AvoidPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+				// NewPrimaryAlias gets populated by the preflightCheck code
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
 				},
 				durability: &durabilityNone{},
 			},
@@ -1091,7 +1190,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 				require.NoError(t, err)
 				tt.opts.durability = durability
 			}
-			isNoop, err := pr.preflightChecks(ctx, tt.ev, tt.tabletMap, tt.opts)
+			isNoop, err := pr.preflightChecks(ctx, tt.ev, tt.tabletMap, tt.innodbBufferPoolData, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedIsNoop, isNoop, "preflightChecks returned wrong isNoop signal")
