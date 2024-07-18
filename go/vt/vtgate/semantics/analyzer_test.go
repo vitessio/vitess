@@ -195,6 +195,31 @@ func TestBindingMultiTablePositive(t *testing.T) {
 	}
 }
 
+func TestBindingRecursiveCTEs(t *testing.T) {
+	type testCase struct {
+		query string
+		rdeps TableSet
+		ddeps TableSet
+	}
+	queries := []testCase{{
+		query: "with recursive x as (select id from user union select x.id + 1 from x where x.id < 15) select t.id from x join x t;",
+		rdeps: MergeTableSets(TS0, TS1), // This is the user and `x` in the CTE
+		ddeps: TS3,                      // this is the t id
+	}, {
+		query: "WITH RECURSIVE user_cte AS (SELECT id, name FROM user WHERE id = 42 UNION ALL SELECT u.id, u.name FROM user u JOIN user_cte cte ON u.id = cte.id + 1 WHERE u.id = 42) SELECT id FROM user_cte",
+		rdeps: MergeTableSets(TS0, TS1, TS2), // This is the two uses of the user and `user_cte` in the CTE
+		ddeps: TS3,
+	}}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyzeStrict(t, query.query, "user")
+			sel := stmt.(*sqlparser.Select)
+			assert.Equal(t, query.rdeps, semTable.RecursiveDeps(extract(sel, 0)), "recursive")
+			assert.Equal(t, query.ddeps, semTable.DirectDeps(extract(sel, 0)), "direct")
+		})
+	}
+}
+
 func TestBindingMultiAliasedTablePositive(t *testing.T) {
 	type testCase struct {
 		query          string
@@ -887,9 +912,6 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql:  "select 1 from t1 where (id, id) in (select 1, 2, 3)",
 		serr: "Operand should contain 2 column(s)",
-	}, {
-		sql:  "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
-		serr: "VT12001: unsupported: recursive common table expression",
 	}, {
 		sql:  "with x as (select 1), x as (select 1) select * from x",
 		serr: "VT03013: not unique table/alias: 'x'",

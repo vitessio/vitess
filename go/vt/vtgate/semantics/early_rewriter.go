@@ -57,7 +57,9 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	case *sqlparser.ComparisonExpr:
 		return handleComparisonExpr(cursor, node)
 	case *sqlparser.With:
-		return r.handleWith(node)
+		if !node.Recursive {
+			return r.handleWith(node)
+		}
 	case *sqlparser.AliasedTableExpr:
 		return r.handleAliasedTable(node)
 	case *sqlparser.Delete:

@@ -773,10 +773,6 @@ func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tab
 	}
 
 	for _, table := range tableInfos {
-		if _, isDT := table.(*DerivedTable); isDT {
-			continue
-		}
-
 		sc := table.canShortCut()
 		var vtbl *vindexes.Table
 

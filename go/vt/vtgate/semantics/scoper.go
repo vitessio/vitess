@@ -240,6 +240,9 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	case sqlparser.AggrFunc:
 		s.currentScope().inHavingAggr = false
 	case sqlparser.TableExpr:
+		// inside joins and derived tables, we can only see the tables in the table/join.
+		// we also want the tables available in the outer query, for SELECT expressions and the WHERE clause,
+		// so we copy the tables from the current scope to the parent scope
 		if isParentSelect(cursor) {
 			curScope := s.currentScope()
 			s.popScope()

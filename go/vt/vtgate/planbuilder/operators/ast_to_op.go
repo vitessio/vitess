@@ -254,24 +254,30 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			panic(err)
 		}
 
-		if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
+		switch tableInfo := tableInfo.(type) {
+		case *semantics.VindexTable:
 			solves := tableID
 			return &Vindex{
 				Table: VindexTable{
 					TableID: tableID,
 					Alias:   tableExpr,
 					Table:   tbl,
-					VTable:  vt.Table.GetVindexTable(),
+					VTable:  tableInfo.Table.GetVindexTable(),
 				},
-				Vindex: vt.Vindex,
+				Vindex: tableInfo.Vindex,
 				Solved: solves,
 			}
+		case *semantics.CTETable:
+			panic(vterrors.VT12001("recursive common table expression"))
+		case *semantics.RealTable:
+			qg := newQueryGraph()
+			isInfSchema := tableInfo.IsInfSchema()
+			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
+			qg.Tables = append(qg.Tables, qt)
+			return qg
+		default:
+			panic(vterrors.VT13001(fmt.Sprintf("unknown table type %T", tableInfo)))
 		}
-		qg := newQueryGraph()
-		isInfSchema := tableInfo.IsInfSchema()
-		qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
-		qg.Tables = append(qg.Tables, qt)
-		return qg
 	case *sqlparser.DerivedTable:
 		if onlyTable && tbl.Select.GetLimit() == nil {
 			tbl.Select.SetOrderBy(nil)

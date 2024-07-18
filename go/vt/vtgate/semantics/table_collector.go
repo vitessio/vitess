@@ -28,45 +28,76 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// tableCollector is responsible for gathering information about the tables listed in the FROM clause,
-// and adding them to the current scope, plus keeping the global list of tables used in the query
-type tableCollector struct {
-	Tables    []TableInfo
-	scoper    *scoper
-	si        SchemaInformation
-	currentDb string
-	org       originable
-	unionInfo map[*sqlparser.Union]unionInfo
-	done      map[*sqlparser.AliasedTableExpr]TableInfo
-}
+type (
+	// tableCollector is responsible for gathering information about the tables listed in the FROM clause,
+	// and adding them to the current scope, plus keeping the global list of tables used in the query
+	tableCollector struct {
+		earlyTableCollector
+		scoper    *scoper
+		org       originable
+		unionInfo map[*sqlparser.Union]unionInfo
+	}
 
-type earlyTableCollector struct {
-	si         SchemaInformation
-	currentDb  string
-	Tables     []TableInfo
-	done       map[*sqlparser.AliasedTableExpr]TableInfo
-	withTables map[sqlparser.IdentifierCS]any
+	earlyTableCollector struct {
+		si        SchemaInformation
+		currentDb string
+		Tables    []TableInfo
+		done      map[*sqlparser.AliasedTableExpr]TableInfo
+		cte       map[string]CTEDef
+	}
+
+	CTEDef struct {
+		definition      sqlparser.SelectStatement
+		isAuthoritative bool
+		recursiveDeps   *TableSet
+	}
+)
+
+func (cte *CTEDef) recursive(org originable) (id TableSet) {
+	if cte.recursiveDeps != nil {
+		return *cte.recursiveDeps
+	}
+
+	// We need to find the recursive dependencies of the CTE
+	// We'll do this by walking the inner query and finding all the tables
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		ate, ok := node.(*sqlparser.AliasedTableExpr)
+		if !ok {
+			return true, nil
+		}
+		id = id.Merge(org.tableSetFor(ate))
+		return true, nil
+	}, cte.definition)
+	return
 }
 
 func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableCollector {
 	return &earlyTableCollector{
-		si:         si,
-		currentDb:  currentDb,
-		done:       map[*sqlparser.AliasedTableExpr]TableInfo{},
-		withTables: map[sqlparser.IdentifierCS]any{},
+		si:        si,
+		currentDb: currentDb,
+		done:      map[*sqlparser.AliasedTableExpr]TableInfo{},
+		cte:       map[string]CTEDef{},
 	}
 }
 
-func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.AliasedTableExpr:
-		etc.visitAliasedTableExpr(node)
-	case *sqlparser.With:
-		for _, cte := range node.CTEs {
-			etc.withTables[cte.ID] = nil
-		}
+func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
+	with, ok := cursor.Node().(*sqlparser.With)
+	if !ok {
+		return true
 	}
+	for _, cte := range with.CTEs {
+		etc.cte[cte.ID.String()] = CTEDef{definition: cte.Subquery.Select}
+	}
+	return true
+}
 
+func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) bool {
+	ate, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return true
+	}
+	etc.visitAliasedTableExpr(ate)
+	return true
 }
 
 func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) {
@@ -79,25 +110,22 @@ func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTabl
 
 func (etc *earlyTableCollector) newTableCollector(scoper *scoper, org originable) *tableCollector {
 	return &tableCollector{
-		Tables:    etc.Tables,
-		scoper:    scoper,
-		si:        etc.si,
-		currentDb: etc.currentDb,
-		unionInfo: map[*sqlparser.Union]unionInfo{},
-		done:      etc.done,
-		org:       org,
+		earlyTableCollector: *etc,
+		scoper:              scoper,
+		unionInfo:           map[*sqlparser.Union]unionInfo{},
+		org:                 org,
 	}
 }
 
 func (etc *earlyTableCollector) handleTableName(tbl sqlparser.TableName, aet *sqlparser.AliasedTableExpr) {
 	if tbl.Qualifier.IsEmpty() {
-		_, isCTE := etc.withTables[tbl.Name]
+		_, isCTE := etc.cte[tbl.Name.String()]
 		if isCTE {
 			// no need to handle these tables here, we wait for the late phase instead
 			return
 		}
 	}
-	tableInfo, err := getTableInfo(aet, tbl, etc.si, etc.currentDb)
+	tableInfo, err := etc.getTableInfo(aet, tbl)
 	if err != nil {
 		// this could just be a CTE that we haven't processed, so we'll give it the benefit of the doubt for now
 		return
@@ -304,7 +332,7 @@ func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sq
 
 	tableInfo, found = tc.done[node]
 	if !found {
-		tableInfo, err = getTableInfo(node, t, tc.si, tc.currentDb)
+		tableInfo, err = tc.earlyTableCollector.getTableInfo(node, t)
 		if err != nil {
 			return err
 		}
@@ -315,12 +343,20 @@ func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sq
 	return scope.addTable(tableInfo)
 }
 
-func getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, si SchemaInformation, currentDb string) (TableInfo, error) {
+func (etc *earlyTableCollector) getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName) (TableInfo, error) {
 	var tbl *vindexes.Table
 	var vindex vindexes.Vindex
+	if t.Qualifier.IsEmpty() {
+		// CTE handling will not be used in the early table collection
+		cteDef, isCte := etc.cte[t.Name.String()]
+		if isCte {
+			return newCTETable(node, t, cteDef), nil
+		}
+	}
+
 	isInfSchema := sqlparser.SystemSchema(t.Qualifier.String())
 	var err error
-	tbl, vindex, _, _, _, err = si.FindTableOrVindex(t)
+	tbl, vindex, _, _, _, err = etc.si.FindTableOrVindex(t)
 	if err != nil && !isInfSchema {
 		// if we are dealing with a system table, it might not be available in the vschema, but that is OK
 		return nil, err
@@ -329,7 +365,7 @@ func getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, si Sc
 		tbl = newVindexTable(t.Name)
 	}
 
-	tableInfo, err := createTable(t, node, tbl, isInfSchema, vindex, si, currentDb)
+	tableInfo, err := etc.createTable(t, node, tbl, isInfSchema, vindex)
 	if err != nil {
 		return nil, err
 	}
@@ -437,14 +473,12 @@ func (tc *tableCollector) tableInfoFor(id TableSet) (TableInfo, error) {
 	return tc.Tables[offset], nil
 }
 
-func createTable(
+func (etc *earlyTableCollector) createTable(
 	t sqlparser.TableName,
 	alias *sqlparser.AliasedTableExpr,
 	tbl *vindexes.Table,
 	isInfSchema bool,
 	vindex vindexes.Vindex,
-	si SchemaInformation,
-	currentDb string,
 ) (TableInfo, error) {
 	hint := getVindexHint(alias.Hints)
 
@@ -458,13 +492,13 @@ func createTable(
 		Table:        tbl,
 		VindexHint:   hint,
 		isInfSchema:  isInfSchema,
-		collationEnv: si.Environment().CollationEnv(),
+		collationEnv: etc.si.Environment().CollationEnv(),
 	}
 
 	if alias.As.IsEmpty() {
 		dbName := t.Qualifier.String()
 		if dbName == "" {
-			dbName = currentDb
+			dbName = etc.currentDb
 		}
 
 		table.dbName = dbName
