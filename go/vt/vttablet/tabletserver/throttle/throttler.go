@@ -1541,6 +1541,7 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 		return result
 	}
 
+	matchedApp := appName
 	if len(metricNames) == 0 {
 		// No explicit metrics requested.
 		// Get the metric names mappd to the given app
@@ -1554,6 +1555,7 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 				case []base.MetricName:
 					metricNames = append(metricNames, val...)
 				}
+				matchedApp = appToken
 			}
 		}
 	}
@@ -1567,17 +1569,20 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 			case []base.MetricName:
 				metricNames = val
 			}
+			matchedApp = throttlerapp.AllName.String()
 		}
 	}
 	if throttlerapp.VitessName.Equals(appName) {
 		// "vitess" always checks all metrics, irrespective of what is mapped.
 		metricNames = base.KnownMetricNames
+		matchedApp = appName
 	}
 	if len(metricNames) == 0 {
 		// Nothing mapped? For backwards compatibility and as default, we use the "default" metric.
 		metricNames = base.MetricNames{throttler.metricNameUsedAsDefault()}
 	}
 	checkResult = throttler.check.Check(ctx, appName, scope, metricNames, flags)
+	checkResult.AppName = matchedApp
 
 	shouldRequestHeartbeats := !flags.SkipRequestHeartbeats
 	if throttlerapp.VitessName.Equals(appName) {

@@ -143,6 +143,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		checkResult.Error = metric.Error
 		checkResult.Message = metric.Message
 		checkResult.AppName = metric.AppName
+		checkResult.Scope = metric.Scope
 		checkResult.MetricName = metricName.String()
 	}
 	for _, metricName := range metricNames {

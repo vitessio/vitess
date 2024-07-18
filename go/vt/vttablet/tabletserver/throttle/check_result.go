@@ -68,6 +68,7 @@ type CheckResult struct {
 	RecentlyChecked bool                     `json:"RecentlyChecked"`
 	AppName         string                   `json:"AppName"`
 	MetricName      string                   `json:"MetricName"`
+	Scope           string                   `json:"Scope"`
 	Metrics         map[string]*MetricResult `json:"Metrics"` // New in multi-metrics support. Will eventually replace the above fields.
 }
 
@@ -100,7 +101,7 @@ func (c *CheckResult) Summary() string {
 	case http.StatusInternalServerError:
 		return fmt.Sprintf("%v is denied access due to unexpected error: %v", c.AppName, c.Error)
 	case http.StatusTooManyRequests:
-		return fmt.Sprintf("%v is denied access due to %s metric value %v exceeding threshold %v", c.AppName, c.MetricName, c.Value, c.Threshold)
+		return fmt.Sprintf("%v is denied access due to %s/%s metric value %v exceeding threshold %v", c.AppName, c.Scope, c.MetricName, c.Value, c.Threshold)
 	case http.StatusNotFound:
 		return fmt.Sprintf("%v is denied access due to unknown or uncollected metric", c.AppName)
 	default:
