@@ -2745,6 +2745,28 @@
     }
   },
   {
+    "comment": "Dual query should be handled on the vtgate even with a LIMIT",
+    "query": "select last_insert_id() limit 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id() limit 1",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          ":__lastInsertId as last_insert_id()"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
     "comment": "PullOut subquery with an aggregation that should be typed in the final output",
     "query": "select (select sum(col) from user) from user_extra",
     "plan": {
