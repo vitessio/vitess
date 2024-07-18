@@ -160,6 +160,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	ctx context.Context,
 	ev *events.Reparent,
 	tabletMap map[string]*topo.TabletInfo,
+	innodbBufferPoolData map[string]int,
 	opts *PlannedReparentOptions, // we take a pointer here to set NewPrimaryAlias
 ) (isNoop bool, err error) {
 	// We don't want to fail when both NewPrimaryAlias and AvoidPrimaryAlias are nil.
@@ -180,7 +181,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	}
 
 	event.DispatchUpdate(ev, "electing a primary candidate")
-	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, innodbBufferPoolData, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
 	if err != nil {
 		return true, err
 	}
@@ -525,13 +526,13 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
-	_, err = pr.verifyAllTabletsReachable(ctx, tabletMap)
+	innodbBufferPoolData, err := pr.verifyAllTabletsReachable(ctx, tabletMap)
 	if err != nil {
 		return err
 	}
 
 	// Check invariants that PlannedReparentShard depends on.
-	if isNoop, err := pr.preflightChecks(ctx, ev, tabletMap, &opts); err != nil {
+	if isNoop, err := pr.preflightChecks(ctx, ev, tabletMap, innodbBufferPoolData, &opts); err != nil {
 		return err
 	} else if isNoop {
 		return nil
