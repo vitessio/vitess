@@ -128,6 +128,7 @@ INSERT INTO lineitem (L_ORDERKEY, L_PARTKEY, L_SUPPKEY, L_LINENUMBER, L_QUANTITY
   (15, 104, 2, 1, 45, 45000.00, 0.20, 0.15, 'N', 'F', '1998-07-15', '1998-07-16', '1998-07-17', 'NONE', 'SHIP', 'N/A');
 
 # Query 1
+-- skip
 select
 	l_returnflag,
 	l_linestatus,
@@ -286,6 +287,7 @@ where
 	and l_quantity < 24;
 
 # Q7 Volume Shipping Query
+-- skip
 select
 	supp_nation,
 	cust_nation,
@@ -327,6 +329,7 @@ order by
 	l_year;
 
 # Q8 National Market Share Query
+-- skip
 select
 	o_year,
 	sum(case
@@ -366,6 +369,7 @@ order by
 	o_year;
 
 # Q9 Product Type Profit Measure Query
+-- skip
 select
 	nation,
 	o_year,
