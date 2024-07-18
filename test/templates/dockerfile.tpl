@@ -15,6 +15,7 @@ RUN wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_
 RUN apt-get update
 RUN apt-get install -y gnupg2
 RUN dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+RUN percona-release enable-only pxb-24
 RUN apt-get update
 RUN apt-get install -y percona-xtrabackup-24
 {{end}}

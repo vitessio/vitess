@@ -114,6 +114,7 @@ jobs:
         wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get install -y gnupg2
         sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
+        sudo percona-release enable-only pxb-24
         sudo apt-get update
         if [[ -n $XTRABACKUP_VERSION ]]; then
           debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
