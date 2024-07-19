@@ -26,19 +26,18 @@ import (
 	"path"
 	"reflect"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
-
-	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -713,4 +712,27 @@ func TestShouldRestore(t *testing.T) {
 	b, err = ShouldRestore(env.ctx, env.restoreParams)
 	assert.False(t, b)
 	assert.NoError(t, err)
+}
+
+func Test_scanLinesToLogger(t *testing.T) {
+	reader, writer := io.Pipe()
+	logger := logutil.NewMemoryLogger()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go scanLinesToLogger("test", reader, logger, wg.Done)
+
+	for i := range 100 {
+		_, err := writer.Write([]byte(fmt.Sprintf("foobar %d\n", i)))
+		require.NoError(t, err)
+	}
+
+	writer.Close()
+	wg.Wait()
+
+	require.Equal(t, 100, len(logger.Events))
+
+	for i, event := range logger.Events {
+		require.Equal(t, fmt.Sprintf("test: foobar %d", i), event.Value)
+	}
 }
