@@ -545,3 +545,11 @@ func (txc *TxConn) runTargets(targets []*querypb.Target, action func(*querypb.Ta
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
 }
+
+func (txc *TxConn) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	mmShard, err := dtids.ShardSession(transactionID)
+	if err != nil {
+		return nil, err
+	}
+	return txc.tabletGateway.ReadTransaction(ctx, mmShard.Target, transactionID)
+}
