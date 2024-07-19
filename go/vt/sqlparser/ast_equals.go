@@ -4184,7 +4184,11 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		a.HighPriority == b.HighPriority &&
 		a.StraightJoinHint == b.StraightJoinHint &&
+		a.SQLSmallResult == b.SQLSmallResult &&
+		a.SQLBigResult == b.SQLBigResult &&
+		a.SQLBufferResult == b.SQLBufferResult &&
 		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
 		cmp.RefOfBool(a.Cache, b.Cache) &&
 		cmp.RefOfWith(a.With, b.With) &&
