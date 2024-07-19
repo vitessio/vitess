@@ -4732,6 +4732,50 @@
     }
   },
   {
+    "comment": "Merge into a single dual route",
+    "query": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "with cte as (select 1 as n from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with cte as (select 1 as n from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "Table": "dual"
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with star projection",
+    "query": "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "with cte as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with cte as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "Table": "dual"
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
     "comment": "Cross keyspace join",
     "query": "select 1 from user join t1 on user.id = t1.id",
     "plan": {

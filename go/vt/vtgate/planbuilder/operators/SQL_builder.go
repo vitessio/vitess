@@ -56,6 +56,17 @@ func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement
 }
 
 func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
+	if tableID.NumberOfTables() == 1 && qb.ctx.SemTable != nil {
+		tblInfo, err := qb.ctx.SemTable.TableInfoFor(tableID)
+		if err != nil {
+			panic(err.Error())
+		}
+		cte, isCTE := tblInfo.(*semantics.CTETable)
+		if isCTE {
+			tableName = cte.TableName
+			db = ""
+		}
+	}
 	tableExpr := sqlparser.TableName{
 		Name:      sqlparser.NewIdentifierCS(tableName),
 		Qualifier: sqlparser.NewIdentifierCS(db),
@@ -205,6 +216,25 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 		Right:    other.asSelectStatement(),
 		Distinct: distinct,
 	}
+}
+
+func (qb *queryBuilder) cteWith(other *queryBuilder, name string) {
+	cteUnion := &sqlparser.Union{
+		Left:  qb.stmt.(sqlparser.SelectStatement),
+		Right: other.stmt.(sqlparser.SelectStatement),
+	}
+
+	qb.stmt = &sqlparser.Select{
+		With: &sqlparser.With{
+			CTEs: []*sqlparser.CommonTableExpr{{
+				ID:       sqlparser.NewIdentifierCS(name),
+				Columns:  nil,
+				Subquery: &sqlparser.Subquery{Select: cteUnion},
+			}},
+		},
+	}
+
+	qb.addTable("", name, "", "", nil)
 }
 
 type FromStatement interface {
@@ -401,6 +431,8 @@ func buildQuery(op Operator, qb *queryBuilder) {
 		buildDelete(op, qb)
 	case *Insert:
 		buildDML(op, qb)
+	case *Recurse:
+		buildCTE(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
 	}
@@ -634,6 +666,13 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
 	stripDownQuery(op.Query, qb.asSelectStatement())
 	sqlparser.RemoveKeyspaceInCol(qb.stmt)
+}
+
+func buildCTE(op *Recurse, qb *queryBuilder) {
+	buildQuery(op.Init, qb)
+	qbR := &queryBuilder{ctx: qb.ctx}
+	buildQuery(op.Tail, qbR)
+	qb.cteWith(qbR, op.Name)
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {

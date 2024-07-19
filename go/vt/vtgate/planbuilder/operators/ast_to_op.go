@@ -256,7 +256,6 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 
 		switch tableInfo := tableInfo.(type) {
 		case *semantics.VindexTable:
-			solves := tableID
 			return &Vindex{
 				Table: VindexTable{
 					TableID: tableID,
@@ -265,10 +264,14 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 					VTable:  tableInfo.Table.GetVindexTable(),
 				},
 				Vindex: tableInfo.Vindex,
-				Solved: solves,
+				Solved: tableID,
 			}
 		case *semantics.CTETable:
-			panic(vterrors.VT12001("recursive common table expression"))
+			current := ctx.ActiveCTE()
+			if current != nil && current.CTEDef.Equals(tableInfo.CTEDef) {
+				return createDualCTETable(ctx, tableID, tableInfo)
+			}
+			return createRecursiveCTE(ctx, tableInfo)
 		case *semantics.RealTable:
 			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
@@ -296,6 +299,36 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl)))
 	}
+}
+
+func createDualCTETable(ctx *plancontext.PlanningContext, tableID semantics.TableSet, tableInfo *semantics.CTETable) Operator {
+	vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(sqlparser.NewTableName("dual"))
+	if err != nil {
+		panic(err)
+	}
+	qtbl := &QueryTable{
+		ID:    tableID,
+		Alias: tableInfo.ASTNode,
+		Table: sqlparser.NewTableName("dual"),
+	}
+	return createRouteFromVSchemaTable(ctx, qtbl, vschemaTable, false, nil)
+}
+
+func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTETable) Operator {
+	union, ok := def.CTEDef.Query.(*sqlparser.Union)
+	if !ok {
+		panic(vterrors.VT13001("expected UNION in recursive CTE"))
+	}
+
+	init := translateQueryToOp(ctx, union.Left)
+
+	// Push the CTE definition to the stack so that it can be used in the recursive part of the query
+	ctx.PushCTE(def)
+	tail := translateQueryToOp(ctx, union.Right)
+	if err := ctx.PopCTE(); err != nil {
+		panic(err)
+	}
+	return newRecurse(def.TableName, init, tail)
 }
 
 func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) Operator {

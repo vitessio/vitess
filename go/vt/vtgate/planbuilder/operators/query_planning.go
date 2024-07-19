@@ -102,6 +102,9 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushDelete(in)
 		case *Update:
 			return tryPushUpdate(in)
+		case *Recurse:
+			return tryMergeRecurse(ctx, in)
+
 		default:
 			return in, NoRewrite
 		}

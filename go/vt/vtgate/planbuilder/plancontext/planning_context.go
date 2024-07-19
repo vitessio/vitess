@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -66,6 +67,10 @@ type PlanningContext struct {
 	// OuterTables contains the tables that are outer to the current query
 	// Used to set the nullable flag on the columns
 	OuterTables semantics.TableSet
+
+	// This is a stack of CTEs being built. It's used when we have CTEs inside CTEs,
+	// to remember which is the CTE currently being assembled
+	CurrentCTE []*semantics.CTETable
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -375,4 +380,23 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 		return true, nil
 	}, e)
 	return
+}
+
+func (ctx *PlanningContext) PushCTE(def *semantics.CTETable) {
+	ctx.CurrentCTE = append(ctx.CurrentCTE, def)
+}
+
+func (ctx *PlanningContext) PopCTE() error {
+	if len(ctx.CurrentCTE) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no CTE to pop")
+	}
+	ctx.CurrentCTE = ctx.CurrentCTE[:len(ctx.CurrentCTE)-1]
+	return nil
+}
+
+func (ctx *PlanningContext) ActiveCTE() *semantics.CTETable {
+	if len(ctx.CurrentCTE) == 0 {
+		return nil
+	}
+	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
 }

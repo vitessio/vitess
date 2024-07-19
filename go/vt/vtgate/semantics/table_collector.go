@@ -45,31 +45,7 @@ type (
 		done      map[*sqlparser.AliasedTableExpr]TableInfo
 		cte       map[string]CTEDef
 	}
-
-	CTEDef struct {
-		definition      sqlparser.SelectStatement
-		isAuthoritative bool
-		recursiveDeps   *TableSet
-	}
 )
-
-func (cte *CTEDef) recursive(org originable) (id TableSet) {
-	if cte.recursiveDeps != nil {
-		return *cte.recursiveDeps
-	}
-
-	// We need to find the recursive dependencies of the CTE
-	// We'll do this by walking the inner query and finding all the tables
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		ate, ok := node.(*sqlparser.AliasedTableExpr)
-		if !ok {
-			return true, nil
-		}
-		id = id.Merge(org.tableSetFor(ate))
-		return true, nil
-	}, cte.definition)
-	return
-}
 
 func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableCollector {
 	return &earlyTableCollector{
@@ -86,7 +62,10 @@ func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 	for _, cte := range with.CTEs {
-		etc.cte[cte.ID.String()] = CTEDef{definition: cte.Subquery.Select}
+		etc.cte[cte.ID.String()] = CTEDef{
+			Query:   cte.Subquery.Select,
+			Columns: cte.Columns,
+		}
 	}
 	return true
 }
