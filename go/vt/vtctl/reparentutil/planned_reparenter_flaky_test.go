@@ -114,12 +114,12 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -238,12 +238,12 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -330,12 +330,12 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -405,7 +405,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -2546,12 +2546,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -2641,12 +2641,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -2724,12 +2724,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -2839,12 +2839,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -2935,12 +2935,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -2997,12 +2997,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -3063,12 +3063,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -3134,12 +3134,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -3228,12 +3228,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 				},
@@ -4001,17 +4001,17 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000201": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "1234",
+							InnodbBufferPoolsDataVar: "1234",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "1231",
+							InnodbBufferPoolsDataVar: "1231",
 						},
 					},
 				},
@@ -4062,12 +4062,12 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 					},
 					"zone1-0000000201": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "1234",
+							InnodbBufferPoolsDataVar: "1234",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "1231",
+							InnodbBufferPoolsDataVar: "1231",
 						},
 					},
 				},
@@ -4114,17 +4114,17 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "123",
+							InnodbBufferPoolsDataVar: "123",
 						},
 					},
 					"zone1-0000000201": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "1234",
+							InnodbBufferPoolsDataVar: "1234",
 						},
 					},
 					"zone1-0000000100": {
 						Statuses: map[string]string{
-							innodbBufferPoolsDataVar: "1231",
+							InnodbBufferPoolsDataVar: "1231",
 						},
 					},
 				},
@@ -4223,12 +4223,12 @@ func TestPlannedReparenterStats(t *testing.T) {
 		}{
 			"zone1-0000000101": {
 				Statuses: map[string]string{
-					innodbBufferPoolsDataVar: "123",
+					InnodbBufferPoolsDataVar: "123",
 				},
 			},
 			"zone1-0000000100": {
 				Statuses: map[string]string{
-					innodbBufferPoolsDataVar: "123",
+					InnodbBufferPoolsDataVar: "123",
 				},
 			},
 		},

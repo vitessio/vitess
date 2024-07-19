@@ -45,7 +45,7 @@ var (
 	prsCounter = stats.NewCountersWithMultiLabels("PlannedReparentCounts", "Number of times Planned Reparent Shard has been run",
 		[]string{"Keyspace", "Shard", "Result"},
 	)
-	innodbBufferPoolsDataVar = "Innodb_buffer_pool_pages_data"
+	InnodbBufferPoolsDataVar = "Innodb_buffer_pool_pages_data"
 )
 
 // PlannedReparenter performs PlannedReparentShard operations.
@@ -744,14 +744,13 @@ func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabl
 	for tblStr, info := range tabletMap {
 		tablet := info.Tablet
 		errorGroup.Go(func() error {
-			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{innodbBufferPoolsDataVar})
+			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{InnodbBufferPoolsDataVar})
 			if err != nil {
 				return err
 			}
-			val, err := strconv.Atoi(statusValues[innodbBufferPoolsDataVar])
-			if err != nil {
-				return err
-			}
+			// We are ignoring the error in conversion because some MySQL variants might not have this
+			// status variable like MariaDB.
+			val, _ := strconv.Atoi(statusValues[InnodbBufferPoolsDataVar])
 			mu.Lock()
 			defer mu.Unlock()
 			innodbBufferPoolsData[tblStr] = val
