@@ -19,8 +19,10 @@ package transaction
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -848,6 +850,19 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("TRCreated_FailNow", "", ""), nil)
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail After TR created")
+
+	t.Run("ReadTransactionState", func(t *testing.T) {
+		errStr := err.Error()
+		indx := strings.Index(errStr, "Fail")
+		require.Greater(t, indx, 0)
+		dtid := errStr[0 : indx-2]
+		res, err := conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil)
+		require.NoError(t, err)
+		resStr := fmt.Sprintf("%v", res.Rows)
+		require.Contains(t, resStr, `[[VARCHAR("ks:80-`)
+		require.Contains(t, resStr, `VARCHAR("PREPARE") DATETIME("`)
+		require.Contains(t, resStr, `+0000 UTC") VARCHAR("ks:-80")]]`)
+	})
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)

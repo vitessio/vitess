@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -204,7 +206,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	if DEBUG_2PC {
 		// Test code to simulate a failure after RM prepare
 		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "TRCreated_FailNow", nil); failNow {
-			return err
+			return errors.Wrapf(err, "%v", dtid)
 		}
 	}
 
