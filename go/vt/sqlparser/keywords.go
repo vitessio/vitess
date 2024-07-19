@@ -752,6 +752,7 @@ var keywords = []keyword{
 	{"varcharacter", UNUSED},
 	{"variance", VARIANCE},
 	{"varying", UNUSED},
+	{"vector", VECTOR},
 	{"vexplain", VEXPLAIN},
 	{"vgtid_executed", VGTID_EXECUTED},
 	{"virtual", VIRTUAL},

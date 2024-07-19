@@ -215,6 +215,9 @@ enum Type {
   // BITNUM specifies a base 2 binary type (unquoted varbinary).
   // Properties: 34, IsText.
   BITNUM = 4130;
+  // VECTOR specifies a VECTOR type
+  // Properties: 35, IsQuoted.
+  VECTOR = 2083;
 }
 
 // Value represents a typed value.
