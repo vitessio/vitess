@@ -205,17 +205,21 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	callerID := callerid.EffectiveCallerIDFromContext(ctx)
 
 	// Test code to simulate a failure after RM prepare
-	if failNow, err := checkTestFailure(callerID, "TRCreated_FailNow"); failNow {
+	if failNow, err := checkTestFailure(callerID, "TRCreated_FailNow", nil); failNow {
 		return err
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
+		// Test code to simulate a failure during RM prepare
+		if failNow, err := checkTestFailure(callerID, "RMPrepare_-40_FailNow", s.Target); failNow {
+			return err
+		}
 		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
 		// including unprepared transactions.
-		if resumeErr := txc.rollbackTx(ctx, dtid, mmShard, participants); resumeErr != nil {
+		if resumeErr := txc.rollbackTx(ctx, dtid, mmShard, session.ShardSessions[1:], session.logging); resumeErr != nil {
 			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
 		}
 		// Return the original error even if the previous operation fails.
@@ -223,7 +227,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	// Test code to simulate a failure after RM prepare
-	if failNow, err := checkTestFailure(callerID, "RMPrepared_FailNow"); failNow {
+	if failNow, err := checkTestFailure(callerID, "RMPrepared_FailNow", nil); failNow {
 		return err
 	}
 
@@ -233,11 +237,15 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	// Test code to simulate a failure after MM commit
-	if failNow, err := checkTestFailure(callerID, "MMCommitted_FailNow"); failNow {
+	if failNow, err := checkTestFailure(callerID, "MMCommitted_FailNow", nil); failNow {
 		return err
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
+		// Test code to simulate a failure during RM prepare
+		if failNow, err := checkTestFailure(callerID, "RMCommit_-40_FailNow", s.Target); failNow {
+			return err
+		}
 		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
 	})
 	if err != nil {
@@ -247,7 +255,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
 }
 
-func checkTestFailure(callerID *vtrpcpb.CallerID, expectCaller string) (bool, error) {
+func checkTestFailure(callerID *vtrpcpb.CallerID, expectCaller string, target *querypb.Target) (bool, error) {
 	if callerID == nil || callerID.GetPrincipal() != expectCaller {
 		return false, nil
 	}
@@ -256,6 +264,13 @@ func checkTestFailure(callerID *vtrpcpb.CallerID, expectCaller string) (bool, er
 		log.Errorf("Fail After TR created")
 		// no commit decision is made. Transaction should be a rolled back.
 		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After TR created")
+	case "RMPrepare_-40_FailNow":
+		if target.Shard != "-40" {
+			return false, nil
+		}
+		log.Errorf("Fail During RM prepare")
+		// no commit decision is made. Transaction should be a rolled back.
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail During RM prepare")
 	case "RMPrepared_FailNow":
 		log.Errorf("Fail After RM prepared")
 		// no commit decision is made. Transaction should be a rolled back.
@@ -264,6 +279,13 @@ func checkTestFailure(callerID *vtrpcpb.CallerID, expectCaller string) (bool, er
 		log.Errorf("Fail After MM commit")
 		//  commit decision is made. Transaction should be committed.
 		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After MM commit")
+	case "RMCommit_-40_FailNow":
+		if target.Shard != "-40" {
+			return false, nil
+		}
+		log.Errorf("Fail During RM commit")
+		// commit decision is made. Transaction should be a committed.
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail During RM commit")
 	default:
 		return false, nil
 	}
@@ -436,7 +458,7 @@ func (txc *TxConn) resolveTx(ctx context.Context, target *querypb.Target, transa
 }
 
 // rollbackTx rollbacks the specified distributed transaction.
-func (txc *TxConn) rollbackTx(ctx context.Context, dtid string, mmShard *vtgatepb.Session_ShardSession, participants []*querypb.Target) error {
+func (txc *TxConn) rollbackTx(ctx context.Context, dtid string, mmShard *vtgatepb.Session_ShardSession, participants []*vtgatepb.Session_ShardSession, logging *executeLogger) error {
 	qs, err := txc.queryService(ctx, mmShard.TabletAlias)
 	if err != nil {
 		return err
@@ -444,8 +466,8 @@ func (txc *TxConn) rollbackTx(ctx context.Context, dtid string, mmShard *vtgatep
 	if err := qs.SetRollback(ctx, mmShard.Target, dtid, mmShard.TransactionId); err != nil {
 		return err
 	}
-	err = txc.runTargets(participants, func(t *querypb.Target) error {
-		return txc.tabletGateway.RollbackPrepared(ctx, t, dtid, 0)
+	err = txc.runSessions(ctx, participants, logging, func(ctx context.Context, session *vtgatepb.Session_ShardSession, logger *executeLogger) error {
+		return txc.tabletGateway.RollbackPrepared(ctx, session.Target, dtid, session.TransactionId)
 	})
 	if err != nil {
 		return err

@@ -625,9 +625,9 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
-// TestDTResolveAfterPrepare tests that transaction is rolled back on recovery
+// TestDTResolveAfterRMPrepare tests that transaction is rolled back on recovery
 // failure after RM prepare and before MM commit.
-func TestDTResolveAfterPrepare(t *testing.T) {
+func TestDTResolveAfterRMPrepare(t *testing.T) {
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
@@ -675,6 +675,145 @@ func TestDTResolveAfterPrepare(t *testing.T) {
 		"ks.redo_statement:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+}
+
+// TestDTResolveDuringRMPrepare tests that transaction is rolled back on recovery
+// failure after semi RM prepare.
+func TestDTResolveDuringRMPrepare(t *testing.T) {
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *binlogdatapb.VEvent)
+	runVStream(t, ctx, ch, vtgateConn)
+
+	conn := vtgateConn.Session("", nil)
+	qCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Insert into multiple shards
+	_, err = conn.Execute(qCtx, "begin", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'bar')", nil)
+	require.NoError(t, err)
+
+	// The caller ID is used to simulate the failure at the desired point.
+	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMPrepare_-40_FailNow", "", ""), nil)
+	_, err = conn.Execute(newCtx, "commit", nil)
+	require.ErrorContains(t, err, "Fail During RM prepare")
+
+	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
+	tableMap := make(map[string][]*querypb.Field)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
+	expectations := map[string][]string{
+		"ks.dt_state:80-": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"ROLLBACK\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"ROLLBACK\")]",
+		},
+		"ks.dt_participant:80-": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+		},
+		"ks.redo_state:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+}
+
+// TestDTResolveDuringRMCommit tests that transaction is committed on recovery
+// failure after semi RM commit.
+func TestDTResolveDuringRMCommit(t *testing.T) {
+	defer cleanup(t)
+
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *binlogdatapb.VEvent)
+	runVStream(t, ctx, ch, vtgateConn)
+
+	conn := vtgateConn.Session("", nil)
+	qCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Insert into multiple shards
+	_, err = conn.Execute(qCtx, "begin", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil)
+	require.NoError(t, err)
+
+	// The caller ID is used to simulate the failure at the desired point.
+	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMCommit_-40_FailNow", "", ""), nil)
+	_, err = conn.Execute(newCtx, "commit", nil)
+	require.ErrorContains(t, err, "Fail During RM commit")
+
+	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
+	tableMap := make(map[string][]*querypb.Field)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
+	expectations := map[string][]string{
+		"ks.dt_state:80-": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.dt_participant:80-": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+		},
+		"ks.redo_state:-40": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_state:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:-40": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+		},
+		"ks.redo_statement:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+		"ks.twopc_user:-40": {
+			`insert:[INT64(10) VARCHAR("apa")]`,
+		},
+		"ks.twopc_user:40-80": {
+			`insert:[INT64(8) VARCHAR("bar")]`,
+		},
+		"ks.twopc_user:80-": {
+			`insert:[INT64(7) VARCHAR("foo")]`,
 		},
 	}
 	assert.Equal(t, expectations, logTable,
