@@ -70,22 +70,32 @@ func TestDTCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 		},
-		"ks.redo_state:-80": {
+		"ks.redo_state:-40": {
 			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
-		"ks.redo_statement:-80": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+		"ks.redo_state:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
-		"ks.twopc_user:-80": {
-			`insert:[INT64(8) VARCHAR("bar")]`,
+		"ks.redo_statement:-40": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+		},
+		"ks.redo_statement:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+		"ks.twopc_user:-40": {
 			`insert:[INT64(10) VARCHAR("apa")]`,
+		},
+		"ks.twopc_user:40-80": {
+			`insert:[INT64(8) VARCHAR("bar")]`,
 		},
 		"ks.twopc_user:80-": {
 			`insert:[INT64(7) VARCHAR("foo")]`,
@@ -109,19 +119,19 @@ func TestDTCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
 		},
-		"ks.redo_state:-80": {
+		"ks.redo_state:40-80": {
 			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
 		},
-		"ks.redo_statement:-80": {
+		"ks.redo_statement:40-80": {
 			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
 			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
 		},
-		"ks.twopc_user:-80": {"update:[INT64(8) VARCHAR(\"newfoo\")]"},
-		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
+		"ks.twopc_user:40-80": {"update:[INT64(8) VARCHAR(\"newfoo\")]"},
+		"ks.twopc_user:80-":   {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
 	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
@@ -140,18 +150,18 @@ func TestDTCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 		},
-		"ks.redo_state:-80": {
+		"ks.redo_state:-40": {
 			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
 			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
 		},
-		"ks.redo_statement:-80": {
+		"ks.redo_statement:-40": {
 			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
 			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
 		},
-		"ks.twopc_user:-80": {"delete:[INT64(10) VARCHAR(\"apa\")]"},
+		"ks.twopc_user:-40": {"delete:[INT64(10) VARCHAR(\"apa\")]"},
 		"ks.twopc_user:80-": {"delete:[INT64(9) VARCHAR(\"baz\")]"},
 	}
 	assert.Equal(t, expectations, logTable,
@@ -230,7 +240,8 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	// Insert into multiple shards
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
-	utils.Exec(t, conn, "select * from twopc_user")
+	utils.Exec(t, conn, "select * from twopc_user where id = 8")
+	utils.Exec(t, conn, "select * from twopc_user where id = 10")
 	utils.Exec(t, conn, "commit")
 
 	tableMap := make(map[string][]*querypb.Field)
@@ -243,8 +254,10 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 		},
 		"ks.twopc_user:80-": {"insert:[INT64(7) VARCHAR(\"foo\")]"},
 	}
@@ -254,7 +267,8 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	// Update from multiple shard
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
-	utils.Exec(t, conn, "select * from twopc_user")
+	utils.Exec(t, conn, "select * from twopc_user where id = 8")
+	utils.Exec(t, conn, "select * from twopc_user where id = 10")
 	utils.Exec(t, conn, "commit")
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
@@ -265,8 +279,10 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 		},
 		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
@@ -276,7 +292,8 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	// DELETE from multiple shard
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "delete from twopc_user where id = 7")
-	utils.Exec(t, conn, "select * from twopc_user")
+	utils.Exec(t, conn, "select * from twopc_user where id = 8")
+	utils.Exec(t, conn, "select * from twopc_user where id = 10")
 	utils.Exec(t, conn, "commit")
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
@@ -287,8 +304,10 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 		},
 		"ks.twopc_user:80-": {"delete:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
@@ -323,12 +342,12 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	dtMap := make(map[string]string)
 	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations := map[string][]string{
-		"ks.dt_state:-80": {
+		"ks.dt_state:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
 		},
-		"ks.dt_participant:-80": {
+		"ks.dt_participant:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
 		},
@@ -353,12 +372,12 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
-		"ks.dt_state:-80": {
+		"ks.dt_state:40-80": {
 			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
 			"update:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
 		},
-		"ks.dt_participant:-80": {
+		"ks.dt_participant:40-80": {
 			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
 			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
 		},
@@ -383,12 +402,12 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
-		"ks.dt_state:-80": {
+		"ks.dt_state:40-80": {
 			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
 			"update:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
 			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
 		},
-		"ks.dt_participant:-80": {
+		"ks.dt_participant:40-80": {
 			"insert:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
 			"delete:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
 		},
@@ -432,7 +451,7 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 
 	utils.Exec(t, conn2, "begin")
 	utils.Exec(t, conn2, "insert into twopc_user(id, name) values(9,'baz')")
-	utils.Exec(t, conn2, "insert into twopc_user(id, name) values(10,'apa')")
+	utils.Exec(t, conn2, "insert into twopc_user(id, name) values(18,'apa')")
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -467,31 +486,31 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"ROLLBACK\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
 		},
-		"ks.redo_state:-80": {
+		"ks.redo_state:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
-		"ks.redo_statement:-80": { /* flexi Expectation */ },
-		"ks.twopc_user:-80":     { /* flexi Expectation */ },
-		"ks.twopc_user:80-":     { /* flexi Expectation */ },
+		"ks.redo_statement:40-80": { /* flexi Expectation */ },
+		"ks.twopc_user:40-80":     { /* flexi Expectation */ },
+		"ks.twopc_user:80-":       { /* flexi Expectation */ },
 	}
 	flexiExpectations := map[string][2][]string{
-		"ks.redo_statement:-80": {{
+		"ks.redo_statement:40-80": {{
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 		}, {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (18, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (18, 'apa')\")]",
 		}},
-		"ks.twopc_user:-80": {{
+		"ks.twopc_user:40-80": {{
 			"insert:[INT64(8) VARCHAR(\"bar\")]",
 		}, {
-			"insert:[INT64(10) VARCHAR(\"apa\")]",
+			"insert:[INT64(18) VARCHAR(\"apa\")]",
 		}},
 		"ks.twopc_user:80-": {{
 			"insert:[INT64(7) VARCHAR(\"foo\")]",
@@ -570,22 +589,32 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 		},
-		"ks.redo_state:-80": {
+		"ks.redo_state:-40": {
 			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
-		"ks.redo_statement:-80": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+		"ks.redo_state:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
-		"ks.twopc_user:-80": {
-			`insert:[INT64(8) VARCHAR("bar")]`,
+		"ks.redo_statement:-40": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+		},
+		"ks.redo_statement:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+		"ks.twopc_user:-40": {
 			`insert:[INT64(10) VARCHAR("apa")]`,
+		},
+		"ks.twopc_user:40-80": {
+			`insert:[INT64(8) VARCHAR("bar")]`,
 		},
 		"ks.twopc_user:80-": {
 			`insert:[INT64(7) VARCHAR("foo")]`,
@@ -636,14 +665,14 @@ func TestDTResolveAfterPrepare(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"ROLLBACK\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
 		},
-		"ks.redo_state:-80": {
+		"ks.redo_state:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
-		"ks.redo_statement:-80": {
+		"ks.redo_statement:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 		},
@@ -692,8 +721,8 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"ROLLBACK\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
 		},
 	}
 	assert.Equal(t, expectations, logTable,

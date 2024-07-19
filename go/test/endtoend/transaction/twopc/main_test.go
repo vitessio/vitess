@@ -90,7 +90,7 @@ func TestMain(m *testing.M) {
 			VSchema:       VSchema,
 			SidecarDBName: sidecarDBName,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 0, false); err != nil {
 			return 1
 		}
 
@@ -173,7 +173,8 @@ func getDTID(dtidMap map[string]string, dtKey string) string {
 func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent, vtgateConn *vtgateconn.VTGateConn) {
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{
-			{Keyspace: keyspaceName, Shard: "-80", Gtid: "current"},
+			{Keyspace: keyspaceName, Shard: "-40", Gtid: "current"},
+			{Keyspace: keyspaceName, Shard: "40-80", Gtid: "current"},
 			{Keyspace: keyspaceName, Shard: "80-", Gtid: "current"},
 		}}
 	filter := &binlogdatapb.Filter{
