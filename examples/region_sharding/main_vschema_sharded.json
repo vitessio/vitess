@@ -14,7 +14,7 @@
       "column_vindexes": [
         {
           "columns": ["id", "country"],
-	      "name": "region_vdx"
+	        "name": "region_vdx"
         }
       ]
     }
