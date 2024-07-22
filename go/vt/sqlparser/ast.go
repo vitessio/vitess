@@ -446,6 +446,7 @@ func (*Rollback) iStatement()          {}
 func (*Flush) iStatement()             {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
+func (*PurgeBinaryLogs) iStatement()   {}
 func (*BeginEndBlock) iStatement()     {}
 func (*CaseStatement) iStatement()     {}
 func (*IfStatement) iStatement()       {}
@@ -3968,6 +3969,23 @@ type FlushOption struct {
 	Channel  string
 	Tables   []TableName
 	ReadLock bool
+}
+
+// PurgeBinaryLogs represents a PURGE BINARY LOGS statement.
+type PurgeBinaryLogs struct {
+	To string
+	Before Expr
+}
+
+func (node *PurgeBinaryLogs) Format(buf *TrackedBuffer) {
+	buf.WriteString("purge binary logs")
+
+	if node.To != "" {
+		buf.Myprintf(" to %s", node.To)
+	} else if node.Before != nil {
+		buf.Myprintf(" before ")
+		node.Before.Format(buf)
+	}
 }
 
 // Flush represents a Flush statement.
