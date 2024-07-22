@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -259,4 +260,8 @@ func (dc *MockDBClient) RemoveInvariant(query string) {
 	dc.expectMu.Lock()
 	defer dc.expectMu.Unlock()
 	delete(dc.invariants, query)
+}
+
+func (dc *MockDBClient) ServerVersion() string {
+	return config.DefaultMySQLVersion
 }

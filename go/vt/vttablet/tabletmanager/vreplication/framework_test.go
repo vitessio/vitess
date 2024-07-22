@@ -509,6 +509,10 @@ func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltyp
 	return results, nil
 }
 
+func (dbc *realDBClient) ServerVersion() string {
+	return dbc.conn.ServerVersion
+}
+
 func expectDeleteQueries(t *testing.T) {
 	t.Helper()
 	if doNotLogDBQueries {

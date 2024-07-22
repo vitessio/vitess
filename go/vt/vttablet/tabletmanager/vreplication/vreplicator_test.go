@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -481,7 +482,17 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			}
 
 			// Create the table.
-			_, err := dbClient.ExecuteFetch(tcase.initialDDL, 1)
+			capability, err := capabilities.ServerVersionAtLeast(dbClient.ServerVersion(), 8, 4, 0)
+			require.NoError(t, err)
+			if capability {
+				_, err := dbClient.ExecuteFetch("set @@session.restrict_fk_on_non_standard_key=0", 1)
+				require.NoError(t, err)
+				defer func() {
+					_, err = dbClient.ExecuteFetch("set @@session.restrict_fk_on_non_standard_key=1", 1)
+					require.NoError(t, err)
+				}()
+			}
+			_, err = dbClient.ExecuteFetch(tcase.initialDDL, 1)
 			require.NoError(t, err)
 			defer func() {
 				_, err = dbClient.ExecuteFetch(fmt.Sprintf("drop table %s.%s", dbName, tcase.tableName), 1)

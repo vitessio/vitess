@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -175,6 +176,10 @@ func (dc *fakeDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 		results = append(results, qr)
 	}
 	return results, nil
+}
+
+func (dc *fakeDBClient) ServerVersion() string {
+	return config.DefaultMySQLVersion
 }
 
 // ExecuteFetch is part of the DBClient interface

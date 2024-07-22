@@ -41,6 +41,7 @@ type DBClient interface {
 	Close()
 	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
 	ExecuteFetchMulti(query string, maxrows int) (qrs []*sqltypes.Result, err error)
+	ServerVersion() string
 }
 
 // dbClientImpl is a real DBClient backed by a mysql connection.
@@ -121,6 +122,10 @@ func (dc *dbClientImpl) Rollback() error {
 
 func (dc *dbClientImpl) Close() {
 	dc.dbConn.Close()
+}
+
+func (dc *dbClientImpl) ServerVersion() string {
+	return dc.dbConn.ServerVersion
 }
 
 // LogError logs a message after truncating it to avoid spamming logs
