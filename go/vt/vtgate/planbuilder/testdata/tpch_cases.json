@@ -252,7 +252,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from lineitem where 1 != 1",
-                    "Query": "select 1 from lineitem where l_orderkey = :o_orderkey and l_commitdate < l_receiptdate",
+                    "Query": "select 1 from lineitem where l_orderkey = :o_orderkey and l_commitdate < l_receiptdate limit 1",
                     "Table": "lineitem"
                   }
                 ]
