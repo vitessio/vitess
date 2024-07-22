@@ -2014,15 +2014,21 @@
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user`",
-            "Table": "`user`"
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` where 1 != 1",
+                "Query": "select 1 from `user` limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
           },
           {
             "InputName": "Outer",
@@ -2854,7 +2860,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where u2.id = 5",
+            "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
             "Table": "`user`",
             "Values": [
               "5"
