@@ -42,7 +42,7 @@ type AggregateParams struct {
 	WCol   int
 	Type   evalengine.Type
 
-	Alias    string `json:",omitempty"`
+	Alias    string
 	Func     sqlparser.AggrFunc
 	Original *sqlparser.AliasedExpr
 
