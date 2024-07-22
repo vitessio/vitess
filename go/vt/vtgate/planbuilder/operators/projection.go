@@ -308,15 +308,6 @@ func (p *Projection) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 	return p.addColumn(ctx, true, false, expr, false)
 }
 
-func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) []int {
-	offsets := make([]int, len(exprs))
-	for idx, expr := range exprs {
-		offset := p.addColumn(ctx, reuse, false, expr, false)
-		offsets[idx] = offset
-	}
-	return offsets
-}
-
 func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	cols, aliased := p.Columns.(AliasedProjections)
 	if !aliased {
@@ -631,7 +622,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) Operator {
 
 		// for everything else, we'll turn to the evalengine
 		eexpr, err := evalengine.Translate(rewritten, &evalengine.Config{
-			ResolveType: ctx.SemTable.TypeForExpr,
+			ResolveType: ctx.TypeForExpr,
 			Collation:   ctx.SemTable.Collation,
 			Environment: ctx.VSchema.Environment(),
 		})

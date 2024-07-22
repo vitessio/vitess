@@ -20,13 +20,13 @@ default_authentication_plugin = mysql_native_password
 #
 # VTTablet will enable semi-sync at the proper time when replication is set up,
 # or when a primary is promoted or demoted based on the durability policy configured.
-plugin-load = rpl_semi_sync_source=semisync_source.so;rpl_semi_sync_replica=semisync_replica.so
+plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
 
 # MySQL 8.0.26 and later will not load plugins during --initialize
 # which makes these options unknown. Prefixing with --loose
 # tells the server it's fine if they are not understood.
-loose_rpl_semi_sync_source_timeout = 1000000000000000000
-loose_rpl_semi_sync_source_wait_no_replica = 1
+loose_rpl_semi_sync_master_timeout = 1000000000000000000
+loose_rpl_semi_sync_master_wait_no_slave = 1
 
 # In order to protect against any errand GTIDs we will start the mysql instance
 # in super-read-only mode.

@@ -112,14 +112,6 @@ func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 	return offset
 }
 
-func (a *Aggregator) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, groupby []bool, exprs []*sqlparser.AliasedExpr) (offsets []int) {
-	for i, ae := range exprs {
-		offset := a.addColumnWithoutPushing(ctx, ae, groupby[i])
-		offsets = append(offsets, offset)
-	}
-	return
-}
-
 func (a *Aggregator) isDerived() bool {
 	return a.DT != nil
 }
@@ -419,6 +411,9 @@ func (aggr Aggr) getPushColumnExprs() sqlparser.Exprs {
 		return sqlparser.Exprs{aggr.Original.Expr}
 	case opcode.AggregateCountStar:
 		return sqlparser.Exprs{sqlparser.NewIntLiteral("1")}
+	case opcode.AggregateUDF:
+		// AggregateUDFs can't be evaluated on the vtgate. So either we are able to push everything down, or we will have to fail the query.
+		return nil
 	default:
 		return aggr.Func.GetArgs()
 	}

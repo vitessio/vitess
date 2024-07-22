@@ -127,7 +127,7 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (Operator, *ApplyResult) 
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	cfg := &evalengine.Config{
-		ResolveType: ctx.SemTable.TypeForExpr,
+		ResolveType: ctx.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
 	}

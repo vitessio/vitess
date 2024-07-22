@@ -1,4 +1,4 @@
-ARG bootstrap_version=32.0
+ARG bootstrap_version=32.1
 ARG image="vitess/bootstrap:${bootstrap_version}-{{.Platform}}"
 
 FROM "${image}"
@@ -15,6 +15,7 @@ RUN wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_
 RUN apt-get update
 RUN apt-get install -y gnupg2
 RUN dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+RUN percona-release enable-only tools
 RUN apt-get update
 RUN apt-get install -y percona-xtrabackup-24
 {{end}}
