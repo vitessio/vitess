@@ -2647,8 +2647,23 @@ var (
 		input:  "select sql_no_cache straight_join distinct 'foo' from t",
 		output: "select distinct sql_no_cache straight_join 'foo' from t",
 	}, {
+		input:  "select sql_buffer_result 'foo' from t",
+		output: "select sql_buffer_result 'foo' from t",
+	}, {
+		input:  "select high_priority 'foo' from t",
+		output: "select high_priority 'foo' from t",
+	}, {
 		input:  "select straight_join distinct sql_no_cache 'foo' from t",
 		output: "select distinct sql_no_cache straight_join 'foo' from t",
+	}, {
+		input:  "select sql_small_result 'foo' from t",
+		output: "select sql_small_result 'foo' from t",
+	}, {
+		input:  "select distinct sql_small_result 'foo' from t",
+		output: "select distinct sql_small_result 'foo' from t",
+	}, {
+		input:  "select sql_big_result 'foo' from t",
+		output: "select sql_big_result 'foo' from t",
 	}, {
 		input:  "select sql_calc_found_rows 'foo' from t",
 		output: "select sql_calc_found_rows 'foo' from t",
@@ -6426,8 +6441,11 @@ func testFile(t *testing.T, filename, tempDir string) {
 					errPresent := ""
 					if err != nil {
 						errPresent = err.Error()
+						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
+					} else {
+						out := String(tree)
+						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
 					}
-					expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
 						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, errPresent), tcase.errStr, errPresent)

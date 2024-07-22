@@ -7,6 +7,7 @@
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deletion of deprecated metrics](#metric-deletion)
     - [VTTablet Flags](#vttablet-flags)
+    - [Metrics](#deprecations-metrics)
   - **[Traffic Mirroring](#traffic-mirroring)**
   - **[New VTGate Shutdown Behavior](#new-vtgate-shutdown-behavior)**
   - **[Tablet Throttler: Multi-Metric support](#tablet-throttler)**
@@ -39,6 +40,20 @@ The following metrics that were deprecated in the previous release, have now bee
 
 - `queryserver-enable-settings-pool` flag, added in v15, has been on by default since v17. 
 It is now deprecated and will be removed in a future release.
+
+#### <a id="deprecations-metrics"/>Metrics
+
+The following metrics are now deprecated, if provided please use their replacement.
+
+| Component  |      Metric Name      |           Replaced By           |
+|------------|:---------------------:|:-------------------------------:|
+| `vttablet` |  `QueryCacheLength`   |  `QueryEnginePlanCacheLength`   |
+| `vttablet` |   `QueryCacheSize`    |   `QueryEnginePlanCacheSize`    |
+| `vttablet` | `QueryCacheCapacity`  | `QueryEnginePlanCacheCapacity`  |
+| `vttablet` | `QueryCacheEvictions` | `QueryEnginePlanCacheEvictions` |
+| `vttablet` |   `QueryCacheHits`    |   `QueryEnginePlanCacheHits`    |
+| `vttablet` |  `QueryCacheMisses`   |  `QueryEnginePlanCacheMisses`   |
+
 
 ### <a id="traffic-mirroring"/>Traffic Mirroring
 

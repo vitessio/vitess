@@ -35,8 +35,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/vtgate/fakerpcvtgateconn"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -51,8 +49,6 @@ var (
 	Server *tabletserver.TabletServer
 	// ServerAddress is the http URL for the server.
 	ServerAddress string
-	// ResolveChan is the channel that sends dtids that are to be resolved.
-	ResolveChan = make(chan string, 1)
 	// TopoServer is the topology for the server
 	TopoServer *topo.Server
 )
@@ -61,15 +57,6 @@ var (
 // all the global variables. This function should only be called
 // once at the beginning of the test.
 func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnParams, dbName string, cfg *tabletenv.TabletConfig) error {
-	// Setup a fake vtgate server.
-	protocol := "resolveTest"
-	vtgateconn.SetVTGateProtocol(protocol)
-	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
-		return &txResolver{
-			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
-		}, nil
-	})
-
 	dbcfgs := dbconfigs.NewTestDBConfigs(connParams, connAppDebugParams, dbName)
 
 	Target = &querypb.Target{
@@ -118,7 +105,6 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	config.StrictTableACL = true
 	config.TwoPCEnable = true
 	config.TwoPCAbandonAge = 1
-	config.TwoPCCoordinatorAddress = "fake"
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
 	config.GracePeriods.Shutdown = 2 * time.Second
@@ -137,17 +123,4 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 // StopServer must be called once all the tests are done.
 func StopServer() {
 	Server.StopService()
-}
-
-// txResolver transmits dtids to be resolved through ResolveChan.
-type txResolver struct {
-	fakerpcvtgateconn.FakeVTGateConn
-}
-
-func (conn *txResolver) ResolveTransaction(ctx context.Context, dtid string) error {
-	select {
-	case ResolveChan <- dtid:
-	default:
-	}
-	return nil
 }

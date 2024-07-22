@@ -88,28 +88,50 @@ Modified to have an early break
 
 // permutateDiffs calls `callback` with each permutation of a. If the function returns `true`, that means
 // the callback has returned `true` for an early break, thus possibly not all permutations have been evaluated.
-func permutateDiffs(ctx context.Context, diffs []EntityDiff, hints *DiffHints, callback func([]EntityDiff, *DiffHints) (earlyBreak bool)) (earlyBreak bool, err error) {
+// callback's `errorIndex` indicates the first index at which the permutation has error, or -1 if there's no such error.
+// When `errorIndex` is non negative, then the algorithm skips any further recursive dives following `i`.
+func permutateDiffs(
+	ctx context.Context,
+	diffs []EntityDiff,
+	hints *DiffHints,
+	callback func([]EntityDiff, *DiffHints) (earlyBreak bool, errorIndex int),
+) (earlyBreak bool, err error) {
 	if len(diffs) == 0 {
 		return false, nil
 	}
 	// Sort by a heuristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
 	// search and serves as seed for the rest of permutations.
 
-	return permDiff(ctx, diffs, hints, callback, 0)
+	earlyBreak, _, err = permDiff(ctx, diffs, hints, callback, 0)
+	return earlyBreak, err
 }
 
 // permDiff is a recursive function to permutate given `a` and call `callback` for each permutation.
 // If `callback` returns `true`, then so does this function, and this indicates a request for an early
 // break, in which case this function will not be called again.
-func permDiff(ctx context.Context, a []EntityDiff, hints *DiffHints, callback func([]EntityDiff, *DiffHints) (earlyBreak bool), i int) (earlyBreak bool, err error) {
+func permDiff(
+	ctx context.Context,
+	a []EntityDiff,
+	hints *DiffHints,
+	callback func([]EntityDiff, *DiffHints) (earlyBreak bool, errorIndex int),
+	i int,
+) (earlyBreak bool, errorIndex int, err error) {
 	if err := ctx.Err(); err != nil {
-		return true, err // early break
+		return true, -1, err // early break (due to context)
 	}
 	if i > len(a) {
-		return callback(a, hints), nil
+		earlyBreak, errorIndex := callback(a, hints)
+		return earlyBreak, errorIndex, nil
 	}
-	if brk, err := permDiff(ctx, a, hints, callback, i+1); brk {
-		return true, err
+	earlyBreak, errorIndex, err = permDiff(ctx, a, hints, callback, i+1)
+	if errorIndex >= 0 && i > errorIndex {
+		// Means the current permutation failed at `errorIndex`, and we're beyond that point. There's no
+		// point in continuing to permutate the rest of the array.
+		return false, errorIndex, err
+	}
+	if earlyBreak {
+		// Found a valid permutation, no need to continue
+		return true, -1, err
 	}
 	for j := i + 1; j < len(a); j++ {
 		// An optimization: we don't really need all possible permutations. We can skip some of the recursive search.
@@ -150,12 +172,18 @@ func permDiff(ctx context.Context, a []EntityDiff, hints *DiffHints, callback fu
 		}
 		// End of optimization
 		a[i], a[j] = a[j], a[i]
-		if brk, err := permDiff(ctx, a, hints, callback, i+1); brk {
-			return true, err
+		earlyBreak, errorIndex, err = permDiff(ctx, a, hints, callback, i+1)
+		if errorIndex >= 0 && i > errorIndex {
+			// Means the current permutation failed at `errorIndex`, and we're beyond that point. There's no
+			// point in continuing to permutate the rest of the array.
+			return false, errorIndex, err
+		}
+		if earlyBreak {
+			return true, -1, err
 		}
 		a[i], a[j] = a[j], a[i]
 	}
-	return false, nil
+	return false, -1, nil
 }
 
 // SchemaDiff is a rich diff between two schemas. It includes the following:
@@ -316,7 +344,7 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 		// We will now permutate the diffs in this equivalence class, and hopefully find
 		// a valid permutation (one where if we apply the diffs in-order, the schema remains valid throughout the process)
 		tryPermutateDiffs := func(hints *DiffHints) (bool, error) {
-			return permutateDiffs(ctx, classDiffs, hints, func(permutatedDiffs []EntityDiff, hints *DiffHints) bool {
+			return permutateDiffs(ctx, classDiffs, hints, func(permutatedDiffs []EntityDiff, hints *DiffHints) (bool, int) {
 				permutationSchema := lastGoodSchema.copy()
 				// We want to apply the changes one by one, and validate the schema after each change
 				for i := range permutatedDiffs {
@@ -338,14 +366,14 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 					}
 					if err := permutationSchema.apply(permutatedDiffs[i:i+1], applyHints); err != nil {
 						// permutation is invalid
-						return false // continue searching
+						return false, i // let the algorithm know there's no point in pursuing any path after `i`
 					}
 				}
 
 				// Good news, we managed to apply all of the permutations!
 				orderedDiffs = append(orderedDiffs, permutatedDiffs...)
 				lastGoodSchema = permutationSchema
-				return true // early break! No need to keep searching
+				return true, -1 // early break! No need to keep searching
 			})
 		}
 		// We prefer stricter strategy, because that gives best chance of finding a valid path.

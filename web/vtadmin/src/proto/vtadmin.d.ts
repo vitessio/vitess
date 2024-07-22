@@ -40102,6 +40102,212 @@ export namespace query {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of an UnresolvedTransactionsRequest. */
+    interface IUnresolvedTransactionsRequest {
+
+        /** UnresolvedTransactionsRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** UnresolvedTransactionsRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** UnresolvedTransactionsRequest target */
+        target?: (query.ITarget|null);
+    }
+
+    /** Represents an UnresolvedTransactionsRequest. */
+    class UnresolvedTransactionsRequest implements IUnresolvedTransactionsRequest {
+
+        /**
+         * Constructs a new UnresolvedTransactionsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IUnresolvedTransactionsRequest);
+
+        /** UnresolvedTransactionsRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** UnresolvedTransactionsRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** UnresolvedTransactionsRequest target. */
+        public target?: (query.ITarget|null);
+
+        /**
+         * Creates a new UnresolvedTransactionsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UnresolvedTransactionsRequest instance
+         */
+        public static create(properties?: query.IUnresolvedTransactionsRequest): query.UnresolvedTransactionsRequest;
+
+        /**
+         * Encodes the specified UnresolvedTransactionsRequest message. Does not implicitly {@link query.UnresolvedTransactionsRequest.verify|verify} messages.
+         * @param message UnresolvedTransactionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IUnresolvedTransactionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UnresolvedTransactionsRequest message, length delimited. Does not implicitly {@link query.UnresolvedTransactionsRequest.verify|verify} messages.
+         * @param message UnresolvedTransactionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IUnresolvedTransactionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UnresolvedTransactionsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UnresolvedTransactionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.UnresolvedTransactionsRequest;
+
+        /**
+         * Decodes an UnresolvedTransactionsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UnresolvedTransactionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.UnresolvedTransactionsRequest;
+
+        /**
+         * Verifies an UnresolvedTransactionsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UnresolvedTransactionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UnresolvedTransactionsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): query.UnresolvedTransactionsRequest;
+
+        /**
+         * Creates a plain object from an UnresolvedTransactionsRequest message. Also converts values to other types if specified.
+         * @param message UnresolvedTransactionsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.UnresolvedTransactionsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UnresolvedTransactionsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UnresolvedTransactionsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an UnresolvedTransactionsResponse. */
+    interface IUnresolvedTransactionsResponse {
+
+        /** UnresolvedTransactionsResponse transactions */
+        transactions?: (query.ITransactionMetadata[]|null);
+    }
+
+    /** Represents an UnresolvedTransactionsResponse. */
+    class UnresolvedTransactionsResponse implements IUnresolvedTransactionsResponse {
+
+        /**
+         * Constructs a new UnresolvedTransactionsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IUnresolvedTransactionsResponse);
+
+        /** UnresolvedTransactionsResponse transactions. */
+        public transactions: query.ITransactionMetadata[];
+
+        /**
+         * Creates a new UnresolvedTransactionsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UnresolvedTransactionsResponse instance
+         */
+        public static create(properties?: query.IUnresolvedTransactionsResponse): query.UnresolvedTransactionsResponse;
+
+        /**
+         * Encodes the specified UnresolvedTransactionsResponse message. Does not implicitly {@link query.UnresolvedTransactionsResponse.verify|verify} messages.
+         * @param message UnresolvedTransactionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IUnresolvedTransactionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UnresolvedTransactionsResponse message, length delimited. Does not implicitly {@link query.UnresolvedTransactionsResponse.verify|verify} messages.
+         * @param message UnresolvedTransactionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IUnresolvedTransactionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UnresolvedTransactionsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UnresolvedTransactionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.UnresolvedTransactionsResponse;
+
+        /**
+         * Decodes an UnresolvedTransactionsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UnresolvedTransactionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.UnresolvedTransactionsResponse;
+
+        /**
+         * Verifies an UnresolvedTransactionsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UnresolvedTransactionsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UnresolvedTransactionsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): query.UnresolvedTransactionsResponse;
+
+        /**
+         * Creates a plain object from an UnresolvedTransactionsResponse message. Also converts values to other types if specified.
+         * @param message UnresolvedTransactionsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.UnresolvedTransactionsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UnresolvedTransactionsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UnresolvedTransactionsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a BeginExecuteRequest. */
     interface IBeginExecuteRequest {
 
@@ -42388,6 +42594,9 @@ export namespace query {
 
         /** RealtimeStats udfs_changed */
         udfs_changed?: (boolean|null);
+
+        /** RealtimeStats tx_unresolved */
+        tx_unresolved?: (boolean|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -42425,6 +42634,9 @@ export namespace query {
 
         /** RealtimeStats udfs_changed. */
         public udfs_changed: boolean;
+
+        /** RealtimeStats tx_unresolved. */
+        public tx_unresolved: boolean;
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
@@ -42744,8 +42956,8 @@ export namespace query {
     enum TransactionState {
         UNKNOWN = 0,
         PREPARE = 1,
-        COMMIT = 2,
-        ROLLBACK = 3
+        ROLLBACK = 2,
+        COMMIT = 3
     }
 
     /** Properties of a TransactionMetadata. */
