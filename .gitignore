@@ -76,7 +76,7 @@ _test/
 
 # Local examples
 /examples/local/vtdataroot
-/examples/region_sharding/vtdataroot
+
 /dist/
 /vthook/
 /bin/
