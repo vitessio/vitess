@@ -431,7 +431,7 @@ func buildQuery(op Operator, qb *queryBuilder) {
 		buildDelete(op, qb)
 	case *Insert:
 		buildDML(op, qb)
-	case *Recurse:
+	case *RecurseCTE:
 		buildCTE(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
@@ -668,7 +668,7 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 	sqlparser.RemoveKeyspaceInCol(qb.stmt)
 }
 
-func buildCTE(op *Recurse, qb *queryBuilder) {
+func buildCTE(op *RecurseCTE, qb *queryBuilder) {
 	buildQuery(op.Init, qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.Tail, qbR)

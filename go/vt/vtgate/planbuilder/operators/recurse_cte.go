@@ -23,8 +23,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// Recurse is used to represent a recursive CTE
-type Recurse struct {
+// RecurseCTE is used to represent a recursive CTE
+type RecurseCTE struct {
 	// Name is the name of the recursive CTE
 	Name string
 
@@ -37,18 +37,18 @@ type Recurse struct {
 	Init, Tail Operator
 }
 
-var _ Operator = (*Recurse)(nil)
+var _ Operator = (*RecurseCTE)(nil)
 
-func newRecurse(name string, init, tail Operator) *Recurse {
-	return &Recurse{
+func newRecurse(name string, init, tail Operator) *RecurseCTE {
+	return &RecurseCTE{
 		Name: name,
 		Init: init,
 		Tail: tail,
 	}
 }
 
-func (r *Recurse) Clone(inputs []Operator) Operator {
-	return &Recurse{
+func (r *RecurseCTE) Clone(inputs []Operator) Operator {
+	return &RecurseCTE{
 		Name:        r.Name,
 		ColumnNames: slices.Clone(r.ColumnNames),
 		Offsets:     slices.Clone(r.Offsets),
@@ -57,43 +57,43 @@ func (r *Recurse) Clone(inputs []Operator) Operator {
 	}
 }
 
-func (r *Recurse) Inputs() []Operator {
+func (r *RecurseCTE) Inputs() []Operator {
 	return []Operator{r.Init, r.Tail}
 }
 
-func (r *Recurse) SetInputs(operators []Operator) {
+func (r *RecurseCTE) SetInputs(operators []Operator) {
 	r.Init = operators[0]
 	r.Tail = operators[1]
 }
 
-func (r *Recurse) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Expr) Operator {
+func (r *RecurseCTE) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Expr) Operator {
 	r.Tail = newFilter(r, e)
 	return r
 }
 
-func (r *Recurse) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
+func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
 	return r.Init.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
 }
 
-func (r *Recurse) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
+func (r *RecurseCTE) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
 	panic("implement me")
 }
 
-func (r *Recurse) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+func (r *RecurseCTE) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return r.Init.FindCol(ctx, expr, underRoute)
 }
 
-func (r *Recurse) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+func (r *RecurseCTE) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return r.Init.GetColumns(ctx)
 }
 
-func (r *Recurse) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (r *RecurseCTE) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return r.Init.GetSelectExprs(ctx)
 }
 
-func (r *Recurse) ShortDescription() string { return "" }
+func (r *RecurseCTE) ShortDescription() string { return "" }
 
-func (r *Recurse) GetOrdering(*plancontext.PlanningContext) []OrderBy {
-	// Recurse is a special case. It never guarantees any ordering.
+func (r *RecurseCTE) GetOrdering(*plancontext.PlanningContext) []OrderBy {
+	// RecurseCTE is a special case. It never guarantees any ordering.
 	return nil
 }

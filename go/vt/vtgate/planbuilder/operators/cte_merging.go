@@ -21,7 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func tryMergeRecurse(ctx *plancontext.PlanningContext, in *Recurse) (Operator, *ApplyResult) {
+func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator, *ApplyResult) {
 	op := tryMergeCTE(ctx, in.Init, in.Tail, in)
 	if op == nil {
 		return in, NoRewrite
@@ -30,7 +30,7 @@ func tryMergeRecurse(ctx *plancontext.PlanningContext, in *Recurse) (Operator, *
 	return op, Rewrote("Merged CTE")
 }
 
-func tryMergeCTE(ctx *plancontext.PlanningContext, init, tail Operator, in *Recurse) *Route {
+func tryMergeCTE(ctx *plancontext.PlanningContext, init, tail Operator, in *RecurseCTE) *Route {
 	initRoute, tailRoute, _, routingB, a, b, sameKeyspace := prepareInputRoutes(init, tail)
 	if initRoute == nil || !sameKeyspace {
 		return nil
@@ -46,7 +46,7 @@ func tryMergeCTE(ctx *plancontext.PlanningContext, init, tail Operator, in *Recu
 	}
 }
 
-func tryMergeCTESharded(ctx *plancontext.PlanningContext, init, tail *Route, in *Recurse) *Route {
+func tryMergeCTESharded(ctx *plancontext.PlanningContext, init, tail *Route, in *RecurseCTE) *Route {
 	tblA := init.Routing.(*ShardedRouting)
 	tblB := tail.Routing.(*ShardedRouting)
 	switch tblA.RouteOpCode {
@@ -66,10 +66,10 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, init, tail *Route, in 
 	return nil
 }
 
-func mergeCTE(ctx *plancontext.PlanningContext, init, tail *Route, r Routing, in *Recurse) *Route {
+func mergeCTE(ctx *plancontext.PlanningContext, init, tail *Route, r Routing, in *RecurseCTE) *Route {
 	return &Route{
 		Routing: r,
-		Source: &Recurse{
+		Source: &RecurseCTE{
 			Name:        in.Name,
 			ColumnNames: in.ColumnNames,
 			Init:        init.Source,
