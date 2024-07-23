@@ -348,6 +348,32 @@ func TestAppendResult(t *testing.T) {
 	}
 }
 
+func TestStats(t *testing.T) {
+	result := &Result{
+		RowsAffected: 1,
+		Fields: []*querypb.Field{{
+			Type: Int64,
+		}, {
+			Type: VarChar,
+		}},
+		InsertID: 1,
+		Rows: [][]Value{
+			{TestValue(Int64, "1"), MakeTrusted(VarChar, nil)},
+			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
+		},
+	}
+	want := &Result{
+		RowsAffected: 1,
+	}
+	assert.Equal(t, want, result.Stats())
+}
+
+func TestMergeStats(t *testing.T) {
+	result := &Result{RowsAffected: 1}
+	result.MergeStats(&Result{RowsAffected: 2})
+	assert.Equal(t, uint64(3), result.RowsAffected)
+}
+
 func TestReplaceKeyspace(t *testing.T) {
 	result := &Result{
 		Fields: []*querypb.Field{{

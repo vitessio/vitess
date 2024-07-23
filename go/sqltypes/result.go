@@ -337,6 +337,18 @@ func (result *Result) AppendResult(src *Result) {
 	result.Rows = append(result.Rows, src.Rows...)
 }
 
+// Stats returns a copy of result with only the stats fields
+func (result *Result) Stats() *Result {
+	return &Result{
+		RowsAffected: result.RowsAffected,
+	}
+}
+
+// MergeStats updates the receiver's stats by merging in the stats from src.
+func (result *Result) MergeStats(src *Result) {
+	result.RowsAffected += src.RowsAffected
+}
+
 // Named returns a NamedResult based on this struct
 func (result *Result) Named() *NamedResult {
 	return ToNamedResult(result)
