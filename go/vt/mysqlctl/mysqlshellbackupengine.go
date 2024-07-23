@@ -13,6 +13,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -57,12 +59,12 @@ func init() {
 }
 
 func registerMysqlShellBackupEngineFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&mysqlShellBackupLocation, "mysql_shell_backup_location", mysqlShellBackupLocation, "location where the backup will be stored")
-	fs.StringVar(&mysqlShellFlags, "mysql_shell_flags", mysqlShellFlags, "execution flags to pass to mysqlsh binary to be used during dump/load")
-	fs.StringVar(&mysqlShellDumpFlags, "mysql_shell_dump_flags", mysqlShellDumpFlags, "flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST")
-	fs.StringVar(&mysqlShellLoadFlags, "mysql_shell_load_flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string")
-	fs.BoolVar(&mysqlShellBackupShouldDrain, "mysql_shell_should_drain", mysqlShellBackupShouldDrain, "decide if we should drain while taking a backup or continue to serving traffic")
-	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql_shell_speedup_restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer during the restore process")
+	fs.StringVar(&mysqlShellBackupLocation, "mysql-shell-backup_location", mysqlShellBackupLocation, "location where the backup will be stored")
+	fs.StringVar(&mysqlShellFlags, "mysql-shell-flags", mysqlShellFlags, "execution flags to pass to mysqlsh binary to be used during dump/load")
+	fs.StringVar(&mysqlShellDumpFlags, "mysql-shell-dump-flags", mysqlShellDumpFlags, "flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST")
+	fs.StringVar(&mysqlShellLoadFlags, "mysql-shell-load-flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string")
+	fs.BoolVar(&mysqlShellBackupShouldDrain, "mysql-shell-should-drain", mysqlShellBackupShouldDrain, "decide if we should drain while taking a backup or continue to serving traffic")
+	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql-shell-speedup-restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer during the restore process")
 }
 
 // MySQLShellBackupEngine encapsulates the logic to implement the restoration
@@ -84,7 +86,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	}
 
 	start := time.Now().UTC()
-	location := path.Join(mysqlShellBackupLocation, params.Keyspace, params.Shard, start.Format("2006-01-02_15-04-05"))
+	location := path.Join(mysqlShellBackupLocation, params.Keyspace, params.Shard, start.Format(BackupTimestampFormat))
 
 	args := []string{}
 
@@ -166,7 +168,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 	params.Logger.Infof("Calling ExecuteRestore for %s (DeleteBeforeRestore: %v)", params.DbName, params.DeleteBeforeRestore)
 
-	err := be.restorePreCheck()
+	err := be.restorePreCheck(ctx, params)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed restore precheck")
 	}
@@ -313,7 +315,7 @@ func (be *MySQLShellBackupEngine) backupPreCheck() error {
 	return nil
 }
 
-func (be *MySQLShellBackupEngine) restorePreCheck() error {
+func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params RestoreParams) error {
 	if mysqlShellFlags == "" {
 		return fmt.Errorf("%w: at least the --js flag is required", MySQLShellPreCheckError)
 	}
@@ -330,6 +332,23 @@ func (be *MySQLShellBackupEngine) restorePreCheck() error {
 
 	if val, ok := loadFlags["progressFile"]; !ok || val != "" {
 		return fmt.Errorf("%w: \"progressFile\" needs to be empty as vitess always starts a restore from scratch", MySQLShellPreCheckError)
+	}
+
+	if mysqlShellSpeedUpRestore {
+		version, err := params.Mysqld.GetVersionString(ctx)
+		if err != nil {
+			return fmt.Errorf("%w: failed to fetch MySQL version: %v", MySQLShellPreCheckError, err)
+		}
+
+		capableOf := mysql.ServerVersionCapableOf(version)
+		capable, err := capableOf(capabilities.DisableRedoLogFlavorCapability)
+		if err != nil {
+			return fmt.Errorf("%w: error checking if server supports disabling redo log: %v", MySQLShellPreCheckError, err)
+		}
+
+		if !capable {
+			return fmt.Errorf("%w: MySQL version doesn't support disabling the redo log (must be >=8.0.21)", MySQLShellPreCheckError)
+		}
 	}
 
 	return nil

@@ -42,7 +42,7 @@ RUN /vt/dist/install_dependencies.sh mysql80
 
 # Set up Vitess user and directory tree.
 RUN groupadd -r vitess && useradd -r -g vitess vitess
-RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
+RUN mkdir -p /vt/vtdataroot /home/vitess && chown -R vitess:vitess /vt /home/vitess
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt/src/vitess.io/vitess

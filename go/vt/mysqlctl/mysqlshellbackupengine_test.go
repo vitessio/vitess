@@ -1,10 +1,13 @@
 package mysqlctl
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -106,10 +109,33 @@ func TestMySQLShellBackupRestorePreCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mysqlShellLoadFlags = tt.flags
-			assert.ErrorIs(t, engine.restorePreCheck(), tt.err)
+			assert.ErrorIs(t, engine.restorePreCheck(context.Background(), RestoreParams{}), tt.err)
 		})
 	}
 
+}
+
+func TestMySQLShellBackupRestorePreCheckDisableRedolog(t *testing.T) {
+	original := mysqlShellSpeedUpRestore
+	defer func() { mysqlShellSpeedUpRestore = original }()
+
+	mysqlShellSpeedUpRestore = true
+	engine := MySQLShellBackupEngine{}
+
+	fakeMysqld := NewFakeMysqlDaemon(fakesqldb.New(t)) // defaults to 8.0.32
+	params := RestoreParams{
+		Mysqld: fakeMysqld,
+	}
+
+	// this should work as it is supported since 8.0.21
+	require.NoError(t, engine.restorePreCheck(context.Background(), params))
+
+	// it should error out if we change to an older version
+	fakeMysqld.Version = "8.0.20"
+
+	err := engine.restorePreCheck(context.Background(), params)
+	require.ErrorIs(t, err, MySQLShellPreCheckError)
+	require.ErrorContains(t, err, "doesn't support disabling the redo log")
 }
 
 func TestShouldDrainForBackupMySQLShell(t *testing.T) {
