@@ -54,7 +54,7 @@ var charsetTypes = map[string]bool{
 	"set":        true,
 }
 
-var blogStorageExponent = map[string]int{
+var blobStorageExponent = map[string]int{
 	"tinyblob":   8,
 	"tinytext":   8,
 	"blob":       16,
@@ -88,7 +88,7 @@ func IsDecimalType(columnType string) bool {
 }
 
 func BlobTypeStorage(columnType string) int {
-	return blogStorageExponent[columnType]
+	return blobStorageExponent[columnType]
 }
 
 // expandedDataTypes maps some known and difficult-to-compute by INFORMATION_SCHEMA data types which expand other data types.
