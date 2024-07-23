@@ -723,6 +723,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `cast(_utf32 0x0000FF as binary)`,
 			result:     `VARBINARY("\x00\x00\x00\xff")`,
 		},
+		{
+			expression: `MAKETIME(-9223372036854775808, '3', 1.5)`,
+			result:     `TIME("-00:03:01.5")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
