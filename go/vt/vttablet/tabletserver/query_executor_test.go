@@ -1513,7 +1513,6 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		cfg.EnableOnlineDDL = true
 	}
-	cfg.TwoPCCoordinatorAddress = "fake"
 	if flags&shortTwopcAge > 0 {
 		cfg.TwoPCAbandonAge = 0.5
 	} else {
@@ -1704,10 +1703,10 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 				mysql.ShowPrimaryRow("msg", "id"),
 			},
 		},
-		"begin":    {},
-		"commit":   {},
-		"rollback": {},
-		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
+		"begin":                                {},
+		"commit":                               {},
+		"rollback":                             {},
+		fmt.Sprintf(readAllRedo, "_vt", "_vt"): {},
 	}
 
 	sidecardb.AddSchemaInitQueries(db, true, sqlparser.NewTestParser())

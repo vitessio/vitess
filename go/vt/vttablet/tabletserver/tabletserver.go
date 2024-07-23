@@ -181,7 +181,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
-	tsv.te = NewTxEngine(tsv)
+	tsv.te = NewTxEngine(tsv, tsv.hs.sendUnresolvedTransactionSignal)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tsv.lagThrottler)

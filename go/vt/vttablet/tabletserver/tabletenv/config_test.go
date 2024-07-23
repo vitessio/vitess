@@ -58,6 +58,8 @@ func TestConfigParse(t *testing.T) {
 			MaxInnoDBTrxHistLen: 1000,
 			MaxMySQLReplLagSecs: 400,
 		},
+		SchemaChangeReloadTimeout: 30 * time.Second,
+		SchemaReloadInterval:      30 * time.Minute,
 	}
 
 	gotBytes, err := yaml2.Marshal(&cfg)
@@ -93,6 +95,8 @@ replicationTracker: {}
 rowStreamer:
   maxInnoDBTrxHistLen: 1000
   maxMySQLReplLagSecs: 400
+schemaChangeReloadTimeout: 30s
+schemaReloadIntervalSeconds: 30m0s
 txPool: {}
 `
 	assert.Equal(t, wantBytes, string(gotBytes))
