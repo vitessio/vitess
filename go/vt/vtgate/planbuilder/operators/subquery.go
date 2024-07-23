@@ -208,6 +208,8 @@ func (sq *SubQuery) GetMergePredicates() []sqlparser.Expr {
 }
 
 func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Operator {
+	// We can allow uncorrelated queries even when subquery isn't the top level construct,
+	// like if its underneath an Aggregator, because they will be pulled out and run separately.
 	if !sq.TopLevel && sq.correlated {
 		panic(subqueryNotAtTopErr)
 	}
