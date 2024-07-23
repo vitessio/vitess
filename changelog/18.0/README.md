@@ -1,4 +1,8 @@
 ## v18.0
+* **[18.0.6](18.0.6)**
+	* [Changelog](18.0.6/changelog.md)
+	* [Release Notes](18.0.6/release_notes.md)
+
 * **[18.0.5](18.0.5)**
 	* [Changelog](18.0.5/changelog.md)
 	* [Release Notes](18.0.5/release_notes.md)
