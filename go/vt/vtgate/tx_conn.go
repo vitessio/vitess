@@ -201,18 +201,19 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	// retrieve the caller ID to execute the testing flow
-	callerID := callerid.EffectiveCallerIDFromContext(ctx)
-
-	// Test code to simulate a failure after RM prepare
-	if failNow, err := checkTestFailure(callerID, "TRCreated_FailNow", nil); failNow {
-		return err
+	if DEBUG_2PC {
+		// Test code to simulate a failure after RM prepare
+		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "TRCreated_FailNow", nil); failNow {
+			return err
+		}
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
-		// Test code to simulate a failure during RM prepare
-		if failNow, err := checkTestFailure(callerID, "RMPrepare_-40_FailNow", s.Target); failNow {
-			return err
+		if DEBUG_2PC {
+			// Test code to simulate a failure during RM prepare
+			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepare_-40_FailNow", s.Target); failNow {
+				return err
+			}
 		}
 		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
@@ -226,9 +227,11 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	// Test code to simulate a failure after RM prepare
-	if failNow, err := checkTestFailure(callerID, "RMPrepared_FailNow", nil); failNow {
-		return err
+	if DEBUG_2PC {
+		// Test code to simulate a failure after RM prepare
+		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepared_FailNow", nil); failNow {
+			return err
+		}
 	}
 
 	err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
@@ -236,15 +239,19 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	// Test code to simulate a failure after MM commit
-	if failNow, err := checkTestFailure(callerID, "MMCommitted_FailNow", nil); failNow {
-		return err
+	if DEBUG_2PC {
+		// Test code to simulate a failure after MM commit
+		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "MMCommitted_FailNow", nil); failNow {
+			return err
+		}
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
-		// Test code to simulate a failure during RM prepare
-		if failNow, err := checkTestFailure(callerID, "RMCommit_-40_FailNow", s.Target); failNow {
-			return err
+		if DEBUG_2PC {
+			// Test code to simulate a failure during RM prepare
+			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMCommit_-40_FailNow", s.Target); failNow {
+				return err
+			}
 		}
 		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
 	})
