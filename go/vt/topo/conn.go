@@ -19,6 +19,7 @@ package topo
 import (
 	"context"
 	"sort"
+	"time"
 )
 
 // Conn defines the interface that must be implemented by topology
@@ -119,6 +120,21 @@ type Conn interface {
 	// Returns ErrTimeout if ctx expires.
 	// Returns ErrInterrupted if ctx is canceled.
 	Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
+
+	// LockWithTTL is similar to `Lock` but the difference is that it allows
+	// you to override the global default TTL that is configured for the
+	// implementation (--topo_etcd_lease_ttl and --topo_consul_lock_session_ttl).
+	// Note: this is no different than `Lock` for ZooKeeper as it does not
+	// support lock TTLs and they exist until released or the session ends.
+	LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (LockDescriptor, error)
+
+	// LockName is similar to `Lock` but the difference is that it does not require
+	// the path to exist and have children in order to lock it. This is because with
+	// named locks you are NOT locking an actual topo entity such as a Keyspace record.
+	// Because this lock is not blocking any Vitess operations OTHER than another
+	// caller that is trying to get the same named lock, there is a static 24 hour
+	// TTL on them to ensure that they are eventually cleaned up.
+	LockName(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
 
 	// TryLock takes lock on the given directory with a fail-fast approach.
 	// It is similar to `Lock` but the difference is it attempts to acquire the lock

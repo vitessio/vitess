@@ -71,6 +71,7 @@ const (
 	writerBufferSize     = 2 * 1024 * 1024 /*2 MiB*/
 	xtrabackupBinaryName = "xtrabackup"
 	xtrabackupEngineName = "xtrabackup"
+	xtrabackupInfoFile   = "xtrabackup_info"
 	xbstream             = "xbstream"
 )
 
@@ -292,7 +293,6 @@ func (be *XtrabackupEngine) backupFiles(
 	numStripes int,
 	flavor string,
 ) (replicationPosition replication.Position, finalErr error) {
-
 	backupProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{"--defaults-file=" + params.Cnf.Path,
 		"--backup",
@@ -300,6 +300,7 @@ func (be *XtrabackupEngine) backupFiles(
 		"--slave-info",
 		"--user=" + xtrabackupUser,
 		"--target-dir=" + params.Cnf.TmpDir,
+		"--extra-lsndir=" + params.Cnf.TmpDir,
 	}
 	if xtrabackupStreamMode != "" {
 		flagsToExec = append(flagsToExec, "--stream="+xtrabackupStreamMode)
@@ -398,27 +399,14 @@ func (be *XtrabackupEngine) backupFiles(
 	// the replication position. Note that if we don't read stderr as we go, the
 	// xtrabackup process gets blocked when the write buffer fills up.
 	stderrBuilder := &strings.Builder{}
-	posBuilder := &strings.Builder{}
 	stderrDone := make(chan struct{})
 	go func() {
 		defer close(stderrDone)
 
 		scanner := bufio.NewScanner(backupErr)
-		capture := false
 		for scanner.Scan() {
 			line := scanner.Text()
 			params.Logger.Infof("xtrabackup stderr: %s", line)
-
-			// Wait until we see the first line of the binlog position.
-			// Then capture all subsequent lines. We need multiple lines since
-			// the value we're looking for has newlines in it.
-			if !capture {
-				if !strings.Contains(line, "MySQL binlog position") {
-					continue
-				}
-				capture = true
-			}
-			fmt.Fprintln(posBuilder, line)
 		}
 		if err := scanner.Err(); err != nil {
 			params.Logger.Errorf("error reading from xtrabackup stderr: %v", err)
@@ -462,8 +450,7 @@ func (be *XtrabackupEngine) backupFiles(
 		return replicationPosition, vterrors.Wrap(err, fmt.Sprintf("xtrabackup failed with error. Output=%s", sterrOutput))
 	}
 
-	posOutput := posBuilder.String()
-	replicationPosition, rerr := findReplicationPosition(posOutput, flavor, params.Logger)
+	replicationPosition, rerr := findReplicationPositionFromXtrabackupInfo(params.Cnf.TmpDir, flavor, params.Logger)
 	if rerr != nil {
 		return replicationPosition, vterrors.Wrap(rerr, "backup failed trying to find replication position")
 	}
@@ -749,6 +736,22 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v is not a valid value for xtrabackup_stream_mode, supported modes are tar and xbstream", streamMode)
 	}
 	return nil
+}
+
+func findReplicationPositionFromXtrabackupInfo(directory, flavor string, logger logutil.Logger) (replication.Position, error) {
+	f, err := os.Open(path.Join(directory, xtrabackupInfoFile))
+	if err != nil {
+		return replication.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT,
+			"couldn't open %q to read GTID position", path.Join(directory, xtrabackupInfoFile))
+	}
+	defer f.Close()
+
+	contents, err := io.ReadAll(f)
+	if err != nil {
+		return replication.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "couldn't read GTID position from %q", f.Name())
+	}
+
+	return findReplicationPosition(string(contents), flavor, logger)
 }
 
 var xtrabackupReplicationPositionRegexp = regexp.MustCompile(`GTID of the last change '([^']*)'`)

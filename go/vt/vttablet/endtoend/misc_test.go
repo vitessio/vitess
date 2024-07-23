@@ -198,7 +198,7 @@ func TestTrailingComment(t *testing.T) {
 		}
 		v2 := framework.Server.QueryPlanCacheLen()
 		if v2 != v1+1 {
-			t.Errorf("QueryCacheLength(%s): %d, want %d", query, v2, v1+1)
+			t.Errorf("QueryEnginePlanCacheLength(%s): %d, want %d", query, v2, v1+1)
 		}
 	}
 }

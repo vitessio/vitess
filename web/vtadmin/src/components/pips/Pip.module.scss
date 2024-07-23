@@ -35,4 +35,8 @@
     &.danger {
         background: var(--colorError50);
     }
+
+    &.throttled {
+        background: var(--grey900);
+    }
 }

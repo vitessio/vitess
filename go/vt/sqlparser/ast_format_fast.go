@@ -41,8 +41,20 @@ func (node *Select) FormatFast(buf *TrackedBuffer) {
 			buf.WriteString(SQLNoCacheStr)
 		}
 	}
+	if node.HighPriority {
+		buf.WriteString(HighPriorityStr)
+	}
 	if node.StraightJoinHint {
 		buf.WriteString(StraightJoinHint)
+	}
+	if node.SQLSmallResult {
+		buf.WriteString(SQLSmallResultStr)
+	}
+	if node.SQLBigResult {
+		buf.WriteString(SQLBigResultStr)
+	}
+	if node.SQLBufferResult {
+		buf.WriteString(SQLBufferResultStr)
 	}
 	if node.SQLCalcFoundRows {
 		buf.WriteString(SQLCalcFoundRowsStr)
@@ -1132,8 +1144,10 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 
 	for _, opt := range idx.Options {
-		buf.WriteByte(' ')
-		buf.WriteString(opt.Name)
+		if opt.Name != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(opt.Name)
+		}
 		if opt.String != "" {
 			buf.WriteByte(' ')
 			buf.WriteString(opt.String)
@@ -1778,6 +1792,72 @@ func (node *Literal) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *Argument) FormatFast(buf *TrackedBuffer) {
+	// We need to make sure that any value used still returns
+	// the right type when interpolated. For example, if we have a
+	// decimal type with 0 scale, we don't want it to be interpreted
+	// as an integer after interpolation as that would the default
+	// literal interpretation in MySQL.
+	switch {
+	case node.Type == sqltypes.Unknown:
+		// Ensure we handle unknown first as we don't want to treat
+		// the type as a bitmask for the further tests.
+		// do nothing, the default literal will be correct.
+	case sqltypes.IsDecimal(node.Type) && node.Scale == 0:
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS DECIMAL(")
+		buf.WriteString(fmt.Sprintf("%d", node.Size))
+		buf.WriteString(", ")
+		buf.WriteString(fmt.Sprintf("%d", node.Scale))
+		buf.WriteString("))")
+		return
+	case sqltypes.IsUnsigned(node.Type):
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS UNSIGNED)")
+		return
+	case node.Type == sqltypes.Float64:
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS DOUBLE)")
+		return
+	case node.Type == sqltypes.Float32:
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS FLOAT)")
+		return
+	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS DATETIME")
+		if node.Size == 0 {
+			buf.WriteString(")")
+			return
+		}
+		buf.WriteByte('(')
+		buf.WriteString(fmt.Sprintf("%d", node.Size))
+		buf.WriteString("))")
+		return
+	case sqltypes.IsDate(node.Type):
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS DATE")
+		buf.WriteString(")")
+		return
+	case node.Type == sqltypes.Time:
+		buf.WriteString("CAST(")
+		buf.WriteArg(":", node.Name)
+		buf.WriteString(" AS TIME")
+		if node.Size == 0 {
+			buf.WriteString(")")
+			return
+		}
+		buf.WriteByte('(')
+		buf.WriteString(fmt.Sprintf("%d", node.Size))
+		buf.WriteString("))")
+		return
+	}
+	// Nothing special to do, the default literal will be correct.
 	buf.WriteArg(":", node.Name)
 	if node.Type >= 0 {
 		// For bind variables that are statically typed, emit their type as an adjacent comment.
@@ -3377,6 +3457,30 @@ func (node *JSONArrayExpr) FormatFast(buf *TrackedBuffer) {
 		}
 	}
 	buf.WriteByte(')')
+}
+
+// FormatFast formats the node.
+func (node *JSONArrayAgg) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_arrayagg(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.FormatFast(buf)
+	}
+}
+
+// FormatFast formats the node.
+func (node *JSONObjectAgg) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_objectagg(")
+	buf.printExpr(node, node.Key, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Value, true)
+	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.FormatFast(buf)
+	}
 }
 
 // FormatFast formats the node.

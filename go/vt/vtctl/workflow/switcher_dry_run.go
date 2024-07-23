@@ -27,6 +27,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/topo"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -60,6 +61,17 @@ func (dr *switcherDryRun) deleteKeyspaceRoutingRules(ctx context.Context) error 
 	if dr.ts.IsMultiTenantMigration() {
 		dr.drLog.Log("Keyspace routing rules will be deleted")
 	}
+	return nil
+}
+
+func (dr *switcherDryRun) mirrorTableTraffic(ctx context.Context, types []topodatapb.TabletType, percent float32) error {
+	var tabletTypes []string
+	for _, servedType := range types {
+		tabletTypes = append(tabletTypes, servedType.String())
+	}
+	dr.drLog.Logf("Mirroring %.2f percent of traffic from keyspace %s to keyspace %s for tablet types [%s]",
+		percent, dr.ts.SourceKeyspaceName(), dr.ts.TargetKeyspaceName(), strings.Join(tabletTypes, ","))
+
 	return nil
 }
 
@@ -293,7 +305,7 @@ func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *StreamMigrato
 	dr.drLog.Log("Cancel migration as requested")
 }
 
-func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), error) {
+func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string, _ ...topo.LockOption) (context.Context, func(*error), error) {
 	dr.drLog.Logf("Lock keyspace %s", keyspace)
 	return ctx, func(e *error) {
 		dr.drLog.Logf("Unlock keyspace %s", keyspace)

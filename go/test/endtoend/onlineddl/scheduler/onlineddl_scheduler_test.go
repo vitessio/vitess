@@ -71,6 +71,7 @@ type testRevertMigrationParams struct {
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	primaryTablet   *cluster.Vttablet
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
 
@@ -208,20 +209,32 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+
+	var lastMessage string
 	for {
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
-			message := row.AsString("message", "")
-			if strings.Contains(message, messageSubstring) {
+			lastMessage = row.AsString("message", "")
+			if strings.Contains(lastMessage, messageSubstring) {
 				return
 			}
 		}
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
+			{
+				resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.TestingName, nil)
+				assert.NoError(t, err)
+				fmt.Println("Throttler check response: ", resp)
+
+				output, err := throttler.GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, primaryTablet)
+				assert.NoError(t, err)
+				fmt.Println("Throttler status response: ", output)
+			}
+			require.Failf(t, "timeout waiting for message", "expected: %s. Last seen: %s", messageSubstring, lastMessage)
+			return
 		}
-		require.NoError(t, ctx.Err())
 	}
 }
 
@@ -278,6 +291,7 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+		primaryTablet = clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 
 		return m.Run(), nil
 	}()
@@ -292,7 +306,7 @@ func TestMain(m *testing.M) {
 
 func TestSchemaChange(t *testing.T) {
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("scheduler", testScheduler)
 	t.Run("singleton", testSingleton)
@@ -334,7 +348,7 @@ func testScheduler(t *testing.T) {
 		}
 	}
 
-	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	mysqlVersion := onlineddl.GetMySQLVersion(t, primaryTablet)
 	require.NotEmpty(t, mysqlVersion)
 	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
@@ -558,12 +572,17 @@ func testScheduler(t *testing.T) {
 			}
 		})
 	})
+	t.Run("show vitess_migrations in transaction", func(t *testing.T) {
+		// The function validates there is no error
+		rs := onlineddl.VtgateExecQueryInTransaction(t, &vtParams, "show vitess_migrations", "")
+		assert.NotEmpty(t, rs.Rows)
+	})
 
 	forceCutoverCapable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability) // 8.0
 	require.NoError(t, err)
 	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*2)
+			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
@@ -587,6 +606,20 @@ func testScheduler(t *testing.T) {
 			transactionErrorChan := make(chan error)
 			t.Run("locking table rows", func(t *testing.T) {
 				go runInTransaction(t, ctx, shards[0].Vttablets[0], "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+			})
+			t.Run("injecting heartbeats asynchronously", func(t *testing.T) {
+				go func() {
+					ticker := time.NewTicker(time.Second)
+					defer ticker.Stop()
+					for {
+						throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil)
+						select {
+						case <-ticker.C:
+						case <-ctx.Done():
+							return
+						}
+					}
+				}()
 			})
 			t.Run("check no force_cutover", func(t *testing.T) {
 				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
@@ -1463,6 +1496,7 @@ DROP TABLE IF EXISTS stress_test
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert CREATE TABLE", func(t *testing.T) {
+		require.NotEmpty(t, uuids)
 		// The table existed, so it will now be dropped (renamed)
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vtgate", "", "", false))
 		uuids = append(uuids, uuid)

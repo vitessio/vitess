@@ -854,6 +854,54 @@ func TestRewriteNot(t *testing.T) {
 	}
 }
 
+func TestOrderByDerivedTable(t *testing.T) {
+	ks := &vindexes.Keyspace{
+		Name:    "main",
+		Sharded: true,
+	}
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t1": {
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t1"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewIdentifierCI("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+		},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql      string
+		expected string
+	}{{
+		sql:      "select a, b, c from (select a, b, c from t1 order by b, a, c) as dt",
+		expected: "select a, b, c from (select a, b, c from t1) as dt",
+	}, {
+		sql:      "select a, b, c from (select a, b, c from t1 order by b, a, c limit 5) as dt",
+		expected: "select a, b, c from (select a, b, c from t1 order by t1.b asc, t1.a asc, t1.c asc limit 5) as dt",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
+			require.True(t, isSelectStatement, "analyzer expects a select statement")
+			_, err = AnalyzeStrict(selectStatement, cDB, schemaInfo)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expected, sqlparser.String(selectStatement))
+		})
+	}
+}
+
 // TestConstantFolding tests that the rewriter is able to do various constant foldings properly.
 func TestConstantFolding(t *testing.T) {
 	ks := &vindexes.Keyspace{

@@ -656,6 +656,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfIsExpr(a, b)
+	case *JSONArrayAgg:
+		b, ok := inB.(*JSONArrayAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONArrayAgg(a, b)
 	case *JSONArrayExpr:
 		b, ok := inB.(*JSONArrayExpr)
 		if !ok {
@@ -692,6 +698,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfJSONKeysExpr(a, b)
+	case *JSONObjectAgg:
+		b, ok := inB.(*JSONObjectAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONObjectAgg(a, b)
 	case *JSONObjectExpr:
 		b, ok := inB.(*JSONObjectExpr)
 		if !ok {
@@ -2966,6 +2978,18 @@ func (cmp *Comparator) RefOfIsExpr(a, b *IsExpr) bool {
 		a.Right == b.Right
 }
 
+// RefOfJSONArrayAgg does deep equals between the two objects.
+func (cmp *Comparator) RefOfJSONArrayAgg(a, b *JSONArrayAgg) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Expr, b.Expr) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
+}
+
 // RefOfJSONArrayExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfJSONArrayExpr(a, b *JSONArrayExpr) bool {
 	if a == b {
@@ -3038,6 +3062,19 @@ func (cmp *Comparator) RefOfJSONKeysExpr(a, b *JSONKeysExpr) bool {
 	}
 	return cmp.Expr(a.JSONDoc, b.JSONDoc) &&
 		cmp.Expr(a.Path, b.Path)
+}
+
+// RefOfJSONObjectAgg does deep equals between the two objects.
+func (cmp *Comparator) RefOfJSONObjectAgg(a, b *JSONObjectAgg) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Key, b.Key) &&
+		cmp.Expr(a.Value, b.Value) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfJSONObjectExpr does deep equals between the two objects.
@@ -4147,7 +4184,11 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		a.HighPriority == b.HighPriority &&
 		a.StraightJoinHint == b.StraightJoinHint &&
+		a.SQLSmallResult == b.SQLSmallResult &&
+		a.SQLBigResult == b.SQLBigResult &&
+		a.SQLBufferResult == b.SQLBufferResult &&
 		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
 		cmp.RefOfBool(a.Cache, b.Cache) &&
 		cmp.RefOfWith(a.With, b.With) &&
@@ -5009,6 +5050,18 @@ func (cmp *Comparator) AggrFunc(inA, inB AggrFunc) bool {
 			return false
 		}
 		return cmp.RefOfGroupConcatExpr(a, b)
+	case *JSONArrayAgg:
+		b, ok := inB.(*JSONArrayAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONArrayAgg(a, b)
+	case *JSONObjectAgg:
+		b, ok := inB.(*JSONObjectAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONObjectAgg(a, b)
 	case *Max:
 		b, ok := inB.(*Max)
 		if !ok {
@@ -6173,6 +6226,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfIsExpr(a, b)
+	case *JSONArrayAgg:
+		b, ok := inB.(*JSONArrayAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONArrayAgg(a, b)
 	case *JSONArrayExpr:
 		b, ok := inB.(*JSONArrayExpr)
 		if !ok {
@@ -6209,6 +6268,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfJSONKeysExpr(a, b)
+	case *JSONObjectAgg:
+		b, ok := inB.(*JSONObjectAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONObjectAgg(a, b)
 	case *JSONObjectExpr:
 		b, ok := inB.(*JSONObjectExpr)
 		if !ok {

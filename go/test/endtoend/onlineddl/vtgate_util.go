@@ -66,6 +66,29 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 	return qr
 }
 
+// VtgateExecQueryInTransaction runs a query on VTGate using given query params, inside a transaction
+func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
+	t.Helper()
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("begin", -1, true)
+	require.NoError(t, err)
+	qr, err := conn.ExecuteFetch(query, -1, true)
+	if expectError == "" {
+		require.NoError(t, err)
+	} else {
+		require.Error(t, err, "error should not be nil")
+		assert.Contains(t, err.Error(), expectError, "Unexpected error")
+	}
+	_, err = conn.ExecuteFetch("commit", -1, true)
+	require.NoError(t, err)
+	return qr
+}
+
 // VtgateExecDDL executes a DDL query with given strategy
 func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string, query string, expectError string) *sqltypes.Result {
 	t.Helper()
@@ -341,7 +364,7 @@ func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 }
 
 // CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
-func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) {
+func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) bool {
 
 	ctx, cancel := context.WithTimeout(context.Background(), ThrottledAppsTimeout)
 	defer cancel()
@@ -361,13 +384,13 @@ func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp t
 		}
 		if appFound == expectFind {
 			// we're all good
-			return
+			return true
 		}
 
 		select {
 		case <-ctx.Done():
-			assert.Failf(t, "CheckThrottledApps timed out waiting for %v to be in throttled status '%v'", throttlerApp.String(), expectFind)
-			return
+			assert.Fail(t, "CheckThrottledApps timed out", "waiting for '%v' to be in throttled status '%v'", throttlerApp.String(), expectFind)
+			return false
 		case <-ticker.C:
 		}
 	}

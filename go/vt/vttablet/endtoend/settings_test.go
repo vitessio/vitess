@@ -355,21 +355,25 @@ func TestInfiniteSessions(t *testing.T) {
 }
 
 func TestSetQueriesMultipleWays(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = false
 	client := framework.NewClient()
 	defer client.Release()
+	client2 := framework.NewClient()
+	defer client2.Release()
+
+	// This will not reserve the connection, instead use a connection from the pool and change settings.
+	// The connection will be stored with settings state in the pool
 	_, err := client.ReserveExecute("select 1", []string{"set sql_safe_updates = 1"}, nil)
 	require.NoError(t, err)
 
-	_, err = client.Execute("set sql_safe_updates = 1", nil)
-	require.NoError(t, err)
+	// As no connection is reserved, set statement will fail to execute.
+	_, err = client.Execute("set sql_safe_updates = 0", nil)
+	assert.ErrorContains(t, err, "Set not allowed without reserved connection")
 
-	framework.Server.Config().EnableSettingsPool = true
-	client2 := framework.NewClient()
-	_, err = client2.ReserveExecute("select 1", []string{"set sql_safe_updates = 1"}, nil)
-	require.NoError(t, err)
+	// This will reserve the connection as this is part of the query execution and not the pre-queries to Reserve API
+	_, err = client2.ReserveExecute("set sql_safe_updates = 1", nil, nil)
+	assert.NoError(t, err)
 
-	// this should not panic.
-	_, err = client.Execute("set sql_safe_updates = 1", nil)
-	require.NoError(t, err)
+	// This will not error out as it gets executed on the reserved connection,
+	_, err = client2.Execute("set sql_safe_updates = 0", nil)
+	assert.NoError(t, err)
 }
