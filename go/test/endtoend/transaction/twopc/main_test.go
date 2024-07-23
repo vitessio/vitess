@@ -75,10 +75,11 @@ func TestMain(m *testing.M) {
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--transaction_mode", "TWOPC",
+			"--grpc_use_effective_callerid",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--twopc_enable",
-			"--twopc_abandon_age", "3600",
+			"--twopc_abandon_age", "1",
 			"--queryserver-config-transaction-cap", "3",
 		)
 
@@ -89,7 +90,7 @@ func TestMain(m *testing.M) {
 			VSchema:       VSchema,
 			SidecarDBName: sidecarDBName,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 0, false); err != nil {
 			return 1
 		}
 
@@ -110,20 +111,21 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 
-	deleteAll := func() {
-		tables := []string{"twopc_user"}
-		for _, table := range tables {
-			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
-		}
-	}
-
-	deleteAll()
-
 	return conn, func() {
-		deleteAll()
 		conn.Close()
-		cluster.PanicHandler(t)
+		cleanup(t)
 	}
+}
+
+func cleanup(t *testing.T) {
+	cluster.PanicHandler(t)
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, _ = utils.ExecAllowError(t, conn, "delete from twopc_user")
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value
@@ -171,7 +173,8 @@ func getDTID(dtidMap map[string]string, dtKey string) string {
 func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent, vtgateConn *vtgateconn.VTGateConn) {
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{
-			{Keyspace: keyspaceName, Shard: "-80", Gtid: "current"},
+			{Keyspace: keyspaceName, Shard: "-40", Gtid: "current"},
+			{Keyspace: keyspaceName, Shard: "40-80", Gtid: "current"},
 			{Keyspace: keyspaceName, Shard: "80-", Gtid: "current"},
 		}}
 	filter := &binlogdatapb.Filter{
@@ -211,6 +214,10 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 }
 
 func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap map[string][]*querypb.Field, dtMap map[string]string) map[string][]string {
+	return retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 1*time.Second)
+}
+
+func retrieveTransitionsWithTimeout(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap map[string][]*querypb.Field, dtMap map[string]string, timeout time.Duration) map[string][]string {
 	logTable := make(map[string][]string)
 
 	keepWaiting := true
@@ -229,7 +236,7 @@ func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap ma
 			if re.FieldEvent != nil {
 				tableMap[re.FieldEvent.TableName] = re.FieldEvent.Fields
 			}
-		case <-time.After(1 * time.Second):
+		case <-time.After(timeout):
 			keepWaiting = false
 		}
 	}

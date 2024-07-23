@@ -39,9 +39,6 @@ type VitessClient interface {
 	// Use this method if the query returns a large number of rows.
 	// API group: v3
 	StreamExecute(ctx context.Context, in *vtgate.StreamExecuteRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteClient, error)
-	// ResolveTransaction resolves a transaction.
-	// API group: Transactions
-	ResolveTransaction(ctx context.Context, in *vtgate.ResolveTransactionRequest, opts ...grpc.CallOption) (*vtgate.ResolveTransactionResponse, error)
 	// VStream streams binlog events from the requested sources.
 	VStream(ctx context.Context, in *vtgate.VStreamRequest, opts ...grpc.CallOption) (Vitess_VStreamClient, error)
 	// Prepare is used by the MySQL server plugin as part of supporting prepared statements.
@@ -108,15 +105,6 @@ func (x *vitessStreamExecuteClient) Recv() (*vtgate.StreamExecuteResponse, error
 		return nil, err
 	}
 	return m, nil
-}
-
-func (c *vitessClient) ResolveTransaction(ctx context.Context, in *vtgate.ResolveTransactionRequest, opts ...grpc.CallOption) (*vtgate.ResolveTransactionResponse, error) {
-	out := new(vtgate.ResolveTransactionResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ResolveTransaction", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *vitessClient) VStream(ctx context.Context, in *vtgate.VStreamRequest, opts ...grpc.CallOption) (Vitess_VStreamClient, error) {
@@ -189,9 +177,6 @@ type VitessServer interface {
 	// Use this method if the query returns a large number of rows.
 	// API group: v3
 	StreamExecute(*vtgate.StreamExecuteRequest, Vitess_StreamExecuteServer) error
-	// ResolveTransaction resolves a transaction.
-	// API group: Transactions
-	ResolveTransaction(context.Context, *vtgate.ResolveTransactionRequest) (*vtgate.ResolveTransactionResponse, error)
 	// VStream streams binlog events from the requested sources.
 	VStream(*vtgate.VStreamRequest, Vitess_VStreamServer) error
 	// Prepare is used by the MySQL server plugin as part of supporting prepared statements.
@@ -215,9 +200,6 @@ func (UnimplementedVitessServer) ExecuteBatch(context.Context, *vtgate.ExecuteBa
 }
 func (UnimplementedVitessServer) StreamExecute(*vtgate.StreamExecuteRequest, Vitess_StreamExecuteServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamExecute not implemented")
-}
-func (UnimplementedVitessServer) ResolveTransaction(context.Context, *vtgate.ResolveTransactionRequest) (*vtgate.ResolveTransactionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ResolveTransaction not implemented")
 }
 func (UnimplementedVitessServer) VStream(*vtgate.VStreamRequest, Vitess_VStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStream not implemented")
@@ -298,24 +280,6 @@ func (x *vitessStreamExecuteServer) Send(m *vtgate.StreamExecuteResponse) error 
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vitess_ResolveTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.ResolveTransactionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).ResolveTransaction(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/ResolveTransaction",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).ResolveTransaction(ctx, req.(*vtgate.ResolveTransactionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Vitess_VStream_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(vtgate.VStreamRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -387,10 +351,6 @@ var Vitess_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExecuteBatch",
 			Handler:    _Vitess_ExecuteBatch_Handler,
-		},
-		{
-			MethodName: "ResolveTransaction",
-			Handler:    _Vitess_ResolveTransaction_Handler,
 		},
 		{
 			MethodName: "Prepare",
