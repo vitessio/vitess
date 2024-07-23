@@ -203,7 +203,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	if DEBUG_2PC {
+	if DebugTwoPc {
 		// Test code to simulate a failure after RM prepare
 		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "TRCreated_FailNow", nil); failNow {
 			return errors.Wrapf(err, "%v", dtid)
@@ -211,7 +211,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
-		if DEBUG_2PC {
+		if DebugTwoPc {
 			// Test code to simulate a failure during RM prepare
 			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepare_-40_FailNow", s.Target); failNow {
 				return err
@@ -229,7 +229,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	if DEBUG_2PC {
+	if DebugTwoPc {
 		// Test code to simulate a failure after RM prepare
 		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepared_FailNow", nil); failNow {
 			return err
@@ -241,7 +241,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	if DEBUG_2PC {
+	if DebugTwoPc {
 		// Test code to simulate a failure after MM commit
 		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "MMCommitted_FailNow", nil); failNow {
 			return err
@@ -249,7 +249,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
-		if DEBUG_2PC {
+		if DebugTwoPc {
 			// Test code to simulate a failure during RM prepare
 			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMCommit_-40_FailNow", s.Target); failNow {
 				return err

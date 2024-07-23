@@ -861,7 +861,7 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 		resStr := fmt.Sprintf("%v", res.Rows)
 		require.Contains(t, resStr, `[[VARCHAR("ks:80-`)
 		require.Contains(t, resStr, `VARCHAR("PREPARE") DATETIME("`)
-		require.Contains(t, resStr, `+0000 UTC") VARCHAR("ks:-80")]]`)
+		require.Contains(t, resStr, `+0000 UTC") VARCHAR("ks:40-80")]]`)
 	})
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
