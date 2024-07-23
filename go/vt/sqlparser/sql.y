@@ -135,6 +135,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   indexOption   *IndexOption
   indexOptions  []*IndexOption
   flushOption   *FlushOption
+  purgeBinaryLogs *PurgeBinaryLogs
   replicationOption *ReplicationOption
   replicationOptions []*ReplicationOption
   indexColumn   *IndexColumn
@@ -439,7 +440,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement open_statement close_statement fetch_statement
 %type <statement> loop_statement leave_statement iterate_statement repeat_statement while_statement return_statement
-%type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
+%type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement purge_binary_logs_statement
 %type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement replication_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
@@ -717,6 +718,7 @@ command:
 | revoke_statement
 | replication_statement
 | flush_statement
+| purge_binary_logs_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -2851,6 +2853,7 @@ statement_list_statement:
 | revoke_statement
 | begin_end_block
 | flush_statement
+| purge_binary_logs_statement
 
 create_table_prefix:
   CREATE temp_opt TABLE not_exists_opt table_name
@@ -3743,6 +3746,16 @@ column_comment:
   COMMENT_KEYWORD STRING
   {
     $$ = NewStrVal($2)
+  }
+
+purge_binary_logs_statement:
+  PURGE BINARY LOGS TO STRING
+  {
+    $$ = &PurgeBinaryLogs{To: string($5)}
+  }
+| PURGE BINARY LOGS BEFORE value_expression
+  {
+    $$ = &PurgeBinaryLogs{Before: $5}
   }
 
 flush_statement:

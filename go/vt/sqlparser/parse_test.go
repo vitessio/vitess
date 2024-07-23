@@ -3237,6 +3237,15 @@ var (
 			input:  "FLUSH BINARY LOGS",
 			output: "flush binary logs",
 		}, {
+			input:  "PURGE BINARY LOGS TO 'mysql-bin.010';",
+			output: "purge binary logs to mysql-bin.010",
+		}, {
+			input:  "PURGE BINARY LOGS BEFORE '2019-04-02 22:46:26';",
+			output: "purge binary logs before '2019-04-02 22:46:26'",
+		}, {
+			input:  "PURGE BINARY LOGS BEFORE DATE_SUB(NOW(), INTERVAL 1 MONTH);",
+			output: "purge binary logs before DATE_SUB(NOW(), interval 1 MONTH)",
+		}, {
 			input:  "FLUSH USER_RESOURCES",
 			output: "flush user_resources",
 		}, {
