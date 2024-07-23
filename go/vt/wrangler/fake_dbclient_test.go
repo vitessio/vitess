@@ -25,11 +25,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/sqltypes"
 )
 
 func verifyQueries(t *testing.T, dcs []*fakeDBClient) {
@@ -178,8 +177,8 @@ func (dc *fakeDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 	return results, nil
 }
 
-func (dc *fakeDBClient) ServerVersion() string {
-	return config.DefaultMySQLVersion
+func (dc *fakeDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return false, nil
 }
 
 // ExecuteFetch is part of the DBClient interface

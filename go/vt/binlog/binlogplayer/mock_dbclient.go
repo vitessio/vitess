@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -262,6 +262,6 @@ func (dc *MockDBClient) RemoveInvariant(query string) {
 	delete(dc.invariants, query)
 }
 
-func (dc *MockDBClient) ServerVersion() string {
-	return config.DefaultMySQLVersion
+func (dc *MockDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return false, nil
 }

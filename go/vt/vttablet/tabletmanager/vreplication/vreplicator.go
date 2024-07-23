@@ -527,7 +527,10 @@ func (vr *vreplicator) getSettingFKCheck() error {
 }
 
 func (vr *vreplicator) needFKRestrict() bool {
-	ok, _ := capabilities.ServerVersionAtLeast(vr.dbClient.ServerVersion(), 8, 4, 0)
+	ok, err := vr.dbClient.SupportsCapability(capabilities.RestrictFKOnNonStandardKey)
+	if err != nil {
+		return false
+	}
 	return ok
 }
 

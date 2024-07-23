@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -86,6 +86,6 @@ func (dc *fakeDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 	return make([]*sqltypes.Result, 0), nil
 }
 
-func (dc *fakeDBClient) ServerVersion() string {
-	return config.DefaultMySQLVersion
+func (dc *fakeDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return false, nil
 }

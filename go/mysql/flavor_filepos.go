@@ -32,21 +32,21 @@ import (
 )
 
 type filePosFlavor struct {
-	format     BinlogFormat
-	file       string
-	savedEvent BinlogEvent
+	format        BinlogFormat
+	file          string
+	savedEvent    BinlogEvent
+	serverVersion string
 }
 
 // newFilePosFlavor creates a new filePos flavor.
-func newFilePosFlavor() flavor {
-	return &filePosFlavor{}
+func newFilePosFlavor(serverVersion string) flavor {
+	return &filePosFlavor{serverVersion: serverVersion}
 }
 
 // primaryGTIDSet is part of the Flavor interface.
 func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 	query := "SHOW MASTER STATUS"
-	capability, _ := capabilities.ServerVersionAtLeast(c.ServerVersion, 8, 4, 0)
-	if capability {
+	if ok, err := c.SupportsCapability(capabilities.BinaryLogStatus); err == nil && ok {
 		query = "SHOW BINARY LOG STATUS"
 	}
 
@@ -300,11 +300,9 @@ func (flv *filePosFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos re
 	queryPos := "SELECT MASTER_POS_WAIT('%s', %d)"
 	queryPosSub := "SELECT MASTER_POS_WAIT('%s', %d, %.6f)"
 
-	if capableOf := capabilities.MySQLVersionCapableOf(c.ServerVersion); capableOf != nil {
-		if ok, _ := capableOf(capabilities.ReplicaTerminologyCapability); ok {
-			queryPos = "SELECT SOURCE_POS_WAIT('%s', %d)"
-			queryPosSub = "SELECT SOURCE_POS_WAIT('%s', %d, %.6f)"
-		}
+	if ok, err := c.SupportsCapability(capabilities.ReplicaTerminologyCapability); err == nil && ok {
+		queryPos = "SELECT SOURCE_POS_WAIT('%s', %d)"
+		queryPosSub = "SELECT SOURCE_POS_WAIT('%s', %d, %.6f)"
 	}
 
 	query := fmt.Sprintf(queryPos, filePosPos.File, filePosPos.Pos)
@@ -369,8 +367,10 @@ func (*filePosFlavor) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (*filePosFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+func (f *filePosFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
+	case capabilities.BinaryLogStatus:
+		return capabilities.ServerVersionAtLeast(f.serverVersion, 8, 2, 0)
 	default:
 		return false, nil
 	}

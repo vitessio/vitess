@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -41,7 +42,7 @@ type DBClient interface {
 	Close()
 	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
 	ExecuteFetchMulti(query string, maxrows int) (qrs []*sqltypes.Result, err error)
-	ServerVersion() string
+	SupportsCapability(capability capabilities.FlavorCapability) (bool, error)
 }
 
 // dbClientImpl is a real DBClient backed by a mysql connection.
@@ -124,8 +125,8 @@ func (dc *dbClientImpl) Close() {
 	dc.dbConn.Close()
 }
 
-func (dc *dbClientImpl) ServerVersion() string {
-	return dc.dbConn.ServerVersion
+func (dc *dbClientImpl) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return dc.dbConn.SupportsCapability(capability)
 }
 
 // LogError logs a message after truncating it to avoid spamming logs
