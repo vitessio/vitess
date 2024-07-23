@@ -105,10 +105,6 @@ func NewEnvironment(serverVersion string) *Environment {
 	var version collver = collverMySQL8
 	serverVersion = strings.TrimSpace(strings.ToLower(serverVersion))
 	switch {
-	case strings.HasSuffix(serverVersion, "-ripple"):
-		// the ripple binlog server can mask the actual version of mysqld;
-		// assume we have the highest
-		version = collverMySQL8
 	case strings.Contains(serverVersion, "mariadb"):
 		switch {
 		case strings.Contains(serverVersion, "10.0."):
