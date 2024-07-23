@@ -94,6 +94,7 @@ endif
 	CGO_ENABLED=0 go build \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		    -ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)" \
+		    -tags "$(EXTRA_BUILD_TAGS)" \
 		    -o ${VTROOTBIN} ./go/...
 ifndef NOVTADMINBUILD
 	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"

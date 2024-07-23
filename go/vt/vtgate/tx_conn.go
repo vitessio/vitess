@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/testing"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
@@ -99,6 +101,10 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	}
 
 	if twopc {
+		if testing.Mode == testing.Debug2PC {
+			// Custom debug code
+			time.Sleep(3 * time.Second)
+		}
 		return txc.commit2PC(ctx, session)
 	}
 	return txc.commitNormal(ctx, session)
