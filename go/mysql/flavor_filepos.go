@@ -44,7 +44,13 @@ func newFilePosFlavor() flavor {
 
 // primaryGTIDSet is part of the Flavor interface.
 func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
-	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
+	query := "SHOW MASTER STATUS"
+	capability, _ := capabilities.ServerVersionAtLeast(c.ServerVersion, 8, 4, 0)
+	if capability {
+		query = "SHOW BINARY LOG STATUS"
+	}
+
+	qr, err := c.ExecuteFetch(query, 100, true /* wantfields */)
 	if err != nil {
 		return nil, err
 	}
@@ -291,14 +297,23 @@ func (flv *filePosFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos re
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "position is not filePos compatible: %#v", pos.GTIDSet)
 	}
+	queryPos := "SELECT MASTER_POS_WAIT('%s', %d)"
+	queryPosSub := "SELECT MASTER_POS_WAIT('%s', %d, %.6f)"
 
-	query := fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.File, filePosPos.Pos)
+	if capableOf := capabilities.MySQLVersionCapableOf(c.ServerVersion); capableOf != nil {
+		if ok, _ := capableOf(capabilities.ReplicaTerminologyCapability); ok {
+			queryPos = "SELECT SOURCE_POS_WAIT('%s', %d)"
+			queryPosSub = "SELECT SOURCE_POS_WAIT('%s', %d, %.6f)"
+		}
+	}
+
+	query := fmt.Sprintf(queryPos, filePosPos.File, filePosPos.Pos)
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
 			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
-		query = fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %.6f)", filePosPos.File, filePosPos.Pos, timeout.Seconds())
+		query = fmt.Sprintf(queryPosSub, filePosPos.File, filePosPos.Pos, timeout.Seconds())
 	}
 
 	result, err := c.ExecuteFetch(query, 1, false)
