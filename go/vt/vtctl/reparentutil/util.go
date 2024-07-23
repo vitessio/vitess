@@ -73,6 +73,7 @@ func ElectNewPrimary(
 	waitReplicasTimeout time.Duration,
 	tolerableReplLag time.Duration,
 	durability Durabler,
+	allowCrossCellPromotion bool,
 	// (TODO:@ajm188) it's a little gross we need to pass this, maybe embed in the context?
 	logger logutil.Logger,
 ) (*topodatapb.TabletAlias, error) {
@@ -102,7 +103,7 @@ func ElectNewPrimary(
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v does not match the new primary alias provided", topoproto.TabletAliasString(tablet.Alias)))
 				continue
 			}
-		case primaryCell != "" && tablet.Alias.Cell != primaryCell:
+		case !allowCrossCellPromotion && primaryCell != "" && tablet.Alias.Cell != primaryCell:
 			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not in the same cell as the previous primary", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		case avoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, avoidPrimaryAlias):
