@@ -46,6 +46,12 @@ func r(names, types string, rows ...string) *sqltypes.Result {
 	return sqltypes.MakeTestResult(fields, rows...)
 }
 
+func rWithStats(rowsAffected uint64, names, types string, rows ...string) *sqltypes.Result {
+	result := r(names, types, rows...)
+	result.RowsAffected = rowsAffected
+	return result
+}
+
 func TestConcatenate_NoErrors(t *testing.T) {
 	type testCase struct {
 		testName       string
@@ -108,6 +114,13 @@ func TestConcatenate_NoErrors(t *testing.T) {
 			r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 		},
 		expectedResult: r("myid|mycol1|mycol2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
+	}, {
+		testName: "merged stats",
+		inputs: []*sqltypes.Result{
+			rWithStats(1, "id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1"),
+			rWithStats(2, "id|col1|col2", "int64|varbinary|varbinary", "2|a2|b2"),
+		},
+		expectedResult: rWithStats(3, "id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
 	}}
 
 	for _, tc := range testCases {
@@ -130,6 +143,9 @@ func TestConcatenate_NoErrors(t *testing.T) {
 					require.NoError(t, err)
 					utils.MustMatch(t, tc.expectedResult.Fields, qr.Fields, "fields")
 					utils.MustMatch(t, tc.expectedResult.Rows, qr.Rows)
+
+					// Only testing stats match in non-streaming mode
+					utils.MustMatch(t, tc.expectedResult.Stats(), qr.Stats(), "stats")
 				} else {
 					require.Error(t, err)
 					require.Contains(t, err.Error(), tc.expectedError)

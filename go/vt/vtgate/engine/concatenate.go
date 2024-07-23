@@ -101,19 +101,19 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 
-	var rows [][]sqltypes.Value
+	out := &sqltypes.Result{
+		Fields: fields,
+	}
 	err = c.coerceAndVisitResults(res, fieldTypes, func(result *sqltypes.Result) error {
-		rows = append(rows, result.Rows...)
+		out.Rows = append(out.Rows, result.Rows...)
+		out.MergeStats(result)
 		return nil
 	}, evalengine.ParseSQLMode(vcursor.SQLMode()))
 	if err != nil {
 		return nil, err
 	}
 
-	return &sqltypes.Result{
-		Fields: fields,
-		Rows:   rows,
-	}, nil
+	return out, nil
 }
 
 func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fieldTypes []evalengine.Type, sqlmode evalengine.SQLMode) error {
