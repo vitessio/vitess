@@ -80,7 +80,13 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return true
 	}
 
-	if len(rs.innodbBufferPool) != 0 {
+	// at this point, both have the same GTIDs
+	// so we check their promotion rules
+	jPromotionRule := PromotionRule(rs.durability, rs.tablets[j])
+	iPromotionRule := PromotionRule(rs.durability, rs.tablets[i])
+
+	// If the promotion rules are different then we want to sort by the promotion rules.
+	if len(rs.innodbBufferPool) != 0 && jPromotionRule == iPromotionRule {
 		if rs.innodbBufferPool[i] > rs.innodbBufferPool[j] {
 			return true
 		}
@@ -89,10 +95,6 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		}
 	}
 
-	// at this point, both have the same GTIDs
-	// so we check their promotion rules
-	jPromotionRule := PromotionRule(rs.durability, rs.tablets[j])
-	iPromotionRule := PromotionRule(rs.durability, rs.tablets[i])
 	return !jPromotionRule.BetterThan(iPromotionRule)
 }
 

@@ -132,7 +132,7 @@ func TestReparentSorter(t *testing.T) {
 			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
 			positions:        []replication.Position{positionIntermediate1, positionIntermediate1, positionMostAdvanced, positionIntermediate1},
 			innodbBufferPool: []int{100, 200, 0, 200},
-			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletRdonly1_102, tabletReplica1_101},
+			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletReplica1_101, tabletRdonly1_102},
 		},
 	}
 
