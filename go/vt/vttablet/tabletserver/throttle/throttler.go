@@ -780,43 +780,16 @@ func (throttler *Throttler) readSelfLoadAvgPerCore(ctx context.Context) *base.Th
 
 // readSelfMySQLThrottleMetric reads the metric from this very tablet or from its backend mysql.
 func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, query string) *base.ThrottleMetric {
-	metric := &base.ThrottleMetric{
-		Scope: base.SelfScope,
-		Alias: throttler.tabletAlias,
-	}
-	if query == "" {
-		return metric
-	}
 	conn, err := throttler.pool.Get(ctx, nil)
 	if err != nil {
-		return metric.WithError(err)
+		return &base.ThrottleMetric{Err: err}
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Conn.Exec(ctx, query, 1, true)
-	if err != nil {
-		return metric.WithError(err)
-	}
-	row := tm.Named().Row()
-	if row == nil {
-		return metric.WithError(fmt.Errorf("no results for readSelfThrottleMetric"))
-	}
+	result := base.ReadSelfMySQLThrottleMetric(ctx, conn.Conn, query)
+	result.Alias = throttler.tabletAlias
 
-	metricsQueryType := base.GetMetricsQueryType(query)
-	switch metricsQueryType {
-	case base.MetricsQueryTypeSelect:
-		// We expect a single row, single column result.
-		// The "for" iteration below is just a way to get first result without knowing column name
-		for k := range row {
-			metric.Value, metric.Err = row.ToFloat64(k)
-		}
-	case base.MetricsQueryTypeShowGlobal:
-		metric.Value, metric.Err = strconv.ParseFloat(row["Value"].ToString(), 64)
-	default:
-		metric.Err = fmt.Errorf("Unsupported metrics query type for query: %s", throttler.GetMetricsQuery())
-	}
-
-	return metric
+	return result
 }
 
 // throttledAppsSnapshot returns a snapshot (a copy) of current throttled apps
