@@ -1229,6 +1229,9 @@ var (
 	}, {
 		input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
 	}, {
+		input:  "select 1 as vector",
+		output: "select 1 as `vector` from dual",
+	}, {
 		input:  "/*!show databases*/",
 		output: "show databases",
 	}, {
@@ -5925,6 +5928,10 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		{
 			input:  "create table t (id int, s varchar(255) default 'foo\"bar')",
 			output: "create table t (\n\tid int,\n\ts varchar(255) default 'foo\"bar'\n)",
+		},
+		{
+			input:  "create table t (id int, vec VECTOR(4))",
+			output: "create table t (\n\tid int,\n\tvec VECTOR(4)\n)",
 		},
 	}
 	parser := NewTestParser()
