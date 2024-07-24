@@ -32,7 +32,7 @@ func TestHashJoinVariations(t *testing.T) {
 	// This test tries the different variations of hash-joins:
 	// comparing values of same type and different types, and both left and right outer joins
 	lhs := func() Primitive {
-		return &fakePrimitive{
+		p := &fakePrimitive{
 			results: []*sqltypes.Result{
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -46,9 +46,12 @@ func TestHashJoinVariations(t *testing.T) {
 				),
 			},
 		}
+		p.results[0].RowsAffected = 1
+		return p
 	}
+
 	rhs := func() Primitive {
-		return &fakePrimitive{
+		p := &fakePrimitive{
 			results: []*sqltypes.Result{
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -62,6 +65,8 @@ func TestHashJoinVariations(t *testing.T) {
 				),
 			},
 		}
+		p.results[0].RowsAffected = 2
+		return p
 	}
 
 	rows := func(r ...string) []string { return r }
@@ -131,6 +136,7 @@ func TestHashJoinVariations(t *testing.T) {
 		}
 
 		expected := sqltypes.MakeTestResult(fields, tc.expected...)
+		expected.RowsAffected = 3
 
 		typ, err := evalengine.CoerceTypes(typeForOffset(tc.lhs), typeForOffset(tc.rhs), collations.MySQL8())
 		require.NoError(t, err)
@@ -157,6 +163,9 @@ func TestHashJoinVariations(t *testing.T) {
 			jn.Right = last()
 			r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 			require.NoError(t, err)
+
+			// Result stats handling not implemented for streaming
+			expected.RowsAffected = 0
 			expectResultAnyOrder(t, r, expected)
 		})
 	}

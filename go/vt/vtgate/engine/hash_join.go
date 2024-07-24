@@ -115,6 +115,8 @@ func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 	result := &sqltypes.Result{
 		Fields: joinFields(lresult.Fields, rresult.Fields, hj.Cols),
 	}
+	result.MergeStats(lresult)
+	result.MergeStats(rresult)
 
 	for _, currentRHSRow := range rresult.Rows {
 		matches, err := pt.get(currentRHSRow)
