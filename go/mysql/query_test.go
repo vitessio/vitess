@@ -460,6 +460,7 @@ func TestQueries(t *testing.T) {
 			// Skip TUPLE, not possible in Result.
 			{Name: "Type_GEOMETRY ", Type: querypb.Type_GEOMETRY, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_BLOB_FLAG)},
 			{Name: "Type_JSON     ", Type: querypb.Type_JSON, Charset: collations.CollationUtf8mb4ID},
+			{Name: "Type_VECTOR   ", Type: querypb.Type_VECTOR, Charset: collations.CollationBinaryID},
 		},
 		Rows: [][]sqltypes.Value{
 			{
@@ -492,8 +493,10 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_SET, []byte("Type_SET")),
 				sqltypes.MakeTrusted(querypb.Type_GEOMETRY, []byte("Type_GEOMETRY")),
 				sqltypes.MakeTrusted(querypb.Type_JSON, []byte("Type_JSON")),
+				sqltypes.MakeTrusted(querypb.Type_VECTOR, []byte("Type_VECTOR")),
 			},
 			{
+				sqltypes.NULL,
 				sqltypes.NULL,
 				sqltypes.NULL,
 				sqltypes.NULL,

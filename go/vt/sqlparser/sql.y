@@ -347,6 +347,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> GEOMETRY POINT LINESTRING POLYGON GEOMCOLLECTION GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 %token <str> ASCII UNICODE // used in CONVERT/CAST types
 
+%nonassoc <str> VECTOR
+
 // Type Modifiers
 %token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
@@ -2177,6 +2179,10 @@ char_type:
 | ENUM '(' enum_values ')' charset_opt
   {
     $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+  }
+| VECTOR length_opt
+  {
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 // need set_values / SetValues ?
 | SET '(' enum_values ')' charset_opt
@@ -8647,6 +8653,7 @@ non_reserved_keyword:
 | VARIABLES
 | VARIANCE %prec FUNCTION_CALL_NON_KEYWORD
 | VCPU
+| VECTOR
 | VEXPLAIN
 | VGTID_EXECUTED
 | VIEW
