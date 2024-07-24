@@ -250,6 +250,7 @@ type TabletManagerClient struct {
 		Schema *tabletmanagerdatapb.SchemaDefinition
 		Error  error
 	}
+	GetGlobalStatusVarsDelays  map[string]time.Duration
 	GetGlobalStatusVarsResults map[string]struct {
 		Statuses map[string]string
 		Error    error
@@ -742,6 +743,17 @@ func (fake *TabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.GetGlobalStatusVarsDelays != nil {
+		if delay, ok := fake.GetGlobalStatusVarsDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
 	if result, ok := fake.GetGlobalStatusVarsResults[key]; ok {
 		return result.Statuses, result.Error
 	}
