@@ -186,6 +186,7 @@ const (
 	HexVal     = querypb.Type_HEXVAL
 	Tuple      = querypb.Type_TUPLE
 	BitNum     = querypb.Type_BITNUM
+	Vector     = querypb.Type_VECTOR
 )
 
 // bit-shift the mysql flags by two byte so we
@@ -219,6 +220,7 @@ var mysqlToType = map[byte]querypb.Type{
 	17:  Timestamp,
 	18:  Datetime,
 	19:  Time,
+	242: Vector,
 	245: TypeJSON,
 	246: Decimal,
 	247: Enum,
@@ -331,6 +333,7 @@ var typeToMySQL = map[querypb.Type]struct {
 	Datetime:  {typ: 12, flags: mysqlBinary},
 	Year:      {typ: 13, flags: mysqlUnsigned},
 	Bit:       {typ: 16, flags: mysqlUnsigned},
+	Vector:    {typ: 242},
 	TypeJSON:  {typ: 245},
 	Decimal:   {typ: 246},
 	Text:      {typ: 252},
