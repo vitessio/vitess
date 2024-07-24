@@ -29,6 +29,7 @@ import (
 	"time"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -8296,19 +8297,24 @@ func TestPlannedReparentShard(t *testing.T) {
 						Error: nil,
 					},
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000101": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 				PrimaryPositionResults: map[string]struct {
@@ -8425,19 +8431,22 @@ func TestPlannedReparentShard(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Error: fmt.Errorf("primary status failed"),
+						Error: fmt.Errorf("global status vars failed"),
 					},
 					"zone1-0000000101": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 			},
@@ -8451,7 +8460,7 @@ func TestPlannedReparentShard(t *testing.T) {
 				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
 			},
 			expectEventsToOccur: true,
-			expectedErr:         "primary status failed",
+			expectedErr:         "global status vars failed",
 		},
 	}
 
