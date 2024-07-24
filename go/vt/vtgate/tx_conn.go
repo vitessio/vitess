@@ -25,7 +25,6 @@ import (
 	"github.com/pkg/errors"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
@@ -205,16 +204,16 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 
 	if DebugTwoPc {
 		// Test code to simulate a failure after RM prepare
-		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "TRCreated_FailNow", nil); failNow {
-			return errors.Wrapf(err, "%v", dtid)
+		if terr := checkTestFailure(ctx, "TRCreated_FailNow", nil); terr != nil {
+			return errors.Wrapf(terr, "%v", dtid)
 		}
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		if DebugTwoPc {
 			// Test code to simulate a failure during RM prepare
-			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepare_-40_FailNow", s.Target); failNow {
-				return err
+			if terr := checkTestFailure(ctx, "RMPrepare_-40_FailNow", s.Target); terr != nil {
+				return terr
 			}
 		}
 		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
@@ -231,8 +230,8 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 
 	if DebugTwoPc {
 		// Test code to simulate a failure after RM prepare
-		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepared_FailNow", nil); failNow {
-			return err
+		if terr := checkTestFailure(ctx, "RMPrepared_FailNow", nil); terr != nil {
+			return terr
 		}
 	}
 
@@ -243,16 +242,16 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 
 	if DebugTwoPc {
 		// Test code to simulate a failure after MM commit
-		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "MMCommitted_FailNow", nil); failNow {
-			return err
+		if terr := checkTestFailure(ctx, "MMCommitted_FailNow", nil); terr != nil {
+			return terr
 		}
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		if DebugTwoPc {
 			// Test code to simulate a failure during RM prepare
-			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMCommit_-40_FailNow", s.Target); failNow {
-				return err
+			if terr := checkTestFailure(ctx, "RMCommit_-40_FailNow", s.Target); terr != nil {
+				return terr
 			}
 		}
 		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
@@ -262,42 +261,6 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
-}
-
-func checkTestFailure(callerID *vtrpcpb.CallerID, expectCaller string, target *querypb.Target) (bool, error) {
-	if callerID == nil || callerID.GetPrincipal() != expectCaller {
-		return false, nil
-	}
-	switch callerID.Principal {
-	case "TRCreated_FailNow":
-		log.Errorf("Fail After TR created")
-		// no commit decision is made. Transaction should be a rolled back.
-		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After TR created")
-	case "RMPrepare_-40_FailNow":
-		if target.Shard != "-40" {
-			return false, nil
-		}
-		log.Errorf("Fail During RM prepare")
-		// no commit decision is made. Transaction should be a rolled back.
-		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail During RM prepare")
-	case "RMPrepared_FailNow":
-		log.Errorf("Fail After RM prepared")
-		// no commit decision is made. Transaction should be a rolled back.
-		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After RM prepared")
-	case "MMCommitted_FailNow":
-		log.Errorf("Fail After MM commit")
-		//  commit decision is made. Transaction should be committed.
-		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After MM commit")
-	case "RMCommit_-40_FailNow":
-		if target.Shard != "-40" {
-			return false, nil
-		}
-		log.Errorf("Fail During RM commit")
-		// commit decision is made. Transaction should be a committed.
-		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail During RM commit")
-	default:
-		return false, nil
-	}
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
