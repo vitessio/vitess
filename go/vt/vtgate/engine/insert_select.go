@@ -306,15 +306,20 @@ func (ins *InsertSelect) buildVindexRowsValues(rows []sqltypes.Row) ([][]sqltype
 }
 
 func (ins *InsertSelect) execInsertSharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	result, err := ins.execSelect(ctx, vcursor, bindVars)
+	selectResult, err := ins.execSelect(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	if len(result.rows) == 0 {
-		return &sqltypes.Result{}, nil
+	if len(selectResult.rows) == 0 {
+		return selectResult.stats, nil
 	}
 
-	return ins.insertIntoShardedTable(ctx, vcursor, bindVars, result)
+	result, err := ins.insertIntoShardedTable(ctx, vcursor, bindVars, selectResult)
+	if err == nil {
+		result.MergeStats(selectResult.stats)
+	}
+
+	return result, err
 }
 
 func (ins *InsertSelect) description() PrimitiveDescription {
@@ -369,6 +374,7 @@ func insertVarOffset(rowNum, colOffset int) string {
 type insertRowsResult struct {
 	rows     []sqltypes.Row
 	insertID uint64
+	stats    *sqltypes.Result
 }
 
 func (ins *InsertSelect) execSelect(
@@ -377,8 +383,11 @@ func (ins *InsertSelect) execSelect(
 	bindVars map[string]*querypb.BindVariable,
 ) (insertRowsResult, error) {
 	res, err := vcursor.ExecutePrimitive(ctx, ins.Input, bindVars, false)
-	if err != nil || len(res.Rows) == 0 {
+	if err != nil {
 		return insertRowsResult{}, err
+	}
+	if len(res.Rows) == 0 {
+		return insertRowsResult{stats: res.Stats()}, nil
 	}
 
 	insertID, err := ins.processGenerateFromSelect(ctx, vcursor, ins, res.Rows)
@@ -389,6 +398,7 @@ func (ins *InsertSelect) execSelect(
 	return insertRowsResult{
 		rows:     res.Rows,
 		insertID: uint64(insertID),
+		stats:    res.Stats(),
 	}, nil
 }
 

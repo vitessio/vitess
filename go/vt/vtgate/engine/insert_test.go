@@ -21,6 +21,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -1703,9 +1705,14 @@ func TestInsertSelectSimple(t *testing.T) {
 				"varchar|int64"),
 			"a|1",
 			"a|3",
-			"b|2")}
+			"b|2"),
+		{},
+	}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	vc.results[0].RowsAffected = 1
+	vc.results[1].RowsAffected = 2
+
+	result, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -1721,6 +1728,7 @@ func TestInsertSelectSimple(t *testing.T) {
 			` _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
 			`sharded.-20: prefix values (:_c1_0, :_c1_1)` +
 			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
+	assert.Equal(t, uint64(3), result.RowsAffected)
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
