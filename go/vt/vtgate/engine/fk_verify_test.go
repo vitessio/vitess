@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -58,9 +60,13 @@ func TestFKVerifyUpdate(t *testing.T) {
 
 	t.Run("foreign key verification success", func(t *testing.T) {
 		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"))
+		fakeRes.RowsAffected = 1
 		vc := newDMLTestVCursor("0")
-		vc.results = []*sqltypes.Result{fakeRes}
-		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		vc.results = []*sqltypes.Result{
+			fakeRes,
+			{RowsAffected: 2},
+		}
+		result, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 		require.NoError(t, err)
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -68,6 +74,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 			`ExecuteMultiShard ks.0: update child set cola = 1, colb = 'a' where foo = 48 {} true true`,
 		})
+		assert.Equal(t, uint64(3), result.RowsAffected)
 
 		vc.Rewind()
 		err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })

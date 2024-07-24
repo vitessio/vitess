@@ -69,6 +69,7 @@ func (f *FkVerify) GetFields(ctx context.Context, vcursor VCursor, bindVars map[
 
 // TryExecute implements the Primitive interface
 func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	stats := &sqltypes.Result{}
 	for _, v := range f.Verify {
 		qr, err := vcursor.ExecutePrimitive(ctx, v.Exec, bindVars, wantfields)
 		if err != nil {
@@ -77,8 +78,14 @@ func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 		if len(qr.Rows) > 0 {
 			return nil, getError(v.Typ)
 		}
+		stats.MergeStats(qr)
 	}
-	return vcursor.ExecutePrimitive(ctx, f.Exec, bindVars, wantfields)
+
+	result, err := vcursor.ExecutePrimitive(ctx, f.Exec, bindVars, wantfields)
+	if err == nil {
+		result.MergeStats(stats)
+	}
+	return result, err
 }
 
 // TryStreamExecute implements the Primitive interface
