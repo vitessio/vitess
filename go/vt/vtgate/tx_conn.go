@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -201,15 +203,15 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	if DEBUG_2PC {
+	if DebugTwoPc {
 		// Test code to simulate a failure after RM prepare
 		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "TRCreated_FailNow", nil); failNow {
-			return err
+			return errors.Wrapf(err, "%v", dtid)
 		}
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
-		if DEBUG_2PC {
+		if DebugTwoPc {
 			// Test code to simulate a failure during RM prepare
 			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepare_-40_FailNow", s.Target); failNow {
 				return err
@@ -227,7 +229,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	if DEBUG_2PC {
+	if DebugTwoPc {
 		// Test code to simulate a failure after RM prepare
 		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepared_FailNow", nil); failNow {
 			return err
@@ -239,7 +241,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	if DEBUG_2PC {
+	if DebugTwoPc {
 		// Test code to simulate a failure after MM commit
 		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "MMCommitted_FailNow", nil); failNow {
 			return err
@@ -247,7 +249,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
-		if DEBUG_2PC {
+		if DebugTwoPc {
 			// Test code to simulate a failure during RM prepare
 			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMCommit_-40_FailNow", s.Target); failNow {
 				return err
@@ -544,4 +546,12 @@ func (txc *TxConn) runTargets(targets []*querypb.Target, action func(*querypb.Ta
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+func (txc *TxConn) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	mmShard, err := dtids.ShardSession(transactionID)
+	if err != nil {
+		return nil, err
+	}
+	return txc.tabletGateway.ReadTransaction(ctx, mmShard.Target, transactionID)
 }

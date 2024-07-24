@@ -18,4 +18,4 @@ limitations under the License.
 
 package vtgate
 
-const DEBUG_2PC = true
+const DebugTwoPc = true
