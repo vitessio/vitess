@@ -23,29 +23,6 @@ import (
 	"strings"
 )
 
-// Scope defines the tablet range from which a metric is collected. This can be the local tablet
-// ("self") or the entire shard ("shard")
-type Scope string
-
-const (
-	UndefinedScope Scope = ""
-	ShardScope     Scope = "shard"
-	SelfScope      Scope = "self"
-)
-
-func (s Scope) String() string {
-	return string(s)
-}
-
-func ScopeFromString(s string) (Scope, error) {
-	switch scope := Scope(s); scope {
-	case UndefinedScope, ShardScope, SelfScope:
-		return scope, nil
-	default:
-		return "", fmt.Errorf("unknown scope: %s", s)
-	}
-}
-
 // MetricName is a formalized name for a metric, such as "lag" or "threads_running". A metric name
 // may include a scope, such as "self/lag" or "shard/threads_running". It is possible to add a
 // scope to a name, or to parse the scope out of a name, and there is also always a default scope
