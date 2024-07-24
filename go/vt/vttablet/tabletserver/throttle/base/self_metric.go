@@ -24,12 +24,33 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
-type Metric interface {
+type SelfMetric interface {
 	Name() MetricName
 	DefaultScope() Scope
-	DefaultThreshold() float32
+	DefaultThreshold() float64
 	RequiresConn() bool
 	Read(ctx context.Context, conn *connpool.Conn) *ThrottleMetric
+}
+
+var (
+	RegisteredSelfMetrics = make(map[MetricName]SelfMetric)
+)
+
+func registerSelfMetric(selfMetric SelfMetric) SelfMetric {
+	RegisteredSelfMetrics[selfMetric.Name()] = selfMetric
+	KnownMetricNames = append(KnownMetricNames, selfMetric.Name())
+	aggregatedMetricNames[selfMetric.Name().String()] = AggregatedMetricName{
+		Scope:  selfMetric.DefaultScope(),
+		Metric: selfMetric.Name(),
+	}
+	for _, scope := range []Scope{ShardScope, SelfScope} {
+		aggregatedName := selfMetric.Name().AggregatedName(scope)
+		aggregatedMetricNames[aggregatedName] = AggregatedMetricName{
+			Scope:  scope,
+			Metric: selfMetric.Name(),
+		}
+	}
+	return selfMetric
 }
 
 // ReadSelfMySQLThrottleMetric reads a metric using a given MySQL connection and a query.
@@ -39,6 +60,9 @@ func ReadSelfMySQLThrottleMetric(ctx context.Context, conn *connpool.Conn, query
 	}
 	if query == "" {
 		return metric
+	}
+	if conn == nil {
+		return metric.WithError(fmt.Errorf("conn is nil"))
 	}
 
 	tm, err := conn.Exec(ctx, query, 1, true)

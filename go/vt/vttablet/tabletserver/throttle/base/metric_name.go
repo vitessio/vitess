@@ -68,12 +68,10 @@ const (
 )
 
 func (metric MetricName) DefaultScope() Scope {
-	switch metric {
-	case LagMetricName:
-		return ShardScope
-	default:
-		return SelfScope
+	if selfMetric := RegisteredSelfMetrics[metric]; selfMetric != nil {
+		return selfMetric.DefaultScope()
 	}
+	return SelfScope
 }
 
 func (metric MetricName) String() string {
@@ -99,44 +97,20 @@ func (metric MetricName) Disaggregated() (scope Scope, metricName MetricName, er
 	return DisaggregateMetricName(metric.String())
 }
 
-var KnownMetricNames = MetricNames{
-	DefaultMetricName,
-	LagMetricName,
-	ThreadsRunningMetricName,
-	CustomMetricName,
-	LoadAvgMetricName,
-}
-
 type AggregatedMetricName struct {
 	Scope  Scope
 	Metric MetricName
 }
 
 var (
+	KnownMetricNames = make([]MetricName, 0)
 	// aggregatedMetricNames precomputes the aggregated metric names for all known metric names,
 	// mapped to their breakdowns. e.g. "self/loadavg" -> {SelfScope, LoadAvgMetricName}
 	// This means:
 	// - no textual parsing is needed in the critical path
 	// - we can easily check if a metric name is valid
-	aggregatedMetricNames map[string]AggregatedMetricName
+	aggregatedMetricNames = make(map[string]AggregatedMetricName)
 )
-
-func init() {
-	aggregatedMetricNames = make(map[string]AggregatedMetricName, 3*len(KnownMetricNames))
-	for _, metricName := range KnownMetricNames {
-		aggregatedMetricNames[metricName.String()] = AggregatedMetricName{
-			Scope:  metricName.DefaultScope(),
-			Metric: metricName,
-		}
-		for _, scope := range []Scope{ShardScope, SelfScope} {
-			aggregatedName := metricName.AggregatedName(scope)
-			aggregatedMetricNames[aggregatedName] = AggregatedMetricName{
-				Scope:  scope,
-				Metric: metricName,
-			}
-		}
-	}
-}
 
 // DisaggregateMetricName splits a metric name into its scope name and metric name
 // aggregated metric name could be in the form:
