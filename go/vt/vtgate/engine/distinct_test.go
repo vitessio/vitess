@@ -75,6 +75,11 @@ func TestDistinct(t *testing.T) {
 		collations:     []collations.ID{collations.CollationUtf8mb4ID, collations.Unknown},
 		inputs:         r("myid|id", "varchar|int64", "monkey|1", "horse|1", "Horse|1", "Monkey|1", "horses|1", "MONKEY|2"),
 		expectedResult: r("myid|id", "varchar|int64", "monkey|1", "horse|1", "horses|1", "MONKEY|2"),
+	}, {
+		testName:       "merged stats",
+		collations:     []collations.ID{collations.CollationUtf8mb4ID, collations.Unknown},
+		inputs:         rWithStats(10, "myid", "int64", "0", "1", "1", "null", "null"),
+		expectedResult: rWithStats(10, "myid", "int64", "0", "1", "null"),
 	}}
 
 	for _, tc := range testCases {
@@ -107,6 +112,9 @@ func TestDistinct(t *testing.T) {
 				got := fmt.Sprintf("%v", qr.Rows)
 				expected := fmt.Sprintf("%v", tc.expectedResult.Rows)
 				utils.MustMatch(t, expected, got, "result not what correct")
+
+				// Only testing stats match in non-streaming mode
+				utils.MustMatch(t, tc.expectedResult.Stats(), qr.Stats(), "result stats did not match")
 			} else {
 				require.EqualError(t, err, tc.expectedError)
 			}

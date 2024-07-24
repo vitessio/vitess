@@ -111,6 +111,7 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 		Fields:   input.Fields,
 		InsertID: input.InsertID,
 	}
+	result.MergeStats(input)
 
 	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv())
 
