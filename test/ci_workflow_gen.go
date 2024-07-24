@@ -31,6 +31,7 @@ type mysqlVersion string
 const (
 	mysql57 mysqlVersion = "mysql57"
 	mysql80 mysqlVersion = "mysql80"
+	mysql84 mysqlVersion = "mysql84"
 
 	defaultMySQLVersion = mysql80
 )
@@ -42,7 +43,7 @@ var (
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80}
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
 )
 
 const (

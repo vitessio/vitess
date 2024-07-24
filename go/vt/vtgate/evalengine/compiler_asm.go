@@ -2670,15 +2670,22 @@ func (asm *assembler) Fn_MULTICMP_u(args int, lessThan bool) {
 	}, "FN MULTICMP UINT64(SP-%d)...UINT64(SP-1)", args)
 }
 
-func (asm *assembler) Fn_REPEAT() {
+func (asm *assembler) Fn_REPEAT(base sqltypes.Type, fallback sqltypes.Type) {
 	asm.adjustStack(-1)
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
 		repeat := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
+		if len(str.bytes) == 0 {
+			str.bytes = nil
+			env.vm.sp--
+			return 1
+		}
+		negative := false
 		if repeat.i < 0 {
 			repeat.i = 0
+			negative = true
 		}
 
 		if !validMaxLength(int64(len(str.bytes)), repeat.i) {
@@ -2687,8 +2694,12 @@ func (asm *assembler) Fn_REPEAT() {
 			return 1
 		}
 
-		str.tt = int16(sqltypes.VarChar)
 		str.bytes = bytes.Repeat(str.bytes, int(repeat.i))
+		if len(str.bytes) >= repeatTypeChangeLength || negative {
+			str.tt = int16(fallback)
+		} else {
+			str.tt = int16(base)
+		}
 		env.vm.sp--
 		return 1
 	}, "FN REPEAT VARCHAR(SP-2) INT64(SP-1)")
@@ -4238,15 +4249,26 @@ func (asm *assembler) Fn_WEEKOFYEAR() {
 	}, "FN WEEKOFYEAR DATE(SP-1)")
 }
 
-func (asm *assembler) Fn_YEAR() {
-	asm.emit(func(env *ExpressionEnv) int {
-		if env.vm.stack[env.vm.sp-1] == nil {
+func (asm *assembler) Fn_YEAR(yearType bool) {
+	if yearType {
+		asm.emit(func(env *ExpressionEnv) int {
+			if env.vm.stack[env.vm.sp-1] == nil {
+				return 1
+			}
+			arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+			env.vm.stack[env.vm.sp-1] = newEvalYear(int64(arg.dt.Date.Year()))
 			return 1
-		}
-		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Year()))
-		return 1
-	}, "FN YEAR DATE(SP-1)")
+		}, "FN YEAR DATE(SP-1)")
+	} else {
+		asm.emit(func(env *ExpressionEnv) int {
+			if env.vm.stack[env.vm.sp-1] == nil {
+				return 1
+			}
+			arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Year()))
+			return 1
+		}, "FN YEAR DATE(SP-1)")
+	}
 }
 
 func (asm *assembler) Fn_YEARWEEK0() {
