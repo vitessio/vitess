@@ -103,7 +103,7 @@ type AggregatedMetricName struct {
 }
 
 var (
-	KnownMetricNames = make([]MetricName, 0)
+	KnownMetricNames = make(MetricNames, 0)
 	// aggregatedMetricNames precomputes the aggregated metric names for all known metric names,
 	// mapped to their breakdowns. e.g. "self/loadavg" -> {SelfScope, LoadAvgMetricName}
 	// This means:

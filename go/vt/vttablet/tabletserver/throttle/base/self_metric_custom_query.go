@@ -26,11 +26,24 @@ import (
 var _ SelfMetric = registerSelfMetric(&CustomQuerySelfMetric{})
 
 type CustomQuerySelfMetric struct {
-	customQuery atomic.Value
+	customQueryFuncPtr atomic.Pointer[func() string]
 }
 
-func (m *CustomQuerySelfMetric) SetQuery(query string) {
-	m.customQuery.Store(query)
+func (m *CustomQuerySelfMetric) GetQuery() string {
+	customQueryFunc := m.customQueryFuncPtr.Load()
+	if customQueryFunc == nil {
+		return ""
+	}
+	query := (*customQueryFunc)()
+	return query
+}
+
+func (m *CustomQuerySelfMetric) SetQueryFunc(f func() string) {
+	if f == nil {
+		m.customQueryFuncPtr.Store(nil)
+		return
+	}
+	m.customQueryFuncPtr.Store(&f)
 }
 
 func (m *CustomQuerySelfMetric) Name() MetricName {
@@ -50,9 +63,5 @@ func (m *CustomQuerySelfMetric) RequiresConn() bool {
 }
 
 func (m *CustomQuerySelfMetric) Read(ctx context.Context, conn *connpool.Conn) *ThrottleMetric {
-	query := ""
-	if val := m.customQuery.Load(); val != nil {
-		query = val.(string)
-	}
-	return ReadSelfMySQLThrottleMetric(ctx, conn, query)
+	return ReadSelfMySQLThrottleMetric(ctx, conn, m.GetQuery())
 }

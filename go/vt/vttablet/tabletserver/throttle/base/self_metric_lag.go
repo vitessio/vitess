@@ -18,18 +18,34 @@ package base
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 var (
-	LagSelfMetricQuery = "show global status like 'threads_running'"
+	lagSelfMetricQueryBase = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat"
 )
 
 var _ SelfMetric = registerSelfMetric(&LagSelfMetric{})
 
 type LagSelfMetric struct {
+	lagSelfMetricQuery atomic.Value
+}
+
+// SetQuery is only used by unit tests to override the query.
+func (m *LagSelfMetric) SetQuery(query string) {
+	m.lagSelfMetricQuery.Store(query)
+}
+
+func (m *LagSelfMetric) GetQuery() string {
+	if query := m.lagSelfMetricQuery.Load(); query == nil {
+		m.lagSelfMetricQuery.Store(sqlparser.BuildParsedQuery(lagSelfMetricQueryBase, sidecar.GetIdentifier()).Query)
+	}
+	return m.lagSelfMetricQuery.Load().(string)
 }
 
 func (m *LagSelfMetric) Name() MetricName {
@@ -49,5 +65,5 @@ func (m *LagSelfMetric) RequiresConn() bool {
 }
 
 func (m *LagSelfMetric) Read(ctx context.Context, conn *connpool.Conn) *ThrottleMetric {
-	return ReadSelfMySQLThrottleMetric(ctx, conn, LagSelfMetricQuery)
+	return ReadSelfMySQLThrottleMetric(ctx, conn, m.GetQuery())
 }

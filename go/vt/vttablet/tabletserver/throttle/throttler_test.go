@@ -241,7 +241,8 @@ func newTestThrottler() *Throttler {
 		tabletTypeFunc:    func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
 		overrideTmClient:  &fakeTMClient{},
 	}
-	throttler.metricsQuery.Store(metricsQuery)
+	lagSelfMetric := base.RegisteredSelfMetrics[base.LagMetricName].(*base.LagSelfMetric)
+	lagSelfMetric.SetQuery(metricsQuery)
 	throttler.MetricsThreshold.Store(math.Float64bits(0.75))
 	throttler.configSettings = config.NewConfigurationSettings()
 	throttler.initConfig()
@@ -283,6 +284,9 @@ func newTestThrottler() *Throttler {
 		return selfMetrics
 	}
 	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottlerName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
+	if customQuerySelfMetric, ok := base.RegisteredSelfMetrics[base.CustomMetricName].(*base.CustomQuerySelfMetric); ok {
+		customQuerySelfMetric.SetQueryFunc(throttler.GetCustomMetricsQuery)
+	}
 
 	return throttler
 }
@@ -916,7 +920,8 @@ func TestRefreshInventory(t *testing.T) {
 		ts:                &FakeTopoServer{},
 		inventory:         base.NewInventory(),
 	}
-	throttler.metricsQuery.Store(metricsQuery)
+	lagSelfMetric := base.RegisteredSelfMetrics[base.LagMetricName].(*base.LagSelfMetric)
+	lagSelfMetric.SetQuery(metricsQuery)
 	throttler.configSettings = configSettings
 	throttler.initConfig()
 	throttler.initThrottleTabletTypes()

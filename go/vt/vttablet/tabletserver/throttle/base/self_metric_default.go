@@ -16,10 +16,16 @@ limitations under the License.
 
 package base
 
+import (
+	"context"
+	"fmt"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+)
+
 var _ SelfMetric = registerSelfMetric(&DefaultSelfMetric{})
 
 type DefaultSelfMetric struct {
-	LagSelfMetric
 }
 
 func (m *DefaultSelfMetric) Name() MetricName {
@@ -28,4 +34,18 @@ func (m *DefaultSelfMetric) Name() MetricName {
 
 func (m *DefaultSelfMetric) DefaultScope() Scope {
 	return SelfScope
+}
+
+func (m *DefaultSelfMetric) DefaultThreshold() float64 {
+	return 0
+}
+
+func (m *DefaultSelfMetric) RequiresConn() bool {
+	return false
+}
+
+func (m *DefaultSelfMetric) Read(ctx context.Context, conn *connpool.Conn) *ThrottleMetric {
+	return &ThrottleMetric{
+		Err: fmt.Errorf("unexpected direct call to DefaultSelfMetric.Read"),
+	}
 }

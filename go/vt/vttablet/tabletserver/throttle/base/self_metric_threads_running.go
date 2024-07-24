@@ -19,14 +19,11 @@ package base
 import (
 	"context"
 
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 var (
-	lagSelfMetricQueryBase = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat"
-	lagSelfMetricQuery     = sqlparser.BuildParsedQuery(lagSelfMetricQueryBase, sidecar.GetIdentifier()).Query
+	threadsRunningMetricQuery = "show global status like 'threads_running'"
 )
 
 var _ SelfMetric = registerSelfMetric(&ThreadsRunningSelfMetric{})
@@ -51,5 +48,5 @@ func (m *ThreadsRunningSelfMetric) RequiresConn() bool {
 }
 
 func (m *ThreadsRunningSelfMetric) Read(ctx context.Context, conn *connpool.Conn) *ThrottleMetric {
-	return ReadSelfMySQLThrottleMetric(ctx, conn, lagSelfMetricQuery)
+	return ReadSelfMySQLThrottleMetric(ctx, conn, threadsRunningMetricQuery)
 }
