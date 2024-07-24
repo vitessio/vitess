@@ -685,7 +685,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 	case sqltypes.Uint16:
 		val, pos, ok := readUint16(data, pos)
 		return sqltypes.NewUint64(uint64(val)), pos, ok
-	case sqltypes.Int16, sqltypes.Year:
+	case sqltypes.Int16:
 		val, pos, ok := readUint16(data, pos)
 		return sqltypes.NewInt64(int64(int16(val))), pos, ok
 	case sqltypes.Uint24, sqltypes.Uint32:
@@ -890,7 +890,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		default:
 			return sqltypes.NULL, 0, false
 		}
-	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Char,
+	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Year, sqltypes.Char,
 		sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON:
 		val, pos, ok := readLenEncStringAsBytesCopy(data, pos)
 		return sqltypes.MakeTrusted(sqltypes.VarBinary, val), pos, ok

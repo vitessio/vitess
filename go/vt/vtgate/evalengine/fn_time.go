@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
@@ -1859,6 +1860,11 @@ func (call *builtinWeekOfYear) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
+func yearType(version string) bool {
+	capability, _ := capabilities.ServerVersionAtLeast(version, 8, 1, 0)
+	return capability
+}
+
 func (b *builtinYear) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -1872,6 +1878,9 @@ func (b *builtinYear) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
+	if yearType(env.currentVersion()) {
+		return newEvalYear(int64(d.dt.Date.Year())), nil
+	}
 	return newEvalInt64(int64(d.dt.Date.Year())), nil
 }
 
@@ -1889,7 +1898,7 @@ func (call *builtinYear) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xD(1, true)
 	}
 
-	c.asm.Fn_YEAR()
+	c.asm.Fn_YEAR(yearType(c.env.MySQLVersion()))
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
