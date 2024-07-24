@@ -211,20 +211,9 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 		if err == nil {
 			return
 		}
-		warningMsg := fmt.Sprintf("%s distributed transaction ID failed during", dtid)
-		switch txPhase {
-		case COMMIT2PC_CREATETRANSACTION:
-			warningMsg += " transaction record creation"
-		case COMMIT2PC_PREPARE:
-			warningMsg += " transaction prepare phase"
-		case COMMIT2PC_STARTCOMMIT:
-			warningMsg += " metadata manager commit"
-		case COMMIT2PC_PREPARECOMMIT:
-			warningMsg += " resource manager commit"
-		case COMMIT2PC_CONCLUDE:
-			warningMsg += " transaction conclusion"
-		}
-		session.RecordWarning(&querypb.QueryWarning{Code: uint32(sqlerror.ERInAtomicRecovery), Message: warningMsg})
+		session.RecordWarning(&querypb.QueryWarning{
+			Code:    uint32(sqlerror.ERInAtomicRecovery),
+			Message: createWarningMessage(dtid, txPhase)})
 	}()
 
 	if err = txc.tabletGateway.CreateTransaction(ctx, mmShard.Target, dtid, participants); err != nil {
@@ -236,6 +225,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 	if DebugTwoPc {
 		// Test code to simulate a failure after RM prepare
 		if terr := checkTestFailure(ctx, "TRCreated_FailNow", nil); terr != nil {
+			_ = txc.Rollback(ctx, session)
 			return errors.Wrapf(terr, "%v", dtid)
 		}
 	}
@@ -296,6 +286,23 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 
 	txPhase = COMMIT2PC_CONCLUDE
 	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+}
+
+func createWarningMessage(dtid string, txPhase int) string {
+	warningMsg := fmt.Sprintf("%s distributed transaction ID failed during", dtid)
+	switch txPhase {
+	case COMMIT2PC_CREATETRANSACTION:
+		warningMsg += " transaction record creation"
+	case COMMIT2PC_PREPARE:
+		warningMsg += " transaction prepare phase"
+	case COMMIT2PC_STARTCOMMIT:
+		warningMsg += " metadata manager commit"
+	case COMMIT2PC_PREPARECOMMIT:
+		warningMsg += " resource manager commit"
+	case COMMIT2PC_CONCLUDE:
+		warningMsg += " transaction conclusion"
+	}
+	return warningMsg
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.

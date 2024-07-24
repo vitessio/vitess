@@ -882,3 +882,37 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
+
+// TestDTWarningAfterMMCommit tests that failure after MM commit returns a warning.
+func TestDTWarningAfterMMCommit(t *testing.T) {
+	defer cleanup(t)
+
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	conn := vtgateConn.Session("", nil)
+	qCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Insert into multiple shards
+	_, err = conn.Execute(qCtx, "begin", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(9,'baz')", nil)
+	require.NoError(t, err)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil)
+	require.NoError(t, err)
+
+	// The caller ID is used to simulate the failure at the desired point.
+	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
+	_, err = conn.Execute(newCtx, "commit", nil)
+	require.ErrorContains(t, err, "Fail After MM commit")
+
+	qr, err := conn.Execute(qCtx, "show warnings", nil)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("Warning") UINT16(302) VARCHAR("ks:80-:`)
+	require.Contains(t, fmt.Sprintf("%v", qr.Rows), `distributed transaction ID failed during metadata manager commit`)
+}
