@@ -89,6 +89,7 @@ func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[strin
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var fields []*querypb.Field
 	var rrow sqltypes.Row
+	stats := &sqltypes.Result{}
 	for _, lf := range l.LockFunctions {
 		var lName string
 		if lf.Name != nil {
@@ -105,6 +106,7 @@ func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[strin
 		fields = append(fields, qr.Fields...)
 		lockRes := qr.Rows[0]
 		rrow = append(rrow, lockRes...)
+		stats.MergeStats(qr)
 
 		switch lf.Typ.Type {
 		case sqlparser.IsFreeLock, sqlparser.IsUsedLock:
@@ -130,10 +132,12 @@ func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[strin
 			}
 		}
 	}
-	return &sqltypes.Result{
+	result := &sqltypes.Result{
 		Fields: fields,
 		Rows:   []sqltypes.Row{rrow},
-	}, nil
+	}
+	result.MergeStats(stats)
+	return result, nil
 }
 
 func (lf *LockFunc) execLock(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
