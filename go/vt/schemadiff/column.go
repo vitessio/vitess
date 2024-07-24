@@ -341,7 +341,7 @@ func (c *ColumnDefinitionEntity) HasEnumValues() bool {
 func (c *ColumnDefinitionEntity) EnumValuesOrdinals() map[string]int {
 	m := make(map[string]int, len(c.ColumnDefinition.Type.EnumValues))
 	for i, enumValue := range c.ColumnDefinition.Type.EnumValues {
-		m[enumValue] = i
+		m[enumValue] = i + 1
 	}
 	return m
 }
