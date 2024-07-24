@@ -47,6 +47,9 @@ var ErrNoResultYet = errors.New("metric not collected yet")
 // ErrNoSuchMetric is for when a user requests a metric by an unknown metric name
 var ErrNoSuchMetric = errors.New("no such metric")
 
+// ErrAppDenied is seen when an app is denied access
+var ErrAppDenied = errors.New("App denied")
+
 // ErrInvalidCheckType is an internal error indicating an unknown check type
 var ErrInvalidCheckType = errors.New("unknown throttler check type")
 
@@ -102,3 +105,13 @@ func NewSimpleMetricResult(value float64) MetricResult {
 func (metricResult *simpleMetricResult) Get() (float64, error) {
 	return metricResult.Value, nil
 }
+
+type appDeniedMetric struct{}
+
+// Get implements MetricResult
+func (metricResult *appDeniedMetric) Get() (float64, error) {
+	return 0, ErrAppDenied
+}
+
+// AppDeniedMetric is a special metric indicating a "denied" situation
+var AppDeniedMetric = &appDeniedMetric{}
