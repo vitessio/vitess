@@ -71,10 +71,6 @@ func (c *terminalClient) CloseSession(ctx context.Context, session *vtgatepb.Ses
 	return errTerminal
 }
 
-func (c *terminalClient) ResolveTransaction(ctx context.Context, dtid string) error {
-	return errTerminal
-}
-
 func (c *terminalClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
 	return errTerminal
 }

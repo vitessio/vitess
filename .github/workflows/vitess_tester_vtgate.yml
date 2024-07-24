@@ -134,6 +134,7 @@ jobs:
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
         source build.env
+        export NOVTADMINBUILD=1
         make build
 
         set -exo pipefail

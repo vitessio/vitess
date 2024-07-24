@@ -551,7 +551,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
-%type <empty> to_opt
+%type <empty> to_opt for_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
@@ -4230,6 +4230,15 @@ show_statement:
   {
     $$ = &Show{&ShowOther{Command: string($2)}}
   }
+| SHOW TRANSACTION STATUS for_opt STRING
+  {
+    $$ = &Show{&ShowTransactionStatus{TransactionID: string($5)}}
+  }
+
+for_opt:
+  {}
+| FOR
+  {}
 
 extended_opt:
   /* empty */
