@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -30,6 +32,7 @@ import (
 // TestDeleteCascade tests that FkCascade executes the child and parent primitives for a delete cascade.
 func TestDeleteCascade(t *testing.T) {
 	fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|colb", "int64|varchar"), "1|a", "2|b")
+	fakeRes.RowsAffected = 1
 
 	inputP := &Route{
 		Query: "select cola, colb from parent where foo = 48",
@@ -63,9 +66,14 @@ func TestDeleteCascade(t *testing.T) {
 	}
 
 	vc := newDMLTestVCursor("0")
-	vc.results = []*sqltypes.Result{fakeRes}
-	_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+	vc.results = []*sqltypes.Result{
+		fakeRes,
+		{RowsAffected: 2},
+		{RowsAffected: 3},
+	}
+	results, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
+	assert.Equal(t, &sqltypes.Result{RowsAffected: 6}, results.Stats())
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,

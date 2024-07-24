@@ -85,25 +85,28 @@ func (fkc *FkCascade) GetFields(_ context.Context, _ VCursor, _ map[string]*quer
 
 // TryExecute implements the Primitive interface.
 func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	stats := &sqltypes.Result{}
+
 	// Execute the Selection primitive to find the rows that are going to modified.
 	// This will be used to find the rows that need modification on the children.
 	selectionRes, err := vcursor.ExecutePrimitive(ctx, fkc.Selection, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
+	stats.MergeStats(selectionRes)
 
 	// If no rows are to be modified, there is nothing to do.
 	if len(selectionRes.Rows) == 0 {
-		return &sqltypes.Result{}, nil
+		return stats, nil
 	}
 
 	for _, child := range fkc.Children {
 		// Having non-empty UpdateExprBvNames is an indication that we have an update query with non-literal expressions in it.
 		// We need to run this query differently because we need to run an update for each row we get back from the SELECT.
 		if len(child.NonLiteralInfo) > 0 {
-			err = fkc.executeNonLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child)
+			err = fkc.executeNonLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, stats)
 		} else {
-			err = fkc.executeLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, false)
+			err = fkc.executeLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, false, stats)
 		}
 		if err != nil {
 			return nil, err
@@ -111,10 +114,15 @@ func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}
 
 	// All the children are modified successfully, we can now execute the Parent Primitive.
-	return vcursor.ExecutePrimitive(ctx, fkc.Parent, bindVars, wantfields)
+	results, err := vcursor.ExecutePrimitive(ctx, fkc.Parent, bindVars, wantfields)
+	if results != nil {
+		results.MergeStats(stats)
+	}
+
+	return results, err
 }
 
-func (fkc *FkCascade) executeLiteralExprFkChild(ctx context.Context, vcursor VCursor, in map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild, isStreaming bool) error {
+func (fkc *FkCascade) executeLiteralExprFkChild(ctx context.Context, vcursor VCursor, in map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild, isStreaming bool, stats *sqltypes.Result) error {
 	bindVars := maps.Clone(in)
 	// We create a bindVariable that stores the tuple of columns involved in the fk constraint.
 	bv := &querypb.BindVariable{
@@ -133,18 +141,22 @@ func (fkc *FkCascade) executeLiteralExprFkChild(ctx context.Context, vcursor VCu
 	// be rolled back incase of an error.
 	bindVars[child.BVName] = bv
 	var err error
+	var result *sqltypes.Result
 	if isStreaming {
 		err = vcursor.StreamExecutePrimitive(ctx, child.Exec, bindVars, wantfields, func(result *sqltypes.Result) error { return nil })
 	} else {
-		_, err = vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
+		result, err = vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
 	}
 	if err != nil {
 		return err
 	}
+	if result != nil {
+		stats.MergeStats(result)
+	}
 	return nil
 }
 
-func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor VCursor, in map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild) error {
+func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor VCursor, in map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild, stats *sqltypes.Result) error {
 	// For each row in the SELECT we need to run the child primitive.
 	for _, row := range selectionRes.Rows {
 		bindVars := maps.Clone(in)
@@ -187,10 +199,11 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 		for _, info := range child.NonLiteralInfo {
 			bindVars[info.UpdateExprBvName] = sqltypes.ValueBindVariable(row[info.UpdateExprCol])
 		}
-		_, err := vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
+		result, err := vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
 		if err != nil {
 			return err
 		}
+		stats.MergeStats(result)
 	}
 	return nil
 }
