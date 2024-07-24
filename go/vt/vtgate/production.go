@@ -25,4 +25,4 @@ package vtgate
 // This allows to have debugging code written in normal code flow without affecting
 // production performance.
 
-const DEBUG_2PC = false
+const DebugTwoPc = false
