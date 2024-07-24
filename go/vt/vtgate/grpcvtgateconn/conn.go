@@ -234,15 +234,6 @@ func (conn *vtgateConn) CloseSession(ctx context.Context, session *vtgatepb.Sess
 	return nil
 }
 
-func (conn *vtgateConn) ResolveTransaction(ctx context.Context, dtid string) error {
-	request := &vtgatepb.ResolveTransactionRequest{
-		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		Dtid:     dtid,
-	}
-	_, err := conn.c.ResolveTransaction(ctx, request)
-	return vterrors.FromGRPC(err)
-}
-
 type vstreamAdapter struct {
 	stream vtgateservicepb.Vitess_VStreamClient
 }

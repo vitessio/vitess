@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -420,6 +421,10 @@ func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltyp
 		results = append(results, qr)
 	}
 	return results, nil
+}
+
+func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return dbc.conn.SupportsCapability(capability)
 }
 
 //----------------------------------------------

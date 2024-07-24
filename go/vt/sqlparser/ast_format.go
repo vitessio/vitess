@@ -37,8 +37,20 @@ func (node *Select) Format(buf *TrackedBuffer) {
 			buf.literal(SQLNoCacheStr)
 		}
 	}
+	if node.HighPriority {
+		buf.literal(HighPriorityStr)
+	}
 	if node.StraightJoinHint {
 		buf.literal(StraightJoinHint)
+	}
+	if node.SQLSmallResult {
+		buf.literal(SQLSmallResultStr)
+	}
+	if node.SQLBigResult {
+		buf.literal(SQLBigResultStr)
+	}
+	if node.SQLBufferResult {
+		buf.literal(SQLBufferResultStr)
 	}
 	if node.SQLCalcFoundRows {
 		buf.literal(SQLCalcFoundRowsStr)
@@ -2135,6 +2147,10 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+}
+
+func (node *ShowTransactionStatus) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show transaction status for '%#s'", node.TransactionID)
 }
 
 // Format formats the node.

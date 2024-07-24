@@ -1884,6 +1884,112 @@
     }
   },
   {
+    "comment": "Complex expression in a subquery used in IN clause of an aggregate query",
+    "query": "select count(*) from user where user.id = 2 or user.id in (select id from unsharded_a where colb = 2)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user where user.id = 2 or user.id in (select id from unsharded_a where colb = 2)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from unsharded_a where 1 != 1",
+                "Query": "select id from unsharded_a where colb = 2",
+                "Table": "unsharded_a"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from `user` where 1 != 1",
+                "Query": "select count(*) from `user` where `user`.id = 2 or :__sq_has_values and `user`.id in ::__sq1",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Complex expression in a subquery used in NOT IN clause of an aggregate query",
+    "query": "select count(*) from user where user.id = 2 or user.id not in (select id from unsharded_a where colb = 2)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user where user.id = 2 or user.id not in (select id from unsharded_a where colb = 2)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutNotIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from unsharded_a where 1 != 1",
+                "Query": "select id from unsharded_a where colb = 2",
+                "Table": "unsharded_a"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from `user` where 1 != 1",
+                "Query": "select count(*) from `user` where `user`.id = 2 or (not :__sq_has_values or `user`.id not in ::__sq1)",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "testing SingleRow Projection with arithmetics",
     "query": "select 42+2",
     "plan": {
@@ -2741,6 +2847,28 @@
       "TablesUsed": [
         "user.user",
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Dual query should be handled on the vtgate even with a LIMIT",
+    "query": "select last_insert_id() limit 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id() limit 1",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          ":__lastInsertId as last_insert_id()"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
       ]
     }
   },

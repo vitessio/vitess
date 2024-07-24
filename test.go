@@ -98,6 +98,7 @@ var (
 	dryRun       = flag.Bool("dry-run", false, "For each test to be run, it will output the test attributes, but NOT run the tests. Useful while debugging changes to test.go (this file)")
 	remoteStats  = flag.String("remote-stats", "", "url to send remote stats")
 	buildVTAdmin = flag.Bool("build-vtadmin", false, "Enable or disable VTAdmin build during 'make build'")
+	buildTag     = flag.String("build-tag", "", "Build tag to create a custom debug build")
 )
 
 var (
@@ -432,6 +433,9 @@ func main() {
 		command := exec.Command("make", "build")
 		if !*buildVTAdmin {
 			command.Env = append(os.Environ(), "NOVTADMINBUILD=1")
+		}
+		if *buildTag != "" {
+			command.Env = append(command.Env, fmt.Sprintf(`EXTRA_BUILD_TAGS=%s`, *buildTag))
 		}
 		if out, err := command.CombinedOutput(); err != nil {
 			log.Fatalf("make build failed; exit code: %d, error: %v\n%s",
