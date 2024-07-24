@@ -31,6 +31,7 @@ type mysqlVersion string
 const (
 	mysql57 mysqlVersion = "mysql57"
 	mysql80 mysqlVersion = "mysql80"
+	mysql84 mysqlVersion = "mysql84"
 
 	defaultMySQLVersion = mysql80
 )
@@ -42,7 +43,7 @@ var (
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80}
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
 )
 
 const (
@@ -122,6 +123,10 @@ var (
 		"vttablet_prscomplex",
 	}
 
+	buildTag = map[string]string{
+		"vtgate_transaction": "debug2PC",
+	}
+
 	vitessTesterMap = map[string]string{
 		"vtgate": "./go/test/endtoend/vtgate/vitess_tester",
 	}
@@ -158,6 +163,7 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard, Platform              string
 	FileName                           string
+	BuildTag                           string
 	MemoryCheck                        bool
 	MakeTools, InstallXtraBackup       bool
 	Docker                             bool
@@ -245,8 +251,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions() {
 			test := &clusterTest{
-				Name:  fmt.Sprintf("Cluster (%s)", cluster),
-				Shard: cluster,
+				Name:     fmt.Sprintf("Cluster (%s)", cluster),
+				Shard:    cluster,
+				BuildTag: buildTag[cluster],
 			}
 			cores16Clusters := canonnizeList(clusterRequiring16CoresMachines)
 			for _, cores16Cluster := range cores16Clusters {

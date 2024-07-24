@@ -838,5 +838,17 @@
         "Filter": " like 'x'"
       }
     }
+  },
+  {
+    "comment": "show transaction status plan",
+    "query": "show transaction status for 'ks:-80:v24s7843sf78934l3'",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show transaction status for 'ks:-80:v24s7843sf78934l3'",
+      "Instructions": {
+        "OperatorType": "TransactionStatus",
+        "TransactionID": "ks:-80:v24s7843sf78934l3"
+      }
+    }
   }
 ]

@@ -2149,6 +2149,10 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v", node.Filter)
 }
 
+func (node *ShowTransactionStatus) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show transaction status for '%#s'", node.TransactionID)
+}
+
 // Format formats the node.
 func (node *ShowCreate) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "show%s %v", node.Command.ToString(), node.Op)

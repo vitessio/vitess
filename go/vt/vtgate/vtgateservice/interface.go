@@ -42,9 +42,6 @@ type VTGateService interface {
 	// but does not affect the query statistics.
 	CloseSession(ctx context.Context, session *vtgatepb.Session) error
 
-	// 2PC support
-	ResolveTransaction(ctx context.Context, dtid string) error
-
 	// Update Stream methods
 	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error
 

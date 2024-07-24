@@ -2829,6 +2829,12 @@ func (node *ShowBasic) FormatFast(buf *TrackedBuffer) {
 	node.Filter.FormatFast(buf)
 }
 
+func (node *ShowTransactionStatus) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show transaction status for '")
+	buf.WriteString(node.TransactionID)
+	buf.WriteByte('\'')
+}
+
 // FormatFast formats the node.
 func (node *ShowCreate) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("show")

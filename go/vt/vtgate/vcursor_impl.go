@@ -86,6 +86,7 @@ type iExecute interface {
 	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
 
 	environment() *vtenv.Environment
+	ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -248,6 +249,10 @@ func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
 // IsShardRoutingEnabled implements the VCursor interface.
 func (vc *vcursorImpl) IsShardRoutingEnabled() bool {
 	return enableShardRouting
+}
+
+func (vc *vcursorImpl) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	return vc.executor.ReadTransaction(ctx, transactionID)
 }
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.

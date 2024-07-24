@@ -81,6 +81,7 @@ endif
 	bash ./build.env
 	go build -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		-ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)"  \
+		-tags "$(EXTRA_BUILD_TAGS)" \
 		-o ${VTROOTBIN} ./go/...
 
 # build the vitess binaries statically
@@ -94,6 +95,7 @@ endif
 	CGO_ENABLED=0 go build \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		    -ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)" \
+		    -tags "$(EXTRA_BUILD_TAGS)" \
 		    -o ${VTROOTBIN} ./go/...
 ifndef NOVTADMINBUILD
 	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
@@ -116,6 +118,7 @@ endif
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build         \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		    -ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)" \
+		    -tags "$(EXTRA_BUILD_TAGS)" \
 		    -o ${VTROOTBIN}/${GOOS}_${GOARCH} ./go/...
 
 	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
@@ -130,6 +133,7 @@ endif
 	go build -trimpath \
 		$(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		-ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)"  \
+		-tags "$(EXTRA_BUILD_TAGS)" \
 		-gcflags -'N -l' \
 		-o ${VTROOTBIN} ./go/...
 
