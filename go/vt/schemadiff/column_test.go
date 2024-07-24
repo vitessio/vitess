@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -460,4 +462,36 @@ func TestColumnDefinitionEntityListSubset(t *testing.T) {
 
 	assert.True(t, list1.Contains(list2))
 	assert.False(t, list2.Contains(list1))
+}
+
+func TestColumnDefinitionEntity(t *testing.T) {
+	table1 := `
+	create table t (
+		it int,
+		e enum('a','b','c'),
+		primary key (id)
+	)`
+	env := NewTestEnv()
+	createTableEntity1, err := NewCreateTableEntityFromSQL(env, table1)
+	require.NoError(t, err)
+	entities1 := createTableEntity1.ColumnDefinitionEntities()
+	require.NotEmpty(t, entities1)
+	list1 := NewColumnDefinitionEntityList(entities1)
+
+	t.Run("enum", func(t *testing.T) {
+		enumCol := list1.GetColumn("e")
+		require.NotNil(t, enumCol)
+		assert.Equal(t, []string{"'a'", "'b'", "'c'"}, enumCol.EnumValues())
+
+		{
+			ordinalsMap := enumCol.EnumValuesOrdinals()
+			assert.ElementsMatch(t, []int{1, 2, 3}, maps.Values(ordinalsMap))
+			assert.ElementsMatch(t, []string{"'a'", "'b'", "'c'"}, maps.Keys(ordinalsMap))
+		}
+		{
+			valuesMap := enumCol.EnumOrdinalValues()
+			assert.ElementsMatch(t, []int{1, 2, 3}, maps.Keys(valuesMap))
+			assert.ElementsMatch(t, []string{"'a'", "'b'", "'c'"}, maps.Values(valuesMap))
+		}
+	})
 }
