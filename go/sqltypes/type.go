@@ -276,10 +276,6 @@ func modifyType(typ querypb.Type, flags int64) querypb.Type {
 		if flags&mysqlSet != 0 {
 			return Set
 		}
-	case Year:
-		if flags&mysqlBinary != 0 {
-			return VarBinary
-		}
 	}
 	return typ
 }
