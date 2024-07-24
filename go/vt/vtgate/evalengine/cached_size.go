@@ -2068,6 +2068,16 @@ func (cached *evalUint64) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *evalYear) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	return size
+}
 func (cached *typedExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -315,10 +315,7 @@ func TestComStmtExecuteUpdStmt(t *testing.T) {
 	assert.EqualValues(t, querypb.Type_DATETIME, prepData.ParamsType[15], "got: %s", querypb.Type(prepData.ParamsType[15]))
 	assert.EqualValues(t, querypb.Type_TIMESTAMP, prepData.ParamsType[16], "got: %s", querypb.Type(prepData.ParamsType[16]))
 	assert.EqualValues(t, querypb.Type_TIME, prepData.ParamsType[17], "got: %s", querypb.Type(prepData.ParamsType[17]))
-
-	// this is year but in binary it is changed to varbinary
-	assert.EqualValues(t, querypb.Type_VARBINARY, prepData.ParamsType[18], "got: %s", querypb.Type(prepData.ParamsType[18]))
-
+	assert.EqualValues(t, querypb.Type_YEAR, prepData.ParamsType[18], "got: %s", querypb.Type(prepData.ParamsType[18]))
 	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[19], "got: %s", querypb.Type(prepData.ParamsType[19]))
 	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[20], "got: %s", querypb.Type(prepData.ParamsType[20]))
 	assert.EqualValues(t, querypb.Type_TEXT, prepData.ParamsType[21], "got: %s", querypb.Type(prepData.ParamsType[21]))
