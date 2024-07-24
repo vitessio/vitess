@@ -83,7 +83,7 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 		if res == nil {
 			res = qr
 		} else {
-			res.RowsAffected += qr.RowsAffected
+			res.MergeStats(qr)
 		}
 	}
 	return res, nil
@@ -146,7 +146,7 @@ func executeNonLiteralUpdate(ctx context.Context, vcursor VCursor, bindVars map[
 		if res == nil {
 			res = qr
 		} else {
-			res.RowsAffected += qr.RowsAffected
+			res.MergeStats(qr)
 		}
 	}
 	return res, nil
