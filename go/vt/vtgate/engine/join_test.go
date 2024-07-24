@@ -21,6 +21,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -42,6 +44,7 @@ func TestJoinExecute(t *testing.T) {
 			),
 		},
 	}
+	leftPrim.results[0].RowsAffected = 1
 	rightFields := sqltypes.MakeTestFields(
 		"col4|col5|col6",
 		"int64|varchar|varchar",
@@ -63,6 +66,10 @@ func TestJoinExecute(t *testing.T) {
 			),
 		},
 	}
+	rightPrim.results[0].RowsAffected = 2
+	rightPrim.results[1].RowsAffected = 3
+	rightPrim.results[2].RowsAffected = 4
+
 	bv := map[string]*querypb.BindVariable{
 		"a": sqltypes.Int64BindVariable(10),
 	}
@@ -99,6 +106,7 @@ func TestJoinExecute(t *testing.T) {
 		"3|c|6|f",
 		"3|c|7|g",
 	))
+	assert.Equal(t, uint64(10), r.RowsAffected)
 
 	// Left Join
 	leftPrim.rewind()
@@ -127,6 +135,7 @@ func TestJoinExecute(t *testing.T) {
 		"3|c|6|f",
 		"3|c|7|g",
 	))
+	assert.Equal(t, uint64(10), r.RowsAffected)
 }
 
 func TestJoinExecuteMaxMemoryRows(t *testing.T) {

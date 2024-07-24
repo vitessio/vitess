@@ -60,6 +60,7 @@ func (jn *Join) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 		return nil, err
 	}
 	result := &sqltypes.Result{}
+	result.MergeStats(lresult)
 	if len(lresult.Rows) == 0 && wantfields {
 		for k, col := range jn.Vars {
 			joinVars[k] = bindvarForType(lresult.Fields[col])
@@ -86,6 +87,7 @@ func (jn *Join) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 		for _, rrow := range rresult.Rows {
 			result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
 		}
+		result.MergeStats(rresult)
 		if jn.Opcode == LeftJoin && len(rresult.Rows) == 0 {
 			result.Rows = append(result.Rows, joinRows(lrow, nil, jn.Cols))
 		}
