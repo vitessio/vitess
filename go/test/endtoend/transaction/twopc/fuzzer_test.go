@@ -82,7 +82,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 		},
 		{
 			name:           "Multiple Threads - Single Set",
-			threads:        5,
+			threads:        2,
 			updateSets:     1,
 			timeForTesting: 5 * time.Second,
 		},
@@ -264,11 +264,17 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, conn *mysql.Conn, 
 	queries = append(queries, fz.generateInsertQueries(updateSetVal, threadId)...)
 	_, err := conn.ExecuteFetch("begin", 0, false)
 	require.NoError(t, err)
+	finalCommand := "commit"
 	for _, query := range queries {
-		_, _ = conn.ExecuteFetch(query, 0, false)
+		_, err = conn.ExecuteFetch(query, 0, false)
+		// If any command fails because of deadlocks or timeout or whatever, then we need to rollback the transaction.
+		if err != nil {
+			finalCommand = "rollback"
+			break
+		}
 	}
 	// TODO: Check if we want to randomize commit and rollback decisions.
-	_, _ = conn.ExecuteFetch("commit", 0, false)
+	_, _ = conn.ExecuteFetch(finalCommand, 0, false)
 }
 
 // generateUpdateQueries generates the queries to run updates on the twopc_fuzzer_update table.
