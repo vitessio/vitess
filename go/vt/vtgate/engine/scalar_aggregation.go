@@ -100,6 +100,7 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 		Fields: fields,
 		Rows:   [][]sqltypes.Value{agg.finish()},
 	}
+	out.MergeStats(result)
 	return out.Truncate(sa.TruncateColumnCount), nil
 }
 

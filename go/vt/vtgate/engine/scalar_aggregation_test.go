@@ -79,6 +79,7 @@ func TestEmptyRows(outer *testing.T) {
 					// Empty input table
 				)},
 			}
+			fp.results[0].RowsAffected = 1
 
 			oa := &ScalarAggregate{
 				Aggregates: []*AggregateParams{{
@@ -100,6 +101,8 @@ func TestEmptyRows(outer *testing.T) {
 				),
 				test.expectedVal,
 			)
+			// Ensure Result stats are passed through
+			wantResult.RowsAffected = 1
 			utils.MustMatch(t, wantResult, result)
 		})
 	}
