@@ -16,7 +16,7 @@ limitations under the License.
 
 package servenv
 
+// THIS FILE IS AUTO-GENERATED DURING NEW RELEASES BY ./tools/do_releases.sh
 // DO NOT EDIT
-// THIS FILE IS AUTO-GENERATED DURING NEW RELEASES BY THE VITESS-RELEASER
 
-const versionName = "18.0.5"
+const versionName = "18.0.5-shopify-3"
