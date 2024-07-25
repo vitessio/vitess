@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
 )
@@ -41,6 +42,8 @@ var (
 	}
 
 	insertIntoFuzzUpdate = "INSERT INTO twopc_fuzzer_update (id, col) VALUES (%d, %d)"
+	updateFuzzUpdate     = "UPDATE twopc_fuzzer_update SET col = col + %d WHERE id = %d"
+	insertIntoFuzzInsert = "INSERT INTO twopc_fuzzer_insert (id, updateSet) VALUES (%d, %d)"
 )
 
 // TestTwoPCFuzzTest tests 2PC transactions in a fuzzer environment.
@@ -134,13 +137,13 @@ func (fz *fuzzer) start(t *testing.T) {
 	fz.wg.Add(fz.threads)
 	for i := 0; i < fz.threads; i++ {
 		go func() {
-			fz.runFuzzerThread(t)
+			fz.runFuzzerThread(t, i)
 		}()
 	}
 }
 
 // runFuzzerThread is used to run a thread of the fuzzer.
-func (fz *fuzzer) runFuzzerThread(t *testing.T) {
+func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 	// Whenever we finish running this thread, we should mark the thread has stopped.
 	defer func() {
 		fz.wg.Done()
@@ -157,7 +160,7 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T) {
 			return
 		}
 		// Run an atomic transaction
-		fz.generateAndExecuteTransaction(conn)
+		fz.generateAndExecuteTransaction(t, conn, threadId)
 	}
 
 }
@@ -181,6 +184,48 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 	}
 }
 
-func (fz *fuzzer) generateAndExecuteTransaction(conn *mysql.Conn) {
+// generateAndExecuteTransaction generates the queries of the transaction and then executes them.
+func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, conn *mysql.Conn, threadId int) {
+	// randomly generate an update set to use and the value to increment it by.
+	updateSetVal := rand.Intn(fz.updateSets)
+	incrementVal := rand.Int31()
+	// We have to generate the update queries first. We can run the inserts only after the update queries.
+	// Otherwise, our check to see that the ids in the twopc_fuzzer_insert table in all the shards are the exact same
+	// for each update set ordered by the auto increment column will not be true.
+	// That assertion depends on all the transactions running updates first to ensure that for any given update set,
+	// no two transactions are running the insert queries.
+	queries := fz.generateUpdateQueries(updateSetVal, incrementVal)
+	queries = append(queries, fz.generateInsertQueries(updateSetVal, threadId)...)
+	_, err := conn.ExecuteFetch("begin", 0, false)
+	require.NoError(t, err)
+	for _, query := range queries {
+		_, _ = conn.ExecuteFetch(query, 0, false)
+	}
+	_, _ = conn.ExecuteFetch("commit", 0, false)
+}
 
+// generateUpdateQueries generates the queries to run updates on the twopc_fuzzer_update table.
+// It takes the update set index and the value to increment the set by.
+func (fz *fuzzer) generateUpdateQueries(updateSet int, incrementVal int32) []string {
+	var queries []string
+	for _, id := range updateRowsVals[updateSet] {
+		queries = append(queries, fmt.Sprintf(updateFuzzUpdate, incrementVal, id))
+	}
+	rand.Shuffle(len(queries), func(i, j int) {
+		queries[i], queries[j] = queries[j], queries[i]
+	})
+	return queries
+}
+
+// generateInsertQueries generates the queries to run inserts on the twopc_fuzzer_insert table.
+// It takes the update set index and the thread id that is generating these inserts.
+func (fz *fuzzer) generateInsertQueries(updateSet int, threadId int) []string {
+	var queries []string
+	for _, id := range updateRowsVals[0] {
+		queries = append(queries, fmt.Sprintf(insertIntoFuzzInsert, updateSet, threadId*16+id))
+	}
+	rand.Shuffle(len(queries), func(i, j int) {
+		queries[i], queries[j] = queries[j], queries[i]
+	})
+	return queries
 }
