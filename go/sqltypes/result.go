@@ -153,7 +153,6 @@ func (result *Result) Truncate(l int) *Result {
 
 	out := &Result{
 		InsertID:            result.InsertID,
-		RowsAffected:        result.RowsAffected,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
 	}
@@ -166,6 +165,7 @@ func (result *Result) Truncate(l int) *Result {
 			out.Rows = append(out.Rows, r[:l])
 		}
 	}
+	out.MergeStats(result)
 	return out
 }
 
@@ -324,17 +324,14 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // to another result.Note currently it doesn't handle cases like
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
-	if src.RowsAffected == 0 && len(src.Rows) == 0 && len(src.Fields) == 0 {
-		return
-	}
 	if result.Fields == nil {
 		result.Fields = src.Fields
 	}
-	result.RowsAffected += src.RowsAffected
 	if src.InsertID != 0 {
 		result.InsertID = src.InsertID
 	}
 	result.Rows = append(result.Rows, src.Rows...)
+	result.MergeStats(src)
 }
 
 // Stats returns a copy of result with only the stats fields
