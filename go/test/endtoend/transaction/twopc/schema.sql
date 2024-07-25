@@ -19,7 +19,8 @@ create table twopc_fuzzer_update (
 
 create table twopc_fuzzer_insert (
     id bigint,
-    updateSet bigint,
+    updateSet varchar(50),
     col bigint auto_increment,
+    key(col),
     primary key (id, col)
 ) Engine=InnoDB;

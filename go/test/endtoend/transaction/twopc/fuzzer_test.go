@@ -41,15 +41,18 @@ var (
 		},
 	}
 
-	insertIntoFuzzUpdate = "INSERT INTO twopc_fuzzer_update (id, col) VALUES (%d, %d)"
-	updateFuzzUpdate     = "UPDATE twopc_fuzzer_update SET col = col + %d WHERE id = %d"
-	insertIntoFuzzInsert = "INSERT INTO twopc_fuzzer_insert (id, updateSet) VALUES (%d, %d)"
+	insertIntoFuzzUpdate   = "INSERT INTO twopc_fuzzer_update (id, col) VALUES (%d, %d)"
+	updateFuzzUpdate       = "UPDATE twopc_fuzzer_update SET col = col + %d WHERE id = %d"
+	insertIntoFuzzInsert   = "INSERT INTO twopc_fuzzer_insert (id, updateSet) VALUES (%d, '%s')"
+	selectFromFuzzUpdate   = "SELECT col FROM twopc_fuzzer_update WHERE id = %d"
+	selectIdFromFuzzInsert = "SELECT id FROM twopc_fuzzer_insert WHERE updateSet = '%s' ORDER BY col"
 )
 
 // TestTwoPCFuzzTest tests 2PC transactions in a fuzzer environment.
 // The testing strategy involves running many transactions and checking that they all must be atomic.
 // To this end, we have a very unique strategy. We have two sharded tables `twopc_fuzzer_update`, and `twopc_fuzzer_insert` with the following columns.
 //   - id: This is the sharding column. We use reverse_bits as the sharding vindex because it is easy to reason about where a row will end up.
+//     For the `twopc_fuzzer_insert` column, it is calculated from the thread id of the fuzzer thread that inserted it.
 //   - col in `twopc_fuzzer_insert`: An auto-increment column.
 //   - col in `twopc_fuzzer_update`: This is a bigint value that we will use to increment on updates.
 //   - updateSet: This column will store which update set the inserts where done for.
@@ -92,9 +95,59 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			// Wait for the timeForTesting so that the threads continue to run.
 			time.Sleep(tt.timeForTesting)
 
+			// Signal the fuzzer to stop.
 			fz.stop()
+
+			// Verify that all the transactions run were actually atomic and no data issues have occurred.
+			verifyTransactionsWereAtomic(t, conn)
 		})
 	}
+}
+
+// verifyTransactionsWereAtomic verifies that the invariants of test are held.
+// It checks the heuristics to ensure that the transactions run were atomic.
+func verifyTransactionsWereAtomic(t *testing.T, conn *mysql.Conn) {
+	for updateSetIdx, updateSet := range updateRowsVals {
+		// All the three values of the update set must be equal.
+		shard1Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[0])
+		shard2Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[1])
+		shard3Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[2])
+		require.EqualValues(t, shard1Val, shard2Val)
+		require.EqualValues(t, shard3Val, shard2Val)
+
+		// Next we get the IDs from all the three shards for the given update set index.
+		shard1IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 1)
+		shard2IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 2)
+		shard3IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 3)
+		require.EqualValues(t, shard1IDs, shard2IDs)
+		require.EqualValues(t, shard3IDs, shard2IDs)
+	}
+}
+
+// getColValueForIdFromFuzzUpdate gets the col column value for the given id in the twopc_fuzzer_update table.
+func getColValueForIdFromFuzzUpdate(t *testing.T, conn *mysql.Conn, id int) uint64 {
+	res, err := conn.ExecuteFetch(fmt.Sprintf(selectFromFuzzUpdate, id), 1, false)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1)
+	require.Len(t, res.Rows[0], 1)
+	val, err := res.Rows[0][0].ToUint64()
+	require.NoError(t, err)
+	return val
+}
+
+// getThreadIDsForUpdateSetFromFuzzInsert gets the thread IDs for the given update set ordered by the col column from the twopc_fuzzer_insert table.
+func getThreadIDsForUpdateSetFromFuzzInsert(t *testing.T, conn *mysql.Conn, updateSet int, shard int) []int {
+	res, err := conn.ExecuteFetch(fmt.Sprintf(selectIdFromFuzzInsert, updateSetValueForShard(updateSet, shard)), 10000, false)
+	require.NoError(t, err)
+	var ids []int
+	for _, row := range res.Rows {
+		require.Len(t, row, 1)
+		val, err := row[0].ToInt()
+		require.NoError(t, err)
+		// We reverse map the value to the thread id that had inserted it so that we can use it to compare the lists.
+		ids = append(ids, (val-updateRowsVals[0][shard-1])/16)
+	}
+	return ids
 }
 
 // fuzzer runs threads that runs queries against the databases.
@@ -168,6 +221,7 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 // initialize initializes all the variables that will be needed for running the fuzzer.
 // It also creates the rows for the `twopc_fuzzer_update` table.
 func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
+	updateRowsVals = updateRowsVals[0:1]
 	for i := 1; i < fz.updateSets; i++ {
 		updateRowsVals = append(updateRowsVals, []int{
 			updateRowsVals[0][0] + i*16,
@@ -201,6 +255,7 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, conn *mysql.Conn, 
 	for _, query := range queries {
 		_, _ = conn.ExecuteFetch(query, 0, false)
 	}
+	// TODO: Check if we want to randomize commit and rollback decisions.
 	_, _ = conn.ExecuteFetch("commit", 0, false)
 }
 
@@ -221,11 +276,16 @@ func (fz *fuzzer) generateUpdateQueries(updateSet int, incrementVal int32) []str
 // It takes the update set index and the thread id that is generating these inserts.
 func (fz *fuzzer) generateInsertQueries(updateSet int, threadId int) []string {
 	var queries []string
-	for _, id := range updateRowsVals[0] {
-		queries = append(queries, fmt.Sprintf(insertIntoFuzzInsert, updateSet, threadId*16+id))
+	for idx, id := range updateRowsVals[0] {
+		queries = append(queries, fmt.Sprintf(insertIntoFuzzInsert, threadId*16+id, updateSetValueForShard(updateSet, idx+1)))
 	}
 	rand.Shuffle(len(queries), func(i, j int) {
 		queries[i], queries[j] = queries[j], queries[i]
 	})
 	return queries
+}
+
+// updateSetValueForShard gets a string representation to store the update set value for each shard.
+func updateSetValueForShard(updateSet int, shard int) string {
+	return fmt.Sprintf("Shard-%d:%d", shard, updateSet)
 }
