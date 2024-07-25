@@ -82,7 +82,7 @@ func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	}
 
 	result, err := vcursor.ExecutePrimitive(ctx, f.Exec, bindVars, wantfields)
-	if err == nil {
+	if result != nil {
 		result.MergeStats(stats)
 	}
 	return result, err

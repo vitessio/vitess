@@ -315,7 +315,7 @@ func (ins *InsertSelect) execInsertSharded(ctx context.Context, vcursor VCursor,
 	}
 
 	result, err := ins.insertIntoShardedTable(ctx, vcursor, bindVars, selectResult)
-	if err == nil {
+	if result != nil {
 		result.MergeStats(selectResult.stats)
 	}
 
