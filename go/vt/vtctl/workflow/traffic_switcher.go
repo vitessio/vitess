@@ -353,7 +353,7 @@ func (ts *trafficSwitcher) getSourceAndTargetShardsNames() ([]string, []string) 
 	return sourceShards, targetShards
 }
 
-// isPartialMoveTables returns true if whe workflow is MoveTables, has the same
+// isPartialMoveTables returns true if the workflow is MoveTables, has the same
 // number of shards, is not covering the entire shard range, and has one-to-one
 // shards in source and target.
 func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []string) (bool, error) {
@@ -390,7 +390,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 	if strings.HasPrefix(tableSpecs, "{") { // user defined the vschema snippet, typically for a sharded target
 		wrap := fmt.Sprintf(`{"tables": %s}`, tableSpecs)
 		ks := &vschemapb.Keyspace{}
-		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
+		if err := json2.UnmarshalPB([]byte(wrap), ks); err != nil {
 			return err
 		}
 		for table, vtab := range ks.Tables {
@@ -1744,4 +1744,49 @@ func (ts *trafficSwitcher) IsMultiTenantMigration() bool {
 		return true
 	}
 	return false
+}
+
+func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, types []topodatapb.TabletType, percent float32) error {
+	mrs, err := topotools.GetMirrorRules(ctx, ts.TopoServer())
+	if err != nil {
+		return err
+	}
+
+	var numExisting int
+	for _, table := range ts.tables {
+		for _, tabletType := range types {
+			fromTable := fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table)
+			if tabletType != topodatapb.TabletType_PRIMARY {
+				fromTable = fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
+			}
+			toTable := fmt.Sprintf("%s.%s", ts.TargetKeyspaceName(), table)
+
+			if _, ok := mrs[fromTable]; !ok {
+				mrs[fromTable] = make(map[string]float32)
+			}
+
+			if _, ok := mrs[fromTable][toTable]; ok {
+				numExisting++
+			}
+
+			if percent == 0 {
+				// When percent is 0, remove mirror rule if it exists.
+				if _, ok := mrs[fromTable][toTable]; ok {
+					delete(mrs, fromTable)
+				}
+			} else {
+				mrs[fromTable][toTable] = percent
+			}
+		}
+	}
+
+	if numExisting > 0 && numExisting != (len(types)*len(ts.tables)) {
+		return vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "wrong number of pre-existing mirror rules")
+	}
+
+	if err := topotools.SaveMirrorRules(ctx, ts.TopoServer(), mrs); err != nil {
+		return err
+	}
+
+	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
 }

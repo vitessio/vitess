@@ -675,7 +675,6 @@ func TestTabletServerReserveConnection(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	db, tsv := setupTabletServerTest(t, ctx, "")
-	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -684,7 +683,7 @@ func TestTabletServerReserveConnection(t *testing.T) {
 	options := &querypb.ExecuteOptions{}
 
 	// reserve a connection
-	state, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, 0, options)
+	state, _, err := tsv.ReserveExecute(ctx, &target, nil, "set sql_mode = ''", nil, 0, options)
 	require.NoError(t, err)
 
 	// run a query in it
@@ -747,7 +746,6 @@ func TestTabletServerReserveAndBeginCommit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	db, tsv := setupTabletServerTest(t, ctx, "")
-	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -756,7 +754,7 @@ func TestTabletServerReserveAndBeginCommit(t *testing.T) {
 	options := &querypb.ExecuteOptions{}
 
 	// reserve a connection and a transaction
-	state, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, nil, "select 42", nil, options)
+	state, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, nil, "set sql_mode = ''", nil, options)
 	require.NoError(t, err)
 	defer func() {
 		// fallback so the test finishes quickly
@@ -2192,20 +2190,19 @@ func TestReserveBeginExecute(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	db, tsv := setupTabletServerTest(t, ctx, "")
-	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
 
-	state, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{"select 43"}, nil, "select 42", nil, &querypb.ExecuteOptions{})
+	state, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, nil, "set @@sql_mode = ''", nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 
 	assert.Greater(t, state.TransactionID, int64(0), "transactionID")
-	assert.Equal(t, state.ReservedID, state.TransactionID, "reservedID should equal transactionID")
+	assert.Equal(t, state.TransactionID, state.ReservedID, "reservedID should equal transactionID")
 	expected := []string{
-		"select 43",
 		"begin",
-		"select 42 from dual limit 10001",
+		"set @@sql_mode = ''",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
 	for _, exp := range expected {
@@ -2219,18 +2216,17 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	db, tsv := setupTabletServerTest(t, ctx, "")
-	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
+	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	state, _, err := tsv.ReserveExecute(ctx, &target, []string{"select 43"}, "select 42", nil, 0, &querypb.ExecuteOptions{})
+	state, _, err := tsv.ReserveExecute(ctx, &target, nil, "set sql_mode = ''", nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.NotEqual(t, int64(0), state.ReservedID, "reservedID should not be zero")
 	expected := []string{
-		"select 43",
-		"select 42 from dual limit 10001",
+		"set @@sql_mode = ''",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
 	for _, exp := range expected {
@@ -2244,9 +2240,10 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	db, tsv := setupTabletServerTest(t, ctx, "")
-	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
+
+	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	beginState, err := tsv.Begin(ctx, &target, &querypb.ExecuteOptions{})
@@ -2254,13 +2251,12 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	require.NotEqual(t, int64(0), beginState.TransactionID)
 	db.ResetQueryLog()
 
-	reserveState, _, err := tsv.ReserveExecute(ctx, &target, []string{"select 43"}, "select 42", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	reserveState, _, err := tsv.ReserveExecute(ctx, &target, nil, "set sql_mode = ''", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	defer tsv.Release(ctx, &target, beginState.TransactionID, reserveState.ReservedID)
 	assert.Equal(t, beginState.TransactionID, reserveState.ReservedID, "reservedID should be equal to transactionID")
 	expected := []string{
-		"select 43",
-		"select 42 from dual limit 10001",
+		"set @@sql_mode = ''",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
 	for _, exp := range expected {
@@ -2306,7 +2302,6 @@ func TestRelease(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			db, tsv := setupTabletServerTest(t, ctx, "")
-			tsv.config.EnableSettingsPool = false
 			defer tsv.StopService()
 			defer db.Close()
 			db.AddQueryPattern(".*", &sqltypes.Result{})
@@ -2316,7 +2311,7 @@ func TestRelease(t *testing.T) {
 
 			switch {
 			case test.begin && test.reserve:
-				state, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{"select 1212"}, nil, "select 42", nil, &querypb.ExecuteOptions{})
+				state, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, nil, "set sql_mode = ''", nil, &querypb.ExecuteOptions{})
 				require.NoError(t, err)
 				transactionID = state.TransactionID
 				reservedID = state.ReservedID
@@ -2328,7 +2323,7 @@ func TestRelease(t *testing.T) {
 				transactionID = state.TransactionID
 				require.NotEqual(t, int64(0), transactionID)
 			case test.reserve:
-				state, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
+				state, _, err := tsv.ReserveExecute(ctx, &target, nil, "set sql_mode = ''", nil, 0, &querypb.ExecuteOptions{})
 				require.NoError(t, err)
 				reservedID = state.ReservedID
 				require.NotEqual(t, int64(0), reservedID)
@@ -2351,10 +2346,10 @@ func TestReserveStats(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	db, tsv := setupTabletServerTest(t, ctx, "")
-	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
+	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	callerID := &querypb.VTGateCallerID{
@@ -2363,12 +2358,12 @@ func TestReserveStats(t *testing.T) {
 	ctx = callerid.NewContext(ctx, nil, callerID)
 
 	// Starts reserved connection and transaction
-	rbeState, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, nil, "select 42", nil, &querypb.ExecuteOptions{})
+	rbeState, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, nil, "set sql_mode = ''", nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
 	// Starts reserved connection
-	reState, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
+	reState, _, err := tsv.ReserveExecute(ctx, &target, nil, "set sql_mode = ''", nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
@@ -2383,7 +2378,7 @@ func TestReserveStats(t *testing.T) {
 	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
 	// Reserved the connection on previous transaction
-	beReState, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, beState.TransactionID, &querypb.ExecuteOptions{})
+	beReState, _, err := tsv.ReserveExecute(ctx, &target, nil, "set sql_mode = ''", nil, beState.TransactionID, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.EqualValues(t, 3, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
@@ -2526,12 +2521,11 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
-	tsv.config.EnableSettingsPool = false
 	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
-	executeSQL := "select * from test_table limit 1000"
+	executeSQL := "select 43"
 	executeSQLResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -2539,24 +2533,21 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 				Database: "databaseInMysql",
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.NewVarBinary("row01")},
+			{sqltypes.NewInt64(43)},
 		},
 	}
-	db.AddQuery(executeSQL, executeSQLResult)
+	db.AddQuery("select 43 from dual limit 10001", executeSQLResult)
 	target := tsv.sm.target
 
 	// Test ReserveExecute
-	state, res, err := tsv.ReserveExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{
+	_, res, err := tsv.ReserveExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{
 		IncludedFields: querypb.ExecuteOptions_ALL,
 	})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
 	}
-	err = tsv.Release(ctx, target, 0, state.ReservedID)
-	require.NoError(t, err)
 }
 
 func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T) {
@@ -2754,10 +2745,10 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 				Type: sqltypes.Int64,
 			}},
 		},
-		"begin":    {},
-		"commit":   {},
-		"rollback": {},
-		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
+		"begin":                                {},
+		"commit":                               {},
+		"rollback":                             {},
+		fmt.Sprintf(readAllRedo, "_vt", "_vt"): {},
 	}
 	parser := sqlparser.NewTestParser()
 	sidecardb.AddSchemaInitQueries(db, true, parser)

@@ -233,6 +233,21 @@ func (q *query) ReadTransaction(ctx context.Context, request *querypb.ReadTransa
 	return &querypb.ReadTransactionResponse{Metadata: result}, nil
 }
 
+// UnresolvedTransactions is part of the queryservice.QueryServer interface
+func (q *query) UnresolvedTransactions(ctx context.Context, request *querypb.UnresolvedTransactionsRequest) (response *querypb.UnresolvedTransactionsResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	transactions, err := q.server.UnresolvedTransactions(ctx, request.Target)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+
+	return &querypb.UnresolvedTransactionsResponse{Transactions: transactions}, nil
+}
+
 // BeginExecute is part of the queryservice.QueryServer interface
 func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteRequest) (response *querypb.BeginExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)

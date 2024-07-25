@@ -91,6 +91,16 @@ jobs:
               - 'bootstrap.sh'
               - 'misc/git/hooks/asthelpers'
               - '.github/workflows/static_checks_etc.yml'
+            astfmt:
+              - 'go/tools/astfmtgen/**'
+              - 'go/vt/sqlparser/**'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'tools/**'
+              - 'bootstrap.sh'
+              - '.github/workflows/static_checks_etc.yml'
             end_to_end:
               - 'docker/**'
               - 'test.go'
@@ -113,7 +123,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
         uses: actions/setup-go@v5
         with:
-          go-version: 1.22.4
+          go-version: 1.22.5
 
       - name: Tune the OS
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -168,6 +178,11 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.visitor == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           misc/git/hooks/asthelpers || exit 1
+          
+      - name: check_ast_format_fast
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.astfmt == 'true' || steps.changes.outputs.go_files == 'true')
+        run: |
+          ./tools/check_astfmtgen.sh || exit 1
 
       - name: run ensure_bootstrap_version
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

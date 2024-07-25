@@ -76,7 +76,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.4
+        go-version: 1.22.5
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -101,7 +101,7 @@ jobs:
         sudo rm -rf /etc/mysql
         # Install mysql80
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.32-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
@@ -120,8 +120,9 @@ jobs:
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo percona-release enable-only tools
         sudo apt-get update
-        sudo apt-get install -y percona-xtrabackup-24
+        sudo apt-get install -y percona-xtrabackup-80
 
     # Checkout to the next release of Vitess
     - name: Check out other version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})

@@ -19,12 +19,14 @@ package topo_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TestTopoKeyspaceLock tests keyspace lock operations.
@@ -81,4 +83,35 @@ func TestTopoKeyspaceLock(t *testing.T) {
 	_, unlock, err = ts.LockKeyspace(origCtx, ks1, "ks1")
 	require.NoError(t, err)
 	defer unlock(&err)
+}
+
+// TestTopoKeyspaceLockWithTTL tests keyspace lock with a custom TTL.
+func TestTopoKeyspaceLockWithTTL(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts, tsf := memorytopo.NewServerAndFactory(ctx, "zone1")
+	defer ts.Close()
+
+	currentTopoLockTimeout := topo.LockTimeout
+	topo.LockTimeout = testLockTimeout
+	defer func() {
+		topo.LockTimeout = currentTopoLockTimeout
+	}()
+
+	ks1 := "ks1"
+	ttl := time.Second
+	err := ts.CreateKeyspace(ctx, ks1, &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
+	ctx, unlock, err := ts.LockKeyspace(ctx, ks1, ks1, topo.WithTTL(ttl))
+	require.NoError(t, err)
+	defer unlock(&err)
+
+	err = topo.CheckKeyspaceLocked(ctx, ks1)
+	require.NoError(t, err)
+
+	// Confirm the new stats.
+	stats := tsf.GetCallStats()
+	require.NotNil(t, stats)
+	require.Equal(t, int64(1), stats.Counts()["LockWithTTL"])
 }

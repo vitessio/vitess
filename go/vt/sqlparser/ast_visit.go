@@ -232,6 +232,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *JSONArrayAgg:
+		return VisitRefOfJSONArrayAgg(in, f)
 	case *JSONArrayExpr:
 		return VisitRefOfJSONArrayExpr(in, f)
 	case *JSONAttributesExpr:
@@ -244,6 +246,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJSONExtractExpr(in, f)
 	case *JSONKeysExpr:
 		return VisitRefOfJSONKeysExpr(in, f)
+	case *JSONObjectAgg:
+		return VisitRefOfJSONObjectAgg(in, f)
 	case *JSONObjectExpr:
 		return VisitRefOfJSONObjectExpr(in, f)
 	case *JSONObjectParam:
@@ -456,6 +460,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowThrottledApps(in, f)
 	case *ShowThrottlerStatus:
 		return VisitRefOfShowThrottlerStatus(in, f)
+	case *ShowTransactionStatus:
+		return VisitRefOfShowTransactionStatus(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Std:
@@ -2086,6 +2092,21 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfJSONArrayAgg(in *JSONArrayAgg, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfJSONArrayExpr(in *JSONArrayExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2181,6 +2202,24 @@ func VisitRefOfJSONKeysExpr(in *JSONKeysExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Path, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONObjectAgg(in *JSONObjectAgg, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Key, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Value, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -3677,6 +3716,15 @@ func VisitRefOfShowThrottlerStatus(in *ShowThrottlerStatus, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfShowTransactionStatus(in *ShowTransactionStatus, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4457,6 +4505,10 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return VisitRefOfCountStar(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *JSONArrayAgg:
+		return VisitRefOfJSONArrayAgg(in, f)
+	case *JSONObjectAgg:
+		return VisitRefOfJSONObjectAgg(in, f)
 	case *Max:
 		return VisitRefOfMax(in, f)
 	case *Min:
@@ -4885,6 +4937,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *JSONArrayAgg:
+		return VisitRefOfJSONArrayAgg(in, f)
 	case *JSONArrayExpr:
 		return VisitRefOfJSONArrayExpr(in, f)
 	case *JSONAttributesExpr:
@@ -4897,6 +4951,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONExtractExpr(in, f)
 	case *JSONKeysExpr:
 		return VisitRefOfJSONKeysExpr(in, f)
+	case *JSONObjectAgg:
+		return VisitRefOfJSONObjectAgg(in, f)
 	case *JSONObjectExpr:
 		return VisitRefOfJSONObjectExpr(in, f)
 	case *JSONOverlapsExpr:
@@ -5085,6 +5141,8 @@ func VisitShowInternal(in ShowInternal, f Visit) error {
 		return VisitRefOfShowCreate(in, f)
 	case *ShowOther:
 		return VisitRefOfShowOther(in, f)
+	case *ShowTransactionStatus:
+		return VisitRefOfShowTransactionStatus(in, f)
 	default:
 		// this should never happen
 		return nil

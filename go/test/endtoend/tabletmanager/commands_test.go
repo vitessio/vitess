@@ -197,7 +197,7 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expec
 		require.Nil(t, err)
 
 		var resp vtctldatapb.ExecuteHookResponse
-		err = json2.Unmarshal([]byte(hr), &resp)
+		err = json2.UnmarshalPB([]byte(hr), &resp)
 		require.Nil(t, err)
 
 		assert.Equal(t, expectedStatus, resp.HookResult.ExitStatus)

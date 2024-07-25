@@ -202,7 +202,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// check that we still have the shard lock. If we don't then we can terminate at this point
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	// find the valid candidates for becoming the primary
@@ -255,8 +255,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	erp.logger.Infof("intermediate source is ideal candidate- %v", isIdeal)
 
 	// Check (again) we still have the topology lock.
-	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	// initialize the newPrimary with the intermediate source, override this value if it is not the ideal candidate
@@ -286,6 +286,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				return err
 			}
 			newPrimary = betterCandidate
+		}
+
+		if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+			return vterrors.Wrap(err, lostTopologyLockMsg)
 		}
 	}
 
@@ -386,7 +390,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	}
 
 	// sort the tablets for finding the best intermediate source in ERS
-	err = sortTabletsForReparent(validTablets, tabletPositions, opts.durability)
+	err = sortTabletsForReparent(validTablets, tabletPositions, nil, opts.durability)
 	if err != nil {
 		return nil, nil, err
 	}

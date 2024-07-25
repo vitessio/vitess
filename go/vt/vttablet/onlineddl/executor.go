@@ -3870,8 +3870,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 				_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
 				_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
-				_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled)
-
+				if s.timeThrottled != 0 {
+					// Avoid creating a 0000-00-00 00:00:00 timestamp
+					_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled)
+				}
 				if onlineDDL.StrategySetting().IsInOrderCompletion() {
 					// We will fail an in-order migration if there's _prior_ migrations within the same migration-context
 					// which have failed.
@@ -4754,6 +4756,26 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 		return nil, err
 	}
 	log.Infof("CleanupMigration: migration %s marked as ready to clean up", uuid)
+	defer e.triggerNextCheckInterval()
+	return rs, nil
+}
+
+// CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
+// all we do is set retain_artifacts_seconds to a very small number (it's actually a negative) so that the
+// next iteration of gcArtifacts() picks up the migration's artifacts and schedules them for deletion
+func (e *Executor) CleanupAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
+	}
+	log.Infof("CleanupMigration: request to cleanup all terminal migrations")
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	rs, err := e.execQuery(ctx, sqlUpdateReadyForCleanupAll)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("CleanupMigration: %v migrations marked as ready to clean up", rs.RowsAffected)
 	defer e.triggerNextCheckInterval()
 	return rs, nil
 }

@@ -233,6 +233,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
+	case *JSONArrayAgg:
+		return CloneRefOfJSONArrayAgg(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
 	case *JSONAttributesExpr:
@@ -245,6 +247,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJSONExtractExpr(in)
 	case *JSONKeysExpr:
 		return CloneRefOfJSONKeysExpr(in)
+	case *JSONObjectAgg:
+		return CloneRefOfJSONObjectAgg(in)
 	case *JSONObjectExpr:
 		return CloneRefOfJSONObjectExpr(in)
 	case *JSONObjectParam:
@@ -457,6 +461,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowThrottledApps(in)
 	case *ShowThrottlerStatus:
 		return CloneRefOfShowThrottlerStatus(in)
+	case *ShowTransactionStatus:
+		return CloneRefOfShowTransactionStatus(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Std:
@@ -1692,6 +1698,17 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	return &out
 }
 
+// CloneRefOfJSONArrayAgg creates a deep clone of the input.
+func CloneRefOfJSONArrayAgg(n *JSONArrayAgg) *JSONArrayAgg {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	return &out
+}
+
 // CloneRefOfJSONArrayExpr creates a deep clone of the input.
 func CloneRefOfJSONArrayExpr(n *JSONArrayExpr) *JSONArrayExpr {
 	if n == nil {
@@ -1756,6 +1773,18 @@ func CloneRefOfJSONKeysExpr(n *JSONKeysExpr) *JSONKeysExpr {
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
 	out.Path = CloneExpr(n.Path)
+	return &out
+}
+
+// CloneRefOfJSONObjectAgg creates a deep clone of the input.
+func CloneRefOfJSONObjectAgg(n *JSONObjectAgg) *JSONObjectAgg {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Key = CloneExpr(n.Key)
+	out.Value = CloneExpr(n.Value)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2882,6 +2911,15 @@ func CloneRefOfShowThrottlerStatus(n *ShowThrottlerStatus) *ShowThrottlerStatus 
 	return &out
 }
 
+// CloneRefOfShowTransactionStatus creates a deep clone of the input.
+func CloneRefOfShowTransactionStatus(n *ShowTransactionStatus) *ShowTransactionStatus {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneRefOfStarExpr creates a deep clone of the input.
 func CloneRefOfStarExpr(n *StarExpr) *StarExpr {
 	if n == nil {
@@ -3460,6 +3498,10 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 		return CloneRefOfCountStar(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *JSONArrayAgg:
+		return CloneRefOfJSONArrayAgg(in)
+	case *JSONObjectAgg:
+		return CloneRefOfJSONObjectAgg(in)
 	case *Max:
 		return CloneRefOfMax(in)
 	case *Min:
@@ -3904,6 +3946,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
+	case *JSONArrayAgg:
+		return CloneRefOfJSONArrayAgg(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
 	case *JSONAttributesExpr:
@@ -3916,6 +3960,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfJSONExtractExpr(in)
 	case *JSONKeysExpr:
 		return CloneRefOfJSONKeysExpr(in)
+	case *JSONObjectAgg:
+		return CloneRefOfJSONObjectAgg(in)
 	case *JSONObjectExpr:
 		return CloneRefOfJSONObjectExpr(in)
 	case *JSONOverlapsExpr:
@@ -4112,6 +4158,8 @@ func CloneShowInternal(in ShowInternal) ShowInternal {
 		return CloneRefOfShowCreate(in)
 	case *ShowOther:
 		return CloneRefOfShowOther(in)
+	case *ShowTransactionStatus:
+		return CloneRefOfShowTransactionStatus(in)
 	default:
 		// this should never happen
 		return nil

@@ -364,4 +364,7 @@ service Vtctld {
   // WorkflowUpdate updates the configuration of a vreplication workflow
   // using the provided updated parameters.
   rpc WorkflowUpdate(vtctldata.WorkflowUpdateRequest) returns (vtctldata.WorkflowUpdateResponse) {};
+  // GetMirrorRules returns the VSchema routing rules.
+  rpc GetMirrorRules(vtctldata.GetMirrorRulesRequest) returns (vtctldata.GetMirrorRulesResponse) {};
+  rpc WorkflowMirrorTraffic(vtctldata.WorkflowMirrorTrafficRequest) returns (vtctldata.WorkflowMirrorTrafficResponse) {};
 }

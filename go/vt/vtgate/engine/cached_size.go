@@ -41,8 +41,8 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	size += cached.Type.CachedSize(false)
 	// field Alias string
 	size += hack.RuntimeAllocSize(int64(len(cached.Alias)))
-	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Expr.(cachedObject); ok {
+	// field Func vitess.io/vitess/go/vt/sqlparser.AggrFunc
+	if cc, ok := cached.Func.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Original *vitess.io/vitess/go/vt/sqlparser.AliasedExpr
@@ -1291,6 +1291,18 @@ func (cached *ThrottleApp) CachedSize(alloc bool) int64 {
 	size += cached.Keyspace.CachedSize(true)
 	// field ThrottledAppRule *vitess.io/vitess/go/vt/proto/topodata.ThrottledAppRule
 	size += cached.ThrottledAppRule.CachedSize(true)
+	return size
+}
+func (cached *TransactionStatus) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field TransactionID string
+	size += hack.RuntimeAllocSize(int64(len(cached.TransactionID)))
 	return size
 }
 func (cached *UncorrelatedSubquery) CachedSize(alloc bool) int64 {

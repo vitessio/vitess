@@ -41,7 +41,7 @@ type MemorySort struct {
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
-	TruncateColumnCount int `json:",omitempty"`
+	TruncateColumnCount int
 }
 
 // RouteType returns a description of the query routing type used by the primitive.

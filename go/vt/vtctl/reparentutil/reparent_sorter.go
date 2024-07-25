@@ -29,17 +29,19 @@ import (
 // reparentSorter sorts tablets by GTID positions and Promotion rules aimed at finding the best
 // candidate for intermediate promotion in emergency reparent shard, and the new primary in planned reparent shard
 type reparentSorter struct {
-	tablets    []*topodatapb.Tablet
-	positions  []replication.Position
-	durability Durabler
+	tablets          []*topodatapb.Tablet
+	positions        []replication.Position
+	innodbBufferPool []int
+	durability       Durabler
 }
 
 // newReparentSorter creates a new reparentSorter
-func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Position, durability Durabler) *reparentSorter {
+func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability Durabler) *reparentSorter {
 	return &reparentSorter{
-		tablets:    tablets,
-		positions:  positions,
-		durability: durability,
+		tablets:          tablets,
+		positions:        positions,
+		durability:       durability,
+		innodbBufferPool: innodbBufferPool,
 	}
 }
 
@@ -50,6 +52,9 @@ func (rs *reparentSorter) Len() int { return len(rs.tablets) }
 func (rs *reparentSorter) Swap(i, j int) {
 	rs.tablets[i], rs.tablets[j] = rs.tablets[j], rs.tablets[i]
 	rs.positions[i], rs.positions[j] = rs.positions[j], rs.positions[i]
+	if len(rs.innodbBufferPool) != 0 {
+		rs.innodbBufferPool[i], rs.innodbBufferPool[j] = rs.innodbBufferPool[j], rs.innodbBufferPool[i]
+	}
 }
 
 // Less implements the Interface for sorting
@@ -79,18 +84,29 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	// so we check their promotion rules
 	jPromotionRule := PromotionRule(rs.durability, rs.tablets[j])
 	iPromotionRule := PromotionRule(rs.durability, rs.tablets[i])
+
+	// If the promotion rules are different then we want to sort by the promotion rules.
+	if len(rs.innodbBufferPool) != 0 && jPromotionRule == iPromotionRule {
+		if rs.innodbBufferPool[i] > rs.innodbBufferPool[j] {
+			return true
+		}
+		if rs.innodbBufferPool[j] > rs.innodbBufferPool[i] {
+			return false
+		}
+	}
+
 	return !jPromotionRule.BetterThan(iPromotionRule)
 }
 
 // sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.
 // Tablets are sorted first by their replication positions, with ties broken by the promotion rules.
-func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []replication.Position, durability Durabler) error {
+func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability Durabler) error {
 	// throw an error internal error in case of unequal number of tablets and positions
 	// fail-safe code prevents panic in sorting in case the lengths are unequal
 	if len(tablets) != len(positions) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and positions")
 	}
 
-	sort.Sort(newReparentSorter(tablets, positions, durability))
+	sort.Sort(newReparentSorter(tablets, positions, innodbBufferPool, durability))
 	return nil
 }

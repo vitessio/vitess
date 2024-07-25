@@ -124,9 +124,12 @@ type BinlogEvent interface {
 	// IsWriteRows(), IsUpdateRows(), or IsDeleteRows() returns
 	// true.
 	Rows(BinlogFormat, *TableMap) (Rows, error)
-	// TransactionPayload returns a list of BinlogEvents contained
-	// within the compressed transaction.
-	TransactionPayload(BinlogFormat) ([]BinlogEvent, error)
+	// TransactionPayload returns a TransactionPayload type which provides
+	// a GetNextEvent() method to iterate over the events contained within
+	// the uncompressed payload. You must call Close() when you are done
+	// with the TransactionPayload to ensure that the underlying resources
+	// used are cleaned up.
+	TransactionPayload(BinlogFormat) (*TransactionPayload, error)
 	// NextLogFile returns the name of the next binary log file & pos.
 	// This is only valid if IsRotate() returns true
 	NextLogFile(BinlogFormat) (string, uint64, error)
@@ -155,7 +158,7 @@ type BinlogFormat struct {
 	HeaderSizes []byte
 
 	// ServerVersion is the name of the MySQL server version.
-	// It starts with something like 5.6.33-xxxx.
+	// It starts with something like 8.0.34-xxxx.
 	ServerVersion string
 
 	// FormatVersion is the version number of the binlog file format.

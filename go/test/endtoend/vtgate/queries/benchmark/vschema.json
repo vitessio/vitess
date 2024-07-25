@@ -13,6 +13,22 @@
           "name": "xxhash"
         }
       ]
+    },
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "user_extra": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
     }
   }
 }

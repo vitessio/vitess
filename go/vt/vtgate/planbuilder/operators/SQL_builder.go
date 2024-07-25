@@ -96,7 +96,7 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
-		if ContainsAggr(qb.ctx, expr) {
+		if qb.ctx.ContainsAggr(expr) {
 			addPred = stmt.AddHaving
 		} else {
 			addPred = stmt.AddWhere
@@ -233,7 +233,9 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 	switch joinType {
 	case sqlparser.NormalJoinType:
 		newFromClause = append(stmt.GetFrom(), otherStmt.GetFrom()...)
-		qb.addPredicate(onCondition)
+		for _, pred := range sqlparser.SplitAndExpression(nil, onCondition) {
+			qb.addPredicate(pred)
+		}
 	default:
 		newFromClause = []sqlparser.TableExpr{buildJoin(stmt, otherStmt, onCondition, joinType)}
 	}
@@ -465,6 +467,14 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 	}
 	if op.WithRollup {
 		qb.setWithRollup()
+	}
+
+	if op.DT != nil {
+		sel := qb.asSelectStatement()
+		qb.stmt = nil
+		qb.addTableExpr(op.DT.Alias, op.DT.Alias, TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, op.DT.Columns)
 	}
 }
 

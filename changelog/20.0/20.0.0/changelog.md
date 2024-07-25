@@ -41,7 +41,6 @@
  * `schemadiff` INSTANT DDL: impossible changes on tables with `FULLTEXT` index [#15725](https://github.com/vitessio/vitess/pull/15725)
  * SchemaEngine: Ensure GetTableForPos returns table schema for "current" position by default [#15912](https://github.com/vitessio/vitess/pull/15912)
  * [release-20.0-rc] Online DDL shadow table: rename referenced table name in self referencing FK (#16205) [#16208](https://github.com/vitessio/vitess/pull/16208)
- * [release-20.0] Online DDL shadow table: rename referenced table name in self referencing FK (#16205) [#16209](https://github.com/vitessio/vitess/pull/16209) 
 #### Query Serving
  * Make connection killing resilient to MySQL hangs [#14500](https://github.com/vitessio/vitess/pull/14500)
  * TxThrottler: dont throttle unless lag [#14789](https://github.com/vitessio/vitess/pull/14789)
@@ -83,9 +82,7 @@
  * `schemadiff`: assume default collation for textual column when collation is undefined [#16000](https://github.com/vitessio/vitess/pull/16000)
  * fix: remove keyspace when merging subqueries [#16019](https://github.com/vitessio/vitess/pull/16019)
  * [release-20.0-rc] fix: rows affected count for multi table update for non-literal column value (#16181) [#16182](https://github.com/vitessio/vitess/pull/16182)
- * [release-20.0] fix: rows affected count for multi table update for non-literal column value (#16181) [#16183](https://github.com/vitessio/vitess/pull/16183)
  * [release-20.0-rc] Handle Nullability for Columns from Outer Tables (#16174) [#16186](https://github.com/vitessio/vitess/pull/16186)
- * [release-20.0] Handle Nullability for Columns from Outer Tables (#16174) [#16187](https://github.com/vitessio/vitess/pull/16187) 
 #### TabletManager
  * mysqlctl: Improve handling of the lock file [#15404](https://github.com/vitessio/vitess/pull/15404)
  * Fix possible race in MySQL startup and vttablet in parallel [#15538](https://github.com/vitessio/vitess/pull/15538)
@@ -111,17 +108,10 @@
  * VReplication: Take replication lag into account in VStreamManager healthcheck result processing [#15761](https://github.com/vitessio/vitess/pull/15761)
  * VReplication: Improve workflow cancel/delete [#15977](https://github.com/vitessio/vitess/pull/15977)
  * [release-20.0-rc] vtctldclient: Apply (Shard | Keyspace| Table) Routing Rules commands don't work (#16096) [#16125](https://github.com/vitessio/vitess/pull/16125)
- * [release-20.0] vtctldclient: Apply (Shard | Keyspace| Table) Routing Rules commands don't work (#16096) [#16126](https://github.com/vitessio/vitess/pull/16126)
  * [release-20.0-rc] VReplication: Improve workflow cancel/delete (#15977) [#16130](https://github.com/vitessio/vitess/pull/16130)
- * [release-20.0] VReplication: Improve workflow cancel/delete (#15977) [#16131](https://github.com/vitessio/vitess/pull/16131)
- * [release-20.0] CI Bug: Rename shard name back to match existing workflow file for vreplication_migrate_vdiff2_convert_tz (#16148) [#16151](https://github.com/vitessio/vitess/pull/16151)
- * [release-20.0] CI flaky test: Fix flakiness in vreplication_migrate_vdiff2_convert_tz (#16180) [#16189](https://github.com/vitessio/vitess/pull/16189)
  * [release-20.0-rc] VDiff CLI: Fix VDiff `show` bug (#16177) [#16199](https://github.com/vitessio/vitess/pull/16199)
- * [release-20.0] VDiff CLI: Fix VDiff `show` bug (#16177) [#16200](https://github.com/vitessio/vitess/pull/16200)
  * [release-20.0-rc] VReplication: handle escaped identifiers in vschema when initializing sequence tables (#16169) [#16218](https://github.com/vitessio/vitess/pull/16218)
- * [release-20.0] VReplication: handle escaped identifiers in vschema when initializing sequence tables (#16169) [#16219](https://github.com/vitessio/vitess/pull/16219)
  * [release-20.0-rc] VReplication Workflow: set state correctly when restarting workflow streams in the copy phase (#16217) [#16223](https://github.com/vitessio/vitess/pull/16223)
- * [release-20.0] VReplication Workflow: set state correctly when restarting workflow streams in the copy phase (#16217) [#16224](https://github.com/vitessio/vitess/pull/16224) 
 #### VTAdmin
  * [VTAdmin API] Fix schema cache flag, add documentation [#15704](https://github.com/vitessio/vitess/pull/15704)
  * [VTAdmin] Remove vtctld web link, improve local example (#15607) [#15824](https://github.com/vitessio/vitess/pull/15824) 
@@ -133,7 +123,6 @@
 #### vtexplain
  * vtexplain: Fix setting up the column information [#15275](https://github.com/vitessio/vitess/pull/15275)
  * vtexplain: Ensure memory topo is set up for throttler [#15279](https://github.com/vitessio/vitess/pull/15279)
- * [release-20.0] Fix `vtexplain` not handling `UNION` queries with `weight_string` results correctly. (#16129) [#16158](https://github.com/vitessio/vitess/pull/16158) 
 #### vttestserver
  * Revert unwanted logging change to `vttestserver` [#15148](https://github.com/vitessio/vitess/pull/15148)
  * use proper mysql version in the `vttestserver` images [#15235](https://github.com/vitessio/vitess/pull/15235) 
@@ -159,18 +148,14 @@
  * Validate go versions in Static Code Checks CI [#15932](https://github.com/vitessio/vitess/pull/15932)
  * Add CODEOWNERS for tablet throttler and schemadiff [#16036](https://github.com/vitessio/vitess/pull/16036)
  * [release-20.0-rc] Add DCO workflow (#16052) [#16057](https://github.com/vitessio/vitess/pull/16057)
- * [release-20.0] Add DCO workflow (#16052) [#16058](https://github.com/vitessio/vitess/pull/16058)
  * [release-20.0-rc] Remove DCO workaround (#16087) [#16092](https://github.com/vitessio/vitess/pull/16092)
- * [release-20.0] Remove DCO workaround (#16087) [#16093](https://github.com/vitessio/vitess/pull/16093)
  * Revert "[release-20.0-rc] Bump to `v20.0.0-SNAPSHOT` after the `v20.00-RC1` release (#16142)" [#16144](https://github.com/vitessio/vitess/pull/16144) 
 #### Docker
  * Docker/vtadmin: Update node version [#16145](https://github.com/vitessio/vitess/pull/16145)
- * [release-20.0] Docker: Update node vtadmin version (#16147) [#16161](https://github.com/vitessio/vitess/pull/16161) 
 #### General
  * [main] Upgrade the Golang version to `go1.22.1` [#15405](https://github.com/vitessio/vitess/pull/15405)
  * Upgrade go version to go1.22.2 [#15642](https://github.com/vitessio/vitess/pull/15642)
  * [main] Upgrade the Golang version to `go1.22.3` [#15865](https://github.com/vitessio/vitess/pull/15865)
- * [release-20.0] Upgrade the Golang version to `go1.22.4` [#16060](https://github.com/vitessio/vitess/pull/16060)
  * [release-20.0-rc] [release-20.0] Upgrade the Golang version to `go1.22.4` (#16060) [#16064](https://github.com/vitessio/vitess/pull/16064) 
 #### Online DDL
  * `onlineddl_scheduler` test: fix flakiness in artifact cleanup test [#15396](https://github.com/vitessio/vitess/pull/15396)
@@ -193,7 +178,6 @@
 #### VTAdmin
  * Bump vite from 4.5.2 to 4.5.3 in /web/vtadmin [#15634](https://github.com/vitessio/vitess/pull/15634)
  * [release-20.0-rc] Update braces package (#16115) [#16119](https://github.com/vitessio/vitess/pull/16119)
- * [release-20.0] Update braces package (#16115) [#16120](https://github.com/vitessio/vitess/pull/16120) 
 #### web UI
  * Remove highcharts dependency pt. 1 [#15970](https://github.com/vitessio/vitess/pull/15970)
 ### Documentation 
@@ -202,9 +186,9 @@
 #### Documentation
  * Fix docs for unmanaged tablets [#15437](https://github.com/vitessio/vitess/pull/15437)
  * [release-20.0-rc] Changelog 20.0: Fix broken links (#16048) [#16075](https://github.com/vitessio/vitess/pull/16075)
- * [release-20.0] Changelog 20.0: Fix broken links (#16048) [#16076](https://github.com/vitessio/vitess/pull/16076) 
 #### General
- * Add Shopify to `ADOPTERS.md` [#15853](https://github.com/vitessio/vitess/pull/15853) 
+ * Add Shopify to `ADOPTERS.md` [#15853](https://github.com/vitessio/vitess/pull/15853)
+ * [release-20.0-rc] release notes: update dml related release notes (#16241) [#16246](https://github.com/vitessio/vitess/pull/16246)
 #### Governance
  * amend contributing guide to ban trivial contributions [#15618](https://github.com/vitessio/vitess/pull/15618)
  * remove koz from active maintainer list [#15733](https://github.com/vitessio/vitess/pull/15733) 
@@ -363,7 +347,6 @@
 #### Docker
  * Revert the removal of the MySQL binaries in the `vitess/lite` image [#16042](https://github.com/vitessio/vitess/pull/16042)
  * [release-20.0-rc] Remove unnecessary Docker build workflows (#16196) [#16201](https://github.com/vitessio/vitess/pull/16201)
- * [release-20.0] Remove unnecessary Docker build workflows (#16196) [#16202](https://github.com/vitessio/vitess/pull/16202) 
 #### Examples
  * Update env.sh so that is does not error when running on Mac [#15835](https://github.com/vitessio/vitess/pull/15835)
  * Local Examples: Add --binary-as-hex=false flag to mysql alias [#15996](https://github.com/vitessio/vitess/pull/15996) 
@@ -452,7 +435,6 @@
 #### VTTablet
  * Improve performance for `BaseShowTablesWithSizes` query. [#15713](https://github.com/vitessio/vitess/pull/15713)
  * Do not load table stats when booting `vttablet`. [#15715](https://github.com/vitessio/vitess/pull/15715)
- * [release-20.0] Do not load table stats when booting `vttablet`. (#15715) [#16101](https://github.com/vitessio/vitess/pull/16101)
 ### Regression 
 #### Query Serving
  * Fix routing rule query rewrite [#15253](https://github.com/vitessio/vitess/pull/15253)
@@ -461,9 +443,7 @@
  * fix: derived table join column expression to be part of add join predicate on rewrite [#15956](https://github.com/vitessio/vitess/pull/15956)
  * fix: insert on duplicate update to add list argument in the bind variables map [#15961](https://github.com/vitessio/vitess/pull/15961)
  * [release-20.0-rc] fix: order by subquery planning (#16049) [#16133](https://github.com/vitessio/vitess/pull/16133)
- * [release-20.0] fix: order by subquery planning (#16049) [#16134](https://github.com/vitessio/vitess/pull/16134)
  * [release-20.0-rc] feat: add a LIMIT 1 on EXISTS subqueries to limit network overhead (#16153) [#16192](https://github.com/vitessio/vitess/pull/16192)
- * [release-20.0] feat: add a LIMIT 1 on EXISTS subqueries to limit network overhead (#16153) [#16193](https://github.com/vitessio/vitess/pull/16193) 
 #### Throttler
  * Enable 'heartbeat_on_demand_duration' in local/examples [#15204](https://github.com/vitessio/vitess/pull/15204) 
 #### vttestserver
@@ -485,9 +465,10 @@
  * [release-20.0-rc] Code Freeze for `v20.0.0-RC1` [#16046](https://github.com/vitessio/vitess/pull/16046)
  * Bump to `v21.0.0-SNAPSHOT` after the `v20.0.0-RC1` release [#16047](https://github.com/vitessio/vitess/pull/16047)
  * [release-20.0-rc] Release of `v20.0.0-RC1` [#16137](https://github.com/vitessio/vitess/pull/16137)
- * [release-20.0] Copy `v20.0.0-RC1` release notes [#16141](https://github.com/vitessio/vitess/pull/16141)
  * [release-20.0-rc] Bump to `v20.0.0-SNAPSHOT` after the `v20.0.0-RC1` release [#16142](https://github.com/vitessio/vitess/pull/16142)
  * [release-20.0-rc] Bump to `v20.0.0-SNAPSHOT` after the `v20.0.0-RC1` release [#16146](https://github.com/vitessio/vitess/pull/16146)
+ * [release-20.0-rc] Release of `v20.0.0-RC2` [#16225](https://github.com/vitessio/vitess/pull/16225)
+ * [release-20.0-rc] Bump to `v20.0.0-SNAPSHOT` after the `v20.0.0-RC2` release [#16236](https://github.com/vitessio/vitess/pull/16236)
 ### Testing 
 #### Build/CI
  * Rewrite _many_ tests to use vtctldclient invocations, mostly non-output related stuff [#15270](https://github.com/vitessio/vitess/pull/15270)
@@ -519,7 +500,6 @@
  * Fix unit-test-runner bug [#15815](https://github.com/vitessio/vitess/pull/15815)
  * test: Add tests for `go/ioutil` and refactor existing [#15885](https://github.com/vitessio/vitess/pull/15885)
  * test: Add required tests for `vt/key`, `timer` and `cache/theine/bf` [#15976](https://github.com/vitessio/vitess/pull/15976)
- * [release-20.0] CI Summary Addition [#16172](https://github.com/vitessio/vitess/pull/16172) 
 #### Observability
  * VStreamer: add throttled logs when row/result/vstreamers get throttled. [#14936](https://github.com/vitessio/vitess/pull/14936) 
 #### Query Serving
@@ -551,14 +531,10 @@
  * VStreamer unit test: port remaining tests to new framework [#15366](https://github.com/vitessio/vitess/pull/15366)
  * VReplication: Fix vtctldclient SwitchReads related bugs and move the TestBasicV2Workflows e2e test to vtctldclient [#15579](https://github.com/vitessio/vitess/pull/15579)
  * VStreamer unit tests: refactor pending test [#15845](https://github.com/vitessio/vitess/pull/15845) 
-#### VTCombo
- * [release-20.0] Fix flaky tests that use vtcombo (#16178) [#16213](https://github.com/vitessio/vitess/pull/16213) 
 #### VTorc
  * Add missing tests for `go/vt/vtorc/collection` [#15070](https://github.com/vitessio/vitess/pull/15070) 
 #### vtctldclient
  * Add tests for GetTablets partial results [#15829](https://github.com/vitessio/vitess/pull/15829) 
-#### vtexplain
- * [release-20.0] Fix flakiness in `vtexplain` unit test case. (#16159) [#16168](https://github.com/vitessio/vitess/pull/16168) 
 #### vttestserver
  * Add `no_scatter` flag to vttestserver [#15670](https://github.com/vitessio/vitess/pull/15670)
 
