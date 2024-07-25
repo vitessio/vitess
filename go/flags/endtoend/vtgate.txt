@@ -28,9 +28,9 @@ Flags:
       --allow-kill-statement                                             Allows the execution of kill statement
       --allowed_tablet_types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
-      --balancer_enabled                                                 Whether to enable the tablet balancer to evenly spread query load
-      --balancer_keyspaces strings                                       When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)
-      --balancer_vtgate_cells strings                                    When in balanced mode, a comma-separated list of cells that contain vtgates (required)
+      --balancer-enabled                                                 Whether to enable the tablet balancer to evenly spread query load
+      --balancer-keyspaces strings                                       When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)
+      --balancer-vtgate-cells strings                                    When in balanced mode, a comma-separated list of cells that contain vtgates (required)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --buffer_drain_concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer_keyspace_shards string                                    If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.
