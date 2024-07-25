@@ -67,16 +67,21 @@ func (ps *UncorrelatedSubquery) GetTableName() string {
 
 // TryExecute satisfies the Primitive interface.
 func (ps *UncorrelatedSubquery) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
+	stats := &sqltypes.Result{}
+	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars, stats)
 	if err != nil {
 		return nil, err
 	}
-	return vcursor.ExecutePrimitive(ctx, ps.Outer, combinedVars, wantfields)
+	results, err := vcursor.ExecutePrimitive(ctx, ps.Outer, combinedVars, wantfields)
+	if results != nil {
+		results.MergeStats(stats)
+	}
+	return results, err
 }
 
 // TryStreamExecute performs a streaming exec.
 func (ps *UncorrelatedSubquery) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
+	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars, &sqltypes.Result{})
 	if err != nil {
 		return err
 	}
@@ -114,7 +119,7 @@ var (
 	errSqColumn = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one column")
 )
 
-func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
+func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, stats *sqltypes.Result) (map[string]*querypb.BindVariable, error) {
 	subqueryBindVars := make(map[string]*querypb.BindVariable, len(bindVars))
 	for k, v := range bindVars {
 		subqueryBindVars[k] = v
@@ -123,6 +128,7 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 	if err != nil {
 		return nil, err
 	}
+	stats.MergeStats(result)
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
 	for k, v := range bindVars {
 		combinedVars[k] = v

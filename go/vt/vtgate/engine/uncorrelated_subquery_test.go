@@ -21,6 +21,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -41,6 +43,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 		),
 		"1",
 	)
+	sqResult.RowsAffected = 1
 	sfp := &fakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
@@ -51,6 +54,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 		),
 		"0",
 	)
+	underlyingResult.RowsAffected = 2
 	ufp := &fakePrimitive{
 		results: []*sqltypes.Result{underlyingResult},
 	}
@@ -66,6 +70,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" false`})
 	ufp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" sq: type:INT64 value:"1" false`})
 	expectResult(t, result, underlyingResult)
+	assert.Equal(t, uint64(3), result.RowsAffected)
 }
 
 func TestPulloutSubqueryValueNone(t *testing.T) {
