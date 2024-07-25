@@ -37,8 +37,6 @@ type (
 		// JoinType is permitted to store only 3 of the possible values
 		// NormalJoinType, StraightJoinType and LeftJoinType.
 		JoinType sqlparser.JoinType
-		// LeftJoin will be true in the case of an outer join
-		LeftJoin bool
 
 		// JoinColumns keeps track of what AST expression is represented in the Columns array
 		JoinColumns *applyJoinColumns
@@ -367,6 +365,10 @@ func (aj *ApplyJoin) ShortDescription() string {
 	}
 
 	firstPart := fmt.Sprintf("on %s columns: %s", fn(aj.JoinPredicates), fn(aj.JoinColumns))
+	if aj.JoinType == sqlparser.LeftJoinType {
+		firstPart = "LEFT JOIN " + firstPart
+	}
+
 	if len(aj.ExtraLHSVars) == 0 {
 		return firstPart
 	}
