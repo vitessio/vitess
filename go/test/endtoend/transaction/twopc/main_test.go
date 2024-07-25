@@ -110,6 +110,7 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
+	cleanup(t)
 
 	return conn, func() {
 		conn.Close()
@@ -126,6 +127,8 @@ func cleanup(t *testing.T) {
 	defer conn.Close()
 
 	_, _ = utils.ExecAllowError(t, conn, "delete from twopc_user")
+	_, _ = utils.ExecAllowError(t, conn, "delete from twopc_fuzzer_insert")
+	_, _ = utils.ExecAllowError(t, conn, "delete from twopc_fuzzer_update")
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value
