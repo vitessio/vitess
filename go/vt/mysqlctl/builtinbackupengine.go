@@ -766,21 +766,25 @@ func (bp *backupPipe) HashString() string {
 	return hex.EncodeToString(bp.crc32.Sum(nil))
 }
 
-func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger) {
+func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger, restore bool) {
+	messageStr := "restoring "
+	if !restore {
+		messageStr = "backing up "
+	}
 	tick := time.NewTicker(period)
 	defer tick.Stop()
 	for {
 		select {
 		case <-bp.done:
-			logger.Infof("Done taking Backup %q", bp.filename)
+			logger.Infof("completed %s %q", messageStr, bp.filename)
 			return
 		case <-tick.C:
 			written := float64(atomic.LoadInt64(&bp.nn))
 			if bp.maxSize == 0 {
-				logger.Infof("Backup %q: %.02fkb", bp.filename, written/1024.0)
+				logger.Infof("%s %q: %.02fkb", messageStr, bp.filename, written/1024.0)
 			} else {
 				maxSize := float64(bp.maxSize)
-				logger.Infof("Backup %q: %.02f%% (%.02f/%.02fkb)", bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
+				logger.Infof("%s %q: %.02f%% (%.02f/%.02fkb)", messageStr, bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
 			}
 		}
 	}
@@ -813,7 +817,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	br := newBackupReader(fe.Name, fi.Size(), timedSource)
-	go br.ReportProgress(builtinBackupProgress, params.Logger)
+	go br.ReportProgress(builtinBackupProgress, params.Logger /*restore*/, false)
 
 	// Open the destination file for writing, and a buffer.
 	params.Logger.Infof("Backing up file: %v", fe.Name)
@@ -1078,7 +1082,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}()
 
 	br := newBackupReader(name, 0, timedSource)
-	go br.ReportProgress(builtinBackupProgress, params.Logger)
+	go br.ReportProgress(builtinBackupProgress, params.Logger /*restore*/, true)
 	var reader io.Reader = br
 
 	// Open the destination file for writing.
