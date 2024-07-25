@@ -817,7 +817,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "1 as 1"
+          "INT64(1) as 1"
         ],
         "Inputs": [
           {
