@@ -83,7 +83,7 @@ func (u *Upsert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 		if err != nil {
 			return nil, err
 		}
-		result.RowsAffected += qr.RowsAffected
+		result.MergeStats(qr)
 	}
 	return result, nil
 }
