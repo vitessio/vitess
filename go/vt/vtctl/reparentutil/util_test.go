@@ -71,7 +71,7 @@ func TestElectNewPrimary(t *testing.T) {
 		tmc                     *chooseNewPrimaryTestTMClient
 		shardInfo               *topo.ShardInfo
 		tabletMap               map[string]*topo.TabletInfo
-		innodbBufferPoolData map[string]int
+		innodbBufferPoolData    map[string]int
 		newPrimaryAlias         *topodatapb.TabletAlias
 		avoidPrimaryAlias       *topodatapb.TabletAlias
 		tolerableReplLag        time.Duration
@@ -853,7 +853,15 @@ zone1-0000000100 is not a replica`,
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, err := ElectNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.innodbBufferPoolData, tt.newPrimaryAlias, tt.avoidPrimaryAlias, time.Millisecond*50, tt.tolerableReplLag, durability, tt.allowCrossCellPromotion, logger)
+			options := &PlannedReparentOptions{
+				NewPrimaryAlias:         tt.newPrimaryAlias,
+				AvoidPrimaryAlias:       tt.avoidPrimaryAlias,
+				TolerableReplLag:        tt.tolerableReplLag,
+				durability:              durability,
+				AllowCrossCellPromotion: tt.allowCrossCellPromotion,
+				WaitReplicasTimeout:     time.Millisecond * 50,
+			}
+			actual, err := ElectNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.innodbBufferPoolData, options, logger)
 			if len(tt.errContains) > 0 {
 				for _, errC := range tt.errContains {
 					assert.ErrorContains(t, err, errC)
