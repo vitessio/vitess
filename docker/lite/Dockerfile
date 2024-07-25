@@ -33,6 +33,11 @@ RUN make install PREFIX=/vt/install
 # Start over and build the final image.
 FROM --platform=linux/amd64 debian:bullseye-slim
 
+# Install locale required for mysqlsh
+RUN apt-get update && apt-get install -y locales \
+    && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
+    && locale-gen en_US.UTF-8
+
 # Install dependencies
 COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh
 RUN /vt/dist/install_dependencies.sh mysql80
