@@ -398,6 +398,33 @@ func TestMissingTables(t *testing.T) {
 	runCases(t, filter, testcases, startPos, nil)
 }
 
+// TestVStreamTableNoPKsWithoutFields confirms that, if a lastpk is passed with no fields defined, it errors out.
+func TestVStreamTableNoPKsWithoutFields(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id11 int, id12 int, primary key(id11))",
+		},
+	}
+	ts.Init()
+	defer ts.Close()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	var tablePKs []*binlogdatapb.TableLastPK
+	tablePKs = append(tablePKs, getTablePK("t1", 1))
+	for _, tpk := range tablePKs {
+		tpk.Lastpk.Fields = nil
+	}
+	ctx := context.Background()
+	ch := make(chan []*binlogdatapb.VEvent)
+	err := vstream(ctx, t, "", tablePKs, filter, ch)
+	require.ErrorContains(t, err, "lastpk for table t1 has no fields defined")
+}
+
 func TestVStreamCopySimpleFlow(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
