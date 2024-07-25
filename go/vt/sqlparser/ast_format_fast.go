@@ -422,6 +422,8 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case CleanupAllMigrationType:
+		alterType = "cleanup all"
 	case LaunchMigrationType:
 		alterType = "launch"
 	case LaunchAllMigrationType:
@@ -2827,6 +2829,12 @@ func (node *ShowBasic) FormatFast(buf *TrackedBuffer) {
 		node.DbName.FormatFast(buf)
 	}
 	node.Filter.FormatFast(buf)
+}
+
+func (node *ShowTransactionStatus) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show transaction status for '")
+	buf.WriteString(node.TransactionID)
+	buf.WriteByte('\'')
 }
 
 // FormatFast formats the node.

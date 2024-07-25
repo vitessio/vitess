@@ -158,7 +158,7 @@ type BinlogFormat struct {
 	HeaderSizes []byte
 
 	// ServerVersion is the name of the MySQL server version.
-	// It starts with something like 5.6.33-xxxx.
+	// It starts with something like 8.0.34-xxxx.
 	ServerVersion string
 
 	// FormatVersion is the version number of the binlog file format.

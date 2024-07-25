@@ -347,6 +347,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> GEOMETRY POINT LINESTRING POLYGON GEOMCOLLECTION GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 %token <str> ASCII UNICODE // used in CONVERT/CAST types
 
+%nonassoc <str> VECTOR
+
 // Type Modifiers
 %token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
@@ -551,7 +553,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
-%type <empty> to_opt
+%type <empty> to_opt for_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
@@ -2178,6 +2180,10 @@ char_type:
   {
     $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
+| VECTOR length_opt
+  {
+    $$ = &ColumnType{Type: string($1), Length: $2}
+  }
 // need set_values / SetValues ?
 | SET '(' enum_values ')' charset_opt
   {
@@ -3308,6 +3314,12 @@ alter_statement:
       UUID: string($4),
     }
   }
+| ALTER comment_opt VITESS_MIGRATION CLEANUP ALL
+  {
+    $$ = &AlterMigration{
+      Type: CleanupAllMigrationType,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING LAUNCH
   {
     $$ = &AlterMigration{
@@ -4224,6 +4236,15 @@ show_statement:
   {
     $$ = &Show{&ShowOther{Command: string($2)}}
   }
+| SHOW TRANSACTION STATUS for_opt STRING
+  {
+    $$ = &Show{&ShowTransactionStatus{TransactionID: string($5)}}
+  }
+
+for_opt:
+  {}
+| FOR
+  {}
 
 extended_opt:
   /* empty */
@@ -8638,6 +8659,7 @@ non_reserved_keyword:
 | VARIABLES
 | VARIANCE %prec FUNCTION_CALL_NON_KEYWORD
 | VCPU
+| VECTOR
 | VEXPLAIN
 | VGTID_EXECUTED
 | VIEW

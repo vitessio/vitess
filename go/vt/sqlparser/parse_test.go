@@ -1229,6 +1229,9 @@ var (
 	}, {
 		input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
 	}, {
+		input:  "select 1 as vector",
+		output: "select 1 as `vector` from dual",
+	}, {
 		input:  "/*!show databases*/",
 		output: "show databases",
 	}, {
@@ -2429,6 +2432,17 @@ var (
 	}, {
 		input: "show vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' logs",
 	}, {
+		input: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input:  "show transaction status for \"ks:-80:232323238342\"",
+		output: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input:  "show transaction status 'ks:-80:232323238342'",
+		output: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input:  "show transaction status \"ks:-80:232323238342\"",
+		output: "show transaction status for 'ks:-80:232323238342'",
+	}, {
 		input: "revert vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
 		input: "revert /*vt+ uuid=123 */ vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
@@ -2436,6 +2450,8 @@ var (
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' retry",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cleanup",
+	}, {
+		input: "alter vitess_migration cleanup all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch",
 	}, {
@@ -5912,6 +5928,10 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		{
 			input:  "create table t (id int, s varchar(255) default 'foo\"bar')",
 			output: "create table t (\n\tid int,\n\ts varchar(255) default 'foo\"bar'\n)",
+		},
+		{
+			input:  "create table t (id int, vec VECTOR(4))",
+			output: "create table t (\n\tid int,\n\tvec VECTOR(4)\n)",
 		},
 	}
 	parser := NewTestParser()

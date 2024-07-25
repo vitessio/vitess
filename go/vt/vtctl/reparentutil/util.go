@@ -68,6 +68,7 @@ func ElectNewPrimary(
 	tmc tmclient.TabletManagerClient,
 	shardInfo *topo.ShardInfo,
 	tabletMap map[string]*topo.TabletInfo,
+	innodbBufferPoolData map[string]int,
 	newPrimaryAlias *topodatapb.TabletAlias,
 	avoidPrimaryAlias *topodatapb.TabletAlias,
 	waitReplicasTimeout time.Duration,
@@ -89,6 +90,7 @@ func ElectNewPrimary(
 		// tablets that are possible candidates to be the new primary and their positions
 		validTablets         []*topodatapb.Tablet
 		tabletPositions      []replication.Position
+		innodbBufferPool     []int
 		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
@@ -135,6 +137,7 @@ func ElectNewPrimary(
 			if err == nil && (tolerableReplLag == 0 || tolerableReplLag >= replLag) {
 				validTablets = append(validTablets, tb)
 				tabletPositions = append(tabletPositions, pos)
+				innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
 			} else {
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
 			}
@@ -153,7 +156,7 @@ func ElectNewPrimary(
 	}
 
 	// sort the tablets for finding the best primary
-	err = sortTabletsForReparent(validTablets, tabletPositions, durability)
+	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, durability)
 	if err != nil {
 		return nil, err
 	}

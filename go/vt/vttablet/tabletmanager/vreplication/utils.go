@@ -222,6 +222,7 @@ func isUnrecoverableError(err error) bool {
 		sqlerror.ERWrongParametersToProcedure,
 		sqlerror.ERWrongUsage,
 		sqlerror.ERWrongValue,
+		sqlerror.ERVectorConversion,
 		sqlerror.ERWrongValueCountOnRow:
 		log.Errorf("Got unrecoverable error: %v", sqlErr)
 		return true

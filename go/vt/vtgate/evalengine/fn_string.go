@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"math"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -889,6 +890,23 @@ func (call *builtinOrd) compile(c *compiler) (ctype, error) {
 //     error: `ERROR 2020 (HY000): Got packet bigger than 'max_allowed_packet' bytes` and the client gets disconnected.
 //   - `> max_allowed_packet`, no error and returns `NULL`.
 const maxRepeatLength = 1073741824
+const repeatTypeChangeLength = 16384
+
+// repeatType returns the type for the REPEAT result.
+// MySQL 8.1.x and later has changed this to return TEXT instead of VARCHAR.
+func repeatType(version string, base sqltypes.Type) sqltypes.Type {
+	capability, _ := capabilities.ServerVersionAtLeast(version, 8, 1, 0)
+	if capability {
+		if sqltypes.IsBinary(base) {
+			return sqltypes.Blob
+		}
+		return sqltypes.Text
+	}
+	if sqltypes.IsBinary(base) {
+		return sqltypes.VarBinary
+	}
+	return sqltypes.VarChar
+}
 
 func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	arg1, arg2, err := call.arg2(env)
@@ -900,22 +918,36 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	text, ok := arg1.(*evalBytes)
-	if !ok {
+	tt := sqltypes.VarChar
+	if ok {
+		tt = text.SQLType()
+	} else {
 		text, err = evalToVarchar(arg1, call.collate, true)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	if len(text.bytes) == 0 {
+		return newEvalText(nil, text.col), nil
+	}
+
 	repeat := evalToInt64(arg2).i
+	negative := false
 	if repeat < 0 {
 		repeat = 0
+		negative = true
 	}
 	if !validMaxLength(int64(len(text.bytes)), repeat) {
 		return nil, nil
 	}
 
-	return newEvalText(bytes.Repeat(text.bytes, int(repeat)), text.col), nil
+	b := bytes.Repeat(text.bytes, int(repeat))
+	if len(b) >= repeatTypeChangeLength || negative {
+		tt = repeatType(env.currentVersion(), tt)
+	}
+
+	return newEvalRaw(tt, b, text.col), nil
 }
 
 func validMaxLength(len, repeat int64) bool {
@@ -942,14 +974,16 @@ func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck2(str, repeat)
 
+	tt := sqltypes.VarChar
 	switch {
 	case str.isTextual():
+		tt = str.Type
 	default:
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
 	}
 	_ = c.compileToInt64(repeat, 1)
 
-	c.asm.Fn_REPEAT()
+	c.asm.Fn_REPEAT(tt, repeatType(c.env.MySQLVersion(), tt))
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: str.Col, Flag: flagNullable}, nil
 }

@@ -1340,6 +1340,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowThrottlerStatus(a, b)
+	case *ShowTransactionStatus:
+		b, ok := inB.(*ShowTransactionStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowTransactionStatus(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -4367,6 +4373,17 @@ func (cmp *Comparator) RefOfShowThrottlerStatus(a, b *ShowThrottlerStatus) bool 
 	return cmp.Comments(a.Comments, b.Comments)
 }
 
+// RefOfShowTransactionStatus does deep equals between the two objects.
+func (cmp *Comparator) RefOfShowTransactionStatus(a, b *ShowTransactionStatus) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.TransactionID == b.TransactionID
+}
+
 // RefOfStarExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfStarExpr(a, b *StarExpr) bool {
 	if a == b {
@@ -6778,6 +6795,12 @@ func (cmp *Comparator) ShowInternal(inA, inB ShowInternal) bool {
 			return false
 		}
 		return cmp.RefOfShowOther(a, b)
+	case *ShowTransactionStatus:
+		b, ok := inB.(*ShowTransactionStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowTransactionStatus(a, b)
 	default:
 		// this should never happen
 		return false
