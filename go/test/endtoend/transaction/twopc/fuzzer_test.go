@@ -80,6 +80,18 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			updateSets:     1,
 			timeForTesting: 5 * time.Second,
 		},
+		{
+			name:           "Multiple Threads - Single Set",
+			threads:        5,
+			updateSets:     1,
+			timeForTesting: 5 * time.Second,
+		},
+		{
+			name:           "Multiple Threads - Multiple Set",
+			threads:        15,
+			updateSets:     15,
+			timeForTesting: 5 * time.Second,
+		},
 	}
 
 	for _, tt := range testcases {
