@@ -229,7 +229,7 @@ func (qb *queryBuilder) cteWith(other *queryBuilder, name string) {
 			CTEs: []*sqlparser.CommonTableExpr{{
 				ID:       sqlparser.NewIdentifierCS(name),
 				Columns:  nil,
-				Subquery: &sqlparser.Subquery{Select: cteUnion},
+				Subquery: cteUnion,
 			}},
 		},
 	}

@@ -146,7 +146,7 @@ func (r *earlyRewriter) handleAliasedTable(node *sqlparser.AliasedTableExpr) err
 		node.As = tbl.Name
 	}
 	node.Expr = &sqlparser.DerivedTable{
-		Select: cte.Subquery.Select,
+		Select: cte.Subquery,
 	}
 	if len(cte.Columns) > 0 {
 		node.Columns = cte.Columns

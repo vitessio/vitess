@@ -370,7 +370,7 @@ func checkForInvalidAliasUse(cte *sqlparser.CommonTableExpr, name string) (err e
 		}
 		return err == nil
 	}
-	_ = sqlparser.CopyOnRewrite(cte.Subquery.Select, down, nil, nil)
+	_ = sqlparser.CopyOnRewrite(cte.Subquery, down, nil, nil)
 	return err
 }
 

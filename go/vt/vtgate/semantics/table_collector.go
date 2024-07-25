@@ -63,7 +63,7 @@ func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
 	}
 	for _, cte := range with.CTEs {
 		etc.cte[cte.ID.String()] = CTEDef{
-			Query:   cte.Subquery.Select,
+			Query:   cte.Subquery,
 			Columns: cte.Columns,
 		}
 	}
