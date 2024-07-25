@@ -324,10 +324,9 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // to another result.Note currently it doesn't handle cases like
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
-	if src.RowsAffected == 0 && len(src.Rows) == 0 && len(src.Fields) == 0 {
+	if src.StatsEmpty() && len(src.Rows) == 0 && len(src.Fields) == 0 {
 		return
 	}
-
 	if result.Fields == nil {
 		result.Fields = src.Fields
 	}
@@ -343,6 +342,10 @@ func (result *Result) Stats() *Result {
 	return &Result{
 		RowsAffected: result.RowsAffected,
 	}
+}
+
+func (result *Result) StatsEmpty() bool {
+	return result.RowsAffected == 0
 }
 
 // MergeStats updates the receiver's stats by merging in the stats from src.
