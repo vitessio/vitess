@@ -21,6 +21,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -42,6 +44,7 @@ func TestSubqueryExecute(t *testing.T) {
 			),
 		},
 	}
+	prim.results[0].RowsAffected = 1
 
 	sq := &SimpleProjection{
 		Cols:     []int{0, 2},
@@ -69,6 +72,7 @@ func TestSubqueryExecute(t *testing.T) {
 		"2|bb",
 		"3|cc",
 	))
+	assert.Equal(t, uint64(1), r.RowsAffected)
 
 	// Error case.
 	sq.Input = &fakePrimitive{

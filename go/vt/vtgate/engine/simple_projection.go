@@ -107,7 +107,7 @@ func (sc *SimpleProjection) buildResult(inner *sqltypes.Result) *sqltypes.Result
 		}
 		result.Rows = append(result.Rows, row)
 	}
-	result.RowsAffected = inner.RowsAffected
+	result.MergeStats(inner)
 	return result
 }
 
