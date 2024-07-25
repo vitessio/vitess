@@ -45,6 +45,7 @@ func (jn *SemiJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		return nil, err
 	}
 	result := &sqltypes.Result{Fields: lresult.Fields}
+	result.MergeStats(lresult)
 	for _, lrow := range lresult.Rows {
 		for k, col := range jn.Vars {
 			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
@@ -53,6 +54,7 @@ func (jn *SemiJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		if err != nil {
 			return nil, err
 		}
+		result.MergeStats(rresult)
 		if len(rresult.Rows) > 0 {
 			result.Rows = append(result.Rows, lrow)
 		}

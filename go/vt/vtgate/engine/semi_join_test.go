@@ -43,6 +43,7 @@ func TestSemiJoinExecute(t *testing.T) {
 			),
 		},
 	}
+	leftPrim.results[0].RowsAffected = 1
 	rightFields := sqltypes.MakeTestFields(
 		"col4|col5|col6",
 		"int64|varchar|varchar",
@@ -64,6 +65,10 @@ func TestSemiJoinExecute(t *testing.T) {
 			),
 		},
 	}
+	rightPrim.results[0].RowsAffected = 2
+	rightPrim.results[1].RowsAffected = 3
+	rightPrim.results[2].RowsAffected = 4
+
 	bv := map[string]*querypb.BindVariable{
 		"a": sqltypes.Int64BindVariable(10),
 	}
@@ -85,14 +90,16 @@ func TestSemiJoinExecute(t *testing.T) {
 		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b" false`,
 		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c" false`,
 	})
-	utils.MustMatch(t, sqltypes.MakeTestResult(
+	want := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2|col3",
 			"int64|varchar|varchar",
 		),
 		"1|a|aa",
 		"3|c|cc",
-	), r)
+	)
+	want.RowsAffected = 10
+	utils.MustMatch(t, want, r)
 }
 
 func TestSemiJoinStreamExecute(t *testing.T) {
