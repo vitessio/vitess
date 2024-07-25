@@ -29,7 +29,7 @@ type SelfMetric interface {
 	DefaultScope() Scope
 	DefaultThreshold() float64
 	RequiresConn() bool
-	Read(ctx context.Context, conn *connpool.Conn) *ThrottleMetric
+	Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric
 }
 
 var (

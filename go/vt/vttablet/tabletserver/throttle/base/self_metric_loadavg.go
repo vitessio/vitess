@@ -50,7 +50,7 @@ func (m *LoadAvgSelfMetric) RequiresConn() bool {
 	return false
 }
 
-func (m *LoadAvgSelfMetric) Read(ctx context.Context, conn *connpool.Conn) *ThrottleMetric {
+func (m *LoadAvgSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
 	metric := &ThrottleMetric{
 		Scope: SelfScope,
 	}

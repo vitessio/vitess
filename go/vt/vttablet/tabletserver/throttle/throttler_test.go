@@ -284,9 +284,6 @@ func newTestThrottler() *Throttler {
 		return selfMetrics
 	}
 	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottlerName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
-	if customQuerySelfMetric, ok := base.RegisteredSelfMetrics[base.CustomMetricName].(*base.CustomQuerySelfMetric); ok {
-		customQuerySelfMetric.SetQueryFunc(throttler.GetCustomMetricsQuery)
-	}
 
 	return throttler
 }

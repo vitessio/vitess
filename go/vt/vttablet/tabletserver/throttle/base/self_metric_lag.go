@@ -64,6 +64,6 @@ func (m *LagSelfMetric) RequiresConn() bool {
 	return true
 }
 
-func (m *LagSelfMetric) Read(ctx context.Context, conn *connpool.Conn) *ThrottleMetric {
+func (m *LagSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
 	return ReadSelfMySQLThrottleMetric(ctx, conn, m.GetQuery())
 }

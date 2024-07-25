@@ -44,7 +44,7 @@ func (m *DefaultSelfMetric) RequiresConn() bool {
 	return false
 }
 
-func (m *DefaultSelfMetric) Read(ctx context.Context, conn *connpool.Conn) *ThrottleMetric {
+func (m *DefaultSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
 	return &ThrottleMetric{
 		Err: fmt.Errorf("unexpected direct call to DefaultSelfMetric.Read"),
 	}

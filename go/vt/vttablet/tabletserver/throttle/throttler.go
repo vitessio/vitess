@@ -268,9 +268,6 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.readSelfThrottleMetrics = func(ctx context.Context) base.ThrottleMetrics {
 		return throttler.readSelfThrottleMetricsInternal(ctx)
 	}
-	if customQuerySelfMetric, ok := base.RegisteredSelfMetrics[base.CustomMetricName].(*base.CustomQuerySelfMetric); ok {
-		customQuerySelfMetric.SetQueryFunc(throttler.GetCustomMetricsQuery)
-	}
 	return throttler
 }
 
@@ -689,20 +686,6 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 	return nil
 }
 
-// readSelfMySQLThrottleMetric reads the metric from this very tablet or from its backend mysql.
-func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, query string) *base.ThrottleMetric {
-	conn, err := throttler.pool.Get(ctx, nil)
-	if err != nil {
-		return &base.ThrottleMetric{Err: err}
-	}
-	defer conn.Recycle()
-
-	result := base.ReadSelfMySQLThrottleMetric(ctx, conn.Conn, query)
-	result.Alias = throttler.tabletAlias
-
-	return result
-}
-
 // throttledAppsSnapshot returns a snapshot (a copy) of current throttled apps
 func (throttler *Throttler) throttledAppsSnapshot() map[string]cache.Item {
 	return throttler.throttledApps.Items()
@@ -946,10 +929,11 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 	}
 }
 
+// readSelfThrottleMetricsInternal rreads all registsred self metrics on this tablet (or backend MySQL server).
+// This is the actual place where metrics are read, to be later aggregated and/or propagated to other tablets.
 func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context) base.ThrottleMetrics {
 
-	writeMetric := func(metricName base.MetricName, metric *base.ThrottleMetric) {
-		metric.Name = metricName
+	writeMetric := func(metric *base.ThrottleMetric) {
 		select {
 		case <-ctx.Done():
 			return
@@ -958,23 +942,24 @@ func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context)
 	}
 	readMetric := func(selfMetric base.SelfMetric) *base.ThrottleMetric {
 		if !selfMetric.RequiresConn() {
-			return selfMetric.Read(ctx, nil)
+			return selfMetric.Read(ctx, throttler, nil)
 		}
 		conn, err := throttler.pool.Get(ctx, nil)
 		if err != nil {
 			return &base.ThrottleMetric{Err: err}
 		}
 		defer conn.Recycle()
-		return selfMetric.Read(ctx, conn.Conn)
+		return selfMetric.Read(ctx, throttler, conn.Conn)
 	}
-	for metricsName, selfMetric := range base.RegisteredSelfMetrics {
-		if metricsName == base.DefaultMetricName {
+	for metricName, selfMetric := range base.RegisteredSelfMetrics {
+		if metricName == base.DefaultMetricName {
 			continue
 		}
 		metric := readMetric(selfMetric)
+		metric.Name = metricName
 		metric.Alias = throttler.tabletAlias
 
-		go writeMetric(metricsName, metric)
+		go writeMetric(metric)
 	}
 	return nil
 }
