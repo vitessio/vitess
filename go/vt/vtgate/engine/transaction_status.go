@@ -84,7 +84,7 @@ func (t *TransactionStatus) TryExecute(ctx context.Context, vcursor VCursor, bin
 	if wantfields {
 		res.Fields = t.getFields()
 	}
-	if transactionState != nil {
+	if transactionState != nil && transactionState.Dtid != "" {
 		var participantString []string
 		for _, participant := range transactionState.Participants {
 			participantString = append(participantString, fmt.Sprintf("%s:%s", participant.Keyspace, participant.Shard))
