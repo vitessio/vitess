@@ -383,19 +383,23 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 		}
 
 		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
-		newOp, err := pushJoinPredicates(ctx, joinPredicates, join)
-		if err != nil {
-			return nil, nil, err
+		for _, pred := range joinPredicates {
+			err := join.AddJoinPredicate(ctx, pred)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
-		return newOp, rewrite.NewTree("logical join to applyJoin, switching side because LIMIT", newOp), nil
+		return join, rewrite.NewTree("logical join to applyJoin, switching side because LIMIT", join), nil
 	}
 
 	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
-	newOp, err := pushJoinPredicates(ctx, joinPredicates, join)
-	if err != nil {
-		return nil, nil, err
+	for _, pred := range joinPredicates {
+		err := join.AddJoinPredicate(ctx, pred)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
-	return newOp, rewrite.NewTree("logical join to applyJoin ", newOp), nil
+	return join, rewrite.NewTree("logical join to applyJoin ", join), nil
 }
 
 func operatorsToRoutes(a, b ops.Operator) (*Route, *Route) {
@@ -613,19 +617,4 @@ func hexEqual(a, b *sqlparser.Literal) bool {
 		return bytes.Equal(v, v2)
 	}
 	return false
-}
-
-func pushJoinPredicates(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr, op *ApplyJoin) (ops.Operator, error) {
-	if len(exprs) == 0 {
-		return op, nil
-	}
-
-	for _, expr := range exprs {
-		_, err := AddPredicate(ctx, op, expr, true, newFilter)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return op, nil
 }
