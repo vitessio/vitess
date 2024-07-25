@@ -72,7 +72,7 @@ func (s *Sequential) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		if err != nil {
 			return nil, err
 		}
-		finalRes.RowsAffected += res.RowsAffected
+		finalRes.MergeStats(res)
 		if finalRes.InsertID == 0 {
 			finalRes.InsertID = res.InsertID
 		}
