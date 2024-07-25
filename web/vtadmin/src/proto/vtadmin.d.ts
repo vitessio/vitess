@@ -63057,6 +63057,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest tolerable_replication_lag */
         tolerable_replication_lag?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest allow_cross_cell_promotion */
+        allow_cross_cell_promotion?: (boolean|null);
     }
 
     /** Represents a PlannedReparentShardRequest. */
@@ -63085,6 +63088,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest tolerable_replication_lag. */
         public tolerable_replication_lag?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest allow_cross_cell_promotion. */
+        public allow_cross_cell_promotion: boolean;
 
         /**
          * Creates a new PlannedReparentShardRequest instance using the specified properties.
