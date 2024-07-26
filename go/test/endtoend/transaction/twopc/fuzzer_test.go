@@ -31,14 +31,12 @@ import (
 )
 
 var (
-	// updateRowsVals are the rows that we use to ensure 1 update on each shard with the same increment.
-	updateRowsVals = [][]int{
-		{
-			4, // 4 maps to 0x20 and ends up in the first shard (-40)
-			6, // 6 maps to 0x60 and ends up in the second shard (40-80)
-			9, // 9 maps to 0x90 and ends up in the third shard (80-)
-			// We can increment all of these values by multiples of 16 and they'll always be in the same shard.
-		},
+	// updateRowBaseVals is the base row values that we use to ensure 1 update on each shard with the same increment.
+	updateRowBaseVals = [3]int{
+		4, // 4 maps to 0x20 and ends up in the first shard (-40)
+		6, // 6 maps to 0x60 and ends up in the second shard (40-80)
+		9, // 9 maps to 0x90 and ends up in the third shard (80-)
+		// We can increment all of these values by multiples of 16 and they'll always be in the same shard.
 	}
 
 	insertIntoFuzzUpdate   = "INSERT INTO twopc_fuzzer_update (id, col) VALUES (%d, %d)"
@@ -111,15 +109,15 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			fz.stop()
 
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
-			verifyTransactionsWereAtomic(t, conn)
+			fz.verifyTransactionsWereAtomic(t, conn)
 		})
 	}
 }
 
 // verifyTransactionsWereAtomic verifies that the invariants of test are held.
 // It checks the heuristics to ensure that the transactions run were atomic.
-func verifyTransactionsWereAtomic(t *testing.T, conn *mysql.Conn) {
-	for updateSetIdx, updateSet := range updateRowsVals {
+func (fz *fuzzer) verifyTransactionsWereAtomic(t *testing.T, conn *mysql.Conn) {
+	for updateSetIdx, updateSet := range fz.updateRowsVals {
 		// All the three values of the update set must be equal.
 		shard1Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[0])
 		shard2Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[1])
@@ -157,7 +155,7 @@ func getThreadIDsForUpdateSetFromFuzzInsert(t *testing.T, conn *mysql.Conn, upda
 		val, err := row[0].ToInt()
 		require.NoError(t, err)
 		// We reverse map the value to the thread id that had inserted it so that we can use it to compare the lists.
-		ids = append(ids, (val-updateRowsVals[0][shard-1])/16)
+		ids = append(ids, (val-updateRowBaseVals[shard-1])/16)
 	}
 	return ids
 }
@@ -173,6 +171,8 @@ type fuzzer struct {
 	shouldStop atomic.Bool
 	// wg is an internal state variable, that used to know whether the fuzzer threads are running or not.
 	wg sync.WaitGroup
+	// updateRowVals are the rows that we use to ensure 1 update on each shard with the same increment.
+	updateRowsVals [][]int
 }
 
 // newFuzzer creates a new fuzzer struct.
@@ -233,16 +233,15 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 // initialize initializes all the variables that will be needed for running the fuzzer.
 // It also creates the rows for the `twopc_fuzzer_update` table.
 func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
-	updateRowsVals = updateRowsVals[0:1]
-	for i := 1; i < fz.updateSets; i++ {
-		updateRowsVals = append(updateRowsVals, []int{
-			updateRowsVals[0][0] + i*16,
-			updateRowsVals[0][1] + i*16,
-			updateRowsVals[0][2] + i*16,
+	for i := 0; i < fz.updateSets; i++ {
+		fz.updateRowsVals = append(fz.updateRowsVals, []int{
+			updateRowBaseVals[0] + i*16,
+			updateRowBaseVals[1] + i*16,
+			updateRowBaseVals[2] + i*16,
 		})
 	}
 
-	for _, updateSet := range updateRowsVals {
+	for _, updateSet := range fz.updateRowsVals {
 		for _, id := range updateSet {
 			_, err := conn.ExecuteFetch(fmt.Sprintf(insertIntoFuzzUpdate, id, 0), 0, false)
 			require.NoError(t, err)
@@ -281,7 +280,7 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, conn *mysql.Conn, 
 // It takes the update set index and the value to increment the set by.
 func (fz *fuzzer) generateUpdateQueries(updateSet int, incrementVal int32) []string {
 	var queries []string
-	for _, id := range updateRowsVals[updateSet] {
+	for _, id := range fz.updateRowsVals[updateSet] {
 		queries = append(queries, fmt.Sprintf(updateFuzzUpdate, incrementVal, id))
 	}
 	rand.Shuffle(len(queries), func(i, j int) {
@@ -294,7 +293,7 @@ func (fz *fuzzer) generateUpdateQueries(updateSet int, incrementVal int32) []str
 // It takes the update set index and the thread id that is generating these inserts.
 func (fz *fuzzer) generateInsertQueries(updateSet int, threadId int) []string {
 	var queries []string
-	for idx, id := range updateRowsVals[0] {
+	for idx, id := range updateRowBaseVals {
 		queries = append(queries, fmt.Sprintf(insertIntoFuzzInsert, threadId*16+id, updateSetValueForShard(updateSet, idx+1)))
 	}
 	rand.Shuffle(len(queries), func(i, j int) {
