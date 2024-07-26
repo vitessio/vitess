@@ -398,8 +398,8 @@ func TestMissingTables(t *testing.T) {
 	runCases(t, filter, testcases, startPos, nil)
 }
 
-// TestVStreamTableNoPKsWithoutFields confirms that, if a lastpk is passed with no fields defined, it errors out.
-func TestVStreamTableNoPKsWithoutFields(t *testing.T) {
+// TestVStreamMissingFieldsInLastPK tests that we error out if the lastpk for a table is missing the fields spec.
+func TestVStreamMissingFieldsInLastPK(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
 		ddls: []string{

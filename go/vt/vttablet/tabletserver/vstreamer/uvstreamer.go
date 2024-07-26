@@ -139,7 +139,6 @@ func (uvs *uvstreamer) buildTablePlan() error {
 	tableLastPKs := make(map[string]*binlogdatapb.TableLastPK)
 	for _, tablePK := range uvs.inTablePKs {
 		if tablePK != nil && tablePK.Lastpk != nil && len(tablePK.Lastpk.Fields) == 0 {
-			log.Errorf("lastpk for table %s has no fields defined", tablePK.TableName)
 			return fmt.Errorf("lastpk for table %s has no fields defined", tablePK.TableName)
 		}
 		tableLastPKs[tablePK.TableName] = tablePK
@@ -317,7 +316,6 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	behind := time.Now().UnixNano() - uvs.lastTimestampNs
 	uvs.setReplicationLagSeconds(behind / 1e9)
-	// log.Infof("sbm set to %d", uvs.ReplicationLagSeconds)
 	var evs2 []*binlogdatapb.VEvent
 	if len(uvs.plans) > 0 {
 		evs2 = uvs.filterEvents(evs)
