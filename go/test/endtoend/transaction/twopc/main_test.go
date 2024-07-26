@@ -127,8 +127,26 @@ func cleanup(t *testing.T) {
 	defer conn.Close()
 
 	_, _ = utils.ExecAllowError(t, conn, "delete from twopc_user")
-	_, _ = utils.ExecAllowError(t, conn, "delete from twopc_fuzzer_insert")
-	_, _ = utils.ExecAllowError(t, conn, "delete from twopc_fuzzer_update")
+	clearOutTable(t, conn, "twopc_fuzzer_insert")
+	clearOutTable(t, conn, "twopc_fuzzer_update")
+}
+
+// clearOutTable deletes everything from a table. Sometimes the table might have more rows than allowed in a single delete query,
+// so we have to do the deletions iteratively.
+func clearOutTable(t *testing.T, conn *mysql.Conn, tableName string) {
+	for {
+		res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT count(*) FROM %v", tableName), 1, false)
+		require.NoError(t, err)
+		require.Len(t, res.Rows, 1)
+		require.Len(t, res.Rows[0], 1)
+		rowCount, err := res.Rows[0][0].ToInt()
+		require.NoError(t, err)
+		if rowCount == 0 {
+			return
+		}
+		_, err = conn.ExecuteFetch(fmt.Sprintf("DELETE FROM %v LIMIT 10000", tableName), 10000, false)
+		require.NoError(t, err)
+	}
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value
