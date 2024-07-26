@@ -776,7 +776,7 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 	for {
 		select {
 		case <-bp.done:
-			logger.Infof("completed %s %q", messageStr, bp.filename)
+			logger.Infof("Completed %s %q", messageStr, bp.filename)
 			return
 		case <-tick.C:
 			written := float64(atomic.LoadInt64(&bp.nn))
@@ -817,7 +817,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	br := newBackupReader(fe.Name, fi.Size(), timedSource)
-	go br.ReportProgress(builtinBackupProgress, params.Logger /*restore*/, false)
+	go br.ReportProgress(builtinBackupProgress, params.Logger, false /*restore*/)
 
 	// Open the destination file for writing, and a buffer.
 	params.Logger.Infof("Backing up file: %v", fe.Name)
@@ -1082,7 +1082,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}()
 
 	br := newBackupReader(name, 0, timedSource)
-	go br.ReportProgress(builtinBackupProgress, params.Logger /*restore*/, true)
+	go br.ReportProgress(builtinBackupProgress, params.Logger, true /*restore*/)
 	var reader io.Reader = br
 
 	// Open the destination file for writing.
