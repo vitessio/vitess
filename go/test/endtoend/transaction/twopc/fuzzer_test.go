@@ -109,14 +109,16 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			fz.stop()
 
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
-			fz.verifyTransactionsWereAtomic(t, conn)
+			fz.verifyTransactionsWereAtomic(t)
 		})
 	}
 }
 
 // verifyTransactionsWereAtomic verifies that the invariants of test are held.
 // It checks the heuristics to ensure that the transactions run were atomic.
-func (fz *fuzzer) verifyTransactionsWereAtomic(t *testing.T, conn *mysql.Conn) {
+func (fz *fuzzer) verifyTransactionsWereAtomic(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
 	for updateSetIdx, updateSet := range fz.updateRowsVals {
 		// All the three values of the update set must be equal.
 		shard1Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[0])
