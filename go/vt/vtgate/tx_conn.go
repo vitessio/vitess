@@ -302,7 +302,7 @@ func createWarningMessage(dtid string, txPhase commitPhase) string {
 	case COMMIT2PC_PREPARE:
 		warningMsg += " transaction prepare phase; prepare transaction rollback attempted; conclude on recovery"
 	case COMMIT2PC_STARTCOMMIT:
-		warningMsg += " metadata manager commit; transaction will be committed/roll based on the state on recovery"
+		warningMsg += " metadata manager commit; transaction will be committed/rollbacked based on the state on recovery"
 	case COMMIT2PC_PREPARECOMMIT:
 		warningMsg += " resource manager commit; transaction will be committed on recovery"
 	case COMMIT2PC_CONCLUDE:

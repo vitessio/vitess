@@ -583,7 +583,7 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	require.ErrorContains(t, err, "Fail After MM commit")
 
 	testWarningAndTransactionStatus(t, conn,
-		"distributed transaction ID failed during metadata manager commit; transaction will be committed/roll based on the state on recovery",
+		"distributed transaction ID failed during metadata manager commit; transaction will be committed/rollbacked based on the state on recovery",
 		false, "COMMIT", "ks:40-80,ks:-40")
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
