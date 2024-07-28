@@ -630,13 +630,13 @@ func (vr *vreplicator) throttlerAppName() string {
 // tablet throttler over time. It also increments the global throttled count to keep
 // track of how many times in total vreplication has been throttled across all workflows
 // (both ones that currently exist and ones that no longer do).
-func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
+func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name, reasonThrottled string) error {
 	appName := appThrottled.String()
 	vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
 	globalStats.ThrottledCount.Add(1)
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appName)
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appName, reasonThrottled)
 		if err != nil {
 			return err
 		}

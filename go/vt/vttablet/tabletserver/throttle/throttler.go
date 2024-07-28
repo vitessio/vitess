@@ -206,8 +206,6 @@ type Throttler struct {
 
 	readSelfThrottleMetrics func(context.Context) base.ThrottleMetrics // overwritten by unit test
 
-	httpClient *http.Client
-
 	hostCpuCoreCount atomic.Int32
 }
 
@@ -263,7 +261,6 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
 	throttler.appCheckedMetrics = cache.New(cache.NoExpiration, 0)
 
-	throttler.httpClient = base.SetupHTTPClient(2 * activeCollectInterval)
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
@@ -1378,8 +1375,8 @@ func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.App
 // IsAppThrottled tells whether some app should be throttled.
 // Assuming an app is throttled to some extend, it will randomize the result based
 // on the throttle ratio
-func (throttler *Throttler) IsAppThrottled(appName string) bool {
-	appFound := false
+func (throttler *Throttler) IsAppThrottled(appName string) (bool, string) {
+	appFound := ""
 	isSingleAppNameThrottled := func(singleAppName string) bool {
 		object, found := throttler.throttledApps.Get(singleAppName)
 		if !found {
@@ -1392,7 +1389,7 @@ func (throttler *Throttler) IsAppThrottled(appName string) bool {
 		}
 		// From this point on, we consider that this app has some throttling configuration
 		// of any sort.
-		appFound = true
+		appFound = singleAppName
 		if appThrottle.Exempt {
 			return false
 		}
@@ -1403,32 +1400,32 @@ func (throttler *Throttler) IsAppThrottled(appName string) bool {
 		return false
 	}
 	if isSingleAppNameThrottled(appName) {
-		return true
+		return true, appName
 	}
 	for _, singleAppName := range throttlerapp.Name(appName).SplitStrings() {
 		if singleAppName == "" {
 			continue
 		}
 		if isSingleAppNameThrottled(singleAppName) {
-			return true
+			return true, singleAppName
 		}
 	}
 	// If app was found then there was some explicit throttle instruction for the app, and the app
 	// passed the test.
-	if appFound {
-		return false
+	if appFound != "" {
+		return false, appFound
 	}
 	// If the app was not found, ie no specific throttle instruction was found for the app, then
 	// the app should also consider the case where the "all" app is throttled.
 	if isSingleAppNameThrottled(throttlerapp.AllName.String()) {
 		// Means the "all" app is throttled. This is a special case, and it means "all apps are throttled"
-		return true
+		return true, throttlerapp.AllName.String()
 	}
-	return false
+	return false, appName
 }
 
 // IsAppExempt
-func (throttler *Throttler) IsAppExempted(appName string) bool {
+func (throttler *Throttler) IsAppExempted(appName string) (bool, string) {
 	isSingleAppNameExempted := func(singleAppName string) bool {
 		if throttlerapp.ExemptFromChecks(appName) { // well known statically exempted apps
 			return true
@@ -1448,22 +1445,24 @@ func (throttler *Throttler) IsAppExempted(appName string) bool {
 		return false
 	}
 	if isSingleAppNameExempted(appName) {
-		return true
+		return true, appName
 	}
 	for _, singleAppName := range throttlerapp.Name(appName).SplitStrings() {
 		if singleAppName == "" {
 			continue
 		}
 		if isSingleAppNameExempted(singleAppName) {
-			return true
+			return true, singleAppName
 		}
 	}
 
-	if isSingleAppNameExempted(throttlerapp.AllName.String()) && !throttler.IsAppThrottled(appName) {
-		return true
+	if isSingleAppNameExempted(throttlerapp.AllName.String()) {
+		if throttled, _ := throttler.IsAppThrottled(appName); !throttled {
+			return true, throttlerapp.AllName.String()
+		}
 	}
 
-	return false
+	return false, appName
 }
 
 // ThrottledAppsMap returns a (copy) map of currently throttled apps
@@ -1517,14 +1516,16 @@ func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
 }
 
 // AppRequestMetricResult gets a metric result in the context of a specific app
-func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName string, metricResultFunc base.MetricResultFunc, denyApp bool) (metricResult base.MetricResult, threshold float64) {
+func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName string, metricResultFunc base.MetricResultFunc, denyApp bool) (metricResult base.MetricResult, threshold float64, matchedApp string) {
 	if denyApp {
-		return base.AppDeniedMetric, 0
+		return base.AppDeniedMetric, 0, appName
 	}
-	if throttler.IsAppThrottled(appName) {
-		return base.AppDeniedMetric, 0
+	throttled, matchedApp := throttler.IsAppThrottled(appName)
+	if throttled {
+		return base.AppDeniedMetric, 0, matchedApp
 	}
-	return metricResultFunc()
+	metricResult, threshold = metricResultFunc()
+	return metricResult, threshold, matchedApp
 }
 
 // checkScope checks the aggregated value of given store
@@ -1532,12 +1533,15 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 	if !throttler.IsRunning() {
 		return okMetricCheckResult
 	}
-	if throttler.IsAppExempted(appName) {
+	if exempted, matchedApp := throttler.IsAppExempted(appName); exempted {
 		// Some apps are exempt from checks. They are always responded with OK. This is because those apps are
 		// continuous and do not generate a substantial load.
-		return okMetricCheckResult
+		result := okMetricCheckResult
+		result.AppName = matchedApp
+		return result
 	}
 
+	matchedApp := appName
 	if len(metricNames) == 0 {
 		// No explicit metrics requested.
 		// Get the metric names mappd to the given app
@@ -1551,6 +1555,7 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 				case []base.MetricName:
 					metricNames = append(metricNames, val...)
 				}
+				matchedApp = appToken
 			}
 		}
 	}
@@ -1564,17 +1569,20 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 			case []base.MetricName:
 				metricNames = val
 			}
+			matchedApp = throttlerapp.AllName.String()
 		}
 	}
 	if throttlerapp.VitessName.Equals(appName) {
 		// "vitess" always checks all metrics, irrespective of what is mapped.
 		metricNames = base.KnownMetricNames
+		matchedApp = appName
 	}
 	if len(metricNames) == 0 {
 		// Nothing mapped? For backwards compatibility and as default, we use the "default" metric.
 		metricNames = base.MetricNames{throttler.metricNameUsedAsDefault()}
 	}
 	checkResult = throttler.check.Check(ctx, appName, scope, metricNames, flags)
+	checkResult.AppName = matchedApp
 
 	shouldRequestHeartbeats := !flags.SkipRequestHeartbeats
 	if throttlerapp.VitessName.Equals(appName) {
