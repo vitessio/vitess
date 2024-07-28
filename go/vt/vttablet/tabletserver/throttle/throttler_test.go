@@ -906,7 +906,7 @@ func TestIsAppThrottled(t *testing.T) {
 		// continuing previous test, we had 3 throttled apps. "all" is a new app being throttled.
 		assert.Equal(t, 4, throttler.throttledApps.ItemCount())
 	})
-	// 	//
+	//
 	t.Run("unthrottle", func(t *testing.T) {
 		throttler.UnthrottleApp("app1")
 		throttler.UnthrottleApp("app2")
