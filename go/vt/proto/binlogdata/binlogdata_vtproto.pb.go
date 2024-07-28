@@ -512,20 +512,21 @@ func (m *VEvent) CloneVT() *VEvent {
 		return (*VEvent)(nil)
 	}
 	r := &VEvent{
-		Type:        m.Type,
-		Timestamp:   m.Timestamp,
-		Gtid:        m.Gtid,
-		Statement:   m.Statement,
-		RowEvent:    m.RowEvent.CloneVT(),
-		FieldEvent:  m.FieldEvent.CloneVT(),
-		Vgtid:       m.Vgtid.CloneVT(),
-		Journal:     m.Journal.CloneVT(),
-		Dml:         m.Dml,
-		CurrentTime: m.CurrentTime,
-		LastPKEvent: m.LastPKEvent.CloneVT(),
-		Keyspace:    m.Keyspace,
-		Shard:       m.Shard,
-		Throttled:   m.Throttled,
+		Type:            m.Type,
+		Timestamp:       m.Timestamp,
+		Gtid:            m.Gtid,
+		Statement:       m.Statement,
+		RowEvent:        m.RowEvent.CloneVT(),
+		FieldEvent:      m.FieldEvent.CloneVT(),
+		Vgtid:           m.Vgtid.CloneVT(),
+		Journal:         m.Journal.CloneVT(),
+		Dml:             m.Dml,
+		CurrentTime:     m.CurrentTime,
+		LastPKEvent:     m.LastPKEvent.CloneVT(),
+		Keyspace:        m.Keyspace,
+		Shard:           m.Shard,
+		Throttled:       m.Throttled,
+		ThrottledReason: m.ThrottledReason,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -671,10 +672,11 @@ func (m *VStreamRowsResponse) CloneVT() *VStreamRowsResponse {
 		return (*VStreamRowsResponse)(nil)
 	}
 	r := &VStreamRowsResponse{
-		Gtid:      m.Gtid,
-		Lastpk:    m.Lastpk.CloneVT(),
-		Throttled: m.Throttled,
-		Heartbeat: m.Heartbeat,
+		Gtid:            m.Gtid,
+		Lastpk:          m.Lastpk.CloneVT(),
+		Throttled:       m.Throttled,
+		Heartbeat:       m.Heartbeat,
+		ThrottledReason: m.ThrottledReason,
 	}
 	if rhs := m.Fields; rhs != nil {
 		tmpContainer := make([]*query.Field, len(rhs))
@@ -2131,6 +2133,15 @@ func (m *VEvent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.ThrottledReason) > 0 {
+		i -= len(m.ThrottledReason)
+		copy(dAtA[i:], m.ThrottledReason)
+		i = encodeVarint(dAtA, i, uint64(len(m.ThrottledReason)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xca
+	}
 	if m.Throttled {
 		i--
 		if m.Throttled {
@@ -2625,6 +2636,13 @@ func (m *VStreamRowsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.ThrottledReason) > 0 {
+		i -= len(m.ThrottledReason)
+		copy(dAtA[i:], m.ThrottledReason)
+		i = encodeVarint(dAtA, i, uint64(len(m.ThrottledReason)))
+		i--
+		dAtA[i] = 0x42
 	}
 	if m.Heartbeat {
 		i--
@@ -3739,6 +3757,10 @@ func (m *VEvent) SizeVT() (n int) {
 	if m.Throttled {
 		n += 3
 	}
+	l = len(m.ThrottledReason)
+	if l > 0 {
+		n += 2 + l + sov(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -3909,6 +3931,10 @@ func (m *VStreamRowsResponse) SizeVT() (n int) {
 	}
 	if m.Heartbeat {
 		n += 2
+	}
+	l = len(m.ThrottledReason)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -7951,6 +7977,38 @@ func (m *VEvent) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Throttled = bool(v != 0)
+		case 25:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottledReason", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ThrottledReason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -9116,6 +9174,38 @@ func (m *VStreamRowsResponse) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Heartbeat = bool(v != 0)
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottledReason", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ThrottledReason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

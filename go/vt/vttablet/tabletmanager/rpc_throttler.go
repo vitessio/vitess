@@ -58,6 +58,8 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 		Threshold:       checkResult.Threshold,
 		Message:         checkResult.Message,
 		RecentlyChecked: checkResult.RecentlyChecked,
+		AppName:         checkResult.AppName,
+		Summary:         checkResult.Summary(),
 		Metrics:         make(map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric),
 	}
 	for name, metric := range checkResult.Metrics {

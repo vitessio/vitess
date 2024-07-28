@@ -30653,6 +30653,12 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse metrics */
         metrics?: ({ [k: string]: tabletmanagerdata.CheckThrottlerResponse.IMetric }|null);
+
+        /** CheckThrottlerResponse app_name */
+        app_name?: (string|null);
+
+        /** CheckThrottlerResponse summary */
+        summary?: (string|null);
     }
 
     /** Represents a CheckThrottlerResponse. */
@@ -30684,6 +30690,12 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse metrics. */
         public metrics: { [k: string]: tabletmanagerdata.CheckThrottlerResponse.IMetric };
+
+        /** CheckThrottlerResponse app_name. */
+        public app_name: string;
+
+        /** CheckThrottlerResponse summary. */
+        public summary: string;
 
         /**
          * Creates a new CheckThrottlerResponse instance using the specified properties.
@@ -33809,6 +33821,9 @@ export namespace binlogdata {
 
         /** VEvent throttled */
         throttled?: (boolean|null);
+
+        /** VEvent throttled_reason */
+        throttled_reason?: (string|null);
     }
 
     /** Represents a VEvent. */
@@ -33861,6 +33876,9 @@ export namespace binlogdata {
 
         /** VEvent throttled. */
         public throttled: boolean;
+
+        /** VEvent throttled_reason. */
+        public throttled_reason: string;
 
         /**
          * Creates a new VEvent instance using the specified properties.
@@ -34520,6 +34538,9 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse heartbeat */
         heartbeat?: (boolean|null);
+
+        /** VStreamRowsResponse throttled_reason */
+        throttled_reason?: (string|null);
     }
 
     /** Represents a VStreamRowsResponse. */
@@ -34551,6 +34572,9 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse heartbeat. */
         public heartbeat: boolean;
+
+        /** VStreamRowsResponse throttled_reason. */
+        public throttled_reason: string;
 
         /**
          * Creates a new VStreamRowsResponse instance using the specified properties.
