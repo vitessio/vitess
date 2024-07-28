@@ -95,15 +95,15 @@ func (c *CheckResult) IsOK() bool {
 func (c *CheckResult) Summary() string {
 	switch c.StatusCode {
 	case http.StatusOK:
-		return fmt.Sprintf("%v is granted access", c.AppName)
+		return fmt.Sprintf("%s is granted access", c.AppName)
 	case http.StatusExpectationFailed:
-		return fmt.Sprintf("%v is explicitly denied access", c.AppName)
+		return fmt.Sprintf("%s is explicitly denied access", c.AppName)
 	case http.StatusInternalServerError:
-		return fmt.Sprintf("%v is denied access due to unexpected error: %v", c.AppName, c.Error)
+		return fmt.Sprintf("%s is denied access due to unexpected error: %v", c.AppName, c.Error)
 	case http.StatusTooManyRequests:
-		return fmt.Sprintf("%v is denied access due to %s/%s metric value %v exceeding threshold %v", c.AppName, c.Scope, c.MetricName, c.Value, c.Threshold)
+		return fmt.Sprintf("%s is denied access due to %s/%s metric value %v exceeding threshold %v", c.AppName, c.Scope, c.MetricName, c.Value, c.Threshold)
 	case http.StatusNotFound:
-		return fmt.Sprintf("%v is denied access due to unknown or uncollected metric", c.AppName)
+		return fmt.Sprintf("%s is denied access due to unknown or uncollected metric", c.AppName)
 	case 0:
 		return ""
 	default:
