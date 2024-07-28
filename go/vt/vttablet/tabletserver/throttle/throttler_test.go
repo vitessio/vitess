@@ -418,7 +418,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
 			assert.Len(t, checkResult.Metrics, 1)
-			assert.Contains(t, checkResult.Summary(), "test is granted access")
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 		})
 		t.Run("apply low threshold", func(t *testing.T) {
 			assert.Equal(t, 0.75, throttler.GetMetricsThreshold())
@@ -441,7 +441,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			assert.EqualValues(t, 0.3, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
 			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 			assert.Len(t, checkResult.Metrics, 1)
-			assert.Contains(t, checkResult.Summary(), "test is denied access due to self/lag metric value")
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to self/lag metric value")
 		})
 		t.Run("apply low threshold but high 'lag' override", func(t *testing.T) {
 			throttlerConfig := &topodatapb.ThrottlerConfig{
@@ -465,7 +465,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			assert.EqualValues(t, 0.3, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 			assert.Len(t, checkResult.Metrics, 1)
-			assert.Contains(t, checkResult.Summary(), "test is granted access")
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 		})
 	})
 
@@ -523,7 +523,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
 			assert.Len(t, checkResult.Metrics, 1)
-			assert.Contains(t, checkResult.Summary(), "test is denied access due to shard/lag metric value")
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to shard/lag metric value")
 		})
 		t.Run("apply high lag threshold", func(t *testing.T) {
 			throttlerConfig.Threshold = 4444.0
@@ -538,7 +538,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // self lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.Len(t, checkResult.Metrics, 1)
-				assert.Contains(t, checkResult.Summary(), "test is granted access")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 		t.Run("apply low 'loadavg' threshold", func(t *testing.T) {
@@ -553,7 +553,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.Len(t, checkResult.Metrics, 1)
-				assert.Contains(t, checkResult.Summary(), "test is granted access")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 		t.Run("assign 'loadavg' to test app", func(t *testing.T) {
@@ -572,7 +572,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 2.718, checkResult.Value) // self loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
-				assert.Contains(t, checkResult.Summary(), "test is denied access due to self/loadavg metric value")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to self/loadavg metric value")
 			})
 		})
 		t.Run("assign 'shard/loadavg' to test app", func(t *testing.T) {
@@ -591,7 +591,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 5.1, checkResult.Value) // shard loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
-				assert.Contains(t, checkResult.Summary(), "test is denied access due to shard/loadavg metric value")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to shard/loadavg metric value")
 			})
 		})
 		t.Run("assign 'lag,loadavg' to test app", func(t *testing.T) {
@@ -609,7 +609,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 2.718, checkResult.Value) // self loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
-				assert.Contains(t, checkResult.Summary(), "test is denied access due to self/loadavg metric value")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to self/loadavg metric value")
 			})
 		})
 		t.Run("assign 'lag,shard/loadavg' to test app", func(t *testing.T) {
@@ -627,7 +627,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 5.1, checkResult.Value) // shard loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
-				assert.Contains(t, checkResult.Summary(), "test is denied access due to shard/loadavg metric value")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to shard/loadavg metric value")
 			})
 		})
 		t.Run("clear 'loadavg' threshold", func(t *testing.T) {
@@ -641,7 +641,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 1, len(checkResult.Metrics), "unexpected metrics: %+v", checkResult.Metrics)
-				assert.Contains(t, checkResult.Summary(), "test is granted access")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 		t.Run("assign 'lag,threads_running' to test app", func(t *testing.T) {
@@ -659,7 +659,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
-				assert.Contains(t, checkResult.Summary(), "test is granted access")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 		t.Run("assign 'custom,loadavg' to 'all' app", func(t *testing.T) {
@@ -677,7 +677,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
-				assert.Contains(t, checkResult.Summary(), "all is denied access due to self/loadavg metric value")
+				assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is denied access due to self/loadavg metric value")
 			})
 			t.Run("check 'test' after assignment", func(t *testing.T) {
 				// "test" app unaffected by 'all' assignment, because it has
@@ -692,7 +692,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
-				assert.Contains(t, checkResult.Summary(), "test is granted access")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 			t.Run("'online-ddl' app affected by 'all'", func(t *testing.T) {
 				// "online-ddl" app is affected by 'all' assignment, because it has
@@ -706,7 +706,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
-				assert.Contains(t, checkResult.Summary(), "all is denied access due to self/loadavg metric value")
+				assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is denied access due to self/loadavg metric value")
 			})
 		})
 		t.Run("'vreplication:online-ddl:12345' app affected by 'all'", func(t *testing.T) {
@@ -717,7 +717,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
 			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 			assert.Equal(t, 2, len(checkResult.Metrics))
-			assert.Contains(t, checkResult.Summary(), "all is denied access due to self/loadavg metric value")
+			assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is denied access due to self/loadavg metric value")
 		})
 		t.Run("'vreplication:online-ddl:test' app affected by 'test' and not by 'all'", func(t *testing.T) {
 			// "vreplication:online-ddl:test" app is affected by 'test' assignment, because it has
@@ -727,7 +727,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 			assert.Equal(t, 2, len(checkResult.Metrics))
-			assert.Contains(t, checkResult.Summary(), "test is granted access")
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 		})
 		t.Run("deassign metrics from 'all' app", func(t *testing.T) {
 			delete(throttlerConfig.AppCheckedMetrics, throttlerapp.AllName.String())
@@ -742,7 +742,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
-				assert.Contains(t, checkResult.Summary(), "all is granted access")
+				assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is granted access")
 			})
 			t.Run("check 'test' after assignment", func(t *testing.T) {
 				// "test" app unaffected by the entire 'all' assignment, because it has
@@ -757,7 +757,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
-				assert.Contains(t, checkResult.Summary(), "test is granted access")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 			t.Run("'online-ddl' no longer has 'all' impact", func(t *testing.T) {
 				// "online-ddl" app is affected by 'all' assignment, because it has
@@ -771,7 +771,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
-				assert.Contains(t, checkResult.Summary(), "online-ddl is granted access")
+				assert.Contains(t, checkResult.Summary(), throttlerapp.OnlineDDLName.String()+" is granted access")
 			})
 		})
 
@@ -788,7 +788,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.Len(t, checkResult.Metrics, 1)
-				assert.Contains(t, checkResult.Summary(), "test is granted access")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 
@@ -1319,7 +1319,7 @@ func TestProbesWhileOperating(t *testing.T) {
 						checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK) // we expect threshold exceeded
 						assert.NotNil(t, checkResult)
-						assert.Contains(t, checkResult.Summary(), "test is denied access due to")
+						assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 					}
 				})
 
@@ -1344,7 +1344,7 @@ func TestProbesWhileOperating(t *testing.T) {
 						checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK)
 						assert.NotNil(t, checkResult)
-						assert.Contains(t, checkResult.Summary(), "test is denied access due to")
+						assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 					}
 				})
 			})
@@ -2079,7 +2079,7 @@ func TestReplica(t *testing.T) {
 				checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
 				assert.NotNil(t, checkResult)
-				assert.Contains(t, checkResult.Summary(), "test is denied access due to")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 			})
 
 			t.Run("custom query, metrics", func(t *testing.T) {
@@ -2116,7 +2116,7 @@ func TestReplica(t *testing.T) {
 				checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
 				assert.NotNil(t, checkResult)
-				assert.Contains(t, checkResult.Summary(), "test is denied access due to")
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 			})
 		}()
 	})
