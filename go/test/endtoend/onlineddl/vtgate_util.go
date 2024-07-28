@@ -217,6 +217,18 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	}
 }
 
+// CheckCleanupAllMigrations cleans up all applicable migrations and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckCleanupAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) uint64 {
+	cleanupQuery := "alter vitess_migration cleanup all"
+	r := VtgateExecQuery(t, vtParams, cleanupQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+	return r.RowsAffected
+}
+
 // CheckLaunchAllMigrations launches all queued posponed migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {

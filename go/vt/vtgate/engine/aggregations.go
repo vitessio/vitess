@@ -347,7 +347,8 @@ func isComparable(typ sqltypes.Type) bool {
 		sqltypes.Enum,
 		sqltypes.Set,
 		sqltypes.TypeJSON,
-		sqltypes.Bit:
+		sqltypes.Bit,
+		sqltypes.Vector:
 		return true
 	}
 	return false

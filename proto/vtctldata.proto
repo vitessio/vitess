@@ -1357,6 +1357,8 @@ message PlannedReparentShardRequest {
   // acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.
   // A value of 0 indicates that Vitess shouldn't consider the replication lag at all.
   vttime.Duration tolerable_replication_lag = 6;
+  // AllowCrossCellPromotion allows cross cell promotion,
+  bool allow_cross_cell_promotion = 7;
 }
 
 message PlannedReparentShardResponse {

@@ -97,6 +97,36 @@ func (asm *assembler) PushBVar_bin(key string) {
 	}, "PUSH VARBINARY(:%q)", key)
 }
 
+func push_vector(env *ExpressionEnv, raw []byte) int {
+	env.vm.stack[env.vm.sp] = newEvalVector(raw)
+	env.vm.sp++
+	return 1
+}
+
+func (asm *assembler) PushColumn_vector(offset int) {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		col := env.Row[offset]
+		if col.IsNull() {
+			return push_null(env)
+		}
+		return push_vector(env, col.Raw())
+	}, "PUSH VECTOR(:%d)", offset)
+}
+
+func (asm *assembler) PushBVar_vector(key string) {
+	asm.adjustStack(1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		var bvar *querypb.BindVariable
+		bvar, env.vm.err = env.lookupBindVar(key)
+		if env.vm.err != nil {
+			return 0
+		}
+		return push_vector(env, bvar.Value)
+	}, "PUSH VECTOR(:%q)", key)
+}
+
 func push_d(env *ExpressionEnv, raw []byte) int {
 	var dec decimal.Decimal
 	dec, env.vm.err = decimal.NewFromMySQL(raw)
