@@ -337,6 +337,49 @@ func TestVSchemaUpdate(t *testing.T) {
 	}
 }
 
+// TestKeyspaceRoutingRules tests that the vschema manager doens't panic in the presence of keyspace routing rules.
+func TestKeyspaceRoutingRules(t *testing.T) {
+	cols1 := []vindexes.Column{{
+		Name: sqlparser.NewIdentifierCI("id"),
+		Type: querypb.Type_INT64,
+	}}
+	// Create a vschema manager with a fake vschema that returns a table with a column and a primary key.
+	vm := &VSchemaManager{}
+	vm.schema = &fakeSchema{t: map[string]*vindexes.TableInfo{
+		"t1": {
+			Columns: cols1,
+			Indexes: []*sqlparser.IndexDefinition{
+				{
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypePrimary},
+					Columns: []*sqlparser.IndexColumn{
+						{
+							Column: sqlparser.NewIdentifierCI("id"),
+						},
+					},
+				},
+			},
+		},
+	}}
+	// Define a vschema that has a keyspace routing rule.
+	vs := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			"ks": {
+				Tables:   map[string]*vindexes.Table{},
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+			},
+			"ks2": {
+				Tables:   map[string]*vindexes.Table{},
+				Keyspace: &vindexes.Keyspace{Name: "ks2", Sharded: true},
+			},
+		},
+		KeyspaceRoutingRules: map[string]string{
+			"ks": "ks2",
+		},
+	}
+	// Ensure that updating the vschema manager from the vschema doesn't cause a panic.
+	vm.updateFromSchema(vs)
+}
+
 func TestRebuildVSchema(t *testing.T) {
 	cols1 := []vindexes.Column{{
 		Name: sqlparser.NewIdentifierCI("id"),

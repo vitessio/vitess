@@ -29,12 +29,12 @@ var _ Primitive = (*SemiJoin)(nil)
 type SemiJoin struct {
 	// Left and Right are the LHS and RHS primitives
 	// of the SemiJoin. They can be any primitive.
-	Left, Right Primitive `json:",omitempty"`
+	Left, Right Primitive
 
 	// Vars defines the list of SemiJoinVars that need to
 	// be built from the LHS result before invoking
 	// the RHS subquery.
-	Vars map[string]int `json:",omitempty"`
+	Vars map[string]int
 }
 
 // TryExecute performs a non-streaming exec.

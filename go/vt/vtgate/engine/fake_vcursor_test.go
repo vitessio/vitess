@@ -46,11 +46,15 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-var testMaxMemoryRows = 100
-var testIgnoreMaxMemoryRows = false
+var (
+	testMaxMemoryRows       = 100
+	testIgnoreMaxMemoryRows = false
+)
 
-var _ VCursor = (*noopVCursor)(nil)
-var _ SessionActions = (*noopVCursor)(nil)
+var (
+	_ VCursor        = (*noopVCursor)(nil)
+	_ SessionActions = (*noopVCursor)(nil)
+)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
@@ -113,6 +117,10 @@ func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 }
 
 func (t *noopVCursor) CloneForMirroring(ctx context.Context) VCursor {
+	panic("implement me")
+}
+
+func (t *noopVCursor) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
 	panic("implement me")
 }
 
@@ -384,8 +392,10 @@ func (t *noopVCursor) GetDBDDLPluginName() string {
 	panic("unimplemented")
 }
 
-var _ VCursor = (*loggingVCursor)(nil)
-var _ SessionActions = (*loggingVCursor)(nil)
+var (
+	_ VCursor        = (*loggingVCursor)(nil)
+	_ SessionActions = (*loggingVCursor)(nil)
+)
 
 // loggingVCursor logs requests and allows you to verify
 // that the correct requests were made.
@@ -401,7 +411,8 @@ type loggingVCursor struct {
 	curResult int
 	resultErr error
 
-	warnings []*querypb.QueryWarning
+	warnings                []*querypb.QueryWarning
+	transactionStatusOutput *querypb.TransactionMetadata
 
 	// Optional errors that can be returned from nextResult() alongside the results for
 	// multi-shard queries
@@ -841,6 +852,13 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 	return useSetVar
 }
 
+func (f *loggingVCursor) ReadTransaction(_ context.Context, _ string) (*querypb.TransactionMetadata, error) {
+	if f.resultErr != nil {
+		return nil, f.resultErr
+	}
+	return f.transactionStatusOutput, nil
+}
+
 // SQLParser implements VCursor
 func (t *loggingVCursor) SQLParser() *sqlparser.Parser {
 	if t.parser == nil {
@@ -854,6 +872,7 @@ func (t *noopVCursor) DisableLogging()  {}
 func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
 	return nil
 }
+
 func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 	return nil, nil
 }

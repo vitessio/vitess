@@ -30653,6 +30653,12 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse metrics */
         metrics?: ({ [k: string]: tabletmanagerdata.CheckThrottlerResponse.IMetric }|null);
+
+        /** CheckThrottlerResponse app_name */
+        app_name?: (string|null);
+
+        /** CheckThrottlerResponse summary */
+        summary?: (string|null);
     }
 
     /** Represents a CheckThrottlerResponse. */
@@ -30684,6 +30690,12 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse metrics. */
         public metrics: { [k: string]: tabletmanagerdata.CheckThrottlerResponse.IMetric };
+
+        /** CheckThrottlerResponse app_name. */
+        public app_name: string;
+
+        /** CheckThrottlerResponse summary. */
+        public summary: string;
 
         /**
          * Creates a new CheckThrottlerResponse instance using the specified properties.
@@ -33809,6 +33821,9 @@ export namespace binlogdata {
 
         /** VEvent throttled */
         throttled?: (boolean|null);
+
+        /** VEvent throttled_reason */
+        throttled_reason?: (string|null);
     }
 
     /** Represents a VEvent. */
@@ -33861,6 +33876,9 @@ export namespace binlogdata {
 
         /** VEvent throttled. */
         public throttled: boolean;
+
+        /** VEvent throttled_reason. */
+        public throttled_reason: string;
 
         /**
          * Creates a new VEvent instance using the specified properties.
@@ -34520,6 +34538,9 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse heartbeat */
         heartbeat?: (boolean|null);
+
+        /** VStreamRowsResponse throttled_reason */
+        throttled_reason?: (string|null);
     }
 
     /** Represents a VStreamRowsResponse. */
@@ -34551,6 +34572,9 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse heartbeat. */
         public heartbeat: boolean;
+
+        /** VStreamRowsResponse throttled_reason. */
+        public throttled_reason: string;
 
         /**
          * Creates a new VStreamRowsResponse instance using the specified properties.
@@ -35943,7 +35967,8 @@ export namespace query {
         EXPRESSION = 31,
         HEXNUM = 4128,
         HEXVAL = 4129,
-        BITNUM = 4130
+        BITNUM = 4130,
+        VECTOR = 2083
     }
 
     /** Properties of a Value. */
@@ -42594,6 +42619,9 @@ export namespace query {
 
         /** RealtimeStats udfs_changed */
         udfs_changed?: (boolean|null);
+
+        /** RealtimeStats tx_unresolved */
+        tx_unresolved?: (boolean|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -42631,6 +42659,9 @@ export namespace query {
 
         /** RealtimeStats udfs_changed. */
         public udfs_changed: boolean;
+
+        /** RealtimeStats tx_unresolved. */
+        public tx_unresolved: boolean;
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
@@ -42950,8 +42981,8 @@ export namespace query {
     enum TransactionState {
         UNKNOWN = 0,
         PREPARE = 1,
-        COMMIT = 2,
-        ROLLBACK = 3
+        ROLLBACK = 2,
+        COMMIT = 3
     }
 
     /** Properties of a TransactionMetadata. */
@@ -63050,6 +63081,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest tolerable_replication_lag */
         tolerable_replication_lag?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest allow_cross_cell_promotion */
+        allow_cross_cell_promotion?: (boolean|null);
     }
 
     /** Represents a PlannedReparentShardRequest. */
@@ -63078,6 +63112,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest tolerable_replication_lag. */
         public tolerable_replication_lag?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest allow_cross_cell_promotion. */
+        public allow_cross_cell_promotion: boolean;
 
         /**
          * Creates a new PlannedReparentShardRequest instance using the specified properties.

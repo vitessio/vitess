@@ -111,7 +111,7 @@ func CellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x], nil
 	case TypeEnum, TypeSet:
 		return int(metadata & 0xff), nil
-	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
+	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry, TypeVector:
 		// Of the Blobs, only TypeBlob is used in binary logs,
 		// but supports others just in case.
 		switch metadata {
@@ -652,8 +652,8 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		return sqltypes.MakeTrusted(querypb.Type_SET,
 			data[pos:pos+l]), l, nil
 
-	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob:
-		// Only TypeBlob is used in binary logs,
+	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeVector:
+		// Only TypeBlob and TypeVector is used in binary logs,
 		// but supports others just in case.
 		l := 0
 		switch metadata {

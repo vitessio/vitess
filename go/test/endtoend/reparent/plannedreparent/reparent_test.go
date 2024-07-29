@@ -125,14 +125,8 @@ func TestReparentReplicaOffline(t *testing.T) {
 	require.Error(t, err)
 
 	// Assert that PRS failed
-	if clusterInstance.VtctlMajorVersion <= 17 {
-		assert.True(t, utils.SetReplicationSourceFailed(tablets[3], out))
-		utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
-	} else {
-		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc")
-		utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
-	}
-
+	assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc")
+	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
 }
 
 func TestReparentAvoid(t *testing.T) {
@@ -155,20 +149,32 @@ func TestReparentAvoid(t *testing.T) {
 	require.NoError(t, err)
 	utils.ValidateTopology(t, clusterInstance, false)
 
-	// tablets[1 is in the same cell and tablets[3] is in a different cell, so we must land on tablets[1
+	// tablets[1] is in the same cell and tablets[3] is in a different cell, so we must land on tablets[1]
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
 	// If we kill the tablet in the same cell as primary then reparent --avoid_tablet will fail.
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	if clusterInstance.VtctlMajorVersion <= 17 {
-		assert.Contains(t, out, "cannot find a tablet to reparent to in the same cell as the current primary")
-	} else {
-		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
-	}
+	assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+
+	t.Run("Allow cross cell promotion", func(t *testing.T) {
+		if clusterInstance.VtctlMajorVersion <= 20 {
+			t.Skip("Allow Cross Cell Promotion was added in v21")
+		}
+		utils.DeleteTablet(t, clusterInstance, tablets[0])
+		// Perform a graceful reparent operation and verify it fails because we have no replicas in the same cell as the primary.
+		out, err = utils.PrsAvoid(t, clusterInstance, tablets[1])
+		require.Error(t, err)
+		assert.Contains(t, out, "is not in the same cell as the previous primary")
+
+		// If we run PRS with allow cross cell promotion then it should succeed and should promote the replica in another cell.
+		_, err = utils.PrsAvoid(t, clusterInstance, tablets[1], "--allow-cross-cell-promotion")
+		require.NoError(t, err)
+		utils.CheckPrimaryTablet(t, clusterInstance, tablets[3])
+	})
 }
 
 func TestReparentFromOutside(t *testing.T) {
@@ -297,17 +303,14 @@ func TestReparentWithDownReplica(t *testing.T) {
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := utils.Prs(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	var insertVal int
 	// Assert that PRS failed
-	if clusterInstance.VtctlMajorVersion <= 17 {
-		assert.True(t, utils.SetReplicationSourceFailed(tablets[2], out))
-		// insert data into the new primary, check the connected replica work
-		insertVal = utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[3]})
-	} else {
+	if clusterInstance.VtctlMajorVersion <= 20 {
 		assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s", tablets[2].Alias))
-		// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
-		insertVal = utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
+	} else {
+		assert.Contains(t, out, fmt.Sprintf("TabletManager.GetGlobalStatusVars on %s", tablets[2].Alias))
 	}
+	// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
+	insertVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
 
 	// restart mysql on the old replica, should still be connecting to the old primary
 	tablets[2].MysqlctlProcess.InitMysql = false

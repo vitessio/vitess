@@ -551,7 +551,7 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 			// cancelled
 			return tableName, err
 		}
-		if !collector.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+		if _, ok := collector.throttlerClient.ThrottleCheckOKOrWait(ctx); !ok {
 			continue
 		}
 		// OK, we're clear to go!

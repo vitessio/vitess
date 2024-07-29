@@ -35,7 +35,7 @@ type Join struct {
 	Opcode JoinOpcode
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.
-	Left, Right Primitive `json:",omitempty"`
+	Left, Right Primitive
 
 	// Cols defines which columns from the left
 	// or right results should be used to build the
@@ -44,12 +44,12 @@ type Join struct {
 	// For the right query, they're 1, 2, etc.
 	// If Cols is {-1, -2, 1, 2}, it means that
 	// the returned result will be {Left0, Left1, Right0, Right1}.
-	Cols []int `json:",omitempty"`
+	Cols []int
 
 	// Vars defines the list of joinVars that need to
 	// be built from the LHS result before invoking
 	// the RHS subqquery.
-	Vars map[string]int `json:",omitempty"`
+	Vars map[string]int
 }
 
 // TryExecute performs a non-streaming exec.

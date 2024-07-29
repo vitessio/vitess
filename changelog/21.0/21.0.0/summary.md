@@ -7,9 +7,11 @@
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deletion of deprecated metrics](#metric-deletion)
     - [VTTablet Flags](#vttablet-flags)
+    - [Metrics](#deprecations-metrics)
   - **[Traffic Mirroring](#traffic-mirroring)**
   - **[New VTGate Shutdown Behavior](#new-vtgate-shutdown-behavior)**
   - **[Tablet Throttler: Multi-Metric support](#tablet-throttler)**
+  - **[Allow Cross Cell Promotion in PRS](#allow-cross-cell)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -39,6 +41,20 @@ The following metrics that were deprecated in the previous release, have now bee
 
 - `queryserver-enable-settings-pool` flag, added in v15, has been on by default since v17. 
 It is now deprecated and will be removed in a future release.
+
+#### <a id="deprecations-metrics"/>Metrics
+
+The following metrics are now deprecated, if provided please use their replacement.
+
+| Component  |      Metric Name      |           Replaced By           |
+|------------|:---------------------:|:-------------------------------:|
+| `vttablet` |  `QueryCacheLength`   |  `QueryEnginePlanCacheLength`   |
+| `vttablet` |   `QueryCacheSize`    |   `QueryEnginePlanCacheSize`    |
+| `vttablet` | `QueryCacheCapacity`  | `QueryEnginePlanCacheCapacity`  |
+| `vttablet` | `QueryCacheEvictions` | `QueryEnginePlanCacheEvictions` |
+| `vttablet` |   `QueryCacheHits`    |   `QueryEnginePlanCacheHits`    |
+| `vttablet` |  `QueryCacheMisses`   |  `QueryEnginePlanCacheMisses`   |
+
 
 ### <a id="traffic-mirroring"/>Traffic Mirroring
 
@@ -81,3 +97,8 @@ Each metric has a factory threshold which can be overridden by the `UpdateThrott
 The throttler also supports the catch-all `"all"` app name, and it is thus possible to assign metrics to _all_ apps. Explicit app to metric assignments will override the catch-all configuration.
 
 Metrics are assigned a default _scope_, which could be `self` (isolated to the tablet) or `shard` (max, aka _worst_ value among shard tablets). It is further possible to require a different scope for each metric.
+
+### <a id="allow-cross-cell"/>Allow Cross Cell Promotion in PRS
+Up until now if the users wanted to promote a replica in a different cell than the current primary using `PlannedReparentShard`, they had to specify the new primary with the `--new-primary` flag.
+
+We have now added a new flag `--allow-cross-cell-promotion` that lets `PlannedReparentShard` choose a primary in a different cell even if no new primary is provided explicitly.

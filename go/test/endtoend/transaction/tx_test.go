@@ -59,7 +59,6 @@ func TestMain(m *testing.M) {
 		// Set extra tablet args for twopc
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--twopc_enable",
-			"--twopc_coordinator_address", fmt.Sprintf("localhost:%d", clusterInstance.VtgateGrpcPort),
 			"--twopc_abandon_age", "3600",
 		}
 

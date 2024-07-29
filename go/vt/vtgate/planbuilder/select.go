@@ -241,9 +241,26 @@ func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.Se
 }
 
 func isOnlyDual(sel *sqlparser.Select) bool {
-	if sel.Where != nil || sel.GroupBy != nil || sel.Having != nil || sel.Limit != nil || sel.OrderBy != nil {
+	if sel.Where != nil || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil {
 		// we can only deal with queries without any other subclauses - just SELECT and FROM, nothing else is allowed
 		return false
+	}
+
+	if sel.Limit != nil {
+		if sel.Limit.Offset != nil {
+			return false
+		}
+		limit := sel.Limit.Rowcount
+		switch limit := limit.(type) {
+		case nil:
+		case *sqlparser.Literal:
+			if limit.Val == "0" {
+				// A limit with any value other than zero can still return a row
+				return false
+			}
+		default:
+			return false
+		}
 	}
 
 	if len(sel.From) > 1 {

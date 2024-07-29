@@ -125,6 +125,8 @@ const (
 	ERDupIndex                      = ErrorCode(1831)
 	ERInnodbReadOnly                = ErrorCode(1874)
 
+	ERVectorConversion = ErrorCode(6138)
+
 	// already exists
 	ERDbCreateExists = ErrorCode(1007)
 	ERTableExists    = ErrorCode(1050)

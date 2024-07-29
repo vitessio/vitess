@@ -1293,6 +1293,18 @@ func (cached *ThrottleApp) CachedSize(alloc bool) int64 {
 	size += cached.ThrottledAppRule.CachedSize(true)
 	return size
 }
+func (cached *TransactionStatus) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field TransactionID string
+	size += hack.RuntimeAllocSize(int64(len(cached.TransactionID)))
+	return size
+}
 func (cached *UncorrelatedSubquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
@@ -429,30 +430,30 @@ func TestUnresolvedTransactions(t *testing.T) {
 			Dtid:  "dtid0",
 			State: querypb.TransactionState_PREPARE,
 			Participants: []*querypb.Target{
-				{Keyspace: "ks01", Shard: "shard01"},
-				{Keyspace: "ks01", Shard: "shard02"},
+				{Keyspace: "ks01", Shard: "shard01", TabletType: topodatapb.TabletType_PRIMARY},
+				{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
 			}}},
 	}, {
 		name: "two unresolved transaction",
 		unresolvedTx: sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("dtid|state|keyspace|shard",
 				"VARBINARY|INT64|VARCHAR|VARCHAR"),
-			"dtid0|2|ks01|shard01",
-			"dtid0|2|ks01|shard02",
-			"dtid1|3|ks02|shard03",
-			"dtid1|3|ks01|shard02"),
+			"dtid0|3|ks01|shard01",
+			"dtid0|3|ks01|shard02",
+			"dtid1|2|ks02|shard03",
+			"dtid1|2|ks01|shard02"),
 		expectedTx: []*querypb.TransactionMetadata{{
 			Dtid:  "dtid0",
 			State: querypb.TransactionState_COMMIT,
 			Participants: []*querypb.Target{
-				{Keyspace: "ks01", Shard: "shard01"},
-				{Keyspace: "ks01", Shard: "shard02"},
+				{Keyspace: "ks01", Shard: "shard01", TabletType: topodatapb.TabletType_PRIMARY},
+				{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
 			}}, {
 			Dtid:  "dtid1",
 			State: querypb.TransactionState_ROLLBACK,
 			Participants: []*querypb.Target{
-				{Keyspace: "ks02", Shard: "shard03"},
-				{Keyspace: "ks01", Shard: "shard02"},
+				{Keyspace: "ks02", Shard: "shard03", TabletType: topodatapb.TabletType_PRIMARY},
+				{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
 			}},
 		},
 	}}

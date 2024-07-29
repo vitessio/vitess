@@ -134,6 +134,9 @@ type (
 
 		// CloneForMirroring clones the VCursor for re-use in mirroring queries to other keyspaces
 		CloneForMirroring(ctx context.Context) VCursor
+		//
+		// ReadTransaction reads the state of the given transaction from the metadata manager
+		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

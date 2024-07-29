@@ -39,35 +39,15 @@ limitations under the License.
 	SOFTWARE.
 */
 
-package mysql
+package base
 
 import (
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// TabletResultMap maps a tablet to a result
-type TabletResultMap map[string]base.MetricResultMap
-
-func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, all TabletResultMap) {
-	withAlias = make(TabletResultMap)
-	if val, ok := m[alias]; ok {
-		withAlias[alias] = val
-	}
-	return withAlias, m
-}
-
-// Inventory has the operational data about probes, their metrics, and relevant configuration
-type Inventory struct {
-	ClustersProbes       Probes
-	IgnoreHostsCount     int
-	IgnoreHostsThreshold float64
-	TabletMetrics        TabletResultMap
-}
-
-// NewInventory creates a Inventory
-func NewInventory() *Inventory {
-	inventory := &Inventory{
-		TabletMetrics: make(TabletResultMap),
-	}
-	return inventory
+func TestNewProbe(t *testing.T) {
+	c := NewProbe()
+	assert.Equal(t, "", c.Alias)
 }

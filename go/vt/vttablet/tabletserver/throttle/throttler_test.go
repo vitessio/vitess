@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -47,26 +46,26 @@ import (
 )
 
 var (
-	selfMetrics = mysql.MySQLThrottleMetrics{
-		base.LagMetricName: &mysql.MySQLThrottleMetric{
+	selfMetrics = base.ThrottleMetrics{
+		base.LagMetricName: &base.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 0.3,
 			Err:   nil,
 		},
-		base.ThreadsRunningMetricName: &mysql.MySQLThrottleMetric{
+		base.ThreadsRunningMetricName: &base.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 26,
 			Err:   nil,
 		},
-		base.CustomMetricName: &mysql.MySQLThrottleMetric{
+		base.CustomMetricName: &base.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 17,
 			Err:   nil,
 		},
-		base.LoadAvgMetricName: &mysql.MySQLThrottleMetric{
+		base.LoadAvgMetricName: &base.ThrottleMetric{
 			Scope: base.SelfScope,
 			Alias: "",
 			Value: 2.718,
@@ -234,26 +233,26 @@ func newTestThrottler() *Throttler {
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TabletServerTest")
 	throttler := &Throttler{
-		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
-		heartbeatWriter:        &FakeHeartbeatWriter{},
-		ts:                     &FakeTopoServer{},
-		mysqlInventory:         mysql.NewInventory(),
-		pool:                   connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{}),
-		tabletTypeFunc:         func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
-		overrideTmClient:       &fakeTMClient{},
+		clusterProbesChan: make(chan *base.ClusterProbes),
+		heartbeatWriter:   &FakeHeartbeatWriter{},
+		ts:                &FakeTopoServer{},
+		inventory:         base.NewInventory(),
+		pool:              connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{}),
+		tabletTypeFunc:    func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
+		overrideTmClient:  &fakeTMClient{},
 	}
 	throttler.metricsQuery.Store(metricsQuery)
 	throttler.MetricsThreshold.Store(math.Float64bits(0.75))
 	throttler.configSettings = config.NewConfigurationSettings()
 	throttler.initConfig()
-	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
-	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
+	throttler.throttleMetricChan = make(chan *base.ThrottleMetric)
+	throttler.clusterProbesChan = make(chan *base.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.serialFuncChan = make(chan func())
-	throttler.mysqlInventory = mysql.NewInventory()
+	throttler.inventory = base.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
-	throttler.mysqlMetricThresholds = cache.New(cache.NoExpiration, 0)
+	throttler.metricThresholds = cache.New(cache.NoExpiration, 0)
 	throttler.aggregatedMetrics = cache.New(10*aggregatedMetricsExpiration, 0)
 	throttler.recentApps = cache.New(recentAppsExpiration, 0)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
@@ -263,21 +262,21 @@ func newTestThrottler() *Throttler {
 
 	// High contention & racy intervals:
 	throttler.leaderCheckInterval = 10 * time.Millisecond
-	throttler.mysqlCollectInterval = 10 * time.Millisecond
-	throttler.mysqlDormantCollectInterval = 10 * time.Millisecond
-	throttler.mysqlRefreshInterval = 10 * time.Millisecond
-	throttler.mysqlAggregateInterval = 10 * time.Millisecond
+	throttler.activeCollectInterval = 10 * time.Millisecond
+	throttler.dormantCollectInterval = 10 * time.Millisecond
+	throttler.inventoryRefreshInterval = 10 * time.Millisecond
+	throttler.metricsAggregateInterval = 10 * time.Millisecond
 	throttler.throttledAppsSnapshotInterval = 10 * time.Millisecond
 	throttler.dormantPeriod = 5 * time.Second
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 	throttler.recentCheckDiff = int64(3 * time.Second / recentCheckRateLimiterInterval)
 
-	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.MySQLThrottleMetrics {
+	throttler.readSelfThrottleMetrics = func(ctx context.Context) base.ThrottleMetrics {
 		for _, metric := range selfMetrics {
 			go func() {
 				select {
 				case <-ctx.Done():
-				case throttler.mysqlThrottleMetricChan <- metric:
+				case throttler.throttleMetricChan <- metric:
 				}
 			}()
 		}
@@ -380,17 +379,17 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	})
 	t.Run("metric thresholds", func(t *testing.T) {
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("lag")
+			val, ok := throttler.metricThresholds.Get("lag")
 			require.True(t, ok)
 			assert.Equal(t, float64(0.75), val)
 		}
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("threads_running")
+			val, ok := throttler.metricThresholds.Get("threads_running")
 			require.True(t, ok)
 			assert.Equal(t, float64(3.0), val)
 		}
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("loadavg")
+			val, ok := throttler.metricThresholds.Get("loadavg")
 			require.True(t, ok)
 			assert.Equal(t, float64(1.0), val)
 		}
@@ -419,6 +418,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
 			assert.Len(t, checkResult.Metrics, 1)
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 		})
 		t.Run("apply low threshold", func(t *testing.T) {
 			assert.Equal(t, 0.75, throttler.GetMetricsThreshold())
@@ -432,7 +432,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 		t.Run("check low threshold", func(t *testing.T) {
 			sleepTillThresholdApplies()
 			{
-				_, ok := throttler.mysqlMetricThresholds.Get("config/lag")
+				_, ok := throttler.metricThresholds.Get("config/lag")
 				assert.False(t, ok)
 			}
 			assert.Equal(t, float64(0.0033), throttler.GetMetricsThreshold())
@@ -441,6 +441,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			assert.EqualValues(t, 0.3, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
 			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 			assert.Len(t, checkResult.Metrics, 1)
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to self/lag metric value")
 		})
 		t.Run("apply low threshold but high 'lag' override", func(t *testing.T) {
 			throttlerConfig := &topodatapb.ThrottlerConfig{
@@ -455,7 +456,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 		t.Run("check with high 'lag' threshold", func(t *testing.T) {
 			sleepTillThresholdApplies()
 			{
-				val, ok := throttler.mysqlMetricThresholds.Get("config/lag")
+				val, ok := throttler.metricThresholds.Get("config/lag")
 				require.True(t, ok)
 				assert.Equal(t, float64(4444), val)
 			}
@@ -464,6 +465,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			assert.EqualValues(t, 0.3, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 			assert.Len(t, checkResult.Metrics, 1)
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 		})
 	})
 
@@ -471,17 +473,17 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 	assert.Equal(t, float64(0.0033), throttler.GetMetricsThreshold())
 	t.Run("metric thresholds", func(t *testing.T) {
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("config/lag")
+			val, ok := throttler.metricThresholds.Get("config/lag")
 			require.True(t, ok)
 			assert.Equal(t, float64(4444), val)
 		}
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("inventory/lag")
+			val, ok := throttler.metricThresholds.Get("inventory/lag")
 			require.True(t, ok)
 			assert.Equal(t, float64(0.0033), val)
 		}
 		{
-			val, ok := throttler.mysqlMetricThresholds.Get("lag")
+			val, ok := throttler.metricThresholds.Get("lag")
 			require.True(t, ok)
 			assert.Equal(t, float64(4444), val)
 		}
@@ -521,6 +523,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
 			assert.Len(t, checkResult.Metrics, 1)
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to shard/lag metric value")
 		})
 		t.Run("apply high lag threshold", func(t *testing.T) {
 			throttlerConfig.Threshold = 4444.0
@@ -535,6 +538,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // self lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.Len(t, checkResult.Metrics, 1)
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 		t.Run("apply low 'loadavg' threshold", func(t *testing.T) {
@@ -549,6 +553,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.Len(t, checkResult.Metrics, 1)
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 		t.Run("assign 'loadavg' to test app", func(t *testing.T) {
@@ -567,6 +572,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 2.718, checkResult.Value) // self loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to self/loadavg metric value")
 			})
 		})
 		t.Run("assign 'shard/loadavg' to test app", func(t *testing.T) {
@@ -585,6 +591,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 5.1, checkResult.Value) // shard loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to shard/loadavg metric value")
 			})
 		})
 		t.Run("assign 'lag,loadavg' to test app", func(t *testing.T) {
@@ -602,6 +609,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 2.718, checkResult.Value) // self loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to self/loadavg metric value")
 			})
 		})
 		t.Run("assign 'lag,shard/loadavg' to test app", func(t *testing.T) {
@@ -619,6 +627,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 5.1, checkResult.Value) // shard loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to shard/loadavg metric value")
 			})
 		})
 		t.Run("clear 'loadavg' threshold", func(t *testing.T) {
@@ -632,6 +641,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 1, len(checkResult.Metrics), "unexpected metrics: %+v", checkResult.Metrics)
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 		t.Run("assign 'lag,threads_running' to test app", func(t *testing.T) {
@@ -649,6 +659,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 		t.Run("assign 'custom,loadavg' to 'all' app", func(t *testing.T) {
@@ -666,6 +677,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
+				assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is denied access due to self/loadavg metric value")
 			})
 			t.Run("check 'test' after assignment", func(t *testing.T) {
 				// "test" app unaffected by 'all' assignment, because it has
@@ -680,6 +692,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 			t.Run("'online-ddl' app affected by 'all'", func(t *testing.T) {
 				// "online-ddl" app is affected by 'all' assignment, because it has
@@ -693,6 +706,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
+				assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is denied access due to self/loadavg metric value")
 			})
 		})
 		t.Run("'vreplication:online-ddl:12345' app affected by 'all'", func(t *testing.T) {
@@ -703,6 +717,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
 			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 			assert.Equal(t, 2, len(checkResult.Metrics))
+			assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is denied access due to self/loadavg metric value")
 		})
 		t.Run("'vreplication:online-ddl:test' app affected by 'test' and not by 'all'", func(t *testing.T) {
 			// "vreplication:online-ddl:test" app is affected by 'test' assignment, because it has
@@ -712,6 +727,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 			assert.Equal(t, 2, len(checkResult.Metrics))
+			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 		})
 		t.Run("deassign metrics from 'all' app", func(t *testing.T) {
 			delete(throttlerConfig.AppCheckedMetrics, throttlerapp.AllName.String())
@@ -726,6 +742,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
+				assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is granted access")
 			})
 			t.Run("check 'test' after assignment", func(t *testing.T) {
 				// "test" app unaffected by the entire 'all' assignment, because it has
@@ -740,6 +757,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 			t.Run("'online-ddl' no longer has 'all' impact", func(t *testing.T) {
 				// "online-ddl" app is affected by 'all' assignment, because it has
@@ -753,6 +771,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
+				assert.Contains(t, checkResult.Summary(), throttlerapp.OnlineDDLName.String()+" is granted access")
 			})
 		})
 
@@ -769,6 +788,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.Len(t, checkResult.Metrics, 1)
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
 		})
 
@@ -791,10 +811,26 @@ func TestIsAppThrottled(t *testing.T) {
 		heartbeatWriter: &FakeHeartbeatWriter{},
 	}
 	t.Run("initial", func(t *testing.T) {
-		assert.False(t, throttler.IsAppThrottled("app1"))
-		assert.False(t, throttler.IsAppThrottled("app2"))
-		assert.False(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.False(t, throttled)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.False(t, throttled)
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled)
+			assert.Equal(t, "app4", app)
+		}
 
 		assert.Equal(t, 0, throttler.throttledApps.ItemCount())
 	})
@@ -804,11 +840,31 @@ func TestIsAppThrottled(t *testing.T) {
 		throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, false) // instantly expire
 		throttler.ThrottleApp("app3", plusOneHour, DefaultThrottleRatio, false)
 		throttler.ThrottleApp("app4", plusOneHour, 0, false)
-		assert.False(t, throttler.IsAppThrottled("app1")) // exempted
-		assert.False(t, throttler.IsAppThrottled("app2")) // expired
-		assert.True(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))      // ratio is zero
-		assert.False(t, throttler.IsAppThrottled("app_other")) // not specified
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled) // exempted
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.False(t, throttled) // expired
+			assert.Equal(t, "app2", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.True(t, throttled)
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled) // ratio is zero
+			assert.Equal(t, "app4", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app_other")
+			assert.False(t, throttled) // not specified
+			assert.Equal(t, "app_other", app)
+		}
 
 		assert.Equal(t, 3, throttler.throttledApps.ItemCount())
 	})
@@ -816,12 +872,36 @@ func TestIsAppThrottled(t *testing.T) {
 		// throttle "all", see how it affects app
 		throttler.ThrottleApp(throttlerapp.AllName.String(), plusOneHour, DefaultThrottleRatio, false)
 		defer throttler.UnthrottleApp(throttlerapp.AllName.String())
-		assert.True(t, throttler.IsAppThrottled("all"))   //
-		assert.False(t, throttler.IsAppThrottled("app1")) // exempted
-		assert.True(t, throttler.IsAppThrottled("app2"))  // expired, so falls under "all"
-		assert.True(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))     // ratio is zero, there is a specific instruction for this app, so it doesn't fall under "all"
-		assert.True(t, throttler.IsAppThrottled("app_other")) // falls under "all"
+		{
+			throttled, app := throttler.IsAppThrottled("all")
+			assert.True(t, throttled) // explicitly throttled
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled) // exempted
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.True(t, throttled) // expired, so falls under "all"
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.True(t, throttled)
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled) // ratio is zero, there is a specific instruction for this app, so it doesn't fall under "all"
+			assert.Equal(t, "app4", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app_other")
+			assert.True(t, throttled) // falls under "all"
+			assert.Equal(t, "all", app)
+		}
 
 		// continuing previous test, we had 3 throttled apps. "all" is a new app being throttled.
 		assert.Equal(t, 4, throttler.throttledApps.ItemCount())
@@ -832,10 +912,27 @@ func TestIsAppThrottled(t *testing.T) {
 		throttler.UnthrottleApp("app2")
 		throttler.UnthrottleApp("app3")
 		throttler.UnthrottleApp("app4")
-		assert.False(t, throttler.IsAppThrottled("app1"))
-		assert.False(t, throttler.IsAppThrottled("app2"))
-		assert.False(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))
+
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.False(t, throttled)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.False(t, throttled)
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled)
+			assert.Equal(t, "app4", app)
+		}
 
 		// we've manually unthrottled everything
 		assert.Equal(t, 0, throttler.throttledApps.ItemCount())
@@ -844,12 +941,37 @@ func TestIsAppThrottled(t *testing.T) {
 		// throttle "all", see how it affects app
 		throttler.ThrottleApp(throttlerapp.AllName.String(), plusOneHour, DefaultThrottleRatio, false)
 		defer throttler.UnthrottleApp(throttlerapp.AllName.String())
-		assert.True(t, throttler.IsAppThrottled("all"))
-		assert.True(t, throttler.IsAppThrottled("app1"))
-		assert.True(t, throttler.IsAppThrottled("app2"))
-		assert.True(t, throttler.IsAppThrottled("app3"))
-		assert.True(t, throttler.IsAppThrottled("app4"))
-		assert.True(t, throttler.IsAppThrottled("app_other"))
+
+		{
+			throttled, app := throttler.IsAppThrottled("all")
+			assert.True(t, throttled) // explicitly throttled
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app_other")
+			assert.True(t, throttled)
+			assert.Equal(t, "all", app)
+		}
 
 		// one rule, for "all" app
 		assert.Equal(t, 1, throttler.throttledApps.ItemCount())
@@ -859,51 +981,128 @@ func TestIsAppThrottled(t *testing.T) {
 		throttler.ThrottleApp("app3", plusOneHour, DefaultThrottleRatio, false)
 		throttler.ThrottleApp(throttlerapp.AllName.String(), plusOneHour, DefaultThrottleRatio, true)
 		defer throttler.UnthrottleApp(throttlerapp.AllName.String())
-		assert.False(t, throttler.IsAppThrottled("all"))
-		assert.False(t, throttler.IsAppThrottled("app1"))
-		assert.False(t, throttler.IsAppThrottled("app2"))
-		assert.True(t, throttler.IsAppThrottled("app3"))
-		assert.False(t, throttler.IsAppThrottled("app4"))
-		assert.False(t, throttler.IsAppThrottled("app_other"))
 
+		{
+			throttled, app := throttler.IsAppThrottled("all")
+			assert.False(t, throttled) // explicitly throttled
+			assert.Equal(t, "all", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app1")
+			assert.False(t, throttled)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app2")
+			assert.False(t, throttled)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app3")
+			assert.True(t, throttled) // explicitly throttled
+			assert.Equal(t, "app3", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app4")
+			assert.False(t, throttled)
+			assert.Equal(t, "app4", app)
+		}
+		{
+			throttled, app := throttler.IsAppThrottled("app_other")
+			assert.False(t, throttled)
+			assert.Equal(t, "app_other", app)
+		}
 		assert.Equal(t, 2, throttler.throttledApps.ItemCount())
 	})
 }
 
 func TestIsAppExempted(t *testing.T) {
-
+	plusOneHour := time.Now().Add(time.Hour)
 	throttler := Throttler{
 		throttledApps:   cache.New(cache.NoExpiration, 0),
 		heartbeatWriter: &FakeHeartbeatWriter{},
 	}
-	assert.False(t, throttler.IsAppExempted("app1"))
-	assert.False(t, throttler.IsAppExempted("app2"))
-	assert.False(t, throttler.IsAppExempted("app3"))
-	//
-	throttler.ThrottleApp("app1", time.Now().Add(time.Hour), DefaultThrottleRatio, true)
-	throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, true) // instantly expire
-	assert.True(t, throttler.IsAppExempted("app1"))
-	assert.True(t, throttler.IsAppExempted("app1:other-tag"))
-	assert.False(t, throttler.IsAppExempted("app2")) // expired
-	assert.False(t, throttler.IsAppExempted("app3"))
-	//
-	throttler.UnthrottleApp("app1")
-	throttler.ThrottleApp("app2", time.Now().Add(time.Hour), DefaultThrottleRatio, false)
-	assert.False(t, throttler.IsAppExempted("app1"))
-	assert.False(t, throttler.IsAppExempted("app2"))
-	assert.False(t, throttler.IsAppExempted("app3"))
-	//
-	assert.True(t, throttler.IsAppExempted("schema-tracker"))
-	throttler.UnthrottleApp("schema-tracker") // meaningless. App is statically exempted
-	assert.True(t, throttler.IsAppExempted("schema-tracker"))
+	t.Run("initial", func(t *testing.T) {
+		{
+			exempted, app := throttler.IsAppExempted("app1")
+			assert.False(t, exempted)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app2")
+			assert.False(t, exempted)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app3")
+			assert.False(t, exempted)
+			assert.Equal(t, "app3", app)
+		}
+	})
+	t.Run("exempt", func(t *testing.T) {
+		throttler.ThrottleApp("app1", time.Now().Add(time.Hour), DefaultThrottleRatio, true)
+		throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, true) // instantly expire
+		{
+			exempted, app := throttler.IsAppExempted("app1")
+			assert.True(t, exempted)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app1:other-tag")
+			assert.True(t, exempted)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app2")
+			assert.False(t, exempted)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app3")
+			assert.False(t, exempted)
+			assert.Equal(t, "app3", app)
+		}
+	})
+	t.Run("throttle", func(t *testing.T) {
+		throttler.UnthrottleApp("app1")
+		throttler.ThrottleApp("app2", time.Now().Add(time.Hour), DefaultThrottleRatio, false)
+		{
+			exempted, app := throttler.IsAppExempted("app1")
+			assert.False(t, exempted)
+			assert.Equal(t, "app1", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app2")
+			assert.False(t, exempted)
+			assert.Equal(t, "app2", app)
+		}
+		{
+			exempted, app := throttler.IsAppExempted("app3")
+			assert.False(t, exempted)
+			assert.Equal(t, "app3", app)
+		}
+	})
+	t.Run("special", func(t *testing.T) {
+		{
+			exempted, app := throttler.IsAppExempted("schema-tracker")
+			assert.True(t, exempted)
+			assert.Equal(t, "schema-tracker", app)
+		}
+		throttler.ThrottleApp("schema-tracker", plusOneHour, 1.0, false) // meaningless. App is statically exempted
+		{
+			exempted, app := throttler.IsAppExempted("schema-tracker")
+			assert.True(t, exempted)
+			assert.Equal(t, "schema-tracker", app)
+		}
+	})
 }
 
-// TestRefreshMySQLInventory tests the behavior of the throttler's RefreshMySQLInventory() function, which
+// TestRefreshInventory tests the behavior of the throttler's RefreshInventory() function, which
 // is called periodically in actual throttler. For a given cluster name, it generates a list of probes
 // the throttler will use to check metrics.
 // On a replica tablet, that list is expect to probe the tablet itself.
 // On the PRIMARY, the list includes all shard tablets, including the PRIMARY itself.
-func TestRefreshMySQLInventory(t *testing.T) {
+func TestRefreshInventory(t *testing.T) {
 	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -912,10 +1111,10 @@ func TestRefreshMySQLInventory(t *testing.T) {
 	configSettings := config.NewConfigurationSettings()
 
 	throttler := &Throttler{
-		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
-		mysqlMetricThresholds:  cache.New(cache.NoExpiration, 0),
-		ts:                     &FakeTopoServer{},
-		mysqlInventory:         mysql.NewInventory(),
+		clusterProbesChan: make(chan *base.ClusterProbes),
+		metricThresholds:  cache.New(cache.NoExpiration, 0),
+		ts:                &FakeTopoServer{},
+		inventory:         base.NewInventory(),
 	}
 	throttler.metricsQuery.Store(metricsQuery)
 	throttler.configSettings = configSettings
@@ -926,7 +1125,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 		testName := fmt.Sprintf("leader=%t", throttler.isLeader.Load())
 		t.Run(testName, func(t *testing.T) {
 			// validateProbesCount expects number of probes according to cluster name and throttler's leadership status
-			validateProbesCount := func(t *testing.T, probes mysql.Probes) {
+			validateProbesCount := func(t *testing.T, probes base.Probes) {
 				if throttler.isLeader.Load() {
 					assert.Equal(t, 3, len(probes))
 				} else {
@@ -938,12 +1137,12 @@ func TestRefreshMySQLInventory(t *testing.T) {
 				defer cancel()
 				for {
 					select {
-					case probes := <-throttler.mysqlClusterProbesChan:
+					case probes := <-throttler.clusterProbesChan:
 						// Worth noting that in this unit test, the throttler is _closed_ and _disabled_. Its own Operate() function does
-						// not run, and therefore there is none but us to both populate `mysqlClusterProbesChan` as well as
+						// not run, and therefore there is none but us to both populate `clusterProbesChan` as well as
 						// read from it. We do not compete here with any other goroutine.
 						assert.NotNil(t, probes)
-						throttler.updateMySQLClusterProbes(ctx, probes)
+						throttler.updateClusterProbes(ctx, probes)
 						validateProbesCount(t, probes.TabletProbes)
 						// Achieved our goal
 						return
@@ -953,7 +1152,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 				}
 			})
 			t.Run("validating probes", func(t *testing.T) {
-				probes := throttler.mysqlInventory.ClustersProbes
+				probes := throttler.inventory.ClustersProbes
 				validateProbesCount(t, probes)
 			})
 		})
@@ -961,19 +1160,19 @@ func TestRefreshMySQLInventory(t *testing.T) {
 
 	t.Run("initial, not leader", func(t *testing.T) {
 		throttler.isLeader.Store(false)
-		throttler.refreshMySQLInventory(ctx)
+		throttler.refreshInventory(ctx)
 		validateClusterProbes(t, ctx)
 	})
 
 	t.Run("promote", func(t *testing.T) {
 		throttler.isLeader.Store(true)
-		throttler.refreshMySQLInventory(ctx)
+		throttler.refreshInventory(ctx)
 		validateClusterProbes(t, ctx)
 	})
 
 	t.Run("demote, expect cleanup", func(t *testing.T) {
 		throttler.isLeader.Store(false)
-		throttler.refreshMySQLInventory(ctx)
+		throttler.refreshInventory(ctx)
 		validateClusterProbes(t, ctx)
 	})
 }
@@ -1114,11 +1313,13 @@ func TestProbesWhileOperating(t *testing.T) {
 				client := NewBackgroundClient(throttler, testAppName, base.UndefinedScope)
 				t.Run("threshold exceeded", func(t *testing.T) {
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK) // we expect threshold exceeded
+						assert.NotNil(t, checkResult)
+						assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 					}
 				})
 
@@ -1126,22 +1327,24 @@ func TestProbesWhileOperating(t *testing.T) {
 				t.Run("adjust threshold", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(math.Float64bits(0.95))
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.True(t, checkOK)
 					}
 				})
 				t.Run("restore threshold", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(savedThreshold)
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					client.clearSuccessfulResultsCache() // ensure we don't read the successful result from the test above
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK)
+						assert.NotNil(t, checkResult)
+						assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 					}
 				})
 			})
@@ -1153,10 +1356,9 @@ func TestProbesWhileOperating(t *testing.T) {
 			// as opposed to choosing the "lag" metric results.
 			throttler.customMetricsQuery.Store("select non_empty")
 			<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-				throttler.aggregateMySQLMetrics(ctx)
+				throttler.aggregateMetrics()
 			})
 			assert.Equal(t, base.CustomMetricName, throttler.metricNameUsedAsDefault())
-			// throttler.aggregateMySQLMetrics(ctx)
 			aggr := throttler.aggregatedMetricsSnapshot()
 			assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
 			assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
@@ -1204,11 +1406,12 @@ func TestProbesWhileOperating(t *testing.T) {
 				client := NewBackgroundClient(throttler, testAppName, base.UndefinedScope)
 				t.Run("threshold exceeded", func(t *testing.T) {
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK) // we expect threshold exceeded
+						assert.NotNil(t, checkResult)
 					}
 				})
 
@@ -1216,41 +1419,41 @@ func TestProbesWhileOperating(t *testing.T) {
 				t.Run("adjust threshold, too low", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(math.Float64bits(0.95))
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK) // 0.95 still too low for custom query
 					}
 				})
 				t.Run("adjust threshold, still too low", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(math.Float64bits(15))
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK) // 15 still too low for custom query because primary has 17
 					}
 				})
 				t.Run("adjust threshold", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(math.Float64bits(18))
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.True(t, checkOK)
 					}
 				})
 				t.Run("restore threshold", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(savedThreshold)
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-						throttler.refreshMySQLInventory(ctx)
+						throttler.refreshInventory(ctx)
 					})
 					client.clearSuccessfulResultsCache() // ensure we don't read the successful result from the test above
 					{
-						checkOK := client.ThrottleCheckOK(ctx, "")
+						_, checkOK := client.ThrottleCheckOK(ctx, "")
 						assert.False(t, checkOK)
 					}
 				})
@@ -1351,7 +1554,7 @@ func TestProbesPostDisable(t *testing.T) {
 	throttler := newTestThrottler()
 	runThrottler(t, ctx, throttler, 2*time.Second, nil)
 
-	probes := throttler.mysqlInventory.ClustersProbes
+	probes := throttler.inventory.ClustersProbes
 
 	<-time.After(1 * time.Second) // throttler's context was cancelled, but still some functionality needs to complete
 	t.Run("probes", func(t *testing.T) {
@@ -1371,7 +1574,7 @@ func TestProbesPostDisable(t *testing.T) {
 	})
 
 	t.Run("metrics", func(t *testing.T) {
-		assert.Equal(t, 3, len(throttler.mysqlInventory.TabletMetrics)) // 1 self tablet + 2 shard tablets
+		assert.Equal(t, 3, len(throttler.inventory.TabletMetrics)) // 1 self tablet + 2 shard tablets
 	})
 
 	t.Run("aggregated", func(t *testing.T) {
@@ -1504,6 +1707,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Len(t, checkResult.Metrics, 1)
 			})
 			t.Run("explicit names", func(t *testing.T) {
@@ -1515,6 +1719,7 @@ func TestChecks(t *testing.T) {
 						t.Logf("%s: %+v", k, v)
 					}
 				}
+				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
 				assert.EqualValues(t, 0.3, checkResult.Metrics[base.LagMetricName.String()].Value)           // self lag value, because flags.Scope is set
@@ -1535,6 +1740,7 @@ func TestChecks(t *testing.T) {
 			t.Run("implicit names, always all known", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 				// "vitess" app always checks all known metrics:
+				assert.Equal(t, throttlerapp.VitessName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 			})
 			t.Run("explicit names, irrelevant, always all known", func(t *testing.T) {
@@ -1545,6 +1751,7 @@ func TestChecks(t *testing.T) {
 
 				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), metricNames, flags)
 				require.NotNil(t, checkResult)
+				assert.Equal(t, throttlerapp.VitessName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 			})
 		})
@@ -1560,6 +1767,7 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Len(t, checkResult.Metrics, 1)
 			})
 			t.Run("explicit names", func(t *testing.T) {
@@ -1568,6 +1776,7 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
 				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)           // shard lag value, because flags.Scope is set
@@ -1851,7 +2060,7 @@ func TestReplica(t *testing.T) {
 			})
 			t.Run("client, OK", func(t *testing.T) {
 				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
-				checkOK := client.ThrottleCheckOK(ctx, "")
+				_, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.True(t, checkOK)
 			})
 			t.Run("client, metrics names mapped, OK", func(t *testing.T) {
@@ -1859,7 +2068,7 @@ func TestReplica(t *testing.T) {
 				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
 				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
-				checkOK := client.ThrottleCheckOK(ctx, "")
+				_, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.True(t, checkOK)
 			})
 			t.Run("client, metrics names mapped, not OK", func(t *testing.T) {
@@ -1867,8 +2076,10 @@ func TestReplica(t *testing.T) {
 				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.LoadAvgMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
 				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
-				checkOK := client.ThrottleCheckOK(ctx, "")
+				checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
+				assert.NotNil(t, checkResult)
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 			})
 
 			t.Run("custom query, metrics", func(t *testing.T) {
@@ -1879,7 +2090,7 @@ func TestReplica(t *testing.T) {
 				// Change custom threshold
 				throttler.MetricsThreshold.Store(math.Float64bits(0.1))
 				<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
-					throttler.refreshMySQLInventory(ctx)
+					throttler.refreshInventory(ctx)
 				})
 				checkResult = throttler.Check(ctx, testAppName.String(), base.KnownMetricNames, flags)
 				require.NotNil(t, checkResult)
@@ -1902,8 +2113,10 @@ func TestReplica(t *testing.T) {
 			})
 			t.Run("client, not OK", func(t *testing.T) {
 				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.SelfScope)
-				checkOK := client.ThrottleCheckOK(ctx, "")
+				checkResult, checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
+				assert.NotNil(t, checkResult)
+				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 			})
 		}()
 	})

@@ -397,6 +397,8 @@ func TestSchemaChange(t *testing.T) {
 		assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
 		component := row.AsString("component_throttled", "")
 		assert.Contains(t, []string{throttlerapp.VCopierName.String(), throttlerapp.VPlayerName.String()}, component)
+		reason := row.AsString("reason_throttled", "")
+		assert.Contains(t, reason, "is explicitly denied access")
 
 		// unthrottle
 		onlineddl.UnthrottleAllMigrations(t, &vtParams)

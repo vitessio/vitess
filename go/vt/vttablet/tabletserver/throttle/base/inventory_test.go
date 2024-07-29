@@ -14,22 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package base
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/maps"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
 func TestTabletResultMapSplit(t *testing.T) {
 	tabletResultMap := TabletResultMap{
-		"a": make(base.MetricResultMap),
-		"b": make(base.MetricResultMap),
-		"c": make(base.MetricResultMap),
+		"a": make(MetricResultMap),
+		"b": make(MetricResultMap),
+		"c": make(MetricResultMap),
 	}
 	{
 		withAlias, all := tabletResultMap.Split("b")

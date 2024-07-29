@@ -92,8 +92,7 @@ var (
 // it implements the BackupEngine interface and contains all the logic
 // required to implement a backup/restore by copying files from and to
 // the correct location / storage bucket
-type BuiltinBackupEngine struct {
-}
+type BuiltinBackupEngine struct{}
 
 // builtinBackupManifest represents the backup. It lists all the files, the
 // Position that the backup was taken at, the compression engine used, etc.
@@ -186,7 +185,7 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	return path.Join(fe.ParentPath, root, fe.Name), nil
 }
 
-// open attempts t oopen the file
+// open attempts to open the file
 func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	name, err := fe.fullPath(cnf)
 	if err != nil {
@@ -194,7 +193,7 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	}
 	var fd *os.File
 	if readOnly {
-		if fd, err = os.Open(name); err != nil {
+		if fd, err = openForSequential(name); err != nil {
 			return nil, vterrors.Wrapf(err, "cannot open source file %v", name)
 		}
 	} else {
@@ -393,7 +392,6 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 // executeFullBackup returns a BackupResult that indicates the usability of the backup,
 // and an overall error.
 func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
-
 	if params.IncrementalFromPos != "" {
 		return be.executeIncrementalBackup(ctx, params, bh)
 	}
@@ -768,21 +766,25 @@ func (bp *backupPipe) HashString() string {
 	return hex.EncodeToString(bp.crc32.Sum(nil))
 }
 
-func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger) {
+func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger, restore bool) {
+	messageStr := "restoring "
+	if !restore {
+		messageStr = "backing up "
+	}
 	tick := time.NewTicker(period)
 	defer tick.Stop()
 	for {
 		select {
 		case <-bp.done:
-			logger.Infof("Done taking Backup %q", bp.filename)
+			logger.Infof("Completed %s %q", messageStr, bp.filename)
 			return
 		case <-tick.C:
 			written := float64(atomic.LoadInt64(&bp.nn))
 			if bp.maxSize == 0 {
-				logger.Infof("Backup %q: %.02fkb", bp.filename, written/1024.0)
+				logger.Infof("%s %q: %.02fkb", messageStr, bp.filename, written/1024.0)
 			} else {
 				maxSize := float64(bp.maxSize)
-				logger.Infof("Backup %q: %.02f%% (%.02f/%.02fkb)", bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
+				logger.Infof("%s %q: %.02f%% (%.02f/%.02fkb)", messageStr, bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
 			}
 		}
 	}
@@ -815,7 +817,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	br := newBackupReader(fe.Name, fi.Size(), timedSource)
-	go br.ReportProgress(builtinBackupProgress, params.Logger)
+	go br.ReportProgress(builtinBackupProgress, params.Logger, false /*restore*/)
 
 	// Open the destination file for writing, and a buffer.
 	params.Logger.Infof("Backing up file: %v", fe.Name)
@@ -968,7 +970,6 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 // we return the position from which replication should start
 // otherwise an error is returned
 func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-
 	var bm builtinBackupManifest
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return nil, err
@@ -1081,7 +1082,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}()
 
 	br := newBackupReader(name, 0, timedSource)
-	go br.ReportProgress(builtinBackupProgress, params.Logger)
+	go br.ReportProgress(builtinBackupProgress, params.Logger, true /*restore*/)
 	var reader io.Reader = br
 
 	// Open the destination file for writing.
@@ -1108,7 +1109,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Create the uncompresser if needed.
 	if !bm.SkipCompress {
 		var decompressor io.ReadCloser
-		var deCompressionEngine = bm.CompressionEngine
+		deCompressionEngine := bm.CompressionEngine
 
 		if deCompressionEngine == "" {
 			// for backward compatibility

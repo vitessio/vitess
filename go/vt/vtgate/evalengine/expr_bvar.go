@@ -160,6 +160,8 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 		c.asm.PushBVar_date(bvar.Key)
 	case tt == sqltypes.Time:
 		c.asm.PushBVar_time(bvar.Key)
+	case tt == sqltypes.Vector:
+		c.asm.PushBVar_vector(bvar.Key)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}

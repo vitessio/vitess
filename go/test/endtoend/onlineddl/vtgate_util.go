@@ -66,6 +66,29 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 	return qr
 }
 
+// VtgateExecQueryInTransaction runs a query on VTGate using given query params, inside a transaction
+func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
+	t.Helper()
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("begin", -1, true)
+	require.NoError(t, err)
+	qr, err := conn.ExecuteFetch(query, -1, true)
+	if expectError == "" {
+		require.NoError(t, err)
+	} else {
+		require.Error(t, err, "error should not be nil")
+		assert.Contains(t, err.Error(), expectError, "Unexpected error")
+	}
+	_, err = conn.ExecuteFetch("commit", -1, true)
+	require.NoError(t, err)
+	return qr
+}
+
 // VtgateExecDDL executes a DDL query with given strategy
 func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string, query string, expectError string) *sqltypes.Result {
 	t.Helper()
@@ -192,6 +215,18 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
 	}
+}
+
+// CheckCleanupAllMigrations cleans up all applicable migrations and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckCleanupAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) uint64 {
+	cleanupQuery := "alter vitess_migration cleanup all"
+	r := VtgateExecQuery(t, vtParams, cleanupQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+	return r.RowsAffected
 }
 
 // CheckLaunchAllMigrations launches all queued posponed migrations and expect number of affected rows

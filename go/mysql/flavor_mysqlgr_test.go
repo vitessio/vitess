@@ -84,7 +84,7 @@ func TestMysqlGRSupportCapability(t *testing.T) {
 			isCapable:  false,
 		},
 		{
-			version:    "5.6.7",
+			version:    "5.7.29",
 			capability: capabilities.InstantDDLFlavorCapability,
 			isCapable:  false,
 		},
@@ -92,16 +92,6 @@ func TestMysqlGRSupportCapability(t *testing.T) {
 			version:    "5.7.29",
 			capability: capabilities.TransactionalGtidExecutedFlavorCapability,
 			isCapable:  false,
-		},
-		{
-			version:    "5.6.7",
-			capability: capabilities.MySQLJSONFlavorCapability,
-			isCapable:  false,
-		},
-		{
-			version:    "5.7.29",
-			capability: capabilities.MySQLJSONFlavorCapability,
-			isCapable:  true,
 		},
 		{
 			version:    "8.0.30",
