@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package transaction
+package fuzzer
 
 import (
 	"context"
@@ -217,18 +217,13 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 		fz.wg.Done()
 	}()
 
-	// Create a connection to the vtgate to run transactions.
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
 	for {
 		// If fuzzer thread is marked to be stopped, then we should exit this go routine.
 		if fz.shouldStop.Load() == true {
 			return
 		}
 		// Run an atomic transaction
-		fz.generateAndExecuteTransaction(t, conn, threadId)
+		fz.generateAndExecuteTransaction(threadId)
 	}
 
 }
@@ -253,7 +248,13 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 }
 
 // generateAndExecuteTransaction generates the queries of the transaction and then executes them.
-func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, conn *mysql.Conn, threadId int) {
+func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
+	// Create a connection to the vtgate to run transactions.
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
 	// randomly generate an update set to use and the value to increment it by.
 	updateSetVal := rand.Intn(fz.updateSets)
 	incrementVal := rand.Int31()
@@ -274,7 +275,6 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, conn *mysql.Conn, 
 			break
 		}
 	}
-	// TODO: Check if we want to randomize commit and rollback decisions.
 	_, _ = conn.ExecuteFetch(finalCommand, 0, false)
 }
 
@@ -307,9 +307,4 @@ func (fz *fuzzer) generateInsertQueries(updateSet int, threadId int) []string {
 		queries[i], queries[j] = queries[j], queries[i]
 	})
 	return queries
-}
-
-// updateSetValueForShard gets a string representation to store the update set value for each shard.
-func updateSetValueForShard(updateSet int, shard int) string {
-	return fmt.Sprintf("Shard-%d:%d", shard, updateSet)
 }

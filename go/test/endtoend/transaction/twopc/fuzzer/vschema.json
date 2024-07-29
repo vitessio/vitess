@@ -1,27 +1,24 @@
 {
   "sharded":true,
   "vindexes": {
-    "xxhash": {
-      "type": "xxhash"
-    },
     "reverse_bits": {
       "type": "reverse_bits"
     }
   },
   "tables": {
-    "twopc_user":{
+    "twopc_fuzzer_update": {
       "column_vindexes": [
         {
           "column": "id",
-          "name": "xxhash"
+          "name": "reverse_bits"
         }
       ]
     },
-    "twopc_music": {
+    "twopc_fuzzer_insert": {
       "column_vindexes": [
         {
-          "column": "user_id",
-          "name": "xxhash"
+          "column": "id",
+          "name": "reverse_bits"
         }
       ]
     }
