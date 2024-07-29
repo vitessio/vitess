@@ -18,7 +18,7 @@ package base
 
 import (
 	"errors"
-	"strings"
+	"net"
 )
 
 // MetricResult is what we expect our probes to return. This can be a numeric result, or
@@ -48,17 +48,21 @@ var ErrNoResultYet = errors.New("metric not collected yet")
 var ErrNoSuchMetric = errors.New("no such metric")
 
 // ErrAppDenied is seen when an app is denied access
-var ErrAppDenied = errors.New("App denied")
+var ErrAppDenied = errors.New("app denied")
 
 // ErrInvalidCheckType is an internal error indicating an unknown check type
 var ErrInvalidCheckType = errors.New("unknown throttler check type")
 
 // IsDialTCPError sees if the given error indicates a TCP issue
-func IsDialTCPError(e error) bool {
-	if e == nil {
+func IsDialTCPError(err error) bool {
+	if err == nil {
 		return false
 	}
-	return strings.HasPrefix(e.Error(), "dial tcp")
+	switch err := err.(type) {
+	case *net.OpError:
+		return err.Op == "dial" && err.Net == "tcp"
+	}
+	return false
 }
 
 type noHostsMetricResult struct{}
