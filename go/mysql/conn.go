@@ -1105,43 +1105,49 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			return nil
 		}
 
-		// Populate PrepareData
-		c.StatementID++
-		prepare := &PrepareData{
-			StatementID: c.StatementID,
-			PrepareStmt: query,
-		}
-
 		var err error
 		var statement sqlparser.Statement
-		var remainder string
-
 		parserOptions, err := handler.ParserOptionsForConnection(c)
 		if err != nil {
 			log.Errorf("unable to determine parser options for current connection: %s", err.Error())
 			return err
 		}
 
+		var queries []string
 		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
-			var ri int
-			statement, ri, err = sqlparser.ParseOneWithOptions(ctx, query, parserOptions)
-			if ri < len(query) {
-				remainder = query[ri:]
+			queries, err = sqlparser.SplitStatementToPieces(query)
+			if err != nil {
+				log.Errorf("error splitting query: %v", c, err)
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Error writing query error to %s: %v", c, werr)
+					return werr
+				}
+				return nil
+			}
+			if len(queries) != 1 {
+				err := fmt.Errorf("cannot prepare multiple statements")
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Error writing query error to %s: %v", c, werr)
+					return werr
+				}
+				return nil
 			}
 		} else {
-			statement, err = sqlparser.ParseWithOptions(ctx, query, parserOptions)
+			queries = []string{query}
 		}
+
+		// Populate PrepareData
+		c.StatementID++
+		prepare := &PrepareData{
+			StatementID: c.StatementID,
+			PrepareStmt: queries[0],
+		}
+
+		statement, err = sqlparser.ParseWithOptions(ctx, query, parserOptions)
 		if err != nil {
 			log.Errorf("Error while parsing prepared statement: %s", err.Error())
-			if werr := c.writeErrorPacketFromError(err); werr != nil {
-				// If we can't even write the error, we're done.
-				log.Errorf("Error writing query error to %s: %v", c, werr)
-				return werr
-			}
-			return nil
-		}
-		if remainder != "" {
-			err := fmt.Errorf("can not prepare multiple statements")
 			if werr := c.writeErrorPacketFromError(err); werr != nil {
 				// If we can't even write the error, we're done.
 				log.Errorf("Error writing query error to %s: %v", c, werr)

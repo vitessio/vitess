@@ -1114,3 +1114,69 @@ func TestExecuteQueries(t *testing.T) {
 		}
 	})
 }
+
+func TestComStmtPrepareWithTrailingNewLine (t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sql := "select ?;\n"
+	data := MockQueryPackets(t, sql)
+	if err := cConn.writePacket(data); err != nil {
+		t.Fatalf("writePacket failed: %v", err)
+	}
+
+	prepare, result := MockPrepareData(t)
+	sConn.PrepareData = make(map[uint32]*PrepareData)
+	sConn.PrepareData[prepare.StatementID] = prepare
+
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	handler := &testHandler{
+		result: result,
+	}
+	err := sConn.handleNextCommand(context.Background(), handler)
+	if err != nil {
+		t.Fatalf("handleNextCommand failed: %v", err)
+	}
+
+	if err := cConn.ExecuteStreamFetch(sql); err != nil {
+		t.Fatalf("ExecuteStreamFetch(%v) failed: %v", sql, err)
+		return
+	}
+}
+
+func TestComStmtPrepareMultiStmt (t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sql := "select ?; select ?;"
+	data := MockQueryPackets(t, sql)
+	if err := cConn.writePacket(data); err != nil {
+		t.Fatalf("writePacket failed: %v", err)
+	}
+
+	prepare, result := MockPrepareData(t)
+	sConn.PrepareData = make(map[uint32]*PrepareData)
+	sConn.PrepareData[prepare.StatementID] = prepare
+
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	handler := &testHandler{
+		result: result,
+	}
+	err := sConn.handleNextCommand(context.Background(), handler)
+	if err != nil {
+		t.Fatalf("handleNextCommand failed: %v", err)
+	}
+
+	if err := cConn.ExecuteStreamFetch(sql); err == nil {
+		t.Fatalf("expected error, but received nil")
+		return
+	}
+}
