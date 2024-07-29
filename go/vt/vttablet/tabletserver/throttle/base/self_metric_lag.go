@@ -27,7 +27,8 @@ import (
 )
 
 var (
-	lagSelfMetricQueryBase = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat"
+	lagSelfMetricQueryBase  = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat"
+	lagSelfDefaultThreshold = 5 * time.Second
 )
 
 var _ SelfMetric = registerSelfMetric(&LagSelfMetric{})
@@ -57,7 +58,7 @@ func (m *LagSelfMetric) DefaultScope() Scope {
 }
 
 func (m *LagSelfMetric) DefaultThreshold() float64 {
-	return 5 * time.Second.Seconds()
+	return lagSelfDefaultThreshold.Seconds()
 }
 
 func (m *LagSelfMetric) RequiresConn() bool {
