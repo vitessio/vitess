@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"slices"
 	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -31,12 +30,12 @@ import (
 type CTETable struct {
 	TableName string
 	ASTNode   *sqlparser.AliasedTableExpr
-	CTEDef
+	*CTEDef
 }
 
 var _ TableInfo = (*CTETable)(nil)
 
-func newCTETable(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, cteDef CTEDef) *CTETable {
+func newCTETable(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, cteDef *CTEDef) *CTETable {
 	var name string
 	if node.As.IsEmpty() {
 		name = t.Name.String()
@@ -113,7 +112,7 @@ func (cte *CTETable) dependencies(colName string, org originable) (dependencies,
 	columns := cte.getColumns(false)
 	for _, columnInfo := range columns {
 		if strings.EqualFold(columnInfo.Name, colName) {
-			return createCertain(directDeps, cte.recursive(org), evalengine.NewUnknownType()), nil
+			return createCertain(directDeps, directDeps, evalengine.NewUnknownType()), nil
 		}
 	}
 
@@ -121,7 +120,7 @@ func (cte *CTETable) dependencies(colName string, org originable) (dependencies,
 		return &nothing{}, nil
 	}
 
-	return createUncertain(directDeps, cte.recursive(org)), nil
+	return createUncertain(directDeps, directDeps), nil
 }
 
 func (cte *CTETable) getExprFor(s string) (sqlparser.Expr, error) {
@@ -133,13 +132,18 @@ func (cte *CTETable) getTableSet(org originable) TableSet {
 }
 
 type CTEDef struct {
+	Name            string
 	Query           sqlparser.SelectStatement
 	isAuthoritative bool
 	recursiveDeps   *TableSet
 	Columns         sqlparser.Columns
+	IDForRecurse    *TableSet
+
+	// Was this CTE marked for being recursive?
+	Recursive bool
 }
 
-func (cte CTEDef) recursive(org originable) (id TableSet) {
+func (cte *CTEDef) recursive(org originable) (id TableSet) {
 	if cte.recursiveDeps != nil {
 		return *cte.recursiveDeps
 	}
@@ -155,13 +159,4 @@ func (cte CTEDef) recursive(org originable) (id TableSet) {
 		return true, nil
 	}, cte.Query)
 	return
-}
-
-func (cte CTEDef) Equals(other CTEDef) bool {
-	if !sqlparser.Equals.SelectStatement(cte.Query, other.Query) {
-		return false
-	}
-	return slices.EqualFunc(cte.Columns, other.Columns, func(a, b sqlparser.IdentifierCI) bool {
-		return a.Equal(b)
-	})
 }

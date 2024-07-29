@@ -428,6 +428,20 @@ func (node *AliasedTableExpr) TableName() (TableName, error) {
 	return tableName, nil
 }
 
+// TableNameString returns a TableNameString pointing to this table expr
+func (node *AliasedTableExpr) TableNameString() string {
+	if node.As.NotEmpty() {
+		return node.As.String()
+	}
+
+	tableName, ok := node.Expr.(TableName)
+	if !ok {
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: Derived table should have an alias. This should not be possible"))
+	}
+
+	return tableName.Name.String()
+}
+
 // IsEmpty returns true if TableName is nil or empty.
 func (node TableName) IsEmpty() bool {
 	// If Name is empty, Qualifier is also empty.

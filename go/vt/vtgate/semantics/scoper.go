@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"reflect"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -35,9 +36,10 @@ type (
 		binder *binder
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
-		specialExprScopes map[*sqlparser.Literal]*scope
-		statementIDs      map[sqlparser.Statement]TableSet
-		si                SchemaInformation
+		specialExprScopes     map[*sqlparser.Literal]*scope
+		statementIDs          map[sqlparser.Statement]TableSet
+		commonTableExprScopes []*sqlparser.CommonTableExpr
+		si                    SchemaInformation
 	}
 
 	scope struct {
@@ -105,6 +107,8 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			s.currentScope().inHaving = true
 			return nil
 		}
+	case *sqlparser.CommonTableExpr:
+		s.commonTableExprScopes = append(s.commonTableExprScopes, node)
 	}
 	return nil
 }
@@ -184,6 +188,9 @@ func (s *scoper) enterJoinScope(cursor *sqlparser.Cursor) {
 
 func (s *scoper) pushSelectScope(node *sqlparser.Select) {
 	currScope := newScope(s.currentScope())
+	if len(s.scopes) > 0 && s.scopes[len(s.scopes)-1] != s.currentScope() {
+		fmt.Println("BUG: scope counts did not match")
+	}
 	currScope.stmtScope = true
 	s.push(currScope)
 
@@ -261,6 +268,8 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 				s.binder.usingJoinInfo[ts] = m
 			}
 		}
+	case *sqlparser.CommonTableExpr:
+		s.commonTableExprScopes = s.commonTableExprScopes[:len(s.commonTableExprScopes)-1]
 	}
 	return nil
 }

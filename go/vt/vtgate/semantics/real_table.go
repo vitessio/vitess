@@ -20,9 +20,11 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/slice"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -31,6 +33,7 @@ type RealTable struct {
 	dbName, tableName string
 	ASTNode           *sqlparser.AliasedTableExpr
 	Table             *vindexes.Table
+	CTE               *CTEDef
 	VindexHint        *sqlparser.IndexHint
 	isInfSchema       bool
 	collationEnv      *collations.Environment
@@ -71,8 +74,17 @@ func (r *RealTable) IsInfSchema() bool {
 // GetColumns implements the TableInfo interface
 func (r *RealTable) getColumns(ignoreInvisbleCol bool) []ColumnInfo {
 	if r.Table == nil {
+		if r.CTE != nil {
+			selectExprs := r.CTE.Query.GetColumns()
+			ci := extractColumnsFromCTE(r.CTE.Columns, selectExprs)
+			if ci == nil {
+				return ci
+			}
+			return extractSelectExprsFromCTE(selectExprs)
+		}
 		return nil
 	}
+
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(r.Table.Columns))
 	for _, col := range r.Table.Columns {
@@ -103,6 +115,36 @@ func (r *RealTable) getColumns(ignoreInvisbleCol bool) []ColumnInfo {
 		}
 	}
 	return cols
+}
+
+func extractSelectExprsFromCTE(selectExprs sqlparser.SelectExprs) []ColumnInfo {
+	var ci []ColumnInfo
+	for _, expr := range selectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil
+		}
+		ci = append(ci, ColumnInfo{
+			Name: ae.ColumnName(),
+			Type: evalengine.NewUnknownType(), // TODO: set the proper type
+		})
+	}
+	return ci
+}
+
+func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs sqlparser.SelectExprs) []ColumnInfo {
+	if len(columns) == 0 {
+		return nil
+	}
+	if len(selectExprs) != len(columns) {
+		panic("mismatch of columns")
+	}
+	return slice.Map(columns, func(from sqlparser.IdentifierCI) ColumnInfo {
+		return ColumnInfo{
+			Name: from.String(),
+			Type: evalengine.NewUnknownType(),
+		}
+	})
 }
 
 // GetExpr implements the TableInfo interface

@@ -43,7 +43,9 @@ type (
 		currentDb string
 		Tables    []TableInfo
 		done      map[*sqlparser.AliasedTableExpr]TableInfo
-		cte       map[string]CTEDef
+
+		// cte is a map of CTE definitions that are used in the query
+		cte map[string]*CTEDef
 	}
 )
 
@@ -52,7 +54,7 @@ func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableC
 		si:        si,
 		currentDb: currentDb,
 		done:      map[*sqlparser.AliasedTableExpr]TableInfo{},
-		cte:       map[string]CTEDef{},
+		cte:       map[string]*CTEDef{},
 	}
 }
 
@@ -62,9 +64,11 @@ func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 	for _, cte := range with.CTEs {
-		etc.cte[cte.ID.String()] = CTEDef{
-			Query:   cte.Subquery,
-			Columns: cte.Columns,
+		etc.cte[cte.ID.String()] = &CTEDef{
+			Name:      cte.ID.String(),
+			Query:     cte.Subquery,
+			Columns:   cte.Columns,
+			Recursive: with.Recursive,
 		}
 	}
 	return true
@@ -104,7 +108,7 @@ func (etc *earlyTableCollector) handleTableName(tbl sqlparser.TableName, aet *sq
 			return
 		}
 	}
-	tableInfo, err := etc.getTableInfo(aet, tbl)
+	tableInfo, err := etc.getTableInfo(aet, tbl, nil)
 	if err != nil {
 		// this could just be a CTE that we haven't processed, so we'll give it the benefit of the doubt for now
 		return
@@ -311,7 +315,7 @@ func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sq
 
 	tableInfo, found = tc.done[node]
 	if !found {
-		tableInfo, err = tc.earlyTableCollector.getTableInfo(node, t)
+		tableInfo, err = tc.earlyTableCollector.getTableInfo(node, t, tc.scoper)
 		if err != nil {
 			return err
 		}
@@ -322,14 +326,26 @@ func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sq
 	return scope.addTable(tableInfo)
 }
 
-func (etc *earlyTableCollector) getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName) (TableInfo, error) {
+func (etc *earlyTableCollector) getCTE(t sqlparser.TableName) *CTEDef {
+	if t.Qualifier.NotEmpty() {
+		return nil
+	}
+
+	return etc.cte[t.Name.String()]
+}
+
+func (etc *earlyTableCollector) getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, sc *scoper) (TableInfo, error) {
 	var tbl *vindexes.Table
 	var vindex vindexes.Vindex
-	if t.Qualifier.IsEmpty() {
-		// CTE handling will not be used in the early table collection
-		cteDef, isCte := etc.cte[t.Name.String()]
-		if isCte {
-			return newCTETable(node, t, cteDef), nil
+	if cteDef := etc.getCTE(t); cteDef != nil {
+		cte, err := etc.buildRecursiveCTE(node, t, sc, cteDef)
+		if err != nil {
+			return nil, err
+		}
+		if cte != nil {
+			// if we didn't get a table, it means we can't build a recursive CTE,
+			// so we need to look for a regular table instead
+			return cte, nil
 		}
 	}
 
@@ -349,6 +365,57 @@ func (etc *earlyTableCollector) getTableInfo(node *sqlparser.AliasedTableExpr, t
 		return nil, err
 	}
 	return tableInfo, nil
+}
+
+func (etc *earlyTableCollector) buildRecursiveCTE(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, sc *scoper, cteDef *CTEDef) (TableInfo, error) {
+	// If sc is nil, then we are in the early table collector.
+	// In early table collector, we don't go over the CTE definitions, so we must be seeing a usage of the CTE.
+	if sc != nil && len(sc.commonTableExprScopes) > 0 {
+		cte := sc.commonTableExprScopes[len(sc.commonTableExprScopes)-1]
+		if cte.ID.String() == t.Name.String() {
+
+			if err := checkValidRecursiveCTE(cteDef); err != nil {
+				return nil, err
+			}
+
+			cteTable := newCTETable(node, t, cteDef)
+			cteTableSet := SingleTableSet(len(etc.Tables))
+			cteDef.IDForRecurse = &cteTableSet
+			if !cteDef.Recursive {
+				return nil, nil
+			}
+			return cteTable, nil
+		}
+	}
+	return &RealTable{
+		tableName:    node.TableNameString(),
+		ASTNode:      node,
+		CTE:          cteDef,
+		collationEnv: etc.si.Environment().CollationEnv(),
+	}, nil
+}
+
+func checkValidRecursiveCTE(cteDef *CTEDef) error {
+	if cteDef.IDForRecurse != nil {
+		return vterrors.VT09029(cteDef.Name)
+	}
+
+	union, isUnion := cteDef.Query.(*sqlparser.Union)
+	if !isUnion {
+		return vterrors.VT09026(cteDef.Name)
+	}
+
+	firstSelect := sqlparser.GetFirstSelect(union.Right)
+	if firstSelect.GroupBy != nil {
+		return vterrors.VT09027(cteDef.Name)
+	}
+
+	for _, expr := range firstSelect.GetColumns() {
+		if sqlparser.ContainsAggregation(expr) {
+			return vterrors.VT09027(cteDef.Name)
+		}
+	}
+	return nil
 }
 
 func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t *sqlparser.DerivedTable) error {
