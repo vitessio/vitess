@@ -115,8 +115,7 @@ func PeriodToMonths(period uint64) uint64 {
 	} else if y < 100 {
 		y += 1900
 	}
-	m := uint64(period % 100)
-	return y*12 + m - 1
+	return y*12 + period%100 - 1
 }
 
 // MonthsToPeriod converts number of months into MySQL period.
