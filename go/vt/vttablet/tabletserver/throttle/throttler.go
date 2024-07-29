@@ -929,7 +929,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 // readSelfThrottleMetricsInternal rreads all registsred self metrics on this tablet (or backend MySQL server).
 // This is the actual place where metrics are read, to be later aggregated and/or propagated to other tablets.
 func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context) base.ThrottleMetrics {
-	result := make(base.ThrottleMetrics)
+	result := make(base.ThrottleMetrics, len(base.RegisteredSelfMetrics))
 	writeMetric := func(metric *base.ThrottleMetric) {
 		select {
 		case <-ctx.Done():
