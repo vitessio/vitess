@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -706,6 +707,23 @@ func (tm *TabletManager) setReplicationSourceRepairReplication(ctx context.Conte
 		return err
 	}
 
+	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tm.Tablet().Keyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tm.Tablet().Keyspace)
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
+	}
+
+	// If using semi-sync, we need to enable it before connecting to primary.
+	// We should set the correct type, since it is used in replica semi-sync.
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, parent.Tablet, tm.Tablet()))
+	if err != nil {
+		return err
+	}
+
 	ctx, unlock, lockErr := tm.TopoServer.LockShard(ctx, parent.Tablet.GetKeyspace(), parent.Tablet.GetShard(), fmt.Sprintf("repairReplication to %v as parent)", topoproto.TabletAliasString(parentAlias)))
 	if lockErr != nil {
 		return lockErr
@@ -713,7 +731,7 @@ func (tm *TabletManager) setReplicationSourceRepairReplication(ctx context.Conte
 
 	defer unlock(&err)
 
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction)
 }
 
 func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
