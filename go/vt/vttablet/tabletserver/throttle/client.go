@@ -18,7 +18,6 @@ package throttle
 
 import (
 	"context"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -111,11 +110,11 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	}
 	// It's time to run a throttler check
 	checkResult = c.throttler.Check(ctx, checkApp.String(), nil, &c.flags)
-	if checkResult.StatusCode != http.StatusOK {
+	if !checkResult.IsOK() {
 		return checkResult, false
 	}
 	for _, metricResult := range checkResult.Metrics {
-		if metricResult.StatusCode != http.StatusOK {
+		if !metricResult.IsOK() {
 			return checkResult, false
 		}
 	}
