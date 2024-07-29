@@ -159,6 +159,7 @@ func TestReferenceRouting(t *testing.T) {
 
 // TestMultiReferenceQuery tests that a query with multiple references with unsharded keyspace and sharded keyspace works with join.
 func TestMultiReferenceQuery(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
 	conn, closer := start(t)
 	defer closer()
 
