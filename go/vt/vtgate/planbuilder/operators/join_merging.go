@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // mergeJoinInputs checks whether two operators can be merged into a single one.
@@ -34,9 +35,9 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 	}
 
 	switch {
+	// We clone the right hand side and try and push all the join predicates that are solved entirely by that side.
+	// If a dual is on the left side, and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single sharded routing.
 	case a == dual:
-		// We clone the right hand side and try and push all the join predicates that are solved entirely by that side.
-		// If a dual is on the left side and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single sharded routing.
 		rhsClone := Clone(rhs).(*Route)
 		for _, predicate := range joinPredicates {
 			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(TableID(rhsClone)) {
@@ -47,9 +48,15 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 			return nil
 		}
 		return m.merge(ctx, lhsRoute, rhsClone, rhsClone.Routing)
+
+	// If a dual is on the right side.
 	case b == dual:
-		// If a dual is on the right side.
 		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
+
+	// As both are reference route. We need to merge the alternates as well.
+	case a == anyShard && b == anyShard && sameKeyspace:
+		newrouting := mergeAnyShardRoutings(ctx, routingA, routingB, joinPredicates, m.joinType)
+		return m.merge(ctx, lhsRoute, rhsRoute, newrouting)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
@@ -73,6 +80,28 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 
 	default:
 		return nil
+	}
+}
+
+func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a Routing, b Routing, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) *AnyShardRouting {
+	ar := a.(*AnyShardRouting)
+	br := b.(*AnyShardRouting)
+	alternates := make(map[*vindexes.Keyspace]*Route)
+	for ak, av := range ar.Alternates {
+		for bk, bv := range br.Alternates {
+			// only same keyspace alternates can be merged.
+			if ak != bk {
+				continue
+			}
+			op, _ := mergeOrJoin(ctx, av, bv, joinPredicates, joinType)
+			if r, ok := op.(*Route); ok {
+				alternates[ak] = r
+			}
+		}
+	}
+	return &AnyShardRouting{
+		keyspace:   ar.keyspace,
+		Alternates: alternates,
 	}
 }
 
