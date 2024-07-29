@@ -199,13 +199,13 @@ func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
 }
 
 func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, downPrimary bool) {
-	//This test will start a primary and 3 replicas.
-	//Then:
-	//- one replica will be the new primary
-	//- one replica will be reparented to that new primary
-	//- one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
-	//Args:
-	//downPrimary: kills the old primary first
+	// This test will start a primary and 3 replicas.
+	// Then:
+	// - one replica will be the new primary
+	// - one replica will be reparented to that new primary
+	// - one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
+	// Args:
+	// downPrimary: kills the old primary first
 	ctx := context.Background()
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -218,7 +218,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 		demoteCommands := []string{"SET GLOBAL read_only = ON", "FLUSH TABLES WITH READ LOCK", "UNLOCK TABLES"}
 		utils.RunSQLs(ctx, t, demoteCommands, tablets[0])
 
-		//Get the position of the old primary and wait for the new one to catch up.
+		// Get the position of the old primary and wait for the new one to catch up.
 		err := utils.WaitForReplicationPosition(t, tablets[0], tablets[1])
 		require.NoError(t, err)
 	}
@@ -304,7 +304,11 @@ func TestReparentWithDownReplica(t *testing.T) {
 		// insert data into the new primary, check the connected replica work
 		insertVal = utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[3]})
 	} else {
-		assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s", tablets[2].Alias))
+		if clusterInstance.VtctlMajorVersion <= 20 {
+			assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s", tablets[2].Alias))
+		} else {
+			assert.Contains(t, out, fmt.Sprintf("TabletManager.GetGlobalStatusVars on %s", tablets[2].Alias))
+		}
 		// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
 		insertVal = utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
 	}
