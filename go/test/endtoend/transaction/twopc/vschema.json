@@ -3,9 +3,6 @@
   "vindexes": {
     "xxhash": {
       "type": "xxhash"
-    },
-    "reverse_bits": {
-      "type": "reverse_bits"
     }
   },
   "tables": {

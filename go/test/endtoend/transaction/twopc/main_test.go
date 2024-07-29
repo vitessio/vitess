@@ -110,7 +110,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	cleanup(t)
 
 	return conn, func() {
 		conn.Close()
