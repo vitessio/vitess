@@ -125,7 +125,7 @@ jobs:
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
         # Setup MySQL 8.0
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.32-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
         # Install everything else we need, and configure
@@ -183,7 +183,7 @@ jobs:
         {{if .LimitResourceUsage}}
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         innodb_buffer_pool_dump_at_shutdown=OFF
         innodb_buffer_pool_in_core_file=OFF
         innodb_buffer_pool_load_at_startup=OFF
@@ -201,7 +201,7 @@ jobs:
         {{end}}
 
         {{if .EnableBinlogTransactionCompression}}
-        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-transaction-compression=ON
         EOF
         {{end}}
