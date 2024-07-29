@@ -17,21 +17,26 @@ limitations under the License.
 package base
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+)
+
+var (
+	loadavgOnlyAvailableOnLinuxMetric = &ThrottleMetric{
+		Scope: SelfScope,
+		Err:   fmt.Errorf("loadavg metric is only available on Linux"),
+	}
 )
 
 var _ SelfMetric = registerSelfMetric(&LoadAvgSelfMetric{})
 
 type LoadAvgSelfMetric struct {
-	hostCpuCoreCount atomic.Int32
 }
 
 func (m *LoadAvgSelfMetric) Name() MetricName {
@@ -51,37 +56,11 @@ func (m *LoadAvgSelfMetric) RequiresConn() bool {
 }
 
 func (m *LoadAvgSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
+	if runtime.GOOS != "linux" {
+		return loadavgOnlyAvailableOnLinuxMetric
+	}
 	metric := &ThrottleMetric{
 		Scope: SelfScope,
-	}
-
-	coreCount := m.hostCpuCoreCount.Load()
-	if coreCount == 0 {
-		// Count cores. This number is not going to change in the lifetime of this tablet,
-		// hence it makes sense to read it once then cache it.
-
-		// We choose to read /proc/cpuinfo over executing "nproc" or similar commands.
-		var coreCount int32
-		f, err := os.Open("/proc/cpuinfo")
-		if err != nil {
-			return metric.WithError(err)
-		}
-		defer f.Close()
-
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			if strings.HasPrefix(scanner.Text(), "processor") {
-				coreCount++
-			}
-		}
-
-		if err := scanner.Err(); err != nil {
-			return metric.WithError(err)
-		}
-		m.hostCpuCoreCount.Store(coreCount)
-	}
-	if coreCount == 0 {
-		return metric.WithError(fmt.Errorf("could not determine number of cores"))
 	}
 	{
 		content, err := os.ReadFile("/proc/loadavg")
@@ -96,7 +75,7 @@ func (m *LoadAvgSelfMetric) Read(ctx context.Context, throttler ThrottlerMetrics
 		if err != nil {
 			return metric.WithError(err)
 		}
-		metric.Value = loadAvg / float64(m.hostCpuCoreCount.Load())
+		metric.Value = loadAvg / float64(runtime.NumCPU())
 	}
 	return metric
 }
