@@ -69,21 +69,20 @@ func ReadSelfMySQLThrottleMetric(ctx context.Context, conn *connpool.Conn, query
 	if err != nil {
 		return metric.WithError(err)
 	}
-	row := tm.Named().Row()
-	if row == nil {
-		return metric.WithError(fmt.Errorf("no results for readSelfThrottleMetric"))
+	if len(tm.Rows) == 0 {
+		return metric.WithError(fmt.Errorf("no results in ReadSelfMySQLThrottleMetric for query %s", query))
+	}
+	if len(tm.Rows) > 1 {
+		return metric.WithError(fmt.Errorf("expecting single row in ReadSelfMySQLThrottleMetric for query %s", query))
 	}
 
 	metricsQueryType := GetMetricsQueryType(query)
 	switch metricsQueryType {
 	case MetricsQueryTypeSelect:
-		// We expect a single row, single column result.
-		// The "for" iteration below is just a way to get first result without knowing column name
-		for k := range row {
-			metric.Value, metric.Err = row.ToFloat64(k)
-		}
+		metric.Value, metric.Err = tm.Rows[0][0].ToFloat64()
 	case MetricsQueryTypeShowGlobal:
-		metric.Value, metric.Err = strconv.ParseFloat(row["Value"].ToString(), 64)
+		// Columns are [Variable_name, Value]
+		metric.Value, metric.Err = strconv.ParseFloat(tm.Rows[0][1].ToString(), 64)
 	default:
 		metric.Err = fmt.Errorf("unsupported metrics query type for query: %s", query)
 	}
