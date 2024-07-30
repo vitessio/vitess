@@ -382,6 +382,9 @@ func TestAliasesInOuterJoinQueries(t *testing.T) {
 	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2 offset 2")
 	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, count(*) as leCount from t1 left outer join tbl on t1.id2 = tbl.nonunq_col group by 1, t1")
 	mcmp.ExecWithColumnCompare("select t.id1, t.id2, derived.unq_col from t1 t join (select id, unq_col, nonunq_col from tbl) as derived on t.id2 = derived.nonunq_col")
+	if utils.BinaryIsAtLeastAtVersion(20, "vtgate") {
+		mcmp.ExecWithColumnCompare("select * from t1 t left join tbl on t.id1 = 666 and t.id2 = tbl.id")
+	}
 }
 
 func TestAlterTableWithView(t *testing.T) {
