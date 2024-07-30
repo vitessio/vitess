@@ -59,15 +59,8 @@ func TestBitVals(t *testing.T) {
 
 	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010'`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
 	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010' from t1`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
-	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
-	require.NoError(t, err)
-	if vtgateVersion >= 19 {
-		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[INT64(10) UINT64(11) INT64(1245)]]`)
-		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[INT64(10) UINT64(11) INT64(1245)]]`)
-	} else {
-		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
-		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
-	}
+	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
+	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
 }
 
 func TestHexVals(t *testing.T) {
@@ -277,8 +270,6 @@ func TestLeftJoinUsingUnsharded(t *testing.T) {
 
 // TestAnalyze executes different analyze statement and validates that they run successfully.
 func TestAnalyze(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
-	utils.SkipIfBinaryIsBelowVersion(t, 18, "vttablet")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -294,12 +285,6 @@ func TestAnalyze(t *testing.T) {
 
 // TestAliasesInOuterJoinQueries tests that aliases work in queries that have outer join clauses.
 func TestAliasesInOuterJoinQueries(t *testing.T) {
-	version, err := cluster.GetMajorVersion("vtgate")
-	require.NoError(t, err)
-	if version != 18 {
-		t.Skip("only run on version 18")
-	}
-
 	mcmp, closer := start(t)
 	defer closer()
 

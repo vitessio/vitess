@@ -79,7 +79,6 @@ func TestNotINQueries(t *testing.T) {
 
 // Test only supported in >= v16.0.0
 func TestSubqueriesExists(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -116,7 +115,6 @@ func TestSubqueryInINClause(t *testing.T) {
 }
 
 func TestSubqueryInUpdate(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -131,7 +129,6 @@ func TestSubqueryInUpdate(t *testing.T) {
 }
 
 func TestSubqueryInReference(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -163,8 +160,6 @@ func TestSubqueryInReference(t *testing.T) {
 
 // TestSubqueryInAggregation validates that subquery work inside aggregation functions.
 func TestSubqueryInAggregation(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
-	utils.SkipIfBinaryIsBelowVersion(t, 18, "vttablet")
 	mcmp, closer := start(t)
 	defer closer()
 

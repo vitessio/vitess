@@ -56,7 +56,6 @@ func TestDerivedTableWithOrderByLimit(t *testing.T) {
 }
 
 func TestDerivedAggregationOnRHS(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 

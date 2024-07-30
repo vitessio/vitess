@@ -160,7 +160,7 @@ func TestKnownFailures(t *testing.T) {
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	// logs more stuff
-	//clusterInstance.EnableGeneralLog()
+	// clusterInstance.EnableGeneralLog()
 
 	// column 'tbl1.`not exists (select 1 from dual)`' not found
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.`not exists (select 1 from dual)`, count(*) from dept as tbl0, (select /*vt+ PLANNER=Gen4 */ not exists (select 1 from dual) from dept as tbl0 where tbl0.dname) as tbl1 group by tbl0.deptno, tbl1.`not exists (select 1 from dual)`")
@@ -337,7 +337,6 @@ func TestRandom(t *testing.T) {
 
 // these queries were previously failing and have now been fixed
 func TestBuggyQueries(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
