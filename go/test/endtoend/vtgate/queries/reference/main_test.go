@@ -18,6 +18,7 @@ package reference
 
 import (
 	"context"
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -39,68 +40,16 @@ var (
 	vtParams        mysql.ConnParams
 
 	unshardedKeyspaceName = "uks"
-	unshardedSQLSchema    = `
-		CREATE TABLE IF NOT EXISTS zip(
-			id BIGINT NOT NULL AUTO_INCREMENT,
-			code5 INT(5) NOT NULL,
-			PRIMARY KEY(id)
-		) ENGINE=InnoDB;
+	//go:embed uschema.sql
+	unshardedSQLSchema string
+	//go:embed uvschema.json
+	unshardedVSchema string
 
-		INSERT INTO zip(id, code5)
-		VALUES (1, 47107),
-			   (2, 82845),
-			   (3, 11237);
-
-		CREATE TABLE IF NOT EXISTS zip_detail(
-			id BIGINT NOT NULL AUTO_INCREMENT,
-			zip_id BIGINT NOT NULL,
-			discontinued_at DATE,
-			PRIMARY KEY(id)
-		) ENGINE=InnoDB;
-
-	`
-	unshardedVSchema = `
-		{
-			"sharded":false,
-			"tables": {
-				"zip": {},
-				"zip_detail": {}
-			}
-		}
-	`
 	shardedKeyspaceName = "sks"
-	shardedSQLSchema    = `
-		CREATE TABLE IF NOT EXISTS delivery_failure (
-			id BIGINT NOT NULL,
-			zip_detail_id BIGINT NOT NULL,
-			reason VARCHAR(255),
-			PRIMARY KEY(id)
-		) ENGINE=InnoDB;
-	`
-	shardedVSchema = `
-		{
-			"sharded": true,
-			"vindexes": {
-				"hash": {
-					"type": "hash"
-				}
-			},
-			"tables": {
-				"delivery_failure": {
-					"columnVindexes": [
-						{
-							"column": "id",
-							"name": "hash"
-						}
-					]
-				},
-				"zip_detail": {
-					"type": "reference",
-					"source": "` + unshardedKeyspaceName + `.zip_detail"
-				}
-			}
-		}
-	`
+	//go:embed sschema.sql
+	shardedSQLSchema string
+	//go:embed svschema.json
+	shardedVSchema string
 )
 
 func TestMain(m *testing.M) {
