@@ -954,8 +954,8 @@ func getTabletTypeSuffix(tabletType topodatapb.TabletType) string {
 // when e.g. processing a gRPC error which will be a status.Error that needs to be
 // converted to an sqlerror.SQLError before we can examine the error code.
 func IsTableDidNotExistError(err error) bool {
-	if mysqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok {
-		return mysqlErr.Num == sqlerror.ERNoSuchTable || mysqlErr.Num == sqlerror.ERBadTable
+	if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok {
+		return sqlErr.Num == sqlerror.ERNoSuchTable || sqlErr.Num == sqlerror.ERBadTable
 	}
 	return false
 }
