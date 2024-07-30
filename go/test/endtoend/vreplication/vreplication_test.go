@@ -1185,9 +1185,7 @@ func materialize(t *testing.T, spec string, useVtctldClient bool) {
 
 func testMaterializeWithNonExistentTable(t *testing.T) {
 	t.Run("vtctldclient materialize with nonexistent table", func(t *testing.T) {
-		tableSettings := `[
-		{"target_table": "table_that_doesnt_exist", "create_ddl": "create table mat_val_counts (mat_val varbinary(10), cnt int unsigned, primary key (mat_val))", "source_expression": "select val, count(*) as cnt from mat group by val"},
-		]`
+		tableSettings := `[{"target_table": "table_that_doesnt_exist", "create_ddl": "create table mat_val_counts (mat_val varbinary(10), cnt int unsigned, primary key (mat_val))", "source_expression": "select val, count(*) as cnt from mat group by val"}]`
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--workflow=tablenogood", "--target-keyspace=source",
 			"create", "--source-keyspace=source", "--table-settings", tableSettings)
 		require.NoError(t, err, "Materialize create failed, err: %v, output: %s", err, output)
