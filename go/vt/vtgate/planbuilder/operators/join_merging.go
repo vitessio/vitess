@@ -55,7 +55,7 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 
 	// As both are reference route. We need to merge the alternates as well.
 	case a == anyShard && b == anyShard && sameKeyspace:
-		newrouting := mergeAnyShardRoutings(ctx, routingA, routingB, joinPredicates, m.joinType)
+		newrouting := mergeAnyShardRoutings(ctx, routingA.(*AnyShardRouting), routingB.(*AnyShardRouting), joinPredicates, m.joinType)
 		return m.merge(ctx, lhsRoute, rhsRoute, newrouting)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
@@ -83,12 +83,10 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 	}
 }
 
-func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a Routing, b Routing, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) *AnyShardRouting {
-	ar := a.(*AnyShardRouting)
-	br := b.(*AnyShardRouting)
+func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a, b *AnyShardRouting, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) *AnyShardRouting {
 	alternates := make(map[*vindexes.Keyspace]*Route)
-	for ak, av := range ar.Alternates {
-		for bk, bv := range br.Alternates {
+	for ak, av := range a.Alternates {
+		for bk, bv := range b.Alternates {
 			// only same keyspace alternates can be merged.
 			if ak != bk {
 				continue
@@ -100,7 +98,7 @@ func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a Routing, b Routin
 		}
 	}
 	return &AnyShardRouting{
-		keyspace:   ar.keyspace,
+		keyspace:   a.keyspace,
 		Alternates: alternates,
 	}
 }
