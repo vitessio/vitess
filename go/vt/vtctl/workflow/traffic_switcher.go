@@ -548,7 +548,9 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 				DisableForeignKeyChecks: true,
 			})
 			if err != nil {
-				if mysqlErr, ok := err.(*sqlerror.SQLError); ok && mysqlErr.Num == sqlerror.ERNoSuchTable {
+				// The error is a gRPC status.Error, so we need to convert it to an sqlerror.SQLError.
+				err := sqlerror.NewSQLErrorFromError(err)
+				if mysqlErr, ok := err.(*sqlerror.SQLError); ok && (mysqlErr.Num == sqlerror.ERNoSuchTable || mysqlErr.Num == sqlerror.ERBadTable) {
 					ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), tableName)
 					return nil
 				}
@@ -1179,7 +1181,9 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 			})
 			log.Infof("Removed target table with result: %+v", res)
 			if err != nil {
-				if mysqlErr, ok := err.(*sqlerror.SQLError); ok && mysqlErr.Num == sqlerror.ERNoSuchTable {
+				// The error is a gRPC status.Error, so we need to convert it to an sqlerror.SQLError.
+				err := sqlerror.NewSQLErrorFromError(err)
+				if mysqlErr, ok := err.(*sqlerror.SQLError); ok && (mysqlErr.Num == sqlerror.ERNoSuchTable || mysqlErr.Num == sqlerror.ERBadTable) {
 					// The table was already gone, so we can ignore the error.
 					ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName)
 					return nil
