@@ -100,8 +100,6 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 
 // TestQueryTimeoutWithShardTargeting tests the query timeout with shard targeting.
 func TestQueryTimeoutWithShardTargeting(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
-
 	mcmp, closer := start(t)
 	defer closer()
 

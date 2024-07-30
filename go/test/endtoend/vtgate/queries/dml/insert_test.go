@@ -21,9 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -56,8 +54,6 @@ func TestSimpleInsertSelect(t *testing.T) {
 
 // TestInsertOnDup test the insert on duplicate key update feature with argument and list argument.
 func TestInsertOnDup(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
-
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -92,19 +88,10 @@ func TestFailureInsertSelect(t *testing.T) {
 			// primary key same
 			mcmp.AssertContainsError("insert into s_tbl(id, num) select id, num*20 from s_tbl where id = 1", `AlreadyExists desc = Duplicate entry '1' for key`)
 			// lookup key same (does not fail on MySQL as there is no lookup, and we have not put unique constraint on num column)
-			vtgateVersion, err := cluster.GetMajorVersion("vtgate")
-			require.NoError(t, err)
-			if vtgateVersion >= 19 {
-				utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `(errno 1062) (sqlstate 23000)`)
-				// mismatch column count
-				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count with the row`)
-				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count with the row`)
-			} else {
-				utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
-				// mismatch column count
-				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count at row 1`)
-				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count at row 1`)
-			}
+			utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `(errno 1062) (sqlstate 23000)`)
+			// mismatch column count
+			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count with the row`)
+			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count with the row`)
 		})
 	}
 }
@@ -486,9 +473,6 @@ func TestMixedCases(t *testing.T) {
 
 // TestInsertAlias test the alias feature in insert statement.
 func TestInsertAlias(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vttablet")
-
 	mcmp, closer := start(t)
 	defer closer()
 
