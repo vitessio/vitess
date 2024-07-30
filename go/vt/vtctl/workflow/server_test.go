@@ -213,15 +213,34 @@ func TestWorkflowDelete(t *testing.T) {
 	defer cancel()
 
 	workflowName := "wf1"
-	tableName := "t1"
+	table1Name := "t1"
+	table2Name := "t1_2"
+	table3Name := "t1_3"
+	tableTemplate := "CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))"
 	sourceKeyspaceName := "sourceks"
 	targetKeyspaceName := "targetks"
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
-		"t1": {
+		table1Name: {
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 				{
-					Name:   tableName,
-					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+					Name:   table1Name,
+					Schema: fmt.Sprintf(tableTemplate, table1Name),
+				},
+			},
+		},
+		table2Name: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   table2Name,
+					Schema: fmt.Sprintf(tableTemplate, table2Name),
+				},
+			},
+		},
+		table3Name: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   table3Name,
+					Schema: fmt.Sprintf(tableTemplate, table3Name),
 				},
 			},
 		},
@@ -261,7 +280,21 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 			expectedTargetQueries: []*queryResult{
 				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, tableName),
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table1Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table2Name),
+					result: &querypb.QueryResult{},
+					// We don't care that the cell and tablet info is off in the error message, only that
+					// it contains the expected SQL error we'd encounter when attempting to drop a table
+					// that doesn't exist. That will then cause this error to be non-fatal and the workflow
+					// delete work will continue.
+					err: fmt.Errorf("rpc error: code = Unknown desc = TabletManager.ExecuteFetchAsDba on cell-01: rpc error: code = Unknown desc = Unknown table 'vt_%s.%s' (errno 1051) (sqlstate 42S02) during query: drop table `vt_%s`.`%s`",
+						targetKeyspaceName, table2Name, targetKeyspaceName, table2Name),
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
 			},
@@ -298,7 +331,7 @@ func TestWorkflowDelete(t *testing.T) {
 				defer targetUnlock(&err)
 				for _, shard := range env.targetKeyspace.ShardNames {
 					_, err := env.ts.UpdateShardFields(lockCtx, targetKeyspaceName, shard, func(si *topo.ShardInfo) error {
-						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{tableName, "t2", "t3"})
+						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{table1Name, "t2", "t3"})
 						return err
 					})
 					require.NoError(t, err)
@@ -317,7 +350,15 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 			expectedTargetQueries: []*queryResult{
 				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, tableName),
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table1Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table2Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
 			},
