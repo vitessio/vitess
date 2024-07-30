@@ -73,18 +73,17 @@ func (r *RealTable) IsInfSchema() bool {
 
 // GetColumns implements the TableInfo interface
 func (r *RealTable) getColumns(ignoreInvisbleCol bool) []ColumnInfo {
-	if r.Table == nil {
-		if r.CTE != nil {
-			selectExprs := r.CTE.Query.GetColumns()
-			ci := extractColumnsFromCTE(r.CTE.Columns, selectExprs)
-			if ci == nil {
-				return ci
-			}
-			return extractSelectExprsFromCTE(selectExprs)
-		}
+	switch {
+	case r.CTE != nil:
+		return r.getCTEColumns()
+	case r.Table == nil:
 		return nil
+	default:
+		return r.getVindexTableColumns(ignoreInvisbleCol)
 	}
+}
 
+func (r *RealTable) getVindexTableColumns(ignoreInvisbleCol bool) []ColumnInfo {
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(r.Table.Columns))
 	for _, col := range r.Table.Columns {
@@ -115,6 +114,35 @@ func (r *RealTable) getColumns(ignoreInvisbleCol bool) []ColumnInfo {
 		}
 	}
 	return cols
+}
+
+func (r *RealTable) getCTEColumns() []ColumnInfo {
+	selectExprs := r.CTE.Query.GetColumns()
+	ci := extractColumnsFromCTE(r.CTE.Columns, selectExprs)
+	if ci != nil {
+		return ci
+	}
+	return extractSelectExprsFromCTE(selectExprs)
+}
+
+// Authoritative implements the TableInfo interface
+func (r *RealTable) authoritative() bool {
+	if r.Table != nil {
+		return r.Table.ColumnListAuthoritative
+	}
+	if r.CTE != nil {
+		if len(r.CTE.Columns) > 0 {
+			return true
+		}
+		for _, se := range r.CTE.Query.GetColumns() {
+			_, isAe := se.(*sqlparser.AliasedExpr)
+			if !isAe {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func extractSelectExprsFromCTE(selectExprs sqlparser.SelectExprs) []ColumnInfo {
@@ -185,11 +213,6 @@ func (r *RealTable) GetVindexHint() *sqlparser.IndexHint {
 // Name implements the TableInfo interface
 func (r *RealTable) Name() (sqlparser.TableName, error) {
 	return r.ASTNode.TableName()
-}
-
-// Authoritative implements the TableInfo interface
-func (r *RealTable) authoritative() bool {
-	return r.Table != nil && r.Table.ColumnListAuthoritative
 }
 
 // Matches implements the TableInfo interface
