@@ -62,11 +62,11 @@ var txAccessModeToEOTxAccessMode = map[sqlparser.TxAccessMode]querypb.ExecuteOpt
 type commitPhase int
 
 const (
-	COMMIT2PC_CREATETRANSACTION = iota
-	COMMIT2PC_PREPARE           = iota
-	COMMIT2PC_STARTCOMMIT       = iota
-	COMMIT2PC_PREPARECOMMIT
-	COMMIT2PC_CONCLUDE
+	Commit2pcCreateTransaction commitPhase = iota
+	Commit2pcPrepare
+	Commit2pcStartCommit
+	Commit2pcPrepareCommit
+	Commit2pcConclude
 )
 
 // Begin begins a new transaction. If one is already in progress, it commits it
@@ -213,7 +213,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 		txc.errActionAndLogWarn(ctx, session, txPhase, dtid, mmShard, rmShards)
 	}()
 
-	txPhase = COMMIT2PC_CREATETRANSACTION
+	txPhase = Commit2pcCreateTransaction
 	if err = txc.tabletGateway.CreateTransaction(ctx, mmShard.Target, dtid, participants); err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 		}
 	}
 
-	txPhase = COMMIT2PC_PREPARE
+	txPhase = Commit2pcPrepare
 	prepareAction := func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		if DebugTwoPc { // Test code to simulate a failure during RM prepare
 			if terr := checkTestFailure(ctx, "RMPrepare_-40_FailNow", s.Target); terr != nil {
@@ -243,7 +243,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 		}
 	}
 
-	txPhase = COMMIT2PC_STARTCOMMIT
+	txPhase = Commit2pcStartCommit
 	err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
 		return err
@@ -255,7 +255,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 		}
 	}
 
-	txPhase = COMMIT2PC_PREPARECOMMIT
+	txPhase = Commit2pcPrepareCommit
 	prepareCommitAction := func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		if DebugTwoPc { // Test code to simulate a failure during RM prepare
 			if terr := checkTestFailure(ctx, "RMCommit_-40_FailNow", s.Target); terr != nil {
@@ -271,19 +271,19 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 	// At this point, application can continue forward.
 	// The transaction is already committed.
 	// This step is to clean up the transaction metadata.
-	txPhase = COMMIT2PC_CONCLUDE
+	txPhase = Commit2pcConclude
 	_ = txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
 	return nil
 }
 
 func (txc *TxConn) errActionAndLogWarn(ctx context.Context, session *SafeSession, txPhase commitPhase, dtid string, mmShard *vtgatepb.Session_ShardSession, rmShards []*vtgatepb.Session_ShardSession) {
 	switch txPhase {
-	case COMMIT2PC_CREATETRANSACTION:
+	case Commit2pcCreateTransaction:
 		// Normal rollback is safe because nothing was prepared yet.
 		if rollbackErr := txc.Rollback(ctx, session); rollbackErr != nil {
 			log.Warningf("Rollback failed after Create Transaction failure: %v", rollbackErr)
 		}
-	case COMMIT2PC_PREPARE:
+	case Commit2pcPrepare:
 		// Rollback the prepared and unprepared transactions.
 		if resumeErr := txc.rollbackTx(ctx, dtid, mmShard, rmShards, session.logging); resumeErr != nil {
 			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
@@ -297,15 +297,15 @@ func (txc *TxConn) errActionAndLogWarn(ctx context.Context, session *SafeSession
 func createWarningMessage(dtid string, txPhase commitPhase) string {
 	warningMsg := fmt.Sprintf("%s distributed transaction ID failed during", dtid)
 	switch txPhase {
-	case COMMIT2PC_CREATETRANSACTION:
+	case Commit2pcCreateTransaction:
 		warningMsg += " transaction record creation; rollback attempted; conclude on recovery"
-	case COMMIT2PC_PREPARE:
+	case Commit2pcPrepare:
 		warningMsg += " transaction prepare phase; prepare transaction rollback attempted; conclude on recovery"
-	case COMMIT2PC_STARTCOMMIT:
+	case Commit2pcStartCommit:
 		warningMsg += " metadata manager commit; transaction will be committed/rollbacked based on the state on recovery"
-	case COMMIT2PC_PREPARECOMMIT:
+	case Commit2pcPrepareCommit:
 		warningMsg += " resource manager commit; transaction will be committed on recovery"
-	case COMMIT2PC_CONCLUDE:
+	case Commit2pcConclude:
 		warningMsg += " transaction conclusion"
 	}
 	return warningMsg
