@@ -202,7 +202,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		// 2. We do not produce CHANGE statements in declarative diff
 		// 3. The success of the operation depends on whether the column is referenced by a foreign key
 		//    in another table. Which is a bit too much to compute here.
-		if opt.OldColumn.Name.Lowered() != opt.NewColDefinition.Name.Lowered() {
+		if opt.OldColumn.Name.String() != opt.NewColDefinition.Name.String() {
 			return false, nil
 		}
 		if col := findColumn(opt.OldColumn.Name.String()); col != nil {
