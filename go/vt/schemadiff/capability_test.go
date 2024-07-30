@@ -272,6 +272,24 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			alter:                     "alter table t modify column c1 set('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i')",
 			expectCapableOfInstantDDL: false,
 		},
+		{
+			name:                      "make a column invisible",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 modify column i1 int invisible",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "make a column visible",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 change column i1 i1 int visible",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "make a column invisible via SET, unsupported",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 alter column i1 set invisible",
+			expectCapableOfInstantDDL: false,
+		},
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {

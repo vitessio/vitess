@@ -73,7 +73,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		return true, col.Type.Options.Storage
 	}
-	colStringStrippedDown := func(col *sqlparser.ColumnDefinition, stripDefault bool, stripEnum bool) string {
+	colStringStrippedDown := func(col *sqlparser.ColumnDefinition, stripDefault bool, stripEnum bool, stripVisibility bool) string {
 		strippedCol := sqlparser.Clone(col)
 		if stripDefault {
 			strippedCol.Type.Options.Default = nil
@@ -81,6 +81,9 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		if stripEnum {
 			strippedCol.Type.EnumValues = nil
+		}
+		if stripVisibility {
+			strippedCol.Type.Options.Invisible = nil
 		}
 		return sqlparser.CanonicalString(strippedCol)
 	}
@@ -164,8 +167,8 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			// table and ALTER statement, and compare the columns: if they're otherwise equal,
 			// then the only change can be an addition/change/removal of DEFAULT, which
 			// is instant-table.
-			tableColDefinition := colStringStrippedDown(col, true, false)
-			newColDefinition := colStringStrippedDown(opt.NewColDefinition, true, false)
+			tableColDefinition := colStringStrippedDown(col, true, false, true)
+			newColDefinition := colStringStrippedDown(opt.NewColDefinition, true, false, true)
 			if tableColDefinition == newColDefinition {
 				return capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
 			}
@@ -194,8 +197,8 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 					}
 				}
 				// Now don't care about change of default:
-				tableColDefinition := colStringStrippedDown(col, true, true)
-				newColDefinition := colStringStrippedDown(opt.NewColDefinition, true, true)
+				tableColDefinition := colStringStrippedDown(col, true, true, true)
+				newColDefinition := colStringStrippedDown(opt.NewColDefinition, true, true, true)
 				if tableColDefinition == newColDefinition {
 					return capableOf(capabilities.InstantExpandEnumCapability)
 				}
