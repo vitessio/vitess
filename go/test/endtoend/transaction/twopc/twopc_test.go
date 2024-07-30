@@ -31,11 +31,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // TestDTCommit tests distributed transaction commit for insert, update and delete operations
@@ -580,6 +582,10 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail After MM commit")
 
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during metadata manager commit; transaction will be committed/rollbacked based on the state on recovery",
+		false, "COMMIT", "ks:40-80,ks:-40")
+
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
@@ -656,6 +662,10 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail After RM prepared")
 
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during transaction prepare phase; prepare transaction rollback attempted; conclude on recovery",
+		true /* transaction concluded */, "", "")
+
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
@@ -713,6 +723,10 @@ func TestDTResolveDuringRMPrepare(t *testing.T) {
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMPrepare_-40_FailNow", "", ""), nil)
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail During RM prepare")
+
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during transaction prepare phase; prepare transaction rollback attempted; conclude on recovery",
+		true, "", "")
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
@@ -775,6 +789,10 @@ func TestDTResolveDuringRMCommit(t *testing.T) {
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMCommit_-40_FailNow", "", ""), nil)
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail During RM commit")
+
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during resource manager commit; transaction will be committed on recovery",
+		false, "COMMIT", "ks:40-80,ks:-40")
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
@@ -851,18 +869,9 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail After TR created")
 
-	t.Run("ReadTransactionState", func(t *testing.T) {
-		errStr := err.Error()
-		indx := strings.Index(errStr, "Fail")
-		require.Greater(t, indx, 0)
-		dtid := errStr[0 : indx-2]
-		res, err := conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil)
-		require.NoError(t, err)
-		resStr := fmt.Sprintf("%v", res.Rows)
-		require.Contains(t, resStr, `[[VARCHAR("ks:80-`)
-		require.Contains(t, resStr, `VARCHAR("PREPARE") DATETIME("`)
-		require.Contains(t, resStr, `+0000 UTC") VARCHAR("ks:40-80")]]`)
-	})
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during transaction record creation; rollback attempted; conclude on recovery",
+		false, "PREPARE", "ks:40-80")
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
@@ -881,4 +890,68 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 	}
 	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+}
+
+type warn struct {
+	level string
+	code  uint16
+	msg   string
+}
+
+func toWarn(row sqltypes.Row) warn {
+	code, _ := row[1].ToUint16()
+	return warn{
+		level: row[0].ToString(),
+		code:  code,
+		msg:   row[2].ToString(),
+	}
+}
+
+type txStatus struct {
+	dtid         string
+	state        string
+	rTime        string
+	participants string
+}
+
+func toTxStatus(row sqltypes.Row) txStatus {
+	return txStatus{
+		dtid:         row[0].ToString(),
+		state:        row[1].ToString(),
+		rTime:        row[2].ToString(),
+		participants: row[3].ToString(),
+	}
+}
+
+func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSession, warnMsg string,
+	txConcluded bool, txState string, txParticipants string) {
+	t.Helper()
+
+	qr, err := conn.Execute(context.Background(), "show warnings", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+
+	// validate warning output
+	w := toWarn(qr.Rows[0])
+	assert.Equal(t, "Warning", w.level)
+	assert.EqualValues(t, 302, w.code)
+	assert.Contains(t, w.msg, warnMsg)
+
+	// extract transaction ID
+	indx := strings.Index(w.msg, " ")
+	require.Greater(t, indx, 0)
+	dtid := w.msg[:indx]
+
+	qr, err = conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil)
+	require.NoError(t, err)
+
+	// validate transaction status
+	if txConcluded {
+		require.Empty(t, qr.Rows)
+	} else {
+		tx := toTxStatus(qr.Rows[0])
+		assert.Equal(t, dtid, tx.dtid)
+		assert.Equal(t, txState, tx.state)
+		assert.Equal(t, txParticipants, tx.participants)
+	}
 }
