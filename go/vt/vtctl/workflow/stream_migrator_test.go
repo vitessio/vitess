@@ -478,7 +478,8 @@ func addMaterializeWorkflow(t *testing.T, env *streamMigratorEnv, id int32, sour
 	})
 	workflowKey := env.tenv.tmc.GetWorkflowKey(env.tenv.sourceKeyspace.KeyspaceName, sourceShard)
 	workflowResponses := []*tabletmanagerdata.ReadVReplicationWorkflowsResponse{
-		nil, &wfs, &wfs, &wfs,
+		nil,              // this is the response for getting stopped workflows
+		&wfs, &wfs, &wfs, // return the full list for subsequent GetWorkflows calls
 	}
 	for _, resp := range workflowResponses {
 		env.tenv.tmc.AddVReplicationWorkflowsResponse(workflowKey, resp)
@@ -503,7 +504,7 @@ func addMaterializeWorkflow(t *testing.T, env *streamMigratorEnv, id int32, sour
 	}
 }
 
-func TestBuildStreamMigrator(t *testing.T) {
+func TestBuildStreamMigratorOneMaterialize(t *testing.T) {
 	ctx := context.Background()
 	env := newStreamMigratorEnv(ctx, t, customerUnshardedKeyspace, customerShardedKeyspace)
 	defer env.close()
@@ -511,7 +512,8 @@ func TestBuildStreamMigrator(t *testing.T) {
 
 	addMaterializeWorkflow(t, env, 100, "0")
 
-	// FIXME: Note: currently it is not optimal: we create two streams for each shard from all the shards even if the key ranges don't intersect. TBD
+	// FIXME: Note: currently it is not optimal: we create two streams for each shard from all the
+	// shards even if the key ranges don't intersect. TBD
 	getInsert := func(shard string) string {
 		s := "/insert into _vt.vreplication.*"
 		s += fmt.Sprintf("shard:\"-80\".*in_keyrange.*c1.*%s.*", shard)
@@ -532,4 +534,22 @@ func TestBuildStreamMigrator(t *testing.T) {
 	require.Equal(t, 1, len(workflows))
 	require.NoError(t, sm.MigrateStreams(ctx))
 	require.Len(t, sm.templates, 1)
+}
+
+func TestBuildStreamMigratorNoStreams(t *testing.T) {
+	ctx := context.Background()
+	env := newStreamMigratorEnv(ctx, t, customerUnshardedKeyspace, customerShardedKeyspace)
+	defer env.close()
+
+	sm, err := BuildStreamMigrator(ctx, env.ts, false, sqlparser.NewTestParser())
+	require.NoError(t, err)
+	require.NotNil(t, sm)
+	require.NotNil(t, sm.streams)
+	require.Equal(t, 0, len(sm.streams))
+
+	workflows, err := sm.StopStreams(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(workflows))
+	require.NoError(t, sm.MigrateStreams(ctx))
+	require.Len(t, sm.templates, 0)
 }
