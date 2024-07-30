@@ -69,15 +69,10 @@ func TestTabletInitialBackup(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
-	require.NoError(t, err)
-	// For all version at or above v17.0.0, each replica will start in super_read_only mode. Let's verify that is working correctly.
-	if vtTabletVersion >= 17 {
-		err := primary.VttabletProcess.CreateDB("testDB")
-		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-		err = replica1.VttabletProcess.CreateDB("testDB")
-		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-	}
+	err := primary.VttabletProcess.CreateDB("testDB")
+	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	err = replica1.VttabletProcess.CreateDB("testDB")
+	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
 
 	// Restore the Tablet
 	restore(t, primary, "replica", "NOT_SERVING")
@@ -172,7 +167,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	restore(t, replica2, "replica", "SERVING")
 	// Replica2 takes time to serve. Sleeping for 5 sec.
 	time.Sleep(5 * time.Second)
-	//check the new replica has the data
+	// check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	removeBackups(t)

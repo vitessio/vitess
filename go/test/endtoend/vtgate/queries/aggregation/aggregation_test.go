@@ -71,11 +71,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestAggrWithLimit(t *testing.T) {
-	version, err := cluster.GetMajorVersion("vtgate")
-	require.NoError(t, err)
-	if version != 19 {
-		t.Skip("Test requires VTGate version 18")
-	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -105,7 +100,6 @@ func TestAggregateTypes(t *testing.T) {
 	mcmp.AssertMatches("select val1 as a, count(*) from aggr_test group by a order by 2, a", `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`)
 	mcmp.AssertMatches("select sum(val1) from aggr_test", `[[FLOAT64(0)]]`)
 	mcmp.Run("Average for sharded keyspaces", func(mcmp *utils.MySQLCompare) {
-		mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 		mcmp.AssertMatches("select avg(val1) from aggr_test", `[[FLOAT64(0)]]`)
 	})
 }
@@ -209,7 +203,6 @@ func TestAggrOnJoin(t *testing.T) {
 		`[[VARCHAR("a")]]`)
 
 	mcmp.Run("Average in join for sharded", func(mcmp *utils.MySQLCompare) {
-		mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 		mcmp.AssertMatches(`select avg(a1.val2), avg(a2.val2) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7`,
 			"[[DECIMAL(1.5000) DECIMAL(1.0000)]]")
 
@@ -367,7 +360,6 @@ func TestAggOnTopOfLimit(t *testing.T) {
 			mcmp.AssertMatches("select val1, count(*) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(1)]]`)
 			mcmp.AssertMatchesNoOrder("select val1, count(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)]]`)
 			mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
-				mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 				mcmp.AssertMatches("select avg(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[NULL]]")
 				mcmp.AssertMatchesNoOrder("select val1, avg(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL DECIMAL(2.0000)] [VARCHAR("a") DECIMAL(3.5000)] [VARCHAR("b") DECIMAL(1.0000)] [VARCHAR("c") DECIMAL(3.5000)]]`)
 			})
@@ -379,7 +371,6 @@ func TestAggOnTopOfLimit(t *testing.T) {
 			mcmp.AssertMatches("select count(val2), sum(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[INT64(0) NULL]]")
 			mcmp.AssertMatches("select val1, count(*), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1) DECIMAL(7)] [VARCHAR("a") INT64(1) DECIMAL(2)]]`)
 			mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
-				mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 				mcmp.AssertMatches("select count(*), sum(val1), avg(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0) FLOAT64(0)]]")
 				mcmp.AssertMatches("select count(val1), sum(id), avg(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) DECIMAL(7) DECIMAL(3.5000)]]")
 				mcmp.AssertMatchesNoOrder("select val1, count(val2), sum(val2), avg(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1",
@@ -401,7 +392,6 @@ func TestEmptyTableAggr(t *testing.T) {
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
 			mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
-				mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 				mcmp.AssertMatches(" select count(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 				mcmp.AssertMatches(" select avg(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[NULL]]")
 			})
@@ -417,7 +407,6 @@ func TestEmptyTableAggr(t *testing.T) {
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
 			mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
-				mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 				mcmp.AssertMatches(" select count(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 				mcmp.AssertMatches(" select avg(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[NULL]]")
 				mcmp.AssertMatches(" select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
@@ -435,12 +424,8 @@ func TestOrderByCount(t *testing.T) {
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'b1','bar',200)")
 
 	mcmp.Exec("SELECT t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC")
-	version, err := cluster.GetMajorVersion("vtgate")
-	require.NoError(t, err)
-	if version == 19 {
-		mcmp.Exec("select COUNT(*) from (select 1 as one FROM t9 WHERE id3 = 3 ORDER BY id1 DESC LIMIT 3 OFFSET 0) subquery_for_count")
-		mcmp.Exec("select t.id1, t1.name, t.leCount from (select id1, count(*) as leCount from t9 group by 1 order by 2 desc limit 20) t join t1 on t.id1 = t1.t1_id")
-	}
+	mcmp.Exec("select COUNT(*) from (select 1 as one FROM t9 WHERE id3 = 3 ORDER BY id1 DESC LIMIT 3 OFFSET 0) subquery_for_count")
+	mcmp.Exec("select t.id1, t1.name, t.leCount from (select id1, count(*) as leCount from t9 group by 1 order by 2 desc limit 20) t join t1 on t.id1 = t1.t1_id")
 }
 
 func TestAggregateAnyValue(t *testing.T) {
@@ -473,7 +458,6 @@ func TestAggregateLeftJoin(t *testing.T) {
 	mcmp.AssertMatches("SELECT count(*) FROM t2 LEFT JOIN t1 ON t1.t1_id = t2.id WHERE IFNULL(t1.name, 'NOTSET') = 'r'", `[[INT64(1)]]`)
 
 	mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
-		mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 		mcmp.AssertMatches("SELECT avg(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(0.5000)]]`)
 		mcmp.AssertMatches("SELECT avg(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1.0000)]]`)
 		aggregations := []string{
@@ -530,7 +514,6 @@ func TestScalarAggregate(t *testing.T) {
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
 	mcmp.AssertMatches("select count(distinct val1) from aggr_test", `[[INT64(3)]]`)
 	mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
-		mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 		mcmp.AssertMatches("select avg(val1) from aggr_test", `[[FLOAT64(0)]]`)
 	})
 }
@@ -590,15 +573,11 @@ func TestComplexAggregation(t *testing.T) {
 	mcmp.Exec(`SELECT name+COUNT(t1_id)+1 FROM t1 GROUP BY name`)
 	mcmp.Exec(`SELECT COUNT(*)+shardkey+MIN(t1_id)+1+MAX(t1_id)*SUM(t1_id)+1+name FROM t1 GROUP BY shardkey, name`)
 	mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
-		mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 		mcmp.Exec(`SELECT COUNT(t1_id)+MAX(shardkey)+AVG(t1_id) FROM t1`)
 	})
 }
 
 func TestJoinAggregation(t *testing.T) {
-	// This is new functionality in Vitess 20
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
-
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -713,7 +692,6 @@ func TestDistinctAggregation(t *testing.T) {
 }
 
 func TestHavingQueries(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
