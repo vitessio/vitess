@@ -35,7 +35,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
@@ -2548,9 +2547,7 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			Query:   []byte(sqlOptimizeTable),
 			MaxRows: uint64(100), // always produces 1+rows with notes and status
 		}); err != nil {
-			// The error is a gRPC status.Error, so we need to convert it to an sqlerror.SQLError.
-			if mysqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok &&
-				(mysqlErr.Num == sqlerror.ERNoSuchTable || mysqlErr.Num == sqlerror.ERBadTable) {
+			if IsTableDidNotExistError(err) {
 				return
 			}
 			log.Warningf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err)
