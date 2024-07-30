@@ -2549,8 +2549,8 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			MaxRows: uint64(100), // always produces 1+rows with notes and status
 		}); err != nil {
 			// The error is a gRPC status.Error, so we need to convert it to an sqlerror.SQLError.
-			err := sqlerror.NewSQLErrorFromError(err)
-			if mysqlErr, ok := err.(*sqlerror.SQLError); ok && (mysqlErr.Num == sqlerror.ERNoSuchTable || mysqlErr.Num == sqlerror.ERBadTable) {
+			if mysqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok &&
+				(mysqlErr.Num == sqlerror.ERNoSuchTable || mysqlErr.Num == sqlerror.ERBadTable) {
 				return
 			}
 			log.Warningf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err)
