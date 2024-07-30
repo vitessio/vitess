@@ -17,7 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -86,7 +89,7 @@ func AddPredicate(
 
 		return join
 	}
-	return nil
+	panic(vterrors.VT13001(fmt.Sprintf("pushed wrong predicate to the join: %s", sqlparser.String(expr))))
 }
 
 // we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
