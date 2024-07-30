@@ -162,7 +162,6 @@ func TestSubqueryInReference(t *testing.T) {
 
 // TestSubqueryInAggregation validates that subquery work inside aggregation functions.
 func TestSubqueryInAggregation(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -180,7 +179,6 @@ func TestSubqueryInAggregation(t *testing.T) {
 // TestSubqueryInDerivedTable tests that subqueries and derived tables
 // are handled correctly when there are joins inside the derived table
 func TestSubqueryInDerivedTable(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -194,7 +192,6 @@ func TestSubqueries(t *testing.T) {
 	// This method tests many types of subqueries. The queries should move to a vitess-tester test file once we have a way to run them.
 	// The commented out queries are failing because of wrong types being returned.
 	// The tests are commented out until the issue is fixed.
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 	queries := []string{
@@ -234,8 +231,6 @@ func TestSubqueries(t *testing.T) {
 }
 
 func TestProperTypesOfPullOutValue(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
-
 	query := "select (select sum(id) from user) from user_extra"
 
 	mcmp, closer := start(t)
