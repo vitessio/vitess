@@ -310,7 +310,7 @@ func AnalyzeSharedColumns(
 		// assumption that the later `targetColumn := targetColumns.GetColumn(expectedTargetName)`
 		// check is sufficient. It is not. It is possible that a columns was explicitly dropped
 		// and added (`DROP COLUMN c, ADD COLUMN c INT`) in the same ALTER TABLE statement.
-		// Without checking the ALTER TABLE statement, we would be folled to believe that column
+		// Without checking the ALTER TABLE statement, we would be fooled to believe that column
 		// `c` is unchanged in the target, when in fact it was dropped and re-added.
 		for droppedColumn := range alterTableAnalysis.DroppedColumnsMap {
 			if strings.EqualFold(sourceColumn.Name(), droppedColumn) {
