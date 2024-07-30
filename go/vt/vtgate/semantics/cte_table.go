@@ -27,6 +27,9 @@ import (
 )
 
 // CTETable contains the information about the CTE table.
+// This is a special TableInfo that is used to represent the recursive table inside a CTE. For the query:
+// WITH RECURSIVE cte AS (SELECT 1 UNION ALL SELECT * FROM cte as C1) SELECT * FROM cte as C2
+// The CTE table C1 is represented by a CTETable.
 type CTETable struct {
 	TableName string
 	ASTNode   *sqlparser.AliasedTableExpr

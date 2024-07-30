@@ -267,12 +267,12 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 				Solved: tableID,
 			}
 		case *semantics.CTETable:
-			current := ctx.ActiveCTE()
-			if current != nil && current.CTEDef == tableInfo.CTEDef {
-				return createDualCTETable(ctx, tableID, tableInfo)
-			}
-			return createRecursiveCTE(ctx, tableInfo)
+			return createDualCTETable(ctx, tableID, tableInfo)
 		case *semantics.RealTable:
+			if tableInfo.CTE != nil {
+				return createRecursiveCTE(ctx, tableInfo.CTE)
+			}
+
 			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
 			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
@@ -314,8 +314,8 @@ func createDualCTETable(ctx *plancontext.PlanningContext, tableID semantics.Tabl
 	return createRouteFromVSchemaTable(ctx, qtbl, vschemaTable, false, nil)
 }
 
-func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTETable) Operator {
-	union, ok := def.CTEDef.Query.(*sqlparser.Union)
+func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTEDef) Operator {
+	union, ok := def.Query.(*sqlparser.Union)
 	if !ok {
 		panic(vterrors.VT13001("expected UNION in recursive CTE"))
 	}
@@ -323,14 +323,19 @@ func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTETabl
 	init := translateQueryToOp(ctx, union.Left)
 
 	// Push the CTE definition to the stack so that it can be used in the recursive part of the query
-	ctx.PushCTE(def)
+	ctx.PushCTE(&plancontext.ContextCTE{
+		CTEDef: def,
+	})
 	tail := translateQueryToOp(ctx, union.Right)
-	if err := ctx.PopCTE(); err != nil {
+	activeCTE, err := ctx.PopCTE()
+	if err != nil {
 		panic(err)
 	}
-	return newRecurse(def.TableName, init, tail)
+	for _, expression := range activeCTE.Expressions {
+		tail = tail.AddPredicate(ctx, expression.RightExpr)
+	}
+	return newRecurse(def.Name, init, tail, activeCTE.Expressions)
 }
-
 func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) Operator {
 	var output Operator
 	for _, tableExpr := range exprs {

@@ -70,7 +70,7 @@ type PlanningContext struct {
 
 	// This is a stack of CTEs being built. It's used when we have CTEs inside CTEs,
 	// to remember which is the CTE currently being assembled
-	CurrentCTE []*semantics.CTETable
+	CurrentCTE []*ContextCTE
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -382,21 +382,31 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 	return
 }
 
-func (ctx *PlanningContext) PushCTE(def *semantics.CTETable) {
+type ContextCTE struct {
+	*semantics.CTEDef
+	Expressions []*RecurseExpression
+}
+
+type RecurseExpression struct {
+	Original  sqlparser.Expr
+	RightExpr sqlparser.Expr
+	LeftExpr  []BindVarExpr
+}
+
+type BindVarExpr struct {
+	Name string
+	Expr sqlparser.Expr
+}
+
+func (ctx *PlanningContext) PushCTE(def *ContextCTE) {
 	ctx.CurrentCTE = append(ctx.CurrentCTE, def)
 }
 
-func (ctx *PlanningContext) PopCTE() error {
+func (ctx *PlanningContext) PopCTE() (*ContextCTE, error) {
 	if len(ctx.CurrentCTE) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no CTE to pop")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no CTE to pop")
 	}
+	activeCTE := ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
 	ctx.CurrentCTE = ctx.CurrentCTE[:len(ctx.CurrentCTE)-1]
-	return nil
-}
-
-func (ctx *PlanningContext) ActiveCTE() *semantics.CTETable {
-	if len(ctx.CurrentCTE) == 0 {
-		return nil
-	}
-	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
+	return activeCTE, nil
 }

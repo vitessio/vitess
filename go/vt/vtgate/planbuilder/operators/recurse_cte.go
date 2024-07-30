@@ -39,7 +39,7 @@ type RecurseCTE struct {
 
 var _ Operator = (*RecurseCTE)(nil)
 
-func newRecurse(name string, init, tail Operator) *RecurseCTE {
+func newRecurse(name string, init, tail Operator, expressions []*plancontext.RecurseExpression) *RecurseCTE {
 	return &RecurseCTE{
 		Name: name,
 		Init: init,
