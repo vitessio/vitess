@@ -22,6 +22,7 @@ import (
 	"testing"
 )
 
+// TestVReplicationStreams tests various methods of VReplicationStreams.
 func TestVReplicationStreams(t *testing.T) {
 	var streams VReplicationStreams
 	for i := 1; i <= 3; i++ {

@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
+// TestMount tests various Mount-related methods.
 func TestMount(t *testing.T) {
 	const (
 		extCluster = "extcluster"
