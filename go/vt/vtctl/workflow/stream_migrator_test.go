@@ -21,6 +21,12 @@ import (
 	"encoding/json"
 	"testing"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -346,4 +352,158 @@ func stringifyVRS(streams []*VReplicationStream) string {
 
 	b, _ := json.Marshal(converted)
 	return string(b)
+}
+
+func TestBuildStreamMigrator(t *testing.T) {
+	ctx := context.Background()
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "sourceks"
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"-80", "80-"},
+	}
+	env := newTestEnv(t, ctx, "cell1", sourceKeyspace, targetKeyspace)
+	defer env.close()
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "xxhash",
+				}},
+			},
+			"t2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "xxhash",
+				}},
+			},
+			"ref": {
+				Type: vindexes.TypeReference,
+			},
+		},
+	}
+	initialKeyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(initialKeyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(initialKeyRange))
+	}
+	leftKeyRange, err := key.ParseShardingSpec("-80")
+	if err != nil || len(leftKeyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+	}
+
+	rightKeyRange, err := key.ParseShardingSpec("80-")
+	if err != nil || len(rightKeyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+	}
+	ksschema, err := vindexes.BuildKeyspaceSchema(vs, "ks", sqlparser.NewTestParser())
+	require.NoError(t, err, "could not create test keyspace %+v", vs)
+	sources := make(map[string]*MigrationSource, len(sourceKeyspace.ShardNames))
+	targets := make(map[string]*MigrationTarget, len(targetKeyspace.ShardNames))
+	for i, shard := range sourceKeyspace.ShardNames {
+		tablet := env.tablets[sourceKeyspace.KeyspaceName][startingSourceTabletUID+(i*tabletUIDStep)]
+		kr, _ := key.ParseShardingSpec(shard)
+		sources[shard] = &MigrationSource{
+			si: topo.NewShardInfo(sourceKeyspaceName, shard, &topodatapb.Shard{KeyRange: kr[0]}, nil),
+			primary: &topo.TabletInfo{
+				Tablet: tablet,
+			},
+		}
+	}
+	for i, shard := range targetKeyspace.ShardNames {
+		tablet := env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+(i*tabletUIDStep)]
+		kr, _ := key.ParseShardingSpec(shard)
+		targets[shard] = &MigrationTarget{
+			si: topo.NewShardInfo(targetKeyspaceName, shard, &topodatapb.Shard{KeyRange: kr[0]}, nil),
+			primary: &topo.TabletInfo{
+				Tablet: tablet,
+			},
+		}
+	}
+	ts := &testTrafficSwitcher{
+		trafficSwitcher: trafficSwitcher{
+			migrationType:  binlogdatapb.MigrationType_SHARDS,
+			workflow:       "wf1",
+			id:             1,
+			sources:        sources,
+			targets:        targets,
+			sourceKeyspace: sourceKeyspaceName,
+			targetKeyspace: targetKeyspaceName,
+			sourceKSSchema: ksschema,
+			workflowType:   binlogdatapb.VReplicationWorkflowType_Reshard,
+			ws:             env.ws,
+		},
+		sourceKeyspaceSchema: ksschema,
+	}
+	parser := sqlparser.NewTestParser()
+
+	var wfs tabletmanagerdata.ReadVReplicationWorkflowsResponse
+	wfName := "wfMat1"
+	wfs.Workflows = append(wfs.Workflows, &tabletmanagerdata.ReadVReplicationWorkflowResponse{
+		Workflow:     wfName,
+		WorkflowType: binlogdatapb.VReplicationWorkflowType_Materialize,
+	})
+	id := int32(1)
+	wfs.Workflows[0].Streams = append(wfs.Workflows[0].Streams, &tabletmanagerdata.ReadVReplicationWorkflowResponse_Stream{
+		Id: id,
+		Bls: &binlogdatapb.BinlogSource{
+			Keyspace: sourceKeyspaceName,
+			Shard:    "0",
+			Filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{
+					{Match: "t1", Filter: "select * from t1"},
+				},
+			},
+		},
+		Pos:   "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615",
+		State: binlogdatapb.VReplicationWorkflowState_Running,
+	})
+	workflowKey := env.tmc.GetWorkflowKey(sourceKeyspaceName, "0")
+	workflowResponses := []*tabletmanagerdata.ReadVReplicationWorkflowsResponse{
+		nil, &wfs, &wfs, &wfs,
+	}
+	for _, resp := range workflowResponses {
+		env.tmc.AddVReplicationWorkflowsResponse(workflowKey, resp)
+	}
+	sourceTabletIds := []int{100}
+
+	for _, id := range sourceTabletIds {
+		queries := []string{
+			"select distinct vrepl_id from _vt.copy_state where vrepl_id in (1)",
+			"update _vt.vreplication set state='Stopped', message='for cutover' where id in (1)",
+		}
+		for _, q := range queries {
+			env.tmc.expectVRQuery(id, q, &sqltypes.Result{})
+		}
+	}
+
+	// Shard -80
+	env.tmc.expectVRQuery(200, "delete from _vt.vreplication where db_name='vt_sourceks' and workflow in ('wfMat1')", &sqltypes.Result{})
+	// FIXME: Note: currently it is not optimal: we create two streams for each shard from all the shards even if the key ranges don't intersect. TBD
+	env.tmc.expectVRQuery(200, "/insert into _vt.vreplication.*shard:\"-80\".*in_keyrange.*c1.*-80.*shard:\"80-\".*in_keyrange.*c1.*-80.*", &sqltypes.Result{})
+
+	// Shard 80-
+	env.tmc.expectVRQuery(210, "delete from _vt.vreplication where db_name='vt_sourceks' and workflow in ('wfMat1')", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "/insert into _vt.vreplication.*shard:\"-80\".*in_keyrange.*c1.*80-.*shard:\"80-\".*in_keyrange.*c1.*80-.*", &sqltypes.Result{})
+
+	sm, err := BuildStreamMigrator(ctx, ts, false, parser)
+	require.NoError(t, err)
+	require.NotNil(t, sm)
+	require.NotNil(t, sm.streams)
+	require.Equal(t, 1, len(sm.streams))
+
+	workflows, err := sm.StopStreams(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(workflows))
+	require.NoError(t, sm.MigrateStreams(ctx))
 }
