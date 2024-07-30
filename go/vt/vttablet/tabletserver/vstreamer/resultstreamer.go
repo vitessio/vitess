@@ -109,7 +109,7 @@ func (rs *resultStreamer) Stream() error {
 		}
 
 		// check throttler.
-		if !rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.ResultStreamerName) {
+		if _, ok := rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.ResultStreamerName); !ok {
 			logger.Infof("throttled.")
 			continue
 		}

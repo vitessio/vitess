@@ -48,10 +48,6 @@ service Vitess {
   // API group: v3
   rpc StreamExecute(vtgate.StreamExecuteRequest) returns (stream vtgate.StreamExecuteResponse) {};
 
-  // ResolveTransaction resolves a transaction.
-  // API group: Transactions
-  rpc ResolveTransaction(vtgate.ResolveTransactionRequest) returns (vtgate.ResolveTransactionResponse) {};
-
   // VStream streams binlog events from the requested sources.
   rpc VStream(vtgate.VStreamRequest) returns (stream vtgate.VStreamResponse) {};
 

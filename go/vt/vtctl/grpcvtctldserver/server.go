@@ -2976,10 +2976,11 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		req.Keyspace,
 		req.Shard,
 		reparentutil.PlannedReparentOptions{
-			AvoidPrimaryAlias:   req.AvoidPrimary,
-			NewPrimaryAlias:     req.NewPrimary,
-			WaitReplicasTimeout: waitReplicasTimeout,
-			TolerableReplLag:    tolerableReplLag,
+			AvoidPrimaryAlias:       req.AvoidPrimary,
+			NewPrimaryAlias:         req.NewPrimary,
+			WaitReplicasTimeout:     waitReplicasTimeout,
+			TolerableReplLag:        tolerableReplLag,
+			AllowCrossCellPromotion: req.AllowCrossCellPromotion,
 		},
 	)
 

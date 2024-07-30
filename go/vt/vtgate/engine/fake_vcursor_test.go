@@ -112,6 +112,10 @@ func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
 
+func (t *noopVCursor) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -397,7 +401,8 @@ type loggingVCursor struct {
 	curResult int
 	resultErr error
 
-	warnings []*querypb.QueryWarning
+	warnings                []*querypb.QueryWarning
+	transactionStatusOutput *querypb.TransactionMetadata
 
 	// Optional errors that can be returned from nextResult() alongside the results for
 	// multi-shard queries
@@ -812,6 +817,13 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 		f.log = append(f.log, "SET_VAR can be used")
 	}
 	return useSetVar
+}
+
+func (f *loggingVCursor) ReadTransaction(_ context.Context, _ string) (*querypb.TransactionMetadata, error) {
+	if f.resultErr != nil {
+		return nil, f.resultErr
+	}
+	return f.transactionStatusOutput, nil
 }
 
 // SQLParser implements VCursor

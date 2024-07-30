@@ -293,6 +293,8 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 		return sqltypes.Set
 	case JSON:
 		return sqltypes.TypeJSON
+	case VECTOR:
+		return sqltypes.Vector
 	case GEOMETRY:
 		return sqltypes.Geometry
 	case POINT:
@@ -800,7 +802,7 @@ func NewSelect(
 	windows NamedWindows,
 ) *Select {
 	var cache *bool
-	var distinct, straightJoinHint, sqlFoundRows bool
+	var distinct, highPriority, straightJoinHint, sqlSmallResult, sqlBigResult, SQLBufferResult, sqlFoundRows bool
 	for _, option := range selectOptions {
 		switch strings.ToLower(option) {
 		case DistinctStr:
@@ -811,8 +813,16 @@ func NewSelect(
 		case SQLNoCacheStr:
 			truth := false
 			cache = &truth
+		case HighPriorityStr:
+			highPriority = true
 		case StraightJoinHint:
 			straightJoinHint = true
+		case SQLSmallResultStr:
+			sqlSmallResult = true
+		case SQLBigResultStr:
+			sqlBigResult = true
+		case SQLBufferResultStr:
+			SQLBufferResult = true
 		case SQLCalcFoundRowsStr:
 			sqlFoundRows = true
 		}
@@ -821,7 +831,11 @@ func NewSelect(
 		Cache:            cache,
 		Comments:         comments.Parsed(),
 		Distinct:         distinct,
+		HighPriority:     highPriority,
 		StraightJoinHint: straightJoinHint,
+		SQLSmallResult:   sqlSmallResult,
+		SQLBigResult:     sqlBigResult,
+		SQLBufferResult:  SQLBufferResult,
 		SQLCalcFoundRows: sqlFoundRows,
 		SelectExprs:      exprs,
 		Into:             into,

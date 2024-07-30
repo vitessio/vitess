@@ -225,6 +225,8 @@ func (dte *DTExecutor) SetRollback(dtid string, transactionID int64) error {
 	dte.logStats.TransactionID = transactionID
 
 	if transactionID != 0 {
+		// If the transaction is still open, it will be rolled back.
+		// Otherwise, it would have been rolled back by other means, like a timeout or vttablet/mysql restart.
 		dte.te.Rollback(dte.ctx, transactionID)
 	}
 

@@ -515,8 +515,9 @@ func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.T
 
 		// Add the current participant (keyspace and shard) to the transaction
 		currentTx.Participants = append(currentTx.Participants, &querypb.Target{
-			Keyspace: row[2].ToString(),
-			Shard:    row[3].ToString(),
+			Keyspace:   row[2].ToString(),
+			Shard:      row[3].ToString(),
+			TabletType: topodatapb.TabletType_PRIMARY,
 		})
 	}
 

@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -259,4 +260,8 @@ func (dc *MockDBClient) RemoveInvariant(query string) {
 	dc.expectMu.Lock()
 	defer dc.expectMu.Unlock()
 	delete(dc.invariants, query)
+}
+
+func (dc *MockDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return false, nil
 }

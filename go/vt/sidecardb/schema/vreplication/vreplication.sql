@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS vreplication
     `workflow_type`         int              NOT NULL DEFAULT '0',
     `time_throttled`        bigint           NOT NULL DEFAULT '0',
     `component_throttled`   varchar(255)     NOT NULL DEFAULT '',
+    `reason_throttled`      varchar(1000)     NOT NULL DEFAULT '',
     `workflow_sub_type`     int              NOT NULL DEFAULT '0',
     `defer_secondary_keys`  tinyint(1)       NOT NULL DEFAULT '0',
     /*

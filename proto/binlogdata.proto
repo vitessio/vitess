@@ -458,6 +458,8 @@ message VEvent {
   string shard = 23;
   // indicate that we are being throttled right now
   bool throttled = 24;
+  // ThrottledReason is a human readable string that explains why the stream is throttled
+  string throttled_reason = 25;
 }
 
 message MinimalTable {
@@ -511,6 +513,8 @@ message VStreamRowsResponse {
   bool throttled = 6;
   // Heartbeat indicates that this is a heartbeat message
   bool heartbeat = 7;
+  // ThrottledReason is a human readable string that explains why the stream is throttled
+  string throttled_reason = 8;
 }
 
 

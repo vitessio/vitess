@@ -22,18 +22,20 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 // nonAtomicCommitWarnMaxShards limits the number of shard names reported in
@@ -201,17 +203,37 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
+	if DebugTwoPc {
+		// Test code to simulate a failure after RM prepare
+		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "TRCreated_FailNow", nil); failNow {
+			return errors.Wrapf(err, "%v", dtid)
+		}
+	}
+
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
+		if DebugTwoPc {
+			// Test code to simulate a failure during RM prepare
+			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepare_-40_FailNow", s.Target); failNow {
+				return err
+			}
+		}
 		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
 		// including unprepared transactions.
-		if resumeErr := txc.Resolve(ctx, dtid); resumeErr != nil {
+		if resumeErr := txc.rollbackTx(ctx, dtid, mmShard, session.ShardSessions[1:], session.logging); resumeErr != nil {
 			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
 		}
 		// Return the original error even if the previous operation fails.
 		return err
+	}
+
+	if DebugTwoPc {
+		// Test code to simulate a failure after RM prepare
+		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMPrepared_FailNow", nil); failNow {
+			return err
+		}
 	}
 
 	err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
@@ -219,7 +241,20 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
+	if DebugTwoPc {
+		// Test code to simulate a failure after MM commit
+		if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "MMCommitted_FailNow", nil); failNow {
+			return err
+		}
+	}
+
 	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
+		if DebugTwoPc {
+			// Test code to simulate a failure during RM prepare
+			if failNow, err := checkTestFailure(callerid.EffectiveCallerIDFromContext(ctx), "RMCommit_-40_FailNow", s.Target); failNow {
+				return err
+			}
+		}
 		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
 	})
 	if err != nil {
@@ -227,6 +262,42 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+}
+
+func checkTestFailure(callerID *vtrpcpb.CallerID, expectCaller string, target *querypb.Target) (bool, error) {
+	if callerID == nil || callerID.GetPrincipal() != expectCaller {
+		return false, nil
+	}
+	switch callerID.Principal {
+	case "TRCreated_FailNow":
+		log.Errorf("Fail After TR created")
+		// no commit decision is made. Transaction should be a rolled back.
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After TR created")
+	case "RMPrepare_-40_FailNow":
+		if target.Shard != "-40" {
+			return false, nil
+		}
+		log.Errorf("Fail During RM prepare")
+		// no commit decision is made. Transaction should be a rolled back.
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail During RM prepare")
+	case "RMPrepared_FailNow":
+		log.Errorf("Fail After RM prepared")
+		// no commit decision is made. Transaction should be a rolled back.
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After RM prepared")
+	case "MMCommitted_FailNow":
+		log.Errorf("Fail After MM commit")
+		//  commit decision is made. Transaction should be committed.
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After MM commit")
+	case "RMCommit_-40_FailNow":
+		if target.Shard != "-40" {
+			return false, nil
+		}
+		log.Errorf("Fail During RM commit")
+		// commit decision is made. Transaction should be a committed.
+		return true, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail During RM commit")
+	default:
+		return false, nil
+	}
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
@@ -343,39 +414,49 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 	})
 }
 
-// Resolve resolves the specified 2PC transaction.
-func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
-	mmShard, err := dtids.ShardSession(dtid)
+// ResolveTransactions fetches all unresolved transactions and resolves them.
+func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Target) error {
+	transactions, err := txc.tabletGateway.UnresolvedTransactions(ctx, target)
 	if err != nil {
 		return err
 	}
 
-	transaction, err := txc.tabletGateway.ReadTransaction(ctx, mmShard.Target, dtid)
+	failedResolution := 0
+	for _, txRecord := range transactions {
+		log.Infof("Resolving transaction ID: %s", txRecord.Dtid)
+		err = txc.resolveTx(ctx, target, txRecord)
+		if err != nil {
+			failedResolution++
+			log.Errorf("Failed to resolve transaction ID: %s with error: %v", txRecord.Dtid, err)
+		}
+	}
+	if failedResolution == 0 {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to resolve %d out of %d transactions", failedResolution, len(transactions))
+}
+
+// resolveTx resolves the specified distributed transaction.
+func (txc *TxConn) resolveTx(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
+	mmShard, err := dtids.ShardSession(transaction.Dtid)
 	if err != nil {
 		return err
 	}
-	if transaction == nil || transaction.Dtid == "" {
-		// It was already resolved.
-		return nil
-	}
+
 	switch transaction.State {
 	case querypb.TransactionState_PREPARE:
 		// If state is PREPARE, make a decision to rollback and
 		// fallthrough to the rollback workflow.
-		qs, err := txc.queryService(ctx, mmShard.TabletAlias)
-		if err != nil {
-			return err
-		}
-		if err := qs.SetRollback(ctx, mmShard.Target, transaction.Dtid, mmShard.TransactionId); err != nil {
+		if err := txc.tabletGateway.SetRollback(ctx, target, transaction.Dtid, mmShard.TransactionId); err != nil {
 			return err
 		}
 		fallthrough
 	case querypb.TransactionState_ROLLBACK:
-		if err := txc.resumeRollback(ctx, mmShard.Target, transaction); err != nil {
+		if err := txc.resumeRollback(ctx, target, transaction); err != nil {
 			return err
 		}
 	case querypb.TransactionState_COMMIT:
-		if err := txc.resumeCommit(ctx, mmShard.Target, transaction); err != nil {
+		if err := txc.resumeCommit(ctx, target, transaction); err != nil {
 			return err
 		}
 	default:
@@ -383,6 +464,25 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid state: %v", transaction.State)
 	}
 	return nil
+}
+
+// rollbackTx rollbacks the specified distributed transaction.
+func (txc *TxConn) rollbackTx(ctx context.Context, dtid string, mmShard *vtgatepb.Session_ShardSession, participants []*vtgatepb.Session_ShardSession, logging *executeLogger) error {
+	qs, err := txc.queryService(ctx, mmShard.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if err := qs.SetRollback(ctx, mmShard.Target, dtid, mmShard.TransactionId); err != nil {
+		return err
+	}
+	err = txc.runSessions(ctx, participants, logging, func(ctx context.Context, session *vtgatepb.Session_ShardSession, logger *executeLogger) error {
+		return txc.tabletGateway.RollbackPrepared(ctx, session.Target, dtid, session.TransactionId)
+	})
+	if err != nil {
+		return err
+	}
+	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+
 }
 
 func (txc *TxConn) resumeRollback(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
@@ -446,4 +546,12 @@ func (txc *TxConn) runTargets(targets []*querypb.Target, action func(*querypb.Ta
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+func (txc *TxConn) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	mmShard, err := dtids.ShardSession(transactionID)
+	if err != nil {
+		return nil, err
+	}
+	return txc.tabletGateway.ReadTransaction(ctx, mmShard.Target, transactionID)
 }

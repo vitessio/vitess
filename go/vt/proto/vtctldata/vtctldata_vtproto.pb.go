@@ -3484,6 +3484,7 @@ func (m *PlannedReparentShardRequest) CloneVT() *PlannedReparentShardRequest {
 		AvoidPrimary:            m.AvoidPrimary.CloneVT(),
 		WaitReplicasTimeout:     m.WaitReplicasTimeout.CloneVT(),
 		TolerableReplicationLag: m.TolerableReplicationLag.CloneVT(),
+		AllowCrossCellPromotion: m.AllowCrossCellPromotion,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -15087,6 +15088,16 @@ func (m *PlannedReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.AllowCrossCellPromotion {
+		i--
+		if m.AllowCrossCellPromotion {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x38
+	}
 	if m.TolerableReplicationLag != nil {
 		size, err := m.TolerableReplicationLag.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -24413,6 +24424,9 @@ func (m *PlannedReparentShardRequest) SizeVT() (n int) {
 	if m.TolerableReplicationLag != nil {
 		l = m.TolerableReplicationLag.SizeVT()
 		n += 1 + l + sov(uint64(l))
+	}
+	if m.AllowCrossCellPromotion {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -49626,6 +49640,26 @@ func (m *PlannedReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowCrossCellPromotion", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllowCrossCellPromotion = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
