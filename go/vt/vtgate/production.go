@@ -18,6 +18,12 @@ limitations under the License.
 
 package vtgate
 
+import (
+	"context"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+)
+
 // This file defines debug constants that are always false.
 // This file is used for building production code.
 // We use go build directives to include a file that defines the constant to true
@@ -26,3 +32,7 @@ package vtgate
 // production performance.
 
 const DebugTwoPc = false
+
+func checkTestFailure(_ context.Context, _ string, _ *querypb.Target) error {
+	return nil
+}

@@ -58,6 +58,7 @@ type VReplStream struct {
 	timeHeartbeat        int64
 	timeThrottled        int64
 	componentThrottled   string
+	reasonThrottled      string
 	transactionTimestamp int64
 	state                binlogdatapb.VReplicationWorkflowState
 	message              string

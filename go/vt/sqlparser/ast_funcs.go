@@ -293,6 +293,8 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 		return sqltypes.Set
 	case JSON:
 		return sqltypes.TypeJSON
+	case VECTOR:
+		return sqltypes.Vector
 	case GEOMETRY:
 		return sqltypes.Geometry
 	case POINT:

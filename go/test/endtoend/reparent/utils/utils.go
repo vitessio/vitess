@@ -293,17 +293,17 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 // region ers, prs
 
 // Prs runs PRS
-func Prs(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) (string, error) {
-	return PrsWithTimeout(t, clusterInstance, tab, false, "", "")
+func Prs(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, extraArgs ...string) (string, error) {
+	return PrsWithTimeout(t, clusterInstance, tab, false, "", "", extraArgs...)
 }
 
 // PrsAvoid runs PRS
-func PrsAvoid(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) (string, error) {
-	return PrsWithTimeout(t, clusterInstance, tab, true, "", "")
+func PrsAvoid(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, extraArgs ...string) (string, error) {
+	return PrsWithTimeout(t, clusterInstance, tab, true, "", "", extraArgs...)
 }
 
 // PrsWithTimeout runs PRS
-func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string) (string, error) {
+func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string, extraArgs ...string) (string, error) {
 	args := []string{
 		"PlannedReparentShard",
 		fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
@@ -319,6 +319,7 @@ func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, 
 		args = append(args, "--new-primary")
 	}
 	args = append(args, tab.Alias)
+	args = append(args, extraArgs...)
 	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
 	return out, err
 }

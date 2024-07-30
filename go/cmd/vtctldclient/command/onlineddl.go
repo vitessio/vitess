@@ -56,8 +56,8 @@ var (
 		RunE:                  commandOnlineDDLCancel,
 	}
 	OnlineDDLCleanup = &cobra.Command{
-		Use:                   "cleanup <keyspace> <uuid>",
-		Short:                 "Mark a given schema migration ready for artifact cleanup.",
+		Use:                   "cleanup <keyspace> <uuid|all>",
+		Short:                 "Mark a given schema migration, or all complete/failed/cancelled migrations, ready for artifact cleanup.",
 		Example:               "OnlineDDL cleanup test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
@@ -168,12 +168,10 @@ func commandOnlineDDLCancel(cmd *cobra.Command, args []string) error {
 }
 
 func commandOnlineDDLCleanup(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-	uuid := cmd.Flags().Arg(1)
-	if !schema.IsOnlineDDLUUID(uuid) {
-		return fmt.Errorf("%s is not a valid UUID", uuid)
+	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
+	if err != nil {
+		return err
 	}
-
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.CleanupSchemaMigration(commandCtx, &vtctldatapb.CleanupSchemaMigrationRequest{

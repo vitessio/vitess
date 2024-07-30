@@ -949,6 +949,7 @@ const (
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType
+	CleanupAllMigrationType
 	ThrottleMigrationType
 	ThrottleAllMigrationType
 	UnthrottleMigrationType

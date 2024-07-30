@@ -456,7 +456,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			default:
 			}
 			if rows.Throttled {
-				_ = vc.vr.updateTimeThrottled(throttlerapp.RowStreamerName)
+				_ = vc.vr.updateTimeThrottled(throttlerapp.RowStreamerName, rows.ThrottledReason)
 				return nil
 			}
 			if rows.Heartbeat {
@@ -464,10 +464,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				return nil
 			}
 			// verify throttler is happy, otherwise keep looping
-			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vc.throttlerAppName)) {
+			if checkResult, ok := vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vc.throttlerAppName)); ok {
 				break // out of 'for' loop
 			} else { // we're throttled
-				_ = vc.vr.updateTimeThrottled(throttlerapp.VCopierName)
+				_ = vc.vr.updateTimeThrottled(throttlerapp.VCopierName, checkResult.Summary())
 			}
 		}
 		if !copyWorkQueue.isOpen {

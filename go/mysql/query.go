@@ -891,7 +891,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 			return sqltypes.NULL, 0, false
 		}
 	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Year, sqltypes.Char,
-		sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON:
+		sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON, sqltypes.Vector:
 		val, pos, ok := readLenEncStringAsBytesCopy(data, pos)
 		return sqltypes.MakeTrusted(sqltypes.VarBinary, val), pos, ok
 	default:
