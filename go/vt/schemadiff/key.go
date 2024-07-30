@@ -100,7 +100,7 @@ func (i *IndexDefinitionEntity) HasColumnPrefix() bool {
 
 // ColumnNames returns the names of the columns in the index.
 func (i *IndexDefinitionEntity) ColumnNames() []string {
-	var names []string
+	names := make([]string, 0, len(i.IndexDefinition.Columns))
 	for _, col := range i.IndexDefinition.Columns {
 		names = append(names, col.Column.String())
 	}
