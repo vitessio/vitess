@@ -544,24 +544,6 @@ func addReferenceWorkflow(t *testing.T, env *streamMigratorEnv, id int32, source
 	for _, resp := range workflowResponses {
 		env.tenv.tmc.AddVReplicationWorkflowsResponse(workflowKey, resp)
 	}
-	for _, id := range env.sourceTabletIds {
-		queries := []string{
-			fmt.Sprintf("select distinct vrepl_id from _vt.copy_state where vrepl_id in (%d)", id),
-			fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in (%d)", id),
-		}
-		for _, q := range queries {
-			env.tenv.tmc.expectVRQuery(id, q, &sqltypes.Result{})
-		}
-	}
-	for _, id := range env.targetTabletIds {
-		queries := []string{
-			fmt.Sprintf("delete from _vt.vreplication where db_name='vt_%s' and workflow in ('%s')",
-				env.tenv.targetKeyspace.KeyspaceName, wfName),
-		}
-		for _, q := range queries {
-			env.tenv.tmc.expectVRQuery(id, q, &sqltypes.Result{})
-		}
-	}
 }
 
 func TestBuildStreamMigratorOneMaterialize(t *testing.T) {
