@@ -473,6 +473,11 @@ func TestMixedCases(t *testing.T) {
 
 // TestInsertAlias test the alias feature in insert statement.
 func TestInsertAlias(t *testing.T) {
+	// keeping the skip here since we need both binaries to be a certain version
+	// this is totally incompatible with the upgrade/downgrade's logic
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vttablet")
+
 	mcmp, closer := start(t)
 	defer closer()
 
