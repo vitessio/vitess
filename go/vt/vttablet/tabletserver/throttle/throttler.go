@@ -66,8 +66,6 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -80,6 +78,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -1028,8 +1029,11 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 			return metricsWithError(fmt.Errorf("gRPC error accessing tablet %v. Err=%v", probe.Alias, gRPCErr))
 		}
 		throttleMetric.Value = resp.Value
+		if resp.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR {
+			throttleMetric.Err = fmt.Errorf("response code: %d", resp.ResponseCode)
+		}
 		if resp.StatusCode == http.StatusInternalServerError {
-			throttleMetric.Err = fmt.Errorf("Status code: %d", resp.StatusCode)
+			throttleMetric.Err = fmt.Errorf("status code: %d", resp.StatusCode)
 		}
 		if resp.RecentlyChecked {
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
@@ -1477,8 +1481,8 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 }
 
 // markRecentApp takes note that an app has just asked about throttling, making it "recent"
-func (throttler *Throttler) markRecentApp(appName string, statusCode int) {
-	recentApp := base.NewRecentApp(appName, statusCode)
+func (throttler *Throttler) markRecentApp(appName string, statusCode int, responseCode tabletmanagerdatapb.CheckThrottlerResponseCode) {
+	recentApp := base.NewRecentApp(appName, statusCode, responseCode)
 	throttler.recentApps.Set(appName, recentApp, cache.DefaultExpiration)
 }
 
