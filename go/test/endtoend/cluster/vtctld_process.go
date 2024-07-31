@@ -67,7 +67,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
 	)
 
-	if v, err := GetMajorVersion("vtgate"); err != nil {
+	if v, err := GetMajorVersion("vtctld"); err != nil {
 		return err
 	} else if v >= 18 {
 		vtctld.proc.Args = append(vtctld.proc.Args, "--bind-address", "127.0.0.1")
