@@ -55,6 +55,8 @@ func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement
 	return q.stmt, q.dmlOperator, nil
 }
 
+// includeTable will return false if the table is a CTE, and it is not merged
+// it will return true if the table is not a CTE or if it is a CTE and it is merged
 func (qb *queryBuilder) includeTable(op *Table) bool {
 	if qb.ctx.SemTable == nil {
 		return true
@@ -540,8 +542,7 @@ func buildLimit(op *Limit, qb *queryBuilder) {
 }
 
 func buildTable(op *Table, qb *queryBuilder) {
-	toto := qb.includeTable(op)
-	if !toto {
+	if !qb.includeTable(op) {
 		return
 	}
 
