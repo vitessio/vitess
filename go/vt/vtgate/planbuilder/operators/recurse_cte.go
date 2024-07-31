@@ -17,7 +17,12 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"slices"
+	"strings"
+
+	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -25,8 +30,10 @@ import (
 
 // RecurseCTE is used to represent a recursive CTE
 type RecurseCTE struct {
-	// Name is the name of the recursive CTE
-	Name string
+	Init, Tail Operator
+
+	// Def is the CTE definition according to the semantics
+	Def *semantics.CTE
 
 	// ColumnNames is the list of column names that are sent between the two parts of the recursive CTE
 	ColumnNames []string
@@ -34,24 +41,31 @@ type RecurseCTE struct {
 	// ColumnOffsets is the list of column offsets that are sent between the two parts of the recursive CTE
 	Offsets []int
 
-	Init, Tail Operator
+	// Expressions are the expressions that are needed on the recurse side of the CTE
+	Expressions []*plancontext.RecurseExpression
+
+	// Vars is the map of variables that are sent between the two parts of the recursive CTE
+	// It's filled in at offset planning time
+	Vars map[string]int
 }
 
 var _ Operator = (*RecurseCTE)(nil)
 
-func newRecurse(name string, init, tail Operator, expressions []*plancontext.RecurseExpression) *RecurseCTE {
+func newRecurse(def *semantics.CTE, init, tail Operator, expressions []*plancontext.RecurseExpression) *RecurseCTE {
 	return &RecurseCTE{
-		Name: name,
-		Init: init,
-		Tail: tail,
+		Def:         def,
+		Init:        init,
+		Tail:        tail,
+		Expressions: expressions,
 	}
 }
 
 func (r *RecurseCTE) Clone(inputs []Operator) Operator {
 	return &RecurseCTE{
-		Name:        r.Name,
+		Def:         r.Def,
 		ColumnNames: slices.Clone(r.ColumnNames),
 		Offsets:     slices.Clone(r.Offsets),
+		Expressions: slices.Clone(r.Expressions),
 		Init:        inputs[0],
 		Tail:        inputs[1],
 	}
@@ -91,9 +105,41 @@ func (r *RecurseCTE) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.
 	return r.Init.GetSelectExprs(ctx)
 }
 
-func (r *RecurseCTE) ShortDescription() string { return "" }
+func (r *RecurseCTE) ShortDescription() string {
+	if len(r.Vars) > 0 {
+		return fmt.Sprintf("%v", r.Vars)
+	}
+	exprs := slice.Map(r.Expressions, func(expr *plancontext.RecurseExpression) string {
+		return sqlparser.String(expr.Original)
+	})
+	return fmt.Sprintf("%v %v", r.Def.Name, strings.Join(exprs, ", "))
+}
 
 func (r *RecurseCTE) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	// RecurseCTE is a special case. It never guarantees any ordering.
 	return nil
+}
+
+func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	r.Vars = make(map[string]int)
+	columns := r.Init.GetColumns(ctx)
+	for _, expr := range r.Expressions {
+	outer:
+		for _, lhsExpr := range expr.LeftExprs {
+			_, found := r.Vars[lhsExpr.Name]
+			if found {
+				continue
+			}
+
+			for offset, column := range columns {
+				if lhsExpr.Expr.Name.EqualString(column.ColumnName()) {
+					r.Vars[lhsExpr.Name] = offset
+					continue outer
+				}
+			}
+
+			panic("couldn't find column")
+		}
+	}
+	return r
 }

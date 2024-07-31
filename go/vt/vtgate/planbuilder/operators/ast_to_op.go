@@ -314,7 +314,7 @@ func createDualCTETable(ctx *plancontext.PlanningContext, tableID semantics.Tabl
 	return createRouteFromVSchemaTable(ctx, qtbl, vschemaTable, false, nil)
 }
 
-func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTEDef) Operator {
+func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE) Operator {
 	union, ok := def.Query.(*sqlparser.Union)
 	if !ok {
 		panic(vterrors.VT13001("expected UNION in recursive CTE"))
@@ -323,19 +323,16 @@ func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTEDef)
 	init := translateQueryToOp(ctx, union.Left)
 
 	// Push the CTE definition to the stack so that it can be used in the recursive part of the query
-	ctx.PushCTE(&plancontext.ContextCTE{
-		CTEDef: def,
-	})
+	ctx.PushCTE(def, *def.IDForRecurse)
 	tail := translateQueryToOp(ctx, union.Right)
 	activeCTE, err := ctx.PopCTE()
 	if err != nil {
 		panic(err)
 	}
-	for _, expression := range activeCTE.Expressions {
-		tail = tail.AddPredicate(ctx, expression.RightExpr)
-	}
-	return newRecurse(def.Name, init, tail, activeCTE.Expressions)
+
+	return newRecurse(def, init, tail, activeCTE.Expressions)
 }
+
 func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) Operator {
 	var output Operator
 	for _, tableExpr := range exprs {

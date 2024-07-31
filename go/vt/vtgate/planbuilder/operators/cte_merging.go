@@ -38,7 +38,7 @@ func tryMergeCTE(ctx *plancontext.PlanningContext, init, tail Operator, in *Recu
 
 	switch {
 	case a == dual:
-		return mergeCTE(ctx, initRoute, tailRoute, routingB, in)
+		return mergeCTE(initRoute, tailRoute, routingB, in)
 	case a == sharded && b == sharded:
 		return tryMergeCTESharded(ctx, initRoute, tailRoute, in)
 	default:
@@ -58,7 +58,7 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, init, tail *Route, in 
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return mergeCTE(ctx, init, tail, tblA, in)
+				return mergeCTE(init, tail, tblA, in)
 			}
 		}
 	}
@@ -66,11 +66,12 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, init, tail *Route, in 
 	return nil
 }
 
-func mergeCTE(ctx *plancontext.PlanningContext, init, tail *Route, r Routing, in *RecurseCTE) *Route {
+func mergeCTE(init, tail *Route, r Routing, in *RecurseCTE) *Route {
+	in.Def.Merged = true
 	return &Route{
 		Routing: r,
 		Source: &RecurseCTE{
-			Name:        in.Name,
+			Def:         in.Def,
 			ColumnNames: in.ColumnNames,
 			Init:        init.Source,
 			Tail:        tail.Source,

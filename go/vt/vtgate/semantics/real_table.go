@@ -33,7 +33,7 @@ type RealTable struct {
 	dbName, tableName string
 	ASTNode           *sqlparser.AliasedTableExpr
 	Table             *vindexes.Table
-	CTE               *CTEDef
+	CTE               *CTE
 	VindexHint        *sqlparser.IndexHint
 	isInfSchema       bool
 	collationEnv      *collations.Environment

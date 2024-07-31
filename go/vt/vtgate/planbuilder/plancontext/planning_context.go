@@ -383,23 +383,27 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 }
 
 type ContextCTE struct {
-	*semantics.CTEDef
+	*semantics.CTE
+	Id          semantics.TableSet
 	Expressions []*RecurseExpression
 }
 
 type RecurseExpression struct {
 	Original  sqlparser.Expr
 	RightExpr sqlparser.Expr
-	LeftExpr  []BindVarExpr
+	LeftExprs []BindVarExpr
 }
 
 type BindVarExpr struct {
 	Name string
-	Expr sqlparser.Expr
+	Expr *sqlparser.ColName
 }
 
-func (ctx *PlanningContext) PushCTE(def *ContextCTE) {
-	ctx.CurrentCTE = append(ctx.CurrentCTE, def)
+func (ctx *PlanningContext) PushCTE(def *semantics.CTE, id semantics.TableSet) {
+	ctx.CurrentCTE = append(ctx.CurrentCTE, &ContextCTE{
+		CTE: def,
+		Id:  id,
+	})
 }
 
 func (ctx *PlanningContext) PopCTE() (*ContextCTE, error) {
@@ -409,4 +413,11 @@ func (ctx *PlanningContext) PopCTE() (*ContextCTE, error) {
 	activeCTE := ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
 	ctx.CurrentCTE = ctx.CurrentCTE[:len(ctx.CurrentCTE)-1]
 	return activeCTE, nil
+}
+
+func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
+	if len(ctx.CurrentCTE) == 0 {
+		return nil
+	}
+	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
 }

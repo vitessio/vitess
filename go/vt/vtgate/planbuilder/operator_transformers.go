@@ -77,6 +77,8 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return transformSequential(ctx, op)
 	case *operators.DMLWithInput:
 		return transformDMLWithInput(ctx, op)
+	case *operators.RecurseCTE:
+		return transformRecurseCTE(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToPrimitive)", op))
@@ -979,6 +981,22 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 		}
 	}
 	return prim, nil
+}
+
+func transformRecurseCTE(ctx *plancontext.PlanningContext, op *operators.RecurseCTE) (engine.Primitive, error) {
+	init, err := transformToPrimitive(ctx, op.Init)
+	if err != nil {
+		return nil, err
+	}
+	tail, err := transformToPrimitive(ctx, op.Tail)
+	if err != nil {
+		return nil, err
+	}
+	return &engine.RecurseCTE{
+		Init:    init,
+		Recurse: tail,
+		Vars:    op.Vars,
+	}, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {

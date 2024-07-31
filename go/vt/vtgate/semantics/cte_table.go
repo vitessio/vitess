@@ -33,12 +33,12 @@ import (
 type CTETable struct {
 	TableName string
 	ASTNode   *sqlparser.AliasedTableExpr
-	*CTEDef
+	*CTE
 }
 
 var _ TableInfo = (*CTETable)(nil)
 
-func newCTETable(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, cteDef *CTEDef) *CTETable {
+func newCTETable(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, cteDef *CTE) *CTETable {
 	var name string
 	if node.As.IsEmpty() {
 		name = t.Name.String()
@@ -59,7 +59,7 @@ func newCTETable(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, cteDef
 	return &CTETable{
 		TableName: name,
 		ASTNode:   node,
-		CTEDef:    cteDef,
+		CTE:       cteDef,
 	}
 }
 
@@ -134,7 +134,7 @@ func (cte *CTETable) getTableSet(org originable) TableSet {
 	return org.tableSetFor(cte.ASTNode)
 }
 
-type CTEDef struct {
+type CTE struct {
 	Name            string
 	Query           sqlparser.SelectStatement
 	isAuthoritative bool
@@ -144,9 +144,12 @@ type CTEDef struct {
 
 	// Was this CTE marked for being recursive?
 	Recursive bool
+
+	// The CTE had the init and recursive parts merged
+	Merged bool
 }
 
-func (cte *CTEDef) recursive(org originable) (id TableSet) {
+func (cte *CTE) recursive(org originable) (id TableSet) {
 	if cte.recursiveDeps != nil {
 		return *cte.recursiveDeps
 	}

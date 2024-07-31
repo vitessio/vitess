@@ -45,7 +45,7 @@ type (
 		done      map[*sqlparser.AliasedTableExpr]TableInfo
 
 		// cte is a map of CTE definitions that are used in the query
-		cte map[string]*CTEDef
+		cte map[string]*CTE
 	}
 )
 
@@ -54,7 +54,7 @@ func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableC
 		si:        si,
 		currentDb: currentDb,
 		done:      map[*sqlparser.AliasedTableExpr]TableInfo{},
-		cte:       map[string]*CTEDef{},
+		cte:       map[string]*CTE{},
 	}
 }
 
@@ -64,7 +64,7 @@ func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 	for _, cte := range with.CTEs {
-		etc.cte[cte.ID.String()] = &CTEDef{
+		etc.cte[cte.ID.String()] = &CTE{
 			Name:      cte.ID.String(),
 			Query:     cte.Subquery,
 			Columns:   cte.Columns,
@@ -326,7 +326,7 @@ func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sq
 	return scope.addTable(tableInfo)
 }
 
-func (etc *earlyTableCollector) getCTE(t sqlparser.TableName) *CTEDef {
+func (etc *earlyTableCollector) getCTE(t sqlparser.TableName) *CTE {
 	if t.Qualifier.NotEmpty() {
 		return nil
 	}
@@ -367,7 +367,7 @@ func (etc *earlyTableCollector) getTableInfo(node *sqlparser.AliasedTableExpr, t
 	return tableInfo, nil
 }
 
-func (etc *earlyTableCollector) buildRecursiveCTE(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, sc *scoper, cteDef *CTEDef) (TableInfo, error) {
+func (etc *earlyTableCollector) buildRecursiveCTE(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, sc *scoper, cteDef *CTE) (TableInfo, error) {
 	// If sc is nil, then we are in the early table collector.
 	// In early table collector, we don't go over the CTE definitions, so we must be seeing a usage of the CTE.
 	if sc != nil && len(sc.commonTableExprScopes) > 0 {
@@ -395,7 +395,7 @@ func (etc *earlyTableCollector) buildRecursiveCTE(node *sqlparser.AliasedTableEx
 	}, nil
 }
 
-func checkValidRecursiveCTE(cteDef *CTEDef) error {
+func checkValidRecursiveCTE(cteDef *CTE) error {
 	if cteDef.IDForRecurse != nil {
 		return vterrors.VT09029(cteDef.Name)
 	}

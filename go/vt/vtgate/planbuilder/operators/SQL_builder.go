@@ -55,6 +55,22 @@ func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement
 	return q.stmt, q.dmlOperator, nil
 }
 
+func (qb *queryBuilder) includeTable(op *Table) bool {
+	if qb.ctx.SemTable == nil {
+		return true
+	}
+	tbl, err := qb.ctx.SemTable.TableInfoFor(op.QTable.ID)
+	if err != nil {
+		return true
+	}
+	cteTbl, isCTE := tbl.(*semantics.CTETable)
+	if !isCTE {
+		return true
+	}
+
+	return cteTbl.Merged
+}
+
 func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
 	if tableID.NumberOfTables() == 1 && qb.ctx.SemTable != nil {
 		tblInfo, err := qb.ctx.SemTable.TableInfoFor(tableID)
@@ -524,6 +540,11 @@ func buildLimit(op *Limit, qb *queryBuilder) {
 }
 
 func buildTable(op *Table, qb *queryBuilder) {
+	toto := qb.includeTable(op)
+	if !toto {
+		return
+	}
+
 	dbName := ""
 
 	if op.QTable.IsInfSchema {
@@ -583,6 +604,11 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.RHS, qbR)
+	// if we have a recursive cte on the rhs, we might not have a statement
+	if qbR.stmt == nil {
+		return
+	}
+
 	qb.joinWith(qbR, pred, op.JoinType)
 }
 
@@ -672,7 +698,7 @@ func buildCTE(op *RecurseCTE, qb *queryBuilder) {
 	buildQuery(op.Init, qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.Tail, qbR)
-	qb.cteWith(qbR, op.Name)
+	qb.cteWith(qbR, op.Def.Name)
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {

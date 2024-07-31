@@ -2105,5 +2105,72 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Recursive CTE that cannot be merged",
+    "query": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": "2",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, id, `name` from `user` where 1 != 1",
+                "Query": "select `name`, id, `name` from `user` where manager_id is null",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.`name`, e.id from `user` as e where 1 != 1",
+                "Query": "select e.`name`, e.id from `user` as e where e.manager_id = :cte_id",
+                "Table": "`user`, dual"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Merge into a single dual route",
+    "query": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "with cte as (select 1 as n from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with cte as (select 1 as n from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "Table": "dual"
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
   }
 ]
