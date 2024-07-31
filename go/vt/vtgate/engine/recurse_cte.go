@@ -24,12 +24,12 @@ import (
 )
 
 // RecurseCTE is used to represent recursive CTEs
-// Init is used to represent the initial query.
-// It's result are then used to start the recursion on the RecurseCTE side
-// The values being sent to the RecurseCTE side are stored in the Vars map -
+// Seed is used to represent the non-recursive part that initializes the result set.
+// It's result are then used to start the recursion on the Term side
+// The values being sent to the Term side are stored in the Vars map -
 // the key is the bindvar name and the value is the index of the column in the recursive result
 type RecurseCTE struct {
-	Init, Recurse Primitive
+	Seed, Term Primitive
 
 	Vars map[string]int
 }
@@ -37,7 +37,7 @@ type RecurseCTE struct {
 var _ Primitive = (*RecurseCTE)(nil)
 
 func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	res, err := vcursor.ExecutePrimitive(ctx, r.Init, bindVars, wantfields)
+	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			for k, col := range r.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(row[col])
 			}
-			rresult, err := vcursor.ExecutePrimitive(ctx, r.Recurse, combineVars(bindVars, joinVars), false)
+			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
 				return nil, err
 			}
@@ -72,7 +72,7 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		}
 		return callback(res)
 	}
-	return vcursor.StreamExecutePrimitive(ctx, r.Init, bindVars, wantfields, func(result *sqltypes.Result) error {
+	return vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, func(result *sqltypes.Result) error {
 		err := callback(result)
 		if err != nil {
 			return err
@@ -91,7 +91,7 @@ func (r *RecurseCTE) recurse(ctx context.Context, vcursor VCursor, bindvars map[
 			joinVars[k] = sqltypes.ValueBindVariable(row[col])
 		}
 
-		err := vcursor.StreamExecutePrimitive(ctx, r.Recurse, combineVars(bindvars, joinVars), false, func(result *sqltypes.Result) error {
+		err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindvars, joinVars), false, func(result *sqltypes.Result) error {
 			err := callback(result)
 			if err != nil {
 				return err
@@ -110,18 +110,18 @@ func (r *RecurseCTE) RouteType() string {
 }
 
 func (r *RecurseCTE) GetKeyspaceName() string {
-	if r.Init.GetKeyspaceName() == r.Recurse.GetKeyspaceName() {
-		return r.Init.GetKeyspaceName()
+	if r.Seed.GetKeyspaceName() == r.Term.GetKeyspaceName() {
+		return r.Seed.GetKeyspaceName()
 	}
-	return r.Init.GetKeyspaceName() + "_" + r.Recurse.GetKeyspaceName()
+	return r.Seed.GetKeyspaceName() + "_" + r.Term.GetKeyspaceName()
 }
 
 func (r *RecurseCTE) GetTableName() string {
-	return r.Init.GetTableName()
+	return r.Seed.GetTableName()
 }
 
 func (r *RecurseCTE) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return r.Init.GetFields(ctx, vcursor, bindVars)
+	return r.Seed.GetFields(ctx, vcursor, bindVars)
 }
 
 func (r *RecurseCTE) NeedsTransaction() bool {
@@ -129,7 +129,7 @@ func (r *RecurseCTE) NeedsTransaction() bool {
 }
 
 func (r *RecurseCTE) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{r.Init, r.Recurse}, nil
+	return []Primitive{r.Seed, r.Term}, nil
 }
 
 func (r *RecurseCTE) description() PrimitiveDescription {

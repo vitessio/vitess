@@ -30,16 +30,11 @@ import (
 
 // RecurseCTE is used to represent a recursive CTE
 type RecurseCTE struct {
-	Init, Tail Operator
+	Seed, // used to describe the non-recursive part that initializes the result set
+	Term Operator // the part that repeatedly applies the recursion, processing the result set
 
 	// Def is the CTE definition according to the semantics
 	Def *semantics.CTE
-
-	// ColumnNames is the list of column names that are sent between the two parts of the recursive CTE
-	ColumnNames []string
-
-	// ColumnOffsets is the list of column offsets that are sent between the two parts of the recursive CTE
-	Offsets []int
 
 	// Expressions are the expressions that are needed on the recurse side of the CTE
 	Expressions []*plancontext.RecurseExpression
@@ -51,11 +46,11 @@ type RecurseCTE struct {
 
 var _ Operator = (*RecurseCTE)(nil)
 
-func newRecurse(def *semantics.CTE, init, tail Operator, expressions []*plancontext.RecurseExpression) *RecurseCTE {
+func newRecurse(def *semantics.CTE, seed, term Operator, expressions []*plancontext.RecurseExpression) *RecurseCTE {
 	return &RecurseCTE{
 		Def:         def,
-		Init:        init,
-		Tail:        tail,
+		Seed:        seed,
+		Term:        term,
 		Expressions: expressions,
 	}
 }
@@ -63,30 +58,28 @@ func newRecurse(def *semantics.CTE, init, tail Operator, expressions []*plancont
 func (r *RecurseCTE) Clone(inputs []Operator) Operator {
 	return &RecurseCTE{
 		Def:         r.Def,
-		ColumnNames: slices.Clone(r.ColumnNames),
-		Offsets:     slices.Clone(r.Offsets),
 		Expressions: slices.Clone(r.Expressions),
-		Init:        inputs[0],
-		Tail:        inputs[1],
+		Seed:        inputs[0],
+		Term:        inputs[1],
 	}
 }
 
 func (r *RecurseCTE) Inputs() []Operator {
-	return []Operator{r.Init, r.Tail}
+	return []Operator{r.Seed, r.Term}
 }
 
 func (r *RecurseCTE) SetInputs(operators []Operator) {
-	r.Init = operators[0]
-	r.Tail = operators[1]
+	r.Seed = operators[0]
+	r.Term = operators[1]
 }
 
 func (r *RecurseCTE) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Expr) Operator {
-	r.Tail = newFilter(r, e)
+	r.Term = newFilter(r, e)
 	return r
 }
 
 func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
-	return r.Init.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
+	return r.Seed.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
 }
 
 func (r *RecurseCTE) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
@@ -94,15 +87,15 @@ func (r *RecurseCTE) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
 }
 
 func (r *RecurseCTE) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
-	return r.Init.FindCol(ctx, expr, underRoute)
+	return r.Seed.FindCol(ctx, expr, underRoute)
 }
 
 func (r *RecurseCTE) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return r.Init.GetColumns(ctx)
+	return r.Seed.GetColumns(ctx)
 }
 
 func (r *RecurseCTE) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return r.Init.GetSelectExprs(ctx)
+	return r.Seed.GetSelectExprs(ctx)
 }
 
 func (r *RecurseCTE) ShortDescription() string {
@@ -122,7 +115,7 @@ func (r *RecurseCTE) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 
 func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	r.Vars = make(map[string]int)
-	columns := r.Init.GetColumns(ctx)
+	columns := r.Seed.GetColumns(ctx)
 	for _, expr := range r.Expressions {
 	outer:
 		for _, lhsExpr := range expr.LeftExprs {

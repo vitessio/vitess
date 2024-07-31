@@ -67,9 +67,9 @@ func TestRecurseDualQuery(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{}
 
 	cte := &RecurseCTE{
-		Init:    leftPrim,
-		Recurse: rightPrim,
-		Vars:    map[string]int{"col1": 0},
+		Seed: leftPrim,
+		Term: rightPrim,
+		Vars: map[string]int{"col1": 0},
 	}
 
 	r, err := cte.TryExecute(context.Background(), &noopVCursor{}, bv, true)

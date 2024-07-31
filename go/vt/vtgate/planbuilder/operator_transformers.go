@@ -984,18 +984,18 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 }
 
 func transformRecurseCTE(ctx *plancontext.PlanningContext, op *operators.RecurseCTE) (engine.Primitive, error) {
-	init, err := transformToPrimitive(ctx, op.Init)
+	seed, err := transformToPrimitive(ctx, op.Seed)
 	if err != nil {
 		return nil, err
 	}
-	tail, err := transformToPrimitive(ctx, op.Tail)
+	term, err := transformToPrimitive(ctx, op.Term)
 	if err != nil {
 		return nil, err
 	}
 	return &engine.RecurseCTE{
-		Init:    init,
-		Recurse: tail,
-		Vars:    op.Vars,
+		Seed: seed,
+		Term: term,
+		Vars: op.Vars,
 	}, nil
 }
 

@@ -695,9 +695,9 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 }
 
 func buildCTE(op *RecurseCTE, qb *queryBuilder) {
-	buildQuery(op.Init, qb)
+	buildQuery(op.Seed, qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
-	buildQuery(op.Tail, qbR)
+	buildQuery(op.Term, qbR)
 	qb.cteWith(qbR, op.Def.Name)
 }
 

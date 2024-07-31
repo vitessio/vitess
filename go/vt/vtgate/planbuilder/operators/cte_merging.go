@@ -22,7 +22,7 @@ import (
 )
 
 func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator, *ApplyResult) {
-	op := tryMergeCTE(ctx, in.Init, in.Tail, in)
+	op := tryMergeCTE(ctx, in.Seed, in.Term, in)
 	if op == nil {
 		return in, NoRewrite
 	}
@@ -30,25 +30,25 @@ func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator
 	return op, Rewrote("Merged CTE")
 }
 
-func tryMergeCTE(ctx *plancontext.PlanningContext, init, tail Operator, in *RecurseCTE) *Route {
-	initRoute, tailRoute, _, routingB, a, b, sameKeyspace := prepareInputRoutes(init, tail)
-	if initRoute == nil || !sameKeyspace {
+func tryMergeCTE(ctx *plancontext.PlanningContext, seed, term Operator, in *RecurseCTE) *Route {
+	seedRoute, termRoute, _, routingB, a, b, sameKeyspace := prepareInputRoutes(seed, term)
+	if seedRoute == nil || !sameKeyspace {
 		return nil
 	}
 
 	switch {
 	case a == dual:
-		return mergeCTE(initRoute, tailRoute, routingB, in)
+		return mergeCTE(seedRoute, termRoute, routingB, in)
 	case a == sharded && b == sharded:
-		return tryMergeCTESharded(ctx, initRoute, tailRoute, in)
+		return tryMergeCTESharded(ctx, seedRoute, termRoute, in)
 	default:
 		return nil
 	}
 }
 
-func tryMergeCTESharded(ctx *plancontext.PlanningContext, init, tail *Route, in *RecurseCTE) *Route {
-	tblA := init.Routing.(*ShardedRouting)
-	tblB := tail.Routing.(*ShardedRouting)
+func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in *RecurseCTE) *Route {
+	tblA := seed.Routing.(*ShardedRouting)
+	tblB := term.Routing.(*ShardedRouting)
 	switch tblA.RouteOpCode {
 	case engine.EqualUnique:
 		// If the two routes fully match, they can be merged together.
@@ -58,7 +58,7 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, init, tail *Route, in 
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return mergeCTE(init, tail, tblA, in)
+				return mergeCTE(seed, term, tblA, in)
 			}
 		}
 	}
@@ -66,16 +66,15 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, init, tail *Route, in 
 	return nil
 }
 
-func mergeCTE(init, tail *Route, r Routing, in *RecurseCTE) *Route {
+func mergeCTE(seed, term *Route, r Routing, in *RecurseCTE) *Route {
 	in.Def.Merged = true
 	return &Route{
 		Routing: r,
 		Source: &RecurseCTE{
-			Def:         in.Def,
-			ColumnNames: in.ColumnNames,
-			Init:        init.Source,
-			Tail:        tail.Source,
+			Def:  in.Def,
+			Seed: seed.Source,
+			Term: term.Source,
 		},
-		MergedWith: []*Route{tail},
+		MergedWith: []*Route{term},
 	}
 }

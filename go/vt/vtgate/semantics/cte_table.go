@@ -145,7 +145,7 @@ type CTE struct {
 	// Was this CTE marked for being recursive?
 	Recursive bool
 
-	// The CTE had the init and recursive parts merged
+	// The CTE had the seed and term parts merged
 	Merged bool
 }
 

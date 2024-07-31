@@ -868,11 +868,11 @@ func (cached *RecurseCTE) CachedSize(alloc bool) int64 {
 		size += int64(48)
 	}
 	// field Init vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Init.(cachedObject); ok {
+	if cc, ok := cached.Seed.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Recurse vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Recurse.(cachedObject); ok {
+	if cc, ok := cached.Term.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Vars map[string]int
