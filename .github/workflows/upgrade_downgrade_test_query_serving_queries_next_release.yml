@@ -183,21 +183,31 @@ jobs:
         fetch-depth: 0
 
     # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n+1
-    - name: Use current version VTGate, and other version VTTablet
+    - name: Use current version VTGate, and other version VTTablet/VTctld
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtgate $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
-        cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
+        rm -Rf bin/*
+        cp -r /tmp/vitess-build-current/bin/* $PWD/bin/
+
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
+
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
         cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
         cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
+
+        cp /tmp/vitess-build-other/bin/vtctld $PWD/bin/vtctld
+        cp /tmp/vitess-build-other/bin/vtctldclient $PWD/bin/vtctldclient
+        cp /tmp/vitess-build-other/bin/vtctl $PWD/bin/vtctl
+        cp /tmp/vitess-build-other/bin/vtctlclient $PWD/bin/vtctlclient
+
         vtgate --version
         vttablet --version
+        vtctl --version
 
     # Running a test with vtgate at version n and vttablet at version n+1
-    - name: Run query serving tests (vtgate=N, vttablet=N+1)
+    - name: Run query serving tests (vtgate=N, vttablet=N+1, vtctld=N+1)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
