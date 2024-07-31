@@ -9,7 +9,7 @@ create table tbl
 (
     id         bigint,
     unq_col    bigint,
-    nonunq_col bigint,
+    nonunq_col bigint not null,
     primary key (id),
     unique (unq_col)
 ) Engine = InnoDB;
