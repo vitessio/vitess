@@ -117,6 +117,22 @@ jobs:
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
 
+    # Build current commit's binaries
+    - name: Get dependencies for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        go mod download
+
+    - name: Building the binaries for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 10
+      run: |
+        source build.env
+        NOVTADMINBUILD=1 make build
+        mkdir -p /tmp/vitess-build-current/
+        cp -R bin /tmp/vitess-build-current/
+        rm -Rf bin/*
+
     # Checkout to the next release of Vitess
     - name: Check out other version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -139,41 +155,13 @@ jobs:
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
 
-    # Checkout to this build's commit
-    - name: Check out commit's code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@v4
-
-    - name: Get dependencies for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        go mod download
-
-    - name: Building the binaries for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 10
-      run: |
-        source build.env
-        NOVTADMINBUILD=1 make build
-        mkdir -p /tmp/vitess-build-current/
-        cp -R bin /tmp/vitess-build-current/
-
-    # Running a test with vtgate and vttablet using version n
-    - name: Run query serving tests (vtgate=N, vttablet=N)
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
-
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
-
     # Swap the binaries in the bin. Use vtgate version n+1 and keep vttablet at version n
     - name: Use next release's VTGate
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
+        cp -r /tmp/vitess-build-current/bin/* $PWD/bin/
         rm -f $PWD/bin/vtgate
         cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
         vtgate --version
@@ -188,22 +176,38 @@ jobs:
         source build.env
         eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
 
+    - name: Check out commit's code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n+1
-    - name: Use current version VTGate, and other version VTTablet
+    - name: Use current version VTGate, and other version VTTablet/VTctld
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtgate $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
-        cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
+        rm -Rf bin/*
+        cp -r /tmp/vitess-build-current/bin/* $PWD/bin/
+
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
+
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
         cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
         cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
+
+        cp /tmp/vitess-build-other/bin/vtctld $PWD/bin/vtctld
+        cp /tmp/vitess-build-other/bin/vtctldclient $PWD/bin/vtctldclient
+        cp /tmp/vitess-build-other/bin/vtctl $PWD/bin/vtctl
+        cp /tmp/vitess-build-other/bin/vtctlclient $PWD/bin/vtctlclient
+
         vtgate --version
         vttablet --version
+        vtctl --version
 
     # Running a test with vtgate at version n and vttablet at version n+1
-    - name: Run query serving tests (vtgate=N, vttablet=N+1)
+    - name: Run query serving tests (vtgate=N, vttablet=N+1, vtctld=N+1)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot

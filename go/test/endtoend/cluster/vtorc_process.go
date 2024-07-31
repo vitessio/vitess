@@ -127,7 +127,6 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either
 		"--topo-information-refresh-duration", "3s",
 	)
-
 	if v, err := GetMajorVersion("vtorc"); err != nil {
 		return err
 	} else if v >= 18 {
