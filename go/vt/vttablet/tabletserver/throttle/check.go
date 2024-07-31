@@ -51,6 +51,8 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 const (
@@ -100,37 +102,44 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 	}
 	value, err := metricResult.Get()
 	if appName == "" {
-		return NewCheckResult(http.StatusExpectationFailed, value, threshold, "", fmt.Errorf("no app indicated"))
+		return NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, http.StatusExpectationFailed, value, threshold, "", fmt.Errorf("no app indicated"))
 	}
 
 	var statusCode int
+	var responseCode tabletmanagerdatapb.CheckThrottlerResponseCode
 
 	switch {
 	case err == base.ErrAppDenied:
 		// app specifically not allowed to get metrics
 		statusCode = http.StatusExpectationFailed // 417
+		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED
 	case err == base.ErrNoSuchMetric:
 		// not collected yet, or metric does not exist
 		statusCode = http.StatusNotFound // 404
+		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC
 	case err != nil:
 		// any error
 		statusCode = http.StatusInternalServerError // 500
+		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR
 	case value > threshold:
 		// casual throttling
 		statusCode = http.StatusTooManyRequests // 429
+		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED
 		err = base.ErrThresholdExceeded
 	default:
 		// all good!
 		statusCode = http.StatusOK // 200
+		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 	}
-	return NewCheckResult(statusCode, value, threshold, matchedApp, err)
+	return NewCheckResult(responseCode, statusCode, value, threshold, matchedApp, err)
 }
 
 // Check is the core function that runs when a user wants to check a metric
 func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope base.Scope, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
 	checkResult = &CheckResult{
-		StatusCode: http.StatusOK,
-		Metrics:    make(map[string]*MetricResult),
+		StatusCode:   http.StatusOK,
+		ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+		Metrics:      make(map[string]*MetricResult),
 	}
 	if len(metricNames) == 0 {
 		metricNames = base.MetricNames{check.throttler.metricNameUsedAsDefault()}
@@ -138,6 +147,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 	metricNames = metricNames.Unique()
 	applyMetricToCheckResult := func(metricName base.MetricName, metric *MetricResult) {
 		checkResult.StatusCode = metric.StatusCode
+		checkResult.ResponseCode = metric.ResponseCode
 		checkResult.Value = metric.Value
 		checkResult.Threshold = metric.Threshold
 		checkResult.Error = metric.Error
@@ -171,7 +181,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 
 		metricCheckResult := check.checkAppMetricResult(ctx, appName, metricResultFunc, flags)
 		if !throttlerapp.VitessName.Equals(appName) {
-			go func(statusCode int) {
+			go func(metricCheckResult *CheckResult) {
 				if metricScope == base.UndefinedScope {
 					// While we should never get here, the following code will panic if we do
 					// because it will attempt to recreate ThrottlerCheckAnyTotal.
@@ -179,22 +189,23 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 					return
 				}
 				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sTotal", textutil.SingleWordCamel(metricScope.String()), textutil.SingleWordCamel(metricName.String())), "").Add(1)
-				if statusCode != http.StatusOK {
+				if !metricCheckResult.IsOK() {
 					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sError", textutil.SingleWordCamel(metricScope.String()), textutil.SingleWordCamel(metricName.String())), "").Add(1)
 				}
-			}(metricCheckResult.StatusCode)
+			}(metricCheckResult)
 		}
 		if metricCheckResult.RecentlyChecked {
 			checkResult.RecentlyChecked = true
 		}
 		metric := &MetricResult{
-			StatusCode: metricCheckResult.StatusCode,
-			Value:      metricCheckResult.Value,
-			Threshold:  metricCheckResult.Threshold,
-			Error:      metricCheckResult.Error,
-			Message:    metricCheckResult.Message,
-			AppName:    metricCheckResult.AppName,
-			Scope:      metricScope.String(), // This reports back the actual scope used for the check
+			StatusCode:   metricCheckResult.StatusCode,
+			ResponseCode: metricCheckResult.ResponseCode,
+			Value:        metricCheckResult.Value,
+			Threshold:    metricCheckResult.Threshold,
+			Error:        metricCheckResult.Error,
+			Message:      metricCheckResult.Message,
+			AppName:      metricCheckResult.AppName,
+			Scope:        metricScope.String(), // This reports back the actual scope used for the check
 		}
 		checkResult.Metrics[metricName.String()] = metric
 		if flags.MultiMetricsEnabled && !metricCheckResult.IsOK() && metricName != base.DefaultMetricName {
@@ -216,13 +227,13 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		// If checkResult is not OK, then we will have populated these fields already by the failing metric.
 		applyMetricToCheckResult(base.DefaultMetricName, metric)
 	}
-	go func(statusCode int) {
+	go func(checkResult *CheckResult) {
 		statsThrottlerCheckAnyTotal.Add(1)
-		if statusCode != http.StatusOK {
+		if !checkResult.IsOK() {
 			statsThrottlerCheckAnyError.Add(1)
 		}
-	}(checkResult.StatusCode)
-	go check.throttler.markRecentApp(appName, checkResult.StatusCode)
+	}(checkResult)
+	go check.throttler.markRecentApp(appName, checkResult.StatusCode, checkResult.ResponseCode)
 	return checkResult
 }
 
@@ -234,7 +245,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, aggregatedMetricNam
 	}
 	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), scope, base.MetricNames{metricName}, selfCheckFlags)
 
-	if checkResult.StatusCode == http.StatusOK {
+	if checkResult.IsOK() {
 		check.throttler.markMetricHealthy(aggregatedMetricName)
 	}
 	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(aggregatedMetricName); found {
