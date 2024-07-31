@@ -230,3 +230,12 @@ func TestContains(t *testing.T) {
 		})
 	}
 }
+
+func TestKnownMetricNames(t *testing.T) {
+	assert.NotEmpty(t, KnownMetricNames)
+	assert.Contains(t, KnownMetricNames, LagMetricName)
+	assert.Contains(t, KnownMetricNames, ThreadsRunningMetricName)
+	assert.Contains(t, KnownMetricNames, LoadAvgMetricName)
+	assert.Contains(t, KnownMetricNames, CustomMetricName)
+	assert.Contains(t, KnownMetricNames, DefaultMetricName)
+}
