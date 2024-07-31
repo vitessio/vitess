@@ -809,6 +809,59 @@
     }
   },
   {
+    "comment": "Outer join with join predicates that only depend on the inner side",
+    "query": "select 1 from user left join user_extra on user.foo = 42 and user.bar = user_extra.bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user left join user_extra on user.foo = 42 and user.bar = user_extra.bar",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "1 as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinVars": {
+              "user_bar": 1,
+              "user_foo": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.foo, `user`.bar from `user` where 1 != 1",
+                "Query": "select `user`.foo, `user`.bar from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_extra.bar = :user_bar and :user_foo = 42",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Parenthesized, single chunk",
     "query": "select user.col from user join (unsharded as m1 join unsharded as m2)",
     "plan": {
