@@ -77,7 +77,7 @@ func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.
 	if tableID.NumberOfTables() == 1 && qb.ctx.SemTable != nil {
 		tblInfo, err := qb.ctx.SemTable.TableInfoFor(tableID)
 		if err != nil {
-			panic(err.Error())
+			panic(err)
 		}
 		cte, isCTE := tblInfo.(*semantics.CTETable)
 		if isCTE {
