@@ -96,5 +96,9 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
-	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
+	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+	if vttabletVersion <= 19 {
+		assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
+	}
 }
