@@ -199,13 +199,13 @@ func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
 }
 
 func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, downPrimary bool) {
-	//This test will start a primary and 3 replicas.
-	//Then:
-	//- one replica will be the new primary
-	//- one replica will be reparented to that new primary
-	//- one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
-	//Args:
-	//downPrimary: kills the old primary first
+	// This test will start a primary and 3 replicas.
+	// Then:
+	// - one replica will be the new primary
+	// - one replica will be reparented to that new primary
+	// - one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
+	// Args:
+	// downPrimary: kills the old primary first
 	ctx := context.Background()
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -218,7 +218,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 		demoteCommands := "SET GLOBAL read_only = ON; FLUSH TABLES WITH READ LOCK; UNLOCK TABLES"
 		utils.RunSQL(ctx, t, demoteCommands, tablets[0])
 
-		//Get the position of the old primary and wait for the new one to catch up.
+		// Get the position of the old primary and wait for the new one to catch up.
 		err := utils.WaitForReplicationPosition(t, tablets[0], tablets[1])
 		require.NoError(t, err)
 	}
@@ -453,14 +453,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Contains(t, primaryStatus.PrimaryStatus.String(), "vt-0000000101-bin")
 	assert.Equal(t, primaryStatus.GtidPurged, "MySQL56/")
 	assert.False(t, primaryStatus.ReadOnly)
-	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
-	require.NoError(t, err)
-	vtcltlVersion, err := cluster.GetMajorVersion("vtctl")
-	require.NoError(t, err)
-	// For all version at or above v17.0.0, each replica will start in super_read_only mode.
-	if vtTabletVersion >= 17 && vtcltlVersion >= 17 {
-		assert.False(t, primaryStatus.SuperReadOnly)
-	}
+	assert.False(t, primaryStatus.SuperReadOnly)
 	assert.True(t, primaryStatus.SemiSyncPrimaryEnabled)
 	assert.True(t, primaryStatus.SemiSyncReplicaEnabled)
 	assert.True(t, primaryStatus.SemiSyncPrimaryStatus)
@@ -514,10 +507,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Contains(t, replicaStatus.PrimaryStatus.String(), "vt-0000000102-bin")
 	assert.Equal(t, replicaStatus.GtidPurged, "MySQL56/")
 	assert.True(t, replicaStatus.ReadOnly)
-	// For all version at or above v17.0.0, each replica will start in super_read_only mode.
-	if vtTabletVersion >= 17 && vtcltlVersion >= 17 {
-		assert.True(t, replicaStatus.SuperReadOnly)
-	}
+	assert.True(t, replicaStatus.SuperReadOnly)
 	assert.False(t, replicaStatus.SemiSyncPrimaryEnabled)
 	assert.True(t, replicaStatus.SemiSyncReplicaEnabled)
 	assert.False(t, replicaStatus.SemiSyncPrimaryStatus)

@@ -178,13 +178,7 @@ func TestInitAndUpdate(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
-	require.NoError(t, err)
-
-	expected := `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
-	if vtgateVersion >= 17 {
-		expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
-	}
+	expected := `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		expected,
@@ -192,6 +186,8 @@ func TestInitAndUpdate(t *testing.T) {
 		30*time.Second,
 		"initial table list not complete")
 
+	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
 	if vtgateVersion >= 19 {
 		utils.AssertMatches(t, conn,
 			"SHOW VSCHEMA KEYSPACES",
@@ -200,10 +196,7 @@ func TestInitAndUpdate(t *testing.T) {
 
 	// Init
 	_ = utils.Exec(t, conn, "create table test_sc (id bigint primary key)")
-	expected = `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`
-	if vtgateVersion >= 17 {
-		expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`
-	}
+	expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		expected,
@@ -213,10 +206,7 @@ func TestInitAndUpdate(t *testing.T) {
 
 	// Tables Update via health check.
 	_ = utils.Exec(t, conn, "create table test_sc1 (id bigint primary key)")
-	expected = `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`
-	if vtgateVersion >= 17 {
-		expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`
-	}
+	expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		expected,
@@ -225,10 +215,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"test_sc1 not in vschema tables")
 
 	_ = utils.Exec(t, conn, "drop table test_sc, test_sc1")
-	expected = `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
-	if vtgateVersion >= 17 {
-		expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
-	}
+	expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		expected,
@@ -247,12 +234,7 @@ func TestDMLOnNewTable(t *testing.T) {
 	// create a new table which is not part of the VSchema
 	utils.Exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
-	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
-	require.NoError(t, err)
-	expected := `[[VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
-	if vtgateVersion >= 17 {
-		expected = `[[VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
-	}
+	expected := `[[VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
 	// wait for vttablet's schema reload interval to pass
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
@@ -296,9 +278,6 @@ func TestDMLOnNewTable(t *testing.T) {
 
 // TestNewView validates that view tracking works as expected.
 func TestNewView(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vttablet")
-
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -321,9 +300,6 @@ func TestNewView(t *testing.T) {
 
 // TestViewAndTable validates that new column added in table is present in the view definition
 func TestViewAndTable(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
-	utils.SkipIfBinaryIsBelowVersion(t, 16, "vttablet")
-
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

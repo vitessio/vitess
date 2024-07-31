@@ -85,9 +85,6 @@ func TestOrderBy(t *testing.T) {
 }
 
 func TestOrderByComplex(t *testing.T) {
-	// tests written to try to trick the ORDER BY engine and planner
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
-
 	mcmp, closer := start(t)
 	defer closer()
 

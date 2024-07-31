@@ -18,12 +18,9 @@ package misc
 
 import (
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestCTEWithOrderByLimit(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -31,7 +28,6 @@ func TestCTEWithOrderByLimit(t *testing.T) {
 }
 
 func TestCTEAggregationOnRHS(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -40,7 +36,6 @@ func TestCTEAggregationOnRHS(t *testing.T) {
 }
 
 func TestCTERemoveInnerOrderBy(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -48,7 +43,6 @@ func TestCTERemoveInnerOrderBy(t *testing.T) {
 }
 
 func TestCTEWithHaving(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -59,7 +53,6 @@ func TestCTEWithHaving(t *testing.T) {
 }
 
 func TestCTEColumns(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
