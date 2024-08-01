@@ -387,13 +387,13 @@ func (a *analyzer) reAnalyze(statement sqlparser.SQLNode) error {
 // canShortCut checks if we are dealing with a single unsharded keyspace and no tables that have managed foreign keys
 // if so, we can stop the analyzer early
 func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool) {
-	if a.fullAnalysis {
-		return false
-	}
-
 	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
 	a.singleUnshardedKeyspace = ks != nil
 	if !a.singleUnshardedKeyspace {
+		return false
+	}
+
+	if a.fullAnalysis {
 		return false
 	}
 
