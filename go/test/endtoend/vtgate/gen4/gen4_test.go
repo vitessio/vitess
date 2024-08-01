@@ -520,3 +520,31 @@ func TestDualJoinQueries(t *testing.T) {
 	mcmp.Exec("select t.title, t2.id from t2 left join (select 'ABC' as title) as t on t.title = t2.tcol1")
 
 }
+
+// TestSchemaTrackingGlobalTables tests that schema tracking works as intended with global table routing.
+// This test creates a new table in a schema and verifies we can query it without needing to add it to the vschema as long
+// as the name of the table is unique.
+func TestSchemaTrackingGlobalTables(t *testing.T) {
+	// Create a new vtgate connection.
+	vtConn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer vtConn.Close()
+
+	// Create a new table in the unsharded keyspace such that it has a unique name that allows for global routing.
+	utils.Exec(t, vtConn, `use `+unshardedKs)
+	utils.Exec(t, vtConn, `create table uniqueTableName(id int, primary key(id))`)
+	defer utils.Exec(t, vtConn, `drop table uniqueTableName`)
+
+	// Wait for schema tracking to see this column.
+	err = utils.WaitForAuthoritative(t, unshardedKs, "uniqueTableName", clusterInstance.VtgateProcess.ReadVSchema)
+	require.NoError(t, err)
+
+	// Create a new vtgate connection.
+	vtConnTwo, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer vtConnTwo.Close()
+	// Insert rows into the table and select them to verify we can use them.
+	utils.Exec(t, vtConnTwo, `insert into uniqueTableName(id) values (1),(2)`)
+	require.NoError(t, err)
+	utils.AssertMatches(t, vtConnTwo, `select * from uniqueTableName order by id`, `[[INT32(1)] [INT32(2)]]`)
+}
