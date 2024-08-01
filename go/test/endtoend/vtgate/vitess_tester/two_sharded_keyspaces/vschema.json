@@ -1,0 +1,72 @@
+{
+  "keyspaces": {
+    "customer": {
+      "sharded": true,
+      "vindexes": {
+        "hash": {
+          "type": "hash",
+          "params": {},
+          "owner": ""
+        }
+      },
+      "tables": {
+        "customer": {
+          "type": "",
+          "column_vindexes": [
+            {
+              "column": "customer_id",
+              "name": "hash",
+              "columns": []
+            }
+          ],
+          "columns": [],
+          "pinned": "",
+          "column_list_authoritative": false,
+          "source": ""
+        }
+      },
+      "require_explicit_routing": false,
+      "foreign_key_mode": 0,
+      "multi_tenant_spec": null
+    },
+    "corder": {
+      "sharded": true,
+      "vindexes": {
+        "hash": {
+          "type": "hash",
+          "params": {},
+          "owner": ""
+        }
+      },
+      "tables": {
+        "corder": {
+          "type": "",
+          "column_vindexes": [
+            {
+              "column": "customer_id",
+              "name": "hash",
+              "columns": []
+            }
+          ],
+          "columns": [],
+          "pinned": "",
+          "column_list_authoritative": false,
+          "source": ""
+        }
+      },
+      "require_explicit_routing": false,
+      "foreign_key_mode": 0,
+      "multi_tenant_spec": null
+    }
+  },
+  "routing_rules": {
+    "rules": []
+  },
+  "shard_routing_rules": {
+    "rules": []
+  },
+  "keyspace_routing_rules": null,
+  "mirror_rules": {
+    "rules": []
+  }
+}
