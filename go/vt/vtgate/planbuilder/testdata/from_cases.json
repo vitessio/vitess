@@ -4144,5 +4144,54 @@
         "user.multicol_tbl"
       ]
     }
+  },
+  {
+    "comment": "Cross keyspace join",
+    "query": "select 1 from user join t1 on user.id = t1.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user join t1 on user.id = t1.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "t1_id": 1
+        },
+        "TableName": "t1_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "zlookup_unique",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1, t1.id from t1 where 1 != 1",
+            "Query": "select 1, t1.id from t1",
+            "Table": "t1"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where `user`.id = :t1_id",
+            "Table": "`user`",
+            "Values": [
+              ":t1_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "zlookup_unique.t1"
+      ]
+    }
   }
 ]

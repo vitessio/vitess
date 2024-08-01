@@ -68,7 +68,7 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, jo
 
 	// sharded routing is complex, so we handle it in a separate method
 	case a == sharded && b == sharded:
-		return tryMergeJoinShardedRouting(ctx, lhsRoute, rhsRoute, m, joinPredicates)
+		return tryMergeShardedRouting(ctx, lhsRoute, rhsRoute, m, joinPredicates, false /*isSubquery*/)
 
 	default:
 		return nil, nil
