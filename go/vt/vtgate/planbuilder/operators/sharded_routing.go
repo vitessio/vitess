@@ -601,11 +601,12 @@ func (tr *ShardedRouting) extraInfo() string {
 	)
 }
 
-func tryMergeJoinShardedRouting(
+func tryMergeShardedRouting(
 	ctx *plancontext.PlanningContext,
 	routeA, routeB *Route,
 	m merger,
 	joinPredicates []sqlparser.Expr,
+	isSubquery bool,
 ) *Route {
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
 	tblA := routeA.Routing.(*ShardedRouting)
@@ -637,7 +638,10 @@ func tryMergeJoinShardedRouting(
 		}
 
 		if !sameKeyspace {
-			panic(vterrors.VT12001("cross-shard correlated subquery"))
+			if isSubquery {
+				panic(vterrors.VT12001("cross-shard correlated subquery"))
+			}
+			return nil
 		}
 
 		canMerge := canMergeOnFilters(ctx, routeA, routeB, joinPredicates)
