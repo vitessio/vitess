@@ -258,7 +258,7 @@ func TestWorkflowDelete(t *testing.T) {
 		postFunc                       func(t *testing.T, env *testEnv)
 	}{
 		{
-			name: "basic",
+			name: "missing table",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
 				ShardNames:   []string{"0"},
@@ -314,7 +314,7 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 		},
 		{
-			name: "basic with missing denied table entries",
+			name: "missing denied table entries",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
 				ShardNames:   []string{"0"},
