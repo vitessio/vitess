@@ -314,7 +314,7 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 		},
 		{
-			name: "basic with existing denied table entries",
+			name: "basic with missing denied table entries",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
 				ShardNames:   []string{"0"},
@@ -331,6 +331,8 @@ func TestWorkflowDelete(t *testing.T) {
 				defer targetUnlock(&err)
 				for _, shard := range env.targetKeyspace.ShardNames {
 					_, err := env.ts.UpdateShardFields(lockCtx, targetKeyspaceName, shard, func(si *topo.ShardInfo) error {
+						// So t1_2 and t1_3 do not exist in the denied table list when we go
+						// to remove t1, t1_2, and t1_3.
 						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{table1Name, "t2", "t3"})
 						return err
 					})
