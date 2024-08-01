@@ -196,6 +196,8 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys
 		// to have an error. This makes all queries against them to fail.
 		markErrorIfCyclesInFk(vschema)
+		// We build the global routing table again because schema tracking might have added more tables to the vschema.
+		vindexes.BuildGlobalTables(v, vschema)
 	}
 	return vschema
 }

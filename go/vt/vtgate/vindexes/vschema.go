@@ -331,9 +331,9 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 		created:        time.Now(),
 	}
 	buildKeyspaces(source, vschema, parser)
-	// buildGlobalTables before buildReferences so that buildReferences can
+	// BuildGlobalTables before buildReferences so that buildReferences can
 	// resolve sources which reference global tables.
-	buildGlobalTables(source, vschema)
+	BuildGlobalTables(source, vschema)
 	buildReferences(source, vschema)
 	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
@@ -437,7 +437,12 @@ func (vschema *VSchema) AddUDF(ksname, udfName string) error {
 	return nil
 }
 
-func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+// BuildGlobalTables rebuilds the global tables map that is used for global routing.
+// If a table name is unique across all keyspaces, then Vitess allows the users to use the table
+// without needing to select a database first.
+func BuildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	// Reinitialize the global Tables map to restart the building process.
+	vschema.globalTables = make(map[string]*Table)
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		// If the keyspace requires explicit routing, don't include any of
