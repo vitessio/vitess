@@ -37,7 +37,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
-	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -472,11 +471,18 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 			healthy, ok := hc.healthy[key]
 			if ok && len(healthy) > 0 {
 				if tabletType == topodata.TabletType_PRIMARY {
-					// If tablet type is primary, we should only have one tablet in the healthy list.
-					hc.recomputeHealthyPrimary(key)
+					// If the deleted tablet was a primary,
+					// and it matches what we think is the current active primary,
+					// clear the healthy list for the primary.
+					//
+					// See the logic in `updateHealth` for more details.
+					alias := tabletAliasString(topoproto.TabletAliasString(healthy[0].Tablet.Alias))
+					if alias == tabletAlias {
+						hc.healthy[key] = []*TabletHealth{}
+					}
 				} else {
 					// Simply recompute the list of healthy tablets for all other tablet types.
-					hc.recomputeHealthyReplicas(key)
+					hc.recomputeHealthy(key)
 				}
 			}
 		}
@@ -575,11 +581,11 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		// Tablets from other cells for non-primary targets should not trigger a re-sort;
 		// they should also be excluded from healthy list.
 		if th.Target.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) {
-			hc.recomputeHealthyReplicas(targetKey)
+			hc.recomputeHealthy(targetKey)
 		}
 		if targetChanged && prevTarget.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) { // also recompute old target's healthy list
 			oldTargetKey := KeyFromTarget(prevTarget)
-			hc.recomputeHealthyReplicas(oldTargetKey)
+			hc.recomputeHealthy(oldTargetKey)
 		}
 	}
 
@@ -598,7 +604,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 // This filters out replicas that might be healthy, but are not part of the current
 // cell or cell alias. It also performs filtering of tablets based on replication lag,
 // if configured to do so.
-func (hc *HealthCheckImpl) recomputeHealthyReplicas(key KeyspaceShardTabletType) {
+func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 	all := hc.healthData[key]
 	allArray := make([]*TabletHealth, 0, len(all))
 	for _, s := range all {
@@ -608,25 +614,6 @@ func (hc *HealthCheckImpl) recomputeHealthyReplicas(key KeyspaceShardTabletType)
 		}
 	}
 	hc.healthy[key] = FilterStatsByReplicationLag(allArray)
-}
-
-// Recompute the healthy primary tablet for the given key.
-func (hc *HealthCheckImpl) recomputeHealthyPrimary(key KeyspaceShardTabletType) {
-	highestPrimaryTermStartTime := int64(math.MinInt64)
-	var newestPrimary *TabletHealth
-
-	for _, s := range hc.healthData[key] {
-		if s.PrimaryTermStartTime >= highestPrimaryTermStartTime {
-			highestPrimaryTermStartTime = s.PrimaryTermStartTime
-			newestPrimary = s
-		}
-	}
-
-	if newestPrimary != nil {
-		hc.healthy[key] = []*TabletHealth{newestPrimary}
-	} else {
-		hc.healthy[key] = []*TabletHealth{}
-	}
 }
 
 // Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
