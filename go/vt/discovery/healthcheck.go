@@ -467,7 +467,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 				continue
 			}
 			delete(ths, tabletAlias)
-
+			// delete from healthy list
 			healthy, ok := hc.healthy[key]
 			if ok && len(healthy) > 0 {
 				if tabletType == topodata.TabletType_PRIMARY {
@@ -599,11 +599,13 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	hc.broadcast(th)
 }
 
-// Recomputes the healthy replica tablets for the given key.
+// Recomputes the healthy tablets for the given key.
 //
-// This filters out replicas that might be healthy, but are not part of the current
+// This filters out tablets that might be healthy, but are not part of the current
 // cell or cell alias. It also performs filtering of tablets based on replication lag,
 // if configured to do so.
+//
+// This should not be called for primary tablets.
 func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 	all := hc.healthData[key]
 	allArray := make([]*TabletHealth, 0, len(all))
