@@ -747,3 +747,92 @@ func TestVStreamCopyMultiKeyspaceReshard(t *testing.T) {
 	require.NotZero(t, ne.numDash40Events)
 	require.NotZero(t, ne.num40DashEvents)
 }
+
+func testVStreamHeartbeats(t *testing.T, failover bool) {
+	extraVTTabletArgs = append(extraVTTabletArgs,
+		"--heartbeat_enable",
+		"--heartbeat_interval", "1s",
+		"--heartbeat_on_demand_duration", "0",
+	)
+	setSidecarDBName("_vt")
+	config := mainClusterConfig
+	config.overrideHeartbeatOptions = true
+	vc = NewVitessCluster(t, &clusterOptions{
+		clusterConfig: config,
+	})
+	defer vc.TearDown()
+
+	require.NotNil(t, vc)
+	defaultReplicas = 0
+	defaultRdonly = 0
+
+	defaultCell := vc.Cells[vc.CellNames[0]]
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
+	verifyClusterHealth(t, vc)
+	insertInitialData(t)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(3*time.Second))
+	defer cancel()
+	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer vstreamConn.Close()
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: "product",
+			Shard:    "0",
+			Gtid:     "",
+		}}}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "customer",
+			Filter: "select * from customer",
+		}},
+	}
+	flags := &vtgatepb.VStreamFlags{EnableHeartbeats: true}
+	done := false
+
+	// stream events from the VStream API
+	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+	require.NoError(t, err)
+	var numHeartbeatRowEvents, numHeartbeatFieldEvents, numRegularFieldEvents, numRegularRowEvents int
+	// second goroutine that continuously receives events via VStream API and should be resilient to the two PRS events
+	for !done {
+		evs, err := reader.Recv()
+
+		switch err {
+		case nil:
+			for _, ev := range evs {
+				switch ev.Type {
+				case binlogdatapb.VEventType_ROW:
+					if ev.RowEvent.TableName == "heartbeat" {
+						numHeartbeatRowEvents++
+					} else {
+						numRegularRowEvents++
+					}
+				case binlogdatapb.VEventType_FIELD:
+					if ev.FieldEvent.TableName == "heartbeat" {
+						numHeartbeatFieldEvents++
+					} else {
+						numRegularFieldEvents++
+					}
+				default:
+				}
+			}
+		case io.EOF:
+			log.Infof("Stream Ended")
+		default:
+			log.Infof("%s:: remote error: %v", time.Now(), err)
+			done = true
+		}
+	}
+	require.Equal(t, 3, numRegularRowEvents)
+	require.Equal(t, 1, numRegularFieldEvents)
+	require.NotZero(t, numHeartbeatRowEvents)
+	require.Equal(t, 1, numHeartbeatFieldEvents)
+}
+
+func TestVStreamHeartbeats(t *testing.T) {
+	testVStreamHeartbeats(t, true)
+}

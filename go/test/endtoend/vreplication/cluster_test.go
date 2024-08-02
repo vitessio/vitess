@@ -87,6 +87,7 @@ type ClusterConfig struct {
 	vtorcPort            int
 
 	vreplicationCompressGTID bool
+	overrideHeartbeatOptions bool
 }
 
 // enableGTIDCompression enables GTID compression for the cluster and returns a function
@@ -517,11 +518,15 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 // AddTablet creates new tablet with specified attributes
 func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *exec.Cmd, error) {
 	tablet := &Tablet{}
-
-	options := []string{
+	var options []string
+	defaultHeartbeatOptions := []string{
 		"--heartbeat_on_demand_duration", "5s",
 		"--heartbeat_interval", "250ms",
 	}
+	if !mainClusterConfig.overrideHeartbeatOptions {
+		options = append(options, defaultHeartbeatOptions...)
+	}
+
 	options = append(options, extraVTTabletArgs...)
 
 	if mainClusterConfig.vreplicationCompressGTID {
