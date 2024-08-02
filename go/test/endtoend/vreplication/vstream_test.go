@@ -806,13 +806,14 @@ func testVStreamHeartbeats(t *testing.T, failover bool) {
 			for _, ev := range evs {
 				switch ev.Type {
 				case binlogdatapb.VEventType_ROW:
-					if ev.RowEvent.TableName == "heartbeat" {
+					log.Infof("Row Event: %v", ev.RowEvent)
+					if strings.HasSuffix(ev.RowEvent.TableName, "heartbeat") {
 						numHeartbeatRowEvents++
 					} else {
 						numRegularRowEvents++
 					}
 				case binlogdatapb.VEventType_FIELD:
-					if ev.FieldEvent.TableName == "heartbeat" {
+					if strings.HasSuffix(ev.FieldEvent.TableName, "heartbeat") {
 						numHeartbeatFieldEvents++
 					} else {
 						numRegularFieldEvents++

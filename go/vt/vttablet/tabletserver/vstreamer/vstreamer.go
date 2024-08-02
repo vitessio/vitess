@@ -567,26 +567,24 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
-
 		if plan, ok := vs.plans[id]; ok {
 			// When the underlying mysql server restarts the table map can change.
 			// Usually the vstreamer will also error out when this happens, and vstreamer re-initializes its table map.
 			// But if the vstreamer is not aware of the restart, we could get an id that matches one in the cache, but
 			// is for a different table. We then invalidate and recompute the plan for this id.
-			if plan == nil || plan.Table.Name == tm.Name {
+			isInternal := tm.Database == sidecar.GetName()
+			if plan == nil ||
+				(plan.Table.Name == tm.Name && isInternal == plan.IsInternal) {
+				log.Infof("Found existing plan for table %s", tm.Name)
 				return nil, nil
 			}
-			vs.plans[id] = nil
-			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
 		}
 
-		if tm.Database == sidecar.GetName() && tm.Name == "resharding_journal" {
-			// A journal is a special case that generates a JOURNAL event.
-			return nil, vs.buildJournalPlan(id, tm)
-		} else if tm.Database == sidecar.GetName() && tm.Name == "schema_version" && !vs.se.SkipMetaCheck {
-			// Generates a Version event when it detects that a schema is stored in the schema_version table.
-			return nil, vs.buildVersionPlan(id, tm)
+		if tm.Database == sidecar.GetName() {
+			log.Infof("Building sidecar table plan for table %s", tm.Name)
+			return vs.buildSidecarTablePlan(id, tm)
 		}
+
 		if tm.Database != "" && tm.Database != vs.cp.DBName() {
 			vs.plans[id] = nil
 			return nil, nil
@@ -671,6 +669,65 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
 		vevent.CurrentTime = time.Now().UnixNano()
+	}
+	return vevents, nil
+}
+
+func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*binlogdatapb.VEvent, error) {
+	tableName := tm.Name
+	switch tableName {
+	case "resharding_journal":
+	case "schema_version":
+	case "heartbeat":
+		// todo: check for passed in vstreamer options
+	default:
+		return nil, nil
+	}
+	conn, err := vs.cp.Connect(vs.ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("select * from %s.%s where 1 != 1",
+		sidecar.GetIdentifier(), tableName).Query, 1, true)
+	if err != nil {
+		return nil, err
+	}
+	fields := qr.Fields
+	if len(fields) < len(tm.Types) {
+		return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
+	}
+	table := &Table{
+		Name:   tableName,
+		Fields: fields[:len(tm.Types)],
+	}
+	// Build a normal table plan, which means, return all rows
+	// and columns as is. Special handling is done when we actually
+	// receive the row event. We'll build a JOURNAL event instead.
+	plan, err := buildREPlan(vs.se.Environment(), table, nil, "")
+	if err != nil {
+		return nil, err
+	}
+	plan.IsInternal = true
+	vs.plans[id] = &streamerPlan{
+		Plan:     plan,
+		TableMap: tm,
+	}
+	var vevents []*binlogdatapb.VEvent
+	switch tm.Name {
+	case "resharding_journal":
+		vs.journalTableID = id
+	case "schema_version":
+		vs.versionTableID = id
+	case "heartbeat":
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_FIELD,
+			FieldEvent: &binlogdatapb.FieldEvent{
+				TableName: tableName,
+				Fields:    plan.fields(),
+				Keyspace:  vs.vse.keyspace,
+				Shard:     vs.vse.shard,
+			}})
 	}
 	return vevents, nil
 }
