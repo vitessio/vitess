@@ -31,8 +31,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/fakerpcvtgateconn"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -449,51 +447,41 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 	}
 }
 
-// These vars and types are used only for TestExecutorResolveTransaction
-var dtidCh = make(chan string)
-
-type FakeVTGateConn struct {
-	fakerpcvtgateconn.FakeVTGateConn
-}
-
-func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
-	dtidCh <- dtid
-	return nil
-}
-
-func TestExecutorResolveTransaction(t *testing.T) {
+// TestTransactionNotifier tests that the transaction notifier is called
+// when a transaction watcher receives unresolved transaction count more than zero.
+func TestTransactionNotifier(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	protocol := "resolveTest"
-	oldValue := vtgateconn.GetVTGateProtocol()
-	vtgateconn.SetVTGateProtocol(protocol)
-	defer func() {
-		vtgateconn.SetVTGateProtocol(oldValue)
-	}()
-	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
-		return &FakeVTGateConn{
-			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
-		}, nil
-	})
+
 	_, tsv, db := newShortAgeExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
-	want := "aa"
 	db.AddQueryPattern(
-		"select dtid, time_created from _vt\\.dt_state where time_created.*",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.VarChar},
-				{Type: sqltypes.Int64},
-			},
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary(want),
-				sqltypes.NewVarBinary("1"),
-			}},
-		})
-	got := <-dtidCh
-	if got != want {
-		t.Errorf("ResolveTransaction: %s, want %s", got, want)
+		"select count\\(\\*\\) from _vt\\.redo_state where time_created.*",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"))
+
+	// zero unresolved transactions
+	db.AddQueryPattern(
+		"select count\\(\\*\\) from _vt\\.dt_state where time_created.*",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"))
+	notifyCh := make(chan any)
+	tsv.te.dxNotify = func() {
+		notifyCh <- nil
+	}
+	select {
+	case <-notifyCh:
+		t.Error("unresolved transaction notifier call unexpected")
+	case <-time.After(1 * time.Second):
+	}
+
+	// non zero unresolved transactions
+	db.AddQueryPattern(
+		"select count\\(\\*\\) from _vt\\.dt_state where time_created.*",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "1"))
+	select {
+	case <-notifyCh:
+	case <-time.After(1 * time.Second):
+		t.Error("unresolved transaction notifier expected but not received")
 	}
 }
 

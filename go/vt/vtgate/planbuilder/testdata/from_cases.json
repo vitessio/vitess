@@ -785,6 +785,59 @@
     }
   },
   {
+    "comment": "Outer join with join predicates that only depend on the inner side",
+    "query": "select 1 from user left join user_extra on user.foo = 42 and user.bar = user_extra.bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user left join user_extra on user.foo = 42 and user.bar = user_extra.bar",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "1 as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinVars": {
+              "user_bar": 1,
+              "user_foo": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.foo, `user`.bar from `user` where 1 != 1",
+                "Query": "select `user`.foo, `user`.bar from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_extra.bar = :user_bar and :user_foo = 42",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Parenthesized, single chunk",
     "query": "select user.col from user join (unsharded as m1 join unsharded as m2)",
     "plan": {
@@ -1821,6 +1874,30 @@
       },
       "TablesUsed": [
         "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "three table join with join predicate touching all tables",
+    "query": "select 42 from user u join user_extra ue on u.id = ue.user_id join music m on m.user_id = u.id where u.foo or m.foo or ue.foo",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 42 from user u join user_extra ue on u.id = ue.user_id join music m on m.user_id = u.id where u.foo or m.foo or ue.foo",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 42 from `user` as u, user_extra as ue, music as m where 1 != 1",
+        "Query": "select 42 from `user` as u, user_extra as ue, music as m where u.id = ue.user_id and m.user_id = u.id and (u.foo or m.foo or ue.foo)",
+        "Table": "`user`, music, user_extra"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
       ]
     }
   },
@@ -4539,6 +4616,55 @@
       "TablesUsed": [
         "user.music",
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Cross keyspace join",
+    "query": "select 1 from user join t1 on user.id = t1.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user join t1 on user.id = t1.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "t1_id": 1
+        },
+        "TableName": "t1_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "zlookup_unique",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1, t1.id from t1 where 1 != 1",
+            "Query": "select 1, t1.id from t1",
+            "Table": "t1"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where `user`.id = :t1_id",
+            "Table": "`user`",
+            "Values": [
+              ":t1_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "zlookup_unique.t1"
       ]
     }
   },

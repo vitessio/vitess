@@ -20,15 +20,13 @@ import (
 	"context"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
 // DTExecutor is used for executing a distributed transactional request.
@@ -227,6 +225,8 @@ func (dte *DTExecutor) SetRollback(dtid string, transactionID int64) error {
 	dte.logStats.TransactionID = transactionID
 
 	if transactionID != 0 {
+		// If the transaction is still open, it will be rolled back.
+		// Otherwise, it would have been rolled back by other means, like a timeout or vttablet/mysql restart.
 		dte.te.Rollback(dte.ctx, transactionID)
 	}
 
@@ -289,4 +289,9 @@ func (dte *DTExecutor) inTransaction(f func(*StatefulConnection) error) error {
 		return err
 	}
 	return nil
+}
+
+// UnresolvedTransactions returns the list of unresolved distributed transactions.
+func (dte *DTExecutor) UnresolvedTransactions() ([]*querypb.TransactionMetadata, error) {
+	return dte.te.twoPC.UnresolvedTransactions(dte.ctx, time.Now().Add(-dte.te.abandonAge))
 }

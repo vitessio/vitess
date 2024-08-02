@@ -1960,6 +1960,9 @@ func FnMaketime(yield Query) {
 		"''", "0", "'3'", "59", "60", "0xFF666F6F626172FF", "18446744073709551615",
 	}
 	for _, h := range inputConversions {
+		if !(bugs{}).MakeTimeValidHours(h) {
+			continue
+		}
 		for _, m := range minutes {
 			for _, s := range inputConversions {
 				yield(fmt.Sprintf("MAKETIME(%s, %s, %s)", h, m, s), nil)

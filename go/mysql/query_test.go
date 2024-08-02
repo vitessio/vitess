@@ -315,10 +315,7 @@ func TestComStmtExecuteUpdStmt(t *testing.T) {
 	assert.EqualValues(t, querypb.Type_DATETIME, prepData.ParamsType[15], "got: %s", querypb.Type(prepData.ParamsType[15]))
 	assert.EqualValues(t, querypb.Type_TIMESTAMP, prepData.ParamsType[16], "got: %s", querypb.Type(prepData.ParamsType[16]))
 	assert.EqualValues(t, querypb.Type_TIME, prepData.ParamsType[17], "got: %s", querypb.Type(prepData.ParamsType[17]))
-
-	// this is year but in binary it is changed to varbinary
-	assert.EqualValues(t, querypb.Type_VARBINARY, prepData.ParamsType[18], "got: %s", querypb.Type(prepData.ParamsType[18]))
-
+	assert.EqualValues(t, querypb.Type_YEAR, prepData.ParamsType[18], "got: %s", querypb.Type(prepData.ParamsType[18]))
 	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[19], "got: %s", querypb.Type(prepData.ParamsType[19]))
 	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[20], "got: %s", querypb.Type(prepData.ParamsType[20]))
 	assert.EqualValues(t, querypb.Type_TEXT, prepData.ParamsType[21], "got: %s", querypb.Type(prepData.ParamsType[21]))
@@ -463,6 +460,7 @@ func TestQueries(t *testing.T) {
 			// Skip TUPLE, not possible in Result.
 			{Name: "Type_GEOMETRY ", Type: querypb.Type_GEOMETRY, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_BLOB_FLAG)},
 			{Name: "Type_JSON     ", Type: querypb.Type_JSON, Charset: collations.CollationUtf8mb4ID},
+			{Name: "Type_VECTOR   ", Type: querypb.Type_VECTOR, Charset: collations.CollationBinaryID},
 		},
 		Rows: [][]sqltypes.Value{
 			{
@@ -495,8 +493,10 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_SET, []byte("Type_SET")),
 				sqltypes.MakeTrusted(querypb.Type_GEOMETRY, []byte("Type_GEOMETRY")),
 				sqltypes.MakeTrusted(querypb.Type_JSON, []byte("Type_JSON")),
+				sqltypes.MakeTrusted(querypb.Type_VECTOR, []byte("Type_VECTOR")),
 			},
 			{
+				sqltypes.NULL,
 				sqltypes.NULL,
 				sqltypes.NULL,
 				sqltypes.NULL,

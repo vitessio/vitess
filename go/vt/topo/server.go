@@ -95,6 +95,7 @@ const (
 	ExternalClusterVitess    = "vitess"
 	RoutingRulesPath         = "routing_rules"
 	KeyspaceRoutingRulesPath = "keyspace"
+	NamedLocksPath           = "internal/named_locks"
 )
 
 // Factory is a factory interface to create Conn objects.

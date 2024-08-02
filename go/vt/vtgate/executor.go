@@ -1619,6 +1619,10 @@ func (e *Executor) environment() *vtenv.Environment {
 	return e.env
 }
 
+func (e *Executor) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	return e.txConn.ReadTransaction(ctx, transactionID)
+}
+
 type (
 	errorTransformer interface {
 		TransformError(err error) error

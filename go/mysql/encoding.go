@@ -132,15 +132,8 @@ func writeLenEncString(data []byte, pos int, value string) int {
 }
 
 func writeZeroes(data []byte, pos int, len int) int {
-	// XXX: This implementation is optimized to leverage
-	// the go compiler's memclr pattern, see: https://github.com/golang/go/issues/5373
 	end := pos + len
-	data = data[pos:end]
-
-	for i := range data {
-		data[i] = 0
-	}
-
+	clear(data[pos:end])
 	return end
 }
 
@@ -332,6 +325,53 @@ func readLenEncStringAsBytesCopy(data []byte, pos int) ([]byte, int, bool) {
 	return result, pos + s, true
 }
 
+// > encGtidData("xxx")
+//
+//	[07 03 05 00 03 78 78 78]
+//	 |  |  |  |  |  |------|
+//	 |  |  |  |  |  ^-------- "xxx"
+//	 |  |  |  |  ^------------ length of rest of bytes, 3
+//	 |  |  |  ^--------------- fixed 0x00
+//	 |  |  ^------------------ length of rest of bytes, 5
+//	 |  ^--------------------- fixed 0x03 (SESSION_TRACK_GTIDS)
+//	 ^------------------------ length of rest of bytes, 7
+//
+// This is ultimately lenencoded strings of length encoded strings, or:
+// > lenenc(0x03 + lenenc(0x00 + lenenc(data)))
+func encGtidData(data string) []byte {
+	const SessionTrackGtids = 0x03
+
+	// calculate total size up front to do 1 allocation
+	// encoded layout is:
+	// lenenc(0x03 + lenenc(0x00 + lenenc(data)))
+	dataSize := uint64(len(data))
+	dataLenEncSize := uint64(lenEncIntSize(dataSize))
+
+	wrapSize := uint64(dataSize + dataLenEncSize + 1)
+	wrapLenEncSize := uint64(lenEncIntSize(wrapSize))
+
+	totalSize := uint64(wrapSize + wrapLenEncSize + 1)
+	totalLenEncSize := uint64(lenEncIntSize(totalSize))
+
+	gtidData := make([]byte, int(totalSize+totalLenEncSize))
+
+	pos := 0
+	pos = writeLenEncInt(gtidData, pos, totalSize)
+
+	gtidData[pos] = SessionTrackGtids
+	pos++
+
+	pos = writeLenEncInt(gtidData, pos, wrapSize)
+
+	gtidData[pos] = 0x00
+	pos++
+
+	pos = writeLenEncInt(gtidData, pos, dataSize)
+	writeEOFString(gtidData, pos, data)
+
+	return gtidData
+}
+
 type coder struct {
 	data []byte
 	pos  int
@@ -395,5 +435,9 @@ func (d *coder) writeLenEncString(value string) {
 }
 
 func (d *coder) writeEOFString(value string) {
+	d.pos += copy(d.data[d.pos:], value)
+}
+
+func (d *coder) writeEOFBytes(value []byte) {
 	d.pos += copy(d.data[d.pos:], value)
 }

@@ -481,7 +481,15 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			}
 
 			// Create the table.
-			_, err := dbClient.ExecuteFetch(tcase.initialDDL, 1)
+			if vr.needFKRestrict() {
+				_, err := dbClient.ExecuteFetch("set @@session.restrict_fk_on_non_standard_key=0", 1)
+				require.NoError(t, err)
+				defer func() {
+					_, err = dbClient.ExecuteFetch("set @@session.restrict_fk_on_non_standard_key=1", 1)
+					require.NoError(t, err)
+				}()
+			}
+			_, err = dbClient.ExecuteFetch(tcase.initialDDL, 1)
 			require.NoError(t, err)
 			defer func() {
 				_, err = dbClient.ExecuteFetch(fmt.Sprintf("drop table %s.%s", dbName, tcase.tableName), 1)

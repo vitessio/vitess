@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -246,7 +247,8 @@ func TestSchemaChange(t *testing.T) {
 		}
 	})
 	t.Run("updating throttler config", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, noCustomQuery, nil)
+		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: customThreshold}
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		require.NoError(t, err)
 	})
 
@@ -257,7 +259,7 @@ func TestSchemaChange(t *testing.T) {
 					t.Run(shard.Name, func(t *testing.T) {
 						for _, tablet := range shard.Vttablets {
 							t.Run(tablet.Alias, func(t *testing.T) {
-								throttler.WaitForThrottlerStatusEnabled(t, tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: customThreshold}, throttlerEnabledTimeout)
+								throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: customThreshold}, throttlerEnabledTimeout)
 							})
 						}
 					})
@@ -395,6 +397,8 @@ func TestSchemaChange(t *testing.T) {
 		assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
 		component := row.AsString("component_throttled", "")
 		assert.Contains(t, []string{throttlerapp.VCopierName.String(), throttlerapp.VPlayerName.String()}, component)
+		reason := row.AsString("reason_throttled", "")
+		assert.Contains(t, reason, "is explicitly denied access")
 
 		// unthrottle
 		onlineddl.UnthrottleAllMigrations(t, &vtParams)

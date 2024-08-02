@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -105,6 +106,7 @@ type vreplicator struct {
 
 	originalFKCheckSetting int64
 	originalSQLMode        string
+	originalFKRestrict     int64
 
 	WorkflowType    int32
 	WorkflowSubType int32
@@ -239,6 +241,10 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 	//defensive guard, should be a no-op since it should happen after copy is done
 	defer vr.resetFKCheckAfterCopy(vr.dbClient)
+	if err := vr.getSettingFKRestrict(); err != nil {
+		return err
+	}
+	defer vr.resetFKRestrictAfterCopy(vr.dbClient)
 
 	vr.throttleUpdatesRateLimiter = timer.NewRateLimiter(time.Second)
 	defer vr.throttleUpdatesRateLimiter.Stop()
@@ -272,6 +278,10 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				log.Warningf("Unable to clear FK check %v", err)
 				return err
 			}
+			if err := vr.clearFKRestrict(vr.dbClient); err != nil {
+				log.Warningf("Unable to clear FK restrict %v", err)
+				return err
+			}
 			if vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
 				if err := newVCopier(vr).copyAll(ctx, settings); err != nil {
 					log.Infof("Error atomically copying all tables: %v", err)
@@ -299,6 +309,10 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		default:
 			if err := vr.resetFKCheckAfterCopy(vr.dbClient); err != nil {
 				log.Warningf("Unable to reset FK check %v", err)
+				return err
+			}
+			if err := vr.resetFKRestrictAfterCopy(vr.dbClient); err != nil {
+				log.Warningf("Unable to reset FK restrict %v", err)
 				return err
 			}
 			if vr.source.StopAfterCopy {
@@ -512,8 +526,42 @@ func (vr *vreplicator) getSettingFKCheck() error {
 	return nil
 }
 
+func (vr *vreplicator) needFKRestrict() bool {
+	ok, err := vr.dbClient.SupportsCapability(capabilities.RestrictFKOnNonStandardKey)
+	if err != nil {
+		return false
+	}
+	return ok
+}
+
+func (vr *vreplicator) getSettingFKRestrict() error {
+	if !vr.needFKRestrict() {
+		return nil
+	}
+	qr, err := vr.dbClient.Execute("select @@session.restrict_fk_on_non_standard_key")
+	if err != nil {
+		return err
+	}
+	if len(qr.Rows) != 1 || len(qr.Fields) != 1 {
+		return fmt.Errorf("unable to select @@session.restrict_fk_on_non_standard_key")
+	}
+	vr.originalFKRestrict, err = qr.Rows[0][0].ToCastInt64()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (vr *vreplicator) resetFKCheckAfterCopy(dbClient *vdbClient) error {
 	_, err := dbClient.Execute(fmt.Sprintf("set @@session.foreign_key_checks=%d", vr.originalFKCheckSetting))
+	return err
+}
+
+func (vr *vreplicator) resetFKRestrictAfterCopy(dbClient *vdbClient) error {
+	if !vr.needFKRestrict() {
+		return nil
+	}
+	_, err := dbClient.Execute(fmt.Sprintf("set @@session.restrict_fk_on_non_standard_key=%d", vr.originalFKRestrict))
 	return err
 }
 
@@ -582,13 +630,13 @@ func (vr *vreplicator) throttlerAppName() string {
 // tablet throttler over time. It also increments the global throttled count to keep
 // track of how many times in total vreplication has been throttled across all workflows
 // (both ones that currently exist and ones that no longer do).
-func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
+func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name, reasonThrottled string) error {
 	appName := appThrottled.String()
 	vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
 	globalStats.ThrottledCount.Add(1)
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appName)
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appName, reasonThrottled)
 		if err != nil {
 			return err
 		}
@@ -613,6 +661,14 @@ func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
 
 func (vr *vreplicator) clearFKCheck(dbClient *vdbClient) error {
 	_, err := dbClient.Execute("set @@session.foreign_key_checks=0")
+	return err
+}
+
+func (vr *vreplicator) clearFKRestrict(dbClient *vdbClient) error {
+	if !vr.needFKRestrict() {
+		return nil
+	}
+	_, err := dbClient.Execute("set @@session.restrict_fk_on_non_standard_key=0")
 	return err
 }
 
@@ -1055,6 +1111,9 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 	}
 	if err := vr.clearFKCheck(dbClient); err != nil {
 		return nil, vterrors.Wrap(err, "failed to clear foreign key check")
+	}
+	if err := vr.clearFKRestrict(dbClient); err != nil {
+		return nil, vterrors.Wrap(err, "failed to clear foreign key restriction")
 	}
 	return dbClient, nil
 }

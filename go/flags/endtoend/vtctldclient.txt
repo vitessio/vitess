@@ -19,6 +19,7 @@ Available Commands:
   Backup                      Uses the BackupStorage service on the given tablet to create and store a new backup.
   BackupShard                 Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
   ChangeTabletType            Changes the db type for the specified tablet, if possible.
+  CheckThrottler              Issue a throttler check on the given tablet.
   CreateKeyspace              Creates the specified keyspace in the topology.
   CreateShard                 Creates the specified shard in the topology.
   DeleteCellInfo              Deletes the CellInfo for the provided cell.
@@ -56,6 +57,7 @@ Available Commands:
   GetTablet                   Outputs a JSON structure that contains information about the tablet.
   GetTabletVersion            Print the version of a tablet from its debug vars.
   GetTablets                  Looks up tablets according to filter criteria.
+  GetThrottlerStatus          Get the throttler status for the given tablet.
   GetTopologyPath             Gets the value associated with the particular path (key) in the topology server.
   GetVSchema                  Prints a JSON representation of a keyspace's topo record.
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.

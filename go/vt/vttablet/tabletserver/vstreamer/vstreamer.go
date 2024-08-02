@@ -287,17 +287,18 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	hbTimer := time.NewTimer(HeartbeatTime)
 	defer hbTimer.Stop()
 
-	injectHeartbeat := func(throttled bool) error {
+	injectHeartbeat := func(throttled bool, throttledReason string) error {
 		now := time.Now().UnixNano()
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 			err := bufferAndTransmit(&binlogdatapb.VEvent{
-				Type:        binlogdatapb.VEventType_HEARTBEAT,
-				Timestamp:   now / 1e9,
-				CurrentTime: now,
-				Throttled:   throttled,
+				Type:            binlogdatapb.VEventType_HEARTBEAT,
+				Timestamp:       now / 1e9,
+				CurrentTime:     now,
+				Throttled:       throttled,
+				ThrottledReason: throttledReason,
 			})
 			return err
 		}
@@ -309,7 +310,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		defer throttledHeartbeatsRateLimiter.Stop()
 		for {
 			// check throttler.
-			if !vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp) {
+			if checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp); !ok {
 				// make sure to leave if context is cancelled
 				select {
 				case <-ctx.Done():
@@ -318,7 +319,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					// do nothing special
 				}
 				throttledHeartbeatsRateLimiter.Do(func() error {
-					return injectHeartbeat(true)
+					return injectHeartbeat(true, checkResult.Summary())
 				})
 				// we won't process events, until we're no longer throttling
 				logger.Infof("throttled.")
@@ -393,7 +394,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:
-			if err := injectHeartbeat(false); err != nil {
+			if err := injectHeartbeat(false, ""); err != nil {
 				if err == io.EOF {
 					return nil
 				}
@@ -642,15 +643,23 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
 				vs.vse.env.Config().DB.Flavor)
 		}
-		tpevents, err := ev.TransactionPayload(vs.format)
+		tp, err := ev.TransactionPayload(vs.format)
 		if err != nil {
 			return nil, err
 		}
+		defer tp.Close()
 		// Events inside the payload don't have their own checksum.
 		ogca := vs.format.ChecksumAlgorithm
 		defer func() { vs.format.ChecksumAlgorithm = ogca }()
 		vs.format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
-		for _, tpevent := range tpevents {
+		for {
+			tpevent, err := tp.GetNextEvent()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, err
+			}
 			tpvevents, err := vs.parseEvent(tpevent)
 			if err != nil {
 				return nil, vterrors.Wrap(err, "failed to parse transaction payload's internal event")

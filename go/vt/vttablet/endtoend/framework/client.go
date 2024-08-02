@@ -178,6 +178,11 @@ func (client *QueryClient) ReadTransaction(dtid string) (*querypb.TransactionMet
 	return client.server.ReadTransaction(client.ctx, client.target, dtid)
 }
 
+// UnresolvedTransactions invokes the UnresolvedTransactions API of TabletServer.
+func (client *QueryClient) UnresolvedTransactions() ([]*querypb.TransactionMetadata, error) {
+	return client.server.UnresolvedTransactions(client.ctx, client.target)
+}
+
 // SetServingType is for testing transitions.
 // It currently supports only primary->replica and back.
 func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) error {

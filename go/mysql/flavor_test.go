@@ -54,11 +54,6 @@ func TestServerVersionCapableOf(t *testing.T) {
 			isCapable:  false,
 		},
 		{
-			version:    "5.7.29",
-			capability: capabilities.MySQLJSONFlavorCapability,
-			isCapable:  true,
-		},
-		{
 			version:    "8.0.30",
 			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
 			isCapable:  true,

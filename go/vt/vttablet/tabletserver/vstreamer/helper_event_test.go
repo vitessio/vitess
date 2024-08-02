@@ -780,6 +780,8 @@ func getQueryType(strType string) query.Type {
 		return query.Type_SET
 	case "JSON":
 		return query.Type_JSON
+	case "VECTOR":
+		return query.Type_VECTOR
 	default:
 		panic("unknown type " + strType)
 	}
