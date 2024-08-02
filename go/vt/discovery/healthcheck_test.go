@@ -827,10 +827,12 @@ func TestRemoveTabletDuringExternalReparenting(t *testing.T) {
 	resultChan := hc.Subscribe()
 
 	hc.AddTablet(firstTablet)
-	hc.AddTablet(secondTablet)
-	hc.AddTablet(thirdTablet)
-
 	<-resultChan
+
+	hc.AddTablet(secondTablet)
+	<-resultChan
+
+	hc.AddTablet(thirdTablet)
 	<-resultChan
 
 	firstTabletPrimaryTermStartTimestamp := time.Now().Unix() - 10
@@ -843,6 +845,7 @@ func TestRemoveTabletDuringExternalReparenting(t *testing.T) {
 		PrimaryTermStartTimestamp: firstTabletPrimaryTermStartTimestamp,
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
 	}
+	<-resultChan
 
 	secondTabletHealthStream <- &querypb.StreamHealthResponse{
 		TabletAlias: secondTablet.Alias,
@@ -852,6 +855,7 @@ func TestRemoveTabletDuringExternalReparenting(t *testing.T) {
 		PrimaryTermStartTimestamp: 0,
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
 	}
+	<-resultChan
 
 	thirdTabletHealthStream <- &querypb.StreamHealthResponse{
 		TabletAlias: thirdTablet.Alias,
@@ -861,9 +865,6 @@ func TestRemoveTabletDuringExternalReparenting(t *testing.T) {
 		PrimaryTermStartTimestamp: 0,
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
 	}
-
-	<-resultChan
-	<-resultChan
 	<-resultChan
 
 	secondTabletPrimaryTermStartTimestamp := time.Now().Unix()
@@ -877,6 +878,7 @@ func TestRemoveTabletDuringExternalReparenting(t *testing.T) {
 		PrimaryTermStartTimestamp: firstTabletPrimaryTermStartTimestamp,
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
 	}
+	<-resultChan
 
 	secondTabletHealthStream <- &querypb.StreamHealthResponse{
 		TabletAlias: secondTablet.Alias,
@@ -886,13 +888,11 @@ func TestRemoveTabletDuringExternalReparenting(t *testing.T) {
 		PrimaryTermStartTimestamp: secondTabletPrimaryTermStartTimestamp,
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
 	}
-
-	<-resultChan
 	<-resultChan
 
 	hc.RemoveTablet(thirdTablet)
 
-	// tablet 1 is the primary now
+	// `secondTablet` should be the primary now
 	expectedTabletStats := []*TabletHealth{{
 		Tablet:               secondTablet,
 		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
