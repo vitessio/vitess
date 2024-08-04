@@ -790,7 +790,7 @@ func testVStreamHeartbeats(t *testing.T, failover bool) {
 			Filter: "select * from customer",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{EnableHeartbeats: true}
+	flags := &vtgatepb.VStreamFlags{EnableKeyspaceHeartbeats: true}
 	done := false
 
 	// stream events from the VStream API

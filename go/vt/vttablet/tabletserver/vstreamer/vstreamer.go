@@ -84,8 +84,9 @@ type vstreamer struct {
 	pos     replication.Position
 	stopPos string
 
-	phase string
-	vse   *Engine
+	phase   string
+	vse     *Engine
+	options *binlogdatapb.VStreamOptions
 }
 
 // streamerPlan extends the original plan to also include
@@ -118,7 +119,9 @@ type streamerPlan struct {
 //
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string,
+	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
+	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:          ctx,
@@ -135,6 +138,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		plans:        make(map[uint64]*streamerPlan),
 		phase:        phase,
 		vse:          vse,
+		options:      options,
 	}
 }
 
@@ -679,7 +683,9 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 	case "resharding_journal":
 	case "schema_version":
 	case "heartbeat":
-		// todo: check for passed in vstreamer options
+		if vs.options == nil || !vs.options.EnableKeyspaceHeartbeats {
+			return nil, nil
+		}
 	default:
 		return nil, nil
 	}

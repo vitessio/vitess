@@ -478,6 +478,10 @@ message MinimalSchema {
   repeated MinimalTable tables = 1;
 }
 
+message VStreamOptions {
+  bool enable_keyspace_heartbeats = 1;
+}
+
 // VStreamRequest is the payload for VStreamer
 message VStreamRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -487,6 +491,8 @@ message VStreamRequest {
   string position = 4;
   Filter filter = 5;
   repeated TableLastPK table_last_p_ks = 6;
+
+  VStreamOptions options = 7;
 }
 
 // VStreamResponse is the response from VStreamer

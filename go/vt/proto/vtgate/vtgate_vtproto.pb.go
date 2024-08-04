@@ -352,13 +352,13 @@ func (m *VStreamFlags) CloneVT() *VStreamFlags {
 		return (*VStreamFlags)(nil)
 	}
 	r := &VStreamFlags{
-		MinimizeSkew:      m.MinimizeSkew,
-		HeartbeatInterval: m.HeartbeatInterval,
-		StopOnReshard:     m.StopOnReshard,
-		Cells:             m.Cells,
-		CellPreference:    m.CellPreference,
-		TabletOrder:       m.TabletOrder,
-		EnableHeartbeats:  m.EnableHeartbeats,
+		MinimizeSkew:             m.MinimizeSkew,
+		HeartbeatInterval:        m.HeartbeatInterval,
+		StopOnReshard:            m.StopOnReshard,
+		Cells:                    m.Cells,
+		CellPreference:           m.CellPreference,
+		TabletOrder:              m.TabletOrder,
+		EnableKeyspaceHeartbeats: m.EnableKeyspaceHeartbeats,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -1480,9 +1480,9 @@ func (m *VStreamFlags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.EnableHeartbeats {
+	if m.EnableKeyspaceHeartbeats {
 		i--
-		if m.EnableHeartbeats {
+		if m.EnableKeyspaceHeartbeats {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -2288,7 +2288,7 @@ func (m *VStreamFlags) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.EnableHeartbeats {
+	if m.EnableKeyspaceHeartbeats {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -5238,7 +5238,7 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 7:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field EnableHeartbeats", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field EnableKeyspaceHeartbeats", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -5255,7 +5255,7 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.EnableHeartbeats = bool(v != 0)
+			m.EnableKeyspaceHeartbeats = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
