@@ -33126,6 +33126,9 @@ export namespace binlogdata {
 
         /** RowEvent flags */
         flags?: (number|null);
+
+        /** RowEvent is_internal */
+        is_internal?: (boolean|null);
     }
 
     /** Represents a RowEvent. */
@@ -33151,6 +33154,9 @@ export namespace binlogdata {
 
         /** RowEvent flags. */
         public flags: number;
+
+        /** RowEvent is_internal. */
+        public is_internal: boolean;
 
         /**
          * Creates a new RowEvent instance using the specified properties.
@@ -33247,6 +33253,9 @@ export namespace binlogdata {
 
         /** FieldEvent enum_set_string_values */
         enum_set_string_values?: (boolean|null);
+
+        /** FieldEvent is_internal */
+        is_internal?: (boolean|null);
     }
 
     /** Represents a FieldEvent. */
@@ -33272,6 +33281,9 @@ export namespace binlogdata {
 
         /** FieldEvent enum_set_string_values. */
         public enum_set_string_values: boolean;
+
+        /** FieldEvent is_internal. */
+        public is_internal: boolean;
 
         /**
          * Creates a new FieldEvent instance using the specified properties.

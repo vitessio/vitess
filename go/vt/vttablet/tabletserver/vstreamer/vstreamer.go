@@ -723,10 +723,11 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_FIELD,
 			FieldEvent: &binlogdatapb.FieldEvent{
-				TableName: tableName,
-				Fields:    plan.fields(),
-				Keyspace:  vs.vse.keyspace,
-				Shard:     vs.vse.shard,
+				TableName:  tableName,
+				Fields:     plan.fields(),
+				Keyspace:   vs.vse.keyspace,
+				Shard:      vs.vse.shard,
+				IsInternal: plan.IsInternal,
 			}})
 	}
 	return vevents, nil
@@ -1057,6 +1058,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 				Keyspace:   vs.vse.keyspace,
 				Shard:      vs.vse.shard,
 				Flags:      uint32(rows.Flags),
+				IsInternal: plan.IsInternal,
 			},
 		})
 	}

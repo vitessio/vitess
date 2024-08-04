@@ -343,10 +343,11 @@ func (m *RowEvent) CloneVT() *RowEvent {
 		return (*RowEvent)(nil)
 	}
 	r := &RowEvent{
-		TableName: m.TableName,
-		Keyspace:  m.Keyspace,
-		Shard:     m.Shard,
-		Flags:     m.Flags,
+		TableName:  m.TableName,
+		Keyspace:   m.Keyspace,
+		Shard:      m.Shard,
+		Flags:      m.Flags,
+		IsInternal: m.IsInternal,
 	}
 	if rhs := m.RowChanges; rhs != nil {
 		tmpContainer := make([]*RowChange, len(rhs))
@@ -375,6 +376,7 @@ func (m *FieldEvent) CloneVT() *FieldEvent {
 		Keyspace:            m.Keyspace,
 		Shard:               m.Shard,
 		EnumSetStringValues: m.EnumSetStringValues,
+		IsInternal:          m.IsInternal,
 	}
 	if rhs := m.Fields; rhs != nil {
 		tmpContainer := make([]*query.Field, len(rhs))
@@ -1734,6 +1736,16 @@ func (m *RowEvent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.IsInternal {
+		i--
+		if m.IsInternal {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
+	}
 	if m.Flags != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.Flags))
 		i--
@@ -1804,6 +1816,18 @@ func (m *FieldEvent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.IsInternal {
+		i--
+		if m.IsInternal {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xd0
 	}
 	if m.EnumSetStringValues {
 		i--
@@ -3558,6 +3582,9 @@ func (m *RowEvent) SizeVT() (n int) {
 	if m.Flags != 0 {
 		n += 1 + sov(uint64(m.Flags))
 	}
+	if m.IsInternal {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -3587,6 +3614,9 @@ func (m *FieldEvent) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.EnumSetStringValues {
+		n += 3
+	}
+	if m.IsInternal {
 		n += 3
 	}
 	n += len(m.unknownFields)
@@ -6674,6 +6704,26 @@ func (m *RowEvent) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IsInternal", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IsInternal = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -6875,6 +6925,26 @@ func (m *FieldEvent) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.EnumSetStringValues = bool(v != 0)
+		case 26:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IsInternal", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IsInternal = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
