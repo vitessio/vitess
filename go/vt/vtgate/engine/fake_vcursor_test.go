@@ -342,7 +342,7 @@ func (t *noopVCursor) ExceedsMaxMemoryRows(numRows int) bool {
 }
 
 func (t *noopVCursor) GetKeyspace() string {
-	return ""
+	return "test_ks"
 }
 
 func (t *noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
