@@ -605,12 +605,16 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.RHS, qbR)
-	// if we have a recursive cte on the rhs, we might not have a statement
-	if qbR.stmt == nil {
-		return
-	}
 
-	qb.joinWith(qbR, pred, op.JoinType)
+	switch {
+	// if we have a recursive cte, we might be missing a statement from one of the sides
+	case qbR.stmt == nil:
+		// do nothing
+	case qb.stmt == nil:
+		qb.stmt = qbR.stmt
+	default:
+		qb.joinWith(qbR, pred, op.JoinType)
+	}
 }
 
 func buildUnion(op *Union, qb *queryBuilder) {
