@@ -409,6 +409,12 @@ func TestInternalTables(t *testing.T) {
 		},
 	}
 	ts.Init()
+	defer func() {
+		execStatements(t, []string{
+			"drop table _vt.internal1",
+			"drop table _vt.internal2",
+		})
+	}()
 	defer ts.Close()
 	ctx := context.Background()
 	engine.se.Reload(ctx)
