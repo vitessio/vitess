@@ -55,7 +55,7 @@ jobs:
           end_to_end:
             - 'go/**/*.go'
             - 'go/vt/sidecardb/**/*.sql'
-            - 'go/test/endtoend/onlineddl/vrepl_suite/**'
+            - 'go/test/endtoend/vtgate/vitess_tester/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
