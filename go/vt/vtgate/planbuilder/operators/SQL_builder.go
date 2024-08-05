@@ -244,6 +244,7 @@ func (qb *queryBuilder) cteWith(other *queryBuilder, name string) {
 
 	qb.stmt = &sqlparser.Select{
 		With: &sqlparser.With{
+			Recursive: true,
 			CTEs: []*sqlparser.CommonTableExpr{{
 				ID:       sqlparser.NewIdentifierCS(name),
 				Columns:  nil,
