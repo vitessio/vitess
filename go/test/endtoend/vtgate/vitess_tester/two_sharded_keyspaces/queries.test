@@ -24,3 +24,6 @@ insert into corder.corder(order_id, customer_id, sku, price) values(4, 4, 'SKU-1
 insert into corder.corder(order_id, customer_id, sku, price) values(5, 5, 'SKU-1002', 30);
 
 select co.order_id, co.customer_id, co.price from corder.corder co left join customer.customer cu on co.customer_id=cu.customer_id where cu.customer_id=1;
+
+# This query was accidentally disallowed by https://github.com/vitessio/vitess/pull/16520
+select 1 from customer.customer where id in (select customer_id from corder.corder where price > 50);
