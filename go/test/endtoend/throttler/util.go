@@ -18,7 +18,6 @@ package throttler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -168,8 +167,8 @@ func UpdateThrottlerTopoConfigRaw(
 }
 
 // CheckThrottler runs vtctldclient CheckThrottler.
-func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags) (*vtctldatapb.CheckThrottlerResponse, error) {
-	output, err := CheckThrottlerRaw(&clusterInstance.VtctldClientProcess, tablet, appName, flags)
+func CheckThrottler(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags) (*vtctldatapb.CheckThrottlerResponse, error) {
+	output, err := CheckThrottlerRaw(vtctldProcess, tablet, appName, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +339,7 @@ func WaitUntilTabletsConfirmThrottledApp(t *testing.T, clusterInstance *cluster.
 	for _, ks := range clusterInstance.Keyspaces {
 		for _, shard := range ks.Shards {
 			for _, tablet := range shard.Vttablets {
-				WaitForThrottledApp(t, tablet, throttlerApp, expectThrottled, ConfigTimeout)
+				WaitForThrottledApp(t, &clusterInstance.VtctldClientProcess, tablet, throttlerApp, expectThrottled, ConfigTimeout)
 			}
 		}
 	}
@@ -424,8 +423,7 @@ func WaitForThrottlerStatusEnabled(t *testing.T, vtctldProcess *cluster.VtctldCl
 
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
 // enabled/disabled and have the provided config (if any) until the specified timeout.
-func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp throttlerapp.Name, expectThrottled bool, timeout time.Duration) {
-	throttledAppsURL := fmt.Sprintf("http://localhost:%d/throttler/throttled-apps", tablet.HTTPPort)
+func WaitForThrottledApp(t *testing.T, vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, throttlerApp throttlerapp.Name, expectThrottled bool, timeout time.Duration) {
 	tabletURL := fmt.Sprintf("http://localhost:%d/debug/status_details", tablet.HTTPPort)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -433,14 +431,14 @@ func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp th
 	defer ticker.Stop()
 
 	for {
-		throttledAppsBody := getHTTPBody(throttledAppsURL)
-		var throttledApps []base.AppThrottle
-		err := json.Unmarshal([]byte(throttledAppsBody), &throttledApps)
-		assert.NoError(t, err)
+		status, err := GetThrottlerStatus(vtctldProcess, tablet)
+		require.NoError(t, err)
+		throttledApps := status.ThrottledApps
 		require.NotEmpty(t, throttledApps) // "always-throttled-app" is always there.
 		appFoundThrottled := false
 		for _, throttledApp := range throttledApps {
-			if throttledApp.AppName == throttlerApp.String() && throttledApp.ExpireAt.After(time.Now()) {
+			expiresAt := protoutil.TimeFromProto(throttledApp.ExpiresAt)
+			if throttledApp.Name == throttlerApp.String() && expiresAt.After(time.Now()) {
 				appFoundThrottled = true
 				break
 			}
@@ -460,8 +458,8 @@ func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp th
 		}
 		select {
 		case <-ctx.Done():
-			assert.Fail(t, "timeout", "waiting for the %s tablet's throttled apps with the correct config (expecting %s to be %v) after %v; last seen value: %s",
-				tablet.Alias, throttlerApp.String(), expectThrottled, timeout, throttledAppsBody)
+			assert.Fail(t, "timeout", "waiting for the %s tablet's throttled apps with the correct config (expecting %s to be %v) after %v; last seen throttled apps: %+v",
+				tablet.Alias, throttlerApp.String(), expectThrottled, timeout, throttledApps)
 			return
 		case <-ticker.C:
 		}
@@ -485,15 +483,15 @@ func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.L
 	}
 }
 
-func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, expect int32, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
+func WaitForCheckThrottlerResult(t *testing.T, vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		resp, err := CheckThrottler(clusterInstance, tablet, appName, flags)
+		resp, err := CheckThrottler(vtctldProcess, tablet, appName, flags)
 		require.NoError(t, err)
-		if resp.Check.StatusCode == expect {
+		if resp.Check.ResponseCode == wantCode {
 			return resp, nil
 		}
 		select {

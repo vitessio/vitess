@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
@@ -45,6 +44,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -71,9 +71,9 @@ const (
 
 	merchantKeyspace            = "merchant-type"
 	maxWait                     = 60 * time.Second
-	BypassLagCheck              = true                         // temporary fix for flakiness seen only in CI when lag check is introduced
-	throttlerStatusThrottled    = http.StatusExpectationFailed // 417
-	throttlerStatusNotThrottled = http.StatusOK                // 200
+	BypassLagCheck              = true // temporary fix for flakiness seen only in CI when lag check is introduced
+	throttlerStatusThrottled    = tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED
+	throttlerStatusNotThrottled = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 )
 
 func init() {
@@ -98,19 +98,11 @@ func throttleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name
 }
 
 func unthrottleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
+	// clusterInstance :=&cluster.LocalProcessCluster{
+	// 	Keyspaces: []*cluster.Keyspace{},
+	// 	VtctldProcess: ,
+	// }
 	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerApp.String()))
-}
-
-func throttlerCheckSelf(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, throttlerApp.String())
-	resp, err := httpClient.Get(apiURL)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	respBody = string(b)
-	return respBody, err
 }
 
 // TestVReplicationDDLHandling tests the DDL handling in

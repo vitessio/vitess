@@ -42,9 +42,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"math/rand/v2"
-	"net/http"
 	"os"
 	"path"
 	"runtime"
@@ -62,6 +60,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -244,9 +243,9 @@ func TestSchemaChange(t *testing.T) {
 					ticker := time.NewTicker(500 * time.Millisecond)
 					defer ticker.Stop()
 					for {
-						_, statusCode, err := throttlerCheck(primaryTablet.VttabletProcess, throttlerapp.OnlineDDLName)
+						resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil)
 						assert.NoError(t, err)
-						throttleWorkload.Store(statusCode != http.StatusOK)
+						throttleWorkload.Store(resp.Check.ResponseCode != tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 						select {
 						case <-ticker.C:
 						case <-workloadCtx.Done():
@@ -286,7 +285,7 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
 				onlineddl.ThrottleAllMigrations(t, &vtParams)
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
-				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusExpectationFailed)
+				throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, migrationWaitTimeout)
 			})
 			t.Run("unthrottle online-ddl", func(t *testing.T) {
 				onlineddl.UnthrottleAllMigrations(t, &vtParams)
@@ -296,7 +295,7 @@ func TestSchemaChange(t *testing.T) {
 
 					t.Logf("Throttler status: %+v", status)
 				}
-				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusOK)
+				throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, migrationWaitTimeout)
 			})
 			t.Run("apply more DML", func(t *testing.T) {
 				// Looking to run a substantial amount of DML, giving vreplication
@@ -609,60 +608,4 @@ func initTable(t *testing.T) {
 	appliedDMLEnd := totalAppliedDML.Load()
 	assert.Greater(t, appliedDMLEnd, appliedDMLStart)
 	assert.GreaterOrEqual(t, appliedDMLEnd-appliedDMLStart, int64(maxTableRows))
-}
-
-func throttleResponse(tablet *cluster.VttabletProcess, path string) (respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/%s", tablet.TabletHostname, tablet.Port, path)
-	resp, err := httpClient.Get(apiURL)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	respBody = string(b)
-	return respBody, err
-}
-
-func throttleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerApp.String()))
-}
-
-func unthrottleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerApp.String()))
-}
-
-func throttlerCheck(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (respBody string, statusCode int, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/throttler/check?app=%s", tablet.TabletHostname, tablet.Port, throttlerApp.String())
-	resp, err := httpClient.Get(apiURL)
-	if err != nil {
-		return "", 0, err
-	}
-	defer resp.Body.Close()
-	statusCode = resp.StatusCode
-	b, err := io.ReadAll(resp.Body)
-	respBody = string(b)
-	return respBody, statusCode, err
-}
-
-// waitForThrottleCheckStatus waits for the tablet to return the provided HTTP code in a throttle check
-func waitForThrottleCheckStatus(t *testing.T, throttlerApp throttlerapp.Name, tablet *cluster.Vttablet, wantCode int) {
-	ctx, cancel := context.WithTimeout(context.Background(), migrationWaitTimeout)
-	defer cancel()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		respBody, statusCode, err := throttlerCheck(tablet.VttabletProcess, throttlerApp)
-		require.NoError(t, err)
-
-		if wantCode == statusCode {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			assert.Equalf(t, wantCode, statusCode, "body: %s", respBody)
-			return
-		case <-ticker.C:
-		}
-	}
 }
