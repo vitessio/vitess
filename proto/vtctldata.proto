@@ -1972,6 +1972,7 @@ message WorkflowSwitchTrafficRequest {
   bool dry_run = 9;
   bool initialize_target_sequences = 10;
   repeated string shards = 11;
+  bool force = 12;
 }
 
 message WorkflowSwitchTrafficResponse {

@@ -99,6 +99,7 @@ func commandSwitchTraffic(cmd *cobra.Command, args []string) error {
 		MaxReplicationLagAllowed:  protoutil.DurationToProto(SwitchTrafficOptions.MaxReplicationLagAllowed),
 		Timeout:                   protoutil.DurationToProto(SwitchTrafficOptions.Timeout),
 		DryRun:                    SwitchTrafficOptions.DryRun,
+		Force:                     SwitchTrafficOptions.Force,
 		EnableReverseReplication:  SwitchTrafficOptions.EnableReverseReplication,
 		InitializeTargetSequences: SwitchTrafficOptions.InitializeTargetSequences,
 		Direction:                 int32(SwitchTrafficOptions.Direction),
