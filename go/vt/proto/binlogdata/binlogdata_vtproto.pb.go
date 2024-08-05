@@ -599,8 +599,11 @@ func (m *VStreamOptions) CloneVT() *VStreamOptions {
 	if m == nil {
 		return (*VStreamOptions)(nil)
 	}
-	r := &VStreamOptions{
-		EnableKeyspaceHeartbeats: m.EnableKeyspaceHeartbeats,
+	r := &VStreamOptions{}
+	if rhs := m.InternalTables; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.InternalTables = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2463,15 +2466,14 @@ func (m *VStreamOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.EnableKeyspaceHeartbeats {
-		i--
-		if m.EnableKeyspaceHeartbeats {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
+	if len(m.InternalTables) > 0 {
+		for iNdEx := len(m.InternalTables) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.InternalTables[iNdEx])
+			copy(dAtA[i:], m.InternalTables[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.InternalTables[iNdEx])))
+			i--
+			dAtA[i] = 0xa
 		}
-		i--
-		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -3920,8 +3922,11 @@ func (m *VStreamOptions) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.EnableKeyspaceHeartbeats {
-		n += 2
+	if len(m.InternalTables) > 0 {
+		for _, s := range m.InternalTables {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -8530,10 +8535,10 @@ func (m *VStreamOptions) UnmarshalVT(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field EnableKeyspaceHeartbeats", wireType)
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InternalTables", wireType)
 			}
-			var v int
+			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -8543,12 +8548,24 @@ func (m *VStreamOptions) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.EnableKeyspaceHeartbeats = bool(v != 0)
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.InternalTables = append(m.InternalTables, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

@@ -585,7 +585,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			Filter:       vs.filter,
 			TableLastPKs: sgtid.TablePKs,
 			Options: &binlogdatapb.VStreamOptions{
-				EnableKeyspaceHeartbeats: vs.flags.EnableKeyspaceHeartbeats,
+				InternalTables: vs.flags.GetInternalTables(),
 			},
 		}
 		var vstreamCreatedOnce sync.Once

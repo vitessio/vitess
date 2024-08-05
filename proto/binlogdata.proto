@@ -479,7 +479,7 @@ message MinimalSchema {
 }
 
 message VStreamOptions {
-  bool enable_keyspace_heartbeats = 1;
+  repeated string internal_tables = 1;
 }
 
 // VStreamRequest is the payload for VStreamer

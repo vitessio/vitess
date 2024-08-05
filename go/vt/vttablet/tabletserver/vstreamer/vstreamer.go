@@ -682,12 +682,20 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 	switch tableName {
 	case "resharding_journal":
 	case "schema_version":
-	case "heartbeat":
-		if vs.options == nil || !vs.options.EnableKeyspaceHeartbeats {
+	default:
+		if vs.options == nil {
 			return nil, nil
 		}
-	default:
-		return nil, nil
+		found := false
+		for _, table := range vs.options.InternalTables {
+			if table == tableName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, nil
+		}
 	}
 	conn, err := vs.cp.Connect(vs.ctx)
 	if err != nil {
@@ -725,7 +733,7 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 		vs.journalTableID = id
 	case "schema_version":
 		vs.versionTableID = id
-	case "heartbeat":
+	default:
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_FIELD,
 			FieldEvent: &binlogdatapb.FieldEvent{

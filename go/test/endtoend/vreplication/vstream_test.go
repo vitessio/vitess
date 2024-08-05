@@ -794,13 +794,18 @@ func TestVStreamHeartbeats(t *testing.T) {
 			Filter: "select * from customer",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{EnableKeyspaceHeartbeats: true}
+	expectedNumRowEvents := make(map[string]int)
+	expectedNumRowEvents["customer"] = 3
+	expectedNumRowEvents["reparent_journal"] = 1
+	expectedNumRowEvents["tables"] = 20 // total tables created in the product keyspace
+	gotNumRowEvents := make(map[string]int)
+	gotNumFieldEvents := make(map[string]int)
+	flags := &vtgatepb.VStreamFlags{InternalTables: []string{"heartbeat", "reparent_journal", "tables"}}
 	done := false
 
 	// stream events from the VStream API
 	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	require.NoError(t, err)
-	var numHeartbeatRowEvents, numHeartbeatFieldEvents, numRegularFieldEvents, numRegularRowEvents int
 	for !done {
 		evs, err := reader.Recv()
 		switch err {
@@ -810,22 +815,17 @@ func TestVStreamHeartbeats(t *testing.T) {
 				switch ev.Type {
 				case binlogdatapb.VEventType_ROW:
 					rowEvent := ev.RowEvent
+					tableName := strings.Split(rowEvent.TableName, ".")[1]
 					require.Equal(t, "product", rowEvent.Keyspace)
 					require.Equal(t, "0", rowEvent.Shard)
-					if strings.HasSuffix(rowEvent.TableName, "heartbeat") && rowEvent.IsInternal == true {
-						numHeartbeatRowEvents++
-					} else {
-						numRegularRowEvents++
-					}
+					gotNumRowEvents[tableName]++
+
 				case binlogdatapb.VEventType_FIELD:
 					fieldEvent := ev.FieldEvent
+					tableName := strings.Split(fieldEvent.TableName, ".")[1]
 					require.Equal(t, "product", fieldEvent.Keyspace)
 					require.Equal(t, "0", fieldEvent.Shard)
-					if strings.HasSuffix(fieldEvent.TableName, "heartbeat") && fieldEvent.IsInternal == true {
-						numHeartbeatFieldEvents++
-					} else {
-						numRegularFieldEvents++
-					}
+					gotNumFieldEvents[tableName]++
 				default:
 				}
 			}
@@ -837,8 +837,10 @@ func TestVStreamHeartbeats(t *testing.T) {
 			done = true
 		}
 	}
-	require.Equal(t, 1, numRegularFieldEvents)   // for the customer table
-	require.Equal(t, 3, numRegularRowEvents)     // the 3 rows in the customer table
-	require.Equal(t, 1, numHeartbeatFieldEvents) // for the heartbeat table
-	require.NotZero(t, numHeartbeatRowEvents)
+	for k := range expectedNumRowEvents {
+		require.Equalf(t, 1, gotNumFieldEvents[k], "incorrect number of field events for table %s, got %d", k, gotNumFieldEvents[k])
+	}
+	require.NotZero(t, gotNumRowEvents["heartbeat"])
+	delete(gotNumRowEvents, "heartbeat")
+	require.Equal(t, expectedNumRowEvents, gotNumRowEvents)
 }

@@ -34213,8 +34213,8 @@ export namespace binlogdata {
     /** Properties of a VStreamOptions. */
     interface IVStreamOptions {
 
-        /** VStreamOptions enable_keyspace_heartbeats */
-        enable_keyspace_heartbeats?: (boolean|null);
+        /** VStreamOptions internal_tables */
+        internal_tables?: (string[]|null);
     }
 
     /** Represents a VStreamOptions. */
@@ -34226,8 +34226,8 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.IVStreamOptions);
 
-        /** VStreamOptions enable_keyspace_heartbeats. */
-        public enable_keyspace_heartbeats: boolean;
+        /** VStreamOptions internal_tables. */
+        public internal_tables: string[];
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.
