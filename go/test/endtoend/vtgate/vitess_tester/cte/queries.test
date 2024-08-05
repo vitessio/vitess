@@ -1,0 +1,116 @@
+# Create tables
+CREATE TABLE employees
+(
+    id         INT PRIMARY KEY,
+    name       VARCHAR(100),
+    manager_id INT
+);
+
+# Insert data into the tables
+INSERT INTO employees (id, name, manager_id)
+VALUES (1, 'CEO', NULL),
+       (2, 'CTO', 1),
+       (3, 'CFO', 1),
+       (4, 'Engineer1', 2),
+       (5, 'Engineer2', 2),
+       (6, 'Accountant1', 3),
+       (7, 'Accountant2', 3);
+
+# Simple recursive CTE using literal values
+WITH RECURSIVE numbers AS (SELECT 1 AS n
+                           UNION ALL
+                           SELECT n + 1
+                           FROM numbers
+                           WHERE n < 5)
+SELECT *
+FROM numbers;
+
+# Recursive CTE joined with a normal table
+WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id
+                           FROM employees e
+                                    INNER JOIN emp_cte cte ON e.manager_id = cte.id)
+SELECT *
+FROM emp_cte;
+
+# Recursive CTE used in a derived table outside the CTE definition
+WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id
+                           FROM employees e
+                                    INNER JOIN emp_cte cte ON e.manager_id = cte.id)
+SELECT derived.id, derived.name, derived.manager_id
+FROM (SELECT * FROM emp_cte) AS derived;
+
+# Recursive CTE with additional computation
+WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id, 1 AS level
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id, cte.level + 1
+                           FROM employees e
+                                    INNER JOIN emp_cte cte ON e.manager_id = cte.id)
+SELECT *
+FROM emp_cte;
+
+# Recursive CTE with filtering in the recursive part
+WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id
+                           FROM employees e
+                                    INNER JOIN emp_cte cte ON e.manager_id = cte.id
+                           WHERE e.name LIKE 'Engineer%')
+SELECT *
+FROM emp_cte;
+
+# Recursive CTE with limit
+WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id
+                           FROM employees e
+                                    INNER JOIN emp_cte cte ON e.manager_id = cte.id)
+SELECT *
+FROM emp_cte
+LIMIT 5;
+
+# Recursive CTE with DISTINCT to avoid duplicates
+WITH RECURSIVE distinct_emp_cte AS (SELECT DISTINCT id, name, manager_id
+                                    FROM employees
+                                    WHERE manager_id IS NULL
+                                    UNION ALL
+                                    SELECT DISTINCT e.id, e.name, e.manager_id
+                                    FROM employees e
+                                             INNER JOIN distinct_emp_cte cte ON e.manager_id = cte.id)
+SELECT *
+FROM distinct_emp_cte;
+
+# Recursive CTE with aggregation outside the CTE
+WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id
+                           FROM employees e
+                                    INNER JOIN emp_cte cte ON e.manager_id = cte.id)
+SELECT manager_id, COUNT(*) AS employee_count
+FROM emp_cte
+GROUP BY manager_id;
+
+# Recursive CTE using literal values and joined with a real table on the outside
+WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 'Root' AS name, NULL AS manager_id
+                               UNION ALL
+                               SELECT id + 1, CONCAT('Node', id + 1), id
+                               FROM literal_cte
+                               WHERE id < 5)
+SELECT l.id, l.name, l.manager_id, e.name AS employee_name
+FROM literal_cte l
+         LEFT JOIN employees e ON l.id = e.id;
