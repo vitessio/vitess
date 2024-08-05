@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -578,9 +577,10 @@ func tryMergeShardedRouting(
 	routeA, routeB *Route,
 	m merger,
 	joinPredicates []sqlparser.Expr,
-	isSubquery bool,
 ) (*Route, error) {
-	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
+	if routeA.Routing.Keyspace() != routeB.Routing.Keyspace() {
+		return nil, nil
+	}
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)
 
@@ -606,13 +606,6 @@ func tryMergeShardedRouting(
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
 			// no join predicates - no vindex
-			return nil, nil
-		}
-
-		if !sameKeyspace {
-			if isSubquery {
-				return nil, vterrors.VT12001("cross-shard correlated subquery")
-			}
 			return nil, nil
 		}
 
