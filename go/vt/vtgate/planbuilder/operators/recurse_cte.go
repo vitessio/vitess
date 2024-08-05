@@ -22,10 +22,10 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/slice"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // RecurseCTE is used to represent a recursive CTE
@@ -42,6 +42,9 @@ type RecurseCTE struct {
 	// Vars is the map of variables that are sent between the two parts of the recursive CTE
 	// It's filled in at offset planning time
 	Vars map[string]int
+
+	// MyTableID is the id of the CTE
+	MyTableInfo *semantics.CTETable
 }
 
 var _ Operator = (*RecurseCTE)(nil)
@@ -78,8 +81,28 @@ func (r *RecurseCTE) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Ex
 	return r
 }
 
-func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
-	return r.Seed.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
+func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, _, _ bool, expr *sqlparser.AliasedExpr) int {
+	r.makeSureWeHaveTableInfo(ctx)
+	e := semantics.RewriteDerivedTableExpression(expr.Expr, r.MyTableInfo)
+	return r.Seed.FindCol(ctx, e, false)
+}
+
+func (r *RecurseCTE) makeSureWeHaveTableInfo(ctx *plancontext.PlanningContext) {
+	if r.MyTableInfo == nil {
+		for _, table := range ctx.SemTable.Tables {
+			cte, ok := table.(*semantics.CTETable)
+			if !ok {
+				continue
+			}
+			if cte.CTE == r.Def {
+				r.MyTableInfo = cte
+				break
+			}
+		}
+		if r.MyTableInfo == nil {
+			panic(vterrors.VT13001("CTE not found"))
+		}
+	}
 }
 
 func (r *RecurseCTE) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
@@ -87,6 +110,8 @@ func (r *RecurseCTE) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
 }
 
 func (r *RecurseCTE) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	r.makeSureWeHaveTableInfo(ctx)
+	expr = semantics.RewriteDerivedTableExpression(expr, r.MyTableInfo)
 	return r.Seed.FindCol(ctx, expr, underRoute)
 }
 

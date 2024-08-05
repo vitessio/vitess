@@ -2114,7 +2114,10 @@
       "Original": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": "2",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "RecurseCTE",
@@ -2126,8 +2129,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `name`, id, `name` from `user` where 1 != 1",
-                "Query": "select `name`, id, `name` from `user` where manager_id is null",
+                "FieldQuery": "select `name`, id from `user` where 1 != 1",
+                "Query": "select `name`, id from `user` where manager_id is null",
                 "Table": "`user`"
               },
               {
@@ -2159,7 +2162,10 @@
       "Original": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from cte join user e on e.manager_id = cte.id) select name from cte",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": "2",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "RecurseCTE",
@@ -2171,8 +2177,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `name`, id, `name` from `user` where 1 != 1",
-                "Query": "select `name`, id, `name` from `user` where manager_id is null",
+                "FieldQuery": "select `name`, id from `user` where 1 != 1",
+                "Query": "select `name`, id from `user` where manager_id is null",
                 "Table": "`user`"
               },
               {
@@ -2209,8 +2215,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "with cte as (select 1 as n from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
-        "Query": "with cte as (select 1 as n from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "FieldQuery": "with recursive cte as (select 1 as n from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 as n from dual union all select n + 1 from cte where n < 5) select n from cte",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -2231,8 +2237,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "with cte as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
-        "Query": "with cte as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "FieldQuery": "with recursive cte as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte",
         "Table": "dual"
       },
       "TablesUsed": [

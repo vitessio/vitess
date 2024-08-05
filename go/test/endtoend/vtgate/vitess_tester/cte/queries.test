@@ -114,3 +114,63 @@ WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 'Root' AS name, NULL AS manager_i
 SELECT l.id, l.name, l.manager_id, e.name AS employee_name
 FROM literal_cte l
          LEFT JOIN employees e ON l.id = e.id;
+
+# Recursive CTE for generating a series of numbers
+WITH RECURSIVE
+    number_series AS (SELECT 1 AS n
+                      UNION ALL
+                      SELECT n + 1
+                      FROM number_series
+                      WHERE n < 5),
+
+# Recursive CTE that uses the number series
+    number_names AS (SELECT n, CONCAT('Number', n) AS name
+                     FROM number_series)
+SELECT *
+FROM number_names;
+
+# Recursive CTE for generating a series of numbers
+WITH RECURSIVE
+    number_series AS (SELECT 1 AS n
+                      UNION ALL
+                      SELECT n + 1
+                      FROM number_series
+                      WHERE n < 5),
+
+# Independent recursive CTE for employees hierarchy
+    employee_hierarchy AS (SELECT id, name, manager_id
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id
+                           FROM employees e
+                                    INNER JOIN employee_hierarchy eh ON e.manager_id = eh.id)
+
+# Joining results from both CTEs
+SELECT ns.n, ns.n AS number, eh.id, eh.name, eh.manager_id
+FROM number_series ns
+         JOIN employee_hierarchy eh ON ns.n = eh.id;
+
+# Recursive CTE for generating a series of numbers
+WITH RECURSIVE
+    number_series AS (SELECT 1 AS n
+                      UNION ALL
+                      SELECT n + 1
+                      FROM number_series
+                      WHERE n < 5),
+
+# Independent recursive CTE for employees hierarchy
+    employee_hierarchy AS (SELECT id, name, manager_id
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id
+                           FROM employees e
+                                    INNER JOIN employee_hierarchy eh ON e.manager_id = eh.id)
+
+# Union results from both CTEs
+SELECT n AS id, CONCAT('Number', n) AS name, NULL AS manager_id
+FROM number_series
+UNION
+SELECT id, name, manager_id
+FROM employee_hierarchy;

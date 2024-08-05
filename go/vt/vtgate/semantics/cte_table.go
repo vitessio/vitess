@@ -127,6 +127,15 @@ func (cte *CTETable) dependencies(colName string, org originable) (dependencies,
 }
 
 func (cte *CTETable) getExprFor(s string) (sqlparser.Expr, error) {
+	for _, se := range cte.Query.GetColumns() {
+		ae, ok := se.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, vterrors.VT09015()
+		}
+		if ae.ColumnName() == s {
+			return ae.Expr, nil
+		}
+	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
 }
 
