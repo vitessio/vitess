@@ -390,41 +390,31 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 
 func TestVStreamRetriableErrors(t *testing.T) {
 	type testCase struct {
-		name         string
-		code         vtrpcpb.Code
-		msg          string
-		shouldRetry  bool
-		ignoreTablet bool
+		name string
+		code vtrpcpb.Code
+		msg  string
 	}
 
 	tcases := []testCase{
 		{
-			name:         "failed precondition",
-			code:         vtrpcpb.Code_FAILED_PRECONDITION,
-			msg:          "",
-			shouldRetry:  true,
-			ignoreTablet: false,
+			name: "failed precondition",
+			code: vtrpcpb.Code_FAILED_PRECONDITION,
+			msg:  "",
 		},
 		{
-			name:         "gtid mismatch",
-			code:         vtrpcpb.Code_INVALID_ARGUMENT,
-			msg:          "GTIDSet Mismatch aa",
-			shouldRetry:  true,
-			ignoreTablet: true,
+			name: "gtid mismatch",
+			code: vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:  "GTIDSet Mismatch aa",
 		},
 		{
-			name:         "unavailable",
-			code:         vtrpcpb.Code_UNAVAILABLE,
-			msg:          "",
-			shouldRetry:  true,
-			ignoreTablet: false,
+			name: "unavailable",
+			code: vtrpcpb.Code_UNAVAILABLE,
+			msg:  "",
 		},
 		{
-			name:         "should not retry",
-			code:         vtrpcpb.Code_INVALID_ARGUMENT,
-			msg:          "final error",
-			shouldRetry:  false,
-			ignoreTablet: false,
+			name: "should not retry",
+			code: vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:  "final error",
 		},
 	}
 
@@ -457,14 +447,8 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			vsm := newTestVStreamManager(ctx, hc, st, cells[0])
 
 			// Always have the local cell tablet error so it's ignored on retry and we pick the other one
-			// if the error requires ignoring the tablet on retry.
 			sbc0.AddVStreamEvents(nil, vterrors.Errorf(tcase.code, tcase.msg))
-
-			if tcase.ignoreTablet {
-				sbc1.AddVStreamEvents(commit, nil)
-			} else {
-				sbc0.AddVStreamEvents(commit, nil)
-			}
+			sbc1.AddVStreamEvents(commit, nil)
 
 			vgtid := &binlogdatapb.VGtid{
 				ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -483,10 +467,6 @@ func TestVStreamRetriableErrors(t *testing.T) {
 				})
 				wantErr := "context canceled"
 
-				if !tcase.shouldRetry {
-					wantErr = tcase.msg
-				}
-
 				if err == nil || !strings.Contains(err.Error(), wantErr) {
 					t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
 				}
@@ -495,20 +475,15 @@ func TestVStreamRetriableErrors(t *testing.T) {
 
 		Loop:
 			for {
-				if tcase.shouldRetry {
-					select {
-					case event := <-ch:
-						got := event.CloneVT()
-						if !proto.Equal(got, want) {
-							t.Errorf("got different vstream event than expected")
-						}
-						cancel()
-					case <-done:
-						// The goroutine has completed, so break out of the loop
-						break Loop
+				select {
+				case event := <-ch:
+					got := event.CloneVT()
+					if !proto.Equal(got, want) {
+						t.Errorf("got different vstream event than expected")
 					}
-				} else {
-					<-done
+					cancel()
+				case <-done:
+					// The goroutine has completed, so break out of the loop
 					break Loop
 				}
 			}
