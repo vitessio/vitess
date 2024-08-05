@@ -579,13 +579,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			isInternal := tm.Database == sidecar.GetName()
 			if plan == nil ||
 				(plan.Table.Name == tm.Name && isInternal == plan.IsInternal) {
-				log.Infof("Found existing plan for table %s", tm.Name)
 				return nil, nil
 			}
+			vs.plans[id] = nil
+			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
 		}
 
 		if tm.Database == sidecar.GetName() {
-			log.Infof("Building sidecar table plan for table %s", tm.Name)
 			return vs.buildSidecarTablePlan(id, tm)
 		}
 
@@ -708,8 +708,8 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 		Fields: fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows
-	// and columns as is. Special handling is done when we actually
-	// receive the row event. We'll build a JOURNAL event instead.
+	// and columns as is. Special handling may be done when we actually
+	// receive the row event, example: we'll build a JOURNAL or VERSION event instead.
 	plan, err := buildREPlan(vs.se.Environment(), table, nil, "")
 	if err != nil {
 		return nil, err

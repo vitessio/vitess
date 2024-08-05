@@ -748,7 +748,10 @@ func TestVStreamCopyMultiKeyspaceReshard(t *testing.T) {
 	require.NotZero(t, ne.num40DashEvents)
 }
 
-func testVStreamHeartbeats(t *testing.T, failover bool) {
+// TestVStreamHeartbeats enables streaming of the internal Vitess heartbeat tables in the VStream API and ensures that
+// the heartbeat events are received by the client.
+func TestVStreamHeartbeats(t *testing.T) {
+	// enable continuous heartbeats
 	extraVTTabletArgs = append(extraVTTabletArgs,
 		"--heartbeat_enable",
 		"--heartbeat_interval", "1s",
@@ -767,10 +770,11 @@ func testVStreamHeartbeats(t *testing.T, failover bool) {
 	defaultRdonly = 0
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema,
+		defaultReplicas, defaultRdonly, 100, nil)
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(3*time.Second))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(15*time.Second)) // ensure heartbeats are sent.
 	defer cancel()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
@@ -797,24 +801,27 @@ func testVStreamHeartbeats(t *testing.T, failover bool) {
 	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	require.NoError(t, err)
 	var numHeartbeatRowEvents, numHeartbeatFieldEvents, numRegularFieldEvents, numRegularRowEvents int
-	// second goroutine that continuously receives events via VStream API and should be resilient to the two PRS events
 	for !done {
 		evs, err := reader.Recv()
-
 		switch err {
 		case nil:
 			for _, ev := range evs {
 				log.Infof("Event: %v", ev)
 				switch ev.Type {
 				case binlogdatapb.VEventType_ROW:
-					log.Infof("Row Event: %v", ev.RowEvent)
-					if strings.HasSuffix(ev.RowEvent.TableName, "heartbeat") && ev.RowEvent.IsInternal == true {
+					rowEvent := ev.RowEvent
+					require.Equal(t, "product", rowEvent.Keyspace)
+					require.Equal(t, "0", rowEvent.Shard)
+					if strings.HasSuffix(rowEvent.TableName, "heartbeat") && rowEvent.IsInternal == true {
 						numHeartbeatRowEvents++
 					} else {
 						numRegularRowEvents++
 					}
 				case binlogdatapb.VEventType_FIELD:
-					if strings.HasSuffix(ev.FieldEvent.TableName, "heartbeat") && ev.FieldEvent.IsInternal == true {
+					fieldEvent := ev.FieldEvent
+					require.Equal(t, "product", fieldEvent.Keyspace)
+					require.Equal(t, "0", fieldEvent.Shard)
+					if strings.HasSuffix(fieldEvent.TableName, "heartbeat") && fieldEvent.IsInternal == true {
 						numHeartbeatFieldEvents++
 					} else {
 						numRegularFieldEvents++
@@ -824,17 +831,14 @@ func testVStreamHeartbeats(t *testing.T, failover bool) {
 			}
 		case io.EOF:
 			log.Infof("Stream Ended")
+			done = true
 		default:
 			log.Infof("%s:: remote error: %v", time.Now(), err)
 			done = true
 		}
 	}
-	require.Equal(t, 3, numRegularRowEvents)
-	require.Equal(t, 1, numRegularFieldEvents)
+	require.Equal(t, 1, numRegularFieldEvents)   // for the customer table
+	require.Equal(t, 3, numRegularRowEvents)     // the 3 rows in the customer table
+	require.Equal(t, 1, numHeartbeatFieldEvents) // for the heartbeat table
 	require.NotZero(t, numHeartbeatRowEvents)
-	require.Equal(t, 1, numHeartbeatFieldEvents)
-}
-
-func TestVStreamHeartbeats(t *testing.T) {
-	testVStreamHeartbeats(t, true)
 }
