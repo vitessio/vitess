@@ -249,7 +249,7 @@ func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences b
 	cmd.Flags().DurationVar(&SwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", MaxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this.")
 	cmd.Flags().BoolVar(&SwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original source keyspace to support rolling back the traffic cutover.")
 	cmd.Flags().BoolVar(&SwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred.")
-	cmd.Flags().BoolVar(&SwitchTrafficOptions.Force, "force", false, "override pre-switchtraffic checks")
+	cmd.Flags().BoolVar(&SwitchTrafficOptions.Force, "force", false, "ignore Switch/ReverseTraffic pre-conditions")
 	if initializeTargetSequences {
 		cmd.Flags().BoolVar(&SwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 	}
