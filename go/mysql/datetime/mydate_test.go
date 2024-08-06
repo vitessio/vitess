@@ -85,8 +85,8 @@ func TestValidatePeriod(t *testing.T) {
 
 func TestPeriodToMonths(t *testing.T) {
 	testCases := []struct {
-		period uint64
-		want   uint64
+		period int64
+		want   int64
 	}{
 		{0, 0},
 		{110112, 13223},
@@ -104,8 +104,8 @@ func TestPeriodToMonths(t *testing.T) {
 
 func TestMonthsToPeriod(t *testing.T) {
 	testCases := []struct {
-		months uint64
-		want   uint64
+		months int64
+		want   int64
 	}{
 		{0, 0},
 		{13223, 110112},

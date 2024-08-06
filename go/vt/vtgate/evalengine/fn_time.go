@@ -1976,7 +1976,7 @@ func periodAdd(period, months int64) (*evalInt64, error) {
 	if !datetime.ValidatePeriod(period) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to period_add")
 	}
-	return newEvalInt64(int64(datetime.MonthsToPeriod(datetime.PeriodToMonths(uint64(period)) + uint64(months)))), nil
+	return newEvalInt64(datetime.MonthsToPeriod(datetime.PeriodToMonths(period) + months)), nil
 }
 
 func (b *builtinPeriodAdd) eval(env *ExpressionEnv) (eval, error) {

@@ -105,30 +105,32 @@ func ValidatePeriod(period int64) bool {
 
 // PeriodToMonths converts a MySQL period into number of months.
 // This is an algorithm that has been reverse engineered from MySQL.
-func PeriodToMonths(period uint64) uint64 {
-	if period == 0 {
+func PeriodToMonths(period int64) int64 {
+	p := uint64(period)
+	if p == 0 {
 		return 0
 	}
-	y := period / 100
+	y := p / 100
 	if y < 70 {
 		y += 2000
 	} else if y < 100 {
 		y += 1900
 	}
-	return y*12 + period%100 - 1
+	return int64(y*12 + p%100 - 1)
 }
 
 // MonthsToPeriod converts number of months into MySQL period.
 // This is an algorithm that has been reverse engineered from MySQL.
-func MonthsToPeriod(months uint64) uint64 {
-	if months == 0 {
+func MonthsToPeriod(months int64) int64 {
+	m := uint64(months)
+	if m == 0 {
 		return 0
 	}
-	y := months / 12
+	y := m / 12
 	if y < 70 {
 		y += 2000
 	} else if y < 100 {
 		y += 1900
 	}
-	return y*100 + months%12 + 1
+	return int64(y*100 + m%12 + 1)
 }
