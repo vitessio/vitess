@@ -43,11 +43,42 @@ func TestTxExecutorEmptyPrepare(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
+
+	// start a transaction.
 	txid := newTransaction(tsv, nil)
-	err := txe.Prepare(txid, "aa")
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	require.NoError(t, err)
+	sc.Taint(ctx, nil)
+	sc.Unlock()
+
+	err = txe.Prepare(txid, "aa")
 	require.NoError(t, err)
 	// Nothing should be prepared.
 	require.Empty(t, txe.te.preparedPool.conns, "txe.te.preparedPool.conns")
+	require.False(t, sc.IsInTransaction(), "transaction should be roll back before returning the connection to the pool")
+}
+
+func TestExecutorPrepareFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	require.NoError(t, err)
+	sc.Taint(ctx, nil)
+	sc.Unlock()
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.Prepare(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction on a reserved connection")
 }
 
 func TestTxExecutorPrepare(t *testing.T) {
@@ -288,6 +319,10 @@ func TestExecutorStartCommitFailure(t *testing.T) {
 	require.NoError(t, err)
 	sc.Taint(ctx, nil)
 	sc.Unlock()
+
+	// add rollback state update expectation
+	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
+	db.AddQuery(rollbackTransition, sqltypes.MakeTestResult(nil))
 
 	// try 2pc commit of Metadata Manager.
 	err = txe.StartCommit(txid, "aa")
