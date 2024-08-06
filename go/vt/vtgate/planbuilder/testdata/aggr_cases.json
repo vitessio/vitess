@@ -6680,7 +6680,7 @@
                         "Variant": "HashLeftJoin",
                         "Collation": "binary",
                         "ComparisonType": "INT16",
-                        "JoinColumnIndexes": "-1,1,-2,2,-3,3",
+                        "JoinColumnIndexes": "-1,1,-2,2,-3,3,-3,3",
                         "Predicate": "`user`.col = ue.col",
                         "TableName": "`user`_user_extra",
                         "Inputs": [
