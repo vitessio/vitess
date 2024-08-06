@@ -511,6 +511,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	// It will be closed when all journal events converge.
 	var journalDone chan struct{}
 	ignoreTablets := make([]*topodatapb.TabletAlias, 0)
+	var prevErr error
 
 	backoffIndex := 0
 	for {
@@ -551,6 +552,12 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.GetKeyspace(), sgtid.GetShard(), vs.tabletType.String(), tpo, ignoreTablets...)
 		if err != nil {
 			return tabletPickerErr(err)
+		}
+		if len(tp.GetMatchingTablets(ctx)) == 0 {
+			tperr := vterrors.Wrapf(prevErr, "zero matching tablets for %s tablet for VStream in %s/%s within the %s cell(s)",
+				vs.tabletType.String(), sgtid.GetKeyspace(), sgtid.GetShard(), strings.Join(cells, ","))
+			log.Errorf("%v", tperr)
+			return tperr
 		}
 		// Create a child context with a stricter timeout when picking a tablet.
 		// This will prevent hanging in the case no tablets are found.
@@ -738,11 +745,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 
 		vs.lastError.Record(err)
+		prevErr = err
 
-		if shouldFailNow(err) {
-			log.Errorf("VStream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
-			return err
-		} else if vs.lastError.ShouldRetry() {
+		if vs.lastError.ShouldRetry() {
 			log.Infof("Retrying tablet, count: %d, alias: %v, hostname: %s", backoffIndex, tablet.GetAlias(), tablet.GetHostname())
 			retryDelay := vs.backoffStrategy.Backoff(backoffIndex)
 			backoffIndex++
@@ -756,14 +761,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
-}
-
-func shouldFailNow(err error) bool {
-	errCode := vterrors.Code(err)
-	if errCode == vtrpcpb.Code_UNKNOWN && strings.Contains(err.Error(), "not all journaling participants are in the stream") {
-		return true
-	}
-	return false
 }
 
 // sendAll sends a group of events together while holding the lock.

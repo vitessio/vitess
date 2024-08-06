@@ -460,7 +460,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			if tcase.shouldSwitchTablets {
 				// Retry just once before trying another tablet.
 				vsm.maxTimeInError = 1 * time.Nanosecond
-				vsm.baseRetryDelay = 1 * time.Millisecond
+				vsm.baseRetryDelay = 1 * time.Nanosecond
 			} else {
 				// Retry at least once on the same tablet.
 				vsm.maxTimeInError = 1 * time.Second
@@ -937,6 +937,8 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "-10", "10-20"})
 	vsm := newTestVStreamManager(ctx, hc, st, "aa")
+	vsm.maxTimeInError = 1 * time.Nanosecond
+	vsm.baseRetryDelay = 1 * time.Nanosecond
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, ks, "-10", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-10", sbc1.Tablet())
 	sbc2 := hc.AddTestTablet("aa", "1.1.1.1", 1003, ks, "10-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -1584,6 +1586,8 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{shard})
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	vsm.maxTimeInError = 1 * time.Nanosecond
+	vsm.baseRetryDelay = 1 * time.Nanosecond
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
