@@ -273,6 +273,27 @@ func TestExecutorStartCommit(t *testing.T) {
 	require.Contains(t, err.Error(), "could not transition to COMMIT: aa")
 }
 
+func TestExecutorStartCommitFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	require.NoError(t, err)
+	sc.Taint(ctx, nil)
+	sc.Unlock()
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.StartCommit(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot commit the transaction on a reserved connection")
+}
+
 func TestExecutorSetRollback(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
