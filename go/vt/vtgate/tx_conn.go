@@ -458,21 +458,21 @@ func (txc *TxConn) resolveTx(ctx context.Context, target *querypb.Target, transa
 	case querypb.TransactionState_PREPARE:
 		// If state is PREPARE, make a decision to rollback and
 		// fallthrough to the rollback workflow.
-		if err := txc.tabletGateway.SetRollback(ctx, target, transaction.Dtid, mmShard.TransactionId); err != nil {
+		if err = txc.tabletGateway.SetRollback(ctx, target, transaction.Dtid, mmShard.TransactionId); err != nil {
 			return err
 		}
 		fallthrough
 	case querypb.TransactionState_ROLLBACK:
-		if err := txc.resumeRollback(ctx, target, transaction); err != nil {
+		if err = txc.resumeRollback(ctx, target, transaction); err != nil {
 			return err
 		}
 	case querypb.TransactionState_COMMIT:
-		if err := txc.resumeCommit(ctx, target, transaction); err != nil {
+		if err = txc.resumeCommit(ctx, target, transaction); err != nil {
 			return err
 		}
 	default:
 		// Should never happen.
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid state: %v", transaction.State)
+		return vterrors.VT13001(fmt.Sprintf("invalid state: %v", transaction.State))
 	}
 	return nil
 }

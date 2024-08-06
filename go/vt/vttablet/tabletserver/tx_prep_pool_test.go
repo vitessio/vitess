@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,38 +83,28 @@ func TestPrepFetchForCommit(t *testing.T) {
 	conn := &StatefulConnection{}
 	got, err := pp.FetchForCommit("aa")
 	require.NoError(t, err)
-	if got != nil {
-		t.Errorf("Get(aa): %v, want nil", got)
-	}
+	assert.Nil(t, got)
+
 	pp.Put(conn, "aa")
 	got, err = pp.FetchForCommit("aa")
 	require.NoError(t, err)
-	if got != conn {
-		t.Errorf("pp.Get(aa): %p, want %p", got, conn)
-	}
+	assert.Equal(t, conn, got)
+
 	_, err = pp.FetchForCommit("aa")
-	want := "committing"
-	if err == nil || err.Error() != want {
-		t.Errorf("FetchForCommit err: %v, want %s", err, want)
-	}
+	assert.ErrorContains(t, err, "locked for committing")
+
 	pp.SetFailed("aa")
 	_, err = pp.FetchForCommit("aa")
-	want = "failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("FetchForCommit err: %v, want %s", err, want)
-	}
+	assert.ErrorContains(t, err, "failed to commit")
+
 	pp.SetFailed("bb")
 	_, err = pp.FetchForCommit("bb")
-	want = "failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("FetchForCommit err: %v, want %s", err, want)
-	}
+	assert.ErrorContains(t, err, "failed to commit")
+
 	pp.Forget("aa")
 	got, err = pp.FetchForCommit("aa")
 	require.NoError(t, err)
-	if got != nil {
-		t.Errorf("Get(aa): %v, want nil", got)
-	}
+	assert.Nil(t, got)
 }
 
 func TestPrepFetchAll(t *testing.T) {

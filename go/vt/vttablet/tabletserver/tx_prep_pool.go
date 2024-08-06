@@ -23,8 +23,8 @@ import (
 )
 
 var (
-	errPrepCommitting = errors.New("committing")
-	errPrepFailed     = errors.New("failed")
+	errPrepCommitting = errors.New("locked for committing")
+	errPrepFailed     = errors.New("failed to commit")
 )
 
 // TxPreparedPool manages connections for prepared transactions.

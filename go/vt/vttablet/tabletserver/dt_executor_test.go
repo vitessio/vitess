@@ -82,7 +82,7 @@ func TestDTExecutorPrepareResevedConn(t *testing.T) {
 	txe.te.Reserve(ctx, nil, txid, nil)
 
 	err := txe.Prepare(txid, "aa")
-	require.ErrorContains(t, err, "VT12001: unsupported: cannot prepare the transaction on a reserved connection")
+	require.ErrorContains(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction on a reserved connection")
 }
 
 func TestTxExecutorPrepareNotInTx(t *testing.T) {
