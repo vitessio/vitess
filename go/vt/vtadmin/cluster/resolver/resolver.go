@@ -42,7 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
-	"vitess.io/vitess/go/vt/vtadmin/internal/backoff"
+	"vitess.io/vitess/go/vt/vterrors/backoff"
 )
 
 const logPrefix = "[vtadmin.cluster.resolver]"

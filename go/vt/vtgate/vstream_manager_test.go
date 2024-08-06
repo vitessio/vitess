@@ -390,31 +390,42 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 
 func TestVStreamRetriableErrors(t *testing.T) {
 	type testCase struct {
-		name string
-		code vtrpcpb.Code
-		msg  string
+		name                string
+		code                vtrpcpb.Code
+		msg                 string
+		shouldSwitchTablets bool
 	}
 
 	tcases := []testCase{
 		{
-			name: "failed precondition",
-			code: vtrpcpb.Code_FAILED_PRECONDITION,
-			msg:  "",
+			name:                "failed precondition",
+			code:                vtrpcpb.Code_FAILED_PRECONDITION,
+			msg:                 "",
+			shouldSwitchTablets: false,
 		},
 		{
-			name: "gtid mismatch",
-			code: vtrpcpb.Code_INVALID_ARGUMENT,
-			msg:  "GTIDSet Mismatch aa",
+			name:                "gtid mismatch",
+			code:                vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:                 "GTIDSet Mismatch aa",
+			shouldSwitchTablets: true,
 		},
 		{
-			name: "unavailable",
-			code: vtrpcpb.Code_UNAVAILABLE,
-			msg:  "",
+			name:                "unavailable",
+			code:                vtrpcpb.Code_UNAVAILABLE,
+			msg:                 "",
+			shouldSwitchTablets: false,
 		},
 		{
-			name: "should not retry",
-			code: vtrpcpb.Code_INVALID_ARGUMENT,
-			msg:  "final error",
+			name:                "unavailable",
+			code:                vtrpcpb.Code_UNAVAILABLE,
+			msg:                 "a different unavailable error that persists",
+			shouldSwitchTablets: true,
+		},
+		{
+			name:                "should not retry",
+			code:                vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:                 "final error",
+			shouldSwitchTablets: false,
 		},
 	}
 
@@ -446,9 +457,25 @@ func TestVStreamRetriableErrors(t *testing.T) {
 
 			vsm := newTestVStreamManager(ctx, hc, st, cells[0])
 
-			// Always have the local cell tablet error so it's ignored on retry and we pick the other one
+			if tcase.shouldSwitchTablets {
+				// Retry just once before trying another tablet.
+				vsm.maxTimeInError = 1 * time.Nanosecond
+				vsm.baseRetryDelay = 1 * time.Millisecond
+			} else {
+				// Retry at least once on the same tablet.
+				vsm.maxTimeInError = 1 * time.Second
+				vsm.baseRetryDelay = 1 * time.Nanosecond
+			}
+
+			// Always have the local cell tablet error on its first vstream
 			sbc0.AddVStreamEvents(nil, vterrors.Errorf(tcase.code, tcase.msg))
-			sbc1.AddVStreamEvents(commit, nil)
+			if tcase.shouldSwitchTablets {
+				// Add desired events to the new tablet we should switch to.
+				sbc1.AddVStreamEvents(commit, nil)
+			} else {
+				// Add desired events to the original tablet. We must retry on the same tablet to obtain them.
+				sbc0.AddVStreamEvents(commit, nil)
+			}
 
 			vgtid := &binlogdatapb.VGtid{
 				ShardGtids: []*binlogdatapb.ShardGtid{{

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+	grpcbackoff "google.golang.org/grpc/backoff"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vterrors/backoff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -46,9 +48,11 @@ import (
 
 // vstreamManager manages vstream requests.
 type vstreamManager struct {
-	resolver *srvtopo.Resolver
-	toposerv srvtopo.Server
-	cell     string
+	resolver       *srvtopo.Resolver
+	toposerv       srvtopo.Server
+	cell           string
+	maxTimeInError time.Duration
+	baseRetryDelay time.Duration
 
 	vstreamsCreated *stats.CountersWithMultiLabels
 	vstreamsLag     *stats.GaugesWithMultiLabels
@@ -60,6 +64,9 @@ const maxSkewTimeoutSeconds = 10 * 60
 // tabletPickerContextTimeout is the timeout for the child context used to select candidate tablets
 // for a vstream
 const tabletPickerContextTimeout = 90 * time.Second
+
+// Default max time a tablet with the same error should be retried before retrying another.
+const defaultMaxTimeInError = 5 * time.Minute
 
 // vstream contains the metadata for one VStream request.
 type vstream struct {
@@ -122,6 +129,9 @@ type vstream struct {
 	ts                *topo.Server
 
 	tabletPickerOptions discovery.TabletPickerOptions
+
+	lastError       *vterrors.LastError
+	backoffStrategy backoff.Strategy
 }
 
 type journalEvent struct {
@@ -134,9 +144,11 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 	exporter := servenv.NewExporter(cell, "VStreamManager")
 
 	return &vstreamManager{
-		resolver: resolver,
-		toposerv: serv,
-		cell:     cell,
+		resolver:       resolver,
+		toposerv:       serv,
+		cell:           cell,
+		maxTimeInError: defaultMaxTimeInError,
+		baseRetryDelay: grpcbackoff.DefaultConfig.BaseDelay,
 		vstreamsCreated: exporter.NewCountersWithMultiLabels(
 			"VStreamsCreated",
 			"Number of vstreams created",
@@ -183,8 +195,24 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 			CellPreference: flags.GetCellPreference(),
 			TabletOrder:    flags.GetTabletOrder(),
 		},
+		lastError:       initLastError(vsm.maxTimeInError),
+		backoffStrategy: initBackOffStrategy(vsm.baseRetryDelay),
 	}
 	return vs.stream(ctx)
+}
+
+func initLastError(maxTimeInError time.Duration) *vterrors.LastError {
+	return vterrors.NewLastError("VStreamManager", maxTimeInError)
+}
+
+func initBackOffStrategy(retryDelay time.Duration) backoff.Strategy {
+	config := grpcbackoff.Config{
+		BaseDelay:  retryDelay,
+		Multiplier: grpcbackoff.DefaultConfig.Multiplier,
+		Jitter:     grpcbackoff.DefaultConfig.Jitter,
+		MaxDelay:   grpcbackoff.DefaultConfig.MaxDelay,
+	}
+	return backoff.Get("exponential", config)
 }
 
 // resolveParams provides defaults for the inputs if they're not specified.
@@ -484,7 +512,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	var journalDone chan struct{}
 	ignoreTablets := make([]*topodatapb.TabletAlias, 0)
 
-	errCount := 0
+	backoffIndex := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -529,6 +557,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		tpCtx, tpCancel := context.WithTimeout(ctx, tabletPickerContextTimeout)
 		defer tpCancel()
 		tablet, err := tp.PickForStreaming(tpCtx)
+
 		if err != nil {
 			return tabletPickerErr(err)
 		}
@@ -585,8 +614,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 		var vstreamCreatedOnce sync.Once
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
-			// We received a valid event. Reset error count.
-			errCount = 0
+			// We received a valid event. Reset backoff index.
+			backoffIndex = 0
 
 			labels := []string{sgtid.Keyspace, sgtid.Shard, req.Target.TabletType.String()}
 
@@ -708,15 +737,21 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			err = vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "vstream ended unexpectedly")
 		}
 
-		ignoreTablets = append(ignoreTablets, tablet.GetAlias())
+		vs.lastError.Record(err)
 
-		errCount++
-		// Retry, at most, 3 times if the error can be retried.
-		if errCount >= 3 {
-			log.Errorf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err)
-			return err
+		if vs.lastError.ShouldRetry() {
+			log.Infof("Retrying tablet, count: %d, alias: %v, hostname: %s", backoffIndex, tablet.GetAlias(), tablet.GetHostname())
+			retryDelay := vs.backoffStrategy.Backoff(backoffIndex)
+			backoffIndex++
+			time.Sleep(retryDelay)
+		} else {
+			log.Infof("Adding tablet to ignore list, alias: %v, hostname: %s", tablet.GetAlias(), tablet.GetHostname())
+			ignoreTablets = append(ignoreTablets, tablet.GetAlias())
+			vs.lastError = initLastError(vs.vsm.maxTimeInError)
+			backoffIndex = 0
 		}
-		log.Infof("vstream for %s/%s error, retrying, count: %d, error: %v", sgtid.Keyspace, sgtid.Shard, errCount, err)
+
+		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
 }
 
