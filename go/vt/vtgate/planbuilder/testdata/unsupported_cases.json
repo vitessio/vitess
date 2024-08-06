@@ -296,8 +296,8 @@
   },
   {
     "comment": "Cross keyspace query with subquery",
-    "query": "select 1 from user where id in (select id from t1)",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "query": "select 1 from user where id = (select id from t1 where user.foo = t1.bar)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "multi-shard union",
