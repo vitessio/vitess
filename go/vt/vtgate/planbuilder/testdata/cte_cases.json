@@ -18,8 +18,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-            "Query": "select count(*) as a from `user`",
-            "Table": "`user`"
+            "Query": "select count(*) as a from `user`"
           }
         ]
       },
@@ -47,8 +46,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
-            "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
-            "Table": "`user`, user_extra"
+            "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a"
           }
         ]
       },
@@ -72,8 +70,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
-        "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
-        "Table": "`user`, user_extra"
+        "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a"
       },
       "TablesUsed": [
         "user.user",
@@ -102,8 +99,7 @@
             },
             "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a group by col order by col asc",
-            "Table": "`user`, user_extra"
+            "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a group by col order by col asc"
           }
         ]
       },
@@ -134,7 +130,6 @@
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,R:0",
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -144,8 +139,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select sum(col) from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t",
-                    "Table": "`user`"
+                    "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t"
                   },
                   {
                     "OperatorType": "Route",
@@ -155,8 +149,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra group by .0"
                   }
                 ]
               }
@@ -197,8 +190,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select x.phone, x.id, x.city from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.phone, x.id, x.city from (select phone, id, city from `user` where id > 12) as x limit 10",
-                    "Table": "`user`"
+                    "Query": "select x.phone, x.id, x.city from (select phone, id, city from `user` where id > 12) as x limit 10"
                   }
                 ]
               }
@@ -238,8 +230,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where id > 12) as x limit 10",
-                    "Table": "`user`"
+                    "Query": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where id > 12) as x limit 10"
                   }
                 ]
               }
@@ -274,7 +265,6 @@
                 "JoinVars": {
                   "user_id": 0
                 },
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Limit",
@@ -288,8 +278,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select x.`user.id` from (select `user`.id as `user.id` from `user` where 1 != 1) as x where 1 != 1",
-                        "Query": "select x.`user.id` from (select `user`.id as `user.id` from `user`) as x limit 10",
-                        "Table": "`user`"
+                        "Query": "select x.`user.id` from (select `user`.id as `user.id` from `user`) as x limit 10"
                       }
                     ]
                   },
@@ -305,8 +294,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select x.col from (select user_extra.col as col from user_extra where 1 != 1) as x where 1 != 1",
-                        "Query": "select x.col from (select user_extra.col as col from user_extra where user_extra.id = :user_id) as x limit 10",
-                        "Table": "user_extra"
+                        "Query": "select x.col from (select user_extra.col as col from user_extra where user_extra.id = :user_id) as x limit 10"
                       }
                     ]
                   }
@@ -352,8 +340,7 @@
                     },
                     "FieldQuery": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
                     "OrderBy": "(1|3) ASC",
-                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2",
-                    "Table": "`user`"
+                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2"
                   }
                 ]
               }
@@ -390,8 +377,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-                "Query": "select id, count(*) from `user`",
-                "Table": "`user`"
+                "Query": "select id, count(*) from `user`"
               }
             ]
           }
@@ -429,8 +415,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select sum(a) as a, sum(b) as b from `user` where 1 != 1",
-                "Query": "select sum(a) as a, sum(b) as b from `user`",
-                "Table": "`user`"
+                "Query": "select sum(a) as a, sum(b) as b from `user`"
               }
             ]
           }
@@ -455,8 +440,7 @@
           "Sharded": true
         },
         "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
-        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId) as t1 where `count` >= :v2",
-        "Table": "user_extra"
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId) as t1 where `count` >= :v2"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -490,8 +474,7 @@
                 },
                 "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
-                "Table": "`user`"
+                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc"
               }
             ]
           }
@@ -529,8 +512,7 @@
                 },
                 "FieldQuery": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
-                "Table": "`user`"
+                "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc"
               }
             ]
           }
@@ -559,7 +541,6 @@
             "JoinVars": {
               "d_id": 1
             },
-            "TableName": "`user`_music",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
@@ -585,8 +566,7 @@
                             },
                             "FieldQuery": "select id, count(*) as a, weight_string(id) from `user` where 1 != 1",
                             "OrderBy": "1 ASC, (0|2) ASC",
-                            "Query": "select id, count(*) as a, weight_string(id) from `user` order by count(*) asc, id asc",
-                            "Table": "`user`"
+                            "Query": "select id, count(*) as a, weight_string(id) from `user` order by count(*) asc, id asc"
                           }
                         ]
                       }
@@ -603,7 +583,6 @@
                 },
                 "FieldQuery": "select 1 from music where 1 != 1 group by .0",
                 "Query": "select 1 from music where music.user_id = :d_id group by .0",
-                "Table": "music",
                 "Values": [
                   ":d_id"
                 ],
@@ -641,8 +620,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user`",
-                "Table": "`user`"
+                "Query": "select col from `user`"
               },
               {
                 "OperatorType": "Route",
@@ -652,8 +630,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col from unsharded where 1 != 1",
-                "Query": "select col from unsharded",
-                "Table": "unsharded"
+                "Query": "select col from unsharded"
               }
             ]
           }
@@ -692,8 +669,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select x.id, x.val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.id, x.val2 from (select id, val2 from `user` where val2 is null) as x limit 2",
-                    "Table": "`user`"
+                    "Query": "select x.id, x.val2 from (select id, val2 from `user` where val2 is null) as x limit 2"
                   }
                 ]
               }
@@ -734,8 +710,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), 1 from `user` where 1 != 1",
-                    "Query": "select count(*), 1 from `user`",
-                    "Table": "`user`"
+                    "Query": "select count(*), 1 from `user`"
                   }
                 ]
               }
@@ -763,7 +738,6 @@
         },
         "FieldQuery": "select id from (select id, col from `user` where 1 != 1) as t where 1 != 1",
         "Query": "select id from (select id, col from `user` where id = 5) as t",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -789,7 +763,6 @@
         },
         "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t, user_extra where 1 != 1",
         "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -816,7 +789,6 @@
         },
         "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1) as t, user_extra where 1 != 1",
         "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5) as t, user_extra where t.id = user_extra.user_id",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -843,7 +815,6 @@
         },
         "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t, user_extra where 1 != 1",
         "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -868,7 +839,6 @@
         "JoinVars": {
           "t_id": 0
         },
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -879,7 +849,6 @@
             },
             "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t where 1 != 1",
             "Query": "select t.id from (select id from `user` where id = 5) as t",
-            "Table": "`user`",
             "Values": [
               "5"
             ],
@@ -893,8 +862,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.col = :t_id",
-            "Table": "user_extra"
+            "Query": "select 1 from user_extra where user_extra.col = :t_id"
           }
         ]
       },
@@ -919,7 +887,6 @@
         },
         "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
         "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -945,7 +912,6 @@
         },
         "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
         "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -975,8 +941,7 @@
           "Sharded": true
         },
         "FieldQuery": "select t.id from (select id, textcol1 as baz from `user` as route1 where 1 != 1) as t, (select id, textcol1 + textcol1 as baz from `user` where 1 != 1) as s where 1 != 1",
-        "Query": "select t.id from (select id, textcol1 as baz from `user` as route1 where textcol1 = '3') as t, (select id, textcol1 + textcol1 as baz from `user` where textcol1 + textcol1 = '3') as s where t.id = s.id",
-        "Table": "`user`"
+        "Query": "select t.id from (select id, textcol1 as baz from `user` as route1 where textcol1 = '3') as t, (select id, textcol1 + textcol1 as baz from `user` where textcol1 + textcol1 = '3') as s where t.id = s.id"
       },
       "TablesUsed": [
         "user.user"
@@ -997,8 +962,7 @@
           "Sharded": true
         },
         "FieldQuery": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where 1 != 1) as u where 1 != 1) as t where 1 != 1",
-        "Query": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where colA + colB + 4 = 5) as u) as t",
-        "Table": "`user`"
+        "Query": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where colA + colB + 4 = 5) as u) as t"
       },
       "TablesUsed": [
         "user.user"
@@ -1020,7 +984,6 @@
         },
         "FieldQuery": "select u.col, e.col from (select col from `user` where 1 != 1) as u, (select col from user_extra where 1 != 1) as e where 1 != 1",
         "Query": "select u.col, e.col from (select col from `user` where id = 5) as u, (select col from user_extra where user_id = 5) as e",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -1046,13 +1009,11 @@
           "t_col1": 0,
           "t_id": 1
         },
-        "TableName": "`user`_user_extra_unsharded",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:1,L:0",
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1062,8 +1023,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user`) as t",
-                "Table": "`user`"
+                "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user`) as t"
               },
               {
                 "OperatorType": "Route",
@@ -1073,8 +1033,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
+                "Query": "select 1 from user_extra"
               }
             ]
           },
@@ -1086,8 +1045,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from unsharded where 1 != 1",
-            "Query": "select 1 from unsharded where unsharded.id = :t_id and unsharded.col1 = :t_col1",
-            "Table": "unsharded"
+            "Query": "select 1 from unsharded where unsharded.id = :t_id and unsharded.col1 = :t_col1"
           }
         ]
       },
@@ -1111,7 +1069,6 @@
         "JoinVars": {
           "user_col": 2
         },
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1121,8 +1078,7 @@
               "Sharded": true
             },
             "FieldQuery": "select t.id, t.col1, t.`user.col` from (select `user`.id, `user`.col1, `user`.col as `user.col` from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select t.id, t.col1, t.`user.col` from (select `user`.id, `user`.col1, `user`.col as `user.col` from `user`) as t",
-            "Table": "`user`"
+            "Query": "select t.id, t.col1, t.`user.col` from (select `user`.id, `user`.col1, `user`.col as `user.col` from `user`) as t"
           },
           {
             "OperatorType": "Route",
@@ -1132,8 +1088,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */",
-            "Table": "user_extra"
+            "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */"
           }
         ]
       },
@@ -1153,7 +1108,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "R:0",
-        "TableName": "unsharded_a_`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1163,14 +1117,12 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from unsharded_a as ua where 1 != 1",
-            "Query": "select 1 from unsharded_a as ua",
-            "Table": "unsharded_a"
+            "Query": "select 1 from unsharded_a as ua"
           },
           {
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:1",
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1180,8 +1132,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user`) as t",
-                "Table": "`user`"
+                "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user`) as t"
               },
               {
                 "OperatorType": "Route",
@@ -1191,8 +1142,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
+                "Query": "select 1 from user_extra"
               }
             ]
           }
@@ -1218,7 +1168,6 @@
         "JoinVars": {
           "ua_id": 0
         },
-        "TableName": "unsharded_a_`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1228,14 +1177,12 @@
               "Sharded": false
             },
             "FieldQuery": "select ua.id from unsharded_a as ua where 1 != 1",
-            "Query": "select ua.id from unsharded_a as ua",
-            "Table": "unsharded_a"
+            "Query": "select ua.id from unsharded_a as ua"
           },
           {
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:1",
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1246,7 +1193,6 @@
                 },
                 "FieldQuery": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
                 "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where `user`.id = :ua_id) as t",
-                "Table": "`user`",
                 "Values": [
                   ":ua_id"
                 ],
@@ -1260,8 +1206,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
+                "Query": "select 1 from user_extra"
               }
             ]
           }
@@ -1284,7 +1229,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0,L:0",
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1294,8 +1238,7 @@
               "Sharded": true
             },
             "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select t.id from (select `user`.id from `user`) as t",
-            "Table": "`user`"
+            "Query": "select t.id from (select `user`.id from `user`) as t"
           },
           {
             "OperatorType": "Route",
@@ -1305,8 +1248,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
+            "Query": "select 1 from user_extra"
           }
         ]
       },
@@ -1341,8 +1283,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "Query": "select count(*) as a from `user`"
               }
             ]
           }
@@ -1367,8 +1308,7 @@
           "Sharded": false
         },
         "FieldQuery": "with u as (select * from unsharded where 1 != 1) select u.* from u where 1 != 1",
-        "Query": "with u as (select * from unsharded) select u.* from u",
-        "Table": "unsharded"
+        "Query": "with u as (select * from unsharded) select u.* from u"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -1385,7 +1325,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1396,7 +1335,6 @@
             },
             "FieldQuery": "select t.id, t.col from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
             "Query": "select t.id, t.col from (select `user`.id, `user`.col from `user` where `user`.id = 5) as t",
-            "Table": "`user`",
             "Values": [
               "5"
             ],
@@ -1410,8 +1348,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
+            "Query": "select 1 from user_extra"
           }
         ]
       },
@@ -1431,7 +1368,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1441,8 +1377,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id + 1 from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select id + 1 from (select `user`.id, `user`.col from `user`) as t",
-            "Table": "`user`"
+            "Query": "select id + 1 from (select `user`.id, `user`.col from `user`) as t"
           },
           {
             "OperatorType": "Route",
@@ -1452,8 +1387,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
+            "Query": "select 1 from user_extra"
           }
         ]
       },
@@ -1490,7 +1424,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -1504,8 +1437,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-            "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
-            "Table": "`user`"
+            "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)"
           }
         ]
       },
@@ -1541,7 +1473,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -1555,8 +1486,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-            "Query": "select u.a from (select id as b, `name` from `user` where b = 1 and `name` = 1) as u(a, n)",
-            "Table": "`user`"
+            "Query": "select u.a from (select id as b, `name` from `user` where b = 1 and `name` = 1) as u(a, n)"
           }
         ]
       },
@@ -1575,7 +1505,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1585,8 +1514,7 @@
               "Sharded": true
             },
             "FieldQuery": "select i + 1 from (select `user`.id from `user` where 1 != 1) as t(i) where 1 != 1",
-            "Query": "select i + 1 from (select `user`.id from `user`) as t(i)",
-            "Table": "`user`"
+            "Query": "select i + 1 from (select `user`.id from `user`) as t(i)"
           },
           {
             "OperatorType": "Route",
@@ -1596,8 +1524,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
+            "Query": "select 1 from user_extra"
           }
         ]
       },
@@ -1620,13 +1547,11 @@
         "JoinVars": {
           "t_col1": 1
         },
-        "TableName": "`user`_unsharded_unsharded",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:0,L:1",
-            "TableName": "`user`_unsharded",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1636,8 +1561,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 0, t.col1 from (select `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select 0, t.col1 from (select `user`.col1 from `user`) as t",
-                "Table": "`user`"
+                "Query": "select 0, t.col1 from (select `user`.col1 from `user`) as t"
               },
               {
                 "OperatorType": "Route",
@@ -1647,8 +1571,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from unsharded where 1 != 1",
-                "Query": "select 1 from unsharded",
-                "Table": "unsharded"
+                "Query": "select 1 from unsharded"
               }
             ]
           },
@@ -1660,8 +1583,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from unsharded where 1 != 1",
-            "Query": "select 1 from unsharded where unsharded.a = :t_col1 and unsharded.col1 = :t_col1",
-            "Table": "unsharded"
+            "Query": "select 1 from unsharded where unsharded.a = :t_col1 and unsharded.col1 = :t_col1"
           }
         ]
       },
@@ -1685,8 +1607,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id2 from (select id from `user` where 1 != 1) as x(id2) where 1 != 1",
-        "Query": "select id2 from (select id from `user`) as x(id2)",
-        "Table": "`user`"
+        "Query": "select id2 from (select id from `user`) as x(id2)"
       },
       "TablesUsed": [
         "user.user"
@@ -1707,8 +1628,7 @@
           "Sharded": false
         },
         "FieldQuery": "with u as (select col from unsharded join unsharded_b where 1 != 1) select col from u join unsharded_a as ua where 1 != 1",
-        "Query": "with u as (select col from unsharded join unsharded_b) select col from u join unsharded_a as ua limit 1",
-        "Table": "unsharded, unsharded_a, unsharded_b"
+        "Query": "with u as (select col from unsharded join unsharded_b) select col from u join unsharded_a as ua limit 1"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -1731,13 +1651,11 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0",
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -1747,8 +1665,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select u.col from (select `user`.col from `user` where 1 != 1) as u where 1 != 1",
-                    "Query": "select u.col from (select `user`.col from `user`) as u",
-                    "Table": "`user`"
+                    "Query": "select u.col from (select `user`.col from `user`) as u"
                   },
                   {
                     "OperatorType": "Route",
@@ -1758,8 +1675,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
+                    "Query": "select 1 from user_extra"
                   }
                 ]
               },
@@ -1775,8 +1691,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                    "Query": "select 1 from user_extra as ue limit 1",
-                    "Table": "user_extra"
+                    "Query": "select 1 from user_extra as ue limit 1"
                   }
                 ]
               }
@@ -1804,8 +1719,7 @@
           "Sharded": true
         },
         "FieldQuery": "select * from (select * from `user` where 1 != 1) as x where 1 != 1",
-        "Query": "select * from (select * from `user`) as x",
-        "Table": "`user`"
+        "Query": "select * from (select * from `user`) as x"
       },
       "TablesUsed": [
         "user.user"
@@ -1834,8 +1748,7 @@
               "Sharded": true
             },
             "FieldQuery": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1 union select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1) as dt(c0, c1) where 1 != 1",
-            "Query": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user`) as x union select id, foo from (select id, foo from `user`) as x) as dt(c0, c1)",
-            "Table": "`user`"
+            "Query": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user`) as x union select id, foo from (select id, foo from `user`) as x) as dt(c0, c1)"
           }
         ]
       },
@@ -1858,8 +1771,7 @@
           "Sharded": false
         },
         "FieldQuery": "with recursive cte(n) as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select cte.n from unsharded join cte on unsharded.id = cte.n where 1 != 1",
-        "Query": "with recursive cte(n) as (select 1 from dual union all select n + 1 from cte where n < 5) select cte.n from unsharded join cte on unsharded.id = cte.n",
-        "Table": "dual, unsharded"
+        "Query": "with recursive cte(n) as (select 1 from dual union all select n + 1 from cte where n < 5) select cte.n from unsharded join cte on unsharded.id = cte.n"
       },
       "TablesUsed": [
         "main.dual",
@@ -1881,8 +1793,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 'count_a' as tab, num from count_a where 1 != 1 union select 'count_b' as tab, num from count_b where 1 != 1",
-        "Query": "with count_a as (select count(id) as num from unsharded_a) , count_b as (select count(id) as num from unsharded_b) select 'count_a' as tab, num from count_a union select 'count_b' as tab, num from count_b",
-        "Table": "unsharded_a, unsharded_b"
+        "Query": "with count_a as (select count(id) as num from unsharded_a) , count_b as (select count(id) as num from unsharded_b) select 'count_a' as tab, num from count_a union select 'count_b' as tab, num from count_b"
       },
       "TablesUsed": [
         "main.unsharded_a",
@@ -1926,8 +1837,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(user_id) as num from user_metadata where 1 != 1",
-                        "Query": "select count(user_id) as num from user_metadata",
-                        "Table": "user_metadata"
+                        "Query": "select count(user_id) as num from user_metadata"
                       }
                     ]
                   }
@@ -1953,8 +1863,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(user_id) as num from user_extra where 1 != 1",
-                        "Query": "select count(user_id) as num from user_extra",
-                        "Table": "user_extra"
+                        "Query": "select count(user_id) as num from user_extra"
                       }
                     ]
                   }
@@ -2030,8 +1939,7 @@
                                                   "Sharded": true
                                                 },
                                                 "FieldQuery": "select t.id, 1, 1000 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'open' and `user`.intcol = 1) as t limit :__upper_limit",
-                                                "Table": "`user`"
+                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'open' and `user`.intcol = 1) as t limit :__upper_limit"
                                               }
                                             ]
                                           }
@@ -2066,8 +1974,7 @@
                                                   "Sharded": true
                                                 },
                                                 "FieldQuery": "select t.id, 1, 1000 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'closed' and `user`.intcol = 1) as t limit :__upper_limit",
-                                                "Table": "`user`"
+                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'closed' and `user`.intcol = 1) as t limit :__upper_limit"
                                               }
                                             ]
                                           }

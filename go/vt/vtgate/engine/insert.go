@@ -350,7 +350,6 @@ func (ins *Insert) buildVindexRowsValues(ctx context.Context, vcursor VCursor, b
 func (ins *Insert) description() PrimitiveDescription {
 	other := ins.commonDesc()
 	other["Query"] = ins.Query
-	other["TableName"] = ins.GetTableName()
 
 	if len(ins.VindexValues) > 0 {
 		valuesOffsets := map[string]string{}

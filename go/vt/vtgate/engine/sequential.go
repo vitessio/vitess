@@ -55,15 +55,6 @@ func (s *Sequential) GetKeyspaceName() string {
 	return res
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (s *Sequential) GetTableName() string {
-	res := s.Sources[0].GetTableName()
-	for i := 1; i < len(s.Sources); i++ {
-		res = formatTwoOptionsNicely(res, s.Sources[i].GetTableName())
-	}
-	return res
-}
-
 // TryExecute performs a non-streaming exec.
 func (s *Sequential) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantFields bool) (*sqltypes.Result, error) {
 	finalRes := &sqltypes.Result{}

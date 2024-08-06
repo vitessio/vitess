@@ -57,11 +57,6 @@ func (f *FkVerify) GetKeyspaceName() string {
 	return f.Exec.GetKeyspaceName()
 }
 
-// GetTableName implements the Primitive interface
-func (f *FkVerify) GetTableName() string {
-	return f.Exec.GetTableName()
-}
-
 // GetFields implements the Primitive interface
 func (f *FkVerify) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields should not be called")

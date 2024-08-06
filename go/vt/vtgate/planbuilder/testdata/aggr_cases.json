@@ -23,7 +23,6 @@
                 "JoinVars": {
                   "user_foo": 1
                 },
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -33,8 +32,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                    "Query": "select count(*), `user`.foo from `user` group by `user`.foo",
-                    "Table": "`user`"
+                    "Query": "select count(*), `user`.foo from `user` group by `user`.foo"
                   },
                   {
                     "OperatorType": "Route",
@@ -44,8 +42,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra where user_extra.bar = :user_foo group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra where user_extra.bar = :user_foo group by .0"
                   }
                 ]
               }
@@ -83,7 +80,6 @@
                 "JoinVars": {
                   "user_foo": 1
                 },
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -93,8 +89,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select sum(`user`.col), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                    "Query": "select sum(`user`.col), `user`.foo from `user` group by `user`.foo",
-                    "Table": "`user`"
+                    "Query": "select sum(`user`.col), `user`.foo from `user` group by `user`.foo"
                   },
                   {
                     "OperatorType": "Route",
@@ -104,8 +99,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra where user_extra.bar = :user_foo group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra where user_extra.bar = :user_foo group by .0"
                   }
                 ]
               }
@@ -143,7 +137,6 @@
                 "JoinVars": {
                   "user_foo": 1
                 },
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -153,8 +146,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(`user`.col), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                    "Query": "select count(`user`.col), `user`.foo from `user` group by `user`.foo",
-                    "Table": "`user`"
+                    "Query": "select count(`user`.col), `user`.foo from `user` group by `user`.foo"
                   },
                   {
                     "OperatorType": "Route",
@@ -164,8 +156,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra where user_extra.bar = :user_foo group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra where user_extra.bar = :user_foo group by .0"
                   }
                 ]
               }
@@ -197,7 +188,6 @@
             "JoinVars": {
               "user_foo": 1
             },
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -207,8 +197,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select max(`user`.col), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                "Query": "select max(`user`.col), `user`.foo from `user` group by `user`.foo",
-                "Table": "`user`"
+                "Query": "select max(`user`.col), `user`.foo from `user` group by `user`.foo"
               },
               {
                 "OperatorType": "Route",
@@ -218,8 +207,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
-                "Query": "select 1 from user_extra where user_extra.bar = :user_foo group by .0",
-                "Table": "user_extra"
+                "Query": "select 1 from user_extra where user_extra.bar = :user_foo group by .0"
               }
             ]
           }
@@ -249,7 +237,6 @@
             "JoinVars": {
               "user_foo": 0
             },
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -259,8 +246,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                "Query": "select `user`.foo from `user` group by `user`.foo",
-                "Table": "`user`"
+                "Query": "select `user`.foo from `user` group by `user`.foo"
               },
               {
                 "OperatorType": "Route",
@@ -270,8 +256,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select min(user_extra.col) from user_extra where 1 != 1 group by .0",
-                "Query": "select min(user_extra.col) from user_extra where user_extra.bar = :user_foo group by .0",
-                "Table": "user_extra"
+                "Query": "select min(user_extra.col) from user_extra where user_extra.bar = :user_foo group by .0"
               }
             ]
           }
@@ -297,8 +282,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
-        "Query": "select id, count(*) as c from `user` group by id having max(col) > 10",
-        "Table": "`user`"
+        "Query": "select id, count(*) as c from `user` group by id having max(col) > 10"
       },
       "TablesUsed": [
         "user.user"
@@ -324,8 +308,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-            "Query": "select count(*) as a from `user`",
-            "Table": "`user`"
+            "Query": "select count(*) as a from `user`"
           }
         ]
       },
@@ -353,8 +336,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-            "Query": "select id, count(*) from `user`",
-            "Table": "`user`"
+            "Query": "select id, count(*) from `user`"
           }
         ]
       },
@@ -383,8 +365,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select distinct col from `user`",
-            "Table": "`user`"
+            "Query": "select distinct col from `user`"
           }
         ]
       },
@@ -413,8 +394,7 @@
             },
             "FieldQuery": "select col from `user` where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col from `user` group by col order by col asc",
-            "Table": "`user`"
+            "Query": "select col from `user` group by col order by col asc"
           }
         ]
       },
@@ -437,8 +417,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id, count(distinct col) from `user` where 1 != 1 group by id",
-        "Query": "select id, count(distinct col) from `user` group by id",
-        "Table": "`user`"
+        "Query": "select id, count(distinct col) from `user` group by id"
       },
       "TablesUsed": [
         "user.user"
@@ -466,8 +445,7 @@
             },
             "FieldQuery": "select col, count(distinct id), sum(distinct id) from `user` where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col, count(distinct id), sum(distinct id) from `user` group by col order by col asc",
-            "Table": "`user`"
+            "Query": "select col, count(distinct id), sum(distinct id) from `user` group by col order by col asc"
           }
         ]
       },
@@ -498,8 +476,7 @@
             },
             "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
             "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
-            "Table": "`user`"
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc"
           }
         ]
       },
@@ -529,8 +506,7 @@
             },
             "FieldQuery": "select col2, weight_string(col2) from `user` where 1 != 1 group by col2, weight_string(col2)",
             "OrderBy": "(0|1) ASC",
-            "Query": "select col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc",
-            "Table": "`user`"
+            "Query": "select col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc"
           }
         ]
       },
@@ -553,8 +529,7 @@
           "Sharded": false
         },
         "FieldQuery": "select a, b, count(*) from unsharded where 1 != 1 group by a, b with rollup",
-        "Query": "select a, b, count(*) from unsharded group by a, b with rollup",
-        "Table": "unsharded"
+        "Query": "select a, b, count(*) from unsharded group by a, b with rollup"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -575,8 +550,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id, user_id, count(*) from music where 1 != 1 group by id, user_id with rollup",
-        "Query": "select id, user_id, count(*) from music group by id, user_id with rollup",
-        "Table": "music"
+        "Query": "select id, user_id, count(*) from music group by id, user_id with rollup"
       },
       "TablesUsed": [
         "user.music"
@@ -605,8 +579,7 @@
             },
             "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
             "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
-            "Table": "`user`"
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc"
           }
         ]
       },
@@ -637,8 +610,7 @@
             },
             "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
             "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
-            "Table": "`user`"
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc"
           }
         ]
       },
@@ -669,8 +641,7 @@
             },
             "FieldQuery": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(min(col2)) from `user` where 1 != 1 group by col1, weight_string(col1)",
             "OrderBy": "(0|2) ASC",
-            "Query": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(min(col2)) from `user` group by col1, weight_string(col1) order by col1 asc",
-            "Table": "`user`"
+            "Query": "select col1, min(col2) as `min(distinct col2)`, weight_string(col1), weight_string(min(col2)) from `user` group by col1, weight_string(col1) order by col1 asc"
           }
         ]
       },
@@ -706,8 +677,7 @@
                 },
                 "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
                 "OrderBy": "(0|2) ASC, (1|3) ASC",
-                "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
-                "Table": "`user`"
+                "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc"
               }
             ]
           }
@@ -750,8 +720,7 @@
             },
             "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, b, weight_string(a), weight_string(b)",
             "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, b, weight_string(a), weight_string(b) order by a asc, b asc",
-            "Table": "`user`"
+            "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, b, weight_string(a), weight_string(b) order by a asc, b asc"
           }
         ]
       },
@@ -773,7 +742,6 @@
         "JoinVars": {
           "t_id": 1
         },
-        "TableName": "`user`_unsharded",
         "Inputs": [
           {
             "OperatorType": "Limit",
@@ -788,8 +756,7 @@
                 },
                 "FieldQuery": "select t.num_segments, t.id from (select id, count(*) as num_segments from `user` where 1 != 1 group by id) as t where 1 != 1",
                 "OrderBy": "0 DESC",
-                "Query": "select t.num_segments, t.id from (select id, count(*) as num_segments from `user` group by id) as t order by t.num_segments desc limit 20",
-                "Table": "`user`"
+                "Query": "select t.num_segments, t.id from (select id, count(*) as num_segments from `user` group by id) as t order by t.num_segments desc limit 20"
               }
             ]
           },
@@ -801,8 +768,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u.id, u.`name` from unsharded as u where 1 != 1",
-            "Query": "select u.id, u.`name` from unsharded as u where u.id = :t_id",
-            "Table": "unsharded"
+            "Query": "select u.id, u.`name` from unsharded as u where u.id = :t_id"
           }
         ]
       },
@@ -834,8 +800,7 @@
             },
             "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a, weight_string(b), weight_string(a)",
             "OrderBy": "(1|3) ASC, (0|4) ASC",
-            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a) order by b asc, a asc",
-            "Table": "`user`"
+            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a) order by b asc, a asc"
           }
         ]
       },
@@ -866,8 +831,7 @@
             },
             "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a, weight_string(b), weight_string(a)",
             "OrderBy": "(1|3) ASC, (0|4) ASC",
-            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a) order by b asc, a asc",
-            "Table": "`user`"
+            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a) order by b asc, a asc"
           }
         ]
       },
@@ -896,7 +860,6 @@
             "JoinVars": {
               "user_id": 0
             },
-            "TableName": "`user`, user_extra_music",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -907,8 +870,7 @@
                 },
                 "FieldQuery": "select `user`.id, weight_string(`user`.id) from `user`, user_extra where 1 != 1",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.id, weight_string(`user`.id) from `user`, user_extra where `user`.id = user_extra.user_id order by `user`.id asc",
-                "Table": "`user`, user_extra"
+                "Query": "select `user`.id, weight_string(`user`.id) from `user`, user_extra where `user`.id = user_extra.user_id order by `user`.id asc"
               },
               {
                 "OperatorType": "Route",
@@ -919,7 +881,6 @@
                 },
                 "FieldQuery": "select music.`name` from music where 1 != 1",
                 "Query": "select music.`name` from music where music.id = :user_id",
-                "Table": "music",
                 "Values": [
                   ":user_id"
                 ],
@@ -956,8 +917,7 @@
             },
             "FieldQuery": "select col from `user` where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col from `user` group by col order by col asc",
-            "Table": "`user`"
+            "Query": "select col from `user` group by col order by col asc"
           }
         ]
       },
@@ -990,8 +950,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user`",
-            "Table": "`user`"
+            "Query": "select count(*) from `user`"
           }
         ]
       },
@@ -1022,8 +981,7 @@
             },
             "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by a, b, c, weight_string(a), weight_string(b), weight_string(c)",
             "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, b, c, weight_string(a), weight_string(b), weight_string(c) order by a asc, b asc, c asc",
-            "Table": "`user`"
+            "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, b, c, weight_string(a), weight_string(b), weight_string(c) order by a asc, b asc, c asc"
           }
         ]
       },
@@ -1054,8 +1012,7 @@
             },
             "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by a, b, c, weight_string(a), weight_string(b), weight_string(c)",
             "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, b, c, weight_string(a), weight_string(b), weight_string(c) order by `user`.a asc, `user`.b asc, `user`.c asc",
-            "Table": "`user`"
+            "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, b, c, weight_string(a), weight_string(b), weight_string(c) order by `user`.a asc, `user`.b asc, `user`.c asc"
           }
         ]
       },
@@ -1086,8 +1043,7 @@
             },
             "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by a, b, c, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
             "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by a, b, c, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc",
-            "Table": "`user`"
+            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by a, b, c, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc"
           }
         ]
       },
@@ -1118,8 +1074,7 @@
             },
             "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by c, b, a, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
             "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by c, b, a, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc",
-            "Table": "`user`"
+            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by c, b, a, d, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc"
           }
         ]
       },
@@ -1150,8 +1105,7 @@
             },
             "FieldQuery": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` where 1 != 1 group by c, b, a, weight_string(a), weight_string(c), weight_string(b)",
             "OrderBy": "(0|4) DESC, (2|5) DESC, (1|6) ASC",
-            "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by c, b, a, weight_string(a), weight_string(c), weight_string(b) order by a desc, c desc, `user`.b asc",
-            "Table": "`user`"
+            "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by c, b, a, weight_string(a), weight_string(c), weight_string(b) order by a desc, c desc, `user`.b asc"
           }
         ]
       },
@@ -1190,8 +1144,7 @@
                 },
                 "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
                 "OrderBy": "0 ASC",
-                "Query": "select col, count(*) from `user` group by col order by col asc",
-                "Table": "`user`"
+                "Query": "select col, count(*) from `user` group by col order by col asc"
               }
             ]
           }
@@ -1216,8 +1169,7 @@
           "Sharded": false
         },
         "FieldQuery": "select id, count(*) from unsharded as route2 where 1 != 1 group by id",
-        "Query": "select id, count(*) from unsharded as route2 group by id",
-        "Table": "unsharded"
+        "Query": "select id, count(*) from unsharded as route2 group by id"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -1238,8 +1190,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from ref where 1 != 1",
-        "Query": "select col from ref order by ref.col asc",
-        "Table": "ref"
+        "Query": "select col from ref order by ref.col asc"
       },
       "TablesUsed": [
         "user.ref"
@@ -1265,8 +1216,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, count(*) from `user` where 1 != 1",
-            "Query": "select a, count(*) from `user`",
-            "Table": "`user`"
+            "Query": "select a, count(*) from `user`"
           }
         ]
       },
@@ -1297,8 +1247,7 @@
             },
             "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
             "OrderBy": "(0|2) ASC",
-            "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
-            "Table": "`user`"
+            "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc"
           }
         ]
       },
@@ -1329,8 +1278,7 @@
             },
             "FieldQuery": "select id, 1.1 from `user` where 1 != 1 group by 1.1",
             "OrderBy": "1 ASC",
-            "Query": "select id, 1.1 from `user` group by 1.1 order by 1.1 asc",
-            "Table": "`user`"
+            "Query": "select id, 1.1 from `user` group by 1.1 order by 1.1 asc"
           }
         ]
       },
@@ -1363,8 +1311,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
-            "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
-            "Table": "`user`, user_extra"
+            "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a"
           }
         ]
       },
@@ -1388,8 +1335,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
-        "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
-        "Table": "`user`, user_extra"
+        "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a"
       },
       "TablesUsed": [
         "user.user",
@@ -1418,8 +1364,7 @@
             },
             "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a group by col order by col asc",
-            "Table": "`user`, user_extra"
+            "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a group by col order by col asc"
           }
         ]
       },
@@ -1451,8 +1396,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1",
-            "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user`",
-            "Table": "`user`"
+            "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user`"
           }
         ]
       },
@@ -1480,8 +1424,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user`",
-            "Table": "`user`"
+            "Query": "select count(*) from `user`"
           }
         ]
       },
@@ -1506,7 +1449,6 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:0,L:1",
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1517,8 +1459,7 @@
                 },
                 "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
-                "Table": "`user`"
+                "Query": "select `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc"
               },
               {
                 "OperatorType": "Route",
@@ -1528,8 +1469,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
-                "Query": "select 1 from user_extra group by .0",
-                "Table": "user_extra"
+                "Query": "select 1 from user_extra group by .0"
               }
             ]
           }
@@ -1563,8 +1503,7 @@
             },
             "FieldQuery": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
             "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
-            "Table": "`user`"
+            "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc"
           }
         ]
       },
@@ -1599,8 +1538,7 @@
                 },
                 "FieldQuery": "select col, count(*) as k from `user` where 1 != 1 group by col",
                 "OrderBy": "0 ASC",
-                "Query": "select col, count(*) as k from `user` group by col order by col asc",
-                "Table": "`user`"
+                "Query": "select col, count(*) as k from `user` group by col order by col asc"
               }
             ]
           }
@@ -1632,8 +1570,7 @@
             },
             "FieldQuery": "select col, count(*) as k from `user` where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col, count(*) as k from `user` group by col order by col asc",
-            "Table": "`user`"
+            "Query": "select col, count(*) as k from `user` group by col order by col asc"
           }
         ]
       },
@@ -1656,8 +1593,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.id, count(*) as c from `user`, user_extra where 1 != 1 group by `user`.id",
-        "Query": "select `user`.id, count(*) as c from `user`, user_extra where `user`.id = user_extra.user_id group by `user`.id having max(`user`.col) > 10",
-        "Table": "`user`, user_extra"
+        "Query": "select `user`.id, count(*) as c from `user`, user_extra where `user`.id = user_extra.user_id group by `user`.id having max(`user`.col) > 10"
       },
       "TablesUsed": [
         "user.user",
@@ -1684,8 +1620,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) > 10)",
-            "Table": "`user`"
+            "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) > 10)"
           }
         ]
       },
@@ -1709,8 +1644,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1 group by id",
-        "Query": "select id from `user` group by id having count(id) = 10",
-        "Table": "`user`"
+        "Query": "select id from `user` group by id having count(id) = 10"
       },
       "TablesUsed": [
         "user.user"
@@ -1738,8 +1672,7 @@
             },
             "FieldQuery": "select lower(col1) as v, count(*) from authoritative where 1 != 1 group by lower(col1)",
             "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-            "Query": "select lower(col1) as v, count(*) from authoritative group by lower(col1) order by lower(col1) asc",
-            "Table": "authoritative"
+            "Query": "select lower(col1) as v, count(*) from authoritative group by lower(col1) order by lower(col1) asc"
           }
         ]
       },
@@ -1769,8 +1702,7 @@
             },
             "FieldQuery": "select char_length(col1) as a, count(*) from authoritative where 1 != 1 group by char_length(col1)",
             "OrderBy": "0 ASC",
-            "Query": "select char_length(col1) as a, count(*) from authoritative group by char_length(col1) order by char_length(authoritative.col1) asc",
-            "Table": "authoritative"
+            "Query": "select char_length(col1) as a, count(*) from authoritative group by char_length(col1) order by char_length(authoritative.col1) asc"
           }
         ]
       },
@@ -1799,8 +1731,7 @@
             "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "(0|1) ASC",
             "Query": "select id, weight_string(id) from `user` order by id asc limit 2",
-            "ResultColumns": 1,
-            "Table": "`user`"
+            "ResultColumns": 1
           }
         ]
       },
@@ -1820,7 +1751,6 @@
         "JoinVars": {
           "user_id": 1
         },
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "InputName": "Outer",
@@ -1833,8 +1763,7 @@
             "FieldQuery": "select col, id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "(1|2) ASC",
             "Query": "select col, id, weight_string(id) from `user` order by `user`.id asc",
-            "ResultColumns": 2,
-            "Table": "`user`"
+            "ResultColumns": 2
           },
           {
             "InputName": "SubQuery",
@@ -1846,7 +1775,6 @@
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
             "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id limit 1",
-            "Table": "user_extra",
             "Values": [
               "3"
             ],
@@ -1883,8 +1811,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "Query": "select count(*) as a from `user`"
               }
             ]
           }
@@ -1918,8 +1845,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "Query": "select count(*) as a from `user`"
               }
             ]
           }
@@ -1953,8 +1879,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "Query": "select count(*) as a from `user`"
               }
             ]
           }
@@ -1988,8 +1913,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "Query": "select count(*) as a from `user`"
               }
             ]
           }
@@ -2023,8 +1947,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "Query": "select count(*) as a from `user`"
               }
             ]
           }
@@ -2058,8 +1981,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "Query": "select count(*) as a from `user`"
               }
             ]
           }
@@ -2093,8 +2015,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "Query": "select count(*) as a from `user`"
               }
             ]
           }
@@ -2128,8 +2049,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "Query": "select count(*) as a from `user`"
               }
             ]
           }
@@ -2166,8 +2086,7 @@
                 },
                 "FieldQuery": "select col1, count(*) as a, weight_string(col1) from `user` where 1 != 1 group by col1, weight_string(col1)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select col1, count(*) as a, weight_string(col1) from `user` group by col1, weight_string(col1) order by col1 asc",
-                "Table": "`user`"
+                "Query": "select col1, count(*) as a, weight_string(col1) from `user` group by col1, weight_string(col1) order by col1 asc"
               }
             ]
           }
@@ -2204,8 +2123,7 @@
                 },
                 "FieldQuery": "select count(*) as a, col2, weight_string(col2) from `user` where 1 != 1 group by col2, weight_string(col2)",
                 "OrderBy": "(1|2) ASC",
-                "Query": "select count(*) as a, col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc",
-                "Table": "`user`"
+                "Query": "select count(*) as a, col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc"
               }
             ]
           }
@@ -2231,7 +2149,6 @@
         },
         "FieldQuery": "select col1, udf_aggr(col2) as r from `user` where 1 != 1 group by col1",
         "Query": "select col1, udf_aggr(col2) as r from `user` where id = 1 group by col1 having udf_aggr(`user`.col2) >= 0.3",
-        "Table": "`user`",
         "Values": [
           "1"
         ],
@@ -2256,8 +2173,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id, udf_aggr(col2) as r from `user` where 1 != 1 group by id",
-        "Query": "select id, udf_aggr(col2) as r from `user` group by id",
-        "Table": "`user`"
+        "Query": "select id, udf_aggr(col2) as r from `user` group by id"
       },
       "TablesUsed": [
         "user.user"
@@ -2285,8 +2201,7 @@
             },
             "FieldQuery": "select col, textcol1 from `user` where 1 != 1 group by col, textcol1",
             "OrderBy": "0 ASC, 1 ASC COLLATE latin1_swedish_ci",
-            "Query": "select col, textcol1 from `user` group by col, textcol1 order by col asc, textcol1 asc",
-            "Table": "`user`"
+            "Query": "select col, textcol1 from `user` group by col, textcol1 order by col asc, textcol1 asc"
           }
         ]
       },
@@ -2332,7 +2247,6 @@
                     },
                     "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
                     "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                    "Table": "name_user_vdx",
                     "Values": [
                       "::name"
                     ],
@@ -2346,8 +2260,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
-                    "Query": "select 1, count(id) from `user` where `name` = 'a'",
-                    "Table": "`user`"
+                    "Query": "select 1, count(id) from `user` where `name` = 'a'"
                   }
                 ]
               }
@@ -2381,7 +2294,6 @@
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,R:0",
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -2391,8 +2303,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from `user` where 1 != 1",
-                    "Query": "select count(*) from `user`",
-                    "Table": "`user`"
+                    "Query": "select count(*) from `user`"
                   },
                   {
                     "OperatorType": "Route",
@@ -2402,8 +2313,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra group by .0"
                   }
                 ]
               }
@@ -2441,8 +2351,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
-                "Query": "select 1, count(id) from `user`",
-                "Table": "`user`"
+                "Query": "select 1, count(id) from `user`"
               }
             ]
           }
@@ -2478,7 +2387,6 @@
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,R:0,L:1,L:2",
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -2489,8 +2397,7 @@
                     },
                     "FieldQuery": "select count(*), `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
                     "OrderBy": "(1|2) ASC",
-                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
-                    "Table": "`user`"
+                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc"
                   },
                   {
                     "OperatorType": "Route",
@@ -2500,8 +2407,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra group by .0"
                   }
                 ]
               }
@@ -2540,7 +2446,6 @@
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "R:0,L:0,L:1,L:2",
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -2551,8 +2456,7 @@
                     },
                     "FieldQuery": "select count(*), `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
                     "OrderBy": "(1|2) ASC",
-                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
-                    "Table": "`user`"
+                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc"
                   },
                   {
                     "OperatorType": "Route",
@@ -2562,8 +2466,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(user_extra.a) from user_extra where 1 != 1 group by .0",
-                    "Query": "select count(user_extra.a) from user_extra group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(user_extra.a) from user_extra group by .0"
                   }
                 ]
               }
@@ -2611,7 +2514,6 @@
                     "JoinVars": {
                       "u_foo": 2
                     },
-                    "TableName": "`user`_user_extra_unsharded",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -2621,8 +2523,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(u.textcol1), count(*), u.foo from `user` as u where 1 != 1 group by u.foo",
-                        "Query": "select count(u.textcol1), count(*), u.foo from `user` as u group by u.foo",
-                        "Table": "`user`"
+                        "Query": "select count(u.textcol1), count(*), u.foo from `user` as u group by u.foo"
                       },
                       {
                         "OperatorType": "Projection",
@@ -2640,7 +2541,6 @@
                             "JoinVars": {
                               "ue_bar": 2
                             },
-                            "TableName": "user_extra_unsharded",
                             "Inputs": [
                               {
                                 "OperatorType": "Route",
@@ -2650,8 +2550,7 @@
                                   "Sharded": true
                                 },
                                 "FieldQuery": "select count(*), count(ue.foo), ue.bar from user_extra as ue where 1 != 1 group by ue.bar",
-                                "Query": "select count(*), count(ue.foo), ue.bar from user_extra as ue where ue.bar = :u_foo group by ue.bar",
-                                "Table": "user_extra"
+                                "Query": "select count(*), count(ue.foo), ue.bar from user_extra as ue where ue.bar = :u_foo group by ue.bar"
                               },
                               {
                                 "OperatorType": "Route",
@@ -2661,8 +2560,7 @@
                                   "Sharded": false
                                 },
                                 "FieldQuery": "select count(*), us.bar, weight_string(us.bar) from unsharded as us where 1 != 1 group by us.bar, weight_string(us.bar)",
-                                "Query": "select count(*), us.bar, weight_string(us.bar) from unsharded as us where us.baz = :ue_bar group by us.bar, weight_string(us.bar)",
-                                "Table": "unsharded"
+                                "Query": "select count(*), us.bar, weight_string(us.bar) from unsharded as us where us.baz = :ue_bar group by us.bar, weight_string(us.bar)"
                               }
                             ]
                           }
@@ -2705,8 +2603,7 @@
             },
             "FieldQuery": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(min(id)), weight_string(col3) from `user` where 1 != 1 group by col1, col3, weight_string(col1), weight_string(col3)",
             "OrderBy": "(0|3) ASC, (2|5) ASC",
-            "Query": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(min(id)), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(col3) order by col1 asc, col3 asc",
-            "Table": "`user`"
+            "Query": "select col1, min(id) as `min(distinct id)`, col3, weight_string(col1), weight_string(min(id)), weight_string(col3) from `user` group by col1, col3, weight_string(col1), weight_string(col3) order by col1 asc, col3 asc"
           }
         ]
       },
@@ -2732,7 +2629,6 @@
             "JoinVars": {
               "user_apa": 1
             },
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "InputName": "Outer",
@@ -2743,8 +2639,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*), `user`.apa from `user` where 1 != 1 group by `user`.apa",
-                "Query": "select count(*), `user`.apa from `user` group by `user`.apa",
-                "Table": "`user`"
+                "Query": "select count(*), `user`.apa from `user` group by `user`.apa"
               },
               {
                 "InputName": "SubQuery",
@@ -2759,8 +2654,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra where user_extra.bar = :user_apa limit 1",
-                    "Table": "user_extra"
+                    "Query": "select 1 from user_extra where user_extra.bar = :user_apa limit 1"
                   }
                 ]
               }
@@ -2796,8 +2690,7 @@
             },
             "FieldQuery": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` where 1 != 1 group by val2, val1, weight_string(val2), weight_string(val1)",
             "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` group by val2, val1, weight_string(val2), weight_string(val1) order by val2 asc, val1 asc",
-            "Table": "`user`"
+            "Query": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` group by val2, val1, weight_string(val2), weight_string(val1) order by val2 asc, val1 asc"
           }
         ]
       },
@@ -2828,8 +2721,7 @@
             },
             "FieldQuery": "select ascii(col2) as a, count(*), weight_string(ascii(col2)) from `user` where 1 != 1 group by ascii(col2), weight_string(ascii(col2))",
             "OrderBy": "(0|2) ASC",
-            "Query": "select ascii(col2) as a, count(*), weight_string(ascii(col2)) from `user` group by ascii(col2), weight_string(ascii(col2)) order by ascii(col2) asc",
-            "Table": "`user`"
+            "Query": "select ascii(col2) as a, count(*), weight_string(ascii(col2)) from `user` group by ascii(col2), weight_string(ascii(col2)) order by ascii(col2) asc"
           }
         ]
       },
@@ -2860,8 +2752,7 @@
             },
             "FieldQuery": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` where 1 != 1 group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2)",
             "OrderBy": "(0|3) ASC, (1|4) ASC",
-            "Query": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) order by tcol1 asc, tcol2 asc",
-            "Table": "`user`"
+            "Query": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) order by tcol1 asc, tcol2 asc"
           }
         ]
       },
@@ -2892,8 +2783,7 @@
             },
             "FieldQuery": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol1), weight_string(tcol2) from `user` where 1 != 1 group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2)",
             "OrderBy": "(1|4) ASC, (0|5) ASC",
-            "Query": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) order by tcol1 asc, tcol2 asc",
-            "Table": "`user`"
+            "Query": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) order by tcol1 asc, tcol2 asc"
           }
         ]
       },
@@ -2922,7 +2812,6 @@
             "JoinVars": {
               "u2_val2": 3
             },
-            "TableName": "`user`_`user`_music",
             "Inputs": [
               {
                 "OperatorType": "Join",
@@ -2931,7 +2820,6 @@
                 "JoinVars": {
                   "u_val2": 1
                 },
-                "TableName": "`user`_`user`",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -2942,8 +2830,7 @@
                     },
                     "FieldQuery": "select u.textcol1, u.val2, weight_string(u.val2) from `user` as u where 1 != 1",
                     "OrderBy": "0 ASC COLLATE latin1_swedish_ci, (1|2) ASC",
-                    "Query": "select u.textcol1, u.val2, weight_string(u.val2) from `user` as u order by u.textcol1 asc, u.val2 asc",
-                    "Table": "`user`"
+                    "Query": "select u.textcol1, u.val2, weight_string(u.val2) from `user` as u order by u.textcol1 asc, u.val2 asc"
                   },
                   {
                     "OperatorType": "Route",
@@ -2954,7 +2841,6 @@
                     },
                     "FieldQuery": "select u2.val2 from `user` as u2 where 1 != 1",
                     "Query": "select u2.val2 from `user` as u2 where u2.id = :u_val2",
-                    "Table": "`user`",
                     "Values": [
                       ":u_val2"
                     ],
@@ -2971,7 +2857,6 @@
                 },
                 "FieldQuery": "select 1 from music as m where 1 != 1",
                 "Query": "select 1 from music as m where m.id = :u2_val2",
-                "Table": "music",
                 "Values": [
                   ":u2_val2"
                 ],
@@ -3001,8 +2886,7 @@
           "Sharded": true
         },
         "FieldQuery": "select group_concat(user_id order by `name` asc), id from `user` where 1 != 1 group by id",
-        "Query": "select group_concat(user_id order by `name` asc), id from `user` group by id",
-        "Table": "`user`"
+        "Query": "select group_concat(user_id order by `name` asc), id from `user` group by id"
       },
       "TablesUsed": [
         "user.user"
@@ -3023,8 +2907,7 @@
           "Sharded": false
         },
         "FieldQuery": "select count(distinct user_id, `name`) from unsharded where 1 != 1",
-        "Query": "select count(distinct user_id, `name`) from unsharded",
-        "Table": "unsharded"
+        "Query": "select count(distinct user_id, `name`) from unsharded"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -3052,7 +2935,6 @@
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,R:0",
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -3062,8 +2944,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select sum(col) from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t",
-                    "Table": "`user`"
+                    "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t"
                   },
                   {
                     "OperatorType": "Route",
@@ -3073,8 +2954,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra group by .0"
                   }
                 ]
               }
@@ -3114,8 +2994,7 @@
                 },
                 "FieldQuery": "select foo, count(*), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
-                "Table": "`user`"
+                "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc"
               }
             ]
           }
@@ -3152,8 +3031,7 @@
                 },
                 "FieldQuery": "select foo, sum(foo), sum(bar), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|3) ASC",
-                "Query": "select foo, sum(foo), sum(bar), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
-                "Table": "`user`"
+                "Query": "select foo, sum(foo), sum(bar), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc"
               }
             ]
           }
@@ -3190,8 +3068,7 @@
                 },
                 "FieldQuery": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|3) ASC",
-                "Query": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
-                "Table": "`user`"
+                "Query": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc"
               }
             ]
           }
@@ -3229,8 +3106,7 @@
                 },
                 "FieldQuery": "select foo, count(*), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
-                "Table": "`user`"
+                "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc"
               }
             ]
           }
@@ -3279,7 +3155,6 @@
                         "JoinVars": {
                           "ue_id": 1
                         },
-                        "TableName": "user_extra_`user`",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -3289,8 +3164,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select count(*), ue.id from user_extra as ue where 1 != 1 group by ue.id",
-                            "Query": "select count(*), ue.id from user_extra as ue group by ue.id",
-                            "Table": "user_extra"
+                            "Query": "select count(*), ue.id from user_extra as ue group by ue.id"
                           },
                           {
                             "OperatorType": "Route",
@@ -3301,7 +3175,6 @@
                             },
                             "FieldQuery": "select count(u.`name`), u.id, weight_string(u.id) from `user` as u where 1 != 1 group by u.id, weight_string(u.id)",
                             "Query": "select count(u.`name`), u.id, weight_string(u.id) from `user` as u where u.id = :ue_id group by u.id, weight_string(u.id)",
-                            "Table": "`user`",
                             "Values": [
                               ":ue_id"
                             ],
@@ -3337,8 +3210,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u.id from `user` as u, user_extra as ue where 1 != 1 group by u.id",
-        "Query": "select u.id from `user` as u, user_extra as ue where ue.user_id = u.id group by u.id having count(u.`name`) = 3",
-        "Table": "`user`, user_extra"
+        "Query": "select u.id from `user` as u, user_extra as ue where ue.user_id = u.id group by u.id having count(u.`name`) = 3"
       },
       "TablesUsed": [
         "user.user",
@@ -3384,7 +3256,6 @@
                         "JoinVars": {
                           "ue_id": 1
                         },
-                        "TableName": "user_extra_`user`",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -3394,8 +3265,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select count(*), ue.id from user_extra as ue where 1 != 1 group by ue.id",
-                            "Query": "select count(*), ue.id from user_extra as ue group by ue.id",
-                            "Table": "user_extra"
+                            "Query": "select count(*), ue.id from user_extra as ue group by ue.id"
                           },
                           {
                             "OperatorType": "Route",
@@ -3406,7 +3276,6 @@
                             },
                             "FieldQuery": "select count(*), u.id, weight_string(u.id) from `user` as u where 1 != 1 group by u.id, weight_string(u.id)",
                             "Query": "select count(*), u.id, weight_string(u.id) from `user` as u where u.id = :ue_id group by u.id, weight_string(u.id)",
-                            "Table": "`user`",
                             "Values": [
                               ":ue_id"
                             ],
@@ -3448,7 +3317,6 @@
             "JoinVars": {
               "user_col": 0
             },
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3459,8 +3327,7 @@
                 },
                 "FieldQuery": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.id, `user`.col, weight_string(`user`.id)",
                 "OrderBy": "(1|2) ASC",
-                "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.id, `user`.col, weight_string(`user`.id) order by `user`.id asc",
-                "Table": "`user`"
+                "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.id, `user`.col, weight_string(`user`.id) order by `user`.id asc"
               },
               {
                 "OperatorType": "Route",
@@ -3470,8 +3337,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
-                "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */ group by .0",
-                "Table": "user_extra"
+                "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */ group by .0"
               }
             ]
           }
@@ -3507,8 +3373,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-            "Query": "select id, count(*) from `user`",
-            "Table": "`user`"
+            "Query": "select id, count(*) from `user`"
           }
         ]
       },
@@ -3533,7 +3398,6 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:0,L:1",
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3544,8 +3408,7 @@
                 },
                 "FieldQuery": "select `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.id, weight_string(`user`.id)",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.id, weight_string(`user`.id) from `user` group by `user`.id, weight_string(`user`.id) order by `user`.id asc",
-                "Table": "`user`"
+                "Query": "select `user`.id, weight_string(`user`.id) from `user` group by `user`.id, weight_string(`user`.id) order by `user`.id asc"
               },
               {
                 "OperatorType": "Route",
@@ -3555,8 +3418,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
-                "Query": "select 1 from user_extra group by .0",
-                "Table": "user_extra"
+                "Query": "select 1 from user_extra group by .0"
               }
             ]
           }
@@ -3595,8 +3457,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select x.phone, x.id, x.city from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.phone, x.id, x.city from (select phone, id, city from `user` where id > 12) as x limit 10",
-                    "Table": "`user`"
+                    "Query": "select x.phone, x.id, x.city from (select phone, id, city from `user` where id > 12) as x limit 10"
                   }
                 ]
               }
@@ -3636,8 +3497,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where id > 12) as x limit 10",
-                    "Table": "`user`"
+                    "Query": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where id > 12) as x limit 10"
                   }
                 ]
               }
@@ -3672,7 +3532,6 @@
                 "JoinVars": {
                   "user_id": 0
                 },
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Limit",
@@ -3686,8 +3545,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select x.`user.id` from (select `user`.id as `user.id` from `user` where 1 != 1) as x where 1 != 1",
-                        "Query": "select x.`user.id` from (select `user`.id as `user.id` from `user`) as x limit 10",
-                        "Table": "`user`"
+                        "Query": "select x.`user.id` from (select `user`.id as `user.id` from `user`) as x limit 10"
                       }
                     ]
                   },
@@ -3703,8 +3561,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select x.col from (select user_extra.col as col from user_extra where 1 != 1) as x where 1 != 1",
-                        "Query": "select x.col from (select user_extra.col as col from user_extra where user_extra.id = :user_id) as x limit 10",
-                        "Table": "user_extra"
+                        "Query": "select x.col from (select user_extra.col as col from user_extra where user_extra.id = :user_id) as x limit 10"
                       }
                     ]
                   }
@@ -3750,8 +3607,7 @@
                     },
                     "FieldQuery": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
                     "OrderBy": "(1|3) ASC",
-                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2",
-                    "Table": "`user`"
+                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2"
                   }
                 ]
               }
@@ -3788,8 +3644,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-                "Query": "select id, count(*) from `user`",
-                "Table": "`user`"
+                "Query": "select id, count(*) from `user`"
               }
             ]
           }
@@ -3827,8 +3682,7 @@
                 },
                 "FieldQuery": "select `user`.intcol, count(`user`.intcol) from `user` where 1 != 1 group by `user`.intcol",
                 "OrderBy": "0 ASC",
-                "Query": "select `user`.intcol, count(`user`.intcol) from `user` group by `user`.intcol order by `user`.intcol asc",
-                "Table": "`user`"
+                "Query": "select `user`.intcol, count(`user`.intcol) from `user` group by `user`.intcol order by `user`.intcol asc"
               }
             ]
           }
@@ -3873,7 +3727,6 @@
                     "JoinVars": {
                       "m_order": 1
                     },
-                    "TableName": "user_extra_`user`",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -3883,8 +3736,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(m.predef1), m.`order` from user_extra as m where 1 != 1 group by m.`order`",
-                        "Query": "select count(m.predef1), m.`order` from user_extra as m group by m.`order`",
-                        "Table": "user_extra"
+                        "Query": "select count(m.predef1), m.`order` from user_extra as m group by m.`order`"
                       },
                       {
                         "OperatorType": "Route",
@@ -3895,7 +3747,6 @@
                         },
                         "FieldQuery": "select u.`name`, count(*), u.id, weight_string(u.id) from `user` as u where 1 != 1 group by u.id, weight_string(u.id)",
                         "Query": "select u.`name`, count(*), u.id, weight_string(u.id) from `user` as u where u.id = :m_order group by u.id, weight_string(u.id)",
-                        "Table": "`user`",
                         "Values": [
                           ":m_order"
                         ],
@@ -3939,7 +3790,6 @@
                 "JoinVars": {
                   "u_col": 1
                 },
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -3949,8 +3799,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(u.id), u.col from `user` as u where 1 != 1 group by u.col",
-                    "Query": "select count(u.id), u.col from `user` as u group by u.col",
-                    "Table": "`user`"
+                    "Query": "select count(u.id), u.col from `user` as u group by u.col"
                   },
                   {
                     "OperatorType": "Route",
@@ -3960,8 +3809,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra as ue where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra as ue where ue.col = :u_col /* INT16 */ group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra as ue where ue.col = :u_col /* INT16 */ group by .0"
                   }
                 ]
               }
@@ -3999,7 +3847,6 @@
                 "JoinVars": {
                   "u_col": 1
                 },
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4009,8 +3856,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), u.col from `user` as u where 1 != 1 group by u.col",
-                    "Query": "select count(*), u.col from `user` as u group by u.col",
-                    "Table": "`user`"
+                    "Query": "select count(*), u.col from `user` as u group by u.col"
                   },
                   {
                     "OperatorType": "Route",
@@ -4020,8 +3866,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(ue.id) from user_extra as ue where 1 != 1 group by .0",
-                    "Query": "select count(ue.id) from user_extra as ue where ue.col = :u_col /* INT16 */ group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(ue.id) from user_extra as ue where ue.col = :u_col /* INT16 */ group by .0"
                   }
                 ]
               }
@@ -4062,8 +3907,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select sum(a) as a, sum(b) as b from `user` where 1 != 1",
-                "Query": "select sum(a) as a, sum(b) as b from `user`",
-                "Table": "`user`"
+                "Query": "select sum(a) as a, sum(b) as b from `user`"
               }
             ]
           }
@@ -4088,8 +3932,7 @@
           "Sharded": true
         },
         "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
-        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId) as t1 where `count` >= :v2",
-        "Table": "user_extra"
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId) as t1 where `count` >= :v2"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -4123,8 +3966,7 @@
                 },
                 "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
-                "Table": "`user`"
+                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc"
               }
             ]
           }
@@ -4162,8 +4004,7 @@
                 },
                 "FieldQuery": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
-                "Table": "`user`"
+                "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc"
               }
             ]
           }
@@ -4201,8 +4042,7 @@
                 },
                 "FieldQuery": "select col, count(*), col + 1 from `user` where 1 != 1 group by col",
                 "OrderBy": "0 ASC",
-                "Query": "select col, count(*), col + 1 from `user` group by col order by col asc",
-                "Table": "`user`"
+                "Query": "select col, count(*), col + 1 from `user` group by col order by col asc"
               }
             ]
           }
@@ -4229,8 +4069,7 @@
         "FieldQuery": "select id, id + 1, weight_string(id + 1) from `user` where 1 != 1 group by id",
         "OrderBy": "(1|2) ASC",
         "Query": "select id, id + 1, weight_string(id + 1) from `user` group by id order by id + 1 asc",
-        "ResultColumns": 1,
-        "Table": "`user`"
+        "ResultColumns": 1
       },
       "TablesUsed": [
         "user.user"
@@ -4259,8 +4098,7 @@
             },
             "FieldQuery": "select a, a + 1, weight_string(a + 1) from `user` where 1 != 1 group by a + 1, weight_string(a + 1)",
             "OrderBy": "(1|2) ASC",
-            "Query": "select a, a + 1, weight_string(a + 1) from `user` group by a + 1, weight_string(a + 1) order by a + 1 asc",
-            "Table": "`user`"
+            "Query": "select a, a + 1, weight_string(a + 1) from `user` group by a + 1, weight_string(a + 1) order by a + 1 asc"
           }
         ]
       },
@@ -4293,7 +4131,6 @@
                 "JoinVars": {
                   "user_foo": 1
                 },
-                "TableName": "`user`_music",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4303,8 +4140,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                    "Query": "select count(*), `user`.foo from `user` group by `user`.foo",
-                    "Table": "`user`"
+                    "Query": "select count(*), `user`.foo from `user` group by `user`.foo"
                   },
                   {
                     "OperatorType": "Route",
@@ -4314,8 +4150,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
-                    "Query": "select count(*) from music where music.bar = :user_foo group by .0",
-                    "Table": "music"
+                    "Query": "select count(*) from music where music.bar = :user_foo group by .0"
                   }
                 ]
               }
@@ -4353,7 +4188,6 @@
                 "JoinVars": {
                   "user_foo": 1
                 },
-                "TableName": "`user`_music",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4363,8 +4197,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                    "Query": "select count(*), `user`.foo from `user` group by `user`.foo",
-                    "Table": "`user`"
+                    "Query": "select count(*), `user`.foo from `user` group by `user`.foo"
                   },
                   {
                     "OperatorType": "Route",
@@ -4374,8 +4207,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
-                    "Query": "select count(*) from music where music.bar = :user_foo group by .0",
-                    "Table": "music"
+                    "Query": "select count(*) from music where music.bar = :user_foo group by .0"
                   }
                 ]
               }
@@ -4416,7 +4248,6 @@
                 "JoinVars": {
                   "user_foo": 2
                 },
-                "TableName": "`user`_music",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4427,8 +4258,7 @@
                     },
                     "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
                     "OrderBy": "1 ASC",
-                    "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo order by `user`.col asc",
-                    "Table": "`user`"
+                    "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo order by `user`.col asc"
                   },
                   {
                     "OperatorType": "Route",
@@ -4438,8 +4268,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
-                    "Query": "select count(*) from music where music.bar = :user_foo group by .0",
-                    "Table": "music"
+                    "Query": "select count(*) from music where music.bar = :user_foo group by .0"
                   }
                 ]
               }
@@ -4486,7 +4315,6 @@
                     "JoinVars": {
                       "user_foo": 1
                     },
-                    "TableName": "`user`_music",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -4496,8 +4324,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                        "Query": "select count(*), `user`.foo from `user` group by `user`.foo",
-                        "Table": "`user`"
+                        "Query": "select count(*), `user`.foo from `user` group by `user`.foo"
                       },
                       {
                         "OperatorType": "Route",
@@ -4507,8 +4334,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), music.col, weight_string(music.col) from music where 1 != 1 group by music.col, weight_string(music.col)",
-                        "Query": "select count(*), music.col, weight_string(music.col) from music where music.bar = :user_foo group by music.col, weight_string(music.col)",
-                        "Table": "music"
+                        "Query": "select count(*), music.col, weight_string(music.col) from music where music.bar = :user_foo group by music.col, weight_string(music.col)"
                       }
                     ]
                   }
@@ -4551,7 +4377,6 @@
                 "JoinVars": {
                   "user_foo": 2
                 },
-                "TableName": "`user`_music",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4562,8 +4387,7 @@
                     },
                     "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
                     "OrderBy": "1 ASC",
-                    "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo order by `user`.col asc",
-                    "Table": "`user`"
+                    "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo order by `user`.col asc"
                   },
                   {
                     "OperatorType": "Route",
@@ -4573,8 +4397,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
-                    "Query": "select count(*) from music where music.bar = :user_foo group by .0",
-                    "Table": "music"
+                    "Query": "select count(*) from music where music.bar = :user_foo group by .0"
                   }
                 ]
               }
@@ -4621,7 +4444,6 @@
                     "JoinVars": {
                       "user_foo": 1
                     },
-                    "TableName": "`user`_music",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -4631,8 +4453,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                        "Query": "select count(*), `user`.foo from `user` group by `user`.foo",
-                        "Table": "`user`"
+                        "Query": "select count(*), `user`.foo from `user` group by `user`.foo"
                       },
                       {
                         "OperatorType": "Route",
@@ -4642,8 +4463,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), music.col, weight_string(music.col) from music where 1 != 1 group by music.col, weight_string(music.col)",
-                        "Query": "select count(*), music.col, weight_string(music.col) from music where music.bar = :user_foo group by music.col, weight_string(music.col)",
-                        "Table": "music"
+                        "Query": "select count(*), music.col, weight_string(music.col) from music where music.bar = :user_foo group by music.col, weight_string(music.col)"
                       }
                     ]
                   }
@@ -4683,7 +4503,6 @@
                 "JoinVars": {
                   "user_extra_baz": 1
                 },
-                "TableName": "user_extra_`user`_music",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4693,8 +4512,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), user_extra.baz from user_extra where 1 != 1 group by user_extra.baz",
-                    "Query": "select count(*), user_extra.baz from user_extra group by user_extra.baz",
-                    "Table": "user_extra"
+                    "Query": "select count(*), user_extra.baz from user_extra group by user_extra.baz"
                   },
                   {
                     "OperatorType": "Projection",
@@ -4709,7 +4527,6 @@
                         "JoinVars": {
                           "user_foo": 1
                         },
-                        "TableName": "`user`_music",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -4719,8 +4536,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select count(*), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                            "Query": "select count(*), `user`.foo from `user` where `user`.foo = :user_extra_baz group by `user`.foo",
-                            "Table": "`user`"
+                            "Query": "select count(*), `user`.foo from `user` where `user`.foo = :user_extra_baz group by `user`.foo"
                           },
                           {
                             "OperatorType": "Route",
@@ -4730,8 +4546,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
-                            "Query": "select count(*) from music where music.bar = :user_foo group by .0",
-                            "Table": "music"
+                            "Query": "select count(*) from music where music.bar = :user_foo group by .0"
                           }
                         ]
                       }
@@ -4774,7 +4589,6 @@
                 "JoinVars": {
                   "user_foo": 1
                 },
-                "TableName": "`user`_music_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -4790,7 +4604,6 @@
                         "JoinVars": {
                           "user_foo": 1
                         },
-                        "TableName": "`user`_music",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -4800,8 +4613,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select count(*), `user`.foo from `user` where 1 != 1 group by `user`.foo",
-                            "Query": "select count(*), `user`.foo from `user` group by `user`.foo",
-                            "Table": "`user`"
+                            "Query": "select count(*), `user`.foo from `user` group by `user`.foo"
                           },
                           {
                             "OperatorType": "Route",
@@ -4811,8 +4623,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
-                            "Query": "select count(*) from music where music.bar = :user_foo group by .0",
-                            "Table": "music"
+                            "Query": "select count(*) from music where music.bar = :user_foo group by .0"
                           }
                         ]
                       }
@@ -4826,8 +4637,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                    "Query": "select count(*) from user_extra where user_extra.baz = :user_foo group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra where user_extra.baz = :user_foo group by .0"
                   }
                 ]
               }
@@ -4866,7 +4676,6 @@
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,R:0,L:1,L:2",
-                "TableName": "`user`_music",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4877,8 +4686,7 @@
                     },
                     "FieldQuery": "select count(*), u.col, u.intcol from `user` as u where 1 != 1 group by u.col, u.intcol",
                     "OrderBy": "2 ASC, 1 ASC",
-                    "Query": "select count(*), u.col, u.intcol from `user` as u group by u.col, u.intcol order by u.intcol asc, u.col asc",
-                    "Table": "`user`"
+                    "Query": "select count(*), u.col, u.intcol from `user` as u group by u.col, u.intcol order by u.intcol asc, u.col asc"
                   },
                   {
                     "OperatorType": "Route",
@@ -4888,8 +4696,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
-                    "Query": "select count(*) from music group by .0",
-                    "Table": "music"
+                    "Query": "select count(*) from music group by .0"
                   }
                 ]
               }
@@ -4917,8 +4724,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col, val, id from `user` where 1 != 1 group by col, val, id",
-        "Query": "select col, val, id from `user` group by col, val, id",
-        "Table": "`user`"
+        "Query": "select col, val, id from `user` group by col, val, id"
       },
       "TablesUsed": [
         "user.user"
@@ -4947,8 +4753,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b as a, weight_string(a), weight_string(b) from `user` where 1 != 1",
-            "Query": "select distinct a, b as a, weight_string(a), weight_string(b) from `user`",
-            "Table": "`user`"
+            "Query": "select distinct a, b as a, weight_string(a), weight_string(b) from `user`"
           }
         ]
       },
@@ -4978,8 +4783,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a + 1, weight_string(a + 1) from `user` where 1 != 1",
-            "Query": "select distinct a + 1, weight_string(a + 1) from `user`",
-            "Table": "`user`"
+            "Query": "select distinct a + 1, weight_string(a + 1) from `user`"
           }
         ]
       },
@@ -5016,8 +4820,7 @@
                 },
                 "FieldQuery": "select count(*), col from `user` where 1 != 1 group by col",
                 "OrderBy": "1 ASC",
-                "Query": "select count(*), col from `user` group by col order by col asc",
-                "Table": "`user`"
+                "Query": "select count(*), col from `user` group by col order by col asc"
               }
             ]
           }
@@ -5049,8 +4852,7 @@
             },
             "FieldQuery": "select min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` where 1 != 1 group by textcol1",
             "OrderBy": "2 ASC COLLATE latin1_swedish_ci",
-            "Query": "select min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` group by textcol1 order by textcol1 asc",
-            "Table": "`user`"
+            "Query": "select min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` group by textcol1 order by textcol1 asc"
           }
         ]
       },
@@ -5081,8 +4883,7 @@
             },
             "FieldQuery": "select col, min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` where 1 != 1 group by col, textcol1",
             "OrderBy": "0 ASC, 3 ASC COLLATE latin1_swedish_ci",
-            "Query": "select col, min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` group by col, textcol1 order by col asc, textcol1 asc",
-            "Table": "`user`"
+            "Query": "select col, min(textcol1), max(textcol2), textcol1, textcol1, weight_string(max(textcol2)) from `user` group by col, textcol1 order by col asc, textcol1 asc"
           }
         ]
       },
@@ -5112,8 +4913,7 @@
             },
             "FieldQuery": "select col, col, count(*) from `user` where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select col, col, count(*) from `user` group by col order by col asc",
-            "Table": "`user`"
+            "Query": "select col, col, count(*) from `user` group by col order by col asc"
           }
         ]
       },
@@ -5145,7 +4945,6 @@
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,R:0,R:1",
-                "TableName": "user_extra_`user`_`user`",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -5155,8 +4954,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from user_extra as ue where 1 != 1",
-                    "Query": "select count(*) from user_extra as ue",
-                    "Table": "user_extra"
+                    "Query": "select count(*) from user_extra as ue"
                   },
                   {
                     "OperatorType": "Projection",
@@ -5169,7 +4967,6 @@
                         "OperatorType": "Join",
                         "Variant": "Join",
                         "JoinColumnIndexes": "L:0,R:0,L:1",
-                        "TableName": "`user`_`user`",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -5179,8 +4976,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select count(*), count(u.col) from `user` as u where 1 != 1 group by .0",
-                            "Query": "select count(*), count(u.col) from `user` as u group by .0",
-                            "Table": "`user`"
+                            "Query": "select count(*), count(u.col) from `user` as u group by .0"
                           },
                           {
                             "OperatorType": "Route",
@@ -5190,8 +4986,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select count(*) from `user` as u2 where 1 != 1 group by .0",
-                            "Query": "select count(*) from `user` as u2 group by .0",
-                            "Table": "`user`"
+                            "Query": "select count(*) from `user` as u2 group by .0"
                           }
                         ]
                       }
@@ -5229,7 +5024,6 @@
             "JoinVars": {
               "user_col": 0
             },
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5240,8 +5034,7 @@
                 },
                 "FieldQuery": "select `user`.col, `user`.bar, weight_string(`user`.bar) from `user` where 1 != 1 group by `user`.col, `user`.bar, weight_string(`user`.bar)",
                 "OrderBy": "0 ASC, (1|2) ASC",
-                "Query": "select `user`.col, `user`.bar, weight_string(`user`.bar) from `user` group by `user`.col, `user`.bar, weight_string(`user`.bar) order by `user`.col asc, `user`.bar asc",
-                "Table": "`user`"
+                "Query": "select `user`.col, `user`.bar, weight_string(`user`.bar) from `user` group by `user`.col, `user`.bar, weight_string(`user`.bar) order by `user`.col asc, `user`.bar asc"
               },
               {
                 "OperatorType": "Route",
@@ -5251,8 +5044,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select min(user_extra.foo), max(user_extra.bar), weight_string(user_extra.foo), weight_string(user_extra.bar) from user_extra where 1 != 1 group by .0, weight_string(user_extra.foo), weight_string(user_extra.bar)",
-                "Query": "select min(user_extra.foo), max(user_extra.bar), weight_string(user_extra.foo), weight_string(user_extra.bar) from user_extra where user_extra.bar = :user_col /* INT16 */ group by .0, weight_string(user_extra.foo), weight_string(user_extra.bar)",
-                "Table": "user_extra"
+                "Query": "select min(user_extra.foo), max(user_extra.bar), weight_string(user_extra.foo), weight_string(user_extra.bar) from user_extra where user_extra.bar = :user_col /* INT16 */ group by .0, weight_string(user_extra.foo), weight_string(user_extra.bar)"
               }
             ]
           }
@@ -5283,7 +5075,6 @@
             "JoinVars": {
               "u_foo": 0
             },
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5293,8 +5084,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.foo from `user` as u where 1 != 1",
-                "Query": "select u.foo from `user` as u",
-                "Table": "`user`"
+                "Query": "select u.foo from `user` as u"
               },
               {
                 "OperatorType": "Route",
@@ -5304,8 +5094,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select :u_foo * ue.bar, weight_string(:u_foo * ue.bar) from user_extra as ue where 1 != 1",
-                "Query": "select :u_foo * ue.bar, weight_string(:u_foo * ue.bar) from user_extra as ue",
-                "Table": "user_extra"
+                "Query": "select :u_foo * ue.bar, weight_string(:u_foo * ue.bar) from user_extra as ue"
               }
             ]
           }
@@ -5335,7 +5124,6 @@
             "JoinVars": {
               "user_foo": 0
             },
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5345,8 +5133,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.foo from `user` where 1 != 1",
-                "Query": "select `user`.foo from `user`",
-                "Table": "`user`"
+                "Query": "select `user`.foo from `user`"
               },
               {
                 "OperatorType": "Route",
@@ -5356,8 +5143,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select :user_foo + user_extra.bar from user_extra where 1 != 1",
-                "Query": "select :user_foo + user_extra.bar from user_extra",
-                "Table": "user_extra"
+                "Query": "select :user_foo + user_extra.bar from user_extra"
               }
             ]
           }
@@ -5402,7 +5188,6 @@
                     "JoinVars": {
                       "user_id": 1
                     },
-                    "TableName": "`user`_user_extra",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -5412,8 +5197,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), `user`.id from `user` where 1 != 1 group by `user`.id",
-                        "Query": "select count(*), `user`.id from `user` group by `user`.id",
-                        "Table": "`user`"
+                        "Query": "select count(*), `user`.id from `user` group by `user`.id"
                       },
                       {
                         "OperatorType": "Route",
@@ -5423,8 +5207,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra where 1 != 1 group by :user_id + user_extra.id, weight_string(:user_id + user_extra.id)",
-                        "Query": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra group by :user_id + user_extra.id, weight_string(:user_id + user_extra.id)",
-                        "Table": "user_extra"
+                        "Query": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra group by :user_id + user_extra.id, weight_string(:user_id + user_extra.id)"
                       }
                     ]
                   }
@@ -5465,8 +5248,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1, count(*) from `user` where 1 != 1",
-                "Query": "select 1, count(*) from `user`",
-                "Table": "`user`"
+                "Query": "select 1, count(*) from `user`"
               }
             ]
           }
@@ -5508,7 +5290,6 @@
                     "JoinVars": {
                       "user_col": 2
                     },
-                    "TableName": "`user`_user_extra",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -5518,8 +5299,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select sum(`user`.foo), count(*), `user`.col from `user` where 1 != 1 group by `user`.col",
-                        "Query": "select sum(`user`.foo), count(*), `user`.col from `user` group by `user`.col",
-                        "Table": "`user`"
+                        "Query": "select sum(`user`.foo), count(*), `user`.col from `user` group by `user`.col"
                       },
                       {
                         "OperatorType": "Route",
@@ -5529,8 +5309,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), sum(user_extra.bar) from user_extra where 1 != 1 group by .0",
-                        "Query": "select count(*), sum(user_extra.bar) from user_extra where user_extra.col = :user_col /* INT16 */ group by .0",
-                        "Table": "user_extra"
+                        "Query": "select count(*), sum(user_extra.bar) from user_extra where user_extra.col = :user_col /* INT16 */ group by .0"
                       }
                     ]
                   }
@@ -5561,7 +5340,6 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5571,8 +5349,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.a from `user` where 1 != 1",
-                "Query": "select `user`.a from `user`",
-                "Table": "`user`"
+                "Query": "select `user`.a from `user`"
               },
               {
                 "OperatorType": "Route",
@@ -5582,8 +5359,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
+                "Query": "select 1 from user_extra"
               }
             ]
           }
@@ -5621,7 +5397,6 @@
                 "JoinVars": {
                   "u_bar": 2
                 },
-                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -5631,8 +5406,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), any_value(u.`name`), u.bar from `user` as u where 1 != 1 group by u.bar",
-                    "Query": "select count(*), any_value(u.`name`), u.bar from `user` as u group by u.bar",
-                    "Table": "`user`"
+                    "Query": "select count(*), any_value(u.`name`), u.bar from `user` as u group by u.bar"
                   },
                   {
                     "OperatorType": "Route",
@@ -5642,8 +5416,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*), any_value(ue.title) from user_extra as ue where 1 != 1 group by .0",
-                    "Query": "select count(*), any_value(ue.title) from user_extra as ue where ue.foo = :u_bar group by .0",
-                    "Table": "user_extra"
+                    "Query": "select count(*), any_value(ue.title) from user_extra as ue where ue.foo = :u_bar group by .0"
                   }
                 ]
               }
@@ -5675,7 +5448,6 @@
             "JoinVars": {
               "d_id": 1
             },
-            "TableName": "`user`_music",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
@@ -5701,8 +5473,7 @@
                             },
                             "FieldQuery": "select id, count(*) as a, weight_string(id) from `user` where 1 != 1",
                             "OrderBy": "1 ASC, (0|2) ASC",
-                            "Query": "select id, count(*) as a, weight_string(id) from `user` order by count(*) asc, id asc",
-                            "Table": "`user`"
+                            "Query": "select id, count(*) as a, weight_string(id) from `user` order by count(*) asc, id asc"
                           }
                         ]
                       }
@@ -5719,7 +5490,6 @@
                 },
                 "FieldQuery": "select 1 from music where 1 != 1 group by .0",
                 "Query": "select 1 from music where music.user_id = :d_id group by .0",
-                "Table": "music",
                 "Values": [
                   ":d_id"
                 ],
@@ -5760,7 +5530,6 @@
                 "JoinVars": {
                   "music_foo": 0
                 },
-                "TableName": "music_`user`",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -5770,8 +5539,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select music.foo from music where 1 != 1",
-                    "Query": "select music.foo from music",
-                    "Table": "music"
+                    "Query": "select music.foo from music"
                   },
                   {
                     "OperatorType": "Route",
@@ -5782,7 +5550,6 @@
                     },
                     "FieldQuery": "select `user`.id, `user`.bar, weight_string(`user`.bar) from `user` where 1 != 1",
                     "Query": "select `user`.id, `user`.bar, weight_string(`user`.bar) from `user` where `user`.id = :music_foo",
-                    "Table": "`user`",
                     "Values": [
                       ":music_foo"
                     ],
@@ -5821,8 +5588,7 @@
             },
             "FieldQuery": "select intcol, group_concat(foo) from `user` where 1 != 1 group by intcol",
             "OrderBy": "0 ASC",
-            "Query": "select intcol, group_concat(foo) from `user` group by intcol order by intcol asc",
-            "Table": "`user`"
+            "Query": "select intcol, group_concat(foo) from `user` group by intcol order by intcol asc"
           }
         ]
       },
@@ -5857,7 +5623,6 @@
                 "JoinVars": {
                   "u_col": 5
                 },
-                "TableName": "`user`_music",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -5868,8 +5633,7 @@
                     },
                     "FieldQuery": "select u.foo, u.bar, u.baz, weight_string(u.foo), weight_string(u.baz), u.col from `user` as u where 1 != 1",
                     "OrderBy": "(0|3) ASC",
-                    "Query": "select u.foo, u.bar, u.baz, weight_string(u.foo), weight_string(u.baz), u.col from `user` as u order by u.foo asc",
-                    "Table": "`user`"
+                    "Query": "select u.foo, u.bar, u.baz, weight_string(u.foo), weight_string(u.baz), u.col from `user` as u order by u.foo asc"
                   },
                   {
                     "OperatorType": "Route",
@@ -5879,8 +5643,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from music as m where 1 != 1",
-                    "Query": "select 1 from music as m where m.col = :u_col /* INT16 */",
-                    "Table": "music"
+                    "Query": "select 1 from music as m where m.col = :u_col /* INT16 */"
                   }
                 ]
               }
@@ -5911,7 +5674,6 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:0,R:0,R:1,L:1",
-            "TableName": "`user`_music",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5922,8 +5684,7 @@
                 },
                 "FieldQuery": "select u.col1, weight_string(u.col1) from `user` as u where 1 != 1 group by u.col1, weight_string(u.col1)",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select u.col1, weight_string(u.col1) from `user` as u group by u.col1, weight_string(u.col1) order by u.col1 asc",
-                "Table": "`user`"
+                "Query": "select u.col1, weight_string(u.col1) from `user` as u group by u.col1, weight_string(u.col1) order by u.col1 asc"
               },
               {
                 "OperatorType": "Route",
@@ -5933,8 +5694,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(distinct m.user_id), sum(distinct m.user_id) from music as m where 1 != 1 group by .0",
-                "Query": "select count(distinct m.user_id), sum(distinct m.user_id) from music as m group by .0",
-                "Table": "music"
+                "Query": "select count(distinct m.user_id), sum(distinct m.user_id) from music as m group by .0"
               }
             ]
           }
@@ -5968,8 +5728,7 @@
             },
             "FieldQuery": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(min(bar)), weight_string(baz), weight_string(max(toto)) from `user` where 1 != 1 group by foo, baz, weight_string(foo), weight_string(baz)",
             "OrderBy": "(0|5) ASC, (2|7) ASC",
-            "Query": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(min(bar)), weight_string(baz), weight_string(max(toto)) from `user` group by foo, baz, weight_string(foo), weight_string(baz) order by foo asc, baz asc",
-            "Table": "`user`"
+            "Query": "select foo, min(bar) as `min(distinct bar)`, baz, baz, max(toto) as `max(distinct toto)`, weight_string(foo), weight_string(min(bar)), weight_string(baz), weight_string(max(toto)) from `user` group by foo, baz, weight_string(foo), weight_string(baz) order by foo asc, baz asc"
           }
         ]
       },
@@ -6000,8 +5759,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user`",
-                "Table": "`user`"
+                "Query": "select col from `user`"
               },
               {
                 "OperatorType": "Route",
@@ -6011,8 +5769,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col from unsharded where 1 != 1",
-                "Query": "select col from unsharded",
-                "Table": "unsharded"
+                "Query": "select col from unsharded"
               }
             ]
           }
@@ -6051,8 +5808,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select x.id, x.val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.id, x.val2 from (select id, val2 from `user` where val2 is null) as x limit 2",
-                    "Table": "`user`"
+                    "Query": "select x.id, x.val2 from (select id, val2 from `user` where val2 is null) as x limit 2"
                   }
                 ]
               }
@@ -6086,7 +5842,6 @@
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,R:0",
-                "TableName": "`user`_`user`",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -6096,8 +5851,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from `user` where 1 != 1",
-                    "Query": "select count(*) from `user`",
-                    "Table": "`user`"
+                    "Query": "select count(*) from `user`"
                   },
                   {
                     "OperatorType": "Aggregate",
@@ -6125,8 +5879,7 @@
                                   "Sharded": true
                                 },
                                 "FieldQuery": "select count(*), .0, 1 from `user` where 1 != 1 group by .0",
-                                "Query": "select count(*), .0, 1 from `user` group by .0",
-                                "Table": "`user`"
+                                "Query": "select count(*), .0, 1 from `user` group by .0"
                               }
                             ]
                           }
@@ -6172,8 +5925,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra",
-                "Table": "user_extra"
+                "Query": "select count(*) from user_extra"
               }
             ]
           },
@@ -6199,8 +5951,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select count(*) from `user` where 1 != 1",
-                    "Query": "select count(*) from `user`",
-                    "Table": "`user`"
+                    "Query": "select count(*) from `user`"
                   }
                 ]
               },
@@ -6213,8 +5964,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual where 1 != 1",
-                "Query": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual",
-                "Table": "dual"
+                "Query": "select :__sq1 /* INT64 */ + :__sq2 /* INT64 */ as `(select count(*) from ``user``) + (select count(*) from user_extra)` from dual"
               }
             ]
           }
@@ -6252,8 +6002,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select sum(id), count(id) from `user` where 1 != 1",
-                "Query": "select sum(id), count(id) from `user`",
-                "Table": "`user`"
+                "Query": "select sum(id), count(id) from `user`"
               }
             ]
           }
@@ -6300,8 +6049,7 @@
                     },
                     "FieldQuery": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` where 1 != 1 group by bar, weight_string(bar)",
                     "OrderBy": "(0|4) ASC",
-                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc",
-                    "Table": "`user`"
+                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc"
                   }
                 ]
               }
@@ -6350,8 +6098,7 @@
                     },
                     "FieldQuery": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` where 1 != 1 group by bar, weight_string(bar)",
                     "OrderBy": "(0|4) ASC",
-                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc",
-                    "Table": "`user`"
+                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc"
                   }
                 ]
               }
@@ -6390,8 +6137,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select sum(foo), sum(bar), count(foo), count(bar) from `user` where 1 != 1",
-                "Query": "select sum(foo), sum(bar), count(foo), count(bar) from `user`",
-                "Table": "`user`"
+                "Query": "select sum(foo), sum(bar), count(foo), count(bar) from `user`"
               }
             ]
           }
@@ -6428,8 +6174,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select sum(foo), count(foo), count(foo) from `user` where 1 != 1",
-                "Query": "select sum(foo), count(foo), count(foo) from `user`",
-                "Table": "`user`"
+                "Query": "select sum(foo), count(foo), count(foo) from `user`"
               }
             ]
           }
@@ -6453,7 +6198,6 @@
         "JoinVars": {
           "tables_table_name": 0
         },
-        "TableName": "`user`_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -6464,7 +6208,6 @@
             },
             "FieldQuery": "select `tables`.table_name from (select table_name from `user` where 1 != 1 group by table_name) as `tables` where 1 != 1",
             "Query": "select `tables`.table_name from (select table_name from `user` where id = 143 group by table_name) as `tables`",
-            "Table": "`user`",
             "Values": [
               "143"
             ],
@@ -6478,8 +6221,7 @@
               "Sharded": true
             },
             "FieldQuery": "select c.column_name from `user` as c where 1 != 1",
-            "Query": "select c.column_name from `user` as c where c.table_name = :tables_table_name",
-            "Table": "`user`"
+            "Query": "select c.column_name from `user` as c where c.table_name = :tables_table_name"
           }
         ]
       },
@@ -6512,7 +6254,6 @@
                 "JoinVars": {
                   "foobars_min_id": 0
                 },
-                "TableName": "`user`_music",
                 "Inputs": [
                   {
                     "OperatorType": "Aggregate",
@@ -6534,8 +6275,7 @@
                             },
                             "FieldQuery": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(min(bb.id)), weight_string(max(bb.id)) from `user` as bb where 1 != 1",
                             "OrderBy": "0 ASC COLLATE utf8mb4_0900_ai_ci",
-                            "Query": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(min(bb.id)), weight_string(max(bb.id)) from `user` as bb order by min(bb.id) asc",
-                            "Table": "`user`"
+                            "Query": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(min(bb.id)), weight_string(max(bb.id)) from `user` as bb order by min(bb.id) asc"
                           }
                         ]
                       }
@@ -6549,8 +6289,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select b.col, weight_string(b.col) from music as b where 1 != 1 group by b.col, weight_string(b.col)",
-                    "Query": "select b.col, weight_string(b.col) from music as b where b.id > :foobars_min_id group by b.col, weight_string(b.col)",
-                    "Table": "music"
+                    "Query": "select b.col, weight_string(b.col) from music as b where b.id > :foobars_min_id group by b.col, weight_string(b.col)"
                   }
                 ]
               }
@@ -6596,7 +6335,6 @@
                     "OperatorType": "Join",
                     "Variant": "Join",
                     "JoinColumnIndexes": "L:0,R:0,L:1,R:1,L:2,R:2",
-                    "TableName": "`user`_music",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -6606,8 +6344,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` where 1 != 1 group by cast(`user`.foo as datetime), weight_string(cast(`user`.foo as datetime))",
-                        "Query": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` group by cast(`user`.foo as datetime), weight_string(cast(`user`.foo as datetime))",
-                        "Table": "`user`"
+                        "Query": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` group by cast(`user`.foo as datetime), weight_string(cast(`user`.foo as datetime))"
                       },
                       {
                         "OperatorType": "Route",
@@ -6617,8 +6354,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music where 1 != 1 group by cast(music.foo as datetime), weight_string(cast(music.foo as datetime))",
-                        "Query": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music group by cast(music.foo as datetime), weight_string(cast(music.foo as datetime))",
-                        "Table": "music"
+                        "Query": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music group by cast(music.foo as datetime), weight_string(cast(music.foo as datetime))"
                       }
                     ]
                   }
@@ -6669,7 +6405,6 @@
                     "ComparisonType": "INT16",
                     "JoinColumnIndexes": "-1,1,-2,2,-3,3",
                     "Predicate": "`user`.col = ue.col",
-                    "TableName": "`user`_user_extra",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -6679,8 +6414,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
-                        "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo",
-                        "Table": "`user`"
+                        "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo"
                       },
                       {
                         "OperatorType": "Aggregate",
@@ -6710,8 +6444,7 @@
                                           "Sharded": true
                                         },
                                         "FieldQuery": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
-                                        "Query": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra) as ue limit 10",
-                                        "Table": "user_extra"
+                                        "Query": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra) as ue limit 10"
                                       }
                                     ]
                                   }
@@ -6750,7 +6483,6 @@
         },
         "FieldQuery": "select max((select min(col) from `user` where 1 != 1)) from dual where 1 != 1",
         "Query": "select max((select min(col) from `user` where id = 1)) from dual",
-        "Table": "dual",
         "Values": [
           "1"
         ],
@@ -6790,8 +6522,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select min(col) from unsharded where 1 != 1",
-                "Query": "select min(col) from unsharded",
-                "Table": "unsharded"
+                "Query": "select min(col) from unsharded"
               },
               {
                 "InputName": "Outer",
@@ -6803,7 +6534,6 @@
                 },
                 "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
                 "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 1 group by weight_string(:__sq1)",
-                "Table": "`user`",
                 "Values": [
                   "1"
                 ],
@@ -6848,7 +6578,6 @@
                 },
                 "FieldQuery": "select min(col) from `user` where 1 != 1",
                 "Query": "select min(col) from `user` where id = 1",
-                "Table": "`user`",
                 "Values": [
                   "1"
                 ],
@@ -6864,7 +6593,6 @@
                 },
                 "FieldQuery": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where 1 != 1 group by weight_string(:__sq1 /* INT16 */)",
                 "Query": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where id = 2 group by weight_string(:__sq1 /* INT16 */)",
-                "Table": "`user`",
                 "Values": [
                   "2"
                 ],
@@ -6894,7 +6622,6 @@
         },
         "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from dual where 1 != 1",
         "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from dual",
-        "Table": "dual",
         "Values": [
           "1"
         ],
@@ -6921,7 +6648,6 @@
         },
         "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from `user` where 1 != 1",
         "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from `user` where id = 1",
-        "Table": "`user`",
         "Values": [
           "1"
         ],
@@ -6961,7 +6687,6 @@
                 },
                 "FieldQuery": "select group_concat(col1, col2) from `user` where 1 != 1",
                 "Query": "select group_concat(col1, col2) from `user` where id = 1",
-                "Table": "`user`",
                 "Values": [
                   "1"
                 ],
@@ -6976,8 +6701,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
-                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` group by weight_string(:__sq1)",
-                "Table": "`user`"
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` group by weight_string(:__sq1)"
               }
             ]
           }
@@ -7008,8 +6732,7 @@
               "Sharded": true
             },
             "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string(max((select max(col2) from `user` as u1 where 1 != 1))) from `user` as u2 where 1 != 1",
-            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string(max((select max(col2) from `user` as u1 where u1.id = u2.id))) from `user` as u2",
-            "Table": "`user`"
+            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string(max((select max(col2) from `user` as u1 where u1.id = u2.id))) from `user` as u2"
           }
         ]
       },
@@ -7037,8 +6760,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(a, b) from `user` where 1 != 1",
-            "Query": "select count(a, b) from `user`",
-            "Table": "`user`"
+            "Query": "select count(a, b) from `user`"
           }
         ]
       },
@@ -7066,8 +6788,7 @@
               "Sharded": true
             },
             "FieldQuery": "select group_concat(col1, col2) from `user` where 1 != 1",
-            "Query": "select group_concat(col1, col2) from `user`",
-            "Table": "`user`"
+            "Query": "select group_concat(col1, col2) from `user`"
           }
         ]
       },
@@ -7095,8 +6816,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(distinct `name`, id) from `user` where 1 != 1",
-            "Query": "select count(distinct `name`, id) from `user`",
-            "Table": "`user`"
+            "Query": "select count(distinct `name`, id) from `user`"
           }
         ]
       },
@@ -7121,8 +6841,7 @@
         "FieldQuery": "select id, from_unixtime(min(col)) as col, min(col) from `user` where 1 != 1 group by id",
         "OrderBy": "2 ASC COLLATE utf8mb4_0900_ai_ci",
         "Query": "select id, from_unixtime(min(col)) as col, min(col) from `user` group by id order by min(col) asc",
-        "ResultColumns": 2,
-        "Table": "`user`"
+        "ResultColumns": 2
       },
       "TablesUsed": [
         "user.user"
@@ -7152,8 +6871,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select sum(x) as col from `user` where 1 != 1",
-                "Query": "select sum(x) as col from `user` where x > 0",
-                "Table": "`user`"
+                "Query": "select sum(x) as col from `user` where x > 0"
               }
             ]
           }
@@ -7188,8 +6906,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1 group by id",
-        "Query": "select id from `user` group by id having udf_aggr(foo) > 1",
-        "Table": "`user`"
+        "Query": "select id from `user` group by id having udf_aggr(foo) > 1"
       },
       "TablesUsed": [
         "user.user"
@@ -7210,8 +6927,7 @@
           "Sharded": false
         },
         "FieldQuery": "select bar, udf_aggr(foo) from unsharded where 1 != 1 group by bar",
-        "Query": "select bar, udf_aggr(foo) from unsharded group by bar",
-        "Table": "unsharded"
+        "Query": "select bar, udf_aggr(foo) from unsharded group by bar"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -7233,7 +6949,6 @@
         },
         "FieldQuery": "select bar, udf_aggr(foo) from `user` where 1 != 1 group by bar",
         "Query": "select bar, udf_aggr(foo) from `user` where id = 17 group by bar",
-        "Table": "`user`",
         "Values": [
           "17"
         ],
@@ -7273,8 +6988,7 @@
                     },
                     "FieldQuery": "select subquery_for_count.one, subquery_for_count.id, 1, weight_string(subquery_for_count.id) from (select 1 as one, id from `user` where 1 != 1) as subquery_for_count where 1 != 1",
                     "OrderBy": "(1|3) DESC",
-                    "Query": "select subquery_for_count.one, subquery_for_count.id, 1, weight_string(subquery_for_count.id) from (select 1 as one, id from `user` where `user`.is_not_deleted = true) as subquery_for_count order by subquery_for_count.id desc limit 25",
-                    "Table": "`user`"
+                    "Query": "select subquery_for_count.one, subquery_for_count.id, 1, weight_string(subquery_for_count.id) from (select 1 as one, id from `user` where `user`.is_not_deleted = true) as subquery_for_count order by subquery_for_count.id desc limit 25"
                   }
                 ]
               }
@@ -7320,7 +7034,6 @@
                     "JoinVars": {
                       "user_team_id": 1
                     },
-                    "TableName": "`user`_user_extra",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -7330,8 +7043,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select sum(`user`.type), `user`.team_id from `user` where 1 != 1 group by `user`.team_id",
-                        "Query": "select sum(`user`.type), `user`.team_id from `user` group by `user`.team_id",
-                        "Table": "`user`"
+                        "Query": "select sum(`user`.type), `user`.team_id from `user` group by `user`.team_id"
                       },
                       {
                         "OperatorType": "Route",
@@ -7341,8 +7053,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), user_extra.id, weight_string(user_extra.id) from user_extra where 1 != 1 group by user_extra.id, weight_string(user_extra.id)",
-                        "Query": "select count(*), user_extra.id, weight_string(user_extra.id) from user_extra where user_extra.id = :user_team_id group by user_extra.id, weight_string(user_extra.id)",
-                        "Table": "user_extra"
+                        "Query": "select count(*), user_extra.id, weight_string(user_extra.id) from user_extra where user_extra.id = :user_team_id group by user_extra.id, weight_string(user_extra.id)"
                       }
                     ]
                   }

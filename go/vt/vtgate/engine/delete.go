@@ -126,7 +126,6 @@ func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bin
 func (del *Delete) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":                del.Query,
-		"Table":                del.GetTableName(),
 		"OwnedVindexQuery":     del.OwnedVindexQuery,
 		"MultiShardAutocommit": del.MultiShardAutocommit,
 		"QueryTimeout":         del.QueryTimeout,

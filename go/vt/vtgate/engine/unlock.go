@@ -42,10 +42,6 @@ func (u *Unlock) GetKeyspaceName() string {
 	return ""
 }
 
-func (u *Unlock) GetTableName() string {
-	return ""
-}
-
 func (u *Unlock) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.VT13001("GetFields should not be called for unlock tables")
 }

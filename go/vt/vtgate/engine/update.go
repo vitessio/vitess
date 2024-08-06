@@ -200,7 +200,6 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 func (upd *Update) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":                upd.Query,
-		"Table":                upd.GetTableName(),
 		"OwnedVindexQuery":     upd.OwnedVindexQuery,
 		"MultiShardAutocommit": upd.MultiShardAutocommit,
 		"QueryTimeout":         upd.QueryTimeout,

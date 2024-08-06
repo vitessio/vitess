@@ -73,11 +73,6 @@ func (fkc *FkCascade) GetKeyspaceName() string {
 	return fkc.Parent.GetKeyspaceName()
 }
 
-// GetTableName implements the Primitive interface.
-func (fkc *FkCascade) GetTableName() string {
-	return fkc.Parent.GetTableName()
-}
-
 // GetFields implements the Primitive interface.
 func (fkc *FkCascade) GetFields(_ context.Context, _ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields should not be called")

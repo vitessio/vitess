@@ -52,11 +52,6 @@ func (sa *ScalarAggregate) GetKeyspaceName() string {
 
 }
 
-// GetTableName implements the Primitive interface
-func (sa *ScalarAggregate) GetTableName() string {
-	return sa.Input.GetTableName()
-}
-
 // GetFields implements the Primitive interface
 func (sa *ScalarAggregate) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	qr, err := sa.Input.GetFields(ctx, vcursor, bindVars)

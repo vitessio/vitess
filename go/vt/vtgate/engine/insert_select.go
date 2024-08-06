@@ -319,7 +319,6 @@ func (ins *InsertSelect) execInsertSharded(ctx context.Context, vcursor VCursor,
 
 func (ins *InsertSelect) description() PrimitiveDescription {
 	other := ins.commonDesc()
-	other["TableName"] = ins.GetTableName()
 
 	if len(ins.VindexValueOffset) > 0 {
 		valuesOffsets := map[string]string{}

@@ -67,11 +67,6 @@ func (l *Lock) GetKeyspaceName() string {
 	return l.Keyspace.Name
 }
 
-// GetTableName is part of the Primitive interface
-func (l *Lock) GetTableName() string {
-	return "dual"
-}
-
 // TryExecute is part of the Primitive interface
 func (l *Lock) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return l.execLock(ctx, vcursor, bindVars)

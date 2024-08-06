@@ -12,7 +12,6 @@
         "JoinVars": {
           "predef2": 0
         },
-        "TableName": "`user`_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -22,8 +21,7 @@
               "Sharded": true
             },
             "FieldQuery": "select predef2 from `user` where 1 != 1",
-            "Query": "select predef2 from `user`",
-            "Table": "`user`"
+            "Query": "select predef2 from `user`"
           },
           {
             "OperatorType": "Route",
@@ -33,8 +31,7 @@
               "Sharded": false
             },
             "FieldQuery": "select predef3 from unsharded where 1 != 1",
-            "Query": "select predef3 from unsharded where predef3 = :predef2",
-            "Table": "unsharded"
+            "Query": "select predef3 from unsharded where predef3 = :predef2"
           }
         ]
       },

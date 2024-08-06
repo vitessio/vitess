@@ -62,14 +62,6 @@ func (u *Upsert) GetKeyspaceName() string {
 	return ""
 }
 
-// GetTableName implements Primitive interface type.
-func (u *Upsert) GetTableName() string {
-	if len(u.Upserts) > 0 {
-		return u.Upserts[0].Insert.GetTableName()
-	}
-	return ""
-}
-
 // GetFields implements Primitive interface type.
 func (u *Upsert) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.VT13001("unexpected to receive GetFields call for insert on duplicate key update query")

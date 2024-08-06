@@ -123,11 +123,6 @@ func (route *Route) GetKeyspaceName() string {
 	return route.Keyspace.Name
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (route *Route) GetTableName() string {
-	return route.TableName
-}
-
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, route.QueryTimeout)
@@ -393,7 +388,6 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 func (route *Route) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":      route.Query,
-		"Table":      route.GetTableName(),
 		"FieldQuery": route.FieldQuery,
 	}
 	if route.Vindex != nil {

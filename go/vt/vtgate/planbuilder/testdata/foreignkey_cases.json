@@ -19,7 +19,6 @@
         },
         "TargetTabletType": "PRIMARY",
         "Query": "insert into tbl2(col2, coly) values (:_col2_0, 3)",
-        "TableName": "tbl2",
         "VindexValues": {
           "hash_vin": "1"
         }
@@ -44,7 +43,6 @@
         },
         "TargetTabletType": "PRIMARY",
         "Query": "insert into multicol_tbl2(cola, colb, colc) values (:_cola_0, :_colb_0, :_colc_0)",
-        "TableName": "multicol_tbl2",
         "VindexValues": {
           "multicolIdx": "1, 2, 3"
         }
@@ -83,7 +81,6 @@
             },
             "FieldQuery": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where 1 != 1",
             "Query": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
-            "Table": "multicol_tbl1",
             "Values": [
               "1",
               "2",
@@ -109,7 +106,6 @@
               4
             ],
             "Query": "delete from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
-            "Table": "multicol_tbl2",
             "Values": [
               "fkc_vals:1",
               "fkc_vals:0",
@@ -127,7 +123,6 @@
             },
             "TargetTabletType": "PRIMARY",
             "Query": "delete from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
-            "Table": "multicol_tbl1",
             "Values": [
               "1",
               "2",
@@ -161,8 +156,7 @@
               "Sharded": true
             },
             "FieldQuery": "select tbl5.col5, tbl5.t5col5 from tbl5 where 1 != 1",
-            "Query": "select tbl5.col5, tbl5.t5col5 from tbl5 for update",
-            "Table": "tbl5"
+            "Query": "select tbl5.col5, tbl5.t5col5 from tbl5 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -178,7 +172,6 @@
               0
             ],
             "Query": "delete from tbl4 where (col4) in ::fkc_vals",
-            "Table": "tbl4",
             "Values": [
               "fkc_vals:0"
             ],
@@ -197,8 +190,7 @@
             "Cols": [
               1
             ],
-            "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1",
-            "Table": "tbl4"
+            "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1"
           },
           {
             "InputName": "Parent",
@@ -209,8 +201,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "delete from tbl5",
-            "Table": "tbl5"
+            "Query": "delete from tbl5"
           }
         ]
       },
@@ -243,8 +234,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-            "Query": "select u_tbl9.col9 from u_tbl9 where col9 = 5 for update nowait",
-            "Table": "u_tbl9"
+            "Query": "select u_tbl9.col9 from u_tbl9 where col9 = 5 for update nowait"
           },
           {
             "InputName": "CascadeChild-1",
@@ -259,8 +249,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals",
-            "Table": "u_tbl8"
+            "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals"
           },
           {
             "InputName": "Parent",
@@ -271,8 +260,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "delete from u_tbl9 where col9 = 5",
-            "Table": "u_tbl9"
+            "Query": "delete from u_tbl9 where col9 = 5"
           }
         ]
       },
@@ -296,8 +284,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update u_tbl5 set col5 = 'foo' where id = 1",
-        "Table": "u_tbl5"
+        "Query": "update u_tbl5 set col5 = 'foo' where id = 1"
       },
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl5"
@@ -322,8 +309,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update",
-            "Table": "u_tbl2"
+            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -338,8 +324,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))",
-            "Table": "u_tbl3"
+            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))"
           },
           {
             "InputName": "Parent",
@@ -350,8 +335,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl2 set col2 = 'bar' where id = 1",
-            "Table": "u_tbl2"
+            "Query": "update u_tbl2 set col2 = 'bar' where id = 1"
           }
         ]
       },
@@ -375,8 +359,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
-        "Table": "u_tbl2"
+        "Query": "update u_tbl2 set col_no_ref = 'baz' where id = 1"
       },
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl2"
@@ -402,8 +385,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update tbl1 set not_ref_col = 'foo' where id = 1",
-        "Table": "tbl1"
+        "Query": "update tbl1 set not_ref_col = 'foo' where id = 1"
       },
       "TablesUsed": [
         "sharded_fk_allow.tbl1"
@@ -433,8 +415,7 @@
               "Sharded": true
             },
             "FieldQuery": "select tbl5.t5col5 from tbl5 where 1 != 1",
-            "Query": "select tbl5.t5col5 from tbl5 for update",
-            "Table": "tbl5"
+            "Query": "select tbl5.t5col5 from tbl5 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -449,8 +430,7 @@
             "Cols": [
               0
             ],
-            "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in (('foo'))",
-            "Table": "tbl4"
+            "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in (('foo'))"
           },
           {
             "InputName": "Parent",
@@ -461,8 +441,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update tbl5 set t5col5 = 'foo'",
-            "Table": "tbl5"
+            "Query": "update tbl5 set t5col5 = 'foo'"
           }
         ]
       },
@@ -491,8 +470,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update tbl2 set col = 'foo'",
-        "Table": "tbl2"
+        "Query": "update tbl2 set col = 'foo'"
       },
       "TablesUsed": [
         "sharded_fk_allow.tbl2"
@@ -527,7 +505,6 @@
                         "OperatorType": "Join",
                         "Variant": "LeftJoin",
                         "JoinColumnIndexes": "R:0",
-                        "TableName": "tbl10_tbl3",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -537,8 +514,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select 1 from tbl10 where 1 != 1",
-                            "Query": "select 1 from tbl10 where not (tbl10.col) <=> ('foo') for share",
-                            "Table": "tbl10"
+                            "Query": "select 1 from tbl10 where not (tbl10.col) <=> ('foo') for share"
                           },
                           {
                             "OperatorType": "Route",
@@ -548,8 +524,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select tbl3.col from tbl3 where 1 != 1",
-                            "Query": "select tbl3.col from tbl3 where tbl3.col = 'foo' for share",
-                            "Table": "tbl3"
+                            "Query": "select tbl3.col from tbl3 where tbl3.col = 'foo' for share"
                           }
                         ]
                       }
@@ -568,8 +543,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update tbl10 set col = 'foo'",
-            "Table": "tbl10"
+            "Query": "update tbl10 set col = 'foo'"
           }
         ]
       },
@@ -603,7 +577,6 @@
             },
             "FieldQuery": "select tbl9.col9 from tbl9 where 1 != 1",
             "Query": "select tbl9.col9 from tbl9 where col9 = 34 for update",
-            "Table": "tbl9",
             "Values": [
               "34"
             ],
@@ -622,8 +595,7 @@
             "Cols": [
               0
             ],
-            "Query": "update tbl4 set col_ref = null where (col_ref) in ::fkc_vals",
-            "Table": "tbl4"
+            "Query": "update tbl4 set col_ref = null where (col_ref) in ::fkc_vals"
           },
           {
             "InputName": "Parent",
@@ -635,7 +607,6 @@
             },
             "TargetTabletType": "PRIMARY",
             "Query": "delete from tbl9 where col9 = 34",
-            "Table": "tbl9",
             "Values": [
               "34"
             ],
@@ -667,8 +638,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-            "Query": "select u_tbl1.col1 from u_tbl1 for update",
-            "Table": "u_tbl1"
+            "Query": "select u_tbl1.col1 from u_tbl1 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -687,8 +657,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                "Table": "u_tbl2"
+                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -703,8 +672,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast('foo' as CHAR)))",
-                "Table": "u_tbl3"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast('foo' as CHAR)))"
               },
               {
                 "InputName": "Parent",
@@ -715,8 +683,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'foo' where (col2) in ::fkc_vals",
-                "Table": "u_tbl2"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'foo' where (col2) in ::fkc_vals"
               }
             ]
           },
@@ -737,8 +704,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait",
-                "Table": "u_tbl9"
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -753,8 +719,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
-                "Table": "u_tbl8"
+                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3"
               },
               {
                 "InputName": "Parent",
@@ -765,8 +730,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))",
-                "Table": "u_tbl9"
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))"
               }
             ]
           },
@@ -779,8 +743,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl1 set col1 = 'foo'",
-            "Table": "u_tbl1"
+            "Query": "update u_tbl1 set col1 = 'foo'"
           }
         ]
       },
@@ -811,8 +774,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where 1 != 1",
-            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where u_tbl1.col1 is null and cast(u_tbl2.col1 + 'bar' as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.col1 + 'bar' as CHAR)) and u_tbl2.id = 1 limit 1 for share",
-            "Table": "u_tbl1, u_tbl2"
+            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where u_tbl1.col1 is null and cast(u_tbl2.col1 + 'bar' as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.col1 + 'bar' as CHAR)) and u_tbl2.id = 1 limit 1 for share"
           },
           {
             "InputName": "PostVerify",
@@ -827,8 +789,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update",
-                "Table": "u_tbl2"
+                "Query": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -850,8 +811,7 @@
                     "UpdateExprBvName": "fkc_upd"
                   }
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (col3) not in ((:fkc_upd)))",
-                "Table": "u_tbl3"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (col3) not in ((:fkc_upd)))"
               },
               {
                 "InputName": "Parent",
@@ -862,8 +822,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
-                "Table": "u_tbl2"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1"
               }
             ]
           }
@@ -894,8 +853,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where 1 != 1",
-            "Query": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update",
-            "Table": "u_tbl1"
+            "Query": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -921,8 +879,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                "Table": "u_tbl2"
+                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -937,8 +894,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:fkc_upd as CHAR) is null or (col3) not in ((cast(:fkc_upd as CHAR))))",
-                "Table": "u_tbl3"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:fkc_upd as CHAR) is null or (col3) not in ((cast(:fkc_upd as CHAR))))"
               },
               {
                 "InputName": "Parent",
@@ -949,8 +905,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = :fkc_upd where (col2) in ::fkc_vals",
-                "Table": "u_tbl2"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = :fkc_upd where (col2) in ::fkc_vals"
               }
             ]
           },
@@ -978,8 +933,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1))) for update nowait",
-                "Table": "u_tbl9"
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1))) for update nowait"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -994,8 +948,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
-                "Table": "u_tbl8"
+                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3"
               },
               {
                 "InputName": "Parent",
@@ -1006,8 +959,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1)))",
-                "Table": "u_tbl9"
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1)))"
               }
             ]
           },
@@ -1020,8 +972,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
-            "Table": "u_tbl1"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set m = 2, col1 = x + 'bar' where id = 1"
           }
         ]
       },
@@ -1052,8 +1003,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update",
-            "Table": "u_tbl2"
+            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -1068,8 +1018,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast(2 as CHAR)))",
-            "Table": "u_tbl3"
+            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast(2 as CHAR)))"
           },
           {
             "InputName": "Parent",
@@ -1080,8 +1029,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
-            "Table": "u_tbl2"
+            "Query": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1"
           }
         ]
       },
@@ -1109,8 +1057,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-            "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update",
-            "Table": "u_tbl1"
+            "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -1129,8 +1076,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                "Table": "u_tbl2"
+                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -1145,8 +1091,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(2 as CHAR)))",
-                "Table": "u_tbl3"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(2 as CHAR)))"
               },
               {
                 "InputName": "Parent",
@@ -1157,8 +1102,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 2 where (col2) in ::fkc_vals",
-                "Table": "u_tbl2"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 2 where (col2) in ::fkc_vals"
               }
             ]
           },
@@ -1179,8 +1123,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR))) for update nowait",
-                "Table": "u_tbl9"
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR))) for update nowait"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -1195,8 +1138,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
-                "Table": "u_tbl8"
+                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3"
               },
               {
                 "InputName": "Parent",
@@ -1207,8 +1149,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR)))",
-                "Table": "u_tbl9"
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR)))"
               }
             ]
           },
@@ -1221,8 +1162,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
-            "Table": "u_tbl1"
+            "Query": "update u_tbl1 set m = x + 'bar', col1 = 2 where id = 1"
           }
         ]
       },
@@ -1261,8 +1201,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl2.id from u_tbl2 where 1 != 1",
-            "Query": "select u_tbl2.id from u_tbl2 limit 2 for update",
-            "Table": "u_tbl2"
+            "Query": "select u_tbl2.id from u_tbl2 limit 2 for update"
           },
           {
             "OperatorType": "FkCascade",
@@ -1276,8 +1215,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update",
-                "Table": "u_tbl2"
+                "Query": "select u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -1292,8 +1230,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals",
-                "Table": "u_tbl3"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals"
               },
               {
                 "InputName": "Parent",
@@ -1304,8 +1241,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl2 where u_tbl2.id in ::dml_vals",
-                "Table": "u_tbl2"
+                "Query": "delete from u_tbl2 where u_tbl2.id in ::dml_vals"
               }
             ]
           }
@@ -1348,7 +1284,6 @@
                         "JoinVars": {
                           "tbl3_colx": 0
                         },
-                        "TableName": "tbl3_tbl1",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -1358,8 +1293,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select tbl3.colx from tbl3 where 1 != 1",
-                            "Query": "select tbl3.colx from tbl3 where tbl3.colx + 10 is not null and not (tbl3.coly) <=> (tbl3.colx + 10) and tbl3.coly = 10 for share",
-                            "Table": "tbl3"
+                            "Query": "select tbl3.colx from tbl3 where tbl3.colx + 10 is not null and not (tbl3.coly) <=> (tbl3.colx + 10) and tbl3.coly = 10 for share"
                           },
                           {
                             "OperatorType": "Route",
@@ -1369,8 +1303,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select tbl1.t1col1 from tbl1 where 1 != 1",
-                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = :tbl3_colx + 10 for share",
-                            "Table": "tbl1"
+                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = :tbl3_colx + 10 for share"
                           }
                         ]
                       }
@@ -1389,8 +1322,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl3 set coly = colx + 10 where coly = 10",
-            "Table": "tbl3"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl3 set coly = colx + 10 where coly = 10"
           }
         ]
       },
@@ -1428,7 +1360,6 @@
                         "OperatorType": "Join",
                         "Variant": "LeftJoin",
                         "JoinColumnIndexes": "R:0",
-                        "TableName": "tbl3_tbl1",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -1438,8 +1369,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select 1 from tbl3 where 1 != 1",
-                            "Query": "select 1 from tbl3 where not (tbl3.coly) <=> (20) and tbl3.coly = 10 for share",
-                            "Table": "tbl3"
+                            "Query": "select 1 from tbl3 where not (tbl3.coly) <=> (20) and tbl3.coly = 10 for share"
                           },
                           {
                             "OperatorType": "Route",
@@ -1449,8 +1379,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select tbl1.t1col1 from tbl1 where 1 != 1",
-                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = 20 for share",
-                            "Table": "tbl1"
+                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = 20 for share"
                           }
                         ]
                       }
@@ -1469,8 +1398,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update tbl3 set coly = 20 where coly = 10",
-            "Table": "tbl3"
+            "Query": "update tbl3 set coly = 20 where coly = 10"
           }
         ]
       },
@@ -1498,8 +1426,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl6.col6 from u_tbl6 where 1 != 1",
-            "Query": "select u_tbl6.col6 from u_tbl6 for update",
-            "Table": "u_tbl6"
+            "Query": "select u_tbl6.col6 from u_tbl6 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -1518,8 +1445,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where u_tbl9.col9 is null and cast('foo' as CHAR) is not null and not (u_tbl8.col8) <=> (cast('foo' as CHAR)) and (u_tbl8.col8) in ::fkc_vals limit 1 for share nowait",
-                "Table": "u_tbl8, u_tbl9"
+                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where u_tbl9.col9 is null and cast('foo' as CHAR) is not null and not (u_tbl8.col8) <=> (cast('foo' as CHAR)) and (u_tbl8.col8) in ::fkc_vals limit 1 for share nowait"
               },
               {
                 "InputName": "PostVerify",
@@ -1530,8 +1456,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals",
-                "Table": "u_tbl8"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals"
               }
             ]
           },
@@ -1544,8 +1469,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl6 set col6 = 'foo'",
-            "Table": "u_tbl6"
+            "Query": "update u_tbl6 set col6 = 'foo'"
           }
         ]
       },
@@ -1574,8 +1498,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl7.col7 from u_tbl7 where 1 != 1",
-            "Query": "select u_tbl7.col7 from u_tbl7 for update",
-            "Table": "u_tbl7"
+            "Query": "select u_tbl7.col7 from u_tbl7 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -1594,8 +1517,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where u_tbl3.col3 is null and cast('foo' as CHAR) is not null and not (u_tbl4.col4) <=> (cast('foo' as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share",
-                "Table": "u_tbl3, u_tbl4"
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where u_tbl3.col3 is null and cast('foo' as CHAR) is not null and not (u_tbl4.col4) <=> (cast('foo' as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share"
               },
               {
                 "InputName": "VerifyChild-2",
@@ -1606,8 +1528,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast('foo' as CHAR) is null or (u_tbl9.col9) not in ((cast('foo' as CHAR)))) limit 1 for share",
-                "Table": "u_tbl4, u_tbl9"
+                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast('foo' as CHAR) is null or (u_tbl9.col9) not in ((cast('foo' as CHAR)))) limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -1618,8 +1539,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = 'foo' where (col4) in ::fkc_vals",
-                "Table": "u_tbl4"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = 'foo' where (col4) in ::fkc_vals"
               }
             ]
           },
@@ -1632,8 +1552,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl7 set col7 = 'foo'",
-            "Table": "u_tbl7"
+            "Query": "update u_tbl7 set col7 = 'foo'"
           }
         ]
       },
@@ -1663,8 +1582,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl7.col7 from u_tbl7 where 1 != 1",
-            "Query": "select u_tbl7.col7 from u_tbl7 for update",
-            "Table": "u_tbl7"
+            "Query": "select u_tbl7.col7 from u_tbl7 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -1683,8 +1601,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where u_tbl3.col3 is null and cast(:v1 as CHAR) is not null and not (u_tbl4.col4) <=> (cast(:v1 as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share",
-                "Table": "u_tbl3, u_tbl4"
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where u_tbl3.col3 is null and cast(:v1 as CHAR) is not null and not (u_tbl4.col4) <=> (cast(:v1 as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share"
               },
               {
                 "InputName": "VerifyChild-2",
@@ -1695,8 +1612,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (u_tbl9.col9) not in ((cast(:v1 as CHAR)))) limit 1 for share",
-                "Table": "u_tbl4, u_tbl9"
+                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (u_tbl9.col9) not in ((cast(:v1 as CHAR)))) limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -1707,8 +1623,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = :v1 where (col4) in ::fkc_vals",
-                "Table": "u_tbl4"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = :v1 where (col4) in ::fkc_vals"
               }
             ]
           },
@@ -1721,8 +1636,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl7 set col7 = :v1",
-            "Table": "u_tbl7"
+            "Query": "update u_tbl7 set col7 = :v1"
           }
         ]
       },
@@ -1754,8 +1668,7 @@
             },
             "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
-            "Query": "insert into u_tbl1(id, col1) values (1, 3)",
-            "TableName": "u_tbl1"
+            "Query": "insert into u_tbl1(id, col1) values (1, 3)"
           },
           {
             "InputName": "Update-1",
@@ -1770,8 +1683,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-                "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update",
-                "Table": "u_tbl1"
+                "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -1790,8 +1702,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                    "Table": "u_tbl2"
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -1806,8 +1717,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(5 as CHAR)))",
-                    "Table": "u_tbl3"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(5 as CHAR)))"
                   },
                   {
                     "InputName": "Parent",
@@ -1818,8 +1728,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 5 where (col2) in ::fkc_vals",
-                    "Table": "u_tbl2"
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 5 where (col2) in ::fkc_vals"
                   }
                 ]
               },
@@ -1840,8 +1749,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR))) for update nowait",
-                    "Table": "u_tbl9"
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR))) for update nowait"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -1856,8 +1764,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
-                    "Table": "u_tbl8"
+                    "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3"
                   },
                   {
                     "InputName": "Parent",
@@ -1868,8 +1775,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR)))",
-                    "Table": "u_tbl9"
+                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR)))"
                   }
                 ]
               },
@@ -1882,8 +1788,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl1 set col1 = 5 where id = 1",
-                "Table": "u_tbl1"
+                "Query": "update u_tbl1 set col1 = 5 where id = 1"
               }
             ]
           }
@@ -1912,8 +1817,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "insert into u_tbl1(id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
-        "TableName": "u_tbl1"
+        "Query": "insert into u_tbl1(id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'"
       },
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl1"
@@ -1946,8 +1850,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-                "Query": "select u_tbl1.col1 from u_tbl1 where (id) in ((1)) for update",
-                "Table": "u_tbl1"
+                "Query": "select u_tbl1.col1 from u_tbl1 where (id) in ((1)) for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -1966,8 +1869,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                    "Table": "u_tbl2"
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -1982,8 +1884,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
-                    "Table": "u_tbl3"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1"
                   },
                   {
                     "InputName": "Parent",
@@ -1994,8 +1895,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
-                    "Table": "u_tbl2"
+                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals"
                   }
                 ]
               },
@@ -2008,8 +1908,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl1 where (id) in ((1))",
-                "Table": "u_tbl1"
+                "Query": "delete from u_tbl1 where (id) in ((1))"
               }
             ]
           },
@@ -2022,8 +1921,7 @@
             },
             "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
-            "Query": "insert into u_tbl1(id, col1) values (1, 2)",
-            "TableName": "u_tbl1"
+            "Query": "insert into u_tbl1(id, col1) values (1, 2)"
           }
         ]
       },
@@ -2052,8 +1950,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where 1 != 1",
-            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where id = 3 for update",
-            "Table": "u_multicol_tbl1"
+            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where id = 3 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -2073,8 +1970,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update",
-                "Table": "u_multicol_tbl2"
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -2090,8 +1986,7 @@
                   0,
                   1
                 ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1",
-                "Table": "u_multicol_tbl3"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1"
               },
               {
                 "InputName": "Parent",
@@ -2102,8 +1997,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2))",
-                "Table": "u_multicol_tbl2"
+                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2))"
               }
             ]
           },
@@ -2116,8 +2010,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
-            "Table": "u_multicol_tbl1"
+            "Query": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3"
           }
         ]
       },
@@ -2146,8 +2039,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where 1 != 1",
-            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where id = :v3 for update",
-            "Table": "u_multicol_tbl1"
+            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where id = :v3 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -2167,8 +2059,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update",
-                "Table": "u_multicol_tbl2"
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -2184,8 +2075,7 @@
                   0,
                   1
                 ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1",
-                "Table": "u_multicol_tbl3"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1"
               },
               {
                 "InputName": "Parent",
@@ -2196,8 +2086,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2))))",
-                "Table": "u_multicol_tbl2"
+                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2))))"
               }
             ]
           },
@@ -2210,8 +2099,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
-            "Table": "u_multicol_tbl1"
+            "Query": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3"
           }
         ]
       },
@@ -2246,8 +2134,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select tbl5.col5, tbl5.t5col5 from tbl5 where 1 != 1",
-                "Query": "select tbl5.col5, tbl5.t5col5 from tbl5 where id = :v1 for update",
-                "Table": "tbl5"
+                "Query": "select tbl5.col5, tbl5.t5col5 from tbl5 where id = :v1 for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -2263,7 +2150,6 @@
                   0
                 ],
                 "Query": "delete from tbl4 where (col4) in ::fkc_vals",
-                "Table": "tbl4",
                 "Values": [
                   "fkc_vals:0"
                 ],
@@ -2282,8 +2168,7 @@
                 "Cols": [
                   1
                 ],
-                "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1",
-                "Table": "tbl4"
+                "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1"
               },
               {
                 "InputName": "Parent",
@@ -2294,8 +2179,7 @@
                   "Sharded": true
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from tbl5 where id = :v1",
-                "Table": "tbl5"
+                "Query": "delete from tbl5 where id = :v1"
               }
             ]
           }
@@ -2330,8 +2214,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl7.col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where 1 != 1",
-            "Query": "select u_tbl7.col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where bar = 42 for update",
-            "Table": "u_tbl7"
+            "Query": "select u_tbl7.col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where bar = 42 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -2357,8 +2240,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where u_tbl3.col3 is null and cast(:fkc_upd as CHAR) is not null and not (u_tbl4.col4) <=> (cast(:fkc_upd as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share",
-                "Table": "u_tbl3, u_tbl4"
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where u_tbl3.col3 is null and cast(:fkc_upd as CHAR) is not null and not (u_tbl4.col4) <=> (cast(:fkc_upd as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share"
               },
               {
                 "InputName": "VerifyChild-2",
@@ -2369,8 +2251,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast(:fkc_upd as CHAR) is null or (u_tbl9.col9) not in ((cast(:fkc_upd as CHAR)))) limit 1 for share",
-                "Table": "u_tbl4, u_tbl9"
+                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast(:fkc_upd as CHAR) is null or (u_tbl9.col9) not in ((cast(:fkc_upd as CHAR)))) limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -2381,8 +2262,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = :fkc_upd where (col4) in ::fkc_vals",
-                "Table": "u_tbl4"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = :fkc_upd where (col4) in ::fkc_vals"
               }
             ]
           },
@@ -2395,8 +2275,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42",
-            "Table": "u_tbl7"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42"
           }
         ]
       },
@@ -2426,8 +2305,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where 1 != 1",
-            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where id = 3 for update",
-            "Table": "u_multicol_tbl1"
+            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where id = 3 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -2454,8 +2332,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (cola) not in ((:fkc_upd))) for update",
-                "Table": "u_multicol_tbl2"
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (cola) not in ((:fkc_upd))) for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -2471,8 +2348,7 @@
                   0,
                   1
                 ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1",
-                "Table": "u_multicol_tbl3"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1"
               },
               {
                 "InputName": "Parent",
@@ -2483,8 +2359,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (cola) not in ((:fkc_upd)))",
-                "Table": "u_multicol_tbl2"
+                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (cola) not in ((:fkc_upd)))"
               }
             ]
           },
@@ -2497,8 +2372,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl1 set cola = cola + 3 where id = 3",
-            "Table": "u_multicol_tbl1"
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl1 set cola = cola + 3 where id = 3"
           }
         ]
       },
@@ -2532,8 +2406,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where 1 != 1",
-            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl1.cola is null and 2 is not null and u_multicol_tbl1.colb is null and u_multicol_tbl2.colc - 2 is not null and not (u_multicol_tbl2.cola, u_multicol_tbl2.colb) <=> (2, u_multicol_tbl2.colc - 2) and u_multicol_tbl2.id = 7 limit 1 for share",
-            "Table": "u_multicol_tbl1, u_multicol_tbl2"
+            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl1.cola is null and 2 is not null and u_multicol_tbl1.colb is null and u_multicol_tbl2.colc - 2 is not null and not (u_multicol_tbl2.cola, u_multicol_tbl2.colb) <=> (2, u_multicol_tbl2.colc - 2) and u_multicol_tbl2.id = 7 limit 1 for share"
           },
           {
             "InputName": "PostVerify",
@@ -2548,8 +2421,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where 1 != 1",
-                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where id = 7 for update",
-                "Table": "u_multicol_tbl2"
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where id = 7 for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -2577,8 +2449,7 @@
                     "UpdateExprBvName": "fkc_upd1"
                   }
                 ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = :fkc_upd, colb = :fkc_upd1 where (cola, colb) in ::fkc_vals",
-                "Table": "u_multicol_tbl3"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = :fkc_upd, colb = :fkc_upd1 where (cola, colb) in ::fkc_vals"
               },
               {
                 "InputName": "Parent",
@@ -2589,8 +2460,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl2 set cola = 2, colb = colc - 2 where id = 7",
-                "Table": "u_multicol_tbl2"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl2 set cola = 2, colb = colc - 2 where id = 7"
               }
             ]
           }
@@ -2624,8 +2494,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3)) for update nowait",
-                "Table": "u_tbl9"
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3)) for update nowait"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -2640,8 +2509,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals",
-                "Table": "u_tbl8"
+                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals"
               },
               {
                 "InputName": "Parent",
@@ -2652,8 +2520,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3))",
-                "Table": "u_tbl9"
+                "Query": "delete from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3))"
               }
             ]
           },
@@ -2666,8 +2533,7 @@
             },
             "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
-            "Query": "insert into u_tbl9(id, col9) values (1, 10), (2, 20), (3, 30)",
-            "TableName": "u_tbl9"
+            "Query": "insert into u_tbl9(id, col9) values (1, 10), (2, 20), (3, 30)"
           }
         ]
       },
@@ -2692,7 +2558,6 @@
         },
         "TargetTabletType": "PRIMARY",
         "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
-        "Table": "multicol_tbl1",
         "Values": [
           "1",
           "2",
@@ -2719,8 +2584,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
-        "Table": "u_multicol_tbl1"
+        "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3"
       },
       "TablesUsed": [
         "unsharded_fk_allow.u_multicol_tbl1"
@@ -2742,7 +2606,6 @@
         },
         "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into tbl3(col3, coly) values (:_col3_0, 3)",
-        "TableName": "tbl3",
         "VindexValues": {
           "hash_vin": "1"
         }
@@ -2772,8 +2635,7 @@
             },
             "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
-            "Query": "insert into u_tbl1(id, col1) values (1, 3)",
-            "TableName": "u_tbl1"
+            "Query": "insert into u_tbl1(id, col1) values (1, 3)"
           },
           {
             "InputName": "Update-1",
@@ -2788,8 +2650,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-                "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update",
-                "Table": "u_tbl1"
+                "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -2808,8 +2669,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                    "Table": "u_tbl2"
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -2824,8 +2684,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(3 as CHAR)))",
-                    "Table": "u_tbl3"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(3 as CHAR)))"
                   },
                   {
                     "InputName": "Parent",
@@ -2836,8 +2695,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 3 where (col2) in ::fkc_vals",
-                    "Table": "u_tbl2"
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 3 where (col2) in ::fkc_vals"
                   }
                 ]
               },
@@ -2858,8 +2716,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as CHAR))) for update nowait",
-                    "Table": "u_tbl9"
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as CHAR))) for update nowait"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -2874,8 +2731,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
-                    "Table": "u_tbl8"
+                    "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3"
                   },
                   {
                     "InputName": "Parent",
@@ -2886,8 +2742,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as CHAR)))",
-                    "Table": "u_tbl9"
+                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as CHAR)))"
                   }
                 ]
               },
@@ -2900,8 +2755,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl1 set col1 = 3 where id = 1",
-                "Table": "u_tbl1"
+                "Query": "update u_tbl1 set col1 = 3 where id = 1"
               }
             ]
           }
@@ -2936,8 +2790,7 @@
             },
             "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
-            "Query": "insert into u_tbl2(id, col2) values (:v1, :v2)",
-            "TableName": "u_tbl2"
+            "Query": "insert into u_tbl2(id, col2) values (:v1, :v2)"
           },
           {
             "InputName": "Update-1",
@@ -2952,8 +2805,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where id = :v1 for update",
-                "Table": "u_tbl2"
+                "Query": "select u_tbl2.col2 from u_tbl2 where id = :v1 for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -2968,8 +2820,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (cast(:v2 as CHAR) is null or (col3) not in ((cast(:v2 as CHAR))))",
-                "Table": "u_tbl3"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (cast(:v2 as CHAR) is null or (col3) not in ((cast(:v2 as CHAR))))"
               },
               {
                 "InputName": "Parent",
@@ -2980,8 +2831,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl2 set col2 = :v2 where id = :v1",
-                "Table": "u_tbl2"
+                "Query": "update u_tbl2 set col2 = :v2 where id = :v1"
               }
             ]
           },
@@ -2995,8 +2845,7 @@
             },
             "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
-            "Query": "insert into u_tbl2(id, col2) values (:v3, :v4)",
-            "TableName": "u_tbl2"
+            "Query": "insert into u_tbl2(id, col2) values (:v3, :v4)"
           },
           {
             "InputName": "Update-2",
@@ -3011,8 +2860,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where id = :v3 for update",
-                "Table": "u_tbl2"
+                "Query": "select u_tbl2.col2 from u_tbl2 where id = :v3 for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3027,8 +2875,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:v4 as CHAR) is null or (col3) not in ((cast(:v4 as CHAR))))",
-                "Table": "u_tbl3"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:v4 as CHAR) is null or (col3) not in ((cast(:v4 as CHAR))))"
               },
               {
                 "InputName": "Parent",
@@ -3039,8 +2886,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl2 set col2 = :v4 where id = :v3",
-                "Table": "u_tbl2"
+                "Query": "update u_tbl2 set col2 = :v4 where id = :v3"
               }
             ]
           },
@@ -3054,8 +2900,7 @@
             },
             "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
-            "Query": "insert into u_tbl2(id, col2) values (:v5, :v6)",
-            "TableName": "u_tbl2"
+            "Query": "insert into u_tbl2(id, col2) values (:v5, :v6)"
           },
           {
             "InputName": "Update-3",
@@ -3070,8 +2915,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where id = :v5 for update",
-                "Table": "u_tbl2"
+                "Query": "select u_tbl2.col2 from u_tbl2 where id = :v5 for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3086,8 +2930,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals2 and (cast(:v6 as CHAR) is null or (col3) not in ((cast(:v6 as CHAR))))",
-                "Table": "u_tbl3"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals2 and (cast(:v6 as CHAR) is null or (col3) not in ((cast(:v6 as CHAR))))"
               },
               {
                 "InputName": "Parent",
@@ -3098,8 +2941,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl2 set col2 = :v6 where id = :v5",
-                "Table": "u_tbl2"
+                "Query": "update u_tbl2 set col2 = :v6 where id = :v5"
               }
             ]
           }
@@ -3137,8 +2979,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u.id from u_tbl6 as u, u_tbl5 as m where 1 != 1",
-            "Query": "select u.id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
-            "Table": "u_tbl5, u_tbl6"
+            "Query": "select u.id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update"
           },
           {
             "OperatorType": "FkCascade",
@@ -3152,8 +2993,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u.col6 from u_tbl6 as u where 1 != 1",
-                "Query": "select u.col6 from u_tbl6 as u where u.id in ::dml_vals for update",
-                "Table": "u_tbl6"
+                "Query": "select u.col6 from u_tbl6 as u where u.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3168,8 +3008,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals",
-                "Table": "u_tbl8"
+                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals"
               },
               {
                 "InputName": "Parent",
@@ -3180,8 +3019,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl6 as u where u.id in ::dml_vals",
-                "Table": "u_tbl6"
+                "Query": "delete from u_tbl6 as u where u.id in ::dml_vals"
               }
             ]
           }
@@ -3215,8 +3053,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl10.id from u_tbl10, u_tbl11 where 1 != 1",
-            "Query": "select u_tbl10.id from u_tbl10, u_tbl11 where u_tbl10.id = 5 and u_tbl10.id = u_tbl11.id for update",
-            "Table": "u_tbl10, u_tbl11"
+            "Query": "select u_tbl10.id from u_tbl10, u_tbl11 where u_tbl10.id = 5 and u_tbl10.id = u_tbl11.id for update"
           },
           {
             "OperatorType": "FkCascade",
@@ -3230,8 +3067,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl10.col from u_tbl10 where 1 != 1",
-                "Query": "select u_tbl10.col from u_tbl10 where u_tbl10.id in ::dml_vals for update",
-                "Table": "u_tbl10"
+                "Query": "select u_tbl10.col from u_tbl10 where u_tbl10.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3246,8 +3082,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "delete from u_tbl11 where (col) in ::fkc_vals",
-                "Table": "u_tbl11"
+                "Query": "delete from u_tbl11 where (col) in ::fkc_vals"
               },
               {
                 "InputName": "Parent",
@@ -3258,8 +3093,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl10 where u_tbl10.id in ::dml_vals",
-                "Table": "u_tbl10"
+                "Query": "delete from u_tbl10 where u_tbl10.id in ::dml_vals"
               }
             ]
           }
@@ -3292,8 +3126,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl1.id from u_tbl10, u_tbl1 where 1 != 1",
-            "Query": "select u_tbl1.id from u_tbl10, u_tbl1 where u_tbl10.col = u_tbl1.col for update",
-            "Table": "u_tbl1, u_tbl10"
+            "Query": "select u_tbl1.id from u_tbl10, u_tbl1 where u_tbl10.col = u_tbl1.col for update"
           },
           {
             "OperatorType": "FkCascade",
@@ -3307,8 +3140,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-                "Query": "select u_tbl1.col1 from u_tbl1 where u_tbl1.id in ::dml_vals for update",
-                "Table": "u_tbl1"
+                "Query": "select u_tbl1.col1 from u_tbl1 where u_tbl1.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3327,8 +3159,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                    "Table": "u_tbl2"
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -3343,8 +3174,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
-                    "Table": "u_tbl3"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1"
                   },
                   {
                     "InputName": "Parent",
@@ -3355,8 +3185,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
-                    "Table": "u_tbl2"
+                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals"
                   }
                 ]
               },
@@ -3369,8 +3198,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals",
-                "Table": "u_tbl1"
+                "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals"
               }
             ]
           }
@@ -3405,8 +3233,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl1.id from u_tbl1 where 1 != 1",
-            "Query": "select u_tbl1.id from u_tbl1 order by id asc limit 1 for update",
-            "Table": "u_tbl1"
+            "Query": "select u_tbl1.id from u_tbl1 order by id asc limit 1 for update"
           },
           {
             "OperatorType": "FkCascade",
@@ -3420,8 +3247,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-                "Query": "select u_tbl1.col1 from u_tbl1 where u_tbl1.id in ::dml_vals for update",
-                "Table": "u_tbl1"
+                "Query": "select u_tbl1.col1 from u_tbl1 where u_tbl1.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3440,8 +3266,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                    "Table": "u_tbl2"
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -3456,8 +3281,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
-                    "Table": "u_tbl3"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1"
                   },
                   {
                     "InputName": "Parent",
@@ -3468,8 +3292,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
-                    "Table": "u_tbl2"
+                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals"
                   }
                 ]
               },
@@ -3482,8 +3305,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals",
-                "Table": "u_tbl1"
+                "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals"
               }
             ]
           }
@@ -3518,8 +3340,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col14 from u_tbl1 where 1 != 1",
-            "Query": "select col14 from u_tbl1 where x = 2 and y = 4 lock in share mode",
-            "Table": "u_tbl1"
+            "Query": "select col14 from u_tbl1 where x = 2 and y = 4 lock in share mode"
           },
           {
             "InputName": "Outer",
@@ -3534,8 +3355,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where u_tbl1.col14 is null and cast(:__sq1 as SIGNED) is not null and not (u_tbl4.col41) <=> (cast(:__sq1 as SIGNED)) and u_tbl4.col4 = 3 limit 1 for share",
-                "Table": "u_tbl1, u_tbl4"
+                "Query": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where u_tbl1.col14 is null and cast(:__sq1 as SIGNED) is not null and not (u_tbl4.col41) <=> (cast(:__sq1 as SIGNED)) and u_tbl4.col4 = 3 limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -3546,8 +3366,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col41 = :__sq1 where col4 = 3",
-                "Table": "u_tbl4"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col41 = :__sq1 where col4 = 3"
               }
             ]
           }
@@ -3581,8 +3400,7 @@
               "Sharded": false
             },
             "FieldQuery": "select foo from u_tbl1 where 1 != 1",
-            "Query": "select foo from u_tbl1 where id = 1 lock in share mode",
-            "Table": "u_tbl1"
+            "Query": "select foo from u_tbl1 where id = 1 lock in share mode"
           },
           {
             "InputName": "Outer",
@@ -3597,8 +3415,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-                "Query": "select u_tbl1.col1 from u_tbl1 order by id desc for update",
-                "Table": "u_tbl1"
+                "Query": "select u_tbl1.col1 from u_tbl1 order by id desc for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3617,8 +3434,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                    "Table": "u_tbl2"
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -3633,8 +3449,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:__sq1 as CHAR) is null or (col3) not in ((cast(:__sq1 as CHAR))))",
-                    "Table": "u_tbl3"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:__sq1 as CHAR) is null or (col3) not in ((cast(:__sq1 as CHAR))))"
                   },
                   {
                     "InputName": "Parent",
@@ -3645,8 +3460,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = :__sq1 where (col2) in ::fkc_vals",
-                    "Table": "u_tbl2"
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = :__sq1 where (col2) in ::fkc_vals"
                   }
                 ]
               },
@@ -3667,8 +3481,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR)))) for update nowait",
-                    "Table": "u_tbl9"
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR)))) for update nowait"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -3683,8 +3496,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
-                    "Table": "u_tbl8"
+                    "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3"
                   },
                   {
                     "InputName": "Parent",
@@ -3695,8 +3507,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR))))",
-                    "Table": "u_tbl9"
+                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR))))"
                   }
                 ]
               },
@@ -3709,8 +3520,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set col1 = :__sq1 order by id desc",
-                "Table": "u_tbl1"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set col1 = :__sq1 order by id desc"
               }
             ]
           }
@@ -3746,8 +3556,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl6.id from u_tbl6, u_tbl8 where 1 != 1",
-            "Query": "select u_tbl6.id from u_tbl6, u_tbl8 where u_tbl6.id = 4 and u_tbl6.id = u_tbl8.id for update",
-            "Table": "u_tbl6, u_tbl8"
+            "Query": "select u_tbl6.id from u_tbl6, u_tbl8 where u_tbl6.id = 4 and u_tbl6.id = u_tbl8.id for update"
           },
           {
             "OperatorType": "FkCascade",
@@ -3761,8 +3570,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl6.col6 from u_tbl6 where 1 != 1",
-                "Query": "select u_tbl6.col6 from u_tbl6 where u_tbl6.id in ::dml_vals for update",
-                "Table": "u_tbl6"
+                "Query": "select u_tbl6.col6 from u_tbl6 where u_tbl6.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3777,8 +3585,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals",
-                "Table": "u_tbl8"
+                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals"
               },
               {
                 "InputName": "Parent",
@@ -3789,8 +3596,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl6 where u_tbl6.id in ::dml_vals",
-                "Table": "u_tbl6"
+                "Query": "delete from u_tbl6 where u_tbl6.id in ::dml_vals"
               }
             ]
           }
@@ -3824,8 +3630,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u.id, m.id from u_tbl6 as u, u_tbl5 as m where 1 != 1",
-            "Query": "select u.id, m.id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
-            "Table": "u_tbl5, u_tbl6"
+            "Query": "select u.id, m.id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update"
           },
           {
             "OperatorType": "FkCascade",
@@ -3839,8 +3644,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u.col6 from u_tbl6 as u where 1 != 1",
-                "Query": "select u.col6 from u_tbl6 as u where u.id in ::dml_vals for update",
-                "Table": "u_tbl6"
+                "Query": "select u.col6 from u_tbl6 as u where u.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3855,8 +3659,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals",
-                "Table": "u_tbl8"
+                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals"
               },
               {
                 "InputName": "Parent",
@@ -3867,8 +3670,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl6 as u where u.id in ::dml_vals",
-                "Table": "u_tbl6"
+                "Query": "delete from u_tbl6 as u where u.id in ::dml_vals"
               }
             ]
           },
@@ -3880,8 +3682,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "delete from u_tbl5 as m where m.id in ::dml_vals",
-            "Table": "u_tbl5"
+            "Query": "delete from u_tbl5 as m where m.id in ::dml_vals"
           }
         ]
       },
@@ -3913,8 +3714,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl2.id from u_tbl2 where 1 != 1",
-            "Query": "select u_tbl2.id from u_tbl2 limit 2 for update",
-            "Table": "u_tbl2"
+            "Query": "select u_tbl2.id from u_tbl2 limit 2 for update"
           },
           {
             "OperatorType": "FkCascade",
@@ -3928,8 +3728,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update",
-                "Table": "u_tbl2"
+                "Query": "select u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -3944,8 +3743,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))",
-                "Table": "u_tbl3"
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))"
               },
               {
                 "InputName": "Parent",
@@ -3956,8 +3754,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl2 set col2 = 'bar' where u_tbl2.id in ::dml_vals",
-                "Table": "u_tbl2"
+                "Query": "update u_tbl2 set col2 = 'bar' where u_tbl2.id in ::dml_vals"
               }
             ]
           }
@@ -3990,8 +3787,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl2.id from u_tbl2 where 1 != 1",
-            "Query": "select u_tbl2.id from u_tbl2 order by id asc limit 2 for update",
-            "Table": "u_tbl2"
+            "Query": "select u_tbl2.id from u_tbl2 order by id asc limit 2 for update"
           },
           {
             "OperatorType": "FKVerify",
@@ -4005,8 +3801,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.id + 1 as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.id + 1 as CHAR) where u_tbl1.col1 is null and cast(u_tbl2.id + 1 as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.id + 1 as CHAR)) and u_tbl2.id in ::dml_vals limit 1 for share",
-                "Table": "u_tbl1, u_tbl2"
+                "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.id + 1 as CHAR) where u_tbl1.col1 is null and cast(u_tbl2.id + 1 as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.id + 1 as CHAR)) and u_tbl2.id in ::dml_vals limit 1 for share"
               },
               {
                 "InputName": "PostVerify",
@@ -4021,8 +3816,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl2.col2, col2 <=> cast(id + 1 as CHAR), cast(id + 1 as CHAR) from u_tbl2 where 1 != 1",
-                    "Query": "select u_tbl2.col2, col2 <=> cast(id + 1 as CHAR), cast(id + 1 as CHAR) from u_tbl2 where u_tbl2.id in ::dml_vals order by id asc for update",
-                    "Table": "u_tbl2"
+                    "Query": "select u_tbl2.col2, col2 <=> cast(id + 1 as CHAR), cast(id + 1 as CHAR) from u_tbl2 where u_tbl2.id in ::dml_vals order by id asc for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -4044,8 +3838,7 @@
                         "UpdateExprBvName": "fkc_upd"
                       }
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (col3) not in ((:fkc_upd)))",
-                    "Table": "u_tbl3"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (col3) not in ((:fkc_upd)))"
                   },
                   {
                     "InputName": "Parent",
@@ -4056,8 +3849,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = id + 1 where u_tbl2.id in ::dml_vals order by id asc",
-                    "Table": "u_tbl2"
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = id + 1 where u_tbl2.id in ::dml_vals order by id asc"
                   }
                 ]
               }
@@ -4090,8 +3882,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u.col6 from u_tbl6 as u, u_tbl5 as m where 1 != 1",
-            "Query": "select u.col6 from u_tbl6 as u, u_tbl5 as m where u.col = m.col and u.col2 = 4 and m.col3 = 6 for update",
-            "Table": "u_tbl5, u_tbl6"
+            "Query": "select u.col6 from u_tbl6 as u, u_tbl5 as m where u.col = m.col and u.col2 = 4 and m.col3 = 6 for update"
           },
           {
             "InputName": "CascadeChild-1",
@@ -4110,8 +3901,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where u_tbl9.col9 is null and cast('foo' as CHAR) is not null and not (u_tbl8.col8) <=> (cast('foo' as CHAR)) and (u_tbl8.col8) in ::fkc_vals limit 1 for share nowait",
-                "Table": "u_tbl8, u_tbl9"
+                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where u_tbl9.col9 is null and cast('foo' as CHAR) is not null and not (u_tbl8.col8) <=> (cast('foo' as CHAR)) and (u_tbl8.col8) in ::fkc_vals limit 1 for share nowait"
               },
               {
                 "InputName": "PostVerify",
@@ -4122,8 +3912,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals",
-                "Table": "u_tbl8"
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals"
               }
             ]
           },
@@ -4136,8 +3925,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl6 as u, u_tbl5 as m set u.col6 = 'foo' where u.col2 = 4 and m.col3 = 6 and u.col = m.col",
-            "Table": "u_tbl6"
+            "Query": "update u_tbl6 as u, u_tbl5 as m set u.col6 = 'foo' where u.col2 = 4 and m.col3 = 6 and u.col = m.col"
           }
         ]
       },
@@ -4171,8 +3959,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u.id, m.id from u_tbl1 as u, u_multicol_tbl1 as m where 1 != 1",
-            "Query": "select u.id, m.id from u_tbl1 as u, u_multicol_tbl1 as m where u.foo = 4 and m.bar = 6 and u.col = m.col for update",
-            "Table": "u_multicol_tbl1, u_tbl1"
+            "Query": "select u.id, m.id from u_tbl1 as u, u_multicol_tbl1 as m where u.foo = 4 and m.bar = 6 and u.col = m.col for update"
           },
           {
             "OperatorType": "FkCascade",
@@ -4186,8 +3973,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u.col1 from u_tbl1 as u where 1 != 1",
-                "Query": "select u.col1 from u_tbl1 as u where u.id in ::dml_vals for update",
-                "Table": "u_tbl1"
+                "Query": "select u.col1 from u_tbl1 as u where u.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -4206,8 +3992,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                    "Table": "u_tbl2"
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -4222,8 +4007,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast('foo' as CHAR)))",
-                    "Table": "u_tbl3"
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast('foo' as CHAR)))"
                   },
                   {
                     "InputName": "Parent",
@@ -4234,8 +4018,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'foo' where (col2) in ::fkc_vals",
-                    "Table": "u_tbl2"
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'foo' where (col2) in ::fkc_vals"
                   }
                 ]
               },
@@ -4256,8 +4039,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait",
-                    "Table": "u_tbl9"
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -4272,8 +4054,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
-                    "Table": "u_tbl8"
+                    "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3"
                   },
                   {
                     "InputName": "Parent",
@@ -4284,8 +4065,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))",
-                    "Table": "u_tbl9"
+                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))"
                   }
                 ]
               },
@@ -4298,8 +4078,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl1 as u set u.col1 = 'foo' where u.id in ::dml_vals",
-                "Table": "u_tbl1"
+                "Query": "update u_tbl1 as u set u.col1 = 'foo' where u.id in ::dml_vals"
               }
             ]
           },
@@ -4315,8 +4094,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select m.cola, m.colb from u_multicol_tbl1 as m where 1 != 1",
-                "Query": "select m.cola, m.colb from u_multicol_tbl1 as m where m.id in ::dml_vals for update",
-                "Table": "u_multicol_tbl1"
+                "Query": "select m.cola, m.colb from u_multicol_tbl1 as m where m.id in ::dml_vals for update"
               },
               {
                 "InputName": "CascadeChild-1",
@@ -4336,8 +4114,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where 1 != 1",
-                    "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals4 and (cola) not in (('bar')) for update",
-                    "Table": "u_multicol_tbl2"
+                    "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals4 and (cola) not in (('bar')) for update"
                   },
                   {
                     "InputName": "CascadeChild-1",
@@ -4353,8 +4130,7 @@
                       0,
                       1
                     ],
-                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals5",
-                    "Table": "u_multicol_tbl3"
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals5"
                   },
                   {
                     "InputName": "Parent",
@@ -4365,8 +4141,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals4 and (cola) not in (('bar'))",
-                    "Table": "u_multicol_tbl2"
+                    "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals4 and (cola) not in (('bar'))"
                   }
                 ]
               },
@@ -4379,8 +4154,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl1 as m set m.cola = 'bar' where m.id in ::dml_vals",
-                "Table": "u_multicol_tbl1"
+                "Query": "update u_multicol_tbl1 as m set m.cola = 'bar' where m.id in ::dml_vals"
               }
             ]
           }

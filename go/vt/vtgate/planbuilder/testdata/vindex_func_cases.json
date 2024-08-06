@@ -152,7 +152,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "_unsharded",
         "Inputs": [
           {
             "OperatorType": "VindexFunc",
@@ -174,8 +173,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded",
-            "Table": "unsharded"
+            "Query": "select unsharded.id from unsharded"
           }
         ]
       },
@@ -195,7 +193,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "R:0,L:0",
-        "TableName": "unsharded_",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -205,8 +202,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded",
-            "Table": "unsharded"
+            "Query": "select unsharded.id from unsharded"
           },
           {
             "OperatorType": "VindexFunc",
@@ -241,7 +237,6 @@
         "JoinVars": {
           "user_index_id": 0
         },
-        "TableName": "_unsharded",
         "Inputs": [
           {
             "OperatorType": "VindexFunc",
@@ -265,8 +260,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id /* VARBINARY */",
-            "Table": "unsharded"
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id /* VARBINARY */"
           }
         ]
       },
@@ -289,7 +283,6 @@
         "JoinVars": {
           "user_index_id": 1
         },
-        "TableName": "_unsharded",
         "Inputs": [
           {
             "OperatorType": "VindexFunc",
@@ -313,8 +306,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id /* VARBINARY */",
-            "Table": "unsharded"
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id /* VARBINARY */"
           }
         ]
       },
@@ -337,7 +329,6 @@
         "JoinVars": {
           "user_index_id": 1
         },
-        "TableName": "_unsharded",
         "Inputs": [
           {
             "OperatorType": "VindexFunc",
@@ -361,8 +352,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id /* VARBINARY */",
-            "Table": "unsharded"
+            "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id /* VARBINARY */"
           }
         ]
       },
@@ -385,7 +375,6 @@
         "JoinVars": {
           "ui_id": 1
         },
-        "TableName": "_unsharded",
         "Inputs": [
           {
             "OperatorType": "VindexFunc",
@@ -409,8 +398,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id /* VARBINARY */",
-            "Table": "unsharded"
+            "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id /* VARBINARY */"
           }
         ]
       },

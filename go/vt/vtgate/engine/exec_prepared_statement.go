@@ -45,10 +45,6 @@ func (e *ExecStmt) GetKeyspaceName() string {
 	return e.Input.GetKeyspaceName()
 }
 
-func (e *ExecStmt) GetTableName() string {
-	return e.Input.GetTableName()
-}
-
 func (e *ExecStmt) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.VT12001("prepare command on execute statement")
 }

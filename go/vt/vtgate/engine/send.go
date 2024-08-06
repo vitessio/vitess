@@ -84,11 +84,6 @@ func (s *Send) GetKeyspaceName() string {
 	return s.Keyspace.Name
 }
 
-// GetTableName implements Primitive interface
-func (s *Send) GetTableName() string {
-	return ""
-}
-
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, s.QueryTimeout)
@@ -189,7 +184,6 @@ func (s *Send) GetFields(ctx context.Context, vcursor VCursor, bindVars map[stri
 func (s *Send) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":                    s.Query,
-		"Table":                    s.GetTableName(),
 		"IsDML":                    s.IsDML,
 		"SingleShardOnly":          s.SingleShardOnly,
 		"ShardNameNeeded":          s.ShardNameNeeded,

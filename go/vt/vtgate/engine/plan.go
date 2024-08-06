@@ -19,6 +19,7 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -109,4 +110,8 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 	}
 
 	return b.Bytes(), nil
+}
+
+func (p *Plan) GetTableName() string {
+	return strings.Join(p.TablesUsed, ",")
 }

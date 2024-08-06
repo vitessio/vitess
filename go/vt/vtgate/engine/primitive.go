@@ -232,7 +232,6 @@ type (
 	Primitive interface {
 		RouteType() string
 		GetKeyspaceName() string
-		GetTableName() string
 		GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 

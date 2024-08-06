@@ -70,15 +70,6 @@ func (c *Concatenate) GetKeyspaceName() string {
 	return res
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (c *Concatenate) GetTableName() string {
-	res := c.Sources[0].GetTableName()
-	for i := 1; i < len(c.Sources); i++ {
-		res = formatTwoOptionsNicely(res, c.Sources[i].GetTableName())
-	}
-	return res
-}
-
 func formatTwoOptionsNicely(a, b string) string {
 	if a == b {
 		return a

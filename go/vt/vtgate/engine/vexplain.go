@@ -56,11 +56,6 @@ func (v *VExplain) GetKeyspaceName() string {
 	return v.Input.GetKeyspaceName()
 }
 
-// GetTableName implements the Primitive interface
-func (v *VExplain) GetTableName() string {
-	return v.Input.GetTableName()
-}
-
 // GetFields implements the Primitive interface
 func (v *VExplain) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return v.Input.GetFields(ctx, vcursor, bindVars)

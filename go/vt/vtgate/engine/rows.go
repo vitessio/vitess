@@ -49,11 +49,6 @@ func (r *Rows) GetKeyspaceName() string {
 	return ""
 }
 
-// GetTableName implements the Primitive interface
-func (r *Rows) GetTableName() string {
-	return ""
-}
-
 // TryExecute implements the Primitive interface
 func (r *Rows) TryExecute(context.Context, VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	return &sqltypes.Result{

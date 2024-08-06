@@ -57,11 +57,6 @@ func (v *AlterVSchema) GetKeyspaceName() string {
 	return v.Keyspace.Name
 }
 
-// GetTableName implements the Primitive interface
-func (v *AlterVSchema) GetTableName() string {
-	return v.AlterVschemaDDL.Table.Name.String()
-}
-
 // TryExecute implements the Primitive interface
 func (v *AlterVSchema) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.ExecuteVSchema(ctx, v.Keyspace.Name, v.AlterVschemaDDL)

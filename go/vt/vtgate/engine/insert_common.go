@@ -137,11 +137,6 @@ func (ic *InsertCommon) GetKeyspaceName() string {
 	return ic.Keyspace.Name
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (ic *InsertCommon) GetTableName() string {
-	return ic.TableName
-}
-
 // GetFields fetches the field info.
 func (ic *InsertCommon) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.VT13001("unexpected fields call for insert query")

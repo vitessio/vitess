@@ -60,11 +60,6 @@ func (v *ThrottleApp) GetKeyspaceName() string {
 	return v.Keyspace.Name
 }
 
-// GetTableName implements the Primitive interface
-func (v *ThrottleApp) GetTableName() string {
-	return ""
-}
-
 // TryExecute implements the Primitive interface
 func (v *ThrottleApp) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	if err := vcursor.ThrottleApp(ctx, v.ThrottledAppRule); err != nil {
