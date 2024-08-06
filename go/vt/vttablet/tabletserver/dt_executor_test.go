@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/require"
@@ -205,20 +207,31 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
+
+	tl := syslogger.NewTestLogger()
+	defer tl.Close()
+
+	// start a transaction.
 	txid := newTxForPrep(ctx, tsv)
-	// Allow all additions to redo logs to succeed
+
+	// prepare the transaction
 	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
 	require.NoError(t, err)
-	defer txe.RollbackPrepared("bb", 0)
-	db.AddQuery("update _vt.redo_state set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
+
+	// fail commit prepare as the delete redo query is in rejected query.
+	db.AddRejectedQuery("delete from _vt.redo_state where dtid = 'bb'", errors.New("delete redo log fail"))
+	db.AddQuery("update _vt.redo_state set state = 0 where dtid = 'bb'", sqltypes.MakeTestResult(nil))
 	err = txe.CommitPrepared("bb")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "is not supported")
-	// A retry should fail differently.
+	require.ErrorContains(t, err, "delete redo log fail")
+
+	// A retry should fail differently as the prepared transaction is marked as failed.
 	err = txe.CommitPrepared("bb")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot commit dtid bb, state: failed")
+
+	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"),
+		"failed to commit the prepared transaction 'bb' with error: unknown error: delete redo log fail")
 }
 
 func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
