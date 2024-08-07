@@ -118,7 +118,7 @@ func TestMySQLShellBackupRestorePreCheck(t *testing.T) {
 		},
 		{
 			"supported values",
-			`{"updateGtidSet": "replace", "progressFile": ""}`,
+			`{"updateGtidSet": "replace", "progressFile": "", "skipBinlog": true}`,
 			nil,
 		},
 	}
