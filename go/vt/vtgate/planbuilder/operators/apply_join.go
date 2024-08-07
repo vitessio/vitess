@@ -293,7 +293,7 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if len(aj.Columns) > 0 {
 		// we've already done offset planning
-		return aj
+		return nil
 	}
 	for _, col := range aj.JoinColumns.columns {
 		// Read the type description for applyJoinColumn to understand the following code
