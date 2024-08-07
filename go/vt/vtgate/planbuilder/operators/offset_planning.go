@@ -38,20 +38,21 @@ func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
 			panic(vterrors.VT13001(fmt.Sprintf("should not see %T here", in)))
 		case offsettable:
 			newOp := op.planOffsets(ctx)
-			var anythingChanged *ApplyResult
-
 			if newOp == nil {
 				newOp = op
-			} else {
-				// We got a new operator from plan offsets. We should return that something has changed.
-				anythingChanged = Rewrote("planned offsets")
 			}
 
 			if DebugOperatorTree {
 				fmt.Println("Planned offsets for:")
 				fmt.Println(ToTree(newOp))
 			}
-			return newOp, anythingChanged
+
+			if newOp == op {
+				return newOp, nil
+			} else {
+				// We got a new operator from plan offsets. We should return that something has changed.
+				return newOp, Rewrote("planning offsets introduced a new operator")
+			}
 		}
 		return in, NoRewrite
 	}
