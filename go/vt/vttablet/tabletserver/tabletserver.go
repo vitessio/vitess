@@ -475,11 +475,6 @@ func (tsv *TabletServer) TableGC() *gc.TableGC {
 	return tsv.tableGC
 }
 
-// TwoPCEngineWait waits until the TwoPC engine has been opened, and the redo read
-func (tsv *TabletServer) TwoPCEngineWait() {
-	tsv.te.twoPCReady.Wait()
-}
-
 // SchemaEngine returns the SchemaEngine part of TabletServer.
 func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 	return tsv.se
@@ -1686,6 +1681,11 @@ func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, fla
 func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus {
 	r := tsv.lagThrottler.Status()
 	return r
+}
+
+// RedoPreparedTransactions redoes the prepared transactions.
+func (tsv *TabletServer) RedoPreparedTransactions() error {
+	return tsv.te.RedoPreparedTransactions()
 }
 
 // HandlePanic is part of the queryservice.QueryService interface

@@ -79,7 +79,12 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 	}
 	defer tm.unlock()
 
-	return tm.MysqlDaemon.SetReadOnly(ctx, rdonly)
+	if !rdonly {
+		// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
+		// setting read_only OFF will also set super_read_only OFF if it was set
+		return tm.redoPreparedTransactionsAndSetReadWrite(ctx)
+	}
+	return tm.MysqlDaemon.SetReadOnly(ctx, true)
 }
 
 // ChangeType changes the tablet type

@@ -226,6 +226,11 @@ func (tqsc *Controller) GetThrottlerStatus(ctx context.Context) *throttle.Thrott
 	return nil
 }
 
+// RedoPreparedTransactions is part of the tabletserver.Controller interface
+func (tqsc *Controller) RedoPreparedTransactions() error {
+	return nil
+}
+
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
 	tqsc.mu.Lock()

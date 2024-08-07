@@ -168,7 +168,9 @@ func (sc *StatefulConnection) Releasef(reasonFormat string, a ...any) {
 	if sc.dbConn == nil {
 		return
 	}
-	sc.pool.unregister(sc.ConnID, fmt.Sprintf(reasonFormat, a...))
+	if sc.pool != nil {
+		sc.pool.unregister(sc.ConnID, fmt.Sprintf(reasonFormat, a...))
+	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
 	sc.logReservedConn()

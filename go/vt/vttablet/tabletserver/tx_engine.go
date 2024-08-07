@@ -87,7 +87,6 @@ type TxEngine struct {
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
-	twoPCReady   sync.WaitGroup
 	dxNotify     func()
 }
 
@@ -128,9 +127,6 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 }
 
 // AcceptReadWrite will start accepting all transactions.
-// If transitioning from RO mode, transactions are rolled
-// back before accepting new transactions. This is to allow
-// for 2PC state to be correctly initialized.
 func (te *TxEngine) AcceptReadWrite() {
 	te.transition(AcceptingReadAndWrite)
 }
@@ -149,36 +145,50 @@ func (te *TxEngine) transition(state txEngineState) {
 	}
 
 	log.Infof("TxEngine transition: %v", state)
-	switch te.state {
-	case AcceptingReadOnly, AcceptingReadAndWrite:
+
+	// When we are transitioning from read write state, we should close all transactions.
+	if te.state == AcceptingReadAndWrite {
 		te.shutdownLocked()
-	case NotServing:
-		// No special action.
 	}
 
 	te.state = state
 	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
-		// If there are errors, we choose to raise an alert and
-		// continue anyway. Serving traffic is considered more important
-		// than blocking everything for the sake of a few transactions.
-		// We do this async; so we do not end up blocking writes on
-		// failover for our setup tasks if using semi-sync replication.
-		te.twoPCReady.Add(1)
-		go func() {
-			defer te.twoPCReady.Done()
-			if err := te.twoPC.Open(te.env.Config().DB); err != nil {
-				te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
-				log.Errorf("Could not open TwoPC engine: %v", err)
-			}
-			if err := te.prepareFromRedo(); err != nil {
-				te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
-				log.Errorf("Could not prepare transactions: %v", err)
-			}
-			te.startTransactionWatcher()
-		}()
+		te.startTransactionWatcher()
 	}
+}
+
+// RedoPreparedTransactions redoes the prepared transactions.
+// If there are errors, we choose to raise an alert and
+// continue anyway. Serving traffic is considered more important
+// than blocking everything for the sake of a few transactions.
+// We do this async; so we do not end up blocking writes on
+// failover for our setup tasks if using semi-sync replication.
+func (te *TxEngine) RedoPreparedTransactions() error {
+	if !te.twopcEnabled {
+		return nil
+	}
+	te.stateLock.Lock()
+	defer te.stateLock.Unlock()
+	oldState := te.state
+	te.shutdownLocked()
+	te.state = oldState
+
+	defer te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
+
+	if err := te.twoPC.Open(te.env.Config().DB); err != nil {
+		te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
+		log.Errorf("Could not open TwoPC engine: %v", err)
+		return err
+	}
+
+	if err := te.prepareFromRedo(); err != nil {
+		te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
+		log.Errorf("Could not prepare transactions: %v", err)
+		return err
+	}
+	return nil
 }
 
 // Close will disregard common rules for when to kill transactions
@@ -389,16 +399,16 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+		conn, err := te.beginNewDbaConnection(ctx)
 		if err != nil {
-			allErr.RecordError(err)
+			allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
 			continue
 		}
 		for _, stmt := range preparedTx.Queries {
 			conn.TxProperties().RecordQuery(stmt)
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
-				allErr.RecordError(err)
+				allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
 				te.txPool.RollbackAndRelease(ctx, conn)
 				continue outer
 			}
@@ -407,7 +417,7 @@ outer:
 		// we don't want to write again to the redo log.
 		err = te.preparedPool.Put(conn, preparedTx.Dtid)
 		if err != nil {
-			allErr.RecordError(err)
+			allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
 			continue
 		}
 	}
@@ -578,4 +588,21 @@ func (te *TxEngine) Release(connID int64) error {
 	conn.Release(tx.ConnRelease)
 
 	return nil
+}
+
+func (te *TxEngine) beginNewDbaConnection(ctx context.Context) (*StatefulConnection, error) {
+	dbConn, err := connpool.NewConn(ctx, te.env.Config().DB.DbaWithDB(), nil, nil, te.env)
+	if err != nil {
+		return nil, err
+	}
+
+	sc := &StatefulConnection{
+		dbConn: &connpool.PooledConn{
+			Conn: dbConn,
+		},
+		env: te.env,
+	}
+
+	_, _, err = te.txPool.begin(ctx, nil, false, sc, nil)
+	return sc, err
 }

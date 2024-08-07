@@ -751,6 +751,18 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 	}
 }
 
+// redoPreparedTransactionsAndSetReadWrite redoes prepared transactions in read-only mode.
+// We turn off super read only mode, and then redo the transactions. Finally, we turn of read-only mode to allow for further traffic.
+func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Context) error {
+	_, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false)
+	if err != nil {
+		return err
+	}
+	_ = tm.QueryServiceControl.RedoPreparedTransactions()
+	err = tm.MysqlDaemon.SetReadOnly(ctx, false)
+	return err
+}
+
 func (tm *TabletManager) initTablet(ctx context.Context) error {
 	tablet := tm.Tablet()
 	err := tm.TopoServer.CreateTablet(ctx, tablet)

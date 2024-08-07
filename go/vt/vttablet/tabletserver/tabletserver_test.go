@@ -204,7 +204,6 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 
 	turnOnTxEngine := func() {
 		tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, true, "")
-		tsv.TwoPCEngineWait()
 	}
 	turnOffTxEngine := func() {
 		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
