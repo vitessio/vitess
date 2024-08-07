@@ -18,7 +18,9 @@ package prometheusbackend
 
 import (
 	"expvar"
+	"net/http"
 	"strings"
+	"vitess.io/vitess/go/vt/vtgate"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -41,7 +43,15 @@ var (
 func Init(namespace string) {
 	servenv.HTTPHandle("/metrics", promhttp.Handler())
 	be.namespace = namespace
+	servenv.HTTPHandleFunc("/clear/metrics", ClearMetricsHandler)
+
 	stats.Register(be.publishPrometheusMetric)
+}
+func ClearMetricsHandler(w http.ResponseWriter, r *http.Request) {
+
+	vtgate.ClearMetrics()
+	log.Infof("All vtgate Prometheus metrics have been cleared.")
+	w.Write([]byte("All vtgate  Prometheus metrics have been cleared."))
 }
 
 // publishPrometheusMetric is used to publish the metric to Prometheus.

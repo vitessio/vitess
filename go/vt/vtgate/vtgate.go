@@ -216,6 +216,23 @@ var (
 		[]string{"Operation", "Keyspace", "DbType"})
 )
 
+func ClearMetrics() {
+	vschemaCounters.ResetAll()
+	errorCounts.ResetAll()
+	warnings.ResetAll()
+	vstreamSkewDelayCount.Reset()
+	vindexUnknownParams.Reset()
+	timings.Reset()
+	rowsReturned.ResetAll()
+	rowsAffected.ResetAll()
+	queriesProcessed.ResetAll()
+	queriesRouted.ResetAll()
+	queriesProcessedByTable.ResetAll()
+	queriesRoutedByTable.ResetAll()
+	vttabletTimings.Reset()
+	tabletCallErrorCount.ResetAll()
+}
+
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created. It implements vtgateservice.VTGateService
 // VTGate exposes multiple generations of interfaces.

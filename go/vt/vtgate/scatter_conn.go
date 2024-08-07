@@ -72,24 +72,41 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 // the results and errors for the caller.
 type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shardActionInfo *shardActionInfo) (*shardActionInfo, error)
 
+var (
+	vttabletTimings = stats.NewMultiTimings(
+		"VttabletCall",
+		"Scatter connection timings",
+		[]string{"Operation", "Keyspace", "ShardName", "DbType"})
+	tabletCallErrorCount = stats.NewCountersWithMultiLabels(
+		"VttabletCallErrorCount",
+		"Error count from tablet calls in scatter conns",
+		[]string{"Operation", "Keyspace", "ShardName", "DbType"})
+)
+
 // NewScatterConn creates a new ScatterConn.
 func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *ScatterConn {
 	// this only works with TabletGateway
-	tabletCallErrorCountStatsName := ""
-	if statsName != "" {
-		tabletCallErrorCountStatsName = statsName + "ErrorCount"
-	}
-	return &ScatterConn{
-		timings: stats.NewMultiTimings(
-			statsName,
-			"Scatter connection timings",
-			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		tabletCallErrorCount: stats.NewCountersWithMultiLabels(
-			tabletCallErrorCountStatsName,
-			"Error count from tablet calls in scatter conns",
-			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		txConn:  txConn,
-		gateway: gw,
+	if statsName == "" {
+		return &ScatterConn{
+			timings: stats.NewMultiTimings(
+				statsName,
+				"Scatter connection timings",
+				[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+			tabletCallErrorCount: stats.NewCountersWithMultiLabels(
+				"",
+				"Error count from tablet calls in scatter conns",
+				[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+			txConn:  txConn,
+			gateway: gw,
+		}
+	} else {
+
+		return &ScatterConn{
+			timings:              vttabletTimings,
+			tabletCallErrorCount: tabletCallErrorCount,
+			txConn:               txConn,
+			gateway:              gw,
+		}
 	}
 }
 
