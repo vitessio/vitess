@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,7 +69,7 @@ func TestMySQLShellBackupBackupPreCheck(t *testing.T) {
 		},
 		{
 			"supported values",
-			"/tmp/backup/",
+			t.TempDir(),
 			"--js -h localhost",
 			nil,
 		},
@@ -79,7 +80,7 @@ func TestMySQLShellBackupBackupPreCheck(t *testing.T) {
 
 			mysqlShellBackupLocation = tt.location
 			mysqlShellFlags = tt.flags
-			assert.ErrorIs(t, engine.backupPreCheck(), tt.err)
+			assert.ErrorIs(t, engine.backupPreCheck(path.Join(mysqlShellBackupLocation, "test")), tt.err)
 		})
 	}
 

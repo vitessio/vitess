@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -224,6 +225,42 @@ func (mysqld *Mysqld) fetchStatuses(ctx context.Context, pattern string) (map[st
 		varMap[row[0].ToString()] = row[1].ToString()
 	}
 	return varMap, nil
+}
+
+// ExecuteSuperQuery allows the user to execute a query as a super user.
+func (mysqld *Mysqld) AcquireGlobalReadLock(ctx context.Context) error {
+	if mysqld.lockConn != nil {
+		return errors.New("lock already acquired")
+	}
+
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+
+	err = mysqld.executeSuperQueryListConn(ctx, conn, []string{"FLUSH TABLES WITH READ LOCK"})
+	if err != nil {
+		conn.Recycle()
+		return err
+	}
+
+	mysqld.lockConn = conn
+	return nil
+}
+
+func (mysqld *Mysqld) ReleaseGlobalReadLock(ctx context.Context) error {
+	if mysqld.lockConn == nil {
+		return errors.New("no read locks acquired yet")
+	}
+
+	err := mysqld.executeSuperQueryListConn(ctx, mysqld.lockConn, []string{"UNLOCK TABLES"})
+	if err != nil {
+		return err
+	}
+
+	mysqld.lockConn.Recycle()
+	mysqld.lockConn = nil
+	return nil
 }
 
 const (

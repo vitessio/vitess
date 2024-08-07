@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,10 +17,13 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -29,9 +32,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/servenv"
@@ -51,6 +54,9 @@ var (
 	mysqlShellBackupShouldDrain = false
 	// disable redo logging and double write buffer
 	mysqlShellSpeedUpRestore = false
+
+	// use when checking if we need to create the directory on the local filesystem or not.
+	knownObjectStoreParams = []string{"s3BucketName", "osBucketName", "azureContainerName"}
 
 	MySQLShellPreCheckError = errors.New("MySQLShellPreCheckError")
 )
@@ -96,25 +102,50 @@ const (
 func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (result BackupResult, finalErr error) {
 	params.Logger.Infof("Starting ExecuteBackup in %s", params.TabletAlias)
 
-	err := be.backupPreCheck()
+	location := path.Join(mysqlShellBackupLocation, bh.Directory(), bh.Name())
+
+	err := be.backupPreCheck(location)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed backup precheck")
 	}
 
-	start := time.Now().UTC()
-	location := path.Join(mysqlShellBackupLocation, params.Keyspace, params.Shard, start.Format(BackupTimestampFormat))
+	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
+	if err != nil {
+		return BackupUnusable, vterrors.Wrap(err, "can't get server uuid")
+	}
+
+	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
+	if err != nil {
+		return BackupUnusable, vterrors.Wrap(err, "can't get MySQL version")
+	}
 
 	args := []string{}
-
 	if mysqlShellFlags != "" {
 		args = append(args, strings.Fields(mysqlShellFlags)...)
 	}
 
-	args = append(args, "-e", fmt.Sprintf("util.dumpSchemas([\"vt_%s\"], %q, %s)",
+	args = append(args, "-e", fmt.Sprintf("util.dumpSchemas([\"%s\", \"vt_%s\"], %q, %s)",
+		sidecar.GetName(),
 		params.Keyspace,
 		location,
 		mysqlShellDumpFlags,
 	))
+
+	// to be able to get the consistent GTID sets, we will acquire a global read lock before starting mysql shell.
+	// oncce we have the lock, we start it and wait unti it has acquired and release its global read lock, which
+	// should guarantee that both use and mysql shell are seeing the same executed GTID sets.
+	// after this we release the lock so that replication can continue. this usually should take just a few seconds.
+	params.Logger.Infof("acquiring a global read lock before fetching the executed GTID sets")
+	err = params.Mysqld.AcquireGlobalReadLock(ctx)
+	if err != nil {
+		return BackupUnusable, vterrors.Wrap(err, "failed to acquire read lock to start backup")
+	}
+	lockAcquired := time.Now() // we will report how long we hold the lock for
+
+	posBeforeBackup, err := params.Mysqld.PrimaryPosition(ctx)
+	if err != nil {
+		return BackupUnusable, vterrors.Wrap(err, "failed to fetch position")
+	}
 
 	cmd := exec.CommandContext(ctx, mysqlShellBackupBinaryName, args...)
 
@@ -124,24 +155,31 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "cannot create stdout pipe")
 	}
-	cmdErr, err := cmd.StderrPipe()
+	cmdOriginalErr, err := cmd.StderrPipe()
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "cannot create stderr pipe")
 	}
 	if err := cmd.Start(); err != nil {
-		return BackupUnusable, vterrors.Wrap(err, "can't start xbstream")
+		return BackupUnusable, vterrors.Wrap(err, "can't start mysqlshell")
 	}
 
+	pipeReader, pipeWriter := io.Pipe()
+	cmdErr := io.TeeReader(cmdOriginalErr, pipeWriter)
+
 	cmdWg := &sync.WaitGroup{}
-	cmdWg.Add(2)
+	cmdWg.Add(3)
+	go releaseReadLock(ctx, pipeReader, params, cmdWg, lockAcquired)
 	go scanLinesToLogger(mysqlShellBackupEngineName+" stdout", cmdOut, params.Logger, cmdWg.Done)
 	go scanLinesToLogger(mysqlShellBackupEngineName+" stderr", cmdErr, params.Logger, cmdWg.Done)
-	cmdWg.Wait()
 
 	// Get exit status.
 	if err := cmd.Wait(); err != nil {
 		return BackupUnusable, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
+
+	// close the pipeWriter and wait for the goroutines to have read all the logs
+	pipeWriter.Close()
+	cmdWg.Wait()
 
 	// open the MANIFEST
 	params.Logger.Infof("Writing backup MANIFEST")
@@ -159,9 +197,16 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 			// the position is empty here because we have no way of capturing it from mysqlsh
 			// we will capture it when doing the restore as mysqlsh can replace the GTIDs with
 			// what it has stored in the backup.
-			Position:     replication.Position{},
-			BackupTime:   start.Format(time.RFC3339),
-			FinishedTime: time.Now().UTC().Format(time.RFC3339),
+			Position:       posBeforeBackup,
+			PurgedPosition: posBeforeBackup,
+			BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
+			FinishedTime:   FormatRFC3339(time.Now().UTC()),
+			ServerUUID:     serverUUID,
+			TabletAlias:    params.TabletAlias,
+			Keyspace:       params.Keyspace,
+			Shard:          params.Shard,
+			MySQLVersion:   mysqlVersion,
+			UpgradeSafe:    true,
 		},
 
 		// mysql shell backup specific fields
@@ -210,8 +255,28 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 	if params.DeleteBeforeRestore {
 		params.Logger.Infof("restoring on an existing tablet, so dropping database %q", params.DbName)
 
+		readonly, err := params.Mysqld.IsSuperReadOnly(ctx)
+		if err != nil {
+			return nil, vterrors.Wrap(err, fmt.Sprintf("checking if mysqld has super_read_only=enable: %v", err))
+		}
+
+		if readonly {
+			resetFunc, err := params.Mysqld.SetSuperReadOnly(ctx, false)
+			if err != nil {
+				return nil, vterrors.Wrap(err, fmt.Sprintf("unable to disable super-read-only: %v", err))
+			}
+
+			defer func() {
+				err := resetFunc()
+				if err != nil {
+					params.Logger.Errorf("Not able to set super_read_only to its original value after restore")
+				}
+			}()
+		}
+
 		err = params.Mysqld.ExecuteSuperQueryList(ctx,
-			[]string{fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", params.DbName)},
+			[]string{fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", params.DbName),
+				fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", sidecar.GetName())},
 		)
 		if err != nil {
 			return nil, vterrors.Wrap(err, fmt.Sprintf("dropping database %q failed", params.DbName))
@@ -226,21 +291,21 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 	}
 
 	// this is required so we can load the backup generated by MySQL Shell. we will disable it afterwards.
-	err = params.Mysqld.ExecuteSuperQueryList(ctx, []string{"SET GLOBAL LOCAL_INFILE=1"})
+	err = params.Mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL LOCAL_INFILE=1")
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to set local_infile=1")
 	}
 
 	if mysqlShellSpeedUpRestore {
 		// disable redo logging and double write buffer if we are configured to do so.
-		err = params.Mysqld.ExecuteSuperQueryList(ctx, []string{"ALTER INSTANCE DISABLE INNODB REDO_LOG"})
+		err = params.Mysqld.ExecuteSuperQuery(ctx, "ALTER INSTANCE DISABLE INNODB REDO_LOG")
 		if err != nil {
 			return nil, vterrors.Wrap(err, "unable to disable REDO_LOG")
 		}
 		params.Logger.Infof("Disabled REDO_LOG")
 
 		defer func() { // re-enable once we are done with the restore.
-			err := params.Mysqld.ExecuteSuperQueryList(ctx, []string{"ALTER INSTANCE ENABLE INNODB REDO_LOG"})
+			err := params.Mysqld.ExecuteSuperQuery(ctx, "ALTER INSTANCE ENABLE INNODB REDO_LOG")
 			if err != nil {
 				params.Logger.Errorf("unable to re-enable REDO_LOG: %v", err)
 			} else {
@@ -248,6 +313,14 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 			}
 		}()
 	}
+
+	// we need to disable SuperReadOnly otherwise we won't be able to restore the backup properly.
+	// once the backups is complete, we will restore it to its previous state.
+	resetFunc, err := be.handleSuperReadOnly(ctx, params)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "unable to disable super-read-only")
+	}
+	defer resetFunc()
 
 	args := []string{}
 
@@ -289,24 +362,11 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 	params.Logger.Infof("%s completed successfully", mysqlShellBackupBinaryName)
 
 	// disable local_infile now that the restore is done.
-	err = params.Mysqld.ExecuteSuperQueryList(ctx, []string{
-		"SET GLOBAL LOCAL_INFILE=0",
-	})
+	err = params.Mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL LOCAL_INFILE=0")
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to set local_infile=0")
 	}
 	params.Logger.Infof("set local_infile=0")
-
-	// since MySQL Shell backups do not store the Executed GTID position in the manifest, we need to
-	// fetch it and override in the manifest we are returning so Vitess can set it again. alternatively
-	// we could have a flag in the future where the backup engine controls if it needs to be set or not.
-	pos, err := params.Mysqld.PrimaryPosition(ctx)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "failure getting restored position")
-	}
-
-	params.Logger.Infof("retrieved primary position after restore")
-	bm.BackupManifest.Position = pos
 
 	params.Logger.Infof("Restore completed")
 
@@ -319,13 +379,30 @@ func (be *MySQLShellBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.
 	return mysqlShellBackupShouldDrain
 }
 
-func (be *MySQLShellBackupEngine) backupPreCheck() error {
+func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 	if mysqlShellBackupLocation == "" {
 		return fmt.Errorf("%w: no backup location set via --mysql_shell_location", MySQLShellPreCheckError)
 	}
 
 	if mysqlShellFlags == "" || !strings.Contains(mysqlShellFlags, "--js") {
 		return fmt.Errorf("%w: at least the --js flag is required", MySQLShellPreCheckError)
+	}
+
+	// make sure the targe directory exists if the target location for the backup is not an object store
+	// (e.g. is the local filesystem) as MySQL Shell doesn't create the entire path beforehand:
+	isObjectStorage := false
+	for _, objStore := range knownObjectStoreParams {
+		if strings.Contains(mysqlShellDumpFlags, objStore) {
+			isObjectStorage = true
+			break
+		}
+	}
+
+	if !isObjectStorage {
+		err := os.MkdirAll(location, 0o750)
+		if err != nil {
+			return fmt.Errorf("failure creating directory %s: %w", location, err)
+		}
 	}
 
 	return nil
@@ -350,6 +427,10 @@ func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params Re
 		return fmt.Errorf("%w: \"progressFile\" needs to be empty as vitess always starts a restore from scratch", MySQLShellPreCheckError)
 	}
 
+	if val, ok := loadFlags["skipBinlog"]; !ok || val != true {
+		return fmt.Errorf("%w: \"skipBinlog\" needs to set to true", MySQLShellPreCheckError)
+	}
+
 	if mysqlShellSpeedUpRestore {
 		version, err := params.Mysqld.GetVersionString(ctx)
 		if err != nil {
@@ -368,6 +449,62 @@ func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params Re
 	}
 
 	return nil
+}
+
+func (be *MySQLShellBackupEngine) handleSuperReadOnly(ctx context.Context, params RestoreParams) (func(), error) {
+	readonly, err := params.Mysqld.IsSuperReadOnly(ctx)
+	if err != nil {
+		return nil, vterrors.Wrap(err, fmt.Sprintf("checking if mysqld has super_read_only=enable: %v", err))
+	}
+
+	params.Logger.Infof("Is Super Read Only: %v", readonly)
+
+	if readonly {
+		resetFunc, err := params.Mysqld.SetSuperReadOnly(ctx, false)
+		if err != nil {
+			return nil, vterrors.Wrap(err, fmt.Sprintf("unable to disable super-read-only: %v", err))
+		}
+
+		return func() {
+			err := resetFunc()
+			if err != nil {
+				params.Logger.Errorf("Not able to set super_read_only to its original value after restore")
+			}
+		}, nil
+	}
+
+	return func() {}, nil
+}
+
+// releaseReadLock will keep reading the MySQL Shell STDERR waiting until the point it has acquired its lock
+func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams, wg *sync.WaitGroup, lockAcquired time.Time) {
+	defer wg.Done()
+
+	scanner := bufio.NewScanner(reader)
+	released := false
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if !released {
+
+			if !strings.Contains(line, "Global read lock has been released") {
+				continue
+			}
+			released = true
+
+			params.Logger.Infof("mysql shell released its global read lock, doing the same")
+
+			err := params.Mysqld.ReleaseGlobalReadLock(ctx)
+			if err != nil {
+				params.Logger.Errorf("unable to release global read lock: %v", err)
+			}
+
+			params.Logger.Infof("global read lock released after %v", time.Since(lockAcquired))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		params.Logger.Errorf("error reading from reader: %v", err)
+	}
 }
 
 func init() {
