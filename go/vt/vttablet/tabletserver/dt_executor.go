@@ -214,13 +214,13 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) error {
 	// If the connection is tainted, we cannot take a commit decision on it.
 	if conn.IsTainted() {
 		dte.inTransaction(func(conn *StatefulConnection) error {
-			return dte.te.twoPC.Transition(dte.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
+			return dte.te.twoPC.Transition(dte.ctx, conn, dtid, DTStateRollback)
 		})
 		// return the error, defer call above will roll back the transaction.
 		return vterrors.VT10002("cannot commit the transaction on a reserved connection")
 	}
 
-	err = dte.te.twoPC.Transition(dte.ctx, conn, dtid, querypb.TransactionState_COMMIT)
+	err = dte.te.twoPC.Transition(dte.ctx, conn, dtid, DTStateCommit)
 	if err != nil {
 		return err
 	}
@@ -247,7 +247,7 @@ func (dte *DTExecutor) SetRollback(dtid string, transactionID int64) error {
 	}
 
 	return dte.inTransaction(func(conn *StatefulConnection) error {
-		return dte.te.twoPC.Transition(dte.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
+		return dte.te.twoPC.Transition(dte.ctx, conn, dtid, DTStateRollback)
 	})
 }
 
