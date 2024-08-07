@@ -20,7 +20,7 @@ import { Link } from 'react-router-dom';
 
 import { useWorkflow } from '../../../hooks/api';
 import { formatAlias } from '../../../util/tablets';
-import { formatDateTime, formatRelativeTime } from '../../../util/time';
+import { formatDateTime } from '../../../util/time';
 import { formatStreamKey, getStreams, getStreamSource, getStreamTarget } from '../../../util/workflows';
 import { DataCell } from '../../dataTable/DataCell';
 import { DataTable } from '../../dataTable/DataTable';
