@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -97,9 +98,7 @@ func TestTableACL(t *testing.T) {
 	for _, tcase := range execCases {
 		_, err := client.Execute(tcase.query, nil)
 		if tcase.err == "" {
-			if err != nil {
-				t.Error(err)
-			}
+			assert.NoError(t, err)
 			continue
 		}
 		assert.ErrorContains(t, err, tcase.err)
@@ -125,9 +124,7 @@ func TestTableACL(t *testing.T) {
 	for _, tcase := range streamCases {
 		_, err := client.StreamExecute(tcase.query, nil)
 		if tcase.err == "" {
-			if err != nil {
-				t.Error(err)
-			}
+			assert.NoError(t, err)
 			continue
 		}
 		assert.ErrorContains(t, err, tcase.err)
@@ -145,28 +142,19 @@ var rulesJSON = []byte(`[{
 }]`)
 
 func TestQueryRules(t *testing.T) {
-	rules := rules.New()
-	err := rules.UnmarshalJSON(rulesJSON)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	err = framework.Server.SetQueryRules("endtoend", rules)
-	want := "Rule source identifier endtoend is not valid"
-	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want %s", err, want)
-	}
+	r := rules.New()
+	err := r.UnmarshalJSON(rulesJSON)
+	require.NoError(t, err)
+	err = framework.Server.SetQueryRules("endtoend", r)
+	assert.EqualError(t, err, "Rule source identifier endtoend is not valid")
 
 	framework.Server.RegisterQueryRuleSource("endtoend")
 	defer framework.Server.UnRegisterQueryRuleSource("endtoend")
-	err = framework.Server.SetQueryRules("endtoend", rules)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	err = framework.Server.SetQueryRules("endtoend", r)
+	require.NoError(t, err)
 
 	rulesJSON := compacted(framework.FetchURL("/debug/query_rules"))
-	want = compacted(`{
+	expectJson := compacted(`{
 		"endtoend":[{
 			"Description": "disallow bindvar 'asdfg'",
 			"Name": "r1",
@@ -178,34 +166,20 @@ func TestQueryRules(t *testing.T) {
 			"Action": "FAIL"
 		}]
 	}`)
-	if rulesJSON != want {
-		t.Errorf("/debug/query_rules:\n%v, want\n%s", rulesJSON, want)
-	}
-
+	assert.Equal(t, expectJson, rulesJSON, "/debug/query_rules")
 	client := framework.NewClient()
 	query := "select * from vitess_test where intval=:asdfg"
 	bv := map[string]*querypb.BindVariable{"asdfg": sqltypes.Int64BindVariable(1)}
 	_, err = client.Execute(query, bv)
-	want = "disallowed due to rule: disallow bindvar 'asdfg' (CallerID: dev)"
-	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want %s", err, want)
-	}
+	errString := "disallowed due to rule: disallow bindvar 'asdfg' (CallerID: dev)"
+	assert.EqualError(t, err, errString)
 	_, err = client.StreamExecute(query, bv)
-	want = "disallowed due to rule: disallow bindvar 'asdfg' (CallerID: dev)"
-	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, errString)
 
 	err = framework.Server.SetQueryRules("endtoend", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, bv)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 }
 
 func compacted(in string) string {
