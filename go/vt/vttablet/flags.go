@@ -17,8 +17,6 @@ limitations under the License.
 package vttablet
 
 import (
-	"time"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -33,10 +31,10 @@ const (
 
 var (
 	// Default flags.
-	VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
-	VReplicationNetReadTimeout    = 300
-	VReplicationNetWriteTimeout   = 600
-	CopyPhaseDuration             = 1 * time.Hour
+	VReplicationExperimentalFlags = DefaultVReplicationConfig.ExperimentalFlags
+	VReplicationNetReadTimeout    = DefaultVReplicationConfig.NetReadTimeout
+	VReplicationNetWriteTimeout   = DefaultVReplicationConfig.NetWriteTimeout
+	CopyPhaseDuration             = DefaultVReplicationConfig.CopyPhaseDuration
 )
 
 func init() {
