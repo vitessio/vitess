@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -105,7 +106,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	cleanup(t)
 
 	return conn, func() {
-		conn.Close()
 		cleanup(t)
 	}
 }
@@ -113,29 +113,37 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 func cleanup(t *testing.T) {
 	cluster.PanicHandler(t)
 
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	clearOutTable(t, conn, "twopc_fuzzer_insert")
-	clearOutTable(t, conn, "twopc_fuzzer_update")
+	clearOutTable(t, "twopc_fuzzer_insert")
+	clearOutTable(t, "twopc_fuzzer_update")
 }
 
 // clearOutTable deletes everything from a table. Sometimes the table might have more rows than allowed in a single delete query,
 // so we have to do the deletions iteratively.
-func clearOutTable(t *testing.T, conn *mysql.Conn, tableName string) {
+func clearOutTable(t *testing.T, tableName string) {
+	ctx := context.Background()
 	for {
-		res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT count(*) FROM %v", tableName), 1, false)
+		conn, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
+
+		res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT count(*) FROM %v", tableName), 1, false)
+		if err != nil {
+			log.Errorf("Error in selecting - %v", err)
+			conn.Close()
+			continue
+		}
 		require.Len(t, res.Rows, 1)
 		require.Len(t, res.Rows[0], 1)
 		rowCount, err := res.Rows[0][0].ToInt()
 		require.NoError(t, err)
 		if rowCount == 0 {
+			conn.Close()
 			return
 		}
 		_, err = conn.ExecuteFetch(fmt.Sprintf("DELETE FROM %v LIMIT 10000", tableName), 10000, false)
-		require.NoError(t, err)
+		if err != nil {
+			log.Errorf("Error in cleanup deletion - %v", err)
+			conn.Close()
+			continue
+		}
 	}
 }

@@ -116,6 +116,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			fz := newFuzzer(tt.threads, tt.updateSets, tt.clusterDisruptions, tt.disruptionProbability)
 
 			fz.initialize(t, conn)
+			conn.Close()
 			// Start the fuzzer.
 			fz.start(t)
 
@@ -127,6 +128,8 @@ func TestTwoPCFuzzTest(t *testing.T) {
 
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
 			fz.verifyTransactionsWereAtomic(t)
+
+			log.Errorf("Verification complete. All good!")
 		})
 	}
 }
@@ -376,7 +379,9 @@ func prs() {
 	newPrimary := vttablets[rand.Intn(len(vttablets))]
 	log.Errorf("Running PRS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
 	err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, newPrimary.Alias)
-	log.Errorf("error running PRS - %v", err)
+	if err != nil {
+		log.Errorf("error running PRS - %v", err)
+	}
 }
 
 func ers() {
@@ -386,7 +391,9 @@ func ers() {
 	newPrimary := vttablets[rand.Intn(len(vttablets))]
 	log.Errorf("Running ERS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
 	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
-	log.Errorf("error running ERS - %v", err)
+	if err != nil {
+		log.Errorf("error running ERS - %v", err)
+	}
 }
 
 func mysqlRestarts() {
