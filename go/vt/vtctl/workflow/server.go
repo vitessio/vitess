@@ -65,7 +65,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -172,7 +171,7 @@ func NewServer(env *vtenv.Environment, ts *topo.Server, tmc tmclient.TabletManag
 		o.apply(&s.options)
 	}
 	if s.options.logger == nil {
-		s.options.logger = logutil.NewConsoleLogger() // Use the default logger directly
+		s.options.logger = logutil.NewConsoleLogger() // Use the default system logger
 	}
 	return s
 }
@@ -3424,7 +3423,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 
 	// Remove mirror rules for the primary tablet type.
-	if err := sw.mirrorTableTraffic(ctx, []topodata.TabletType{topodatapb.TabletType_PRIMARY}, 0); err != nil {
+	if err := sw.mirrorTableTraffic(ctx, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, 0); err != nil {
 		return handleError(fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for primary tablet type",
 			ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
 	}
@@ -4281,41 +4280,7 @@ func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMir
 
 func (s *Server) Logger() logutil.Logger {
 	if s.options.logger == nil {
-		s.options.logger = logutil.NewConsoleLogger()
+		s.options.logger = logutil.NewConsoleLogger() // Use default system logger
 	}
 	return s.options.logger
-}
-
-// serverOptions configure a Workflow Server. serverOptions are set by
-// the ServerOption values passed to the server functions.
-type serverOptions struct {
-	logger logutil.Logger
-}
-
-// ServerOption configures how we perform the certain operations.
-type ServerOption interface {
-	apply(*serverOptions)
-}
-
-// funcServerOption wraps a function that modifies serverOptions into
-// an implementation of the ServerOption interface.
-type funcServerOption struct {
-	f func(*serverOptions)
-}
-
-func (fso *funcServerOption) apply(so *serverOptions) {
-	fso.f(so)
-}
-
-func newFuncServerOption(f func(*serverOptions)) *funcServerOption {
-	return &funcServerOption{
-		f: f,
-	}
-}
-
-// WithLogger determines the customer logger to use.
-func WithLogger(l logutil.Logger) ServerOption {
-	return newFuncServerOption(func(o *serverOptions) {
-		o.logger = l
-	})
 }
