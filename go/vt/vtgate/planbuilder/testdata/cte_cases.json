@@ -2121,6 +2121,9 @@
         "Inputs": [
           {
             "OperatorType": "RecurseCTE",
+            "JoinVars": {
+              "cte_id": 1
+            },
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2169,6 +2172,9 @@
         "Inputs": [
           {
             "OperatorType": "RecurseCTE",
+            "JoinVars": {
+              "cte_id": 1
+            },
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2243,6 +2249,76 @@
       },
       "TablesUsed": [
         "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE calculations on the term side - merged",
+    "query": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL and id = 6 UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id and e.id = 6) SELECT * FROM emp_cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL and id = 6 UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id and e.id = 6) SELECT * FROM emp_cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive emp_cte as (select id, 1 as `level` from `user` where 1 != 1 union all select e.id, cte.`level` + 1 from cte as cte, `user` as e where 1 != 1) select id, `level` from emp_cte where 1 != 1",
+        "Query": "with recursive emp_cte as (select id, 1 as `level` from `user` where manager_id is null and id = 6 union all select e.id, cte.`level` + 1 from cte as cte, `user` as e where e.id = 6 and e.manager_id = cte.id) select id, `level` from emp_cte",
+        "Table": "`user`, dual",
+        "Values": [
+          "6"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE calculations on the term side - unmerged",
+    "query": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id) SELECT * FROM emp_cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id) SELECT * FROM emp_cte",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "cte_id": 0,
+          "cte_level": 1
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, 1 as `level` from `user` where 1 != 1",
+            "Query": "select id, 1 as `level` from `user` where manager_id is null",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where 1 != 1",
+            "Query": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where e.manager_id = :cte_id",
+            "Table": "`user`, dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
       ]
     }
   }
