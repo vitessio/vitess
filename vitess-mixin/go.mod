@@ -1,6 +1,6 @@
 module vitess-mixin
 
-go 1.22.5
+go 1.22.6
 
 require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
