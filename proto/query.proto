@@ -356,6 +356,10 @@ message ExecuteOptions {
   // priority specifies the priority of the query, between 0 and 100. This is leveraged by the transaction
   // throttler to determine whether, under resource contention, a query should or should not be throttled.
   string priority = 16;
+
+  // semanticCheck tells the tablet that we should use semantic analysis to check the query.
+  // this is a bit more expensive than the normal check, but is needed for some queries.
+  bool semanticCheck = 17;
 }
 
 // Field describes a single column returned by a query

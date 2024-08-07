@@ -36352,6 +36352,9 @@ export namespace query {
 
         /** ExecuteOptions priority */
         priority?: (string|null);
+
+        /** ExecuteOptions semanticCheck */
+        semanticCheck?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -36398,6 +36401,9 @@ export namespace query {
 
         /** ExecuteOptions priority. */
         public priority: string;
+
+        /** ExecuteOptions semanticCheck. */
+        public semanticCheck: boolean;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
