@@ -400,12 +400,12 @@ func prepareForAggregationPushing(ctx *plancontext.PlanningContext, root Operato
 		}
 
 		// We need to break the expressions into LHS and RHS, and store them in the CTE for later use
-		expressions := slice.Map(ap, func(p *ProjExpr) *plancontext.RecurseExpression {
+		projections := slice.Map(ap, func(p *ProjExpr) *plancontext.RecurseExpression {
 			recurseExpression := breakCTEExpressionInLhsAndRhs(ctx, p.EvalExpr, rcte.LHSId)
 			p.EvalExpr = recurseExpression.RightExpr
 			return recurseExpression
 		})
-		rcte.Expressions = append(rcte.Expressions, expressions...)
+		rcte.Projections = projections
 		rcte.Term = newTerm
 		return rcte, Rewrote("expanded horizon on term side of recursive CTE")
 	}

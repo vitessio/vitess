@@ -701,9 +701,19 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 }
 
 func buildCTE(op *RecurseCTE, qb *queryBuilder) {
+	predicates := slice.Map(op.Predicates, func(jc *plancontext.RecurseExpression) sqlparser.Expr {
+		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
+		err := qb.ctx.SkipJoinPredicates(jc.Original)
+		if err != nil {
+			panic(err)
+		}
+		return jc.Original
+	})
+	pred := sqlparser.AndExpressions(predicates...)
 	buildQuery(op.Seed, qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.Term, qbR)
+	qbR.addPredicate(pred)
 	qb.cteWith(qbR, op.Def.Name)
 }
 
