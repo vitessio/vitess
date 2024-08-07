@@ -8117,6 +8117,7 @@ var correctlyDoParse = []string{
 	"insert_method",
 	"install",
 	"instance",
+	"instant",
 	"invisible",
 	"invoker",
 	"io",
