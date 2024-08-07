@@ -1161,9 +1161,9 @@ func TestRefreshInventory(t *testing.T) {
 			// validateProbesCount expects number of probes according to cluster name and throttler's leadership status
 			validateProbesCount := func(t *testing.T, probes base.Probes) {
 				if throttler.isLeader.Load() {
-					assert.Equal(t, 3, len(probes))
+					assert.Len(t, probes, 3)
 				} else {
-					assert.Equal(t, 1, len(probes))
+					assert.Len(t, probes, 1)
 				}
 			}
 			t.Run("waiting for probes", func(t *testing.T) {
@@ -1495,7 +1495,7 @@ func TestProbesWhileOperating(t *testing.T) {
 		})
 
 		t.Run("metrics", func(t *testing.T) {
-			assert.Equal(t, 3, len(throttler.inventory.TabletMetrics))                                                         // 1 self tablet + 2 shard tablets
+			assert.Len(t, throttler.inventory.TabletMetrics, 3)                                                                // 1 self tablet + 2 shard tablets
 			assert.Contains(t, throttler.inventory.TabletMetrics, "", "TabletMetrics: %+v", throttler.inventory.TabletMetrics) // primary self identifies with empty alias
 			assert.Contains(t, throttler.inventory.TabletMetrics, "fakezone1-0000000101", "TabletMetrics: %+v", throttler.inventory.TabletMetrics)
 			assert.Contains(t, throttler.inventory.TabletMetrics, "fakezone2-0000000102", "TabletMetrics: %+v", throttler.inventory.TabletMetrics)
@@ -1660,7 +1660,7 @@ func TestProbesPostDisable(t *testing.T) {
 	})
 
 	t.Run("metrics", func(t *testing.T) {
-		assert.Equal(t, 3, len(throttler.inventory.TabletMetrics)) // 1 self tablet + 2 shard tablets
+		assert.Empty(t, throttler.inventory.TabletMetrics) // map has been cleared
 	})
 
 	t.Run("aggregated", func(t *testing.T) {
@@ -2160,7 +2160,7 @@ func TestReplica(t *testing.T) {
 				defer throttler.appCheckedMetrics.Delete(testAppName.String())
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
 				require.NotNil(t, checkResult)
-				assert.Equal(t, 3, len(checkResult.Metrics))
+				assert.Len(t, checkResult.Metrics, 3)
 			})
 			t.Run("client, OK", func(t *testing.T) {
 				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
