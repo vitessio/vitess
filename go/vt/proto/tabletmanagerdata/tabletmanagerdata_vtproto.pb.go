@@ -2499,13 +2499,14 @@ func (m *CheckThrottlerResponse_Metric) CloneVT() *CheckThrottlerResponse_Metric
 		return (*CheckThrottlerResponse_Metric)(nil)
 	}
 	r := &CheckThrottlerResponse_Metric{
-		Name:       m.Name,
-		StatusCode: m.StatusCode,
-		Value:      m.Value,
-		Threshold:  m.Threshold,
-		Error:      m.Error,
-		Message:    m.Message,
-		Scope:      m.Scope,
+		Name:         m.Name,
+		StatusCode:   m.StatusCode,
+		Value:        m.Value,
+		Threshold:    m.Threshold,
+		Error:        m.Error,
+		Message:      m.Message,
+		Scope:        m.Scope,
+		ResponseCode: m.ResponseCode,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2531,6 +2532,7 @@ func (m *CheckThrottlerResponse) CloneVT() *CheckThrottlerResponse {
 		RecentlyChecked: m.RecentlyChecked,
 		AppName:         m.AppName,
 		Summary:         m.Summary,
+		ResponseCode:    m.ResponseCode,
 	}
 	if rhs := m.Metrics; rhs != nil {
 		tmpContainer := make(map[string]*CheckThrottlerResponse_Metric, len(rhs))
@@ -2609,8 +2611,9 @@ func (m *GetThrottlerStatusResponse_RecentApp) CloneVT() *GetThrottlerStatusResp
 		return (*GetThrottlerStatusResponse_RecentApp)(nil)
 	}
 	r := &GetThrottlerStatusResponse_RecentApp{
-		CheckedAt:  m.CheckedAt.CloneVT(),
-		StatusCode: m.StatusCode,
+		CheckedAt:    m.CheckedAt.CloneVT(),
+		StatusCode:   m.StatusCode,
+		ResponseCode: m.ResponseCode,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -8757,6 +8760,11 @@ func (m *CheckThrottlerResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.ResponseCode != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.ResponseCode))
+		i--
+		dAtA[i] = 0x40
+	}
 	if len(m.Scope) > 0 {
 		i -= len(m.Scope)
 		copy(dAtA[i:], m.Scope)
@@ -8834,6 +8842,11 @@ func (m *CheckThrottlerResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ResponseCode != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.ResponseCode))
+		i--
+		dAtA[i] = 0x50
 	}
 	if len(m.Summary) > 0 {
 		i -= len(m.Summary)
@@ -9071,6 +9084,11 @@ func (m *GetThrottlerStatusResponse_RecentApp) MarshalToSizedBufferVT(dAtA []byt
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ResponseCode != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.ResponseCode))
+		i--
+		dAtA[i] = 0x18
 	}
 	if m.StatusCode != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.StatusCode))
@@ -11539,6 +11557,9 @@ func (m *CheckThrottlerResponse_Metric) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.ResponseCode != 0 {
+		n += 1 + sov(uint64(m.ResponseCode))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -11589,6 +11610,9 @@ func (m *CheckThrottlerResponse) SizeVT() (n int) {
 	l = len(m.Summary)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
+	}
+	if m.ResponseCode != 0 {
+		n += 1 + sov(uint64(m.ResponseCode))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -11650,6 +11674,9 @@ func (m *GetThrottlerStatusResponse_RecentApp) SizeVT() (n int) {
 	}
 	if m.StatusCode != 0 {
 		n += 1 + sov(uint64(m.StatusCode))
+	}
+	if m.ResponseCode != 0 {
+		n += 1 + sov(uint64(m.ResponseCode))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -25313,6 +25340,25 @@ func (m *CheckThrottlerResponse_Metric) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Scope = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ResponseCode", wireType)
+			}
+			m.ResponseCode = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ResponseCode |= CheckThrottlerResponseCode(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -25682,6 +25728,25 @@ func (m *CheckThrottlerResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Summary = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ResponseCode", wireType)
+			}
+			m.ResponseCode = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ResponseCode |= CheckThrottlerResponseCode(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -26035,6 +26100,25 @@ func (m *GetThrottlerStatusResponse_RecentApp) UnmarshalVT(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.StatusCode |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ResponseCode", wireType)
+			}
+			m.ResponseCode = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ResponseCode |= CheckThrottlerResponseCode(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

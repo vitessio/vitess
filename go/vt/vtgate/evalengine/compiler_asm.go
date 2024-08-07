@@ -4299,6 +4299,26 @@ func (asm *assembler) Fn_YEARWEEK() {
 	}, "FN YEARWEEK DATE(SP-1)")
 }
 
+func (asm *assembler) Fn_PERIOD_ADD() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-2] == nil {
+			env.vm.sp--
+			return 1
+		}
+		period := env.vm.stack[env.vm.sp-2].(*evalInt64).i
+		months := env.vm.stack[env.vm.sp-1].(*evalInt64).i
+		res, err := periodAdd(period, months)
+		if err != nil {
+			env.vm.err = err
+			return 0
+		}
+		env.vm.stack[env.vm.sp-2] = res
+		env.vm.sp--
+		return 1
+	}, "FN PERIOD_ADD INT64(SP-2) INT64(SP-1)")
+}
+
 func (asm *assembler) Interval(l int) {
 	asm.adjustStack(-l)
 	asm.emit(func(env *ExpressionEnv) int {

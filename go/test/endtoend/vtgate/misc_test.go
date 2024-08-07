@@ -95,10 +95,13 @@ func TestShowTables(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	query := "show tables;"
-	qr := utils.Exec(t, conn, query)
-
+	qr := utils.Exec(t, conn, "show tables")
 	assert.Equal(t, "Tables_in_ks", qr.Fields[0].Name)
+
+	// no error on executing `show tables` on system schema
+	utils.Exec(t, conn, `use mysql`)
+	utils.Exec(t, conn, "show tables")
+	utils.Exec(t, conn, "show tables from information_schema")
 }
 
 func TestCastConvert(t *testing.T) {

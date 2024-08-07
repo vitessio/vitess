@@ -26,6 +26,9 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var SystemTime = time.Now
@@ -174,6 +177,10 @@ type (
 		CallExpr
 	}
 
+	builtinPeriodAdd struct {
+		CallExpr
+	}
+
 	builtinDateMath struct {
 		CallExpr
 		sub     bool
@@ -214,6 +221,7 @@ var _ IR = (*builtinWeekDay)(nil)
 var _ IR = (*builtinWeekOfYear)(nil)
 var _ IR = (*builtinYear)(nil)
 var _ IR = (*builtinYearWeek)(nil)
+var _ IR = (*builtinPeriodAdd)(nil)
 
 func (call *builtinNow) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(call.utc)
@@ -1962,6 +1970,55 @@ func (call *builtinYearWeek) compile(c *compiler) (ctype, error) {
 
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func periodAdd(period, months int64) (*evalInt64, error) {
+	if !datetime.ValidatePeriod(period) {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to period_add")
+	}
+	return newEvalInt64(datetime.MonthsToPeriod(datetime.PeriodToMonths(period) + months)), nil
+}
+
+func (b *builtinPeriodAdd) eval(env *ExpressionEnv) (eval, error) {
+	p, m, err := b.arg2(env)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil || m == nil {
+		return nil, nil
+	}
+	period := evalToInt64(p)
+	months := evalToInt64(m)
+	return periodAdd(period.i, months.i)
+}
+
+func (call *builtinPeriodAdd) compile(c *compiler) (ctype, error) {
+	period, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	months, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(period, months)
+
+	switch period.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(2)
+	}
+
+	switch months.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(1)
+	}
+
+	c.asm.Fn_PERIOD_ADD()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Flag: period.Flag | months.Flag | flagNullable}, nil
 }
 
 func evalToInterval(itv eval, unit datetime.IntervalType, negate bool) *datetime.Interval {

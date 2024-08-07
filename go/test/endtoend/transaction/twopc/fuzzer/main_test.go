@@ -106,6 +106,7 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	cleanup(t)
 
 	return conn, func() {
+		conn.Close()
 		cleanup(t)
 	}
 }

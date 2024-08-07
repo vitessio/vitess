@@ -74,20 +74,24 @@ var (
 	}
 	replicaMetrics = map[string]*MetricResult{
 		base.LagMetricName.String(): {
-			StatusCode: http.StatusOK,
-			Value:      0.9,
+			StatusCode:   http.StatusOK,
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+			Value:        0.9,
 		},
 		base.ThreadsRunningMetricName.String(): {
-			StatusCode: http.StatusOK,
-			Value:      13,
+			StatusCode:   http.StatusOK,
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+			Value:        13,
 		},
 		base.CustomMetricName.String(): {
-			StatusCode: http.StatusOK,
-			Value:      14,
+			StatusCode:   http.StatusOK,
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+			Value:        14,
 		},
 		base.LoadAvgMetricName.String(): {
-			StatusCode: http.StatusOK,
-			Value:      5.1,
+			StatusCode:   http.StatusOK,
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+			Value:        5.1,
 		},
 	}
 )
@@ -116,14 +120,16 @@ func (c *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Ta
 		RecentlyChecked: false,
 	}
 	if !c.v20.Load() {
+		resp.ResponseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 		resp.Metrics = make(map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric)
 		for name, metric := range replicaMetrics {
 			resp.Metrics[name] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
-				Name:       name,
-				StatusCode: int32(metric.StatusCode),
-				Value:      metric.Value,
-				Threshold:  metric.Threshold,
-				Message:    metric.Message,
+				Name:         name,
+				StatusCode:   int32(metric.StatusCode),
+				ResponseCode: metric.ResponseCode,
+				Value:        metric.Value,
+				Threshold:    metric.Threshold,
+				Message:      metric.Message,
 			}
 		}
 	}
@@ -241,7 +247,8 @@ func newTestThrottler() *Throttler {
 		tabletTypeFunc:    func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
 		overrideTmClient:  &fakeTMClient{},
 	}
-	throttler.metricsQuery.Store(metricsQuery)
+	lagSelfMetric := base.RegisteredSelfMetrics[base.LagMetricName].(*base.LagSelfMetric)
+	lagSelfMetric.SetQuery(metricsQuery)
 	throttler.MetricsThreshold.Store(math.Float64bits(0.75))
 	throttler.configSettings = config.NewConfigurationSettings()
 	throttler.initConfig()
@@ -417,6 +424,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			require.NotNil(t, checkResult)
 			assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+			assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 			assert.Len(t, checkResult.Metrics, 1)
 			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 		})
@@ -440,6 +448,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			require.NotNil(t, checkResult)
 			assert.EqualValues(t, 0.3, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
 			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+			assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 			assert.Len(t, checkResult.Metrics, 1)
 			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to self/lag metric value")
 		})
@@ -464,6 +473,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			require.NotNil(t, checkResult)
 			assert.EqualValues(t, 0.3, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+			assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 			assert.Len(t, checkResult.Metrics, 1)
 			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 		})
@@ -522,6 +532,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			require.NotNil(t, checkResult)
 			assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+			assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 			assert.Len(t, checkResult.Metrics, 1)
 			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to shard/lag metric value")
 		})
@@ -537,6 +548,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // self lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.Len(t, checkResult.Metrics, 1)
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
@@ -552,6 +564,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.Len(t, checkResult.Metrics, 1)
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
@@ -571,6 +584,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 2.718, checkResult.Value) // self loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to self/loadavg metric value")
 			})
@@ -590,6 +604,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 5.1, checkResult.Value) // shard loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to shard/loadavg metric value")
 			})
@@ -608,6 +623,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 2.718, checkResult.Value) // self loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to self/loadavg metric value")
 			})
@@ -626,6 +642,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 5.1, checkResult.Value) // shard loadavg value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to shard/loadavg metric value")
 			})
@@ -640,6 +657,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 1, len(checkResult.Metrics), "unexpected metrics: %+v", checkResult.Metrics)
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
@@ -658,6 +676,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
@@ -676,6 +695,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
 				assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is denied access due to self/loadavg metric value")
 			})
@@ -691,6 +711,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
@@ -705,6 +726,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
 				assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is denied access due to self/loadavg metric value")
 			})
@@ -716,6 +738,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			require.NotNil(t, checkResult)
 			assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
 			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+			assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 			assert.Equal(t, 2, len(checkResult.Metrics))
 			assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is denied access due to self/loadavg metric value")
 		})
@@ -726,6 +749,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			require.NotNil(t, checkResult)
 			assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+			assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 			assert.Equal(t, 2, len(checkResult.Metrics))
 			assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 		})
@@ -741,6 +765,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
 				assert.Contains(t, checkResult.Summary(), throttlerapp.AllName.String()+" is granted access")
 			})
@@ -756,6 +781,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Equal(t, 2, len(checkResult.Metrics))
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
@@ -770,6 +796,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 				assert.Len(t, checkResult.Metrics, 1)
 				assert.Contains(t, checkResult.Summary(), throttlerapp.OnlineDDLName.String()+" is granted access")
 			})
@@ -787,6 +814,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.Len(t, checkResult.Metrics, 1)
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is granted access")
 			})
@@ -1116,7 +1144,8 @@ func TestRefreshInventory(t *testing.T) {
 		ts:                &FakeTopoServer{},
 		inventory:         base.NewInventory(),
 	}
-	throttler.metricsQuery.Store(metricsQuery)
+	lagSelfMetric := base.RegisteredSelfMetrics[base.LagMetricName].(*base.LagSelfMetric)
+	lagSelfMetric.SetQuery(metricsQuery)
 	throttler.configSettings = configSettings
 	throttler.initConfig()
 	throttler.initThrottleTabletTypes()
@@ -1707,6 +1736,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Len(t, checkResult.Metrics, 1)
 			})
@@ -1719,6 +1749,12 @@ func TestChecks(t *testing.T) {
 						t.Logf("%s: %+v", k, v)
 					}
 				}
+				if !assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult) {
+					for k, v := range checkResult.Metrics {
+						t.Logf("%s: %+v", k, v)
+					}
+				}
+
 				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
@@ -1766,6 +1802,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Len(t, checkResult.Metrics, 1)
@@ -1775,6 +1812,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
@@ -1798,6 +1836,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Len(t, checkResult.Metrics, 1)
 			})
@@ -1806,6 +1845,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
@@ -1837,6 +1877,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Equal(t, len(metricNames), len(checkResult.Metrics))
 
@@ -1865,6 +1906,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.3, checkResult.Value) // explicitly set self lag value
 				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 				assert.Equal(t, len(metricNames), len(checkResult.Metrics))
 
 				assert.EqualValues(t, 0.3, checkResult.Metrics[base.LagMetricName.String()].Value)           // self lag value, because scope name is in metric name
@@ -1927,6 +1969,7 @@ func TestReplica(t *testing.T) {
 					require.NotNil(t, checkResult)
 					assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 					assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+					assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 					assert.Len(t, checkResult.Metrics, 1)
 					select {
 					case <-ctx.Done():
@@ -1944,6 +1987,7 @@ func TestReplica(t *testing.T) {
 						require.NotNil(t, checkResult)
 						assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 						assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+						assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 						assert.Len(t, checkResult.Metrics, 1)
 						assert.True(t, checkResult.RecentlyChecked)
 						assert.True(t, throttler.recentlyChecked())
@@ -1951,6 +1995,7 @@ func TestReplica(t *testing.T) {
 							recentApp, ok := throttler.recentAppsSnapshot()[throttlerapp.OnlineDDLName.String()]
 							require.True(t, ok)
 							assert.EqualValues(t, http.StatusOK, recentApp.StatusCode)
+							assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, recentApp.ResponseCode)
 						}
 					}
 					{
@@ -1981,6 +2026,7 @@ func TestReplica(t *testing.T) {
 					// loadavg value exceeds threshold. This will show up in the check result as an error.
 					assert.EqualValues(t, 2.718, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
 					assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+					assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
 					assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 				})
 				t.Run("validate v20 non-multi-metric results", func(t *testing.T) {
@@ -1996,6 +2042,7 @@ func TestReplica(t *testing.T) {
 					// reports the default metric.
 					assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 					assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+					assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 					assert.EqualValues(t, 0.75, checkResult.Threshold)
 					// The replica will still report the multi-metrics, and that's fine. As long
 					// as it does not reflect any of their values in the checkResult.Value/StatusCode/Threshold/Error/Message.

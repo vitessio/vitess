@@ -427,6 +427,19 @@ func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
 	sbc1.Queries = nil
 }
 
+func TestSelectVindexFunc(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	query := "select * from hash_index where id = 1"
+	session := NewAutocommitSession(&vtgatepb.Session{})
+	_, err := executor.Execute(context.Background(), nil, "TestSelectVindexFunc", session, query, nil)
+	require.ErrorContains(t, err, "VT09005: no database selected")
+
+	session.TargetString = KsTestSharded
+	_, err = executor.Execute(context.Background(), nil, "TestSelectVindexFunc", session, query, nil)
+	require.NoError(t, err)
+}
+
 func TestCreateTableValidTimestamp(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 	executor.normalize = true

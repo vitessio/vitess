@@ -1090,9 +1090,7 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 	sbc0.MustFailConcludeTransaction = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	err := sc.txConn.Commit(ctx, session)
-	want := "error: err"
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), want, "Commit")
+	require.NoError(t, err) // ConcludeTransaction is best-effort as it does not impact the outcome.
 	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
 	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
 	assert.EqualValues(t, 1, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
