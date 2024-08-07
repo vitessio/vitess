@@ -36,7 +36,7 @@ type RecurseCTE struct {
 	// Def is the CTE definition according to the semantics
 	Def *semantics.CTE
 
-	// Expressions are the expressions that are needed on the recurse side of the CTE
+	// Expressions are the predicates that are needed on the recurse side of the CTE
 	Expressions []*plancontext.RecurseExpression
 
 	// Vars is the map of variables that are sent between the two parts of the recursive CTE
@@ -45,16 +45,27 @@ type RecurseCTE struct {
 
 	// MyTableID is the id of the CTE
 	MyTableInfo *semantics.CTETable
+
+	Horizon *Horizon
+	LHSId   semantics.TableSet
 }
 
 var _ Operator = (*RecurseCTE)(nil)
 
-func newRecurse(def *semantics.CTE, seed, term Operator, expressions []*plancontext.RecurseExpression) *RecurseCTE {
+func newRecurse(
+	def *semantics.CTE,
+	seed, term Operator,
+	expressions []*plancontext.RecurseExpression,
+	horizon *Horizon,
+	id semantics.TableSet,
+) *RecurseCTE {
 	return &RecurseCTE{
 		Def:         def,
 		Seed:        seed,
 		Term:        term,
 		Expressions: expressions,
+		Horizon:     horizon,
+		LHSId:       id,
 	}
 }
 
@@ -64,6 +75,8 @@ func (r *RecurseCTE) Clone(inputs []Operator) Operator {
 		Expressions: slices.Clone(r.Expressions),
 		Seed:        inputs[0],
 		Term:        inputs[1],
+		Horizon:     r.Horizon,
+		LHSId:       r.LHSId,
 	}
 }
 

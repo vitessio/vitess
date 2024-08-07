@@ -320,17 +320,35 @@ func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE) Op
 		panic(vterrors.VT13001("expected UNION in recursive CTE"))
 	}
 
-	init := translateQueryToOp(ctx, union.Left)
+	seed := translateQueryToOp(ctx, union.Left)
 
 	// Push the CTE definition to the stack so that it can be used in the recursive part of the query
 	ctx.PushCTE(def, *def.IDForRecurse)
-	tail := translateQueryToOp(ctx, union.Right)
+
+	term := translateQueryToOp(ctx, union.Right)
+	horizon, ok := term.(*Horizon)
+	if !ok {
+		panic(vterrors.VT09027(def.Name))
+	}
+	term = horizon.Source
+	horizon.Source = nil // not sure about this
 	activeCTE, err := ctx.PopCTE()
 	if err != nil {
 		panic(err)
 	}
 
-	return newRecurse(def, init, tail, activeCTE.Expressions)
+	return newRecurse(def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def))
+}
+
+func idForRecursiveTable(ctx *plancontext.PlanningContext, def *semantics.CTE) semantics.TableSet {
+	for i, table := range ctx.SemTable.Tables {
+		tbl, ok := table.(*semantics.CTETable)
+		if !ok || tbl.CTE.Name != def.Name {
+			continue
+		}
+		return semantics.SingleTableSet(i)
+	}
+	panic(vterrors.VT13001("recursive table not found"))
 }
 
 func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) Operator {

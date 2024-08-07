@@ -174,3 +174,13 @@ FROM number_series
 UNION
 SELECT id, name, manager_id
 FROM employee_hierarchy;
+
+WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, cte.level + 1
+                           FROM employees e
+                                    JOIN emp_cte cte ON e.manager_id = cte.id)
+SELECT *
+FROM emp_cte;

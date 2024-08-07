@@ -448,6 +448,11 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 		if node.GroupBy != nil {
 			a.sig.Aggregation = true
 		}
+	case *sqlparser.With:
+		if node.Recursive {
+			// TODO: hacky - we should split this into it's own thing
+			a.sig.Aggregation = true
+		}
 	case sqlparser.AggrFunc:
 		a.sig.Aggregation = true
 	case *sqlparser.Delete, *sqlparser.Update, *sqlparser.Insert:

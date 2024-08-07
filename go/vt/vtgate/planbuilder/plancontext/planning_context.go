@@ -384,8 +384,8 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 
 type ContextCTE struct {
 	*semantics.CTE
-	Id          semantics.TableSet
-	Expressions []*RecurseExpression
+	Id         semantics.TableSet
+	Predicates []*RecurseExpression
 }
 
 type RecurseExpression struct {

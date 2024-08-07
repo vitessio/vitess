@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
@@ -146,7 +147,7 @@ func addJoinPredicates(
 		// if we are inside a CTE, we need to check if we depend on the recursion table
 		if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(pred).IsOverlapping(cte.Id) {
 			original := pred
-			pred = breakCTEExpressionInLhsAndRhs(ctx, pred, cte)
+			pred = addCTEPredicate(ctx, pred, cte)
 			ctx.AddJoinPredicates(original, pred)
 		}
 		op = op.AddPredicate(ctx, pred)
@@ -154,13 +155,19 @@ func addJoinPredicates(
 	return sqc.getRootOperator(op, nil)
 }
 
-// breakCTEExpressionInLhsAndRhs breaks the expression into LHS and RHS
-func breakCTEExpressionInLhsAndRhs(
+// addCTEPredicate breaks the expression into LHS and RHS
+func addCTEPredicate(
 	ctx *plancontext.PlanningContext,
 	pred sqlparser.Expr,
 	cte *plancontext.ContextCTE,
 ) sqlparser.Expr {
-	col := breakExpressionInLHSandRHS(ctx, pred, cte.Id)
+	expr := breakCTEExpressionInLhsAndRhs(ctx, pred, cte.Id)
+	cte.Predicates = append(cte.Predicates, expr)
+	return expr.RightExpr
+}
+
+func breakCTEExpressionInLhsAndRhs(ctx *plancontext.PlanningContext, pred sqlparser.Expr, lhsID semantics.TableSet) *plancontext.RecurseExpression {
+	col := breakExpressionInLHSandRHS(ctx, pred, lhsID)
 
 	lhsExprs := slice.Map(col.LHSExprs, func(bve BindVarExpr) plancontext.BindVarExpr {
 		col, ok := bve.Expr.(*sqlparser.ColName)
@@ -172,12 +179,11 @@ func breakCTEExpressionInLhsAndRhs(
 			Expr: col,
 		}
 	})
-	cte.Expressions = append(cte.Expressions, &plancontext.RecurseExpression{
+	return &plancontext.RecurseExpression{
 		Original:  col.Original,
 		RightExpr: col.RHSExpr,
 		LeftExprs: lhsExprs,
-	})
-	return col.RHSExpr
+	}
 }
 
 func createJoin(ctx *plancontext.PlanningContext, LHS, RHS Operator) Operator {
