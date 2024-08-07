@@ -29631,6 +29631,9 @@ export namespace tabletmanagerdata {
 
         /** ReadVReplicationWorkflowResponse options */
         options?: (string|null);
+
+        /** ReadVReplicationWorkflowResponse config_overrides */
+        config_overrides?: ({ [k: string]: string }|null);
     }
 
     /** Represents a ReadVReplicationWorkflowResponse. */
@@ -29674,6 +29677,9 @@ export namespace tabletmanagerdata {
 
         /** ReadVReplicationWorkflowResponse options. */
         public options: string;
+
+        /** ReadVReplicationWorkflowResponse config_overrides. */
+        public config_overrides: { [k: string]: string };
 
         /**
          * Creates a new ReadVReplicationWorkflowResponse instance using the specified properties.
@@ -30680,6 +30686,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state */
         state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest config_overrides */
+        config_overrides?: ({ [k: string]: string }|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -30708,6 +30717,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state. */
         public state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest config_overrides. */
+        public config_overrides: { [k: string]: string };
 
         /** UpdateVReplicationWorkflowRequest _tablet_selection_preference. */
         public _tablet_selection_preference?: "tablet_selection_preference";
@@ -48115,6 +48127,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions shards */
         shards?: (string[]|null);
+
+        /** WorkflowOptions config */
+        config?: ({ [k: string]: string }|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -48134,6 +48149,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions shards. */
         public shards: string[];
+
+        /** WorkflowOptions config. */
+        public config: { [k: string]: string };
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.

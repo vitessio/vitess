@@ -40,6 +40,7 @@ var (
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
 		OnDDL                        string
+		ConfigOverrides              []string
 	}{}
 
 	// update makes a WorkflowUpdate gRPC call to a vtctld.
@@ -95,6 +96,21 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	configOverrides := make(map[string]string)
+	for _, kv := range updateOptions.ConfigOverrides {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) != 2 {
+			fmt.Printf("Invalid key-value pair: %s\n", kv)
+			continue
+		}
+		key := parts[0]
+		value := parts[1]
+		configOverrides[key] = value
+	}
+	if len(configOverrides) > 0 {
+		fmt.Printf("Config overrides: %v\n", configOverrides)
+	}
+
 	req := &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: baseOptions.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
@@ -102,6 +118,7 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			Cells:                     updateOptions.Cells,
 			TabletTypes:               updateOptions.TabletTypes,
 			TabletSelectionPreference: &tsp,
+			ConfigOverrides:           configOverrides,
 		},
 	}
 

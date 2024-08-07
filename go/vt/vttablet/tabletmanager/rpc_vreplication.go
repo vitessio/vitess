@@ -19,10 +19,13 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
@@ -55,7 +58,7 @@ const (
 	// Retrieve the current configuration values for a workflow's vreplication stream(s).
 	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
-	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
+	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a %s where id = %a"
 	// Update field values for multiple workflows. The final format specifier is
 	// used to optionally add any additional predicates to the query.
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
@@ -483,6 +486,11 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 				state = binlogdatapb.VReplicationWorkflowState_Copying.String()
 			}
 		}
+		options, err := getOptionSetString(req.ConfigOverrides)
+		if err != nil {
+			return nil, err
+		}
+
 		bindVars = map[string]*querypb.BindVariable{
 			"st": sqltypes.StringBindVariable(state),
 			"sc": sqltypes.StringBindVariable(string(source)),
@@ -490,11 +498,13 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			"tt": sqltypes.StringBindVariable(tabletTypesStr),
 			"id": sqltypes.Int64BindVariable(id),
 		}
-		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
+		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", options, ":id")
 		stmt, err = parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
+			log.Infof("error generating query: %v", err)
 			return nil, err
 		}
+		log.Infof("executing query: %v", stmt)
 		res, err = tm.VREngine.Exec(stmt)
 		if err != nil {
 			return nil, err
@@ -507,6 +517,43 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			RowsAffected: rowsAffected,
 		},
 	}, nil
+}
+
+func getOptionSetString(config map[string]string) (string, error) {
+	var options string
+	if len(config) > 0 {
+		deletedKeys := []string{}
+		keys := []string{}
+		for k, v := range config {
+			if strings.TrimSpace(v) == "" {
+				deletedKeys = append(deletedKeys, k)
+			} else {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		sort.Strings(deletedKeys)
+		clause := "options"
+		if len(deletedKeys) > 0 {
+			clause = fmt.Sprintf("json_remove(options, '$.config.%s'", deletedKeys[0])
+			for _, k := range deletedKeys[1:] {
+				clause += fmt.Sprintf(", '$.config.%s'", k)
+			}
+			clause += ")"
+		}
+		if len(keys) > 0 {
+			clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
+			for i, k := range keys {
+				if i > 0 {
+					clause += ", "
+				}
+				clause += fmt.Sprintf("'$.config.%s', '%s'", k, strings.TrimSpace(config[k]))
+			}
+			clause += ")"
+		}
+		options = fmt.Sprintf(", options = %s", clause)
+	}
+	return options, nil
 }
 
 // UpdateVReplicationWorkflows operates in much the same way that

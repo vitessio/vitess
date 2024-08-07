@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -550,6 +552,52 @@ func TestMoveTables(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestGetOptionSetString(t *testing.T) {
+	tests := []struct {
+		name   string
+		config map[string]string
+		want   string
+	}{
+		{
+			name:   "nil config",
+			config: nil,
+			want:   "",
+		},
+		{
+			name:   "empty params",
+			config: map[string]string{},
+			want:   "",
+		},
+		{
+			name: "valid params",
+			config: map[string]string{
+				"password": "secret",
+				"user":     "admin",
+			},
+			want: ", options = json_set(options, '$.config', json_object(), '$.config.password', 'secret', '$.config.user', 'admin')",
+		},
+		{
+			name: "valid params, deleting two",
+			config: map[string]string{
+				"password": "secret",
+				"user":     "admin",
+				"port":     "",
+				"host":     "",
+			},
+			want: ", options = json_set(json_remove(options, '$.config.host', '$.config.port'), '$.config', json_object(), '$.config.password', 'secret', '$.config.user', 'admin')",
+		},
+		// Additional tests for handling escaping errors or complex scenarios can be added here
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getOptionSetString(tt.config)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestUpdateVReplicationWorkflow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -690,6 +738,20 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Copying', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, cells[0], tabletTypes[0], vreplID),
 		},
+		{
+			name: "update cells and options",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+				Workflow: workflow,
+				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
+				Cells:    []string{"zone2"},
+				ConfigOverrides: map[string]string{
+					"user":     "admin",
+					"password": "secret",
+				},
+			},
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '', options = json_set(options, '$.config', json_object(), '$.config.password', 'secret', '$.config.user', 'admin') where id in (%d)`,
+				keyspace, shard, "zone2", vreplID),
+		},
 	}
 
 	for _, tt := range tests {
@@ -698,6 +760,8 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
+					log.Infof("Got panic in test: %v", err)
+					log.Flush()
 					t.Errorf("Recovered from panic: %v, stack: %s", err, debug.Stack())
 				}
 			}()
