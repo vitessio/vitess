@@ -79,7 +79,10 @@ func TestMain(m *testing.M) {
 			VSchema:       VSchema,
 			SidecarDBName: sidecarDBName,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
+			return 1
+		}
+		if _, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync"); err != nil {
 			return 1
 		}
 
