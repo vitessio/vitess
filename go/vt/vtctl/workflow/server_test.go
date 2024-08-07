@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -237,6 +238,7 @@ func TestWorkflowDelete(t *testing.T) {
 		want                           *vtctldatapb.WorkflowDeleteResponse
 		wantErr                        bool
 		postFunc                       func(t *testing.T, env *testEnv)
+		expectedLogs                   []string
 	}{
 		{
 			name: "basic",
@@ -354,6 +356,9 @@ func TestWorkflowDelete(t *testing.T) {
 			require.NotNil(t, tc.req)
 			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
 			defer env.close()
+			memlogger := logutil.NewMemoryLogger()
+			defer memlogger.Clear()
+			env.ws.options.logger = memlogger
 			env.tmc.schema = schema
 			if tc.expectedSourceQueries != nil {
 				require.NotNil(t, env.tablets[tc.sourceKeyspace.KeyspaceName])
@@ -393,6 +398,14 @@ func TestWorkflowDelete(t *testing.T) {
 						require.Zero(t, si.Shard.TabletControls)
 					}
 				}
+			}
+			logs := memlogger.String()
+			// To confirm that the custom logger was passed on to the trafficSwitcher.
+			require.Contains(t, logs, "traffic_switcher.go")
+			// TODO: Add expected log messages in the test cases after this is merged:
+			// https://github.com/vitessio/vitess/pull/16505
+			for _, expectedLog := range tc.expectedLogs {
+				require.Contains(t, logs, expectedLog)
 			}
 		})
 	}
