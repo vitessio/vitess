@@ -842,7 +842,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				}
 			case probes := <-throttler.clusterProbesChan:
 				// incoming structural update, sparse, as result of refreshInventory()
-				throttler.updateClusterProbes(ctx, probes)
+				throttler.updateClusterProbes(probes)
 			case <-metricsAggregateTicker.C:
 				if throttler.IsOpen() {
 					throttler.aggregateMetrics()
@@ -1116,10 +1116,25 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 }
 
 // synchronous update of inventory
-func (throttler *Throttler) updateClusterProbes(ctx context.Context, clusterProbes *base.ClusterProbes) error {
+func (throttler *Throttler) updateClusterProbes(clusterProbes *base.ClusterProbes) error {
 	throttler.inventory.ClustersProbes = clusterProbes.TabletProbes
 	throttler.inventory.IgnoreHostsCount = clusterProbes.IgnoreHostsCount
 	throttler.inventory.IgnoreHostsThreshold = clusterProbes.IgnoreHostsThreshold
+
+	for alias := range throttler.inventory.TabletMetrics {
+		if alias == "" {
+			// *this* tablet uses the empty alias to identify itself.
+			continue
+		}
+		if _, found := clusterProbes.TabletProbes[alias]; !found {
+			// There seems to be a metric stored for some alias, say zone1-0000000102,
+			// but there is no alias for this probe in the new clusterProbes. This
+			// suggests that the corresponding tablet has been removed, or its type was changed
+			// (e.g. from REPLICA to RDONLY). We should therefore remove this cached metric.
+			delete(throttler.inventory.TabletMetrics, alias)
+		}
+	}
+
 	return nil
 }
 

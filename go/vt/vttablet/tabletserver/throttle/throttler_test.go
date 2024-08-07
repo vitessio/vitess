@@ -94,6 +94,7 @@ var (
 			Value:        5.1,
 		},
 	}
+	nonPrimaryTabletType atomic.Int32
 )
 
 const (
@@ -151,7 +152,11 @@ type FakeTopoServer struct {
 func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
 	tabletType := topodatapb.TabletType_PRIMARY
 	if alias.Uid != 100 {
-		tabletType = topodatapb.TabletType_REPLICA
+		val := topodatapb.TabletType(nonPrimaryTabletType.Load())
+		if val == topodatapb.TabletType_UNKNOWN {
+			val = topodatapb.TabletType_REPLICA
+		}
+		tabletType = val
 	}
 	tablet := &topo.TabletInfo{
 		Tablet: &topodatapb.Tablet{
@@ -1171,7 +1176,7 @@ func TestRefreshInventory(t *testing.T) {
 						// not run, and therefore there is none but us to both populate `clusterProbesChan` as well as
 						// read from it. We do not compete here with any other goroutine.
 						assert.NotNil(t, probes)
-						throttler.updateClusterProbes(ctx, probes)
+						throttler.updateClusterProbes(probes)
 						validateProbesCount(t, probes.TabletProbes)
 						// Achieved our goal
 						return
@@ -1486,6 +1491,58 @@ func TestProbesWhileOperating(t *testing.T) {
 						assert.False(t, checkOK)
 					}
 				})
+			})
+		})
+
+		t.Run("metrics", func(t *testing.T) {
+			assert.Equal(t, 3, len(throttler.inventory.TabletMetrics))                                                         // 1 self tablet + 2 shard tablets
+			assert.Contains(t, throttler.inventory.TabletMetrics, "", "TabletMetrics: %+v", throttler.inventory.TabletMetrics) // primary self identifies with empty alias
+			assert.Contains(t, throttler.inventory.TabletMetrics, "fakezone1-0000000101", "TabletMetrics: %+v", throttler.inventory.TabletMetrics)
+			assert.Contains(t, throttler.inventory.TabletMetrics, "fakezone2-0000000102", "TabletMetrics: %+v", throttler.inventory.TabletMetrics)
+		})
+
+		t.Run("no REPLICA probes", func(t *testing.T) {
+			nonPrimaryTabletType.Store(int32(topodatapb.TabletType_RDONLY))
+			defer nonPrimaryTabletType.Store(int32(topodatapb.TabletType_REPLICA))
+
+			t.Run("waiting for inventory metrics", func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(ctx, waitForProbesTimeout)
+				defer cancel()
+				ticker := time.NewTicker(100 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					if len(throttler.inventory.TabletMetrics) == 1 {
+						// That's what we were waiting for. Good.
+						assert.Contains(t, throttler.inventory.TabletMetrics, "", "TabletMetrics: %+v", throttler.inventory.TabletMetrics) // primary self identifies with empty alias
+						return
+					}
+
+					select {
+					case <-ticker.C:
+					case <-ctx.Done():
+						assert.FailNowf(t, ctx.Err().Error(), "waiting for inventory metrics")
+					}
+				}
+			})
+		})
+		t.Run("again with probes", func(t *testing.T) {
+			t.Run("waiting for inventory metrics", func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(ctx, waitForProbesTimeout)
+				defer cancel()
+				ticker := time.NewTicker(100 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					if len(throttler.inventory.TabletMetrics) == 3 {
+						// That's what we were waiting for. Good.
+						return
+					}
+
+					select {
+					case <-ticker.C:
+					case <-ctx.Done():
+						assert.FailNowf(t, ctx.Err().Error(), "waiting for inventory metrics")
+					}
+				}
 			})
 		})
 	})
