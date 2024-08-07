@@ -257,7 +257,7 @@ func (se *Engine) Open() error {
 	}
 	se.notifiers = make(map[string]notifier)
 
-	if err := se.reload(ctx, true); err != nil {
+	if err := se.reload(ctx, false); err != nil {
 		return err
 	}
 	if !se.SkipMetaCheck {

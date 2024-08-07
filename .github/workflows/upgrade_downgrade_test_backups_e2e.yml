@@ -76,6 +76,7 @@ jobs:
         go-version: 1.22.5
 
     - name: Setup github.com/slackhq/vitess-additions access token
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
     - name: Set up python
@@ -104,9 +105,9 @@ jobs:
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release enable-only pxb-24
+        sudo percona-release enable-only tools
         sudo apt-get update
-        sudo apt-get install -y percona-xtrabackup-24
+        sudo apt-get install -y percona-xtrabackup-80
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})

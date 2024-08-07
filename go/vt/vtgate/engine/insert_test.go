@@ -356,13 +356,22 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
 		},
 		sqlparser.OnDup{
-			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
-		},
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix1"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix2"), Expr: &sqlparser.FuncExpr{
+				Name: sqlparser.NewIdentifierCI("if"),
+				Exprs: sqlparser.SelectExprs{
+					sqlparser.NewAliasedExpr(sqlparser.NewComparisonExpr(sqlparser.InOp, &sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")}, sqlparser.ListArg("_id_1"), nil), ""),
+					sqlparser.NewAliasedExpr(sqlparser.NewColName("col"), ""),
+					sqlparser.NewAliasedExpr(&sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")}, ""),
+				},
+			}}},
 	)
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{
+		"_id_1": sqltypes.TestBindVariable([]int{1, 2}),
+	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +380,10 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1"} ` +
+			`sharded.20-: prefix(:_id_0 /* INT64 */) on duplicate key update ` +
+			`suffix1 = :_id_0 /* INT64 */, suffix2 = if(values(col) in ::_id_1, col, values(col)) ` +
+			`{_id_0: type:INT64 value:"1" ` +
+			`_id_1: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} ` +
 			`true true`,
 	})
 

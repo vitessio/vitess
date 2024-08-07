@@ -79,6 +79,7 @@ jobs:
         go-version: 1.22.5
 
     - name: Setup github.com/slackhq/vitess-additions access token
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
     - name: Set up python

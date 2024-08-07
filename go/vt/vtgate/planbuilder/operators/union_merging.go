@@ -202,8 +202,8 @@ func createMergedUnion(
 			continue
 		}
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(rae.Expr))
-		rt, foundR := ctx.SemTable.TypeForExpr(rae.Expr)
-		lt, foundL := ctx.SemTable.TypeForExpr(lae.Expr)
+		rt, foundR := ctx.TypeForExpr(rae.Expr)
+		lt, foundL := ctx.TypeForExpr(lae.Expr)
 		if foundR && foundL {
 			types := []sqltypes.Type{rt.Type(), lt.Type()}
 			t := evalengine.AggregateTypes(types)

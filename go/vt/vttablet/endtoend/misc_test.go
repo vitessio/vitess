@@ -261,8 +261,10 @@ func TestSidecarTables(t *testing.T) {
 }
 
 func TestConsolidation(t *testing.T) {
-	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
-	framework.Server.SetPoolSize(1)
+	defer framework.Server.SetPoolSize(context.Background(), framework.Server.PoolSize())
+
+	err := framework.Server.SetPoolSize(context.Background(), 1)
+	require.NoError(t, err)
 
 	const tag = "Waits/Histograms/Consolidations/Count"
 

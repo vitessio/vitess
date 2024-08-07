@@ -60,6 +60,7 @@ const (
 	dockerFileTemplate            = "templates/dockerfile.tpl"
 	clusterTestSelfHostedTemplate = "templates/cluster_endtoend_test_self_hosted.tpl"
 	clusterTestDockerTemplate     = "templates/cluster_endtoend_test_docker.tpl"
+	clusterVitessTesterTemplate   = "templates/cluster_vitess_tester.tpl"
 )
 
 var (
@@ -124,6 +125,10 @@ var (
 		"vttablet_prscomplex",
 	}
 
+	vitessTesterMap = map[string]string{
+		"vtgate": "./go/test/endtoend/vtgate/vitess_tester",
+	}
+
 	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
@@ -166,6 +171,12 @@ type selfHostedTest struct {
 	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
 	FileName                                                    string
 	MakeTools, InstallXtraBackup, Docker                        bool
+}
+
+type vitessTesterTest struct {
+	FileName string
+	Name     string
+	Path     string
 }
 
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
@@ -213,6 +224,7 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 
 func main() {
 	generateUnitTestWorkflows()
+	generateVitessTesterWorkflows(vitessTesterMap, clusterVitessTesterTemplate)
 	generateClusterWorkflows(clusterList, clusterTestTemplate)
 	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
 
@@ -327,6 +339,23 @@ func generateSelfHostedClusterWorkflows() error {
 		}
 	}
 	return nil
+}
+
+func generateVitessTesterWorkflows(mp map[string]string, tpl string) {
+	for test, testPath := range mp {
+		tt := &vitessTesterTest{
+			Name: fmt.Sprintf("Vitess Tester (%v)", test),
+			Path: testPath,
+		}
+
+		templateFileName := tpl
+		tt.FileName = fmt.Sprintf("vitess_tester_%s.yml", test)
+		workflowPath := fmt.Sprintf("%s/%s", workflowConfigDir, tt.FileName)
+		err := writeFileFromTemplate(templateFileName, workflowPath, tt)
+		if err != nil {
+			log.Print(err)
+		}
+	}
 }
 
 func generateClusterWorkflows(list []string, tpl string) {

@@ -946,31 +946,37 @@
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "Concatenate",
+            "OperatorType": "Limit",
+            "Count": "1",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-                "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name1 /* VARCHAR */ and table_name = :table_name1 /* VARCHAR */",
-                "SysTableTableName": "[table_name1:'Music']",
-                "Table": "information_schema.`tables`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-                "Query": "select 1 as found from information_schema.views where table_name = :table_name2 /* VARCHAR */ and table_name = :table_name2 /* VARCHAR */ limit 1",
-                "SysTableTableName": "[table_name2:'user']",
-                "Table": "information_schema.views"
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "DBA",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
+                    "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name1 /* VARCHAR */ and table_name = :table_name1 /* VARCHAR */ limit :__upper_limit",
+                    "SysTableTableName": "[table_name1:'Music']",
+                    "Table": "information_schema.`tables`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "DBA",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
+                    "Query": "select 1 as found from information_schema.views where table_name = :table_name2 /* VARCHAR */ and table_name = :table_name2 /* VARCHAR */ limit :__upper_limit",
+                    "SysTableTableName": "[table_name2:'user']",
+                    "Table": "information_schema.views"
+                  }
+                ]
               }
             ]
           },

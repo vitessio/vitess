@@ -18,6 +18,7 @@ package aggregation
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"sort"
 	"strings"
@@ -67,6 +68,22 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		mcmp.Close()
 		cluster.PanicHandler(t)
 	}
+}
+
+func TestAggrWithLimit(t *testing.T) {
+	version, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if version != 19 {
+		t.Skip("Test requires VTGate version 18")
+	}
+	mcmp, closer := start(t)
+	defer closer()
+
+	for i := range 1000 {
+		r := rand.IntN(50)
+		mcmp.Exec(fmt.Sprintf("insert into aggr_test(id, val1, val2) values(%d, 'a', %d)", i, r))
+	}
+	mcmp.Exec("select val2, count(*) from aggr_test group by val2 order by count(*), val2 limit 10")
 }
 
 func TestAggregateTypes(t *testing.T) {
@@ -415,8 +432,15 @@ func TestOrderByCount(t *testing.T) {
 	defer closer()
 
 	mcmp.Exec("insert into t9(id1, id2, id3) values(1, '1', '1'), (2, '2', '2'), (3, '2', '2'), (4, '3', '3'), (5, '3', '3'), (6, '3', '3')")
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'b1','bar',200)")
 
-	mcmp.AssertMatches("SELECT t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC", `[[VARCHAR("3")] [VARCHAR("2")] [VARCHAR("1")]]`)
+	mcmp.Exec("SELECT t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC")
+	version, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if version == 19 {
+		mcmp.Exec("select COUNT(*) from (select 1 as one FROM t9 WHERE id3 = 3 ORDER BY id1 DESC LIMIT 3 OFFSET 0) subquery_for_count")
+		mcmp.Exec("select t.id1, t1.name, t.leCount from (select id1, count(*) as leCount from t9 group by 1 order by 2 desc limit 20) t join t1 on t.id1 = t1.t1_id")
+	}
 }
 
 func TestAggregateAnyValue(t *testing.T) {
@@ -573,7 +597,7 @@ func TestComplexAggregation(t *testing.T) {
 
 func TestJoinAggregation(t *testing.T) {
 	// This is new functionality in Vitess 20
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 
 	mcmp, closer := start(t)
 	defer closer()

@@ -82,6 +82,8 @@ mkdir -p "${VTDATAROOT}/tmp"
 alias mysql="command mysql --no-defaults -h 127.0.0.1 -P 15306"
 alias vtctldclient="command vtctldclient --server localhost:15999"
 
-# Make sure aliases are expanded in non-interactive shell
-shopt -s expand_aliases
+# If using bash, make sure aliases are expanded in non-interactive shell
+if [[ -n ${BASH} ]]; then
+    shopt -s expand_aliases
+fi
 

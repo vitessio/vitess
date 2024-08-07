@@ -43,7 +43,7 @@ func (sqc *SubQueryContainer) Clone(inputs []Operator) Operator {
 		if !ok {
 			panic("got bad input")
 		}
-		result.Inner = append(result.Inner, inner)
+		result.addInner(inner)
 	}
 	return result
 }
@@ -89,4 +89,14 @@ func (sqc *SubQueryContainer) GetColumns(ctx *plancontext.PlanningContext) []*sq
 
 func (sqc *SubQueryContainer) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return sqc.Outer.GetSelectExprs(ctx)
+}
+
+func (sqc *SubQueryContainer) addInner(inner *SubQuery) {
+	for _, sq := range sqc.Inner {
+		if sq.ArgName == inner.ArgName {
+			// we already have this subquery
+			return
+		}
+	}
+	sqc.Inner = append(sqc.Inner, inner)
 }

@@ -20,6 +20,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -57,6 +58,10 @@ type PlanningContext struct {
 
 	// Statement contains the originally parsed statement
 	Statement sqlparser.Statement
+
+	// OuterTables contains the tables that are outer to the current query
+	// Used to set the nullable flag on the columns
+	OuterTables semantics.TableSet
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -187,4 +192,33 @@ func (ctx *PlanningContext) execOnJoinPredicateEqual(joinPred sqlparser.Expr, fn
 		}
 	}
 	return false
+}
+
+func (ctx *PlanningContext) RewriteDerivedTableExpression(expr sqlparser.Expr, tableInfo semantics.TableInfo) sqlparser.Expr {
+	modifiedExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	for key, exprs := range ctx.joinPredicates {
+		for _, rhsExpr := range exprs {
+			if ctx.SemTable.EqualsExpr(expr, rhsExpr) {
+				ctx.joinPredicates[key] = append(ctx.joinPredicates[key], modifiedExpr)
+				return modifiedExpr
+			}
+		}
+	}
+	return modifiedExpr
+}
+
+// TypeForExpr returns the type of the given expression, with nullable set if the expression is from an outer table.
+func (ctx *PlanningContext) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
+	t, found := ctx.SemTable.TypeForExpr(e)
+	if !found {
+		return t, found
+	}
+	deps := ctx.SemTable.RecursiveDeps(e)
+	// If the expression is from an outer table, it should be nullable
+	// There are some exceptions to this, where an expression depending on the outer side
+	// will never return NULL, but it's better to be conservative here.
+	if deps.IsOverlapping(ctx.OuterTables) {
+		t.SetNullability(true)
+	}
+	return t, true
 }

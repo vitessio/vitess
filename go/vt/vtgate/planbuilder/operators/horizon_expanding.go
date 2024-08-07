@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (Operator, *ApplyResult) {
@@ -74,9 +75,16 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 }
 
 func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (Operator, *ApplyResult) {
-	op := createProjectionFromSelect(ctx, horizon)
 	qp := horizon.getQP(ctx)
 	var extracted []string
+	if horizon.IsDerived() {
+		// if we are dealing with a derived table, we need to make sure that the ordering columns
+		// are available outside the derived table
+		for _, order := range horizon.Query.GetOrderBy() {
+			qp.addDerivedColumn(ctx, order.Expr)
+		}
+	}
+	op := createProjectionFromSelect(ctx, horizon)
 	if qp.HasAggr {
 		extracted = append(extracted, "Aggregation")
 	} else {
@@ -98,7 +106,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if len(qp.OrderExprs) > 0 {
-		op = expandOrderBy(ctx, op, qp)
+		op = expandOrderBy(ctx, op, qp, horizon.Alias)
 		extracted = append(extracted, "Ordering")
 	}
 
@@ -113,18 +121,36 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")))
 }
 
-func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection) Operator {
-	proj := newAliasedProjection(op)
+func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection, derived string) Operator {
 	var newOrder []OrderBy
 	sqc := &SubQueryBuilder{}
+	proj, ok := op.(*Projection)
+
 	for _, expr := range qp.OrderExprs {
+		// Attempt to extract any subqueries within the expression
 		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr.SimplifiedExpr, TableID(op), false)
 		if newExpr == nil {
-			// no subqueries found, let's move on
+			// If no subqueries are found, retain the original order expression
+			if derived != "" {
+				expr = exposeOrderingColumn(ctx, qp, expr, derived)
+			}
 			newOrder = append(newOrder, expr)
 			continue
 		}
-		proj.addSubqueryExpr(aeWrap(newExpr), newExpr, subqs...)
+
+		// If the operator is not a projection, we cannot handle subqueries with aggregation if we are unable to push everything into a single route.
+		if !ok {
+			ctx.SemTable.NotSingleRouteErr = vterrors.VT12001("subquery with aggregation in order by")
+			return &Ordering{
+				Source: op,
+				Order:  qp.OrderExprs,
+			}
+		} else {
+			// Add the new subquery expression to the projection
+			proj.addSubqueryExpr(ctx, aeWrap(newExpr), newExpr, subqs...)
+		}
+
+		// Replace the original order expression with the new expression containing subqueries
 		newOrder = append(newOrder, OrderBy{
 			Inner: &sqlparser.Order{
 				Expr:      newExpr,
@@ -132,19 +158,37 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 			},
 			SimplifiedExpr: newExpr,
 		})
-
 	}
 
-	if len(proj.Columns.GetColumns()) > 0 {
-		// if we had to project columns for the ordering,
-		// we need the projection as source
-		op = proj
+	// Update the source of the projection if we have it
+	if proj != nil {
+		proj.Source = sqc.getRootOperator(proj.Source, nil)
 	}
 
+	// Return the updated operator with the new order by expressions
 	return &Ordering{
 		Source: op,
 		Order:  newOrder,
 	}
+}
+
+// exposeOrderingColumn will expose the ordering column to the outer query
+func exposeOrderingColumn(ctx *plancontext.PlanningContext, qp *QueryProjection, orderBy OrderBy, derived string) OrderBy {
+	for _, se := range qp.SelectExprs {
+		aliasedExpr, err := se.GetAliasedExpr()
+		if err != nil {
+			panic(vterrors.VT13001("unexpected expression in select"))
+		}
+		if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, orderBy.SimplifiedExpr) {
+			newExpr := sqlparser.NewColNameWithQualifier(aliasedExpr.ColumnName(), sqlparser.NewTableName(derived))
+			ctx.SemTable.CopySemanticInfo(orderBy.SimplifiedExpr, newExpr)
+			orderBy.SimplifiedExpr = newExpr
+			orderBy.Inner = &sqlparser.Order{Expr: newExpr, Direction: orderBy.Inner.Direction}
+			break
+		}
+	}
+
+	return orderBy
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) Operator {
@@ -152,6 +196,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 
 	var dt *DerivedTable
 	if horizon.TableId != nil {
+		// if we are dealing with a derived table, we need to create a derived table object
 		dt = &DerivedTable{
 			TableID: *horizon.TableId,
 			Alias:   horizon.Alias,
@@ -159,13 +204,13 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 		}
 	}
 
-	if !qp.NeedsAggregation() {
-		projX := createProjectionWithoutAggr(ctx, qp, horizon.src())
-		projX.DT = dt
-		return projX
+	if qp.NeedsAggregation() {
+		return createProjectionWithAggr(ctx, qp, dt, horizon.src())
 	}
 
-	return createProjectionWithAggr(ctx, qp, dt, horizon.src())
+	projX := createProjectionWithoutAggr(ctx, qp, horizon.src())
+	projX.DT = dt
+	return projX
 }
 
 func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, dt *DerivedTable, src Operator) Operator {
@@ -181,13 +226,8 @@ func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProject
 
 	// Go through all aggregations and check for any subquery.
 	sqc := &SubQueryBuilder{}
-	outerID := TableID(src)
 	for idx, aggr := range aggregations {
-		expr := aggr.Original.Expr
-		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
-		if newExpr != nil {
-			aggregations[idx].SubQueryExpression = subqs
-		}
+		aggregations[idx] = pullOutValueSubqueries(ctx, aggr, sqc, TableID(src))
 	}
 	aggrOp.Source = sqc.getRootOperator(src, nil)
 
@@ -196,6 +236,25 @@ func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProject
 		return createProjectionForComplexAggregation(aggrOp, qp)
 	}
 	return createProjectionForSimpleAggregation(ctx, aggrOp, qp)
+}
+
+func pullOutValueSubqueries(ctx *plancontext.PlanningContext, aggr Aggr, sqc *SubQueryBuilder, outerID semantics.TableSet) Aggr {
+	exprs := aggr.getPushColumnExprs()
+	var newExprs sqlparser.Exprs
+	for _, expr := range exprs {
+		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
+		if newExpr != nil {
+			newExprs = append(newExprs, newExpr)
+			aggr.SubQueryExpression = append(aggr.SubQueryExpression, subqs...)
+		} else {
+			newExprs = append(newExprs, expr)
+		}
+	}
+	if len(aggr.SubQueryExpression) > 0 {
+		aggr.setPushColumn(newExprs)
+	}
+
+	return aggr
 }
 
 func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) Operator {
@@ -280,7 +339,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 			// there was no subquery in this expression
 			proj.addUnexploredExpr(org, expr)
 		} else {
-			proj.addSubqueryExpr(org, newExpr, subqs...)
+			proj.addSubqueryExpr(ctx, org, newExpr, subqs...)
 		}
 	}
 	proj.Source = sqc.getRootOperator(src, nil)

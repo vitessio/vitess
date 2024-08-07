@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -28,6 +29,12 @@ import (
 )
 
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
+	var selExpr sqlparser.SelectExprs
+	if horizon, isHorizon := root.(*Horizon); isHorizon {
+		sel := sqlparser.GetFirstSelect(horizon.Query)
+		selExpr = sqlparser.CloneSelectExprs(sel.SelectExprs)
+	}
+
 	output := runPhases(ctx, root)
 	output = planOffsets(ctx, output)
 
@@ -38,7 +45,7 @@ func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
 
 	output = compact(ctx, output)
 
-	return addTruncationOrProjectionToReturnOutput(ctx, root, output)
+	return addTruncationOrProjectionToReturnOutput(ctx, selExpr, output)
 }
 
 // runPhases is the process of figuring out how to perform the operations in the Horizon
@@ -249,8 +256,169 @@ func tryPushLimit(in *Limit) (Operator, *ApplyResult) {
 		return tryPushingDownLimitInRoute(in, src)
 	case *Aggregator:
 		return in, NoRewrite
+	case *Limit:
+		combinedLimit := mergeLimits(in.AST, src.AST)
+		if combinedLimit == nil {
+			break
+		}
+		// we can remove the other LIMIT
+		in.AST = combinedLimit
+		in.Source = src.Source
+		return in, Rewrote("merged two limits")
+	}
+	return setUpperLimit(in)
+}
+
+func mergeLimits(l1, l2 *sqlparser.Limit) *sqlparser.Limit {
+	// To merge two relational LIMIT operators with LIMIT and OFFSET, we need to combine their
+	// LIMIT and OFFSET values appropriately.
+	// Let's denote the first LIMIT operator as LIMIT_1 with LIMIT_1 and OFFSET_1,
+	// and the second LIMIT operator as LIMIT_2 with LIMIT_2 and OFFSET_2.
+	// The second LIMIT operator receives the output of the first LIMIT operator, meaning the first LIMIT and
+	// OFFSET are applied first, and then the second LIMIT and OFFSET are applied to the resulting subset.
+	//
+	// The goal is to determine the effective combined LIMIT and OFFSET values when applying these two operators sequentially.
+	//
+	// Combined Offset:
+	// The combined offset (OFFSET_combined) is the sum of the two offsets because you need to skip OFFSET_1 rows first,
+	// and then apply the second offset OFFSET_2 to the result.
+	// OFFSET_combined = OFFSET_1 + OFFSET_2
+
+	// Combined Limit:
+	// The combined limit (LIMIT_combined) needs to account for both limits. The effective limit should not exceed the rows returned by the first limit,
+	// so it is the minimum of the remaining rows after the first offset and the second limit.
+	// LIMIT_combined = min(LIMIT_2, LIMIT_1 - OFFSET_2)
+
+	// Note: If LIMIT_1 - OFFSET_2 is negative or zero, it means there are no rows left to limit, so LIMIT_combined should be zero.
+
+	// Example:
+	// First LIMIT operator: LIMIT 10 OFFSET 5 (LIMIT_1 = 10, OFFSET_1 = 5)
+	// Second LIMIT operator: LIMIT 7 OFFSET 3 (LIMIT_2 = 7, OFFSET_2 = 3)
+
+	// Calculations:
+	// Combined OFFSET:
+	// OFFSET_combined = 5 + 3 = 8
+
+	// Combined LIMIT:
+	// remaining rows after OFFSET_2 = 10 - 3 = 7
+	// LIMIT_combined = min(7, 7) = 7
+
+	// So, the combined result would be:
+	// LIMIT 7 OFFSET 8
+
+	// This method ensures that the final combined LIMIT and OFFSET correctly reflect the sequential application of the two original operators.
+	combinedLimit, failed := mergeLimitExpressions(l1.Rowcount, l2.Rowcount, l2.Offset)
+	if failed {
+		return nil
+	}
+	combinedOffset, failed := mergeOffsetExpressions(l1.Offset, l2.Offset)
+	if failed {
+		return nil
+	}
+
+	return &sqlparser.Limit{
+		Offset:   combinedOffset,
+		Rowcount: combinedLimit,
+	}
+}
+
+func mergeOffsetExpressions(e1, e2 sqlparser.Expr) (expr sqlparser.Expr, failed bool) {
+	switch {
+	case e1 == nil && e2 == nil:
+		return nil, false
+	case e1 == nil:
+		return e2, false
+	case e2 == nil:
+		return e1, false
 	default:
-		return setUpperLimit(in)
+		v1str, ok := e1.(*sqlparser.Literal)
+		if !ok {
+			return nil, true
+		}
+		v2str, ok := e2.(*sqlparser.Literal)
+		if !ok {
+			return nil, true
+		}
+		v1, _ := strconv.Atoi(v1str.Val)
+		v2, _ := strconv.Atoi(v2str.Val)
+		return sqlparser.NewIntLiteral(strconv.Itoa(v1 + v2)), false
+	}
+}
+
+// mergeLimitExpressions merges two LIMIT expressions with an OFFSET expression.
+// l1: First LIMIT expression.
+// l2: Second LIMIT expression.
+// off2: Second OFFSET expression.
+// Returns the merged LIMIT expression and a boolean indicating if the merge failed.
+func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, failed bool) {
+	switch {
+	// If both limits are nil, there's nothing to merge, return nil without failure.
+	case l1 == nil && l2 == nil:
+		return nil, false
+
+	// If the first limit is nil, the second limit determines the final limit.
+	case l1 == nil:
+		return l2, false
+
+	// If the second limit is nil, calculate the remaining limit after applying the offset to the first limit.
+	case l2 == nil:
+		if off2 == nil {
+			// No offset, so the first limit is used directly.
+			return l1, false
+		}
+		off2, ok := off2.(*sqlparser.Literal)
+		if !ok {
+			// If the offset is not a literal, fail the merge.
+			return nil, true
+		}
+		lim1str, ok := l1.(*sqlparser.Literal)
+		if !ok {
+			// If the first limit is not a literal, return the first limit without failing.
+			return nil, false
+		}
+		// Calculate the remaining limit after the offset.
+		off2int, _ := strconv.Atoi(off2.Val)
+		l1int, _ := strconv.Atoi(lim1str.Val)
+		lim := l1int - off2int
+		if lim < 0 {
+			lim = 0
+		}
+		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
+
+	default:
+		v1str, ok1 := l1.(*sqlparser.Literal)
+		if ok1 && v1str.Val == "1" {
+			// If the first limit is "1", it dominates, so return it.
+			return l1, false
+		}
+		v2str, ok2 := l2.(*sqlparser.Literal)
+		if ok2 && v2str.Val == "1" {
+			// If the second limit is "1", it dominates, so return it.
+			return l2, false
+		}
+		if !ok1 || !ok2 {
+			// If either limit is not a literal, fail the merge.
+			return nil, true
+		}
+
+		var off2int int
+		if off2 != nil {
+			off2, ok := off2.(*sqlparser.Literal)
+			if !ok {
+				// If the offset is not a literal, fail the merge.
+				return nil, true
+			}
+			off2int, _ = strconv.Atoi(off2.Val)
+		}
+
+		v1, _ := strconv.Atoi(v1str.Val)
+		v2, _ := strconv.Atoi(v2str.Val)
+		lim := min(v2, v1-off2int)
+		if lim < 0 {
+			// If the combined limit is negative, set it to zero.
+			lim = 0
+		}
+		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
 	}
 }
 
@@ -276,6 +444,11 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		case *Join, *ApplyJoin, *SubQueryContainer, *SubQuery:
 			// we can't push limits down on either side
 			return SkipChildren
+		case *Aggregator:
+			if len(op.Grouping) > 0 {
+				// we can't push limits down if we have a group by
+				return SkipChildren
+			}
 		case *Route:
 			newSrc := &Limit{
 				Source: op.Source,
@@ -285,9 +458,8 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 			op.Source = newSrc
 			result = result.Merge(Rewrote("push limit under route"))
 			return SkipChildren
-		default:
-			return VisitChildren
 		}
+		return VisitChildren
 	}
 
 	TopDown(in.Source, TableID, visitor, shouldVisit)
@@ -303,23 +475,14 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 		return Swap(in, src, "push ordering under filter")
 	case *ApplyJoin:
 		if canPushLeft(ctx, src, in.Order) {
-			// ApplyJoin is stable in regard to the columns coming from the LHS,
-			// so if all the ordering columns come from the LHS, we can push down the Ordering there
-			src.LHS, in.Source = in, src.LHS
-			return src, Rewrote("push down ordering on the LHS of a join")
+			return pushOrderLeftOfJoin(src, in)
 		}
 	case *Ordering:
 		// we'll just remove the order underneath. The top order replaces whatever was incoming
 		in.Source = src.Source
 		return in, Rewrote("remove double ordering")
 	case *Projection:
-		// we can move ordering under a projection if it's not introducing a column we're sorting by
-		for _, by := range in.Order {
-			if !mustFetchFromInput(by.SimplifiedExpr) {
-				return in, NoRewrite
-			}
-		}
-		return Swap(in, src, "push ordering under projection")
+		return pushOrderingUnderProjection(ctx, in, src)
 	case *Aggregator:
 		if !src.QP.AlignGroupByAndOrderBy(ctx) && !overlaps(ctx, in.Order, src.Grouping) {
 			return in, NoRewrite
@@ -327,27 +490,63 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 
 		return pushOrderingUnderAggr(ctx, in, src)
 	case *SubQueryContainer:
-		outerTableID := TableID(src.Outer)
-		for _, order := range in.Order {
-			deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
-			if !deps.IsSolvedBy(outerTableID) {
-				return in, NoRewrite
-			}
-		}
-		src.Outer, in.Source = in, src.Outer
-		return src, Rewrote("push ordering into outer side of subquery")
+		return pushOrderingToOuterOfSubqueryContainer(ctx, in, src)
 	case *SubQuery:
-		outerTableID := TableID(src.Outer)
-		for _, order := range in.Order {
-			deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
-			if !deps.IsSolvedBy(outerTableID) {
-				return in, NoRewrite
-			}
-		}
-		src.Outer, in.Source = in, src.Outer
-		return src, Rewrote("push ordering into outer side of subquery")
+		return pushOrderingToOuterOfSubquery(ctx, in, src)
 	}
 	return in, NoRewrite
+}
+
+func pushOrderingToOuterOfSubquery(ctx *plancontext.PlanningContext, in *Ordering, sq *SubQuery) (Operator, *ApplyResult) {
+	outerTableID := TableID(sq.Outer)
+	for idx, order := range in.Order {
+		deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
+		if !deps.IsSolvedBy(outerTableID) {
+			return in, NoRewrite
+		}
+		in.Order[idx].SimplifiedExpr = sq.rewriteColNameToArgument(order.SimplifiedExpr)
+		in.Order[idx].Inner.Expr = sq.rewriteColNameToArgument(order.Inner.Expr)
+	}
+	sq.Outer, in.Source = in, sq.Outer
+	return sq, Rewrote("push ordering into outer side of subquery")
+}
+
+func pushOrderingToOuterOfSubqueryContainer(ctx *plancontext.PlanningContext, in *Ordering, subq *SubQueryContainer) (Operator, *ApplyResult) {
+	outerTableID := TableID(subq.Outer)
+	for _, order := range in.Order {
+		deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
+		if !deps.IsSolvedBy(outerTableID) {
+			return in, NoRewrite
+		}
+	}
+	subq.Outer, in.Source = in, subq.Outer
+	return subq, Rewrote("push ordering into outer side of subquery")
+}
+
+func pushOrderingUnderProjection(ctx *plancontext.PlanningContext, in *Ordering, proj *Projection) (Operator, *ApplyResult) {
+	// we can move ordering under a projection if it's not introducing a column we're sorting by
+	for _, by := range in.Order {
+		if !mustFetchFromInput(by.SimplifiedExpr) {
+			return in, NoRewrite
+		}
+	}
+	ap, ok := proj.Columns.(AliasedProjections)
+	if !ok {
+		return in, NoRewrite
+	}
+	for _, projExpr := range ap {
+		if projExpr.Info != nil {
+			return in, NoRewrite
+		}
+	}
+	return Swap(in, proj, "push ordering under projection")
+}
+
+func pushOrderLeftOfJoin(src *ApplyJoin, in *Ordering) (Operator, *ApplyResult) {
+	// ApplyJoin is stable in regard to the columns coming from the LHS,
+	// so if all the ordering columns come from the LHS, we can push down the Ordering there
+	src.LHS, in.Source = in, src.LHS
+	return src, Rewrote("push down ordering on the LHS of a join")
 }
 
 func overlaps(ctx *plancontext.PlanningContext, order []OrderBy, grouping []GroupBy) bool {
@@ -605,25 +804,56 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
-func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, oldHorizon Operator, output Operator) Operator {
-	horizon, ok := oldHorizon.(*Horizon)
-	if !ok {
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs sqlparser.SelectExprs, output Operator) Operator {
+	if len(selExprs) == 0 {
 		return output
 	}
 
 	cols := output.GetSelectExprs(ctx)
-	sel := sqlparser.GetFirstSelect(horizon.Query)
-	if len(sel.SelectExprs) == len(cols) {
+	sizeCorrect := len(selExprs) == len(cols) || tryTruncateColumnsAt(output, len(selExprs))
+	if sizeCorrect && colNamesAlign(selExprs, cols) {
 		return output
 	}
 
-	if tryTruncateColumnsAt(output, len(sel.SelectExprs)) {
-		return output
+	return createSimpleProjection(ctx, selExprs, output)
+}
+
+func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
+	if len(expected) > len(actual) {
+		// if we expect more columns than we have, we can't align
+		return false
 	}
 
-	qp := horizon.getQP(ctx)
-	proj := createSimpleProjection(ctx, qp, output)
-	return proj
+	for i, seE := range expected {
+		switch se := seE.(type) {
+		case *sqlparser.AliasedExpr:
+			if !areColumnNamesAligned(se, actual[i]) {
+				return false
+			}
+		case *sqlparser.StarExpr:
+			actualStar, isStar := actual[i].(*sqlparser.StarExpr)
+			if !isStar {
+				panic(vterrors.VT13001(fmt.Sprintf("star expression is expected here, found: %T", actual[i])))
+			}
+			if !sqlparser.Equals.RefOfStarExpr(se, actualStar) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func areColumnNamesAligned(expectation *sqlparser.AliasedExpr, actual sqlparser.SelectExpr) bool {
+	_, isCol := expectation.Expr.(*sqlparser.ColName)
+	if expectation.As.IsEmpty() && !isCol {
+		// is the user didn't specify a name, we don't care
+		return true
+	}
+	actualAE, isAe := actual.(*sqlparser.AliasedExpr)
+	if !isAe {
+		panic(vterrors.VT13001("used star expression when user did not"))
+	}
+	return expectation.ColumnName() == actualAE.ColumnName()
 }
 
 func stopAtRoute(operator Operator) VisitRule {

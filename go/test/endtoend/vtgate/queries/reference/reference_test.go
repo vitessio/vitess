@@ -84,7 +84,7 @@ func TestReferenceRouting(t *testing.T) {
 	)
 
 	t.Run("Complex reference query", func(t *testing.T) {
-		utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+		utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 		// Verify a complex query using reference tables with a left join having a derived table with an order by clause works as intended.
 		utils.AssertMatches(
 			t,

@@ -220,7 +220,9 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}
 	}
 
-	qb.addPredicate(onCondition)
+	for _, pred := range sqlparser.SplitAndExpression(nil, onCondition) {
+		qb.addPredicate(pred)
+	}
 }
 
 func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
@@ -462,6 +464,13 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 		if by.WSOffset != -1 {
 			qb.addGroupBy(weightStringFor(simplified))
 		}
+	}
+	if op.DT != nil {
+		sel := qb.asSelectStatement()
+		qb.stmt = nil
+		qb.addTableExpr(op.DT.Alias, op.DT.Alias, TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, op.DT.Columns)
 	}
 }
 

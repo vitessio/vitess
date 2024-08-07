@@ -871,6 +871,29 @@
     }
   },
   {
+    "comment": "Merging subqueries should remove keyspace from query",
+    "query": "select u.id from user.user as u where not exists (select 1 from user.user_extra as ue where u.id = ue.user_id)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.id from user.user as u where not exists (select 1 from user.user_extra as ue where u.id = ue.user_id)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u where not exists (select 1 from user_extra as ue where u.id = ue.user_id)",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Single table equality route with unsigned value",
     "query": "select id from user where name = 18446744073709551615",
     "plan": {
@@ -1991,15 +2014,21 @@
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user`",
-            "Table": "`user`"
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` where 1 != 1",
+                "Query": "select 1 from `user` limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
           },
           {
             "InputName": "Outer",
@@ -2831,7 +2860,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where u2.id = 5",
+            "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
             "Table": "`user`",
             "Values": [
               "5"
@@ -4288,7 +4317,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
-                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar",
+                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar limit 1",
                 "Table": "unsharded"
               }
             ]

@@ -53,7 +53,8 @@ type SubQuery struct {
 	// We use this information to fail the planning if we are unable to merge the subquery with a route.
 	correlated bool
 
-	IsProjection bool
+	// IsArgument is set to true if the subquery puts the
+	IsArgument bool
 }
 
 func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) Operator {
@@ -156,8 +157,8 @@ func (sq *SubQuery) SetInputs(inputs []Operator) {
 
 func (sq *SubQuery) ShortDescription() string {
 	var typ string
-	if sq.IsProjection {
-		typ = "PROJ"
+	if sq.IsArgument {
+		typ = "ARGUMENT"
 	} else {
 		typ = "FILTER"
 	}
@@ -175,8 +176,11 @@ func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 	return sq
 }
 
-func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {
-	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
+func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
+	ae = sqlparser.CloneRefOfAliasedExpr(ae)
+	// we need to rewrite the column name to an argument if it's the same as the subquery column name
+	ae.Expr = rewriteColNameToArgument(ctx, ae.Expr, []*SubQuery{sq}, sq)
+	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, ae)
 }
 
 func (sq *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
@@ -206,7 +210,7 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 	if sq.correlated && sq.FilterType != opcode.PulloutExists {
 		panic(correlatedSubqueryErr)
 	}
-	if sq.IsProjection {
+	if sq.IsArgument {
 		if len(sq.GetMergePredicates()) > 0 {
 			// this means that we have a correlated subquery on our hands
 			panic(correlatedSubqueryErr)
@@ -220,11 +224,20 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
 var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
+func (sq *SubQuery) addLimit() {
+	// for a correlated subquery, we can add a limit 1 to the subquery
+	sq.Subquery = &Limit{
+		Source: sq.Subquery,
+		AST:    &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")},
+	}
+}
+
 func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) Operator {
 	if len(sq.Predicates) > 0 {
 		if sq.FilterType != opcode.PulloutExists {
 			panic(correlatedSubqueryErr)
 		}
+		sq.addLimit()
 		return outer
 	}
 
@@ -252,8 +265,10 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	var predicates []sqlparser.Expr
 	switch sq.FilterType {
 	case opcode.PulloutExists:
+		sq.addLimit()
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()))
 	case opcode.PulloutNotExists:
+		sq.addLimit()
 		sq.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
 		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
 	case opcode.PulloutIn:
@@ -288,4 +303,19 @@ func (sq *SubQuery) mapExpr(f func(expr sqlparser.Expr) sqlparser.Expr) {
 	sq.Predicates = slice.Map(sq.Predicates, f)
 	sq.Original = f(sq.Original)
 	sq.originalSubquery = f(sq.originalSubquery).(*sqlparser.Subquery)
+}
+
+func (sq *SubQuery) rewriteColNameToArgument(expr sqlparser.Expr) sqlparser.Expr {
+	pre := func(cursor *sqlparser.Cursor) bool {
+		colName, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok || colName.Qualifier.NonEmpty() || !colName.Name.EqualString(sq.ArgName) {
+			// we only want to rewrite the column name to an argument if it's the right column
+			return true
+		}
+
+		cursor.Replace(sqlparser.NewArgument(sq.ArgName))
+		return true
+	}
+
+	return sqlparser.Rewrite(expr, pre, nil).(sqlparser.Expr)
 }

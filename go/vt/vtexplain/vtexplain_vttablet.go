@@ -428,7 +428,9 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 		tEnv.addResult(query, result)
 	}
 
-	showTableRows := make([][]sqltypes.Value, 0, 4)
+	showTableRows := make([][]sqltypes.Value, 0, len(ddls))
+	showTableWithSizesRows := make([][]sqltypes.Value, 0, len(ddls))
+
 	for _, ddl := range ddls {
 		table := ddl.GetTable().Name.String()
 		options := ""
@@ -441,14 +443,21 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			}
 		}
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, options))
+		showTableWithSizesRows = append(showTableWithSizesRows, mysql.BaseShowTablesWithSizesRow(table, true, options))
 	}
-	tEnv.addResult(mysql.TablesWithSize57, &sqltypes.Result{
+
+	tEnv.addResult(mysql.BaseShowTables, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows:   showTableRows,
 	})
+
+	tEnv.addResult(mysql.TablesWithSize57, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesWithSizesFields,
+		Rows:   showTableWithSizesRows,
+	})
 	tEnv.addResult(mysql.TablesWithSize80, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-		Rows:   showTableRows,
+		Fields: mysql.BaseShowTablesWithSizesFields,
+		Rows:   showTableWithSizesRows,
 	})
 
 	indexRows := make([][]sqltypes.Value, 0, 4)
@@ -854,9 +863,15 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			colTypes = append(colTypes, colType)
 		}
 	case sqlparser.Callable:
-		// As a shortcut, functions are integral types
-		colNames = append(colNames, sqlparser.String(node))
-		colTypes = append(colTypes, querypb.Type_INT32)
+		switch node := node.(type) {
+		case *sqlparser.WeightStringFuncExpr:
+			colNames = append(colNames, sqlparser.String(node))
+			colTypes = append(colTypes, querypb.Type_BINARY)
+		default:
+			// As a shortcut, functions are integral types
+			colNames = append(colNames, sqlparser.String(node))
+			colTypes = append(colTypes, querypb.Type_INT32)
+		}
 	case *sqlparser.Literal:
 		colNames = append(colNames, sqlparser.String(node))
 		switch node.Type {

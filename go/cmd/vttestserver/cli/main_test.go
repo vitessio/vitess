@@ -60,7 +60,7 @@ func TestRunsVschemaMigrations(t *testing.T) {
 	cluster, err := startCluster()
 	defer cluster.TearDown()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
 
@@ -77,7 +77,7 @@ func TestPersistentMode(t *testing.T) {
 	dir := t.TempDir()
 
 	cluster, err := startPersistentCluster(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Add a new "ad-hoc" vindex via vtgate once the cluster is up, to later make sure it is persisted across teardowns
 	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on persistence_test add vindex my_vdx(id)")
@@ -116,7 +116,7 @@ func TestPersistentMode(t *testing.T) {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
 		cluster.TearDown()
 	}()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// rerun our sanity checks to make sure vschema is persisted correctly
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
@@ -137,7 +137,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	defer resetConfig(conf)
 
 	cluster, err := startCluster("--foreign_key_mode=allow", "--enable_online_ddl=true", "--enable_direct_ddl=true")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer cluster.TearDown()
 
 	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
@@ -163,7 +163,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 
 	cluster.TearDown()
 	cluster, err = startCluster("--foreign_key_mode=disallow", "--enable_online_ddl=false", "--enable_direct_ddl=false")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer cluster.TearDown()
 
 	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
@@ -191,7 +191,7 @@ func TestCanGetKeyspaces(t *testing.T) {
 	defer resetConfig(conf)
 
 	clusterInstance, err := startCluster()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer clusterInstance.TearDown()
 
 	defer func() {
@@ -222,7 +222,7 @@ func TestExternalTopoServerConsul(t *testing.T) {
 
 	cluster, err := startCluster("--external_topo_implementation=consul",
 		fmt.Sprintf("--external_topo_global_server_address=%s", serverAddr), "--external_topo_global_root=consul_test/global")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer cluster.TearDown()
 
 	assertGetKeyspaces(t, cluster)
@@ -258,7 +258,7 @@ func TestMtlsAuth(t *testing.T) {
 		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
 		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
 		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer func() {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
 		cluster.TearDown()
@@ -302,7 +302,7 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
 	defer cluster.TearDown()
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "code = Unauthenticated desc = client certificate not authorized")
 }
 

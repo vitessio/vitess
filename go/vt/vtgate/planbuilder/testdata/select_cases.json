@@ -737,6 +737,33 @@
     }
   },
   {
+    "comment": "subquery with an aggregation in order by that can be merged into a single route",
+    "query": "select col, trim((select user_name from user where id = 3)) val from user_extra where user_id = 3 group by col order by val",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col, trim((select user_name from user where id = 3)) val from user_extra where user_id = 3 group by col order by val",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, trim((select user_name from `user` where 1 != 1)) as val from user_extra where 1 != 1 group by col",
+        "Query": "select col, trim((select user_name from `user` where id = 3)) as val from user_extra where user_id = 3 group by col order by trim((select `user`.user_name from `user` where `user`.id = 3)) asc",
+        "Table": "user_extra",
+        "Values": [
+          "3"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Jumbled references",
     "query": "select user.col, user_extra.id, user.col2 from user join user_extra",
     "plan": {
@@ -2113,7 +2140,7 @@
     }
   },
   {
-    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
+    "comment": "ORDER BY subquery",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
     "plan": {
       "QueryType": "SELECT",
@@ -2157,9 +2184,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` order by __sq1 asc",
+                "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
+                "Query": "select :__sq1 as a from `user`",
                 "Table": "`user`"
               }
             ]
@@ -2290,7 +2316,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
+                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id limit 1",
                 "Table": "user_extra",
                 "Values": [
                   "3"
@@ -2348,7 +2374,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
+                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id limit 1",
                 "Table": "user_extra",
                 "Values": [
                   "3"
@@ -2412,15 +2438,21 @@
               },
               {
                 "InputName": "SubQuery",
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
-                "Table": "user_extra"
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col limit :__upper_limit",
+                    "Table": "user_extra"
+                  }
+                ]
               }
             ]
           }
@@ -2465,15 +2497,21 @@
               },
               {
                 "InputName": "SubQuery",
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col",
-                "Table": "user_extra"
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col limit :__upper_limit",
+                    "Table": "user_extra"
+                  }
+                ]
               }
             ]
           }
@@ -4940,6 +4978,28 @@
       },
       "TablesUsed": [
         "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "join with derived table with alias and join condition - merge into route",
+    "query": "select 1 from user join (select id as uid from user) as t where t.uid = user.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user join (select id as uid from user) as t where t.uid = user.id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from (select id as uid from `user` where 1 != 1) as t, `user` where 1 != 1",
+        "Query": "select 1 from (select id as uid from `user`) as t, `user` where t.uid = `user`.id",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
         "user.user"
       ]
     }

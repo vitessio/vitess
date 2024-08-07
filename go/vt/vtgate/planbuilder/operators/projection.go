@@ -182,13 +182,24 @@ var _ selectExpressions = (*Projection)(nil)
 
 // createSimpleProjection returns a projection where all columns are offsets.
 // used to change the name and order of the columns in the final output
-func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjection, src Operator) *Projection {
+func createSimpleProjection(ctx *plancontext.PlanningContext, selExprs sqlparser.SelectExprs, src Operator) *Projection {
 	p := newAliasedProjection(src)
-	for _, e := range qp.SelectExprs {
-		ae, err := e.GetAliasedExpr()
-		if err != nil {
-			panic(err)
+	for _, e := range selExprs {
+		ae, isAe := e.(*sqlparser.AliasedExpr)
+		if !isAe {
+			panic(vterrors.VT09015())
 		}
+
+		if ae.As.IsEmpty() {
+			// if we don't have an alias, we can use the column name as the alias
+			// the expectation is that when users use columns without aliases, they want the column name as the alias
+			// for more complex expressions, we just assume they'll use column offsets instead of column names
+			col, ok := ae.Expr.(*sqlparser.ColName)
+			if ok {
+				ae.As = col.Name
+			}
+		}
+
 		offset := p.Source.AddColumn(ctx, true, false, ae)
 		expr := newProjExpr(ae)
 		expr.Info = Offset(offset)
@@ -218,11 +229,14 @@ func (p *Projection) canPush(ctx *plancontext.PlanningContext) bool {
 }
 
 func (p *Projection) GetAliasedProjections() (AliasedProjections, error) {
-	ap, ok := p.Columns.(AliasedProjections)
-	if !ok {
+	switch cols := p.Columns.(type) {
+	case AliasedProjections:
+		return cols, nil
+	case nil:
+		return nil, nil
+	default:
 		return nil, vterrors.VT09015()
 	}
-	return ap, nil
 }
 
 func (p *Projection) isDerived() bool {
@@ -263,8 +277,7 @@ func (p *Projection) addProjExpr(pe ...*ProjExpr) int {
 	}
 
 	offset := len(ap)
-	ap = append(ap, pe...)
-	p.Columns = ap
+	p.Columns = append(ap, pe...)
 
 	return offset
 }
@@ -273,7 +286,18 @@ func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Ex
 	return p.addProjExpr(newProjExprWithInner(ae, e))
 }
 
-func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.Expr, sqs ...*SubQuery) {
+func (p *Projection) addSubqueryExpr(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, expr sqlparser.Expr, sqs ...*SubQuery) {
+	ap, err := p.GetAliasedProjections()
+	if err != nil {
+		panic(err)
+	}
+	for _, projExpr := range ap {
+		if ctx.SemTable.EqualsExprWithDeps(projExpr.EvalExpr, expr) {
+			// if we already have this column, we can just return the offset
+			return
+		}
+	}
+
 	pe := newProjExprWithInner(ae, expr)
 	pe.Info = SubQueryExpression(sqs)
 
@@ -562,7 +586,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) Operator {
 
 		// for everything else, we'll turn to the evalengine
 		eexpr, err := evalengine.Translate(rewritten, &evalengine.Config{
-			ResolveType: ctx.SemTable.TypeForExpr,
+			ResolveType: ctx.TypeForExpr,
 			Collation:   ctx.SemTable.Collation,
 			Environment: ctx.VSchema.Environment(),
 		})
