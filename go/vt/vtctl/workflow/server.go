@@ -2583,6 +2583,7 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DropTargets")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return nil, lockErr
 	}
 	defer workflowUnlock(&err)
 	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
@@ -2781,6 +2782,7 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DropSources")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return nil, lockErr
 	}
 	defer workflowUnlock(&err)
 	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
@@ -3022,6 +3024,7 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "completeMigrateWorkflow")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return nil, lockErr
 	}
 	defer workflowUnlock(&err)
 	ctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow")
