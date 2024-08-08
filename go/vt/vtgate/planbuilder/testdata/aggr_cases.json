@@ -6507,59 +6507,74 @@
                 "OrderBy": "(4|6) ASC, (5|7) ASC",
                 "Inputs": [
                   {
-                    "OperatorType": "Join",
-                    "Variant": "HashLeftJoin",
-                    "Collation": "binary",
-                    "ComparisonType": "INT16",
-                    "JoinColumnIndexes": "-1,1,-2,2,-3,3",
-                    "Predicate": "`user`.col = ue.col",
-                    "TableName": "`user`_user_extra",
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "count(*) as count(*)",
+                      "count(*) as count(*)",
+                      "`user`.col as col",
+                      "ue.col as col",
+                      "`user`.foo as foo",
+                      "ue.bar as bar",
+                      "weight_string(`user`.foo) as weight_string(`user`.foo)",
+                      "weight_string(ue.bar) as weight_string(ue.bar)"
+                    ],
                     "Inputs": [
                       {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
-                        "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo",
-                        "Table": "`user`"
-                      },
-                      {
-                        "OperatorType": "Aggregate",
-                        "Variant": "Ordered",
-                        "Aggregates": "count_star(0)",
-                        "GroupBy": "1, (2|3)",
+                        "OperatorType": "Join",
+                        "Variant": "HashLeftJoin",
+                        "Collation": "binary",
+                        "ComparisonType": "INT16",
+                        "JoinColumnIndexes": "-1,1,-2,2,-3,3,-3,3",
+                        "Predicate": "`user`.col = ue.col",
+                        "TableName": "`user`_user_extra",
                         "Inputs": [
                           {
-                            "OperatorType": "SimpleProjection",
-                            "Columns": [
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
+                            "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo",
+                            "Table": "`user`"
+                          },
+                          {
+                            "OperatorType": "Aggregate",
+                            "Variant": "Ordered",
+                            "Aggregates": "count_star(0)",
+                            "GroupBy": "1, (2|3)",
+                            "Inputs": [
+                              {
+                                "OperatorType": "SimpleProjection",
+                                "Columns": [
                               2,
                               0,
                               1,
                               3
                             ],
-                            "Inputs": [
-                              {
-                                "OperatorType": "Sort",
-                                "Variant": "Memory",
-                                "OrderBy": "0 ASC, (1|3) ASC",
                                 "Inputs": [
                                   {
-                                    "OperatorType": "Limit",
-                                    "Count": "10",
+                                    "OperatorType": "Sort",
+                                    "Variant": "Memory",
+                                    "OrderBy": "0 ASC, (1|3) ASC",
                                     "Inputs": [
                                       {
-                                        "OperatorType": "Route",
-                                        "Variant": "Scatter",
-                                        "Keyspace": {
-                                          "Name": "user",
-                                          "Sharded": true
-                                        },
-                                        "FieldQuery": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
-                                        "Query": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra) as ue limit :__upper_limit",
-                                        "Table": "user_extra"
+                                        "OperatorType": "Limit",
+                                        "Count": "10",
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "Scatter",
+                                            "Keyspace": {
+                                              "Name": "user",
+                                              "Sharded": true
+                                            },
+                                            "FieldQuery": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
+                                            "Query": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra) as ue limit :__upper_limit",
+                                            "Table": "user_extra"
+                                          }
+                                        ]
                                       }
                                     ]
                                   }
