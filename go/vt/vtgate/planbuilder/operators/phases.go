@@ -401,7 +401,7 @@ func prepareForAggregationPushing(ctx *plancontext.PlanningContext, root Operato
 
 		// We need to break the expressions into LHS and RHS, and store them in the CTE for later use
 		projections := slice.Map(ap, func(p *ProjExpr) *plancontext.RecurseExpression {
-			recurseExpression := breakCTEExpressionInLhsAndRhs(ctx, p.EvalExpr, rcte.LHSId)
+			recurseExpression := breakCTEExpressionInLhsAndRhs(ctx, p.EvalExpr, rcte.LeftID)
 			p.EvalExpr = recurseExpression.RightExpr
 			return recurseExpression
 		})

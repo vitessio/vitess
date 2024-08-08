@@ -270,7 +270,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			return createDualCTETable(ctx, tableID, tableInfo)
 		case *semantics.RealTable:
 			if tableInfo.CTE != nil {
-				return createRecursiveCTE(ctx, tableInfo.CTE)
+				return createRecursiveCTE(ctx, tableInfo.CTE, tableID)
 			}
 
 			qg := newQueryGraph()
@@ -314,7 +314,7 @@ func createDualCTETable(ctx *plancontext.PlanningContext, tableID semantics.Tabl
 	return createRouteFromVSchemaTable(ctx, qtbl, vschemaTable, false, nil)
 }
 
-func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE) Operator {
+func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE, outerID semantics.TableSet) Operator {
 	union, ok := def.Query.(*sqlparser.Union)
 	if !ok {
 		panic(vterrors.VT13001("expected UNION in recursive CTE"))
@@ -337,7 +337,7 @@ func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE) Op
 		panic(err)
 	}
 
-	return newRecurse(ctx, def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def))
+	return newRecurse(ctx, def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def), outerID)
 }
 
 func idForRecursiveTable(ctx *plancontext.PlanningContext, def *semantics.CTE) semantics.TableSet {

@@ -48,8 +48,14 @@ type RecurseCTE struct {
 	// MyTableID is the id of the CTE
 	MyTableInfo *semantics.CTETable
 
+	// Horizon is stored here until we either expand it or push it under a route
 	Horizon *Horizon
-	LHSId   semantics.TableSet
+
+	// The LeftID is the id of the left side of the CTE
+	LeftID,
+
+	// The OuterID is the id for this use of the CTE
+	OuterID semantics.TableSet
 }
 
 var _ Operator = (*RecurseCTE)(nil)
@@ -60,7 +66,7 @@ func newRecurse(
 	seed, term Operator,
 	predicates []*plancontext.RecurseExpression,
 	horizon *Horizon,
-	id semantics.TableSet,
+	leftID, outerID semantics.TableSet,
 ) *RecurseCTE {
 	for _, pred := range predicates {
 		ctx.AddJoinPredicates(pred.Original, pred.RightExpr)
@@ -71,7 +77,8 @@ func newRecurse(
 		Term:       term,
 		Predicates: predicates,
 		Horizon:    horizon,
-		LHSId:      id,
+		LeftID:     leftID,
+		OuterID:    outerID,
 	}
 }
 
@@ -84,7 +91,8 @@ func (r *RecurseCTE) Clone(inputs []Operator) Operator {
 		Projections: r.Projections,
 		Vars:        maps.Clone(r.Vars),
 		Horizon:     r.Horizon,
-		LHSId:       r.LHSId,
+		LeftID:      r.LeftID,
+		OuterID:     r.OuterID,
 	}
 }
 
@@ -185,4 +193,8 @@ func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 	}
 	return r
+}
+
+func (r *RecurseCTE) introducesTableID() semantics.TableSet {
+	return r.OuterID
 }

@@ -83,7 +83,7 @@ FROM emp_cte
 LIMIT 5;
 
 # Recursive CTE using literal values and joined with a real table on the outside
-WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 100 AS value, NULL AS manager_id
+WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 100 AS value, 1 AS manager_id
                                UNION ALL
                                SELECT id + 1, value * 2, id
                                FROM literal_cte
