@@ -525,7 +525,10 @@ func (tmc *testTMClient) VReplicationWaitForPos(ctx context.Context, tablet *top
 	return nil
 }
 
+//
 // Utility / helper functions.
+//
+
 func checkRouting(t *testing.T, ws *Server, want map[string][]string) {
 	t.Helper()
 	ctx := context.Background()
