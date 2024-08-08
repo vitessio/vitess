@@ -720,9 +720,7 @@ func TestWorkflowDelete(t *testing.T) {
 				// DeniedTables live.
 				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
 					for _, shardName := range keyspace.ShardNames {
-						si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
-						require.NoError(t, err)
-						require.Zero(t, si.Shard.TabletControls)
+						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil)
 					}
 				}
 			}

@@ -590,8 +590,7 @@ outer:
 			}
 		}
 	}
-	require.Equal(t, want, count, "serving types for %s/%s in cell %s: got: %d, want: %d",
-		keyspace, shard, cell, count, want)
+	require.Equal(t, want, count, "serving types for %s/%s in cell %s: got: %d, want: %d", keyspace, shard, cell, count, want)
 }
 
 func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspace, shard string, want bool) {
