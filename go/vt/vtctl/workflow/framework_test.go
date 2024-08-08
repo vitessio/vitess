@@ -236,10 +236,10 @@ func (env *testEnv) confirmRoutingAllTablesToTarget(t *testing.T) {
 	wantRR := make(map[string][]string)
 	for _, sd := range env.tmc.schema {
 		for _, td := range sd.TableDefinitions {
-			for _, pf := range []string{"", "@rdonly", "@replica"} {
-				wantRR[td.Name+pf] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
-				wantRR[fmt.Sprintf("%s.%s", env.sourceKeyspace.KeyspaceName, td.Name+pf)] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
-				wantRR[fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name+pf)] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
+			for _, tt := range []string{"", "@rdonly", "@replica"} {
+				wantRR[td.Name+tt] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
+				wantRR[fmt.Sprintf("%s.%s", env.sourceKeyspace.KeyspaceName, td.Name+tt)] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
+				wantRR[fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name+tt)] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
 			}
 		}
 	}
@@ -411,7 +411,7 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 		return nil, fmt.Errorf("tablet %v:\nunexpected query\n%s\nwant:\n%s", tablet, query, qrs[0].query)
 	}
 	tmc.vrQueries[int(tablet.Alias.Uid)] = qrs[1:]
-	return qrs[0].result, nil
+	return qrs[0].result, qrs[0].err
 }
 
 func (tmc *testTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
