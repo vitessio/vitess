@@ -184,7 +184,7 @@ const (
 )
 
 // ErrNotSingleTable refers to an error happening when something should be used only for single tables
-var ErrNotSingleTable = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+var ErrNotSingleTable = vterrors.VT13001("should only be used for single tables")
 
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {

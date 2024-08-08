@@ -45,7 +45,7 @@ const (
 var _ Primitive = (*percentBasedMirror)(nil)
 
 // NewPercentBasedMirror creates a Mirror.
-func NewPercentBasedMirror(percentage float32, primitive Primitive, target Primitive) *percentBasedMirror {
+func NewPercentBasedMirror(percentage float32, primitive Primitive, target Primitive) Primitive {
 	return &percentBasedMirror{percentage, primitive, target}
 }
 
@@ -84,19 +84,18 @@ func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bi
 
 		go func(target Primitive, vcursor VCursor) {
 			defer close(mirrorCh)
-			_, _ = target.TryExecute(mirrorCtx, vcursor, bindVars, wantfields)
+			_, _ = vcursor.ExecutePrimitive(mirrorCtx, target, bindVars, wantfields)
 		}(m.target, vcursor.CloneForMirroring(mirrorCtx))
 	}
 
-	r, err := m.primitive.TryExecute(ctx, vcursor, bindVars, wantfields)
+	r, err := vcursor.ExecutePrimitive(ctx, m.primitive, bindVars, wantfields)
 
 	if doMirror {
 		select {
 		case <-mirrorCh:
 			// Mirroring completed within the allowed time.
 		case <-mirrorCtx.Done():
-			// Mirroring took too long, cancel the mirror context.
-			mirrorCtxCancel()
+			// Mirroring took too long and was canceled.
 		}
 	}
 
@@ -118,19 +117,20 @@ func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCurs
 
 		go func(target Primitive, vcursor VCursor) {
 			defer close(mirrorCh)
-			_ = target.TryStreamExecute(mirrorCtx, vcursor, bindVars, wantfields, func(_ *sqltypes.Result) error {
+			_ = vcursor.StreamExecutePrimitive(mirrorCtx, target, bindVars, wantfields, func(_ *sqltypes.Result) error {
 				return nil
 			})
 		}(m.target, vcursor.CloneForMirroring(mirrorCtx))
 	}
 
-	err := m.primitive.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
+	err := vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
 
 	if doMirror {
 		select {
 		case <-mirrorCh:
-		case <-ctx.Done():
-			mirrorCtxCancel()
+			// Mirroring completed within the allowed time.
+		case <-mirrorCtx.Done():
+			// Mirroring took too long and was canceled.
 		}
 	}
 

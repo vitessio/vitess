@@ -42,10 +42,10 @@
   },
   {
     "comment": "select unsharded, qualified, table mirrored to sharded table",
-    "query": "select t1.id from unsharded_src1.t1 where t1.id = 1",
+    "query": "select t2.id from unsharded_src1.t2 where t2.id = 1",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select t1.id from unsharded_src1.t1 where t1.id = 1",
+      "Original": "select t2.id from unsharded_src1.t2 where t2.id = 1",
       "Instructions": {
         "OperatorType": "Mirror",
         "Variant": "PercentBased",
@@ -58,26 +58,30 @@
               "Name": "unsharded_src1",
               "Sharded": false
             },
-            "FieldQuery": "select t1.id from t1 where 1 != 1",
-            "Query": "select t1.id from t1 where t1.id = 1",
-            "Table": "t1"
+            "FieldQuery": "select t2.id from t2 where 1 != 1",
+            "Query": "select t2.id from t2 where t2.id = 1",
+            "Table": "t2"
           },
           {
             "OperatorType": "Route",
-            "Variant": "Unsharded",
+            "Variant": "EqualUnique",
             "Keyspace": {
-              "Name": "unsharded_dst1",
-              "Sharded": false
+              "Name": "sharded_dst1",
+              "Sharded": true
             },
-            "FieldQuery": "select t1.id from t1 where 1 != 1",
-            "Query": "select t1.id from t1 where t1.id = 1",
-            "Table": "t1"
+            "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
+            "Query": "select t2.id from t1 as t2 where t2.id = 1",
+            "Table": "t1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "xxhash"
           }
         ]
       },
       "TablesUsed": [
-        "unsharded_dst1.t1",
-        "unsharded_src1.t1"
+        "sharded_dst1.t1",
+        "unsharded_src1.t2"
       ]
     }
   },
@@ -285,23 +289,23 @@
   },
   {
     "comment": "self-mirror is not allowed",
-    "query": "select t1.id from unsharded_src1.t3",
+    "query": "select t1.id from unsharded_src2.t1",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select t1.id from unsharded_src1.t3",
+      "Original": "select t1.id from unsharded_src2.t1",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Unsharded",
         "Keyspace": {
-          "Name": "unsharded_src1",
+          "Name": "unsharded_src2",
           "Sharded": false
         },
-        "FieldQuery": "select t1.id from t3 where 1 != 1",
-        "Query": "select t1.id from t3",
-        "Table": "t3"
+        "FieldQuery": "select t1.id from t1 where 1 != 1",
+        "Query": "select t1.id from t1",
+        "Table": "t1"
       },
       "TablesUsed": [
-        "unsharded_src1.t3"
+        "unsharded_src2.t1"
       ]
     }
   },

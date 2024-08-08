@@ -385,7 +385,7 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 
 func (ctx *PlanningContext) UseMirror() *PlanningContext {
 	if ctx.isMirrored {
-		panic("bug: cannot mirror already mirrored planning context")
+		panic(vterrors.VT13001("bug: cannot mirror already mirrored planning context"))
 	}
 	if ctx.mirror != nil {
 		return ctx.mirror

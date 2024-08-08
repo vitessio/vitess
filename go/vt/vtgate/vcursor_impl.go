@@ -1099,6 +1099,9 @@ func (vc *vcursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.Mirro
 	if err != nil {
 		return nil, "", destTabletType, nil, err
 	}
+	if mirrorRule != nil {
+		destKeyspace = mirrorRule.Table.Keyspace.Name
+	}
 	return mirrorRule, destKeyspace, destTabletType, dest, err
 }
 
