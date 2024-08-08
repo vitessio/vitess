@@ -309,7 +309,7 @@ func TestMoveTablesComplete(t *testing.T) {
 			},
 		},
 		{
-			name: "keep routing rules",
+			name: "keep routing rules and data",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
 				ShardNames:   []string{"0"},
@@ -322,20 +322,9 @@ func TestMoveTablesComplete(t *testing.T) {
 				TargetKeyspace:   targetKeyspaceName,
 				Workflow:         workflowName,
 				KeepRoutingRules: true,
+				KeepData:         true,
 			},
 			expectedSourceQueries: []*queryResult{
-				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table1Name),
-					result: &querypb.QueryResult{},
-				},
-				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table2Name),
-					result: &querypb.QueryResult{},
-				},
-				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table3Name),
-					result: &querypb.QueryResult{},
-				},
 				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
@@ -358,7 +347,7 @@ func TestMoveTablesComplete(t *testing.T) {
 			},
 		},
 		{
-			name: "named lock held",
+			name: "rename tables",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
 				ShardNames:   []string{"0"},
@@ -368,21 +357,21 @@ func TestMoveTablesComplete(t *testing.T) {
 				ShardNames:   []string{"-80", "80-"},
 			},
 			req: &vtctldatapb.MoveTablesCompleteRequest{
-				TargetKeyspace:   targetKeyspaceName,
-				Workflow:         workflowName,
-				KeepRoutingRules: true,
+				TargetKeyspace: targetKeyspaceName,
+				Workflow:       workflowName,
+				RenameTables:   true,
 			},
 			expectedSourceQueries: []*queryResult{
 				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table1Name),
+					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table1Name, sourceKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},
 				},
 				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table2Name),
+					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table2Name, sourceKeyspaceName, table2Name),
 					result: &querypb.QueryResult{},
 				},
 				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table3Name),
+					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table3Name, sourceKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
 				{
@@ -398,6 +387,26 @@ func TestMoveTablesComplete(t *testing.T) {
 					result: &querypb.QueryResult{},
 				},
 			},
+			want: &vtctldatapb.MoveTablesCompleteResponse{
+				Summary: fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+			},
+		},
+		{
+			name: "named lock held",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.MoveTablesCompleteRequest{
+				TargetKeyspace:   targetKeyspaceName,
+				Workflow:         workflowName,
+				KeepRoutingRules: true,
+			},
 			preFunc: func(t *testing.T, env *testEnv) {
 				_, _, err := env.ts.LockName(ctx, lockName, "test")
 				require.NoError(t, err)
@@ -407,10 +416,6 @@ func TestMoveTablesComplete(t *testing.T) {
 				topo.LockTimeout = 45 * time.Second // reset it to the default
 			},
 			wantErr: fmt.Sprintf("deadline exceeded: internal/named_locks/%s", lockName),
-			want: &vtctldatapb.MoveTablesCompleteResponse{
-				Summary: fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace",
-					workflowName, targetKeyspaceName),
-			},
 		},
 	}
 	for _, tc := range testcases {
@@ -458,9 +463,7 @@ func TestMoveTablesComplete(t *testing.T) {
 				// DeniedTables live.
 				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
 					for _, shardName := range keyspace.ShardNames {
-						si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
-						require.NoError(t, err)
-						require.Zero(t, si.Shard.TabletControls)
+						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil)
 					}
 				}
 			}

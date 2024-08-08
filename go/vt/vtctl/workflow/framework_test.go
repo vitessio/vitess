@@ -544,69 +544,65 @@ func checkCellRouting(t *testing.T, ws *Server, cell string, want map[string][]s
 	ctx := context.Background()
 	svs, err := ws.ts.GetSrvVSchema(ctx, cell)
 	require.NoError(t, err)
-	got := make(map[string][]string)
+	got := make(map[string][]string, len(svs.RoutingRules.Rules))
 	for _, rr := range svs.RoutingRules.Rules {
 		got[rr.FromTable] = append(got[rr.FromTable], rr.ToTables...)
 	}
 	require.EqualValues(t, got, want, "routing rules don't match for cell %s: got: %v, want: %v", cell, got, want)
 }
 
-func checkDenyList(t *testing.T, ts *topo.Server, keyspaceShard string, want []string) {
+func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, want []string) {
 	t.Helper()
 	ctx := context.Background()
-	splits := strings.Split(keyspaceShard, ":")
-	si, err := ts.GetShard(ctx, splits[0], splits[1])
+	si, err := ts.GetShard(ctx, keyspace, shard)
 	require.NoError(t, err)
 	tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
 	var got []string
 	if tc != nil {
 		got = tc.DeniedTables
 	}
-	require.EqualValues(t, got, want, "denied tables for %v: got: %v, want: %v", keyspaceShard, got, want)
+	require.EqualValues(t, got, want, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, want)
 }
 
-func checkServedTypes(t *testing.T, ts *topo.Server, keyspaceShard string, want int) {
+func checkServedTypes(t *testing.T, ts *topo.Server, keyspace, shard string, want int) {
 	t.Helper()
 	ctx := context.Background()
-	splits := strings.Split(keyspaceShard, ":")
-	si, err := ts.GetShard(ctx, splits[0], splits[1])
+	si, err := ts.GetShard(ctx, keyspace, shard)
 	require.NoError(t, err)
 	servedTypes, err := ts.GetShardServingTypes(ctx, si)
 	require.NoError(t, err)
-	require.Equal(t, want, len(servedTypes), "shard %v has wrong served types: got: %v, want: %v",
-		keyspaceShard, len(servedTypes), want)
+	require.Equal(t, want, len(servedTypes), "shard %s/%s has wrong served types: got: %v, want: %v",
+		keyspace, shard, len(servedTypes), want)
 }
 
-func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspaceShard, cell string, want int) {
+func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspace, shard, cell string, want int) {
 	t.Helper()
 	ctx := context.Background()
-	splits := strings.Split(keyspaceShard, ":")
-	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, splits[0])
+	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 	require.NoError(t, err)
 	count := 0
 outer:
 	for _, partition := range srvKeyspace.GetPartitions() {
 		for _, ref := range partition.ShardReferences {
-			if ref.Name == splits[1] {
+			if ref.Name == shard {
 				count++
 				continue outer
 			}
 		}
 	}
-	require.Equal(t, want, count, "serving types for keyspaceShard %s, cell %s: got: %d, want: %d",
-		keyspaceShard, cell, count, want)
+	require.Equal(t, want, count, "serving types for %s/%s in cell %s: got: %d, want: %d",
+		keyspace, shard, cell, count, want)
 }
 
-func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {
+func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspace, shard string, want bool) {
 	t.Helper()
 	ctx := context.Background()
-	splits := strings.Split(keyspaceShard, ":")
-	si, err := ts.GetShard(ctx, splits[0], splits[1])
+	si, err := ts.GetShard(ctx, keyspace, shard)
 	require.NoError(t, err)
-	require.Equal(t, want, si.IsPrimaryServing, "primary serving for %v: got: %v, want: %v", keyspaceShard, si.IsPrimaryServing, want)
+	require.Equal(t, want, si.IsPrimaryServing, "primary serving for %s/%s: got: %v, want: %v", keyspace, shard, si.IsPrimaryServing, want)
 }
 
-func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Server, keyspace string, table string) bool {
+func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Server, keyspace, table string) bool {
 	vschema, err := ts.GetVSchema(ctx, keyspace)
 	require.NoError(t, err)
 	require.NotNil(t, vschema)
