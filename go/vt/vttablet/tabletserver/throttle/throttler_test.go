@@ -1495,10 +1495,14 @@ func TestProbesWhileOperating(t *testing.T) {
 		})
 
 		t.Run("metrics", func(t *testing.T) {
-			assert.Len(t, throttler.inventory.TabletMetrics, 3)                                                                // 1 self tablet + 2 shard tablets
-			assert.Contains(t, throttler.inventory.TabletMetrics, "", "TabletMetrics: %+v", throttler.inventory.TabletMetrics) // primary self identifies with empty alias
-			assert.Contains(t, throttler.inventory.TabletMetrics, "fakezone1-0000000101", "TabletMetrics: %+v", throttler.inventory.TabletMetrics)
-			assert.Contains(t, throttler.inventory.TabletMetrics, "fakezone2-0000000102", "TabletMetrics: %+v", throttler.inventory.TabletMetrics)
+			var results base.TabletResultMap
+			<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+				results = maps.Clone(throttler.inventory.TabletMetrics)
+			})
+			assert.Len(t, results, 3)                                      // 1 self tablet + 2 shard tablets
+			assert.Contains(t, results, "", "TabletMetrics: %+v", results) // primary self identifies with empty alias
+			assert.Contains(t, results, "fakezone1-0000000101", "TabletMetrics: %+v", results)
+			assert.Contains(t, results, "fakezone2-0000000102", "TabletMetrics: %+v", results)
 		})
 
 		t.Run("no REPLICA probes", func(t *testing.T) {
@@ -1511,9 +1515,13 @@ func TestProbesWhileOperating(t *testing.T) {
 				ticker := time.NewTicker(100 * time.Millisecond)
 				defer ticker.Stop()
 				for {
-					if len(throttler.inventory.TabletMetrics) == 1 {
+					var results base.TabletResultMap
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						results = maps.Clone(throttler.inventory.TabletMetrics)
+					})
+					if len(results) == 1 {
 						// That's what we were waiting for. Good.
-						assert.Contains(t, throttler.inventory.TabletMetrics, "", "TabletMetrics: %+v", throttler.inventory.TabletMetrics) // primary self identifies with empty alias
+						assert.Contains(t, results, "", "TabletMetrics: %+v", results) // primary self identifies with empty alias
 						return
 					}
 
@@ -1532,7 +1540,11 @@ func TestProbesWhileOperating(t *testing.T) {
 				ticker := time.NewTicker(100 * time.Millisecond)
 				defer ticker.Stop()
 				for {
-					if len(throttler.inventory.TabletMetrics) == 3 {
+					var results base.TabletResultMap
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						results = maps.Clone(throttler.inventory.TabletMetrics)
+					})
+					if len(results) == 3 {
 						// That's what we were waiting for. Good.
 						return
 					}
