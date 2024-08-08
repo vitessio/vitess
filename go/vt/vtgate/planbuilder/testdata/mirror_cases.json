@@ -8,7 +8,7 @@
       "Instructions": {
         "OperatorType": "Mirror",
         "Variant": "PercentBased",
-        "Percent": 50,
+        "Percent": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -41,6 +41,28 @@
     }
   },
   {
+    "comment": "select unsharded, qualified, table mirrored to unsharded table with zero percentage",
+    "query": "select t3.id from unsharded_src1.t3 where t3.id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t3.id from unsharded_src1.t3 where t3.id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_src1",
+          "Sharded": false
+        },
+        "FieldQuery": "select t3.id from t3 where 1 != 1",
+        "Query": "select t3.id from t3 where t3.id = 1",
+        "Table": "t3"
+      },
+      "TablesUsed": [
+        "unsharded_src1.t3"
+      ]
+    }
+  },
+  {
     "comment": "select unsharded, qualified, table mirrored to sharded table",
     "query": "select t2.id from unsharded_src1.t2 where t2.id = 1",
     "plan": {
@@ -49,7 +71,7 @@
       "Instructions": {
         "OperatorType": "Mirror",
         "Variant": "PercentBased",
-        "Percent": 50,
+        "Percent": 2,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -94,7 +116,7 @@
       "Instructions": {
         "OperatorType": "Mirror",
         "Variant": "PercentBased",
-        "Percent": 50,
+        "Percent": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -163,7 +185,7 @@
       "Instructions": {
         "OperatorType": "Mirror",
         "Variant": "PercentBased",
-        "Percent": 50,
+        "Percent": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -318,7 +340,7 @@
       "Instructions": {
         "OperatorType": "Mirror",
         "Variant": "PercentBased",
-        "Percent": 50,
+        "Percent": 4,
         "Inputs": [
           {
             "OperatorType": "Route",

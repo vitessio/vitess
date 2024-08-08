@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -69,11 +70,11 @@ func (m *PercentBasedMirror) SetInputs(inputs []Operator) {
 // where data is fetched from the LHS of the join to be used in the evaluation on the RHS
 // TODO: we should remove this and replace it with rewriters
 func (m *PercentBasedMirror) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	panic("not supported")
+	panic(vterrors.VT13001("not supported"))
 }
 
 func (m *PercentBasedMirror) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
-	panic("not supported")
+	panic(vterrors.VT13001("not supported"))
 }
 
 func (m *PercentBasedMirror) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
@@ -98,5 +99,5 @@ func (m *PercentBasedMirror) GetOrdering(ctx *plancontext.PlanningContext) []Ord
 
 // AddWSColumn implements Operator.
 func (m *PercentBasedMirror) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	panic("not supported")
+	panic(vterrors.VT13001("not supported"))
 }
