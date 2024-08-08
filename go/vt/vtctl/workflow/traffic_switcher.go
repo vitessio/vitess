@@ -30,7 +30,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -547,12 +546,12 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 				DisableForeignKeyChecks: true,
 			})
 			if err != nil {
-				if mysqlErr, ok := err.(*sqlerror.SQLError); ok && mysqlErr.Num == sqlerror.ERNoSuchTable {
+				if IsTableDidNotExistError(err) {
 					ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), tableName)
-					return nil
+				} else {
+					ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), tableName, err)
+					return err
 				}
-				ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), tableName, err)
-				return err
 			}
 			ts.Logger().Infof("%s: Removed table %s.%s\n", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), source.GetPrimary().DbName(), tableName)
 
@@ -1178,13 +1177,13 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 			})
 			ts.Logger().Infof("Removed target table with result: %+v", res)
 			if err != nil {
-				if mysqlErr, ok := err.(*sqlerror.SQLError); ok && mysqlErr.Num == sqlerror.ERNoSuchTable {
+				if IsTableDidNotExistError(err) {
 					// The table was already gone, so we can ignore the error.
 					ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName)
-					return nil
+				} else {
+					ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName, err)
+					return err
 				}
-				ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName, err)
-				return err
 			}
 			ts.Logger().Infof("%s: Removed table %s.%s\n",
 				topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)

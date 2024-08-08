@@ -35,7 +35,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
@@ -2554,7 +2553,7 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			Query:   []byte(sqlOptimizeTable),
 			MaxRows: uint64(100), // always produces 1+rows with notes and status
 		}); err != nil {
-			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Num == sqlerror.ERNoSuchTable { // the table may not exist
+			if IsTableDidNotExistError(err) {
 				return
 			}
 			s.Logger().Warningf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err)
