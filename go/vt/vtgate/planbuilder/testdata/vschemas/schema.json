@@ -252,6 +252,12 @@
               "column": "non_planable",
               "name": "non_planable_user_map"
             }
+          ],
+          "columns": [
+            {
+              "name": "col",
+              "type": "INT16"
+            }
           ]
         },
         "user_extra": {
@@ -281,6 +287,12 @@
             {
               "column": "id",
               "name": "music_user_map"
+            }
+          ],
+          "columns": [
+            {
+              "name": "intcol",
+              "type": "INT16"
             }
           ]
         },
