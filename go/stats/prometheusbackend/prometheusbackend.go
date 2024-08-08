@@ -18,9 +18,10 @@ package prometheusbackend
 
 import (
 	"expvar"
+	"strings"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"strings"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
