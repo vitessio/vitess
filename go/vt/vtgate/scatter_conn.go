@@ -86,21 +86,7 @@ var (
 // NewScatterConn creates a new ScatterConn.
 func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *ScatterConn {
 	// this only works with TabletGateway
-	if statsName == "" {
-		return &ScatterConn{
-			timings: stats.NewMultiTimings(
-				statsName,
-				"Scatter connection timings",
-				[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
-			tabletCallErrorCount: stats.NewCountersWithMultiLabels(
-				"",
-				"Error count from tablet calls in scatter conns",
-				[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
-			txConn:  txConn,
-			gateway: gw,
-		}
-	} else {
-
+	if statsName == "VttabletCall" {
 		return &ScatterConn{
 			timings:              vttabletTimings,
 			tabletCallErrorCount: tabletCallErrorCount,
@@ -108,6 +94,24 @@ func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *Scatte
 			gateway:              gw,
 		}
 	}
+
+	tabletCallErrorCountStatsName := ""
+	if statsName != "" {
+		tabletCallErrorCountStatsName = statsName + "ErrorCount"
+	}
+	return &ScatterConn{
+		timings: stats.NewMultiTimings(
+			statsName,
+			"Scatter connection timings",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		tabletCallErrorCount: stats.NewCountersWithMultiLabels(
+			tabletCallErrorCountStatsName,
+			"Error count from tablet calls in scatter conns",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		txConn:  txConn,
+		gateway: gw,
+	}
+
 }
 
 func (stc *ScatterConn) startAction(name string, target *querypb.Target) (time.Time, []string) {

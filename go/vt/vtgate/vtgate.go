@@ -394,6 +394,7 @@ func Init(
 	})
 	vtgateInst.registerDebugHealthHandler()
 	vtgateInst.registerDebugEnvHandler()
+	vtgateInst.registerClearMetrics()
 
 	initAPI(gw.hc)
 	return vtgateInst
@@ -455,6 +456,14 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 			return
 		}
 		w.Write([]byte("ok"))
+	})
+}
+
+func (vtg *VTGate) registerClearMetrics() {
+	servenv.HTTPHandleFunc("/clear/metrics", func(w http.ResponseWriter, r *http.Request) {
+		ClearMetrics()
+		log.Infof("vtgate metrics have been cleared.")
+		w.Write([]byte("vtgate metrics have been cleared."))
 	})
 }
 
