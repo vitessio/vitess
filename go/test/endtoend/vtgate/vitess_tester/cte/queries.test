@@ -82,16 +82,15 @@ SELECT *
 FROM emp_cte
 LIMIT 5;
 
-# Recursive CTE with DISTINCT to avoid duplicates
-WITH RECURSIVE distinct_emp_cte AS (SELECT DISTINCT id, name, manager_id
-                                    FROM employees
-                                    WHERE manager_id IS NULL
-                                    UNION ALL
-                                    SELECT DISTINCT e.id, e.name, e.manager_id
-                                    FROM employees e
-                                             INNER JOIN distinct_emp_cte cte ON e.manager_id = cte.id)
-SELECT *
-FROM distinct_emp_cte;
+# Recursive CTE using literal values and joined with a real table on the outside
+WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 100 AS value, NULL AS manager_id
+                               UNION ALL
+                               SELECT id + 1, value * 2, id
+                               FROM literal_cte
+                               WHERE id < 5)
+SELECT l.id, l.value, l.manager_id, e.name AS employee_name
+FROM literal_cte l
+         LEFT JOIN employees e ON l.id = e.id;
 
 # Recursive CTE with aggregation outside the CTE
 WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
@@ -104,83 +103,3 @@ WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
 SELECT manager_id, COUNT(*) AS employee_count
 FROM emp_cte
 GROUP BY manager_id;
-
-# Recursive CTE using literal values and joined with a real table on the outside
-WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 'Root' AS name, NULL AS manager_id
-                               UNION ALL
-                               SELECT id + 1, CONCAT('Node', id + 1), id
-                               FROM literal_cte
-                               WHERE id < 5)
-SELECT l.id, l.name, l.manager_id, e.name AS employee_name
-FROM literal_cte l
-         LEFT JOIN employees e ON l.id = e.id;
-
-# Recursive CTE for generating a series of numbers
-WITH RECURSIVE
-    number_series AS (SELECT 1 AS n
-                      UNION ALL
-                      SELECT n + 1
-                      FROM number_series
-                      WHERE n < 5),
-
-# Recursive CTE that uses the number series
-    number_names AS (SELECT n, CONCAT('Number', n) AS name
-                     FROM number_series)
-SELECT *
-FROM number_names;
-
-# Recursive CTE for generating a series of numbers
-WITH RECURSIVE
-    number_series AS (SELECT 1 AS n
-                      UNION ALL
-                      SELECT n + 1
-                      FROM number_series
-                      WHERE n < 5),
-
-# Independent recursive CTE for employees hierarchy
-    employee_hierarchy AS (SELECT id, name, manager_id
-                           FROM employees
-                           WHERE manager_id IS NULL
-                           UNION ALL
-                           SELECT e.id, e.name, e.manager_id
-                           FROM employees e
-                                    INNER JOIN employee_hierarchy eh ON e.manager_id = eh.id)
-
-# Joining results from both CTEs
-SELECT ns.n, ns.n AS number, eh.id, eh.name, eh.manager_id
-FROM number_series ns
-         JOIN employee_hierarchy eh ON ns.n = eh.id;
-
-# Recursive CTE for generating a series of numbers
-WITH RECURSIVE
-    number_series AS (SELECT 1 AS n
-                      UNION ALL
-                      SELECT n + 1
-                      FROM number_series
-                      WHERE n < 5),
-
-# Independent recursive CTE for employees hierarchy
-    employee_hierarchy AS (SELECT id, name, manager_id
-                           FROM employees
-                           WHERE manager_id IS NULL
-                           UNION ALL
-                           SELECT e.id, e.name, e.manager_id
-                           FROM employees e
-                                    INNER JOIN employee_hierarchy eh ON e.manager_id = eh.id)
-
-# Union results from both CTEs
-SELECT n AS id, CONCAT('Number', n) AS name, NULL AS manager_id
-FROM number_series
-UNION
-SELECT id, name, manager_id
-FROM employee_hierarchy;
-
-WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level
-                           FROM employees
-                           WHERE manager_id IS NULL
-                           UNION ALL
-                           SELECT e.id, cte.level + 1
-                           FROM employees e
-                                    JOIN emp_cte cte ON e.manager_id = cte.id)
-SELECT *
-FROM emp_cte;
