@@ -599,7 +599,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	hc.broadcast(th)
 }
 
-// Recomputes the healthy tablets for the given key.
+// recomputeHealthy recomputes the healthy tablets for the given key.
 //
 // This filters out tablets that might be healthy, but are not part of the current
 // cell or cell alias. It also performs filtering of tablets based on replication lag,
