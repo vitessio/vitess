@@ -300,6 +300,9 @@ func TestWorkflowDelete(t *testing.T) {
 					result: &querypb.QueryResult{},
 				},
 			},
+			expectedLogs: []string{ // Confirm that the custom logger is working as expected
+				fmt.Sprintf("Table `%s` did not exist when attempting to remove it", table2Name),
+			},
 			want: &vtctldatapb.WorkflowDeleteResponse{
 				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
 					workflowName, targetKeyspaceName),
@@ -445,8 +448,6 @@ func TestWorkflowDelete(t *testing.T) {
 			logs := memlogger.String()
 			// To confirm that the custom logger was passed on to the trafficSwitcher.
 			require.Contains(t, logs, "traffic_switcher.go")
-			// TODO: Add expected log messages in the test cases after this is merged:
-			// https://github.com/vitessio/vitess/pull/16505
 			for _, expectedLog := range tc.expectedLogs {
 				require.Contains(t, logs, expectedLog)
 			}
