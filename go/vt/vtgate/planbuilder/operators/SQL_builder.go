@@ -236,7 +236,7 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 	}
 }
 
-func (qb *queryBuilder) cteWith(other *queryBuilder, name string) {
+func (qb *queryBuilder) cteWith(other *queryBuilder, name, alias string) {
 	cteUnion := &sqlparser.Union{
 		Left:  qb.stmt.(sqlparser.SelectStatement),
 		Right: other.stmt.(sqlparser.SelectStatement),
@@ -253,7 +253,7 @@ func (qb *queryBuilder) cteWith(other *queryBuilder, name string) {
 		},
 	}
 
-	qb.addTable("", name, "", "", nil)
+	qb.addTable("", name, alias, "", nil)
 }
 
 type FromStatement interface {
@@ -714,7 +714,12 @@ func buildCTE(op *RecurseCTE, qb *queryBuilder) {
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.Term, qbR)
 	qbR.addPredicate(pred)
-	qb.cteWith(qbR, op.Def.Name)
+	infoFor, err := qb.ctx.SemTable.TableInfoFor(op.OuterID)
+	if err != nil {
+		panic(err)
+	}
+
+	qb.cteWith(qbR, op.Def.Name, infoFor.GetAliasedTableExpr().As.String())
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {
