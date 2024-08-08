@@ -415,7 +415,7 @@ func TestMoveTablesComplete(t *testing.T) {
 			postFunc: func(t *testing.T, env *testEnv) {
 				topo.LockTimeout = 45 * time.Second // reset it to the default
 			},
-			wantErr: fmt.Sprintf("deadline exceeded: internal/named_locks/%s", lockName),
+			wantErr: fmt.Sprintf("failed to lock the %s workflow: deadline exceeded: internal/named_locks/%s", lockName, lockName),
 		},
 	}
 	for _, tc := range testcases {
@@ -675,7 +675,7 @@ func TestWorkflowDelete(t *testing.T) {
 			postFunc: func(t *testing.T, env *testEnv) {
 				topo.LockTimeout = 45 * time.Second // reset it to the default
 			},
-			wantErr: fmt.Sprintf("deadline exceeded: internal/named_locks/%s", lockName),
+			wantErr: fmt.Sprintf("failed to lock the %s workflow: deadline exceeded: internal/named_locks/%s", lockName, lockName),
 		},
 	}
 	for _, tc := range testcases {
