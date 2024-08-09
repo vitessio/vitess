@@ -831,7 +831,6 @@
                             "Variant": "Ordered",
                             "Aggregates": "sum(0) AS sum(case when nation = 'BRAZIL' then volume else 0 end), sum(1) AS sum(volume)",
                             "GroupBy": "(2|3)",
-                            "ResultColumns": 3,
                             "Inputs": [
                               {
                                 "OperatorType": "Join",
@@ -1111,12 +1110,11 @@
                         "Variant": "Ordered",
                         "Aggregates": "sum(0) AS sum_profit",
                         "GroupBy": "(1|3), (2|4)",
-                        "ResultColumns": 4,
                         "Inputs": [
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "R:0,L:0,L:4,L:6,L:7",
+                            "JoinColumnIndexes": "R:0,L:0,L:4,L:6,L:8",
                             "JoinVars": {
                               "l_discount": 2,
                               "l_extendedprice": 1,
@@ -1129,12 +1127,12 @@
                               {
                                 "OperatorType": "Sort",
                                 "Variant": "Memory",
-                                "OrderBy": "(0|8) ASC, (4|7) ASC",
+                                "OrderBy": "(0|6) ASC, (4|8) ASC",
                                 "Inputs": [
                                   {
                                     "OperatorType": "Join",
                                     "Variant": "Join",
-                                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,L:2,R:5,L:3",
+                                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,L:3,R:5",
                                     "JoinVars": {
                                       "o_orderkey": 1
                                     },
@@ -2098,13 +2096,13 @@
         "OperatorType": "Sort",
         "Variant": "Memory",
         "OrderBy": "3 DESC, (0|4) ASC, (1|5) ASC, (2|6) ASC",
+        "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "count_distinct(3|7) AS supplier_cnt",
             "GroupBy": "(0|4), (1|5), (2|6)",
-            "ResultColumns": 4,
             "Inputs": [
               {
                 "OperatorType": "Sort",
@@ -2114,9 +2112,9 @@
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:0,R:1,R:2,L:0,R:3,R:4,R:5,L:1",
+                    "JoinColumnIndexes": "R:0,R:1,R:2,L:0,R:3,R:4,R:5,L:2",
                     "JoinVars": {
-                      "ps_partkey": 2,
+                      "ps_partkey": 1,
                       "ps_suppkey": 0
                     },
                     "TableName": "partsupp_part",
@@ -2149,8 +2147,8 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where 1 != 1",
-                            "Query": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where not :__sq_has_values or ps_suppkey not in ::__sq1",
+                            "FieldQuery": "select ps_suppkey, ps_partkey, weight_string(ps_suppkey) from partsupp where 1 != 1",
+                            "Query": "select ps_suppkey, ps_partkey, weight_string(ps_suppkey) from partsupp where not :__sq_has_values or ps_suppkey not in ::__sq1",
                             "Table": "partsupp"
                           }
                         ]

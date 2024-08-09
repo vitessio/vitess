@@ -788,7 +788,6 @@
                     "OperatorType": "Aggregate",
                     "Variant": "Ordered",
                     "GroupBy": "(0|1)",
-                    "ResultColumns": 1,
                     "Inputs": [
                       {
                         "OperatorType": "SimpleProjection",

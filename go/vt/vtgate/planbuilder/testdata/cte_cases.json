@@ -565,7 +565,6 @@
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "GroupBy": "0, (1|2)",
-                "ResultColumns": 2,
                 "Inputs": [
                   {
                     "OperatorType": "SimpleProjection",
@@ -574,7 +573,7 @@
                       {
                         "OperatorType": "Aggregate",
                         "Variant": "Scalar",
-                        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS a, any_value(2)",
+                        "Aggregates": "any_value(0|2) AS id, sum_count_star(1) AS a",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -583,9 +582,9 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select id, count(*) as a, weight_string(id) from `user` where 1 != 1",
-                            "OrderBy": "1 ASC, (0|2) ASC",
-                            "Query": "select id, count(*) as a, weight_string(id) from `user` order by count(*) asc, id asc",
+                            "FieldQuery": "select dt.c0 as id, dt.c1 as a, weight_string(dt.c0), weight_string(dt.c0) from (select id, count(*) as a from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                            "OrderBy": "1 ASC, (0|3) ASC",
+                            "Query": "select dt.c0 as id, dt.c1 as a, weight_string(dt.c0), weight_string(dt.c0) from (select id, count(*) as a from `user` order by count(*) asc, id asc) as dt(c0, c1)",
                             "Table": "`user`"
                           }
                         ]
