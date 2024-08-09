@@ -109,8 +109,12 @@ export const getReverseWorkflow = <W extends pb.Workflow>(
   if (originalWorkflowName.endsWith("_reverse")) {
     reverseWorkflowName = originalWorkflowName.split("_reverse")[0];
   }
-  return workflows.find((workflow) => 
-    workflow.workflow?.name === reverseWorkflowName &&
-    workflow.workflow?.source?.keyspace === originalWorkflow.workflow?.target?.keyspace &&
-    workflow.workflow?.target?.keyspace === originalWorkflow.workflow?.source?.keyspace);
+  return workflows.find(
+    (workflow) =>
+      workflow.workflow?.name === reverseWorkflowName &&
+      workflow.workflow?.source?.keyspace ===
+        originalWorkflow.workflow?.target?.keyspace &&
+      workflow.workflow?.target?.keyspace ===
+        originalWorkflow.workflow?.source?.keyspace
+  );
 };

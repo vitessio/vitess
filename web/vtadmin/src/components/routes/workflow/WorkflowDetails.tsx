@@ -14,26 +14,22 @@
  * limitations under the License.
  */
 
-import { groupBy, orderBy } from "lodash-es";
+import { orderBy } from "lodash-es";
 import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { useWorkflow, useWorkflows } from "../../../hooks/api";
-import { formatAlias } from "../../../util/tablets";
-import { formatDateTime, formatRelativeTime } from "../../../util/time";
+import { formatDateTime } from "../../../util/time";
 import {
   formatStreamKey,
   getReverseWorkflow,
   getStreams,
-  getStreamSource,
-  getStreamTarget,
 } from "../../../util/workflows";
 import { DataTable } from "../../dataTable/DataTable";
 import { vtctldata } from "../../../proto/vtadmin";
 import { DataCell } from "../../dataTable/DataCell";
 import { StreamStatePip } from "../../pips/StreamStatePip";
 import { ThrottleThresholdSeconds } from "../Workflows";
-import { workerData } from "worker_threads";
 
 interface Props {
   clusterID: string;
@@ -83,7 +79,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
       {reverseWorkflow && (
         <div>
           <h3 className="my-8">Reverse Workflow</h3>
-          <div className="font-bold font-mono text-lg">
+          <div className="font-bold text-lg">
             <Link
               to={`/workflow/${reverseWorkflow.cluster?.id}/${reverseWorkflow.keyspace}/${reverseWorkflow.workflow?.name}`}
             >
@@ -136,7 +132,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
             {streamState == "Running" &&
               data?.workflow?.max_v_replication_lag && (
                 <p className="text-base">
-                  <strong>VReplication Lag</strong> <br />
+                  <strong>Max VReplication Lag</strong> <br />
                   {`${data?.workflow?.max_v_replication_lag}`}
                 </p>
               )}
