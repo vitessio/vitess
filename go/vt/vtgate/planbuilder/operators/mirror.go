@@ -61,6 +61,9 @@ func (m *PercentBasedMirror) Inputs() []Operator {
 
 // SetInputs changes the inputs for this op
 func (m *PercentBasedMirror) SetInputs(inputs []Operator) {
+	if len(inputs) < 2 {
+		panic(vterrors.VT13001("unexpected number of inputs for PercentBasedMirror operator"))
+	}
 	m.Operator = inputs[0]
 	m.Target = inputs[1]
 }
