@@ -80,8 +80,8 @@ func (si *declarativeSchemaInformation) GetForeignKeyChecksState() *bool {
 }
 
 // FindMirrorRule implements semantics.SchemaInformation.
-func (si *declarativeSchemaInformation) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error) {
-	return nil, "", topodatapb.TabletType_UNKNOWN, nil, nil
+func (si *declarativeSchemaInformation) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	return nil, nil
 }
 
 // addTable adds a fake table with an empty column list

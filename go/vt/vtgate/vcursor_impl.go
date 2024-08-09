@@ -1087,22 +1087,19 @@ func (vc *vcursorImpl) GetAggregateUDFs() []string {
 
 // FindMirrorRule finds the mirror rule for the requested table name and
 // VSchema tablet type.
-func (vc *vcursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+func (vc *vcursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	destKeyspace, destTabletType, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
-		return nil, "", destTabletType, nil, err
+		return nil, err
 	}
 	if destKeyspace == "" {
 		destKeyspace = vc.keyspace
 	}
 	mirrorRule, err := vc.vschema.FindMirrorRule(destKeyspace, name.Name.String(), destTabletType)
 	if err != nil {
-		return nil, "", destTabletType, nil, err
+		return nil, err
 	}
-	if mirrorRule != nil {
-		destKeyspace = mirrorRule.Table.Keyspace.Name
-	}
-	return mirrorRule, destKeyspace, destTabletType, dest, err
+	return mirrorRule, err
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

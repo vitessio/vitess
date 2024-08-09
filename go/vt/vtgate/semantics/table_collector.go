@@ -451,7 +451,13 @@ func createTable(
 		return nil, err
 	}
 
-	mr, _, _, _, _ := si.FindMirrorRule(t)
+	mr, err := si.FindMirrorRule(t)
+	if err != nil {
+		// Mirroring is best effort. If we get an error while mirroring, keep going
+		// as if mirroring was disabled. We don't want to interrupt production work
+		// because of an issue with mirroring.
+		mr = nil
+	}
 
 	table := &RealTable{
 		tableName:    alias.As.String(),

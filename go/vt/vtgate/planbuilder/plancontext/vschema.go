@@ -99,7 +99,7 @@ type VSchema interface {
 
 	// FindMirrorRule finds the mirror rule for the requested keyspace, table
 	// name, and the tablet type in the VSchema.
-	FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error)
+	FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error)
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

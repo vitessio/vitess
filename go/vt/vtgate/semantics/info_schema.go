@@ -1671,6 +1671,6 @@ func (i *infoSchemaWithColumns) GetAggregateUDFs() []string {
 }
 
 // FindMirrorRule implements SchemaInformation.
-func (i *infoSchemaWithColumns) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error) {
+func (i *infoSchemaWithColumns) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error) {
 	return i.inner.FindMirrorRule(tablename)
 }

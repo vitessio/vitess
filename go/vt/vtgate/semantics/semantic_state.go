@@ -171,7 +171,7 @@ type (
 		GetForeignKeyChecksState() *bool
 		KeyspaceError(keyspace string) error
 		GetAggregateUDFs() []string
-		FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error)
+		FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error)
 	}
 
 	shortCut = int

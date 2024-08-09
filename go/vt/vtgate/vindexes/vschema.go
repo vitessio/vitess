@@ -938,7 +938,6 @@ func extractTableParts(tableName string, allowUnqualified bool) (string, string,
 	}
 	// Using fmt.Errorf instead of vterrors here because this error is always wrapped in vterrors.
 	return "", "", fmt.Errorf(errMsgFormat, tableName)
-
 }
 
 func parseTable(tableName string) (sqlparser.TableName, error) {
@@ -996,7 +995,6 @@ outer:
 			}
 
 			toKeyspace, toTableName, err := parser.ParseTable(toTable)
-
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: err,
@@ -1559,7 +1557,7 @@ func (vschema *VSchema) GetAggregateUDFs() (udfs []string) {
 	return
 }
 
-// FindMirroredTable finds a mirror rule from the keyspace, table name and
+// FindMirrorRule finds a mirror rule from the keyspace, table name and
 // tablet type.
 func (vschema *VSchema) FindMirrorRule(keyspace, tablename string, tabletType topodatapb.TabletType) (*MirrorRule, error) {
 	qualified := tablename

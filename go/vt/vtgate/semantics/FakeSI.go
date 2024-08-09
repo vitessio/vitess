@@ -87,6 +87,6 @@ func (s *FakeSI) GetAggregateUDFs() []string {
 }
 
 // FindMirrorRule implements SchemaInformation.
-func (s *FakeSI) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error) {
-	return nil, "", topodatapb.TabletType_UNKNOWN, nil, nil
+func (s *FakeSI) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	return nil, nil
 }

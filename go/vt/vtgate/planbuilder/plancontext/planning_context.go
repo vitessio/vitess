@@ -383,23 +383,32 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 	return
 }
 
+func (ctx *PlanningContext) IsMirrored() bool {
+	return ctx.isMirrored
+}
+
 func (ctx *PlanningContext) UseMirror() *PlanningContext {
 	if ctx.isMirrored {
-		panic(vterrors.VT13001("bug: cannot mirror already mirrored planning context"))
+		panic(vterrors.VT13001("cannot mirror already mirrored planning context"))
 	}
 	if ctx.mirror != nil {
 		return ctx.mirror
 	}
 	ctx.mirror = &PlanningContext{
-		ReservedVars:      ctx.ReservedVars,
-		SemTable:          ctx.SemTable,
-		VSchema:           MirrorVSchema(ctx.VSchema),
-		joinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
-		skipPredicates:    map[sqlparser.Expr]any{},
-		PlannerVersion:    ctx.PlannerVersion,
-		ReservedArguments: map[sqlparser.Expr]string{},
-		Statement:         ctx.Statement,
-		isMirrored:        true,
+		ctx.ReservedVars,
+		ctx.SemTable,
+		ctx.VSchema,
+		map[sqlparser.Expr][]sqlparser.Expr{},
+		map[sqlparser.Expr]any{},
+		ctx.PlannerVersion,
+		map[sqlparser.Expr]string{},
+		ctx.VerifyAllFKs,
+		ctx.MergedSubqueries,
+		ctx.CurrentPhase,
+		ctx.Statement,
+		ctx.OuterTables,
+		nil,
+		true,
 	}
 	return ctx.mirror
 }

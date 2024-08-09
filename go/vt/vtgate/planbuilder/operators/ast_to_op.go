@@ -276,6 +276,20 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		}
 		qg := newQueryGraph()
 		isInfSchema := tableInfo.IsInfSchema()
+		if ctx.IsMirrored() {
+			if mr := tableInfo.GetMirrorRule(); mr != nil {
+				newTbl := sqlparser.Clone(tbl)
+				newTbl.Qualifier = sqlparser.NewIdentifierCS(mr.Table.Keyspace.Name)
+				newTbl.Name = mr.Table.Name
+				if newTbl.Name.String() != tbl.Name.String() {
+					tableExpr = sqlparser.Clone(tableExpr)
+					tableExpr.As = tbl.Name
+				}
+				tbl = newTbl
+			} else {
+				panic(vterrors.VT13001(fmt.Sprintf("unable to find mirror rule for table: %T", tbl)))
+			}
+		}
 		qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
 		qg.Tables = append(qg.Tables, qt)
 		return qg
