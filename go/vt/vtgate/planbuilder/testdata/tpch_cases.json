@@ -67,14 +67,13 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci, (2|5) ASC",
-            "ResultColumns": 4,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum(1) AS revenue",
                 "GroupBy": "(0|4), (2|5), (3|6)",
-                "ResultColumns": 6,
+                "ResultColumns": 4,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -1130,12 +1129,12 @@
                               {
                                 "OperatorType": "Sort",
                                 "Variant": "Memory",
-                                "OrderBy": "(0|6) ASC, (4|7) ASC",
+                                "OrderBy": "(0|8) ASC, (4|7) ASC",
                                 "Inputs": [
                                   {
                                     "OperatorType": "Join",
                                     "Variant": "Join",
-                                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,L:2,R:5",
+                                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,L:2,R:5,L:3",
                                     "JoinVars": {
                                       "o_orderkey": 1
                                     },
@@ -1148,8 +1147,8 @@
                                           "Name": "main",
                                           "Sharded": true
                                         },
-                                        "FieldQuery": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders where 1 != 1) as profit where 1 != 1",
-                                        "Query": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders) as profit",
+                                        "FieldQuery": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year), weight_string(extract(year from o_orderdate)) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders where 1 != 1) as profit where 1 != 1",
+                                        "Query": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year), weight_string(extract(year from o_orderdate)) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders) as profit",
                                         "Table": "orders"
                                       },
                                       {
@@ -2099,14 +2098,13 @@
         "OperatorType": "Sort",
         "Variant": "Memory",
         "OrderBy": "3 DESC, (0|4) ASC, (1|5) ASC, (2|6) ASC",
-        "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "count_distinct(3|7) AS supplier_cnt",
             "GroupBy": "(0|4), (1|5), (2|6)",
-            "ResultColumns": 7,
+            "ResultColumns": 4,
             "Inputs": [
               {
                 "OperatorType": "Sort",
@@ -2437,14 +2435,13 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "1 DESC, (0|2) ASC",
-            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum_count_star(1) AS numwait",
                 "GroupBy": "(0|2)",
-                "ResultColumns": 3,
+                "ResultColumns": 2,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",

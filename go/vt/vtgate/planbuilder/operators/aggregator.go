@@ -151,6 +151,8 @@ func (a *Aggregator) checkOffset(offset int) {
 }
 
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) (offset int) {
+	a.planOffsets(ctx)
+
 	defer func() {
 		a.checkOffset(offset)
 	}()
@@ -199,6 +201,10 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 }
 
 func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	if !underRoute {
+		a.planOffsets(ctx)
+	}
+
 	if len(a.Columns) <= offset {
 		panic(vterrors.VT13001("offset out of range"))
 	}
@@ -221,7 +227,7 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	}
 
 	if expr == nil {
-		for _, aggr := range a.Aggregations {
+		for i, aggr := range a.Aggregations {
 			if aggr.ColOffset != offset {
 				continue
 			}
@@ -230,9 +236,13 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 				return aggr.WSOffset
 			}
 
-			panic(vterrors.VT13001("expected to find a weight string for aggregation"))
+			a.Aggregations[i].WSOffset = len(a.Columns)
+			expr = a.Columns[offset].Expr
+			break
 		}
+	}
 
+	if expr == nil {
 		panic(vterrors.VT13001("could not find expression at offset"))
 	}
 
