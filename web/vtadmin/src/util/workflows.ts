@@ -94,3 +94,23 @@ export const getStreamTablets = <W extends pb.IWorkflow>(workflow: W | null | un
 
     return [...aliases];
 };
+
+/**
+ * getReverseWorkflow returns the reverse workflow of `originalWorkflow` by looking for the '_reverse'
+ * suffix and the source and target keyspace from all `workflows` list.
+ */
+export const getReverseWorkflow = <W extends pb.Workflow>(
+  workflows: W[],
+  originalWorkflow: W | undefined | null
+): W | undefined => {
+  if (!originalWorkflow) return;
+  const originalWorkflowName = originalWorkflow.workflow?.name!;
+  let reverseWorkflowName = originalWorkflowName.concat("_reverse");
+  if (originalWorkflowName.endsWith("_reverse")) {
+    reverseWorkflowName = originalWorkflowName.split("_reverse")[0];
+  }
+  return workflows.find((workflow) => 
+    workflow.workflow?.name === reverseWorkflowName &&
+    workflow.workflow?.source?.keyspace === originalWorkflow.workflow?.target?.keyspace &&
+    workflow.workflow?.target?.keyspace === originalWorkflow.workflow?.source?.keyspace);
+};
