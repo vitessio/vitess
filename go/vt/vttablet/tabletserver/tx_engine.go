@@ -19,6 +19,8 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -216,6 +218,9 @@ func (te *TxEngine) redoPreparedTransactionsLocked() {
 	if err := te.prepareFromRedo(); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
 		log.Errorf("Could not prepare transactions: %v", err)
+		if strings.Contains(err.Error(), "unexpected rows affected") {
+			os.Exit(1)
+		}
 	}
 }
 
@@ -435,9 +440,14 @@ outer:
 		}
 		for _, stmt := range preparedTx.Queries {
 			conn.TxProperties().RecordQuery(stmt, te.env.Environment().Parser())
-			_, err := conn.Exec(ctx, stmt, 1, false)
+			qr, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
+				te.txPool.RollbackAndRelease(ctx, conn)
+				continue outer
+			}
+			if qr.RowsAffected != 1 {
+				allErr.RecordError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "dtid - %v unexpected rows affected: %v for query: %s", preparedTx.Dtid, qr.RowsAffected, stmt))
 				te.txPool.RollbackAndRelease(ctx, conn)
 				continue outer
 			}

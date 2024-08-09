@@ -72,6 +72,7 @@ func TestMain(m *testing.M) {
 			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--migration_check_interval", "2s",
+			"--queryserver-config-transaction-cap", "100",
 		)
 
 		// Start keyspace
