@@ -1319,6 +1319,17 @@ func (ts *trafficSwitcher) gatherPositions(ctx context.Context) error {
 	})
 }
 
+// updateSourcePositions will update the Position for all migration sources.
+func (ts *trafficSwitcher) updateSourcePositions(ctx context.Context) error {
+	err := ts.ForAllSources(func(source *MigrationSource) error {
+		var err error
+		source.Position, err = ts.ws.tmc.PrimaryPosition(ctx, source.GetPrimary().Tablet)
+		ts.Logger().Infof("Updated position for source %v:%v: %v", ts.SourceKeyspaceName(), source.GetShard().ShardName(), source.Position)
+		return err
+	})
+	return err
+}
+
 func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, error) {
 	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
 	if err != nil {
