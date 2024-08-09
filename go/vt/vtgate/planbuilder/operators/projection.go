@@ -383,8 +383,18 @@ func (p *Projection) addColumn(
 		return p.addProjExpr(pe)
 	}
 
-	// we need to push down this column to our input
-	inputOffset := p.Source.AddColumn(ctx, true, addToGroupBy, ae)
+	var inputOffset int
+	if nothingNeedsFetching(ctx, expr) {
+		// if we don't need to fetch anything, we could just evaluate it in the projection
+		// we still check if it's there - if it is, we can, we should use it
+		inputOffset = p.Source.FindCol(ctx, expr, false)
+		if inputOffset < 0 {
+			return p.addProjExpr(pe)
+		}
+	} else {
+		// we need to push down this column to our input
+		inputOffset = p.Source.AddColumn(ctx, true, addToGroupBy, ae)
+	}
 
 	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
 	return p.addProjExpr(pe)

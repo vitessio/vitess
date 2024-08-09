@@ -4593,20 +4593,21 @@
         "Aggregates": "count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": "1",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Distinct",
                 "Collations": [
-                  "(0:2)",
-                  "1"
+                  "(0:1)"
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:0,L:1,R:1",
+                    "JoinColumnIndexes": "R:0,R:1",
                     "JoinVars": {
                       "m_id": 0
                     },
@@ -4619,8 +4620,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select subquery_for_count.`m.id`, 1 from (select m.id as `m.id` from music as m where 1 != 1) as subquery_for_count where 1 != 1",
-                        "Query": "select distinct subquery_for_count.`m.id`, 1 from (select m.id as `m.id` from music as m) as subquery_for_count",
+                        "FieldQuery": "select subquery_for_count.`m.id` from (select m.id as `m.id` from music as m where 1 != 1) as subquery_for_count where 1 != 1",
+                        "Query": "select distinct subquery_for_count.`m.id` from (select m.id as `m.id` from music as m) as subquery_for_count",
                         "Table": "music"
                       },
                       {

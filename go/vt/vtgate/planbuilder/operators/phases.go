@@ -334,7 +334,7 @@ func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult) {
 			return nil
 		}
 		if len(aggr.Grouping) == 0 {
-			gb := sqlparser.NewIntLiteral(".0")
+			gb := sqlparser.NewFloatLiteral(".0")
 			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb))
 		}
 		return nil
