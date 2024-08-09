@@ -302,12 +302,18 @@ func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 
 	for _, col := range aj.JoinPredicates.columns {
 		for _, lhsExpr := range col.LHSExprs {
+			if _, found := aj.Vars[lhsExpr.Name]; found {
+				continue
+			}
 			offset := aj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 			aj.Vars[lhsExpr.Name] = offset
 		}
 	}
 
 	for _, lhsExpr := range aj.ExtraLHSVars {
+		if _, found := aj.Vars[lhsExpr.Name]; found {
+			continue
+		}
 		offset := aj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 		aj.Vars[lhsExpr.Name] = offset
 	}
