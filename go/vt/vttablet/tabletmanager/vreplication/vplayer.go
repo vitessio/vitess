@@ -476,6 +476,12 @@ func (vp *vplayer) recordHeartbeat() error {
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.dbClient.Rollback()
 
+	estimateLag := func() {
+		behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
+		vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
+		vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
+	}
+
 	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
@@ -489,6 +495,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// Check throttler.
 		if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
+			estimateLag()
 			continue
 		}
 
@@ -499,9 +506,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// No events were received. This likely means that there's a network partition.
 		// So, we should assume we're falling behind.
 		if len(items) == 0 {
-			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-			vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
-			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
+			estimateLag()
 		}
 		// Empty transactions are saved at most once every idleTimeout.
 		// This covers two situations:
