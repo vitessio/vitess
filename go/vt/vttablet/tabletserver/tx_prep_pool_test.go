@@ -113,11 +113,9 @@ func TestPrepFetchAll(t *testing.T) {
 	conn2 := &StatefulConnection{}
 	pp.Put(conn1, "aa")
 	pp.Put(conn2, "bb")
-	got := pp.FetchAll()
-	if len(got) != 2 {
-		t.Errorf("FetchAll len: %d, want 2", len(got))
-	}
-	if len(pp.conns) != 0 {
-		t.Errorf("len(pp.conns): %d, want 0", len(pp.conns))
-	}
+	got := pp.FetchAllForRollback()
+	require.Len(t, got, 2)
+	require.Len(t, pp.conns, 0)
+	_, err := pp.FetchForCommit("aa")
+	require.ErrorContains(t, err, "pool is shutdown")
 }

@@ -160,6 +160,8 @@ func (te *TxEngine) transition(state txEngineState) {
 	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
+		// Set the preparedPool to start accepting connections.
+		te.preparedPool.shutdown = false
 		// If there are errors, we choose to raise an alert and
 		// continue anyway. Serving traffic is considered more important
 		// than blocking everything for the sake of a few transactions.
@@ -442,7 +444,7 @@ func (te *TxEngine) shutdownTransactions() {
 
 func (te *TxEngine) rollbackPrepared() {
 	ctx := tabletenv.LocalContext()
-	for _, conn := range te.preparedPool.FetchAll() {
+	for _, conn := range te.preparedPool.FetchAllForRollback() {
 		te.txPool.Rollback(ctx, conn)
 		conn.Release(tx.TxRollback)
 	}

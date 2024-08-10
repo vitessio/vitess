@@ -34,6 +34,8 @@ type TxPreparedPool struct {
 	mu       sync.Mutex
 	conns    map[string]*StatefulConnection
 	reserved map[string]error
+	// shutdown tells if the prepared pool has been drained and shutdown.
+	shutdown bool
 	capacity int
 }
 
@@ -55,6 +57,10 @@ func NewTxPreparedPool(capacity int) *TxPreparedPool {
 func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+	// If the pool is shutdown, we don't accept new prepared transactions.
+	if pp.shutdown {
+		return errors.New("pool is shutdown")
+	}
 	if _, ok := pp.reserved[dtid]; ok {
 		return errors.New("duplicate DTID in Prepare: " + dtid)
 	}
@@ -95,6 +101,11 @@ func (pp *TxPreparedPool) FetchForRollback(dtid string) *StatefulConnection {
 func (pp *TxPreparedPool) FetchForCommit(dtid string) (*StatefulConnection, error) {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+	// If the pool is shutdown, we don't have any connections to return.
+	// That however doesn't mean this transaction was committed, it could very well have been rollbacked.
+	if pp.shutdown {
+		return nil, errors.New("pool is shutdown")
+	}
 	if err, ok := pp.reserved[dtid]; ok {
 		return nil, err
 	}
@@ -121,11 +132,12 @@ func (pp *TxPreparedPool) Forget(dtid string) {
 	delete(pp.reserved, dtid)
 }
 
-// FetchAll removes all connections and returns them as a list.
+// FetchAllForRollback removes all connections and returns them as a list.
 // It also forgets all reserved dtids.
-func (pp *TxPreparedPool) FetchAll() []*StatefulConnection {
+func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+	pp.shutdown = true
 	conns := make([]*StatefulConnection, 0, len(pp.conns))
 	for _, c := range pp.conns {
 		conns = append(conns, c)
