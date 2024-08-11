@@ -28,6 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -469,7 +471,7 @@ func (vse *Engine) setWatch() {
 }
 
 func getPacketSize() int64 {
-	return int64(defaultPacketSize)
+	return int64(vttablet.VStreamerDefaultPacketSize)
 }
 
 // waitForMySQL ensures that the source is able to stay within defined bounds for
