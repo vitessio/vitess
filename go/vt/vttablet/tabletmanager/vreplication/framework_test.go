@@ -47,7 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"

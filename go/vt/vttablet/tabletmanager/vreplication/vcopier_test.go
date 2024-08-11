@@ -25,9 +25,8 @@ import (
 	"testing"
 	"time"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
-
-	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -290,7 +289,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		// Back to copy mode.
 		// Inserts can happen out of order.
 		// Updates must happen in order.
-		//upd1 := expect.
+		// upd1 := expect.
 		upd1 := expect.Then(qh.Eventually(
 			"insert into dst(idc,val) values ('B',3)",
 			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"idc" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:"B"}'.*`,

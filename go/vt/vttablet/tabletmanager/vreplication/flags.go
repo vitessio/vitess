@@ -19,7 +19,7 @@ package vreplication
 import (
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	"github.com/spf13/pflag"
 

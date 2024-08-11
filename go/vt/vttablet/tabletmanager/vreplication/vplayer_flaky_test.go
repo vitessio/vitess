@@ -36,7 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -334,7 +334,7 @@ func TestCharPK(t *testing.T) {
 		output string
 		table  string
 		data   [][]string
-	}{{ //binary(2)
+	}{{ // binary(2)
 		input:  "insert into t1 values(1, 'a')",
 		output: "insert into t1(id,val) values (1,'a\\0')",
 		table:  "t1",
@@ -348,7 +348,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a\000"},
 		},
-	}, { //char(2)
+	}, { // char(2)
 		input:  "insert into t2 values(1, 'a')",
 		output: "insert into t2(id,val) values (1,'a')",
 		table:  "t2",
@@ -362,7 +362,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varbinary(2)
+	}, { // varbinary(2)
 		input:  "insert into t3 values(1, 'a')",
 		output: "insert into t3(id,val) values (1,'a')",
 		table:  "t3",
@@ -376,7 +376,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varchar(2)
+	}, { // varchar(2)
 		input:  "insert into t4 values(1, 'a')",
 		output: "insert into t4(id,val) values (1,'a')",
 		table:  "t4",
@@ -1728,7 +1728,7 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) //For debugging only
+	pos0 := primaryPosition(t) // For debugging only
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	pos1 := primaryPosition(t)
 	// The stop position must be the GTID of the first DDL
@@ -1742,7 +1742,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
 	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) //For debugging only: to check what are the positions when test works and if/when it fails
+		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
