@@ -25,6 +25,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -32,6 +33,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -559,11 +562,12 @@ type VRSettings struct {
 	WorkflowSubType    binlogdatapb.VReplicationWorkflowSubType
 	WorkflowName       string
 	DeferSecondaryKeys bool
+	WorkflowOptions    *vtctldata.WorkflowOptions
 }
 
 // ReadVRSettings retrieves the settings for a vreplication stream.
 func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
-	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=%v", uid)
+	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
@@ -602,6 +606,11 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse defer_secondary_keys column: %v", err)
 	}
+	options := vrRow.AsString("options", "{}")
+	var workflowOptions vtctldata.WorkflowOptions
+	if err := json.Unmarshal([]byte(options), &workflowOptions); err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse options column: %v", err)
+	}
 	return VRSettings{
 		StartPos:           startPos,
 		StopPos:            stopPos,
@@ -612,6 +621,7 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 		WorkflowName:       vrRow.AsString("workflow", ""),
 		WorkflowSubType:    binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
 		DeferSecondaryKeys: deferSecondaryKeys,
+		WorkflowOptions:    &workflowOptions,
 	}, nil
 }
 

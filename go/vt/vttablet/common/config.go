@@ -43,7 +43,7 @@ type VReplicationConfig struct {
 
 var DefaultVReplicationConfig VReplicationConfig
 
-func init() {
+func initDefaults() {
 	DefaultVReplicationConfig = VReplicationConfig{
 		ExperimentalFlags:              VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage,
 		NetReadTimeout:                 300,

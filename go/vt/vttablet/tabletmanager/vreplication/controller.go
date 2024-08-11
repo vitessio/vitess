@@ -94,7 +94,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
-	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
+	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), vttablet.VReplicationMaxTimeToRetryError)
 
 	state := params["state"]
 	blpStats.State.Store(state)
@@ -164,8 +164,8 @@ func (ct *controller) run(ctx context.Context) {
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		binlogplayer.LogError(fmt.Sprintf("error in stream %v, will retry after %v", ct.id, retryDelay), err)
-		timer := time.NewTimer(retryDelay)
+		binlogplayer.LogError(fmt.Sprintf("error in stream %v, will retry after %v", ct.id, vttablet.VReplicationRetryDelay), err)
+		timer := time.NewTimer(vttablet.VReplicationRetryDelay)
 		select {
 		case <-ctx.Done():
 			log.Warningf("context canceled: %s", err.Error())

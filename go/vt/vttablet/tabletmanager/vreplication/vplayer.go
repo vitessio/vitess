@@ -138,15 +138,15 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 	if batchMode {
 		// relayLogMaxSize is effectively the limit used when not batching.
-		maxAllowedPacket := int64(relayLogMaxSize)
+		maxAllowedPacket := int64(vttablet.VReplicationRelayLogMaxSize)
 		// We explicitly do NOT want to batch this, we want to send it down the wire
 		// immediately so we use ExecuteFetch directly.
 		res, err := vr.dbClient.ExecuteFetch("select @@session.max_allowed_packet as max_allowed_packet", 1)
 		if err != nil {
-			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", relayLogMaxSize, err)
+			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vttablet.VReplicationRelayLogMaxSize, err)
 		} else {
 			if maxAllowedPacket, err = res.Rows[0][0].ToInt64(); err != nil {
-				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", relayLogMaxSize, err)
+				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vttablet.VReplicationRelayLogMaxSize, err)
 			}
 		}
 		// Leave 64 bytes of room for the commit to be sure that we have a more than
@@ -269,7 +269,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
+	relay := newRelayLog(ctx, vttablet.VReplicationRelayLogMaxItems, vttablet.VReplicationRelayLogMaxSize)
 
 	streamErr := make(chan error, 1)
 	go func() {
@@ -383,7 +383,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vttablet.VReplicationStoreCompressedGTID)
 	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
@@ -404,7 +404,7 @@ func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, er
 }
 
 func (vp *vplayer) mustUpdateHeartbeat() bool {
-	return vp.numAccumulatedHeartbeats >= vreplicationHeartbeatUpdateInterval ||
+	return vp.numAccumulatedHeartbeats >= vttablet.VReplicationHeartbeatUpdateInterval ||
 		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
 }
 

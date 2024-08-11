@@ -78,7 +78,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, vttablet.CopyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, vttablet.VReplicationCopyPhaseDuration)
 	defer cancel()
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)

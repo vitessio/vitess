@@ -456,5 +456,5 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 }
 
 func GetVReplicationMaxExecutionTimeQueryHint() string {
-	return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", vttablet.CopyPhaseDuration.Milliseconds())
+	return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", vttablet.VReplicationCopyPhaseDuration.Milliseconds())
 }

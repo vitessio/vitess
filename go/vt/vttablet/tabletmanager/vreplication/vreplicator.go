@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -138,9 +140,9 @@ type vreplicator struct {
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
 func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
-	if vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
+	if vttablet.VReplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
 		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
-			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
+			vttablet.VReplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
 	vr := &vreplicator{
 		vre:             vre,
@@ -239,7 +241,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	if err := vr.getSettingFKCheck(); err != nil {
 		return err
 	}
-	//defensive guard, should be a no-op since it should happen after copy is done
+	// defensive guard, should be a no-op since it should happen after copy is done
 	defer vr.resetFKCheckAfterCopy(vr.dbClient)
 	if err := vr.getSettingFKRestrict(); err != nil {
 		return err
