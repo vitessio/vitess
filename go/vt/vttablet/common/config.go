@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -45,9 +46,15 @@ type VReplicationConfig struct {
 	VStreamBinlogRotationThresholdOverride bool
 }
 
+var configMutex sync.Mutex
 var DefaultVReplicationConfig *VReplicationConfig
 
-func initDefaults() *VReplicationConfig {
+func InitConfigDefaults() *VReplicationConfig {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+	if DefaultVReplicationConfig != nil {
+		return DefaultVReplicationConfig
+	}
 	DefaultVReplicationConfig = &VReplicationConfig{
 		ExperimentalFlags:       VReplicationExperimentalFlags,
 		NetReadTimeout:          VReplicationNetReadTimeout,
@@ -73,6 +80,8 @@ func initDefaults() *VReplicationConfig {
 }
 
 func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
 	c := &VReplicationConfig{}
 	*c = *DefaultVReplicationConfig
 	var errors []string

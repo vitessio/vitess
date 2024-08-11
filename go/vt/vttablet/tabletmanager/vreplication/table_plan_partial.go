@@ -37,7 +37,7 @@ func isBitSet(data []byte, index int) bool {
 }
 
 func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
-	if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
+	if (tp.WorkflowConfig.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
 		rowChange.DataColumns == nil ||
 		rowChange.DataColumns.Count == 0 {
 

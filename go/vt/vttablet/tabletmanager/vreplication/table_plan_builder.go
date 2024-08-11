@@ -61,7 +61,8 @@ type tablePlanBuilder struct {
 	source            *binlogdatapb.BinlogSource
 	pkIndices         []bool
 
-	collationEnv *collations.Environment
+	collationEnv   *collations.Environment
+	WorkflowConfig *vttablet.VReplicationConfig
 }
 
 // colExpr describes the processing to be performed to
@@ -131,16 +132,17 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
+func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
 	filter := source.Filter
 	plan := &ReplicatorPlan{
-		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
-		TargetTables:  make(map[string]*TablePlan),
-		TablePlans:    make(map[string]*TablePlan),
-		ColInfoMap:    colInfoMap,
-		stats:         stats,
-		Source:        source,
-		collationEnv:  collationEnv,
+		VStreamFilter:  &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
+		TargetTables:   make(map[string]*TablePlan),
+		TablePlans:     make(map[string]*TablePlan),
+		ColInfoMap:     colInfoMap,
+		stats:          stats,
+		Source:         source,
+		collationEnv:   collationEnv,
+		WorkflowConfig: vr.WorkflowConfig,
 	}
 	for tableName := range colInfoMap {
 		lastpk, ok := copyState[tableName]
@@ -167,6 +169,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 			// Table was excluded.
 			continue
 		}
+		tablePlan.WorkflowConfig = vr.WorkflowConfig
 		if dup, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
 			return nil, fmt.Errorf("more than one target for source table %s: %s and %s", tablePlan.SendRule.Match, dup.TargetName, tableName)
 		}
@@ -378,6 +381,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
 		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
 		CollationEnv:            tpb.collationEnv,
+		WorkflowConfig:          tpb.WorkflowConfig,
 	}
 }
 
@@ -880,7 +884,7 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 }
 
 func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
-	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
+	if tpb.WorkflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
 		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
 		return nil
 	}

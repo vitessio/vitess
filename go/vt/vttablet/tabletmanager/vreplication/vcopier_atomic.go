@@ -53,7 +53,7 @@ func newCopyAllState(vc *vcopier) (*copyAllState, error) {
 	state := &copyAllState{
 		vc: vc,
 	}
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
+	plan, err := vc.vr.buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
 		return nil, err
 	}

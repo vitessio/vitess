@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"vitess.io/vitess/go/vt/schema"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -53,15 +55,18 @@ type workflowDiffer struct {
 	tableDiffers map[string]*tableDiffer // key is table name
 	opts         *tabletmanagerdatapb.VDiffOptions
 
-	collationEnv *collations.Environment
+	collationEnv   *collations.Environment
+	WorkflowConfig **vttablet.VReplicationConfig
 }
 
 func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions, collationEnv *collations.Environment) (*workflowDiffer, error) {
+	vttablet.InitConfigDefaults()
 	wd := &workflowDiffer{
-		ct:           ct,
-		opts:         opts,
-		tableDiffers: make(map[string]*tableDiffer, 1),
-		collationEnv: collationEnv,
+		ct:             ct,
+		opts:           opts,
+		tableDiffers:   make(map[string]*tableDiffer, 1),
+		collationEnv:   collationEnv,
+		WorkflowConfig: &vttablet.DefaultVReplicationConfig,
 	}
 	return wd, nil
 }

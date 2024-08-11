@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -54,17 +56,19 @@ type tablePlan struct {
 	pkCols []int
 
 	// selectPks is the list of pk columns as they appear in the select clause for the diff.
-	selectPks  []int
-	dbName     string
-	table      *tabletmanagerdatapb.TableDefinition
-	orderBy    sqlparser.OrderBy
-	aggregates []*engine.AggregateParams
+	selectPks      []int
+	dbName         string
+	table          *tabletmanagerdatapb.TableDefinition
+	orderBy        sqlparser.OrderBy
+	aggregates     []*engine.AggregateParams
+	WorkflowConfig **vttablet.VReplicationConfig
 }
 
 func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName string, collationEnv *collations.Environment) (*tablePlan, error) {
 	tp := &tablePlan{
-		table:  td.table,
-		dbName: dbName,
+		table:          td.table,
+		dbName:         dbName,
+		WorkflowConfig: td.wd.WorkflowConfig,
 	}
 	statement, err := td.wd.ct.vde.parser.Parse(td.sourceQuery)
 	if err != nil {
