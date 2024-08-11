@@ -163,7 +163,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		timeLastSaved:    time.Now(),
 		tablePlans:       make(map[string]*TablePlan),
 		phase:            phase,
-		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
+		throttlerAppName: throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
 		query:            queryFunc,
 		commit:           commitFunc,
 		batchMode:        batchMode,
