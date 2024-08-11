@@ -24,42 +24,47 @@ import (
 )
 
 type VReplicationConfig struct {
-	ExperimentalFlags              int64
-	NetReadTimeout                 int
-	NetWriteTimeout                int
-	CopyPhaseDuration              time.Duration
-	RetryDelay                     time.Duration
-	MaxTimeToRetryError            time.Duration
-	RelayLogMaxSize                int
-	RelayLogMaxItems               int
-	ReplicaLagTolerance            time.Duration
-	HeartbeatUpdateInterval        int
-	StoreCompressedGTID            bool
-	ParallelInsertWorkers          int
-	VStreamPacketSize              int
-	VStreamDynamicPacketSize       bool
-	VStreamBinlogRotationThreshold int
+	ExperimentalFlags       int64
+	NetReadTimeout          int
+	NetWriteTimeout         int
+	CopyPhaseDuration       time.Duration
+	RetryDelay              time.Duration
+	MaxTimeToRetryError     time.Duration
+	RelayLogMaxSize         int
+	RelayLogMaxItems        int
+	ReplicaLagTolerance     time.Duration
+	HeartbeatUpdateInterval int
+	StoreCompressedGTID     bool
+	ParallelInsertWorkers   int
+
+	VStreamPacketSize                      int
+	VStreamPacketSizeOverride              bool
+	VStreamDynamicPacketSize               bool
+	VStreamDynamicPacketSizeOverride       bool
+	VStreamBinlogRotationThreshold         int
+	VStreamBinlogRotationThresholdOverride bool
 }
 
 var DefaultVReplicationConfig VReplicationConfig
 
 func initDefaults() {
 	DefaultVReplicationConfig = VReplicationConfig{
-		ExperimentalFlags:              VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage,
-		NetReadTimeout:                 300,
-		NetWriteTimeout:                600,
-		CopyPhaseDuration:              1 * time.Hour,
-		RetryDelay:                     5 * time.Second,
-		MaxTimeToRetryError:            0,
-		RelayLogMaxSize:                250000,
-		RelayLogMaxItems:               5000,
-		ReplicaLagTolerance:            1 * time.Minute,
-		HeartbeatUpdateInterval:        1,
-		StoreCompressedGTID:            false,
-		ParallelInsertWorkers:          1,
-		VStreamPacketSize:              0,
-		VStreamDynamicPacketSize:       false,
-		VStreamBinlogRotationThreshold: 0,
+		ExperimentalFlags:       VReplicationExperimentalFlags,
+		NetReadTimeout:          VReplicationNetReadTimeout,
+		NetWriteTimeout:         VReplicationNetWriteTimeout,
+		CopyPhaseDuration:       VReplicationCopyPhaseDuration,
+		RetryDelay:              VReplicationRetryDelay,
+		MaxTimeToRetryError:     VReplicationMaxTimeToRetryError,
+		RelayLogMaxSize:         VReplicationRelayLogMaxSize,
+		RelayLogMaxItems:        VReplicationRelayLogMaxItems,
+		ReplicaLagTolerance:     VReplicationReplicaLagTolerance,
+		HeartbeatUpdateInterval: VReplicationHeartbeatUpdateInterval,
+		StoreCompressedGTID:     VReplicationStoreCompressedGTID,
+		ParallelInsertWorkers:   VReplicationParallelInsertWorkers,
+
+		VStreamPacketSizeOverride:              false,
+		VStreamDynamicPacketSizeOverride:       false,
+		VStreamBinlogRotationThresholdOverride: false,
 	}
 }
 
@@ -158,6 +163,7 @@ func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error
 			if err != nil {
 				errors = append(errors, "invalid value for vstream_packet_size")
 			} else {
+				c.VStreamPacketSizeOverride = true
 				c.VStreamPacketSize = int(value)
 			}
 		case "vstream_dynamic_packet_size":
@@ -165,6 +171,7 @@ func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error
 			if err != nil {
 				errors = append(errors, "invalid value for vstream_dynamic_packet_size")
 			} else {
+				c.VStreamDynamicPacketSizeOverride = true
 				c.VStreamDynamicPacketSize = value
 			}
 		case "vstream_binlog_rotation_threshold":
@@ -172,6 +179,7 @@ func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error
 			if err != nil {
 				errors = append(errors, "invalid value for vstream_binlog_rotation_threshold")
 			} else {
+				c.VStreamBinlogRotationThresholdOverride = true
 				c.VStreamBinlogRotationThreshold = int(value)
 			}
 		default:
