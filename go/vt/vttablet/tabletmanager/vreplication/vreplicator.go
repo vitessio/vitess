@@ -269,6 +269,11 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			return err
 		}
 
+		err = setDBClientSettings(vr.dbClient, vr.WorkflowConfig)
+		if err != nil {
+			return err
+		}
+
 		if err := vr.validateBinlogRowImage(); err != nil {
 			return err
 		}

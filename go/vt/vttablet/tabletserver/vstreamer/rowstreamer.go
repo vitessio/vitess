@@ -128,6 +128,7 @@ func (rs *rowStreamer) Stream() error {
 		if _, err := rs.conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
 			return err
 		}
+		// FIXME (Rohit): change these to accept options passed into the API
 		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 1, false); err != nil {
 			return err
 		}

@@ -68,6 +68,7 @@ type controller struct {
 	sourceTablet atomic.Value
 
 	lastWorkflowError *vterrors.LastError
+	WorkflowConfig    *vttablet.VReplicationConfig
 }
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
@@ -76,7 +77,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
-
+	vttablet.InitConfigDefaults()
 	ct := &controller{
 		vre:             vre,
 		dbClientFactory: dbClientFactory,
@@ -84,6 +85,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		blpStats:        blpStats,
 		done:            make(chan struct{}),
 		source:          &binlogdatapb.BinlogSource{},
+		WorkflowConfig:  vttablet.DefaultVReplicationConfig,
 	}
 	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
@@ -176,6 +178,34 @@ func (ct *controller) run(ctx context.Context) {
 	}
 }
 
+func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttablet.VReplicationConfig) error {
+	if workflowConfig == nil {
+		log.Warningf("workflowConfig is nil. Skipping setting DB client settings.")
+		panic("workflowConfig is nil. Skipping setting DB client settings.") // FIXME: This should be an error.
+	}
+	// Timestamp fields from binlogs are always sent as UTC.
+	// So, we should set the timezone to be UTC for those values to be correctly inserted.
+	if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
+		return err
+	}
+	// Tables may have varying character sets. To ship the bits without interpreting them
+	// we set the character set to be binary.
+	if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
+		return err
+	}
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", workflowConfig.NetReadTimeout), 10000); err != nil {
+		return err
+	}
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", workflowConfig.NetWriteTimeout), 10000); err != nil {
+		return err
+	}
+	// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is not recommended in AUTO_INCREMENT, and yet is valid.
+	if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')", 10000); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (ct *controller) runBlp(ctx context.Context) (err error) {
 	defer func() {
 		ct.sourceTablet.Store(&topodatapb.TabletAlias{})
@@ -217,27 +247,6 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
 		return player.ApplyBinlogEvents(ctx)
 	case ct.source.Filter != nil:
-		// Timestamp fields from binlogs are always sent as UTC.
-		// So, we should set the timezone to be UTC for those values to be correctly inserted.
-		if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
-			return err
-		}
-		// Tables may have varying character sets. To ship the bits without interpreting them
-		// we set the character set to be binary.
-		if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
-			return err
-		}
-		if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 10000); err != nil {
-			return err
-		}
-		if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 10000); err != nil {
-			return err
-		}
-		// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is not recommended in AUTO_INCREMENT, and yet is valid.
-		if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')", 10000); err != nil {
-			return err
-		}
-
 		var vsClient VStreamerClient
 		var err error
 		if name := ct.source.GetExternalMysql(); name != "" {
