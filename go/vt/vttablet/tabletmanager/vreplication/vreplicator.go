@@ -140,7 +140,8 @@ type vreplicator struct {
 //	alias like "a+b as targetcol" must be used.
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
-func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
+func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats,
+	dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig) *vreplicator {
 	if vttablet.VReplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
 		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			vttablet.VReplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
@@ -154,7 +155,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
-		WorkflowConfig:  vttablet.DefaultVReplicationConfig,
+		WorkflowConfig:  workflowConfig,
 	}
 	vr.setExistingRowsCopied()
 	return vr
@@ -265,11 +266,6 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		vr.dbClient.Rollback()
 
 		settings, numTablesToCopy, err := vr.loadSettings(ctx, vr.dbClient)
-		if err != nil {
-			return err
-		}
-
-		err = setDBClientSettings(vr.dbClient, vr.WorkflowConfig)
 		if err != nil {
 			return err
 		}
@@ -449,15 +445,6 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 		vr.WorkflowType = int32(settings.WorkflowType)
 		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
-		vr.WorkflowConfig, err = vttablet.NewVReplicationConfig(settings.WorkflowOptions.Config)
-		if err != nil {
-			return settings, numTablesToCopy, err
-		}
-		if vr.WorkflowConfig == nil {
-			// Playing it safe, in case the config is not set.
-
-		}
-		log.Infof("WorkflowConfig: %+v", vr.WorkflowConfig)
 	}
 	return settings, numTablesToCopy, err
 }

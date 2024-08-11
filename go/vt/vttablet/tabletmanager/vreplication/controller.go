@@ -18,11 +18,14 @@ package vreplication
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -71,13 +74,33 @@ type controller struct {
 	WorkflowConfig    *vttablet.VReplicationConfig
 }
 
+func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationConfig, error) {
+	vttablet.InitConfigDefaults()
+	options, ok := params["options"]
+	if !ok {
+		return nil, fmt.Errorf("options column not found")
+	}
+	var workflowOptions vtctldata.WorkflowOptions
+	if err := json.Unmarshal([]byte(options), &workflowOptions); err != nil {
+		return nil, fmt.Errorf("failed to parse options column: %v", err)
+	}
+	workflowConfig, err := vttablet.NewVReplicationConfig(workflowOptions.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process config options: %v", err)
+	}
+	return workflowConfig, nil
+}
+
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
 // this function launches a goroutine to perform continuous vreplication.
 func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats, vre *Engine, tpo discovery.TabletPickerOptions) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
-	vttablet.InitConfigDefaults()
+	workflowConfig, err := processWorkflowOptions(params)
+	if err != nil {
+		return nil, err
+	}
 	ct := &controller{
 		vre:             vre,
 		dbClientFactory: dbClientFactory,
@@ -85,7 +108,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		blpStats:        blpStats,
 		done:            make(chan struct{}),
 		source:          &binlogdatapb.BinlogSource{},
-		WorkflowConfig:  vttablet.DefaultVReplicationConfig,
+		WorkflowConfig:  workflowConfig,
 	}
 	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
@@ -96,7 +119,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
-	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), vttablet.VReplicationMaxTimeToRetryError)
+	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), workflowConfig.MaxTimeToRetryError)
 
 	state := params["state"]
 	blpStats.State.Store(state)
@@ -247,6 +270,9 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
 		return player.ApplyBinlogEvents(ctx)
 	case ct.source.Filter != nil:
+		if err := setDBClientSettings(dbClient, ct.WorkflowConfig); err != nil {
+			return err
+		}
 		var vsClient VStreamerClient
 		var err error
 		if name := ct.source.GetExternalMysql(); name != "" {
@@ -262,7 +288,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		defer vsClient.Close(ctx)
 
-		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
+		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.WorkflowConfig)
 		err = vr.Replicate(ctx)
 		ct.lastWorkflowError.Record(err)
 
