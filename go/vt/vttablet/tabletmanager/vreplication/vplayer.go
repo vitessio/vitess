@@ -133,7 +133,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		return vr.dbClient.Commit()
 	}
 	batchMode := false
-	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
+	if vr.WorkflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
 		batchMode = true
 	}
 	if batchMode {

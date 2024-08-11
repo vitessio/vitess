@@ -49,8 +49,16 @@ var (
 
 	VReplicationHeartbeatUpdateInterval = 1
 
-	VReplicationStoreCompressedGTID   = false
+	VReplicationStoreCompressedGTID   = true
 	VReplicationParallelInsertWorkers = 1
+
+	// If the current binary log is greater than this byte size, we
+	// will attempt to rotate it before starting a GTID snapshot
+	// based stream.
+	// Default is 64MiB.
+	VStreamerBinlogRotationThreshold = int64(64 * 1024 * 1024) // 64MiB
+	VStreamerDefaultPacketSize       = 250000
+	VStreamerUseDynamicPacketSize    = false
 )
 
 func init() {

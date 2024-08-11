@@ -115,6 +115,7 @@ type vreplicator struct {
 	WorkflowName    string
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
+	WorkflowConfig             *vttablet.VReplicationConfig
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -152,6 +153,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
+		WorkflowConfig:  vttablet.DefaultVReplicationConfig,
 	}
 	vr.setExistingRowsCopied()
 	return vr
@@ -441,6 +443,15 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 		vr.WorkflowType = int32(settings.WorkflowType)
 		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
+		vr.WorkflowConfig, err = vttablet.NewVReplicationConfig(settings.WorkflowOptions.Config)
+		if err != nil {
+			return settings, numTablesToCopy, err
+		}
+		if vr.WorkflowConfig == nil {
+			// Playing it safe, in case the config is not set.
+
+		}
+		log.Infof("WorkflowConfig: %+v", vr.WorkflowConfig)
 	}
 	return settings, numTablesToCopy, err
 }

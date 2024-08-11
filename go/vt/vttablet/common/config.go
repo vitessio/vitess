@@ -41,14 +41,14 @@ type VReplicationConfig struct {
 	VStreamPacketSizeOverride              bool
 	VStreamDynamicPacketSize               bool
 	VStreamDynamicPacketSizeOverride       bool
-	VStreamBinlogRotationThreshold         int
+	VStreamBinlogRotationThreshold         int64
 	VStreamBinlogRotationThresholdOverride bool
 }
 
-var DefaultVReplicationConfig VReplicationConfig
+var DefaultVReplicationConfig *VReplicationConfig
 
-func initDefaults() {
-	DefaultVReplicationConfig = VReplicationConfig{
+func initDefaults() *VReplicationConfig {
+	DefaultVReplicationConfig = &VReplicationConfig{
 		ExperimentalFlags:       VReplicationExperimentalFlags,
 		NetReadTimeout:          VReplicationNetReadTimeout,
 		NetWriteTimeout:         VReplicationNetWriteTimeout,
@@ -63,14 +63,18 @@ func initDefaults() {
 		ParallelInsertWorkers:   VReplicationParallelInsertWorkers,
 
 		VStreamPacketSizeOverride:              false,
+		VStreamPacketSize:                      VStreamerDefaultPacketSize,
 		VStreamDynamicPacketSizeOverride:       false,
+		VStreamDynamicPacketSize:               VStreamerUseDynamicPacketSize,
 		VStreamBinlogRotationThresholdOverride: false,
+		VStreamBinlogRotationThreshold:         VStreamerBinlogRotationThreshold,
 	}
+	return DefaultVReplicationConfig
 }
 
 func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error) {
 	c := &VReplicationConfig{}
-	*c = DefaultVReplicationConfig
+	*c = *DefaultVReplicationConfig
 	var errors []string
 	for k, v := range config {
 		switch k {
@@ -180,7 +184,7 @@ func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error
 				errors = append(errors, "invalid value for vstream_binlog_rotation_threshold")
 			} else {
 				c.VStreamBinlogRotationThresholdOverride = true
-				c.VStreamBinlogRotationThreshold = int(value)
+				c.VStreamBinlogRotationThreshold = value
 			}
 		default:
 			errors = append(errors, "unknown vreplication config flag: %s", k)
