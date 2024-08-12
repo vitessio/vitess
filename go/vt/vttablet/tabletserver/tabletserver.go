@@ -655,6 +655,9 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			if DebugTwoPc {
+				commitPreparedDelayForTest(tsv)
+			}
 			return txe.CommitPrepared(dtid)
 		},
 	)

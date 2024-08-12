@@ -96,7 +96,7 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	var conn *StatefulConnection
 	conn, err = dte.te.preparedPool.FetchForCommit(dtid)
 	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit dtid %s, state: %v", dtid, err)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit dtid %s, err: %v", dtid, err)
 	}
 	// No connection means the transaction was already committed.
 	if conn == nil {
