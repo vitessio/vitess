@@ -24,7 +24,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
@@ -34,13 +36,15 @@ type DTExecutor struct {
 	ctx      context.Context
 	logStats *tabletenv.LogStats
 	te       *TxEngine
+	qe       *QueryEngine
 }
 
 // NewDTExecutor creates a new distributed transaction executor.
-func NewDTExecutor(ctx context.Context, te *TxEngine, logStats *tabletenv.LogStats) *DTExecutor {
+func NewDTExecutor(ctx context.Context, te *TxEngine, qe *QueryEngine, logStats *tabletenv.LogStats) *DTExecutor {
 	return &DTExecutor{
 		ctx:      ctx,
 		te:       te,
+		qe:       qe,
 		logStats: logStats,
 	}
 }
@@ -78,6 +82,17 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	if conn.IsTainted() {
 		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
 		return vterrors.VT10002("cannot prepare the transaction on a reserved connection")
+	}
+
+	for _, query := range conn.TxProperties().Queries {
+		qr := dte.qe.queryRuleSources.FilterByPlan(query, 0)
+		if qr != nil {
+			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
+			if act != rules.QRContinue {
+				dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
+				return vterrors.VT10002("cannot prepare the transaction due to query rule")
+			}
+		}
 	}
 
 	err = dte.te.preparedPool.Put(conn, dtid)
