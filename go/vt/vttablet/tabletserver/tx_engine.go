@@ -175,7 +175,9 @@ func (te *TxEngine) RedoPreparedTransactions() error {
 	defer te.stateLock.Unlock()
 	oldState := te.state
 	te.shutdownLocked()
-	te.state = oldState
+	defer func() {
+		te.state = oldState
+	}()
 
 	defer te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
@@ -316,11 +318,6 @@ func (te *TxEngine) shutdownLocked() {
 	te.stateLock.Lock()
 	log.Infof("TxEngine - state lock acquired again")
 
-	// Shut down functions are idempotent.
-	// No need to check if 2pc is enabled.
-	log.Infof("TxEngine - stop watchdog")
-	te.stopTransactionWatcher()
-
 	poolEmpty := make(chan bool)
 	rollbackDone := make(chan bool)
 	// This goroutine decides if transactions have to be
@@ -343,13 +340,6 @@ func (te *TxEngine) shutdownLocked() {
 		// connections.
 		te.txPool.scp.ShutdownNonTx()
 		if te.shutdownGracePeriod <= 0 {
-			// No grace period was specified. Wait indefinitely for transactions to be concluded.
-			// TODO(sougou): invoking rollbackPrepared is incorrect here. Prepared statements should
-			// actually be rolled back last. But this will cause the shutdown to hang because the
-			// tx pool will never become empty, because the prepared pool is holding on to connections
-			// from the tx pool. But we plan to deprecate this approach to 2PC. So, this
-			// should eventually be deleted.
-			te.rollbackPrepared()
 			log.Info("No grace period specified: performing normal wait.")
 			return
 		}
@@ -364,6 +354,9 @@ func (te *TxEngine) shutdownLocked() {
 			log.Info("Transactions completed before grace period: shutting down.")
 		}
 	}()
+	// It is important to note, that we aren't rolling back prepared transactions here.
+	// That is happneing in the same place where we are killing queries. This will block
+	// until either all prepared transactions get resolved or rollbacked.
 	log.Infof("TxEngine - waiting for empty txPool")
 	te.txPool.WaitForEmpty()
 	// If the goroutine is still running, signal that it can exit.
@@ -371,6 +364,14 @@ func (te *TxEngine) shutdownLocked() {
 	// Make sure the goroutine has returned.
 	log.Infof("TxEngine - making sure the goroutine has returned")
 	<-rollbackDone
+
+	// Shut down functions are idempotent.
+	// No need to check if 2pc is enabled.
+	// We stop the transaction watcher so late, because if the user isn't running
+	// with any shutdown grace period, we still want the watcher to run while we are waiting
+	// for resolving transactions.
+	log.Infof("TxEngine - stop transaction watcher")
+	te.stopTransactionWatcher()
 
 	log.Infof("TxEngine - closing the txPool")
 	te.txPool.Close()
@@ -438,21 +439,21 @@ outer:
 	return allErr.Error()
 }
 
-// shutdownTransactions rolls back all open transactions
-// including the prepared ones.
-// This is used for transitioning from a primary to a non-primary
-// serving type.
+// shutdownTransactions rolls back all open transactions that are idol.
+// These are transactions that are open but no write is executing on them right now.
+// By definition, prepared transactions aren't part of them since these are transactions on which
+// the user has issued a commit command. These transactions are rollbacked elsewhere when we kill all writes.
+// This is used for transitioning from a primary to a non-primary serving type.
 func (te *TxEngine) shutdownTransactions() {
-	te.rollbackPrepared()
 	ctx := tabletenv.LocalContext()
-	// The order of rollbacks is currently not material because
-	// we don't allow new statements or commits during
-	// this function. In case of any such change, this will
-	// have to be revisited.
 	te.txPool.Shutdown(ctx)
 }
 
-func (te *TxEngine) rollbackPrepared() {
+// RollbackPrepared rollbacks all the prepared transactions.
+// This should only be called after we are certain no other writes are in progress.
+// If there were some other conflicting write in progress that hadn't been killed, then it could potentially go through
+// and cause data corruption since we won't be able to prepare the transaction again.
+func (te *TxEngine) RollbackPrepared() {
 	ctx := tabletenv.LocalContext()
 	for _, conn := range te.preparedPool.FetchAllForRollback() {
 		te.txPool.Rollback(ctx, conn)
@@ -483,6 +484,7 @@ func (te *TxEngine) startTransactionWatcher() {
 			log.Errorf("Error reading unresolved transactions: %v", err)
 			return
 		}
+		log.Errorf("Count of unresolved transactions - %d", count)
 		if count > 0 {
 			te.dxNotify()
 		}
