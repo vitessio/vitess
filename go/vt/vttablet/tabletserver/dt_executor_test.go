@@ -228,7 +228,7 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	// A retry should fail differently as the prepared transaction is marked as failed.
 	err = txe.CommitPrepared("bb")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot commit dtid bb, state: failed")
+	require.Contains(t, err.Error(), "cannot commit dtid bb, err: VT09025: atomic transaction error: failed to commit")
 
 	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"),
 		"failed to commit the prepared transaction 'bb' with error: unknown error: delete redo log fail")

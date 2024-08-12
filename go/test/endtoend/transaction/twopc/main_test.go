@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -85,12 +85,13 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:          keyspaceName,
-			SchemaSQL:     SchemaSQL,
-			VSchema:       VSchema,
-			SidecarDBName: sidecarDBName,
+			Name:             keyspaceName,
+			SchemaSQL:        SchemaSQL,
+			VSchema:          VSchema,
+			SidecarDBName:    sidecarDBName,
+			DurabilityPolicy: "semi_sync",
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
 			return 1
 		}
 
@@ -119,13 +120,8 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 
 func cleanup(t *testing.T) {
 	cluster.PanicHandler(t)
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	_, _ = utils.ExecAllowError(t, conn, "delete from twopc_user")
+	utils.ClearOutTable(t, vtParams, "twopc_user")
+	utils.ClearOutTable(t, vtParams, "twopc_t1")
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value
