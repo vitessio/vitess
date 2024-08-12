@@ -75,7 +75,7 @@ type controller struct {
 }
 
 func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationConfig, error) {
-	vttablet.InitConfigDefaults()
+	vttablet.InitVReplicationConfigDefaults()
 	options, ok := params["options"]
 	if !ok {
 		return nil, fmt.Errorf("options column not found")

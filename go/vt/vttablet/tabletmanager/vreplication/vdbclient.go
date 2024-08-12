@@ -22,8 +22,6 @@ import (
 	"strings"
 	"time"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -203,7 +201,7 @@ func (vc *vdbClient) Retry() (*sqltypes.Result, error) {
 			continue
 		}
 		// Number of rows should never exceed relayLogMaxItems.
-		result, err := vc.DBClient.ExecuteFetch(q, vttablet.VReplicationRelayLogMaxItems)
+		result, err := vc.DBClient.ExecuteFetch(q, vc.relayLogMaxItems)
 		if err != nil {
 			return nil, err
 		}

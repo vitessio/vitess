@@ -129,10 +129,10 @@ func (rs *rowStreamer) Stream() error {
 			return err
 		}
 		// FIXME (Rohit): change these to accept options passed into the API
-		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 1, false); err != nil {
+		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.GetVReplicationNetReadTimeout()), 1, false); err != nil {
 			return err
 		}
-		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 1, false); err != nil {
+		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.GetVReplicationNetWriteTimeout()), 1, false); err != nil {
 			return err
 		}
 	}
@@ -458,5 +458,5 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 
 func GetVReplicationMaxExecutionTimeQueryHint() string {
 	// FIXME (Rohit): Use from API Options
-	return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", vttablet.VReplicationCopyPhaseDuration.Milliseconds())
+	return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", vttablet.GetVReplicationCopyPhaseDuration().Milliseconds())
 }

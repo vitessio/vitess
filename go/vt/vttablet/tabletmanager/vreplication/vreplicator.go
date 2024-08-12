@@ -146,7 +146,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			workflowConfig.HeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
-	vttablet.InitConfigDefaults()
+	vttablet.InitVReplicationConfigDefaults()
 	vr := &vreplicator{
 		vre:             vre,
 		id:              id,

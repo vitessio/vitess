@@ -60,7 +60,7 @@ type workflowDiffer struct {
 }
 
 func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions, collationEnv *collations.Environment) (*workflowDiffer, error) {
-	vttablet.InitConfigDefaults()
+	vttablet.InitVReplicationConfigDefaults()
 	wd := &workflowDiffer{
 		ct:             ct,
 		opts:           opts,

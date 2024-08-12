@@ -50,7 +50,7 @@ for shard in "customer/0"; do
 done
 
 ./202_move_tables.sh
-exit
+
 ./203_switch_reads.sh
 
 ./204_switch_writes.sh
@@ -60,11 +60,9 @@ mysql --table < ../common/select_customer0_data.sql
 # We expect this to fail due to the denied tables
 # rules in place.
 # For some reason this succeeds...
-$(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 
 ./205_clean_commerce.sh
 # We expect this to fail as the keyspace is now gone.
-(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh

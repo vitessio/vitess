@@ -49,25 +49,25 @@ type VReplicationConfig struct {
 var configMutex sync.Mutex
 var DefaultVReplicationConfig *VReplicationConfig
 
-func InitConfigDefaults() *VReplicationConfig {
+func InitVReplicationConfigDefaults() *VReplicationConfig {
 	configMutex.Lock()
 	defer configMutex.Unlock()
 	if DefaultVReplicationConfig != nil {
 		return DefaultVReplicationConfig
 	}
 	DefaultVReplicationConfig = &VReplicationConfig{
-		ExperimentalFlags:       VReplicationExperimentalFlags,
-		NetReadTimeout:          VReplicationNetReadTimeout,
-		NetWriteTimeout:         VReplicationNetWriteTimeout,
-		CopyPhaseDuration:       VReplicationCopyPhaseDuration,
-		RetryDelay:              VReplicationRetryDelay,
-		MaxTimeToRetryError:     VReplicationMaxTimeToRetryError,
-		RelayLogMaxSize:         VReplicationRelayLogMaxSize,
-		RelayLogMaxItems:        VReplicationRelayLogMaxItems,
-		ReplicaLagTolerance:     VReplicationReplicaLagTolerance,
-		HeartbeatUpdateInterval: VReplicationHeartbeatUpdateInterval,
-		StoreCompressedGTID:     VReplicationStoreCompressedGTID,
-		ParallelInsertWorkers:   VReplicationParallelInsertWorkers,
+		ExperimentalFlags:       vreplicationExperimentalFlags,
+		NetReadTimeout:          vreplicationNetReadTimeout,
+		NetWriteTimeout:         vreplicationNetWriteTimeout,
+		CopyPhaseDuration:       vreplicationCopyPhaseDuration,
+		RetryDelay:              vreplicationRetryDelay,
+		MaxTimeToRetryError:     vreplicationMaxTimeToRetryError,
+		RelayLogMaxSize:         vreplicationRelayLogMaxSize,
+		RelayLogMaxItems:        vreplicationRelayLogMaxItems,
+		ReplicaLagTolerance:     vreplicationReplicaLagTolerance,
+		HeartbeatUpdateInterval: vreplicationHeartbeatUpdateInterval,
+		StoreCompressedGTID:     vreplicationStoreCompressedGTID,
+		ParallelInsertWorkers:   vreplicationParallelInsertWorkers,
 
 		VStreamPacketSizeOverride:              false,
 		VStreamPacketSize:                      VStreamerDefaultPacketSize,

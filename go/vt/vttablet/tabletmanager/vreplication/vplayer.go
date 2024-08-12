@@ -269,7 +269,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, vttablet.VReplicationRelayLogMaxItems, vp.vr.WorkflowConfig.RelayLogMaxSize)
+	relay := newRelayLog(ctx, vp.vr.WorkflowConfig.RelayLogMaxItems, vp.vr.WorkflowConfig.RelayLogMaxSize)
 
 	streamErr := make(chan error, 1)
 	go func() {
@@ -383,7 +383,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vttablet.VReplicationStoreCompressedGTID)
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.WorkflowConfig.StoreCompressedGTID)
 	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}

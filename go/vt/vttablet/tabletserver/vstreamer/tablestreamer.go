@@ -104,10 +104,10 @@ func (ts *tableStreamer) Stream() error {
 		return err
 	}
 	// FIXME (Rohit): change these to accept options passed into the API
-	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 1, false); err != nil {
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.GetVReplicationNetReadTimeout()), 1, false); err != nil {
 		return err
 	}
-	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 1, false); err != nil {
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.GetVReplicationNetWriteTimeout()), 1, false); err != nil {
 		return err
 	}
 
