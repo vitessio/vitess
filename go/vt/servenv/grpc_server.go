@@ -207,10 +207,12 @@ func createGRPCServer() {
 	// grpc: received message length XXXXXXX exceeding the max size 4194304
 	// Note: For gRPC 1.0.0 it's sufficient to set the limit on the server only
 	// because it's not enforced on the client side.
-	msgSize := grpccommon.MaxMessageSize()
-	log.Infof("Setting grpc max message size to %d", msgSize)
-	opts = append(opts, grpc.MaxRecvMsgSize(msgSize))
-	opts = append(opts, grpc.MaxSendMsgSize(msgSize))
+
+	maxSendSize := grpccommon.MaxMessageSendSize()
+	maxRecvSize := grpccommon.MaxMessageRecvSize()
+	log.Infof("Setting grpc server max message sizes to %d (sending), %d (receiving)", maxSendSize, maxRecvSize)
+	opts = append(opts, grpc.MaxRecvMsgSize(maxRecvSize))
+	opts = append(opts, grpc.MaxSendMsgSize(maxSendSize))
 
 	if gRPCInitialConnWindowSize != 0 {
 		log.Infof("Setting grpc server initial conn window size to %d", int32(gRPCInitialConnWindowSize))
