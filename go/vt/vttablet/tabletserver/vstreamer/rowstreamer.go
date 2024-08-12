@@ -457,5 +457,6 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 }
 
 func GetVReplicationMaxExecutionTimeQueryHint() string {
+	// FIXME (Rohit): Use from API Options
 	return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", vttablet.VReplicationCopyPhaseDuration.Milliseconds())
 }

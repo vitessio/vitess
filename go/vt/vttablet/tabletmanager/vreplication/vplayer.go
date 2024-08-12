@@ -138,15 +138,15 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 	if batchMode {
 		// relayLogMaxSize is effectively the limit used when not batching.
-		maxAllowedPacket := int64(vttablet.VReplicationRelayLogMaxSize)
+		maxAllowedPacket := int64(vr.WorkflowConfig.RelayLogMaxSize)
 		// We explicitly do NOT want to batch this, we want to send it down the wire
 		// immediately so we use ExecuteFetch directly.
 		res, err := vr.dbClient.ExecuteFetch("select @@session.max_allowed_packet as max_allowed_packet", 1)
 		if err != nil {
-			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vttablet.VReplicationRelayLogMaxSize, err)
+			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vr.WorkflowConfig.RelayLogMaxSize, err)
 		} else {
 			if maxAllowedPacket, err = res.Rows[0][0].ToInt64(); err != nil {
-				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vttablet.VReplicationRelayLogMaxSize, err)
+				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vr.WorkflowConfig.RelayLogMaxSize, err)
 			}
 		}
 		// Leave 64 bytes of room for the commit to be sure that we have a more than
@@ -269,7 +269,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, vttablet.VReplicationRelayLogMaxItems, vttablet.VReplicationRelayLogMaxSize)
+	relay := newRelayLog(ctx, vttablet.VReplicationRelayLogMaxItems, vp.vr.WorkflowConfig.RelayLogMaxSize)
 
 	streamErr := make(chan error, 1)
 	go func() {

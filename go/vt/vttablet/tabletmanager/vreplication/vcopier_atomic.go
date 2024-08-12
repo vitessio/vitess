@@ -28,12 +28,10 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 /*
@@ -78,7 +76,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, vttablet.VReplicationCopyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, vc.vr.WorkflowConfig.CopyPhaseDuration)
 	defer cancel()
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)

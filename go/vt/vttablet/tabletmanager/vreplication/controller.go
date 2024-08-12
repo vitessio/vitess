@@ -189,8 +189,8 @@ func (ct *controller) run(ctx context.Context) {
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		binlogplayer.LogError(fmt.Sprintf("error in stream %v, will retry after %v", ct.id, vttablet.VReplicationRetryDelay), err)
-		timer := time.NewTimer(vttablet.VReplicationRetryDelay)
+		binlogplayer.LogError(fmt.Sprintf("error in stream %v, will retry after %v", ct.id, ct.WorkflowConfig.RetryDelay), err)
+		timer := time.NewTimer(ct.WorkflowConfig.RetryDelay)
 		select {
 		case <-ctx.Done():
 			log.Warningf("context canceled: %s", err.Error())
