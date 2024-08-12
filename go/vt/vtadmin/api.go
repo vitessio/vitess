@@ -417,6 +417,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
 	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
+	router.HandleFunc("/workflow_status/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflowStatus)).Name("API.GetWorkflowStatus")
 
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
@@ -1659,6 +1660,30 @@ func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowReque
 
 	return c.GetWorkflow(ctx, req.Keyspace, req.Name, cluster.GetWorkflowOptions{
 		ActiveOnly: req.ActiveOnly,
+	})
+}
+
+// GetWorkflowStatus is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetWorkflowStatus(ctx context.Context, req *vtadminpb.GetWorkflowStatusRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetWorkflowStatus")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow_name", req.Name)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
+		Keyspace: req.Keyspace,
+		Workflow: req.Name,
 	})
 }
 
