@@ -105,7 +105,7 @@ func TestControllerKeyRange(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	defer setTabletTypesStr("replica")
+	defer setTabletTypesStr("replica")()
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
@@ -125,9 +125,10 @@ func TestControllerTables(t *testing.T) {
 	resetBinlogClient()
 
 	params := map[string]string{
-		"id":     "1",
-		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" tables:"table1" tables:"/funtables_/" `, env.KeyspaceName),
+		"id":      "1",
+		"state":   binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":  fmt.Sprintf(`keyspace:"%s" shard:"0" tables:"table1" tables:"/funtables_/" `, env.KeyspaceName),
+		"options": "{}",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
@@ -167,7 +168,7 @@ func TestControllerTables(t *testing.T) {
 	}
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
-
+	defer setTabletTypesStr("replica")()
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +184,8 @@ func TestControllerTables(t *testing.T) {
 
 func TestControllerBadID(t *testing.T) {
 	params := map[string]string{
-		"id": "bad",
+		"id":      "bad",
+		"options": "{}",
 	}
 	_, err := newController(context.Background(), params, nil, nil, nil, "", nil, nil, defaultTabletPickerOptions)
 	want := `strconv.ParseInt: parsing "bad": invalid syntax`
@@ -194,8 +196,9 @@ func TestControllerBadID(t *testing.T) {
 
 func TestControllerStopped(t *testing.T) {
 	params := map[string]string{
-		"id":    "1",
-		"state": binlogdatapb.VReplicationWorkflowState_Stopped.String(),
+		"id":      "1",
+		"state":   binlogdatapb.VReplicationWorkflowState_Stopped.String(),
+		"options": "{}",
 	}
 
 	ct, err := newController(context.Background(), params, nil, nil, nil, "", nil, nil, defaultTabletPickerOptions)
@@ -222,6 +225,7 @@ func TestControllerOverrides(t *testing.T) {
 		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
+		"options":      "{}",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
@@ -238,6 +242,7 @@ func TestControllerOverrides(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
+	defer setTabletTypesStr("rdonly")()
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
@@ -256,9 +261,10 @@ func TestControllerCanceledContext(t *testing.T) {
 	defer deleteTablet(wantTablet)
 
 	params := map[string]string{
-		"id":     "1",
-		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"id":      "1",
+		"state":   binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":  fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"options": "{}",
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -292,13 +298,14 @@ func TestControllerRetry(t *testing.T) {
 		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
+		"options":      "{}",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest(getWorkflowQuery, nil, errors.New("(expected error)"))
-	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error (expected error) in selecting vreplication settings select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error (expected error) in selecting vreplication settings select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest(getWorkflowQuery, testSettingsResponse, nil)
@@ -311,6 +318,7 @@ func TestControllerRetry(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
+	defer setTabletTypesStr("rdonly")()
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
@@ -326,9 +334,10 @@ func TestControllerStopPosition(t *testing.T) {
 	defer deleteTablet(wantTablet)
 
 	params := map[string]string{
-		"id":     "1",
-		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"id":      "1",
+		"state":   binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":  fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"options": "{}",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
