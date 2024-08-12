@@ -58,7 +58,7 @@ var (
 	targetKsOpts           = make(map[string]string)
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
 	sourceThrottlerAppName = throttlerapp.VStreamerName
-	targetThrottlerAppName = throttlerapp.VReplicationName
+	targetThrottlerAppName = throttlerapp.VPlayerName
 )
 
 const (
@@ -1228,7 +1228,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
 				// Confirm that we updated the stats on the target tablets as expected.
-				confirmVReplicationThrottling(t, tab, workflow, sourceThrottlerAppName.String())
+				confirmVReplicationThrottling(t, tab, sourceKs, workflow, sourceThrottlerAppName)
 			}
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
@@ -1263,7 +1263,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
 				// Confirm that we updated the stats on the target tablets as expected.
-				confirmVReplicationThrottling(t, tab, workflow, targetThrottlerAppName.String())
+				confirmVReplicationThrottling(t, tab, sourceKs, workflow, targetThrottlerAppName)
 			}
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
@@ -1697,16 +1697,19 @@ func releaseInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {
 // confirmVReplicationThrottling confirms that the throttling related metrics reflect that
 // the workflow is being throttled as expected, via the expected app name, and that this
 // is impacting the lag as expected.
-func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, workflow, appname string) {
-	//time.Sleep(1 * time.Second) // To accrue some lag
-	const zv = int64(0)
+// The tablet passed should be a target tablet for the given workflow while the keyspace
+// name provided should be the source keyspace as the target tablet stats note the stream's
+// source keyspace and shard.
+func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, keyspace, workflow string, appname throttlerapp.Name) {
+	time.Sleep(5 * time.Second) // To be sure that we accrue some lag
+	const zero = int64(0)
 
 	jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
 	require.NoError(t, err)
 	require.NotEqual(t, "{}", jsVal)
 	// The JSON value looks like this: {"cproduct.4.tablet.vstreamer": 2, "cproduct.4.tablet.vplayer": 4}
 	throttledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.%s`, workflow, appname)).Int()
-	require.Greater(t, throttledCount, zv, "JSON value: %s", jsVal)
+	require.Greater(t, throttledCount, zero, "JSON value: %s", jsVal)
 
 	val, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCountTotal"})
 	require.NoError(t, err)
@@ -1715,18 +1718,22 @@ func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, w
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, throttledCountTotal, throttledCount, "Value: %s", val)
 
-	jsVal, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSeconds"})
-	require.NoError(t, err)
-	require.NotEqual(t, "{}", jsVal)
-	// The JSON value looks like this: {"commerce.0.commerce2customer.1": 135}
-	vreplLagSeconds := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.%s\.*`, tab.Keyspace, workflow)).Int()
-	require.NoError(t, err)
-	require.Greater(t, vreplLagSeconds, zv, "JSON value: %s", jsVal)
+	// We do not calculate replication lag for the vcopier as it's not replicating
+	// events.
+	if appname != throttlerapp.VCopierName {
+		jsVal, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSeconds"})
+		require.NoError(t, err)
+		require.NotEqual(t, "{}", jsVal)
+		// The JSON value looks like this: {"product.0.cproduct.4": 6}
+		vreplLagSeconds := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.%s\.*`, keyspace, workflow)).Int()
+		require.NoError(t, err)
+		require.Greater(t, vreplLagSeconds, zero, "JSON value: %s", jsVal)
 
-	val, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSecondsMax"})
-	require.NoError(t, err)
-	require.NotEqual(t, "", val)
-	vreplLagSecondsMax, err := strconv.ParseInt(val, 10, 64)
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, vreplLagSecondsMax, vreplLagSeconds, "Value: %s", val)
+		val, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSecondsMax"})
+		require.NoError(t, err)
+		require.NotEqual(t, "", val)
+		vreplLagSecondsMax, err := strconv.ParseInt(val, 10, 64)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, vreplLagSecondsMax, vreplLagSeconds, "Value: %s", val)
+	}
 }
