@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -69,7 +70,7 @@ func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 		return vterrors.VT09025("duplicate DTID in Prepare: " + dtid)
 	}
 	if len(pp.conns) >= pp.capacity {
-		return vterrors.VT09025(fmt.Sprintf("prepared transactions exceeded limit: %d", pp.capacity))
+		return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, fmt.Sprintf("prepared transactions exceeded limit: %d", pp.capacity))
 	}
 	pp.conns[dtid] = c
 	return nil
