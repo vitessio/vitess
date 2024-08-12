@@ -284,7 +284,7 @@ func (vre *Engine) initControllers(rows []map[string]string) {
 	for _, row := range rows {
 		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
-			log.Errorf("Controller could not be initialized for stream: %v", row)
+			log.Errorf("Controller could not be initialized for stream: %v: error %v", row, err)
 			continue
 		}
 		vre.controllers[ct.id] = ct

@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	"github.com/stretchr/testify/assert"
@@ -737,10 +739,12 @@ func TestBuildPlayerPlan(t *testing.T) {
 		),
 	}
 
+	vttablet.InitVReplicationConfigDefaults()
 	for _, tcase := range testcases {
 		vr := &vreplicator{
 			WorkflowConfig: vttablet.DefaultVReplicationConfig,
 		}
+		log.Infof("WorkflowConfig is %v", vr.WorkflowConfig)
 		plan, err := vr.buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 		gotErr := ""
 		if err != nil {

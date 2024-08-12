@@ -1213,7 +1213,7 @@ func setExperimentalFlags(flags int64) func() {
 // TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
 // enabling the optimize inserts functionality
 func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
-	defer setExperimentalFlags(vttablet.VReplicationExperimentalFlagOptimizeInserts)
+	defer setExperimentalFlags(vttablet.VReplicationExperimentalFlagOptimizeInserts)()
 
 	defer deleteTablet(addTablet(100))
 
@@ -1535,7 +1535,9 @@ func testPlayerCopyTableCancel(t *testing.T) {
 	// Set a hook to reset the copy timeout after first call.
 	vstreamRowsHook = func(ctx context.Context) {
 		<-ctx.Done()
-		vttablet.DefaultVReplicationConfig.CopyPhaseDuration = saveTimeout
+		for _, ct := range playerEngine.controllers {
+			ct.WorkflowConfig.CopyPhaseDuration = saveTimeout
+		}
 		vstreamRowsHook = nil
 	}
 

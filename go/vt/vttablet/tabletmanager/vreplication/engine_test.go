@@ -50,10 +50,10 @@ func TestEngineOpen(t *testing.T) {
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|state|source|tablet_types",
-			"int64|varchar|varchar|varbinary",
+			"id|state|source|tablet_types|options",
+			"int64|varchar|varchar|varbinary|varchar",
 		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|PRIMARY,REPLICA`, env.KeyspaceName),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|PRIMARY,REPLICA|{}`, env.KeyspaceName),
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
@@ -161,10 +161,10 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest("select @@session.auto_increment_increment", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|state|source|tablet_types",
-			"int64|varchar|varchar|varbinary",
+			"id|state|source|tablet_types|options",
+			"int64|varchar|varchar|varbinary|varchar",
 		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|PRIMARY,REPLICA`, env.KeyspaceName),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|PRIMARY,REPLICA|{}`, env.KeyspaceName),
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
@@ -203,10 +203,10 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id in (1)", testDMLResponse, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|state|source",
-			"int64|varchar|varchar",
+			"id|state|source|options",
+			"int64|varchar|varchar|varchar",
 		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|{}`, env.KeyspaceName),
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)

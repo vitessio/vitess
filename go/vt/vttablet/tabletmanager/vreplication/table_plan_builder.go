@@ -161,7 +161,7 @@ func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, co
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser, vr.WorkflowConfig)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to build table replication plan for %s table", tableName)
 		}
@@ -169,7 +169,6 @@ func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, co
 			// Table was excluded.
 			continue
 		}
-		tablePlan.WorkflowConfig = vr.WorkflowConfig
 		if dup, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
 			return nil, fmt.Errorf("more than one target for source table %s: %s and %s", tablePlan.SendRule.Match, dup.TargetName, tableName)
 		}
@@ -202,7 +201,8 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 }
 
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
-	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment, parser *sqlparser.Parser) (*TablePlan, error) {
+	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment,
+	parser *sqlparser.Parser, workflowConfig *vttablet.VReplicationConfig) (*TablePlan, error) {
 
 	planError := func(err error, query string) error {
 		// Use the error string here to ensure things are uniform across
@@ -251,6 +251,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			ConvertCharset:   rule.ConvertCharset,
 			ConvertIntToEnum: rule.ConvertIntToEnum,
 			CollationEnv:     collationEnv,
+			WorkflowConfig:   workflowConfig,
 		}
 
 		return tablePlan, nil
@@ -262,11 +263,12 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		lastpk:       lastpk,
-		colInfos:     colInfos,
-		stats:        stats,
-		source:       source,
-		collationEnv: collationEnv,
+		lastpk:         lastpk,
+		colInfos:       colInfos,
+		stats:          stats,
+		source:         source,
+		collationEnv:   collationEnv,
+		WorkflowConfig: workflowConfig,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -361,7 +363,6 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 			fieldsToSkip[colInfo.Name] = true
 		}
 	}
-
 	return &TablePlan{
 		TargetName:              tpb.name.String(),
 		Lastpk:                  tpb.lastpk,
