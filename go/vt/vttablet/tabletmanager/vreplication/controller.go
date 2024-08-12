@@ -93,7 +93,7 @@ func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationCon
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
 // this function launches a goroutine to perform continuous vreplication.
-func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats, vre *Engine, tpo discovery.TabletPickerOptions) (*controller, error) {
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell string, blpStats *binlogplayer.Stats, vre *Engine, tpo discovery.TabletPickerOptions) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
@@ -101,6 +101,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if err != nil {
 		return nil, err
 	}
+	tabletTypesStr := workflowConfig.TabletTypesStr
 	ct := &controller{
 		vre:             vre,
 		dbClientFactory: dbClientFactory,

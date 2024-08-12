@@ -40,7 +40,7 @@ var (
 	vreplicationRetryDelay          = 5 * time.Second
 	vreplicationMaxTimeToRetryError = 0 * time.Second // Default behavior is to keep retrying, for backward compatibility
 
-	VReplicationTabletTypesStr = "in_order:REPLICA,PRIMARY" // Default value
+	vreplicationTabletTypesStr = "in_order:REPLICA,PRIMARY" // Default value
 
 	vreplicationRelayLogMaxSize  = 250000
 	vreplicationRelayLogMaxItems = 5000

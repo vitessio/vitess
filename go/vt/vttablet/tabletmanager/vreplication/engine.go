@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -284,7 +282,7 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 
 func (vre *Engine) initControllers(rows []map[string]string) {
 	for _, row := range rows {
-		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, vttablet.VReplicationTabletTypesStr, nil, vre, discovery.TabletPickerOptions{})
+		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
 			log.Errorf("Controller could not be initialized for stream: %v", row)
 			continue
@@ -430,7 +428,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			if err != nil {
 				return nil, err
 			}
-			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, vttablet.VReplicationTabletTypesStr, nil, vre, plan.tabletPickerOptions)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, nil, vre, plan.tabletPickerOptions)
 			if err != nil {
 				return nil, err
 			}
@@ -470,7 +468,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			}
 			// Create a new controller in place of the old one.
 			// For continuity, the new controller inherits the previous stats.
-			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, vttablet.VReplicationTabletTypesStr, blpStats[id], vre, plan.tabletPickerOptions)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, blpStats[id], vre, plan.tabletPickerOptions)
 			if err != nil {
 				return nil, err
 			}
@@ -731,7 +729,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 			log.Errorf("transitionJournal: %v", err)
 			return
 		}
-		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, vttablet.VReplicationTabletTypesStr, nil, vre, discovery.TabletPickerOptions{})
+		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return

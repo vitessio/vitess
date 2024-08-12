@@ -37,6 +37,7 @@ type VReplicationConfig struct {
 	HeartbeatUpdateInterval int
 	StoreCompressedGTID     bool
 	ParallelInsertWorkers   int
+	TabletTypesStr          string
 
 	VStreamPacketSize                      int
 	VStreamPacketSizeOverride              bool
@@ -68,6 +69,7 @@ func InitVReplicationConfigDefaults() *VReplicationConfig {
 		HeartbeatUpdateInterval: vreplicationHeartbeatUpdateInterval,
 		StoreCompressedGTID:     vreplicationStoreCompressedGTID,
 		ParallelInsertWorkers:   vreplicationParallelInsertWorkers,
+		TabletTypesStr:          vreplicationTabletTypesStr,
 
 		VStreamPacketSizeOverride:              false,
 		VStreamPacketSize:                      VStreamerDefaultPacketSize,
