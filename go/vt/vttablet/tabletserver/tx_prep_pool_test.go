@@ -25,11 +25,8 @@ import (
 
 func TestEmptyPrep(t *testing.T) {
 	pp := NewTxPreparedPool(0)
-	want := "prepared transactions exceeded limit: 0"
 	err := pp.Put(nil, "aa")
-	if err == nil || err.Error() != want {
-		t.Errorf("Put err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "prepared transactions exceeded limit: 0")
 }
 
 func TestPrepPut(t *testing.T) {
@@ -38,23 +35,15 @@ func TestPrepPut(t *testing.T) {
 	require.NoError(t, err)
 	err = pp.Put(nil, "bb")
 	require.NoError(t, err)
-	want := "prepared transactions exceeded limit: 2"
 	err = pp.Put(nil, "cc")
-	if err == nil || err.Error() != want {
-		t.Errorf("Put err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "prepared transactions exceeded limit: 2")
 	err = pp.Put(nil, "aa")
-	want = "duplicate DTID in Prepare: aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("Put err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "duplicate DTID in Prepare: aa")
+
 	_, err = pp.FetchForCommit("aa")
 	require.NoError(t, err)
 	err = pp.Put(nil, "aa")
-	want = "duplicate DTID in Prepare: aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("Put err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "duplicate DTID in Prepare: aa")
 	pp.Forget("aa")
 	err = pp.Put(nil, "aa")
 	require.NoError(t, err)

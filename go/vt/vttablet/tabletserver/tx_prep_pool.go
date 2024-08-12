@@ -17,14 +17,15 @@ limitations under the License.
 package tabletserver
 
 import (
-	"errors"
 	"fmt"
 	"sync"
+
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	errPrepCommitting = errors.New("locked for committing")
-	errPrepFailed     = errors.New("failed to commit")
+	errPrepCommitting = vterrors.VT09025("locked for committing")
+	errPrepFailed     = vterrors.VT09025("failed to commit")
 )
 
 // TxPreparedPool manages connections for prepared transactions.
@@ -59,16 +60,16 @@ func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 	defer pp.mu.Unlock()
 	// If the pool is shutdown, we don't accept new prepared transactions.
 	if pp.shutdown {
-		return errors.New("pool is shutdown")
+		return vterrors.VT09025("pool is shutdown")
 	}
 	if _, ok := pp.reserved[dtid]; ok {
-		return errors.New("duplicate DTID in Prepare: " + dtid)
+		return vterrors.VT09025("duplicate DTID in Prepare: " + dtid)
 	}
 	if _, ok := pp.conns[dtid]; ok {
-		return errors.New("duplicate DTID in Prepare: " + dtid)
+		return vterrors.VT09025("duplicate DTID in Prepare: " + dtid)
 	}
 	if len(pp.conns) >= pp.capacity {
-		return fmt.Errorf("prepared transactions exceeded limit: %d", pp.capacity)
+		return vterrors.VT09025(fmt.Sprintf("prepared transactions exceeded limit: %d", pp.capacity))
 	}
 	pp.conns[dtid] = c
 	return nil
@@ -104,7 +105,7 @@ func (pp *TxPreparedPool) FetchForCommit(dtid string) (*StatefulConnection, erro
 	// If the pool is shutdown, we don't have any connections to return.
 	// That however doesn't mean this transaction was committed, it could very well have been rollbacked.
 	if pp.shutdown {
-		return nil, errors.New("pool is shutdown")
+		return nil, vterrors.VT09025("pool is shutdown")
 	}
 	if err, ok := pp.reserved[dtid]; ok {
 		return nil, err
