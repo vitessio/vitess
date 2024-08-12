@@ -122,6 +122,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
 	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
+	vttablet.InitVReplicationConfigDefaults()
 	return &vstreamer{
 		ctx:          ctx,
 		cancel:       cancel,

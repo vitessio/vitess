@@ -88,6 +88,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 	mode RowStreamerMode, conn *snapshotConn) *rowStreamer {
 
 	ctx, cancel := context.WithCancel(ctx)
+	vttablet.InitVReplicationConfigDefaults()
 	return &rowStreamer{
 		ctx:     ctx,
 		cancel:  cancel,

@@ -65,6 +65,7 @@ type tableStreamer struct {
 func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
 	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine) *tableStreamer {
 	ctx, cancel := context.WithCancel(ctx)
+	vttablet.InitVReplicationConfigDefaults()
 	return &tableStreamer{
 		ctx:     ctx,
 		cancel:  cancel,
