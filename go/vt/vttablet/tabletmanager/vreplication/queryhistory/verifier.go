@@ -2,8 +2,6 @@ package queryhistory
 
 import (
 	"fmt"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 type Result struct {
@@ -47,7 +45,6 @@ func NewVerifier(sequence ExpectationSequence) *Verifier {
 // Returns a *Result indicating whether the query was accepted and, if not,
 // diagnostic details indicating why not.
 func (v *Verifier) AcceptQuery(query string) *Result {
-	log.Infof("Query is %s", query)
 	history := append(v.history, query)
 	index := len(history) - 1
 	result := &Result{

@@ -3352,16 +3352,16 @@ func TestPlayerStalls(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	log.Errorf = logger.Errorf
 
-	ovmhu := vreplicationMinimumHeartbeatUpdateInterval
-	ogvpt := vplayerProgressDeadline
-	orlmi := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
-	ord := vttablet.DefaultVReplicationConfig.RetryDelay
+	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
+	oldProgressDeadline := vplayerProgressDeadline
+	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	defer func() {
 		log.Errorf = ole
-		vreplicationMinimumHeartbeatUpdateInterval = ovmhu
-		vplayerProgressDeadline = ogvpt
-		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = orlmi
-		vttablet.DefaultVReplicationConfig.RetryDelay = ord
+		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
+		vplayerProgressDeadline = oldProgressDeadline
+		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
+		vttablet.DefaultVReplicationConfig.RetryDelay = oldRetryDelay
 	}()
 
 	// Shorten the deadline for the test.

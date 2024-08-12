@@ -49,7 +49,7 @@ var (
 
 	vreplicationHeartbeatUpdateInterval = 1
 
-	vreplicationStoreCompressedGTID   = true
+	vreplicationStoreCompressedGTID   = false
 	vreplicationParallelInsertWorkers = 1
 
 	// VStreamerBinlogRotationThreshold is the threshold, above which we rotate binlogs, before taking a GTID snapshot
