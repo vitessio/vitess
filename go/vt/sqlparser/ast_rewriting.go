@@ -415,6 +415,76 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	return true
 }
 
+func (er *astRewriter) rewriteNotExpr(cursor *Cursor, node *NotExpr) {
+	switch inner := node.Expr.(type) {
+	case *ComparisonExpr:
+		// not col = 42 => col != 42
+		// not col > 42 => col <= 42
+		// etc
+		canChange, inverse := inverseOp(inner.Operator)
+		if canChange {
+			inner.Operator = inverse
+			cursor.Replace(inner)
+		}
+	case *NotExpr:
+		// not not true => true
+		cursor.Replace(inner.Expr)
+	case BoolVal:
+		// not true => false
+		inner = !inner
+		cursor.Replace(inner)
+	}
+}
+
+func (er *astRewriter) rewriteVariable(cursor *Cursor, node *Variable) {
+	// Iff we are in SET, we want to change the scope of variables if a modifier has been set
+	// and only on the lhs of the assignment:
+	// set session sql_mode = @someElse
+	// here we need to change the scope of `sql_mode` and not of `@someElse`
+	if v, isSet := cursor.Parent().(*SetExpr); isSet && v.Var == node {
+		return
+	}
+	// no rewriting for global scope variable.
+	// this should be returned from the underlying database.
+	switch node.Scope {
+	case VariableScope:
+		er.udvRewrite(cursor, node)
+	case SessionScope, NextTxScope:
+		er.sysVarRewrite(cursor, node)
+	}
+}
+
+func (er *astRewriter) visitSelect(node *Select) {
+	for _, col := range node.SelectExprs {
+		if _, hasStar := col.(*StarExpr); hasStar {
+			er.hasStarInSelect = true
+			continue
+		}
+
+		aliasedExpr, ok := col.(*AliasedExpr)
+		if !ok || aliasedExpr.As.NotEmpty() {
+			continue
+		}
+		buf := NewTrackedBuffer(nil)
+		aliasedExpr.Expr.Format(buf)
+		// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
+		innerBindVarNeeds, err := er.rewriteAliasedExpr(aliasedExpr)
+		if err != nil {
+			er.err = err
+			return
+		}
+		if innerBindVarNeeds.HasRewrites() {
+			aliasedExpr.As = NewIdentifierCI(buf.String())
+		}
+		er.bindVars.MergeWith(innerBindVarNeeds)
+
+	}
+	// set select limit if explicitly not set when sql_select_limit is set on the connection.
+	if er.selectLimit > 0 && node.Limit == nil {
+		node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(er.selectLimit))}
+	}
+}
+
 func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
 	switch i {
 	case EqualOp:

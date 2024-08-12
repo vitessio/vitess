@@ -3782,3 +3782,85 @@ func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
 }
+
+func TestStreamJoinQuery(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
+	s := createSandbox(KsTestSharded)
+	s.VSchema = executorVSchema
+	u.VSchema = unshardedVSchema
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	for _, shard := range shards {
+		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+	}
+	executor := createExecutor(ctx, serv, cell, resolver)
+	defer executor.Close()
+
+	sql := "select u.foo, u.apa, ue.bar, ue.apa from user u join user_extra ue on u.foo = ue.bar"
+	result, err := executorStream(ctx, executor, sql)
+	require.NoError(t, err)
+	wantResult := &sqltypes.Result{
+		Fields: append(sandboxconn.SingleRowResult.Fields, sandboxconn.SingleRowResult.Fields...),
+	}
+	wantRow := append(sandboxconn.StreamRowResult.Rows[0], sandboxconn.StreamRowResult.Rows[0]...)
+	for i := 0; i < 64; i++ {
+		wantResult.Rows = append(wantResult.Rows, wantRow)
+	}
+	require.Equal(t, len(wantResult.Rows), len(result.Rows))
+	for idx := 0; idx < 64; idx++ {
+		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
+	}
+}
+
+// TestSysVarGlobalAndSession tests that global and session variables are set correctly.
+// It also tests that setting a global variable does not affect the session variable and vice versa.
+// Also, test what happens on running select @@global and select @@session for a system variable.
+func TestSysVarGlobalAndSession(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, SystemVariables: map[string]string{}})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("innodb_lock_wait_timeout", "uint64"), "20"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("innodb_lock_wait_timeout", "uint64"), "20"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "uint64"), "40"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("reserve_execute", "uint64")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.innodb_lock_wait_timeout", "uint64"), "20"),
+	})
+	qr, err := executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"select @@innodb_lock_wait_timeout", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[UINT64(20)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"select @@global.innodb_lock_wait_timeout", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[UINT64(20)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	_, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"set @@global.innodb_lock_wait_timeout = 120", nil)
+	require.NoError(t, err)
+	require.Empty(t, session.SystemVariables["innodb_lock_wait_timeout"])
+
+	_, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"set @@innodb_lock_wait_timeout = 40", nil)
+	require.NoError(t, err)
+	require.EqualValues(t, "40", session.SystemVariables["innodb_lock_wait_timeout"])
+
+	qr, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"select @@innodb_lock_wait_timeout", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[INT64(40)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"select @@global.innodb_lock_wait_timeout", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[UINT64(20)]]`, fmt.Sprintf("%v", qr.Rows))
+}
