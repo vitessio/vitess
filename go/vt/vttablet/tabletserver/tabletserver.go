@@ -661,13 +661,7 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := NewDTExecutor(ctx, tsv.te, logStats)
 			if DebugTwoPc {
-				sh := readFileForTestSynchronization("VT_DELAY_COMMIT_SHARD")
-				if tsv.sm.target.Shard == sh {
-					delay := readFileForTestSynchronization("VT_DELAY_COMMIT_TIME")
-					delVal, _ := strconv.Atoi(delay)
-					log.Infof("Delaying commit for shard %v for %d seconds", sh, delVal)
-					time.Sleep(time.Duration(delVal) * time.Second)
-				}
+				commitPreparedDelayForTest(tsv)
 			}
 			return txe.CommitPrepared(dtid)
 		},

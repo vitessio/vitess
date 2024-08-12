@@ -27,6 +27,4 @@ package tabletserver
 
 const DebugTwoPc = false
 
-func readFileForTestSynchronization(fileName string) string {
-	return ""
-}
+func commitPreparedDelayForTest(tsv *TabletServer) {}

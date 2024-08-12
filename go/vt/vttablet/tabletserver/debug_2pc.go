@@ -21,6 +21,10 @@ package tabletserver
 import (
 	"os"
 	"path"
+	"strconv"
+	"time"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 const DebugTwoPc = true
@@ -30,4 +34,15 @@ const DebugTwoPc = true
 func readFileForTestSynchronization(fileName string) string {
 	res, _ := os.ReadFile(path.Join(os.Getenv("VTDATAROOT"), fileName))
 	return string(res)
+}
+
+// commitPreparedDelayForTest is a test-only function that delays the commit that have already been prepared.
+func commitPreparedDelayForTest(tsv *TabletServer) {
+	sh := readFileForTestSynchronization("VT_DELAY_COMMIT_SHARD")
+	if tsv.sm.target.Shard == sh {
+		delay := readFileForTestSynchronization("VT_DELAY_COMMIT_TIME")
+		delVal, _ := strconv.Atoi(delay)
+		log.Infof("Delaying commit for shard %v for %d seconds", sh, delVal)
+		time.Sleep(time.Duration(delVal) * time.Second)
+	}
 }
