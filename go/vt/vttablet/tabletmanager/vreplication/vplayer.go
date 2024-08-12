@@ -404,7 +404,7 @@ func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, er
 }
 
 func (vp *vplayer) mustUpdateHeartbeat() bool {
-	return vp.numAccumulatedHeartbeats >= vttablet.VReplicationHeartbeatUpdateInterval ||
+	return vp.numAccumulatedHeartbeats >= vp.vr.WorkflowConfig.HeartbeatUpdateInterval ||
 		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
 }
 

@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -348,7 +347,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	// Wait for catchup.
 	tkr := time.NewTicker(waitRetryTime)
 	defer tkr.Stop()
-	seconds := int64(vttablet.VReplicationReplicaLagTolerance / time.Second)
+	seconds := int64(vc.vr.WorkflowConfig.ReplicaLagTolerance / time.Second)
 	for {
 		sbm := vc.vr.stats.ReplicationLagSeconds.Load()
 		if sbm < seconds {
@@ -405,7 +404,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	copyStateGCTicker := time.NewTicker(copyStateGCInterval)
 	defer copyStateGCTicker.Stop()
 
-	parallelism := getInsertParallelism()
+	parallelism := int(math.Max(1, float64(vc.vr.WorkflowConfig.ParallelInsertWorkers)))
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	copyWorkQueue := vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 	defer copyWorkQueue.close()
@@ -683,7 +682,7 @@ func (vc *vcopier) updatePos(ctx context.Context, gtid string) error {
 	if err != nil {
 		return err
 	}
-	update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vttablet.VReplicationStoreCompressedGTID)
+	update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vc.vr.WorkflowConfig.StoreCompressedGTID)
 	_, err = vc.vr.dbClient.Execute(update)
 	return err
 }
@@ -699,7 +698,7 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 		return err
 	}
 	if settings.StartPos.IsZero() {
-		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vttablet.VReplicationStoreCompressedGTID)
+		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vc.vr.WorkflowConfig.StoreCompressedGTID)
 		_, err := vc.vr.dbClient.Execute(update)
 		return err
 	}
@@ -1200,10 +1199,4 @@ func vcopierCopyTaskGetNextState(vts vcopierCopyTaskState) vcopierCopyTaskState 
 		return vcopierCopyTaskComplete
 	}
 	return vts
-}
-
-// getInsertParallelism returns the number of parallel workers to use for inserting batches during the copy phase.
-func getInsertParallelism() int {
-	parallelism := int(math.Max(1, float64(vttablet.VReplicationParallelInsertWorkers)))
-	return parallelism
 }

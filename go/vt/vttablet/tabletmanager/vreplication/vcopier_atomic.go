@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"time"
 
@@ -82,7 +83,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
 
-	parallelism := getInsertParallelism()
+	parallelism := int(math.Max(1, float64(vc.vr.WorkflowConfig.ParallelInsertWorkers)))
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	var copyWorkQueue *vcopierCopyWorkQueue
 

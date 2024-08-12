@@ -142,9 +142,9 @@ type vreplicator struct {
 //	documentation for more info.
 func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats,
 	dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig) *vreplicator {
-	if vttablet.VReplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
+	if workflowConfig.HeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
 		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
-			vttablet.VReplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
+			workflowConfig.HeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
 	vttablet.InitConfigDefaults()
 	vr := &vreplicator{
