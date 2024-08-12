@@ -407,8 +407,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return nil, fmt.Errorf("insert id %v out of range", qr.InsertID)
 		}
 
-		vdbc := newVDBClient(dbClient, stats)
-
 		// If we are creating multiple streams, for example in a
 		// merge workflow going from 2 shards to 1 shard, we
 		// will be inserting multiple rows. To get the ids of
@@ -437,6 +435,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			vdbc := newVDBClient(dbClient, stats, ct.WorkflowConfig.RelayLogMaxSize)
 			insertLogWithParams(vdbc, LogStreamCreate, id, params)
 		}
 		return qr, nil
@@ -464,7 +463,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		vdbc := newVDBClient(dbClient, stats)
 		for _, id := range ids {
 			params, err := readRow(dbClient, id)
 			if err != nil {
@@ -477,6 +475,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			vdbc := newVDBClient(dbClient, stats, ct.WorkflowConfig.RelayLogMaxSize)
 			insertLog(vdbc, LogStateChange, id, params["state"], "")
 		}
 		return qr, nil
@@ -489,13 +488,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return &sqltypes.Result{}, nil
 		}
 		// Stop and delete the current controllers.
-		vdbc := newVDBClient(dbClient, stats)
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
+				vdbc := newVDBClient(dbClient, stats, ct.WorkflowConfig.RelayLogMaxSize)
 				ct.Stop()
 				delete(vre.controllers, id)
+				insertLogWithParams(vdbc, LogStreamDelete, id, nil)
 			}
-			insertLogWithParams(vdbc, LogStreamDelete, id, nil)
 		}
 		if err := dbClient.Begin(); err != nil {
 			return nil, err

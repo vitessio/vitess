@@ -36,19 +36,21 @@ import (
 // It allows us to retry a failed transactions on lock errors.
 type vdbClient struct {
 	binlogplayer.DBClient
-	stats         *binlogplayer.Stats
-	InTransaction bool
-	startTime     time.Time
-	queries       []string
-	queriesPos    int64
-	batchSize     int64
-	maxBatchSize  int64
+	stats            *binlogplayer.Stats
+	InTransaction    bool
+	startTime        time.Time
+	queries          []string
+	queriesPos       int64
+	batchSize        int64
+	maxBatchSize     int64
+	relayLogMaxItems int
 }
 
-func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats) *vdbClient {
+func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int) *vdbClient {
 	return &vdbClient{
-		DBClient: dbclient,
-		stats:    stats,
+		DBClient:         dbclient,
+		stats:            stats,
+		relayLogMaxItems: relayLogMaxItems,
 	}
 }
 
@@ -165,7 +167,7 @@ func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 // Execute is ExecuteFetch without the maxrows.
 func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
 	// Number of rows should never exceed relayLogMaxItems.
-	return vc.ExecuteFetch(query, vttablet.VReplicationRelayLogMaxItems)
+	return vc.ExecuteFetch(query, vc.relayLogMaxItems)
 }
 
 func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
