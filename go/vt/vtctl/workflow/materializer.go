@@ -618,7 +618,7 @@ func primaryVindexesDiffer(ms *vtctldatapb.MaterializeSettings, source, target *
 		// If neither source nor target have any vindexes, treat the answer to
 		// the question as trivially false.
 		if len(sColumnVindexes) == 0 && len(tColumnVindexes) == 0 {
-			return false
+			return true
 		}
 
 		sPrimaryVindex := sColumnVindexes[0]

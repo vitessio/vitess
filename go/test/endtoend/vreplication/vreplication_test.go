@@ -1228,18 +1228,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
 				// Confirm that we updated the stats on the target tablets as expected.
-				jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
-				require.NoError(t, err)
-				require.NotEqual(t, "{}", jsVal)
-				// The JSON value looks like this: {"cproduct.4.tablet.vstreamer": 2}
-				vstreamerThrottledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.vstreamer`, workflow)).Int()
-				require.Greater(t, vstreamerThrottledCount, int64(0))
-				// We only need to do this stat check once.
-				val, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCountTotal"})
-				require.NoError(t, err)
-				throttledCount, err := strconv.ParseInt(val, 10, 64)
-				require.NoError(t, err)
-				require.GreaterOrEqual(t, throttledCount, vstreamerThrottledCount)
+				confirmVReplicationThrottling(t, tab, workflow, sourceThrottlerAppName.String())
 			}
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
@@ -1274,12 +1263,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
 				// Confirm that we updated the stats on the target tablets as expected.
-				jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
-				require.NoError(t, err)
-				require.NotEqual(t, "{}", jsVal)
-				// The JSON value now looks like this: {"cproduct.4.tablet.vstreamer": 2, "cproduct.4.tablet.vplayer": 4}
-				vplayerThrottledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.vplayer`, workflow)).Int()
-				require.Greater(t, vplayerThrottledCount, int64(0))
+				confirmVReplicationThrottling(t, tab, workflow, targetThrottlerAppName.String())
 			}
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
@@ -1708,4 +1692,41 @@ func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, e
 
 func releaseInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {
 	execQuery(t, dbConn, "rollback")
+}
+
+// confirmVReplicationThrottling confirms that the throttling related metrics reflect that
+// the workflow is being throttled as expected, via the expected app name, and that this
+// is impacting the lag as expected.
+func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, workflow, appname string) {
+	//time.Sleep(1 * time.Second) // To accrue some lag
+	const zv = int64(0)
+
+	jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
+	require.NoError(t, err)
+	require.NotEqual(t, "{}", jsVal)
+	// The JSON value looks like this: {"cproduct.4.tablet.vstreamer": 2, "cproduct.4.tablet.vplayer": 4}
+	throttledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.%s`, workflow, appname)).Int()
+	require.Greater(t, throttledCount, zv, "JSON value: %s", jsVal)
+
+	val, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCountTotal"})
+	require.NoError(t, err)
+	require.NotEqual(t, "", val)
+	throttledCountTotal, err := strconv.ParseInt(val, 10, 64)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, throttledCountTotal, throttledCount, "Value: %s", val)
+
+	jsVal, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSeconds"})
+	require.NoError(t, err)
+	require.NotEqual(t, "{}", jsVal)
+	// The JSON value looks like this: {"commerce.0.commerce2customer.1": 135}
+	vreplLagSeconds := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.%s\.*`, tab.Keyspace, workflow)).Int()
+	require.NoError(t, err)
+	require.Greater(t, vreplLagSeconds, zv, "JSON value: %s", jsVal)
+
+	val, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSecondsMax"})
+	require.NoError(t, err)
+	require.NotEqual(t, "", val)
+	vreplLagSecondsMax, err := strconv.ParseInt(val, 10, 64)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, vreplLagSecondsMax, vreplLagSeconds, "Value: %s", val)
 }
