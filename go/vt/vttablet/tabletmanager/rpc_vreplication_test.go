@@ -97,8 +97,8 @@ var (
 		},
 	}
 	position           = fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition)
-	setNetReadTimeout  = fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout)
-	setNetWriteTimeout = fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout)
+	setNetReadTimeout  = fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.GetVReplicationNetReadTimeout())
+	setNetWriteTimeout = fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.GetVReplicationNetWriteTimeout())
 	inOrder            = tabletmanagerdatapb.TabletSelectionPreference_INORDER
 	running            = binlogdatapb.VReplicationWorkflowState_Running
 	stopped            = binlogdatapb.VReplicationWorkflowState_Stopped

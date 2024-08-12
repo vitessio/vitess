@@ -26,6 +26,8 @@ import (
 	"sync"
 	"testing"
 
+	_flag "vitess.io/vitess/go/internal/flag"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -184,6 +186,7 @@ func init() {
 }
 
 func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
 	exitCode := func() int {
 		var err error
 		ctx, cancel := context.WithCancel(context.Background())
