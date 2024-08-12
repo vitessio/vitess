@@ -27,6 +27,8 @@ import (
 	"time"
 	"unicode"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -232,7 +234,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 		_, err = dbClient.ExecuteFetch(fmt.Sprintf("delete from _vt.vreplication where id = %d", id), 1)
 		require.NoError(t, err)
 	}()
-	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
+	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
 	getActionsSQLf := "select action from _vt.post_copy_action where table_name='%s'"
 	getCurrentDDL := func(tableName string) string {
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
@@ -386,7 +388,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				myvr := newVReplicator(myid, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
+				myvr := newVReplicator(myid, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
 				myvr.WorkflowType = int32(binlogdatapb.VReplicationWorkflowType_Reshard)
 				// Insert second post copy action record to simulate a shard merge where you
 				// have N controllers/replicators running for the same table on the tablet.
@@ -630,7 +632,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		_, err = dbClient.ExecuteFetch(fmt.Sprintf("delete from _vt.vreplication where id = %d", id), 1)
 		require.NoError(t, err)
 	}()
-	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
+	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
 	vr.WorkflowType = int32(binlogdatapb.VReplicationWorkflowType_MoveTables)
 	getCurrentDDL := func(tableName string) string {
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
@@ -692,7 +694,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(res.Rows))
 	// TODO: figure out why the KILL never shows up...
-	//require.Equal(t, "1", res.Rows[0][0].ToString())
+	// require.Equal(t, "1", res.Rows[0][0].ToString())
 
 	// Confirm that the post copy action record still exists
 	// so it will later be retried.
@@ -749,7 +751,7 @@ func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
 		_, err = dbClient.ExecuteFetch(fmt.Sprintf("delete from _vt.vreplication where id = %d", id), 1)
 		require.NoError(t, err)
 	}()
-	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
+	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
 	assert.Equal(t, rowsCopied, vr.stats.CopyRowCount.Get())
 }
 
@@ -850,8 +852,8 @@ func TestThrottlerAppNames(t *testing.T) {
 		_, err = dbClient.ExecuteFetch(fmt.Sprintf("delete from _vt.vreplication where id = %d", id), 1)
 		require.NoError(t, err)
 	}()
-	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
-	settings, _, err := vr.loadSettings(ctx, newVDBClient(dbClient, stats))
+	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
+	settings, _, err := vr.loadSettings(ctx, newVDBClient(dbClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems))
 	require.NoError(t, err)
 
 	throttlerAppName := vr.throttlerAppName()

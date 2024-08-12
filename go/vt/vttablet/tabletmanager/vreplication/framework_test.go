@@ -84,6 +84,8 @@ type LogExpectation struct {
 
 var heartbeatRe *regexp.Regexp
 
+const getWorkflowQuery = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1"
+
 // setFlag() sets a flag for a test in a non-racy way:
 //   - it registers the flag using a different flagset scope
 //   - clears other flags by passing a dummy os.Args() while parsing this flagset
@@ -140,7 +142,8 @@ func setup(ctx context.Context) (func(), int) {
 	globalDBQueries = make(chan string, 1000)
 	resetBinlogClient()
 
-	vttablet.VReplicationExperimentalFlags = 0
+	vttablet.InitVReplicationConfigDefaults()
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = 0
 
 	// Engines cannot be initialized in testenv because it introduces circular dependencies.
 	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])

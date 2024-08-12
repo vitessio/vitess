@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -736,7 +738,10 @@ func TestBuildPlayerPlan(t *testing.T) {
 	}
 
 	for _, tcase := range testcases {
-		plan, err := buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+		vr := &vreplicator{
+			WorkflowConfig: vttablet.DefaultVReplicationConfig,
+		}
+		plan, err := vr.buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 		gotErr := ""
 		if err != nil {
 			gotErr = err.Error()
@@ -745,8 +750,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 		gotPlan, _ := json.Marshal(plan)
 		wantPlan, _ := json.Marshal(tcase.plan)
 		require.Equal(t, string(wantPlan), string(gotPlan), "Filter(%v):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
-
-		plan, err = buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+		plan, err = vr.buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 		if err != nil {
 			continue
 		}
@@ -774,7 +778,10 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 			Filter: "select * from t",
 		}},
 	}
-	_, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+	vr := &vreplicator{
+		WorkflowConfig: vttablet.DefaultVReplicationConfig,
+	}
+	_, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	want := "more than one target for source table t"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
@@ -795,7 +802,10 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 			Filter: "",
 		}},
 	}
-	plan, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+	vr := &vreplicator{
+		WorkflowConfig: vttablet.DefaultVReplicationConfig,
+	}
+	plan, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	assert.NoError(t, err)
 
 	want := &TestReplicatorPlan{
