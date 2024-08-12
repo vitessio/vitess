@@ -24,14 +24,6 @@
           "name": "xxhash"
         }
       ]
-    },
-    "twopc_t1": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "reverse_bits"
-        }
-      ]
     }
   }
 }

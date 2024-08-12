@@ -33,7 +33,10 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 	ctx := context.Background()
 	for {
 		conn, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
+		if err != nil {
+			log.Errorf("Error in connection - %v", err)
+			continue
+		}
 
 		res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT count(*) FROM %v", tableName), 1, false)
 		if err != nil {

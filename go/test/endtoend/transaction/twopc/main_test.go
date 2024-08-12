@@ -121,7 +121,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 func cleanup(t *testing.T) {
 	cluster.PanicHandler(t)
 	utils.ClearOutTable(t, vtParams, "twopc_user")
-	utils.ClearOutTable(t, vtParams, "twopc_t1")
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value

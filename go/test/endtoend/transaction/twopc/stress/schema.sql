@@ -12,3 +12,9 @@ create table twopc_fuzzer_insert (
     key(col),
     primary key (id, col)
 ) Engine=InnoDB;
+
+create table twopc_t1 (
+    id bigint,
+    col bigint,
+    primary key (id)
+) Engine=InnoDB;

@@ -10,9 +10,3 @@ create table twopc_music (
     title varchar(64),
     primary key (id)
 ) Engine=InnoDB;
-
-create table twopc_t1 (
-    id bigint,
-    col bigint,
-    primary key (id, col)
-) Engine=InnoDB;
