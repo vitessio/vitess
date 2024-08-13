@@ -139,7 +139,11 @@ func TestMySQLShellBackupRestorePreCheckDisableRedolog(t *testing.T) {
 	mysqlShellSpeedUpRestore = true
 	engine := MySQLShellBackupEngine{}
 
-	fakeMysqld := NewFakeMysqlDaemon(fakesqldb.New(t)) // defaults to 8.0.32
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	fakeMysqld := NewFakeMysqlDaemon(fakedb) // defaults to 8.0.32
+	defer fakeMysqld.Close()
+
 	params := RestoreParams{
 		Mysqld: fakeMysqld,
 	}
