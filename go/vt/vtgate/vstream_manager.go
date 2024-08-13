@@ -578,15 +578,21 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			})
 		}()
 
+		var options *binlogdatapb.VStreamOptions
+		const SidecardHeartbeatTableName = "heartbeat"
+		if vs.flags.GetStreamKeyspaceHeartbeats() {
+			options = &binlogdatapb.VStreamOptions{
+				InternalTables: []string{SidecardHeartbeatTableName},
+			}
+		}
+
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
 		req := &binlogdatapb.VStreamRequest{
 			Target:       target,
 			Position:     sgtid.Gtid,
 			Filter:       vs.filter,
 			TableLastPKs: sgtid.TablePKs,
-			Options: &binlogdatapb.VStreamOptions{
-				InternalTables: vs.flags.GetInternalTables(),
-			},
+			Options:      options,
 		}
 		var vstreamCreatedOnce sync.Once
 		log.Infof("Starting to vstream from %s, with req %+v", tablet.Alias.String(), req)

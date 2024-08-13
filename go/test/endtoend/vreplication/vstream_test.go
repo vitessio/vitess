@@ -748,6 +748,76 @@ func TestVStreamCopyMultiKeyspaceReshard(t *testing.T) {
 	require.NotZero(t, ne.num40DashEvents)
 }
 
+const (
+	vstreamHeartbeatsTestContextTimeout = 20 * time.Second
+	// Expect a reasonable number of heartbeats to be received in the test duration, should ideally be ~ timeout
+	// since the heartbeat interval is set to 1s. But we set it to 10 to be conservative to avoid CI flakiness.
+	numExpectedHeartbeats = 10
+)
+
+func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (numRowEvents map[string]int, numFieldEvents map[string]int) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(vstreamHeartbeatsTestContextTimeout)) // ensure heartbeats are sent.
+	defer cancel()
+
+	numRowEvents = make(map[string]int)
+	numFieldEvents = make(map[string]int)
+	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer vstreamConn.Close()
+
+	done := false
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: "product",
+			Shard:    "0",
+			Gtid:     "",
+		}}}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "customer",
+			Filter: "select * from customer",
+		}},
+	}
+	// stream events from the VStream API
+	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+	require.NoError(t, err)
+	for !done {
+		evs, err := reader.Recv()
+		switch err {
+		case nil:
+			for _, ev := range evs {
+				// log.Infof("Event: %v", ev)
+				switch ev.Type {
+				case binlogdatapb.VEventType_ROW:
+					rowEvent := ev.RowEvent
+					tableName := strings.Split(rowEvent.TableName, ".")[1]
+					require.Equal(t, "product", rowEvent.Keyspace)
+					require.Equal(t, "0", rowEvent.Shard)
+					numRowEvents[tableName]++
+
+				case binlogdatapb.VEventType_FIELD:
+					fieldEvent := ev.FieldEvent
+					tableName := strings.Split(fieldEvent.TableName, ".")[1]
+					require.Equal(t, "product", fieldEvent.Keyspace)
+					require.Equal(t, "0", fieldEvent.Shard)
+					numFieldEvents[tableName]++
+				default:
+				}
+			}
+		case io.EOF:
+			log.Infof("Stream Ended")
+			done = true
+		default:
+			log.Infof("%s:: remote error: %v", time.Now(), err)
+			done = true
+		}
+	}
+	return numRowEvents, numFieldEvents
+}
+
 // TestVStreamHeartbeats enables streaming of the internal Vitess heartbeat tables in the VStream API and ensures that
 // the heartbeat events are received by the client.
 func TestVStreamHeartbeats(t *testing.T) {
@@ -774,73 +844,31 @@ func TestVStreamHeartbeats(t *testing.T) {
 		defaultReplicas, defaultRdonly, 100, nil)
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(15*time.Second)) // ensure heartbeats are sent.
-	defer cancel()
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer vstreamConn.Close()
-	vgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: "product",
-			Shard:    "0",
-			Gtid:     "",
-		}}}
 
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "customer",
-			Filter: "select * from customer",
-		}},
-	}
 	expectedNumRowEvents := make(map[string]int)
 	expectedNumRowEvents["customer"] = 3
-	expectedNumRowEvents["reparent_journal"] = 1
-	expectedNumRowEvents["tables"] = 20 // total tables created in the product keyspace
-	gotNumRowEvents := make(map[string]int)
-	gotNumFieldEvents := make(map[string]int)
-	flags := &vtgatepb.VStreamFlags{InternalTables: []string{"heartbeat", "reparent_journal", "tables"}}
-	done := false
 
-	// stream events from the VStream API
-	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-	require.NoError(t, err)
-	for !done {
-		evs, err := reader.Recv()
-		switch err {
-		case nil:
-			for _, ev := range evs {
-				log.Infof("Event: %v", ev)
-				switch ev.Type {
-				case binlogdatapb.VEventType_ROW:
-					rowEvent := ev.RowEvent
-					tableName := strings.Split(rowEvent.TableName, ".")[1]
-					require.Equal(t, "product", rowEvent.Keyspace)
-					require.Equal(t, "0", rowEvent.Shard)
-					gotNumRowEvents[tableName]++
-
-				case binlogdatapb.VEventType_FIELD:
-					fieldEvent := ev.FieldEvent
-					tableName := strings.Split(fieldEvent.TableName, ".")[1]
-					require.Equal(t, "product", fieldEvent.Keyspace)
-					require.Equal(t, "0", fieldEvent.Shard)
-					gotNumFieldEvents[tableName]++
-				default:
-				}
-			}
-		case io.EOF:
-			log.Infof("Stream Ended")
-			done = true
-		default:
-			log.Infof("%s:: remote error: %v", time.Now(), err)
-			done = true
+	t.Run("With Keyspace Heartbeats On", func(t *testing.T) {
+		flags := &vtgatepb.VStreamFlags{
+			StreamKeyspaceHeartbeats: true,
 		}
-	}
-	for k := range expectedNumRowEvents {
-		require.Equalf(t, 1, gotNumFieldEvents[k], "incorrect number of field events for table %s, got %d", k, gotNumFieldEvents[k])
-	}
-	require.NotZero(t, gotNumRowEvents["heartbeat"])
-	delete(gotNumRowEvents, "heartbeat")
-	require.Equal(t, expectedNumRowEvents, gotNumRowEvents)
+		gotNumRowEvents, gotNumFieldEvents := doVStream(t, vc, flags)
+		for k := range expectedNumRowEvents {
+			require.Equalf(t, 1, gotNumFieldEvents[k], "incorrect number of field events for table %s, got %d", k, gotNumFieldEvents[k])
+		}
+		require.Greater(t, gotNumRowEvents["heartbeat"], numExpectedHeartbeats, "incorrect number of heartbeat events received")
+		log.Infof("Total number of heartbeat events received: %v", gotNumRowEvents["heartbeat"])
+		delete(gotNumRowEvents, "heartbeat")
+		require.Equal(t, expectedNumRowEvents, gotNumRowEvents)
+	})
+
+	t.Run("With Keyspace Heartbeats Off", func(t *testing.T) {
+		gotNumRowEvents, gotNumFieldEvents := doVStream(t, vc, nil)
+		for k := range expectedNumRowEvents {
+			require.Equalf(t, 1, gotNumFieldEvents[k], "incorrect number of field events for table %s, got %d", k, gotNumFieldEvents[k])
+		}
+		require.Zero(t, gotNumRowEvents["heartbeat"], "heartbeat events should not be received when StreamKeyspaceHeartbeats is false")
+		require.Equal(t, expectedNumRowEvents, gotNumRowEvents)
+	})
+
 }

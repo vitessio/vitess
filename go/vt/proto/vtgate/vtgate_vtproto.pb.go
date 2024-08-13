@@ -352,17 +352,13 @@ func (m *VStreamFlags) CloneVT() *VStreamFlags {
 		return (*VStreamFlags)(nil)
 	}
 	r := &VStreamFlags{
-		MinimizeSkew:      m.MinimizeSkew,
-		HeartbeatInterval: m.HeartbeatInterval,
-		StopOnReshard:     m.StopOnReshard,
-		Cells:             m.Cells,
-		CellPreference:    m.CellPreference,
-		TabletOrder:       m.TabletOrder,
-	}
-	if rhs := m.InternalTables; rhs != nil {
-		tmpContainer := make([]string, len(rhs))
-		copy(tmpContainer, rhs)
-		r.InternalTables = tmpContainer
+		MinimizeSkew:             m.MinimizeSkew,
+		HeartbeatInterval:        m.HeartbeatInterval,
+		StopOnReshard:            m.StopOnReshard,
+		Cells:                    m.Cells,
+		CellPreference:           m.CellPreference,
+		TabletOrder:              m.TabletOrder,
+		StreamKeyspaceHeartbeats: m.StreamKeyspaceHeartbeats,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -1484,14 +1480,15 @@ func (m *VStreamFlags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.InternalTables) > 0 {
-		for iNdEx := len(m.InternalTables) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.InternalTables[iNdEx])
-			copy(dAtA[i:], m.InternalTables[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.InternalTables[iNdEx])))
-			i--
-			dAtA[i] = 0x3a
+	if m.StreamKeyspaceHeartbeats {
+		i--
+		if m.StreamKeyspaceHeartbeats {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
 		}
+		i--
+		dAtA[i] = 0x38
 	}
 	if len(m.TabletOrder) > 0 {
 		i -= len(m.TabletOrder)
@@ -2291,11 +2288,8 @@ func (m *VStreamFlags) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if len(m.InternalTables) > 0 {
-		for _, s := range m.InternalTables {
-			l = len(s)
-			n += 1 + l + sov(uint64(l))
-		}
+	if m.StreamKeyspaceHeartbeats {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -5243,10 +5237,10 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 			m.TabletOrder = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 7:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field InternalTables", wireType)
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StreamKeyspaceHeartbeats", wireType)
 			}
-			var stringLen uint64
+			var v int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -5256,24 +5250,12 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.InternalTables = append(m.InternalTables, string(dAtA[iNdEx:postIndex]))
-			iNdEx = postIndex
+			m.StreamKeyspaceHeartbeats = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
