@@ -2152,6 +2152,10 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 }
 
 func (node *ShowTransactionStatus) Format(buf *TrackedBuffer) {
+	if node.TransactionID == "" {
+		buf.astPrintf(node, "show unresolved transactions")
+		return
+	}
 	buf.astPrintf(node, "show transaction status for '%#s'", node.TransactionID)
 }
 
