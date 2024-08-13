@@ -4245,7 +4245,10 @@ show_statement:
   {
     $$ = &Show{&ShowTransactionStatus{}}
   }
-
+| SHOW UNRESOLVED TRANSACTIONS FOR table_id
+  {
+    $$ = &Show{&ShowTransactionStatus{Keyspace: $5.String()}}
+  }
 
 for_opt:
   {}

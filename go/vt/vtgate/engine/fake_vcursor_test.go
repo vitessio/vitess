@@ -116,6 +116,10 @@ func (t *noopVCursor) ReadTransaction(ctx context.Context, transactionID string)
 	panic("implement me")
 }
 
+func (t *noopVCursor) UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -824,6 +828,13 @@ func (f *loggingVCursor) ReadTransaction(_ context.Context, _ string) (*querypb.
 		return nil, f.resultErr
 	}
 	return f.transactionStatusOutput, nil
+}
+
+func (f *loggingVCursor) UnresolvedTransactions(_ context.Context, _ string) ([]*querypb.TransactionMetadata, error) {
+	if f.resultErr != nil {
+		return nil, f.resultErr
+	}
+	return nil, nil
 }
 
 // SQLParser implements VCursor

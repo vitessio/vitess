@@ -2834,6 +2834,10 @@ func (node *ShowBasic) FormatFast(buf *TrackedBuffer) {
 func (node *ShowTransactionStatus) FormatFast(buf *TrackedBuffer) {
 	if node.TransactionID == "" {
 		buf.WriteString("show unresolved transactions")
+		if node.Keyspace != "" {
+			buf.WriteString(" for ")
+			buf.WriteString(node.Keyspace)
+		}
 		return
 	}
 	buf.WriteString("show transaction status for '")

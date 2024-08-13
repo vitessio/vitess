@@ -33,6 +33,7 @@ type TransactionStatus struct {
 	noInputs
 	noTxNeeded
 
+	Keyspace      string
 	TransactionID string
 }
 
@@ -76,25 +77,37 @@ func (t *TransactionStatus) getFields() []*querypb.Field {
 }
 
 func (t *TransactionStatus) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	transactionState, err := vcursor.ReadTransaction(ctx, t.TransactionID)
+	var transactionStatuses []*querypb.TransactionMetadata
+	var err error
+	if t.TransactionID != "" {
+		var transactionState *querypb.TransactionMetadata
+		transactionState, err = vcursor.ReadTransaction(ctx, t.TransactionID)
+		transactionStatuses = append(transactionStatuses, transactionState)
+	} else {
+		transactionStatuses, err = vcursor.UnresolvedTransactions(ctx, t.Keyspace)
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	res := &sqltypes.Result{}
 	if wantfields {
 		res.Fields = t.getFields()
 	}
-	if transactionState != nil && transactionState.Dtid != "" {
-		var participantString []string
-		for _, participant := range transactionState.Participants {
-			participantString = append(participantString, fmt.Sprintf("%s:%s", participant.Keyspace, participant.Shard))
+
+	for _, transactionState := range transactionStatuses {
+		if transactionState != nil && transactionState.Dtid != "" {
+			var participantString []string
+			for _, participant := range transactionState.Participants {
+				participantString = append(participantString, fmt.Sprintf("%s:%s", participant.Keyspace, participant.Shard))
+			}
+			res.Rows = append(res.Rows, sqltypes.Row{
+				sqltypes.NewVarChar(transactionState.Dtid),
+				sqltypes.NewVarChar(transactionState.State.String()),
+				sqltypes.NewDatetime(time.Unix(0, transactionState.TimeCreated).UTC().String()),
+				sqltypes.NewVarChar(strings.Join(participantString, ",")),
+			})
 		}
-		res.Rows = append(res.Rows, sqltypes.Row{
-			sqltypes.NewVarChar(transactionState.Dtid),
-			sqltypes.NewVarChar(transactionState.State.String()),
-			sqltypes.NewDatetime(time.Unix(0, transactionState.TimeCreated).UTC().String()),
-			sqltypes.NewVarChar(strings.Join(participantString, ",")),
-		})
 	}
 	return res, nil
 }
@@ -108,10 +121,14 @@ func (t *TransactionStatus) TryStreamExecute(ctx context.Context, vcursor VCurso
 }
 
 func (t *TransactionStatus) description() PrimitiveDescription {
+	otherMap := map[string]any{}
+	if t.TransactionID == "" {
+		otherMap["AllUnresolved"] = t.Keyspace
+	} else {
+		otherMap["TransactionID"] = t.TransactionID
+	}
 	return PrimitiveDescription{
 		OperatorType: "TransactionStatus",
-		Other: map[string]any{
-			"TransactionID": t.TransactionID,
-		},
+		Other:        otherMap,
 	}
 }

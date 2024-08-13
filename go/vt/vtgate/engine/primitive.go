@@ -134,6 +134,8 @@ type (
 
 		// ReadTransaction reads the state of the given transaction from the metadata manager
 		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
+
+		UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error)
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

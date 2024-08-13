@@ -52,7 +52,7 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 	var err error
 	switch show := stmt.Internal.(type) {
 	case *sqlparser.ShowTransactionStatus:
-		prim, err = buildShowTransactionStatusPlan(show, vschema)
+		prim, err = buildShowTransactionStatusPlan(show)
 	case *sqlparser.ShowBasic:
 		prim, err = buildShowBasicPlan(show, vschema)
 	case *sqlparser.ShowCreate:
@@ -70,8 +70,9 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 }
 
 // buildShowTransactionStatusPlan builds the transaction status plan
-func buildShowTransactionStatusPlan(show *sqlparser.ShowTransactionStatus, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildShowTransactionStatusPlan(show *sqlparser.ShowTransactionStatus) (engine.Primitive, error) {
 	return &engine.TransactionStatus{
+		Keyspace:      show.Keyspace,
 		TransactionID: show.TransactionID,
 	}, nil
 }
