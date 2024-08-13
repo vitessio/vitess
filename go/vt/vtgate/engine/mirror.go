@@ -70,68 +70,55 @@ func (m *percentBasedMirror) NeedsTransaction() bool {
 }
 
 func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	var mirrorCh chan any
-	var mirrorCtx context.Context
-	var mirrorCtxCancel func()
-
-	doMirror := m.percentAtLeastDieRoll()
-
-	if doMirror {
-		mirrorCh = make(chan any)
-
-		mirrorCtx, mirrorCtxCancel = context.WithTimeout(ctx, maxMirrorTargetLag)
-		defer mirrorCtxCancel()
-
-		go func(target Primitive, vcursor VCursor) {
-			defer close(mirrorCh)
-			_, _ = vcursor.ExecutePrimitive(mirrorCtx, target, bindVars, wantfields)
-		}(m.target, vcursor.CloneForMirroring(mirrorCtx))
+	if !m.percentAtLeastDieRoll() {
+		return vcursor.ExecutePrimitive(ctx, m.primitive, bindVars, wantfields)
 	}
+
+	mirrorCh := make(chan any)
+	mirrorCtx, mirrorCtxCancel := context.WithTimeout(ctx, maxMirrorTargetLag)
+	defer mirrorCtxCancel()
+
+	go func() {
+		defer close(mirrorCh)
+		vcursor.ExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields)
+	}()
 
 	r, err := vcursor.ExecutePrimitive(ctx, m.primitive, bindVars, wantfields)
 
-	if doMirror {
-		select {
-		case <-mirrorCh:
-			// Mirroring completed within the allowed time.
-		case <-mirrorCtx.Done():
-			// Mirroring took too long and was canceled.
-		}
+	select {
+	case <-mirrorCh:
+		// Mirroring completed within the allowed time.
+	case <-mirrorCtx.Done():
+		// Mirroring took too long and was canceled.
 	}
 
 	return r, err
 }
 
+
 func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var mirrorCh chan any
-	var mirrorCtx context.Context
-	var mirrorCtxCancel func()
-
-	doMirror := m.percentAtLeastDieRoll()
-
-	if doMirror {
-		mirrorCh = make(chan any)
-
-		mirrorCtx, mirrorCtxCancel = context.WithTimeout(ctx, maxMirrorTargetLag)
-		defer mirrorCtxCancel()
-
-		go func(target Primitive, vcursor VCursor) {
-			defer close(mirrorCh)
-			_ = vcursor.StreamExecutePrimitive(mirrorCtx, target, bindVars, wantfields, func(_ *sqltypes.Result) error {
-				return nil
-			})
-		}(m.target, vcursor.CloneForMirroring(mirrorCtx))
+	if !m.percentAtLeastDieRoll() {
+		return vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
 	}
+
+	mirrorCh := make(chan any)
+	mirrorCtx, mirrorCtxCancel := context.WithTimeout(ctx, maxMirrorTargetLag)
+	defer mirrorCtxCancel()
+
+	go func() {
+		defer close(mirrorCh)
+		vcursor.StreamExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields, func(_ *sqltypes.Result) error {
+			return nil
+		})
+	}()
 
 	err := vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
 
-	if doMirror {
-		select {
-		case <-mirrorCh:
-			// Mirroring completed within the allowed time.
-		case <-mirrorCtx.Done():
-			// Mirroring took too long and was canceled.
-		}
+	select {
+	case <-mirrorCh:
+		// Mirroring completed within the allowed time.
+	case <-mirrorCtx.Done():
+		// Mirroring took too long and was canceled.
 	}
 
 	return err

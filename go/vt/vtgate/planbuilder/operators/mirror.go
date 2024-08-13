@@ -45,9 +45,7 @@ func NewPercentBasedMirror(percent float32, operator, target Operator) *PercentB
 // Clone will return a copy of this operator, protected so changed to the original will not impact the clone
 func (m *PercentBasedMirror) Clone(inputs []Operator) Operator {
 	cloneMirror := *m
-	cloneMirror.Percent = m.Percent
-	cloneMirror.Operator = inputs[0]
-	cloneMirror.Target = inputs[1]
+	cloneMirror.SetInputs(inputs)
 	return &cloneMirror
 }
 
