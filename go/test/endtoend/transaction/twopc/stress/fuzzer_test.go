@@ -100,12 +100,12 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			timeForTesting: 5 * time.Second,
 		},
 		{
-			name:                  "Multiple Threads - Multiple Set - PRS, ERS and MySQL restart disruptions",
+			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL and Vttablet restart disruptions",
 			threads:               15,
 			updateSets:            15,
 			timeForTesting:        5 * time.Second,
-			clusterDisruptions:    []func(){prs, ers, mysqlRestarts},
-			disruptionProbability: []int{5, 5, 5},
+			clusterDisruptions:    []func(){prs, ers, mysqlRestarts, vttabletRestarts},
+			disruptionProbability: []int{5, 5, 5, 5},
 		},
 	}
 
@@ -393,6 +393,18 @@ func ers() {
 	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
 	if err != nil {
 		log.Errorf("error running ERS - %v", err)
+	}
+}
+
+func vttabletRestarts() {
+	shards := clusterInstance.Keyspaces[0].Shards
+	shard := shards[rand.Intn(len(shards))]
+	vttablets := shard.Vttablets
+	tablet := vttablets[rand.Intn(len(vttablets))]
+	log.Errorf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias)
+	err := tablet.RestartOnlyTablet()
+	if err != nil {
+		log.Errorf("error restarting vttablet - %v", err)
 	}
 }
 

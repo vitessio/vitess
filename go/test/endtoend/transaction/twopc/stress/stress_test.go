@@ -72,6 +72,11 @@ func TestDisruptions(t *testing.T) {
 			commitDelayTime: "5",
 			disruption:      mysqlRestartShard3,
 		},
+		{
+			disruptionName:  "Vttablet Restart",
+			commitDelayTime: "5",
+			disruption:      vttabletRestartShard3,
+		},
 	}
 	for _, tt := range testcases {
 		t.Run(fmt.Sprintf("%s-%ss timeout", tt.disruptionName, tt.commitDelayTime), func(t *testing.T) {
@@ -210,6 +215,13 @@ func ersShard3() error {
 	newPrimary := shard.Vttablets[1]
 	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
 	return err
+}
+
+// vttabletRestartShard3 restarts the first vttablet of the third shard.
+func vttabletRestartShard3() error {
+	shard := clusterInstance.Keyspaces[0].Shards[2]
+	tablet := shard.Vttablets[0]
+	return tablet.RestartOnlyTablet()
 }
 
 // mysqlRestartShard3 restarts MySQL on the first tablet of the third shard.

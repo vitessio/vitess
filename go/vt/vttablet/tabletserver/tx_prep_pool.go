@@ -100,6 +100,13 @@ func (pp *TxPreparedPool) Open() {
 	pp.open = true
 }
 
+// Close marks the prepared pool closed.
+func (pp *TxPreparedPool) Close() {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	pp.open = false
+}
+
 // IsOpen checks if the prepared pool is open for use.
 func (pp *TxPreparedPool) IsOpen() bool {
 	pp.mu.Lock()

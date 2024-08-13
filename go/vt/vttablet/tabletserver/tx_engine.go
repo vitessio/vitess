@@ -153,6 +153,11 @@ func (te *TxEngine) transition(state txEngineState) {
 
 	te.state = state
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
+		// If the prepared pool is not open, then we need to redo the prepared transactions
+		// before we open the transaction engine to accept new writes.
+		if !te.preparedPool.IsOpen() {
+			_ = te.redoPreparedTransactionsLocked()
+		}
 		te.startTransactionWatcher()
 	}
 	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
@@ -376,6 +381,9 @@ func (te *TxEngine) shutdownLocked() {
 	log.Infof("TxEngine - stop transaction watcher")
 	te.stopTransactionWatcher()
 
+	// Mark the prepared pool closed.
+	log.Infof("TxEngine - closing the prepared pool")
+	te.preparedPool.Close()
 	log.Infof("TxEngine - closing the txPool")
 	te.txPool.Close()
 	log.Infof("TxEngine - closing twoPC")
