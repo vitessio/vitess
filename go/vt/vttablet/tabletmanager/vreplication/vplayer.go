@@ -487,7 +487,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// can estimate this value more accurately.
 	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
-	var sbm int64
+	var lagSecs int64
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -521,7 +521,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
-		sbm = -1
+		lagSecs = -1
 		for i, events := range items {
 			for j, event := range events {
 				if event.Timestamp != 0 {
@@ -533,7 +533,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
 						vp.lastTimestampNs = event.Timestamp * 1e9
 						vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
-						sbm = event.CurrentTime/1e9 - event.Timestamp
+						lagSecs = event.CurrentTime/1e9 - event.Timestamp
 					}
 				}
 				mustSave := false
@@ -575,9 +575,9 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
-		if sbm >= 0 {
-			vp.vr.stats.ReplicationLagSeconds.Store(sbm)
-			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
+		if lagSecs >= 0 {
+			vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
+			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(lagSecs)*time.Second)
 		} else { // We couldn't determine the lag, so we need to estimate it
 			estimateLag()
 		}
