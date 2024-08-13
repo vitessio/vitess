@@ -287,12 +287,22 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	hbTimer := time.NewTimer(HeartbeatTime)
 	defer hbTimer.Stop()
 
+	resetHBTimer := func() {
+		hbTimer.Reset(HeartbeatTime)
+		// Drain event if timer fired before reset.
+		select {
+		case <-hbTimer.C:
+		default:
+		}
+	}
+
 	injectHeartbeat := func(throttled bool, throttledReason string) error {
 		now := time.Now().UnixNano()
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
+			resetHBTimer()
 			err := bufferAndTransmit(&binlogdatapb.VEvent{
 				Type:            binlogdatapb.VEventType_HEARTBEAT,
 				Timestamp:       now / 1e9,
@@ -309,19 +319,19 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
 		defer throttledHeartbeatsRateLimiter.Stop()
 		for {
-			// check throttler.
+			// Check throttler.
 			if checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp); !ok {
-				// make sure to leave if context is cancelled
+				// Make sure to leave if context is cancelled.
 				select {
 				case <-ctx.Done():
 					return
 				default:
-					// do nothing special
+					// Do nothing special.
 				}
 				throttledHeartbeatsRateLimiter.Do(func() error {
 					return injectHeartbeat(true, checkResult.Summary())
 				})
-				// we won't process events, until we're no longer throttling
+				// We won't process events, until we're no longer throttling.
 				logger.Infof("throttled.")
 				continue
 			}
@@ -349,12 +359,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	go throttleEvents(throttledEvents)
 
 	for {
-		hbTimer.Reset(HeartbeatTime)
 		// Drain event if timer fired before reset.
-		select {
-		case <-hbTimer.C:
-		default:
-		}
+		resetHBTimer()
 
 		select {
 		case ev, ok := <-throttledEvents:

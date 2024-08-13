@@ -487,7 +487,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// can estimate this value more accurately.
 	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
-	var sbm int64 = -1
+	var sbm int64
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -503,11 +503,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if err != nil {
 			return err
 		}
-		// No events were received. This likely means that there's a network partition.
-		// So, we should assume we're falling behind.
-		if len(items) == 0 {
-			estimateLag()
-		}
+
 		// Empty transactions are saved at most once every idleTimeout.
 		// This covers two situations:
 		// 1. Fetch was idle for idleTimeout.
@@ -525,9 +521,17 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
+		sbm = -1
 		for i, events := range items {
 			for j, event := range events {
-				if event.Timestamp != 0 {
+				// If the event has no timestamp OR is an Other/GTID event (which is only meant
+				// to move the position forward as non-data changing events occur) then do not
+				// update the lag.
+				// If the batch consists only of Other/GTID and Heartbeat events then we cannot
+				// calculate the lag -- as the vstreamer may be fully throttled -- and we will
+				// estimate it after processing the batch.
+				if event.Timestamp != 0 &&
+					!(event.Type == binlogdatapb.VEventType_GTID || event.Type == binlogdatapb.VEventType_HEARTBEAT) {
 					vp.lastTimestampNs = event.Timestamp * 1e9
 					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
 					sbm = event.CurrentTime/1e9 - event.Timestamp
@@ -574,8 +578,9 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if sbm >= 0 {
 			vp.vr.stats.ReplicationLagSeconds.Store(sbm)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
+		} else { // We couldn't determine the lag, so we need to estimate it
+			estimateLag()
 		}
-
 	}
 }
 
