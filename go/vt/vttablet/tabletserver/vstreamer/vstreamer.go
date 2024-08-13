@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -287,22 +286,12 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	hbTimer := time.NewTimer(HeartbeatTime)
 	defer hbTimer.Stop()
 
-	resetHBTimer := func() {
-		hbTimer.Reset(HeartbeatTime)
-		// Drain event if timer fired before reset.
-		select {
-		case <-hbTimer.C:
-		default:
-		}
-	}
-
 	injectHeartbeat := func(throttled bool, throttledReason string) error {
-		now := time.Now().UnixNano()
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
-			resetHBTimer()
+			now := time.Now().UnixNano()
 			err := bufferAndTransmit(&binlogdatapb.VEvent{
 				Type:            binlogdatapb.VEventType_HEARTBEAT,
 				Timestamp:       now / 1e9,
@@ -315,9 +304,11 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
+	wfNameLog := ""
+	if vs.filter != nil && vs.filter.WorkflowName != "" {
+		wfNameLog = fmt.Sprintf(" in workflow %s", vs.filter.WorkflowName)
+	}
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
-		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
-		defer throttledHeartbeatsRateLimiter.Stop()
 		for {
 			// Check throttler.
 			if checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp); !ok {
@@ -328,11 +319,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				default:
 					// Do nothing special.
 				}
-				throttledHeartbeatsRateLimiter.Do(func() error {
-					return injectHeartbeat(true, checkResult.Summary())
-				})
-				// We won't process events, until we're no longer throttling.
-				logger.Infof("throttled.")
+				logger.Infof("vstreamer throttled%s: %s.", wfNameLog, checkResult.Summary())
 				continue
 			}
 			select {
@@ -359,7 +346,12 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	go throttleEvents(throttledEvents)
 
 	for {
-		resetHBTimer()
+		hbTimer.Reset(HeartbeatTime)
+		// Drain event if timer fired before reset.
+		select {
+		case <-hbTimer.C:
+		default:
+		}
 
 		select {
 		case ev, ok := <-throttledEvents:
