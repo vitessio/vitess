@@ -524,14 +524,12 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		sbm = -1
 		for i, events := range items {
 			for j, event := range events {
-				// If the event has no timestamp OR is an Other/GTID event (which is only meant
-				// to move the position forward as non-data changing events occur) then do not
-				// update the lag.
-				// If the batch consists only of Other/GTID and Heartbeat events then we cannot
-				// calculate the lag -- as the vstreamer may be fully throttled -- and we will
+				// If the event has no timestamp OR is a heartbeat event then do not update
+				// the lag.
+				// If the batch consists only of heartbeat events then we cannot calculate
+				// the lag -- as the vstreamer may be fully throttled -- and we will
 				// estimate it after processing the batch.
-				if event.Timestamp != 0 &&
-					!(event.Type == binlogdatapb.VEventType_GTID || event.Type == binlogdatapb.VEventType_HEARTBEAT) {
+				if event.Timestamp != 0 && event.Type != binlogdatapb.VEventType_HEARTBEAT {
 					vp.lastTimestampNs = event.Timestamp * 1e9
 					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
 					sbm = event.CurrentTime/1e9 - event.Timestamp

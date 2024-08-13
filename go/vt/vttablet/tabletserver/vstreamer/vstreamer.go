@@ -359,7 +359,6 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	go throttleEvents(throttledEvents)
 
 	for {
-		// Drain event if timer fired before reset.
 		resetHBTimer()
 
 		select {
