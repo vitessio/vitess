@@ -80,7 +80,9 @@ func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bi
 
 	go func() {
 		defer close(mirrorCh)
-		vcursor.ExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields)
+		mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
+		// TODO(maxeng) handle error.
+		_, _ = mirrorVCursor.ExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields)
 	}()
 
 	r, err := vcursor.ExecutePrimitive(ctx, m.primitive, bindVars, wantfields)
@@ -95,7 +97,6 @@ func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bi
 	return r, err
 }
 
-
 func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	if !m.percentAtLeastDieRoll() {
 		return vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
@@ -107,9 +108,13 @@ func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCurs
 
 	go func() {
 		defer close(mirrorCh)
-		vcursor.StreamExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields, func(_ *sqltypes.Result) error {
-			return nil
-		})
+		mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
+		// TODO(maxeng) handle error.
+		_ = mirrorVCursor.StreamExecutePrimitive(
+			mirrorCtx, m.target, bindVars, wantfields, func(_ *sqltypes.Result,
+			) error {
+				return nil
+			})
 	}()
 
 	err := vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
