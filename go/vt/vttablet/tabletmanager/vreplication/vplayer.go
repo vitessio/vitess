@@ -524,15 +524,17 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		sbm = -1
 		for i, events := range items {
 			for j, event := range events {
-				// If the event has no timestamp OR is a heartbeat event then do not update
-				// the lag.
-				// If the batch consists only of heartbeat events then we cannot calculate
-				// the lag -- as the vstreamer may be fully throttled -- and we will
-				// estimate it after processing the batch.
-				if event.Timestamp != 0 && event.Type != binlogdatapb.VEventType_HEARTBEAT {
-					vp.lastTimestampNs = event.Timestamp * 1e9
-					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
-					sbm = event.CurrentTime/1e9 - event.Timestamp
+				if event.Timestamp != 0 {
+					// If the event is a heartbeat sent while throttled then do not update
+					// the lag based on it.
+					// If the batch consists only of throttled heartbeat events then we cannot
+					// determine the actual lag, as the vstreamer is fully throttled, and we
+					// will estimate it after processing the batch.
+					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
+						vp.lastTimestampNs = event.Timestamp * 1e9
+						vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
+						sbm = event.CurrentTime/1e9 - event.Timestamp
+					}
 				}
 				mustSave := false
 				switch event.Type {

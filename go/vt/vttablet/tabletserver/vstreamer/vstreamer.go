@@ -399,7 +399,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:
-			if err := injectHeartbeat(false, ""); err != nil {
+			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp)
+			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
 				if err == io.EOF {
 					return nil
 				}
