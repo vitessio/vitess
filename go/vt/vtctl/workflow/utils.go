@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -958,4 +959,12 @@ func IsTableDidNotExistError(err error) bool {
 		return sqlErr.Num == sqlerror.ERNoSuchTable || sqlErr.Num == sqlerror.ERBadTable
 	}
 	return false
+}
+
+// defaultErrorHandler provides a way to consistently handle errors by logging and
+// returning them.
+func defaultErrorHandler(logger logutil.Logger, message string, err error) (*[]string, error) {
+	werr := vterrors.Wrapf(err, message)
+	logger.Error(werr)
+	return nil, werr
 }

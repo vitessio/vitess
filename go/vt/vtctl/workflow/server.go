@@ -2581,20 +2581,18 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DropTargets")
 	if lockErr != nil {
-		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s workflow", lockName), lockErr)
 	}
 	defer workflowUnlock(&err)
 	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
 	if lockErr != nil {
-		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
-		return nil, lockErr
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer sourceUnlock(&err)
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
 		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
 		if lockErr != nil {
-			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
-			return nil, lockErr
+			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}
 		defer targetUnlock(&err)
 		ctx = lockCtx
@@ -2779,20 +2777,18 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DropSources")
 	if lockErr != nil {
-		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s workflow", lockName), lockErr)
 	}
 	defer workflowUnlock(&err)
 	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
 	if lockErr != nil {
-		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
-		return nil, lockErr
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer sourceUnlock(&err)
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
 		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
 		if lockErr != nil {
-			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
-			return nil, lockErr
+			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}
 		defer targetUnlock(&err)
 		ctx = lockCtx
@@ -3020,13 +3016,12 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "completeMigrateWorkflow")
 	if lockErr != nil {
-		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s workflow", lockName), lockErr)
 	}
 	defer workflowUnlock(&err)
 	ctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow")
 	if lockErr != nil {
-		ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
-		return nil, lockErr
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 	}
 	defer targetUnlock(&err)
 
@@ -3193,16 +3188,10 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	cellsStr := strings.Join(req.Cells, ",")
 
-	// Consistently handle errors by logging and returning them.
-	handleError := func(message string, err error) (*[]string, error) {
-		werr := vterrors.Wrapf(err, message)
-		ts.Logger().Error(werr)
-		return nil, werr
-	}
-
 	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, cellsStr, state.String())
 	if !switchReplica && !switchRdonly {
-		return handleError("invalid tablet types", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
+		return defaultErrorHandler(ts.Logger(), "invalid tablet types",
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
 	}
 	// For partial (shard-by-shard migrations) or multi-tenant migrations, traffic for all tablet types
 	// is expected to be switched at once. For other MoveTables migrations where we use table routing rules
@@ -3214,7 +3203,8 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		trafficSwitchingIsAllOrNothing = true
 	case ts.MigrationType() == binlogdatapb.MigrationType_TABLES && ts.IsMultiTenantMigration():
 		if direction == DirectionBackward {
-			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "requesting reversal of read traffic for multi-tenant migrations is not supported"))
+			return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"requesting reversal of read traffic for multi-tenant migrations is not supported"))
 		}
 		// For multi-tenant migrations, we only support switching traffic to all cells at once
 		allCells, err := ts.TopoServer().GetCellInfoNames(ctx)
@@ -3222,16 +3212,19 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return nil, err
 		}
 		if len(req.GetCells()) != 0 && len(req.GetCells()) != len(allCells) {
-			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "requesting read traffic for multi-tenant migrations must include all cells"))
+			return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"requesting read traffic for multi-tenant migrations must include all cells"))
 		}
 	}
 
 	if !trafficSwitchingIsAllOrNothing {
 		if direction == DirectionBackward && switchReplica && len(state.ReplicaCellsSwitched) == 0 {
-			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
+			return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
 		}
 		if direction == DirectionBackward && switchRdonly && len(state.RdonlyCellsSwitched) == 0 {
-			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
+			return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
 
@@ -3253,7 +3246,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// If journals exist notify user and fail.
 	journalsExist, _, err := ts.checkJournals(ctx)
 	if err != nil {
-		return handleError(fmt.Sprintf("failed to read journal in the %s keyspace", ts.SourceKeyspaceName()), err)
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to read journal in the %s keyspace", ts.SourceKeyspaceName()), err)
 	}
 	if journalsExist {
 		log.Infof("Found a previous journal entry for %d", ts.id)
@@ -3266,7 +3259,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	}
 
 	if err := ts.validate(ctx); err != nil {
-		return handleError("workflow validation failed", err)
+		return defaultErrorHandler(ts.Logger(), "workflow validation failed", err)
 	}
 
 	// For switching reads, locking the source keyspace is sufficient.
@@ -3282,7 +3275,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// For reads, locking the source keyspace is sufficient.
 	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
 	if lockErr != nil {
-		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer unlock(&err)
 	confirmKeyspaceLocksHeld := func() error {
@@ -3297,7 +3290,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	// Remove mirror rules for the specified tablet types.
 	if err := sw.mirrorTableTraffic(ctx, roTabletTypes, 0); err != nil {
-		return handleError(fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for read-only tablet types",
+		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to remove mirror rules from source keyspace %s to target keyspace %s, workflow %s, for read-only tablet types",
 			ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
 	}
 
@@ -3306,7 +3299,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		case ts.IsMultiTenantMigration():
 			err := sw.switchKeyspaceReads(ctx, roTabletTypes)
 			if err != nil {
-				return handleError(fmt.Sprintf("failed to switch read traffic, from source keyspace %s to target keyspace %s, workflow %s",
+				return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to switch read traffic, from source keyspace %s to target keyspace %s, workflow %s",
 					ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
 			}
 		case ts.isPartialMigration:
@@ -3314,28 +3307,28 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		default:
 			err := sw.switchTableReads(ctx, req.Cells, roTabletTypes, rebuildSrvVSchema, direction)
 			if err != nil {
-				return handleError("failed to switch read traffic for the tables", err)
+				return defaultErrorHandler(ts.Logger(), "failed to switch read traffic for the tables", err)
 			}
 		}
 		return sw.logs(), nil
 	}
 
 	if err := confirmKeyspaceLocksHeld(); err != nil {
-		return handleError("locks were lost", err)
+		return defaultErrorHandler(ts.Logger(), "locks were lost", err)
 	}
 	ts.Logger().Infof("About to switchShardReads: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
 	if err := sw.switchShardReads(ctx, req.Cells, roTabletTypes, direction); err != nil {
-		return handleError("failed to switch read traffic for the shards", err)
+		return defaultErrorHandler(ts.Logger(), "failed to switch read traffic for the shards", err)
 	}
 
 	if err := confirmKeyspaceLocksHeld(); err != nil {
-		return handleError("locks were lost", err)
+		return defaultErrorHandler(ts.Logger(), "locks were lost", err)
 	}
 	ts.Logger().Infof("switchShardReads Completed: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
 	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.targetKeyspace, cellsStr)
-		return handleError("failed to validate SrvKeyspace record", err2)
+		return defaultErrorHandler(ts.Logger(), "failed to validate SrvKeyspace record", err2)
 	}
 	return sw.logs(), nil
 }
