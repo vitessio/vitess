@@ -1132,7 +1132,7 @@
                                   {
                                     "OperatorType": "Join",
                                     "Variant": "Join",
-                                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,L:3,R:5",
+                                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,L:2,R:5",
                                     "JoinVars": {
                                       "o_orderkey": 1
                                     },
@@ -1145,8 +1145,8 @@
                                           "Name": "main",
                                           "Sharded": true
                                         },
-                                        "FieldQuery": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year), weight_string(extract(year from o_orderdate)) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders where 1 != 1) as profit where 1 != 1",
-                                        "Query": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year), weight_string(extract(year from o_orderdate)) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders) as profit",
+                                        "FieldQuery": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders where 1 != 1) as profit where 1 != 1",
+                                        "Query": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders) as profit",
                                         "Table": "orders"
                                       },
                                       {
@@ -1192,8 +1192,8 @@
                                                   "Name": "main",
                                                   "Sharded": true
                                                 },
-                                                "FieldQuery": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, weight_string(profit.l_suppkey) from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
-                                                "Query": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, weight_string(profit.l_suppkey) from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
+                                                "FieldQuery": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, weight_string(profit.l_suppkey) from (select l_extendedprice as l_extendedprice, l_discount as l_discount, l_quantity as l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
+                                                "Query": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, weight_string(profit.l_suppkey) from (select l_extendedprice as l_extendedprice, l_discount as l_discount, l_quantity as l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
                                                 "Table": "lineitem"
                                               }
                                             ]

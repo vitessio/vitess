@@ -87,7 +87,7 @@ type (
 
 	ProjExpr struct {
 		Original *sqlparser.AliasedExpr // this is the expression the user asked for. should only be used to decide on the column alias
-		EvalExpr sqlparser.Expr         // EvalExpr is the expression that will be evaluated at runtime
+		EvalExpr sqlparser.Expr         // EvalExpr represents the expression evaluated at runtime or used when the ProjExpr is pushed under a route
 		ColExpr  sqlparser.Expr         // ColExpr is used during planning to figure out which column this ProjExpr is representing
 		Info     ExprInfo               // Here we store information about evalengine, offsets or subqueries
 	}
