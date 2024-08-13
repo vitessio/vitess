@@ -152,27 +152,29 @@ func (te *TxEngine) transition(state txEngineState) {
 	}
 
 	te.state = state
-	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
-
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
-		// Set the preparedPool to start accepting connections.
-		te.preparedPool.shutdown = false
 		te.startTransactionWatcher()
 	}
+	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 }
 
-// RedoPreparedTransactions redoes the prepared transactions.
-// If there are errors, we choose to raise an alert and
-// continue anyway. Serving traffic is considered more important
-// than blocking everything for the sake of a few transactions.
-// We do this async; so we do not end up blocking writes on
-// failover for our setup tasks if using semi-sync replication.
+// RedoPreparedTransactions acquires the state lock and calls redoPreparedTransactionsLocked.
 func (te *TxEngine) RedoPreparedTransactions() error {
 	if !te.twopcEnabled {
 		return nil
 	}
 	te.stateLock.Lock()
 	defer te.stateLock.Unlock()
+	return te.redoPreparedTransactionsLocked()
+}
+
+// redoPreparedTransactionsLocked redoes the prepared transactions.
+// If there are errors, we choose to raise an alert and
+// continue anyway. Serving traffic is considered more important
+// than blocking everything for the sake of a few transactions.
+// We do this async; so we do not end up blocking writes on
+// failover for our setup tasks if using semi-sync replication.
+func (te *TxEngine) redoPreparedTransactionsLocked() error {
 	oldState := te.state
 	te.shutdownLocked()
 	defer func() {
@@ -181,6 +183,7 @@ func (te *TxEngine) RedoPreparedTransactions() error {
 
 	defer te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
+	te.preparedPool.Open()
 	if err := te.twoPC.Open(te.env.Config().DB); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
 		log.Errorf("Could not open TwoPC engine: %v", err)
@@ -484,7 +487,6 @@ func (te *TxEngine) startTransactionWatcher() {
 			log.Errorf("Error reading unresolved transactions: %v", err)
 			return
 		}
-		log.Errorf("Count of unresolved transactions - %d", count)
 		if count > 0 {
 			te.dxNotify()
 		}

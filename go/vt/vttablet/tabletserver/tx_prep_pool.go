@@ -36,8 +36,8 @@ type TxPreparedPool struct {
 	mu       sync.Mutex
 	conns    map[string]*StatefulConnection
 	reserved map[string]error
-	// shutdown tells if the prepared pool has been drained and shutdown.
-	shutdown bool
+	// open tells if the prepared pool is open for accepting transactions.
+	open     bool
 	capacity int
 }
 
@@ -60,7 +60,7 @@ func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 	// If the pool is shutdown, we don't accept new prepared transactions.
-	if pp.shutdown {
+	if !pp.open {
 		return vterrors.VT09025("pool is shutdown")
 	}
 	if _, ok := pp.reserved[dtid]; ok {
@@ -93,6 +93,20 @@ func (pp *TxPreparedPool) FetchForRollback(dtid string) *StatefulConnection {
 	return c
 }
 
+// Open marks the prepared pool open for use.
+func (pp *TxPreparedPool) Open() {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	pp.open = true
+}
+
+// IsOpen checks if the prepared pool is open for use.
+func (pp *TxPreparedPool) IsOpen() bool {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	return pp.open
+}
+
 // FetchForCommit returns the connection for commit. Before returning,
 // it remembers the dtid in its reserved list as "committing". If
 // the dtid is already in the reserved list, it returns an error.
@@ -105,7 +119,7 @@ func (pp *TxPreparedPool) FetchForCommit(dtid string) (*StatefulConnection, erro
 	defer pp.mu.Unlock()
 	// If the pool is shutdown, we don't have any connections to return.
 	// That however doesn't mean this transaction was committed, it could very well have been rollbacked.
-	if pp.shutdown {
+	if !pp.open {
 		return nil, vterrors.VT09025("pool is shutdown")
 	}
 	if err, ok := pp.reserved[dtid]; ok {
@@ -139,7 +153,7 @@ func (pp *TxPreparedPool) Forget(dtid string) {
 func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
-	pp.shutdown = true
+	pp.open = false
 	conns := make([]*StatefulConnection, 0, len(pp.conns))
 	for _, c := range pp.conns {
 		conns = append(conns, c)
