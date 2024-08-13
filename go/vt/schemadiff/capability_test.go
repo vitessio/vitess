@@ -19,6 +19,7 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			capabilities.InstantAddDropVirtualColumnFlavorCapability,
 			capabilities.InstantAddDropColumnFlavorCapability,
 			capabilities.InstantChangeColumnDefaultFlavorCapability,
+			capabilities.InstantChangeColumnVisibilityCapability,
 			capabilities.InstantExpandEnumCapability:
 			return true, nil
 		}
@@ -271,6 +272,36 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			create:                    "create table t(id int, c1 set('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'), primary key(id))",
 			alter:                     "alter table t modify column c1 set('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i')",
 			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "make a column invisible",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 modify column i1 int invisible",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "make a column visible",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 change column i1 i1 int visible",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "make a column visible with rename",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 change column i1 i2 int visible",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "make a column invisible via SET",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 alter column i1 set invisible",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "drop column default",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 alter column i1 drop default",
+			expectCapableOfInstantDDL: true,
 		},
 	}
 	for _, tcase := range tcases {

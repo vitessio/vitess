@@ -30630,6 +30630,16 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** CheckThrottlerResponseCode enum. */
+    enum CheckThrottlerResponseCode {
+        UNDEFINED = 0,
+        OK = 1,
+        THRESHOLD_EXCEEDED = 2,
+        APP_DENIED = 3,
+        UNKNOWN_METRIC = 4,
+        INTERNAL_ERROR = 5
+    }
+
     /** Properties of a CheckThrottlerResponse. */
     interface ICheckThrottlerResponse {
 
@@ -30659,6 +30669,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse summary */
         summary?: (string|null);
+
+        /** CheckThrottlerResponse response_code */
+        response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
     }
 
     /** Represents a CheckThrottlerResponse. */
@@ -30696,6 +30709,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse summary. */
         public summary: string;
+
+        /** CheckThrottlerResponse response_code. */
+        public response_code: tabletmanagerdata.CheckThrottlerResponseCode;
 
         /**
          * Creates a new CheckThrottlerResponse instance using the specified properties.
@@ -30800,6 +30816,9 @@ export namespace tabletmanagerdata {
 
             /** Metric scope */
             scope?: (string|null);
+
+            /** Metric response_code */
+            response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
         }
 
         /** Represents a Metric. */
@@ -30831,6 +30850,9 @@ export namespace tabletmanagerdata {
 
             /** Metric scope. */
             public scope: string;
+
+            /** Metric response_code. */
+            public response_code: tabletmanagerdata.CheckThrottlerResponseCode;
 
             /**
              * Creates a new Metric instance using the specified properties.
@@ -31417,6 +31439,9 @@ export namespace tabletmanagerdata {
 
             /** RecentApp status_code */
             status_code?: (number|null);
+
+            /** RecentApp response_code */
+            response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
         }
 
         /** Represents a RecentApp. */
@@ -31433,6 +31458,9 @@ export namespace tabletmanagerdata {
 
             /** RecentApp status_code. */
             public status_code: number;
+
+            /** RecentApp response_code. */
+            public response_code: tabletmanagerdata.CheckThrottlerResponseCode;
 
             /**
              * Creates a new RecentApp instance using the specified properties.

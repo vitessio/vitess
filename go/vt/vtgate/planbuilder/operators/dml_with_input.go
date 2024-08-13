@@ -114,7 +114,7 @@ func (d *DMLWithInput) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 	}
 	d.BvList = bvList
-	return d
+	return nil
 }
 
 var _ Operator = (*DMLWithInput)(nil)

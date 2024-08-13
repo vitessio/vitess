@@ -821,7 +821,7 @@ func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sq
 
 // TargetDestination implements the ContextVSchema interface
 func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
-	keyspaceName := vc.keyspace
+	keyspaceName := vc.getActualKeyspace()
 	if vc.destination == nil && qualifier != "" {
 		keyspaceName = qualifier
 	}

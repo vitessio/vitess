@@ -1105,6 +1105,15 @@ func TestExecutorShowTargeted(t *testing.T) {
 	}
 }
 
+func TestExecutorShowFromSystemSchema(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "mysql"})
+
+	_, err := executor.Execute(ctx, nil, "TestExecutorShowFromSystemSchema", session, "show tables", nil)
+	require.NoError(t, err)
+}
+
 func TestExecutorUse(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 

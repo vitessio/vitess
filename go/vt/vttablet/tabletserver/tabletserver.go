@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -659,6 +660,9 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			if DebugTwoPc {
+				commitPreparedDelayForTest(tsv)
+			}
 			return txe.CommitPrepared(dtid)
 		},
 	)
@@ -1800,8 +1804,9 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 			metricNames := tsv.lagThrottler.MetricNames(r.URL.Query()["m"])
 			checkResult := tsv.lagThrottler.Check(ctx, appName, metricNames, flags)
-			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
+			if checkResult.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC && flags.OKIfNotExists {
 				checkResult.StatusCode = http.StatusOK // 200
+				checkResult.ResponseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 			}
 
 			if r.Method == http.MethodGet {
