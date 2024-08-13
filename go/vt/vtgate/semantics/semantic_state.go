@@ -1016,6 +1016,12 @@ func (st *SemTable) GetMirrorInfo() MirrorInfo {
 	return mirrorInfo(st.Tables)
 }
 
+// mirrorInfo looks through all tables with mirror rules defined, and returns a
+// MirrorInfo containing the lowest mirror percentage found across all rules.
+//
+// The idea here is that if you have two tables with mirror rules both involved
+// in a query, and one of those rules is 1% while the other is 100%, to mirror
+// the query with 1% chance.
 func mirrorInfo(tableInfos []TableInfo) MirrorInfo {
 	mi := MirrorInfo{}
 	for _, t := range tableInfos {
