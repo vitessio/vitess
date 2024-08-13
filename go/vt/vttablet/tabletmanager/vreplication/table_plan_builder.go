@@ -598,12 +598,10 @@ func (tpb *tablePlanBuilder) analyzePK(cols []*ColumnInfo) error {
 			// TODO(shlomi): at some point in the futue we want to make this check stricter.
 			// We could be reading a generated column c1 which in turn selects some other column c2.
 			// We will want t oensure that `c2` is found in select list...
-			return fmt.Errorf("primary key column %v not found in %s table's select filter or the TableMap event in the GTID",
-				col, tpb.name)
+			return fmt.Errorf("primary key column %v not found in select list", col)
 		}
 		if cexpr.operation != opExpr {
-			return fmt.Errorf("primary key column %v in table %s is not allowed to reference an aggregate expression",
-				col, tpb.name)
+			return fmt.Errorf("primary key column %v is not allowed to reference an aggregate expression", col)
 		}
 		cexpr.isPK = true
 		cexpr.dataType = col.DataType
