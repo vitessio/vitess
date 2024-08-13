@@ -123,7 +123,7 @@ func (t *TransactionStatus) TryStreamExecute(ctx context.Context, vcursor VCurso
 func (t *TransactionStatus) description() PrimitiveDescription {
 	otherMap := map[string]any{}
 	if t.TransactionID == "" {
-		otherMap["AllUnresolved"] = t.Keyspace
+		otherMap["Keyspace"] = t.Keyspace
 	} else {
 		otherMap["TransactionID"] = t.TransactionID
 	}
