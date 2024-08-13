@@ -600,5 +600,5 @@ func (dbc *Conn) applySameSetting(ctx context.Context) error {
 }
 
 func (dbc *Conn) IsUnixSocket() bool {
-	return dbc.conn.Conn.IsUnixSocket()
+	return dbc.conn.IsClientUnixSocket()
 }
