@@ -440,7 +440,7 @@ export const fetchWorkflow = async (params: { clusterID: string; keyspace: strin
 };
 
 export const fetchWorkflowStatus = async (params: { clusterID: string; keyspace: string; name: string }) => {
-    const { result } = await vtfetch(`/api/workflow_status/${params.clusterID}/${params.keyspace}/${params.name}`);
+    const { result } = await vtfetch(`/api/workflow/${params.clusterID}/${params.keyspace}/${params.name}/status`);
 
     const err = vtctldata.WorkflowStatusResponse.verify(result);
     if (err) throw Error(err);
