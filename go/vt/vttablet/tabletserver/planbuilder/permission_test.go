@@ -174,6 +174,12 @@ func TestBuildPermissions(t *testing.T) {
 		}, {
 			TableName: "t1", // derived table in update or delete needs reader permission as they cannot be modified.
 		}},
+	}, {
+		input: "select next 10 values from seq",
+		output: []Permission{{
+			TableName: "seq",
+			Role:      tableacl.WRITER,
+		}},
 	}}
 
 	for _, tcase := range tcases {

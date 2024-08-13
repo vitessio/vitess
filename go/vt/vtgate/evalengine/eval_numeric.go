@@ -58,6 +58,10 @@ type (
 		dec    decimal.Decimal
 		length int32
 	}
+
+	evalYear struct {
+		evalInt64
+	}
 )
 
 var _ evalNumeric = (*evalInt64)(nil)
@@ -100,6 +104,10 @@ func newEvalBool(b bool) *evalInt64 {
 		return evalBoolTrue
 	}
 	return evalBoolFalse
+}
+
+func newEvalYear(i int64) *evalYear {
+	return &evalYear{evalInt64{i: i}}
 }
 
 func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
@@ -615,4 +623,8 @@ func (e *evalDecimal) toUint64() *evalUint64 {
 		return newEvalUint64(math.MaxUint64)
 	}
 	return newEvalUint64(u)
+}
+
+func (e *evalYear) SQLType() sqltypes.Type {
+	return sqltypes.Year
 }

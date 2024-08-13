@@ -1671,6 +1671,11 @@ type (
 		Filter  *ShowFilter
 	}
 
+	// ShowTransactionStatus is used to see the status of a distributed transaction in progress.
+	ShowTransactionStatus struct {
+		TransactionID string
+	}
+
 	// ShowCreate is of ShowInternal type, holds SHOW CREATE queries.
 	ShowCreate struct {
 		Command ShowCommandType
@@ -1683,9 +1688,10 @@ type (
 	}
 )
 
-func (*ShowBasic) isShowInternal()  {}
-func (*ShowCreate) isShowInternal() {}
-func (*ShowOther) isShowInternal()  {}
+func (*ShowBasic) isShowInternal()             {}
+func (*ShowCreate) isShowInternal()            {}
+func (*ShowOther) isShowInternal()             {}
+func (*ShowTransactionStatus) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {

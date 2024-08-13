@@ -296,6 +296,8 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case CleanupAllMigrationType:
+		alterType = "cleanup all"
 	case LaunchMigrationType:
 		alterType = "launch"
 	case LaunchAllMigrationType:
@@ -2147,6 +2149,10 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+}
+
+func (node *ShowTransactionStatus) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show transaction status for '%#s'", node.TransactionID)
 }
 
 // Format formats the node.

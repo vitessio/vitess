@@ -40,7 +40,7 @@ const (
 	InstantAddDropColumnFlavorCapability                                // Adding/dropping column in any position/ordinal.
 	InstantChangeColumnDefaultFlavorCapability                          //
 	InstantExpandEnumCapability                                         //
-	MySQLJSONFlavorCapability                                           // JSON type supported
+	InstantChangeColumnVisibilityCapability                             //
 	MySQLUpgradeInServerFlavorCapability                                //
 	DynamicRedoLogCapacityFlavorCapability                              // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
 	DisableRedoLogFlavorCapability                                      // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
@@ -48,6 +48,8 @@ const (
 	PerformanceSchemaDataLocksTableCapability                           // supported in MySQL 8.0.1 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-1.html
 	InstantDDLXtrabackupCapability                                      // Supported in 8.0.32 and above, solving a MySQL-vs-Xtrabackup bug starting 8.0.29
 	ReplicaTerminologyCapability                                        // Supported in 8.0.26 and above, using SHOW REPLICA STATUS and all variations.
+	BinaryLogStatus                                                     // Supported in 8.2.0 and above, uses SHOW BINARY LOG STATUS
+	RestrictFKOnNonStandardKey                                          // Supported in 8.4.0 and above, restricts usage of non-standard indexes for foreign keys.
 )
 
 type CapableOf func(capability FlavorCapability) (bool, error)
@@ -87,8 +89,6 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 	}
 	// Capabilities sorted by version.
 	switch capability {
-	case MySQLJSONFlavorCapability:
-		return atLeast(5, 7, 0)
 	case InstantDDLFlavorCapability,
 		InstantExpandEnumCapability,
 		InstantAddLastColumnFlavorCapability,
@@ -107,6 +107,8 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 		return atLeast(8, 0, 21)
 	case FastDropTableFlavorCapability:
 		return atLeast(8, 0, 23)
+	case InstantChangeColumnVisibilityCapability:
+		return atLeast(8, 0, 23)
 	case InstantAddDropColumnFlavorCapability:
 		return atLeast(8, 0, 29)
 	case DynamicRedoLogCapacityFlavorCapability:
@@ -119,6 +121,10 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 		// So be conservative here, and only use the new syntax on newer versions,
 		// so we don't have to have too many different flavors.
 		return atLeast(8, 0, 26)
+	case BinaryLogStatus:
+		return atLeast(8, 2, 0)
+	case RestrictFKOnNonStandardKey:
+		return atLeast(8, 4, 0)
 	default:
 		return false, nil
 	}

@@ -30630,6 +30630,16 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** CheckThrottlerResponseCode enum. */
+    enum CheckThrottlerResponseCode {
+        UNDEFINED = 0,
+        OK = 1,
+        THRESHOLD_EXCEEDED = 2,
+        APP_DENIED = 3,
+        UNKNOWN_METRIC = 4,
+        INTERNAL_ERROR = 5
+    }
+
     /** Properties of a CheckThrottlerResponse. */
     interface ICheckThrottlerResponse {
 
@@ -30653,6 +30663,15 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse metrics */
         metrics?: ({ [k: string]: tabletmanagerdata.CheckThrottlerResponse.IMetric }|null);
+
+        /** CheckThrottlerResponse app_name */
+        app_name?: (string|null);
+
+        /** CheckThrottlerResponse summary */
+        summary?: (string|null);
+
+        /** CheckThrottlerResponse response_code */
+        response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
     }
 
     /** Represents a CheckThrottlerResponse. */
@@ -30684,6 +30703,15 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerResponse metrics. */
         public metrics: { [k: string]: tabletmanagerdata.CheckThrottlerResponse.IMetric };
+
+        /** CheckThrottlerResponse app_name. */
+        public app_name: string;
+
+        /** CheckThrottlerResponse summary. */
+        public summary: string;
+
+        /** CheckThrottlerResponse response_code. */
+        public response_code: tabletmanagerdata.CheckThrottlerResponseCode;
 
         /**
          * Creates a new CheckThrottlerResponse instance using the specified properties.
@@ -30788,6 +30816,9 @@ export namespace tabletmanagerdata {
 
             /** Metric scope */
             scope?: (string|null);
+
+            /** Metric response_code */
+            response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
         }
 
         /** Represents a Metric. */
@@ -30819,6 +30850,9 @@ export namespace tabletmanagerdata {
 
             /** Metric scope. */
             public scope: string;
+
+            /** Metric response_code. */
+            public response_code: tabletmanagerdata.CheckThrottlerResponseCode;
 
             /**
              * Creates a new Metric instance using the specified properties.
@@ -31405,6 +31439,9 @@ export namespace tabletmanagerdata {
 
             /** RecentApp status_code */
             status_code?: (number|null);
+
+            /** RecentApp response_code */
+            response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
         }
 
         /** Represents a RecentApp. */
@@ -31421,6 +31458,9 @@ export namespace tabletmanagerdata {
 
             /** RecentApp status_code. */
             public status_code: number;
+
+            /** RecentApp response_code. */
+            public response_code: tabletmanagerdata.CheckThrottlerResponseCode;
 
             /**
              * Creates a new RecentApp instance using the specified properties.
@@ -33809,6 +33849,9 @@ export namespace binlogdata {
 
         /** VEvent throttled */
         throttled?: (boolean|null);
+
+        /** VEvent throttled_reason */
+        throttled_reason?: (string|null);
     }
 
     /** Represents a VEvent. */
@@ -33861,6 +33904,9 @@ export namespace binlogdata {
 
         /** VEvent throttled. */
         public throttled: boolean;
+
+        /** VEvent throttled_reason. */
+        public throttled_reason: string;
 
         /**
          * Creates a new VEvent instance using the specified properties.
@@ -34520,6 +34566,9 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse heartbeat */
         heartbeat?: (boolean|null);
+
+        /** VStreamRowsResponse throttled_reason */
+        throttled_reason?: (string|null);
     }
 
     /** Represents a VStreamRowsResponse. */
@@ -34551,6 +34600,9 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse heartbeat. */
         public heartbeat: boolean;
+
+        /** VStreamRowsResponse throttled_reason. */
+        public throttled_reason: string;
 
         /**
          * Creates a new VStreamRowsResponse instance using the specified properties.
@@ -35943,7 +35995,8 @@ export namespace query {
         EXPRESSION = 31,
         HEXNUM = 4128,
         HEXVAL = 4129,
-        BITNUM = 4130
+        BITNUM = 4130,
+        VECTOR = 2083
     }
 
     /** Properties of a Value. */
@@ -63056,6 +63109,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest tolerable_replication_lag */
         tolerable_replication_lag?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest allow_cross_cell_promotion */
+        allow_cross_cell_promotion?: (boolean|null);
     }
 
     /** Represents a PlannedReparentShardRequest. */
@@ -63084,6 +63140,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest tolerable_replication_lag. */
         public tolerable_replication_lag?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest allow_cross_cell_promotion. */
+        public allow_cross_cell_promotion: boolean;
 
         /**
          * Creates a new PlannedReparentShardRequest instance using the specified properties.

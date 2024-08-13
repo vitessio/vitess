@@ -18,4 +18,52 @@ limitations under the License.
 
 package vtgate
 
-const DEBUG_2PC = true
+import (
+	"context"
+
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+)
+
+const DebugTwoPc = true
+
+// checkTestFailure is used to simulate failures in 2PC flow for testing when DebugTwoPc is true.
+func checkTestFailure(ctx context.Context, expectCaller string, target *querypb.Target) error {
+	callerID := callerid.EffectiveCallerIDFromContext(ctx)
+	if callerID == nil || callerID.GetPrincipal() != expectCaller {
+		return nil
+	}
+	switch callerID.Principal {
+	case "TRCreated_FailNow":
+		log.Errorf("Fail After TR created")
+		// no commit decision is made. Transaction should be a rolled back.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After TR created")
+	case "RMPrepare_-40_FailNow":
+		if target.Shard != "-40" {
+			return nil
+		}
+		log.Errorf("Fail During RM prepare")
+		// no commit decision is made. Transaction should be a rolled back.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail During RM prepare")
+	case "RMPrepared_FailNow":
+		log.Errorf("Fail After RM prepared")
+		// no commit decision is made. Transaction should be a rolled back.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After RM prepared")
+	case "MMCommitted_FailNow":
+		log.Errorf("Fail After MM commit")
+		//  commit decision is made. Transaction should be committed.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail After MM commit")
+	case "RMCommit_-40_FailNow":
+		if target.Shard != "-40" {
+			return nil
+		}
+		log.Errorf("Fail During RM commit")
+		// commit decision is made. Transaction should be a committed.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Fail During RM commit")
+	default:
+		return nil
+	}
+}

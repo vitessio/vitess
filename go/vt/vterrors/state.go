@@ -120,6 +120,8 @@ const (
 	CharacterSetMismatch
 	WrongParametersToNativeFct
 
+	VectorConversion
+
 	// No state should be added below NumOfStates
 	NumOfStates
 )

@@ -92,7 +92,7 @@ Flags:
       --db_appdebug_password string                                 db appdebug password
       --db_appdebug_use_ssl                                         Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db_appdebug_user string                                     db appdebug user userKey (default "vt_appdebug")
-      --db_charset string                                           Character set used for this tablet. (default "utf8mb4")
+      --db_charset string                                           Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
       --db_conn_query_info                                          enable parsing and processing of QUERY_OK info fields
       --db_connect_timeout_ms int                                   connection timeout to mysqld in milliseconds (0 for no timeout)
       --db_dba_password string                                      db dba password
