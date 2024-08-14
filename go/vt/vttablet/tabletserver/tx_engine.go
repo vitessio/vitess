@@ -155,6 +155,8 @@ func (te *TxEngine) transition(state txEngineState) {
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
 		// If the prepared pool is not open, then we need to redo the prepared transactions
 		// before we open the transaction engine to accept new writes.
+		// This check is required because during a Promotion, we would have already setup the prepared pool
+		// and redid the prepared transactions when we turn super_read_only off. So we don't need to do it again.
 		if !te.preparedPool.IsOpen() {
 			_ = te.redoPreparedTransactionsLocked()
 		}
@@ -181,6 +183,7 @@ func (te *TxEngine) RedoPreparedTransactions() error {
 // failover for our setup tasks if using semi-sync replication.
 func (te *TxEngine) redoPreparedTransactionsLocked() error {
 	oldState := te.state
+	// We shutdown to ensure no other writes are in progress.
 	te.shutdownLocked()
 	defer func() {
 		te.state = oldState
@@ -197,6 +200,8 @@ func (te *TxEngine) redoPreparedTransactionsLocked() error {
 	// So if we open the prepared pool and then opening of twoPC fails, we will never end up opening the twoPC pool at all!
 	// This is why opening prepared pool after the twoPC pool is crucial for correctness.
 	te.preparedPool.Open()
+	// We have to defer opening the transaction pool because we call shutdown in the beginning that closes it.
+	// We want to open the transaction pool after the prepareFromRedo has run. Also, we want this to run even if that fails.
 	defer te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
 	if err := te.prepareFromRedo(); err != nil {
@@ -417,6 +422,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
+		// We need to redo the prepared transactions using a dba user because MySQL might still be in read only mode.
 		conn, err := te.beginNewDbaConnection(ctx)
 		if err != nil {
 			allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
@@ -608,6 +614,8 @@ func (te *TxEngine) Release(connID int64) error {
 	return nil
 }
 
+// beginNewDbaConnection gets a new dba connection and starts a transaction in it.
+// This should only be used to redo prepared transactions. All the other writes should use the normal pool.
 func (te *TxEngine) beginNewDbaConnection(ctx context.Context) (*StatefulConnection, error) {
 	dbConn, err := connpool.NewConn(ctx, te.env.Config().DB.DbaWithDB(), nil, nil, te.env)
 	if err != nil {
