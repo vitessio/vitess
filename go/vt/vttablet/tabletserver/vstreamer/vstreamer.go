@@ -684,7 +684,14 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 	tableName := tm.Name
 	switch tableName {
 	case "resharding_journal":
+		// A journal is a special case that generates a JOURNAL event.
 	case "schema_version":
+		// Generates a Version event when it detects that a schema is stored in the schema_version table.
+
+		// SkipMetaCheck is set during PITR restore: some table metadata is not fetched in that case.
+		if vs.se.SkipMetaCheck {
+			return nil, nil
+		}
 	default:
 		if vs.options == nil {
 			return nil, nil

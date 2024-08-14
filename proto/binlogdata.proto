@@ -344,7 +344,7 @@ message RowEvent {
   string keyspace = 3;
   string shard = 4;
   uint32 flags = 5; // https://dev.mysql.com/doc/dev/mysql-server/latest/classbinary__log_1_1Rows__event.html
-  bool is_internal = 6;
+  bool is_internal = 6; // set for sidecardb tables
 }
 
 // FieldEvent represents the field info for a table.
@@ -361,7 +361,7 @@ message FieldEvent {
   // NOTE: because this is the use case, this is ONLY ever set today in
   // vstreams managed by the vstreamManager.
   bool enum_set_string_values = 25;
-  bool is_internal = 26;
+  bool is_internal = 26; // set for sidecardb tables
 }
 
 // ShardGtid contains the GTID position for one shard.

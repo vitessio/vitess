@@ -1420,8 +1420,8 @@ type RowEvent struct {
 	RowChanges []*RowChange `protobuf:"bytes,2,rep,name=row_changes,json=rowChanges,proto3" json:"row_changes,omitempty"`
 	Keyspace   string       `protobuf:"bytes,3,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Shard      string       `protobuf:"bytes,4,opt,name=shard,proto3" json:"shard,omitempty"`
-	Flags      uint32       `protobuf:"varint,5,opt,name=flags,proto3" json:"flags,omitempty"` // https://dev.mysql.com/doc/dev/mysql-server/latest/classbinary__log_1_1Rows__event.html
-	IsInternal bool         `protobuf:"varint,6,opt,name=is_internal,json=isInternal,proto3" json:"is_internal,omitempty"`
+	Flags      uint32       `protobuf:"varint,5,opt,name=flags,proto3" json:"flags,omitempty"`                             // https://dev.mysql.com/doc/dev/mysql-server/latest/classbinary__log_1_1Rows__event.html
+	IsInternal bool         `protobuf:"varint,6,opt,name=is_internal,json=isInternal,proto3" json:"is_internal,omitempty"` // set for sidecardb tables
 }
 
 func (x *RowEvent) Reset() {
@@ -1516,7 +1516,7 @@ type FieldEvent struct {
 	// NOTE: because this is the use case, this is ONLY ever set today in
 	// vstreams managed by the vstreamManager.
 	EnumSetStringValues bool `protobuf:"varint,25,opt,name=enum_set_string_values,json=enumSetStringValues,proto3" json:"enum_set_string_values,omitempty"`
-	IsInternal          bool `protobuf:"varint,26,opt,name=is_internal,json=isInternal,proto3" json:"is_internal,omitempty"`
+	IsInternal          bool `protobuf:"varint,26,opt,name=is_internal,json=isInternal,proto3" json:"is_internal,omitempty"` // set for sidecardb tables
 }
 
 func (x *FieldEvent) Reset() {
