@@ -85,7 +85,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	}
 
 	for _, query := range conn.TxProperties().Queries {
-		qr := dte.qe.queryRuleSources.FilterByPlan(query, 0)
+		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, query.PlanType, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
 			if act != rules.QRContinue {

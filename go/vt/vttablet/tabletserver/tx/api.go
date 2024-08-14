@@ -25,17 +25,18 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
 type (
 	// ConnID as type int64
 	ConnID = int64
 
-	//DTID as type string
+	// DTID as type string
 	DTID = string
 
-	//EngineStateMachine is used to control the state the transactional engine -
-	//whether new connections and/or transactions are allowed or not.
+	// EngineStateMachine is used to control the state the transactional engine -
+	// whether new connections and/or transactions are allowed or not.
 	EngineStateMachine interface {
 		Init() error
 		AcceptReadWrite() error
@@ -46,14 +47,14 @@ type (
 	// ReleaseReason as type int
 	ReleaseReason int
 
-	//Properties contains all information that is related to the currently running
-	//transaction on the connection
+	// Properties contains all information that is related to the currently running
+	// transaction on the connection
 	Properties struct {
 		EffectiveCaller *vtrpcpb.CallerID
 		ImmediateCaller *querypb.VTGateCallerID
 		StartTime       time.Time
 		EndTime         time.Time
-		Queries         []string
+		Queries         []Query
 		Autocommit      bool
 		Conclusion      string
 		LogToFile       bool
@@ -61,6 +62,12 @@ type (
 		Stats *servenv.TimingsWrapper
 	}
 )
+
+type Query struct {
+	Sql      string
+	PlanType planbuilder.PlanType
+	Tables   []string
+}
 
 const (
 	// TxClose - connection released on close.
@@ -115,11 +122,15 @@ var txNames = map[ReleaseReason]string{
 }
 
 // RecordQuery records the query against this transaction.
-func (p *Properties) RecordQuery(query string) {
+func (p *Properties) RecordQuery(query string, planType planbuilder.PlanType, tables []string) {
 	if p == nil {
 		return
 	}
-	p.Queries = append(p.Queries, query)
+	p.Queries = append(p.Queries, Query{
+		Sql:      query,
+		PlanType: planType,
+		Tables:   tables,
+	})
 }
 
 // InTransaction returns true as soon as this struct is not nil
@@ -134,10 +145,11 @@ func (p *Properties) String(sanitize bool, parser *sqlparser.Parser) string {
 	printQueries := func() string {
 		sb := strings.Builder{}
 		for _, query := range p.Queries {
+			sql := query.Sql
 			if sanitize {
-				query, _ = parser.RedactSQLQuery(query)
+				sql, _ = parser.RedactSQLQuery(sql)
 			}
-			sb.WriteString(query)
+			sb.WriteString(sql)
 			sb.WriteString(";")
 		}
 		return sb.String()

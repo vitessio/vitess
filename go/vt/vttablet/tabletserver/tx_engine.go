@@ -427,7 +427,6 @@ outer:
 			continue
 		}
 		for _, stmt := range preparedTx.Queries {
-			conn.TxProperties().RecordQuery(stmt)
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
