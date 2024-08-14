@@ -611,7 +611,11 @@ func getNextPosition(items [][]*binlogdatapb.VEvent, i, j int) string {
 		for j < len(items[i]) {
 			switch items[i][j].Type {
 			case binlogdatapb.VEventType_GTID:
-				return items[i][j].Gtid
+				pos, err := binlogplayer.DecodePosition(items[i][j].Gtid)
+				if err != nil {
+					return ""
+				}
+				return pos.String()
 			}
 			j++
 		}
