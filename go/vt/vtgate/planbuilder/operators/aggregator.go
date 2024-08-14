@@ -57,6 +57,9 @@ type (
 		// This is used to truncate the columns in the final result
 		ResultColumns int
 
+		// Truncate is set to true if the columns produced by this operator should be truncated if we added any additional columns
+		Truncate bool
+
 		QP *QueryProjection
 
 		DT *DerivedTable
@@ -541,6 +544,12 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 }
 
 func (a *Aggregator) internalAddWSColumn(ctx *plancontext.PlanningContext, inOffset int, aliasedExpr *sqlparser.AliasedExpr) int {
+	if a.ResultColumns == 0 && a.Truncate {
+		// if we need to use `internalAddColumn`, it means we are adding columns that are not part of the original list,
+		// so we need to set the ResultColumns to the current length of the columns list
+		a.ResultColumns = len(a.Columns)
+	}
+
 	offset := a.Source.AddWSColumn(ctx, inOffset, false)
 
 	if offset == len(a.Columns) {
@@ -559,7 +568,7 @@ func (a *Aggregator) getTruncateColumnCount() int {
 }
 
 func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) int {
-	if a.ResultColumns == 0 {
+	if a.ResultColumns == 0 && a.Truncate {
 		// if we need to use `internalAddColumn`, it means we are adding columns that are not part of the original list,
 		// so we need to set the ResultColumns to the current length of the columns list
 		a.ResultColumns = len(a.Columns)

@@ -798,7 +798,6 @@
                             "Variant": "Ordered",
                             "Aggregates": "sum_count_star(1) AS count",
                             "GroupBy": "(0|2)",
-                            "ResultColumns": 3,
                             "Inputs": [
                               {
                                 "OperatorType": "Route",

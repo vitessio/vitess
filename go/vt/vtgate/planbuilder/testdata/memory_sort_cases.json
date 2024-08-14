@@ -16,7 +16,6 @@
             "Variant": "Ordered",
             "Aggregates": "any_value(1|4) AS b, sum_count_star(2) AS count(*)",
             "GroupBy": "(0|3)",
-            "ResultColumns": 5,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -49,13 +48,13 @@
         "OperatorType": "Sort",
         "Variant": "Memory",
         "OrderBy": "2 ASC",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k",
             "GroupBy": "(0|3)",
-            "ResultColumns": 3,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -95,7 +94,6 @@
             "Variant": "Ordered",
             "Aggregates": "any_value(1|4) AS b, sum_count_star(2) AS k",
             "GroupBy": "(0|3)",
-            "ResultColumns": 5,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -132,13 +130,13 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "2 DESC",
+            "ResultColumns": 3,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k",
                 "GroupBy": "(0|3)",
-                "ResultColumns": 3,
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -173,13 +171,13 @@
         "OperatorType": "Sort",
         "Variant": "Memory",
         "OrderBy": "(0|3) ASC, 2 ASC",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k",
             "GroupBy": "(0|3)",
-            "ResultColumns": 3,
             "Inputs": [
               {
                 "OperatorType": "Route",

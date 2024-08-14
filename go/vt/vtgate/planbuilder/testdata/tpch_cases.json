@@ -25,7 +25,6 @@
             "Variant": "Ordered",
             "Aggregates": "sum(2) AS sum_qty, sum(3) AS sum_base_price, sum(4) AS sum_disc_price, sum(5) AS sum_charge, sum(6) AS avg_qty, sum(7) AS avg_price, sum(8) AS avg_disc, sum_count_star(9) AS count_order, sum_count(10) AS count(l_quantity), sum_count(11) AS count(l_extendedprice), sum_count(12) AS count(l_discount)",
             "GroupBy": "(0|13), (1|14)",
-            "ResultColumns": 13,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -67,13 +66,13 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci, (2|5) ASC",
+            "ResultColumns": 4,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum(1) AS revenue",
                 "GroupBy": "(0|4), (2|5), (3|6)",
-                "ResultColumns": 4,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -278,13 +277,13 @@
         "OperatorType": "Sort",
         "Variant": "Memory",
         "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci",
+        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum(1) AS revenue",
             "GroupBy": "(0|2)",
-            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Projection",
@@ -801,7 +800,6 @@
             "Variant": "Ordered",
             "Aggregates": "sum(1) AS sum(case when nation = 'BRAZIL' then volume else 0 end), sum(2) AS sum(volume)",
             "GroupBy": "(0|3)",
-            "ResultColumns": 3,
             "Inputs": [
               {
                 "OperatorType": "Projection",
@@ -1346,13 +1344,13 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "2 DESC COLLATE utf8mb4_0900_ai_ci",
+            "ResultColumns": 8,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum(2) AS revenue",
                 "GroupBy": "(0|8), (1|9), (3|10), (6|11), (4|12), (5|13), (7|14)",
-                "ResultColumns": 8,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -1657,6 +1655,7 @@
             "InputName": "Outer",
             "OperatorType": "Filter",
             "Predicate": "sum(ps_supplycost * ps_availqty) > :__sq1",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Sort",
@@ -1668,7 +1667,6 @@
                     "Variant": "Ordered",
                     "Aggregates": "sum(1) AS value",
                     "GroupBy": "(0|2)",
-                    "ResultColumns": 2,
                     "Inputs": [
                       {
                         "OperatorType": "Projection",
@@ -1900,7 +1898,6 @@
                     "Variant": "Ordered",
                     "Aggregates": "sum_count(1) AS count(o_orderkey)",
                     "GroupBy": "(0|2)",
-                    "ResultColumns": 2,
                     "Inputs": [
                       {
                         "OperatorType": "Projection",
@@ -2061,7 +2058,6 @@
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
             "Aggregates": "max(0|1) AS max(total_revenue)",
-            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2445,13 +2441,13 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "1 DESC, (0|2) ASC",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum_count_star(1) AS numwait",
                 "GroupBy": "(0|2)",
-                "ResultColumns": 2,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
