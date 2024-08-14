@@ -186,14 +186,18 @@ func (te *TxEngine) redoPreparedTransactionsLocked() error {
 		te.state = oldState
 	}()
 
-	defer te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
-
-	te.preparedPool.Open()
 	if err := te.twoPC.Open(te.env.Config().DB); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
 		log.Errorf("Could not open TwoPC engine: %v", err)
 		return err
 	}
+
+	// We should only open the prepared pool and the transaction pool if the opening of twoPC pool is successful.
+	// We use the prepared pool being open to know if we need to redo the prepared transactions.
+	// So if we open the prepared pool and then opening of twoPC fails, we will never end up opening the twoPC pool at all!
+	// This is why opening prepared pool after the twoPC pool is crucial for correctness.
+	te.preparedPool.Open()
+	defer te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
 	if err := te.prepareFromRedo(); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -42,6 +43,7 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 		if err != nil {
 			log.Errorf("Error in selecting - %v", err)
 			conn.Close()
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		require.Len(t, res.Rows, 1)
@@ -56,6 +58,7 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 		if err != nil {
 			log.Errorf("Error in cleanup deletion - %v", err)
 			conn.Close()
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 	}
