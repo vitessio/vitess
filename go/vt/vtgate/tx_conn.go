@@ -574,3 +574,19 @@ func (txc *TxConn) ReadTransaction(ctx context.Context, transactionID string) (*
 	}
 	return txc.tabletGateway.ReadTransaction(ctx, mmShard.Target, transactionID)
 }
+
+func (txc *TxConn) UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	var tmList []*querypb.TransactionMetadata
+	var mu sync.Mutex
+	err := txc.runTargets(targets, func(target *querypb.Target) error {
+		res, err := txc.tabletGateway.UnresolvedTransactions(ctx, target)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		tmList = append(tmList, res...)
+		return nil
+	})
+	return tmList, err
+}
