@@ -126,6 +126,8 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			// Signal the fuzzer to stop.
 			fz.stop()
 
+			// Wait for all transactions to be resolved.
+			waitForResults(t, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 10*time.Second)
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
 			fz.verifyTransactionsWereAtomic(t)
 
