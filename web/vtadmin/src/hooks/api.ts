@@ -41,6 +41,7 @@ import {
     fetchVtctlds,
     fetchVTExplain,
     fetchWorkflow,
+    fetchWorkflowStatus,
     fetchWorkflows,
     TabletDebugVarsResponse,
     refreshState,
@@ -447,6 +448,16 @@ export const useWorkflow = (
         },
         ...options,
     });
+};
+
+/**
+ * useWorkflowStatus is a query hook that fetches status for a single workflow.
+ */
+export const useWorkflowStatus = (
+    params: Parameters<typeof fetchWorkflowStatus>[0],
+    options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
+) => {
+    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params));
 };
 
 /**
