@@ -549,7 +549,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
 					if err != io.EOF {
 						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
-						var table, tableLogMsg string
+						var table, tableLogMsg, gtidLogMsg string
 						switch {
 						case event.GetFieldEvent() != nil:
 							table = event.GetFieldEvent().TableName
@@ -559,7 +559,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 						if table != "" {
 							tableLogMsg = fmt.Sprintf(" for table %s", table)
 						}
-						log.Errorf("Error applying event%s: %s", tableLogMsg, err.Error())
+						if vp.unsavedEvent != nil && vp.unsavedEvent.Gtid != "" {
+							gtidLogMsg = fmt.Sprintf(" that were part of GTID %s", vp.unsavedEvent.Gtid)
+						}
+						log.Errorf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error())
+						err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
 					}
 					return err
 				}
