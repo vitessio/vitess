@@ -130,11 +130,6 @@ func TestDisruptions(t *testing.T) {
 			disruption:      prsShard3,
 		},
 		{
-			disruptionName:  "EmergencyReparentShard",
-			commitDelayTime: "5",
-			disruption:      ersShard3,
-		},
-		{
 			disruptionName:  "MySQL Restart",
 			commitDelayTime: "5",
 			disruption:      mysqlRestartShard3,
@@ -143,6 +138,11 @@ func TestDisruptions(t *testing.T) {
 			disruptionName:  "Vttablet Restart",
 			commitDelayTime: "5",
 			disruption:      vttabletRestartShard3,
+		},
+		{
+			disruptionName:  "EmergencyReparentShard",
+			commitDelayTime: "5",
+			disruption:      ersShard3,
 		},
 	}
 	for _, tt := range testcases {
