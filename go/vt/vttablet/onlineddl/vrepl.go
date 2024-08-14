@@ -301,8 +301,9 @@ func (v *VRepl) generateFilterQuery() error {
 			if targetCol.IsTextual() && toCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset(), targetCol.Name())
 			}
-
 			if trivialCharset(fromCollation) && trivialCharset(toCollation) && targetCol.Type() != "json" {
+				sb.WriteString(escapeName(name))
+			} else if fromCollation == toCollation && targetCol.Type() != "json" {
 				sb.WriteString(escapeName(name))
 			} else {
 				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
