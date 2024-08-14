@@ -113,7 +113,11 @@ func (r *RecurseCTE) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Ex
 func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, _, _ bool, expr *sqlparser.AliasedExpr) int {
 	r.makeSureWeHaveTableInfo(ctx)
 	e := semantics.RewriteDerivedTableExpression(expr.Expr, r.MyTableInfo)
-	return r.Seed.FindCol(ctx, e, false)
+	offset := r.Seed.FindCol(ctx, e, false)
+	if offset == -1 {
+		panic(vterrors.VT13001("CTE column not found"))
+	}
+	return offset
 }
 
 func (r *RecurseCTE) makeSureWeHaveTableInfo(ctx *plancontext.PlanningContext) {
@@ -134,8 +138,13 @@ func (r *RecurseCTE) makeSureWeHaveTableInfo(ctx *plancontext.PlanningContext) {
 	}
 }
 
-func (r *RecurseCTE) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
-	panic("implement me")
+func (r *RecurseCTE) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	seed := r.Seed.AddWSColumn(ctx, offset, underRoute)
+	term := r.Term.AddWSColumn(ctx, offset, underRoute)
+	if seed != term {
+		panic(vterrors.VT13001("CTE columns don't match"))
+	}
+	return seed
 }
 
 func (r *RecurseCTE) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
