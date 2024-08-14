@@ -317,14 +317,15 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 // - text values with charset conversion
 // - enum values converted to text via Online DDL
 // - ...any other future possible values
-func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
-	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
+func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value, applyChange bool) (*querypb.BindVariable, error) {
+	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() && applyChange {
 		// Non-null string value, for which we have a charset conversion instruction
 		fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
 		if fromCollation == collations.Unknown {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
 		}
 		out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, val.Raw(), colldata.Lookup(fromCollation).Charset())
+		// out, err := charset.Convert(nil, colldata.Lookup(fromCollation).Charset(), val.Raw(), charset.Charset_utf8mb4{})
 		if err != nil {
 			return nil, err
 		}
@@ -345,7 +346,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		before = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
 		for i, field := range tp.Fields {
-			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			bindVar, err := tp.bindFieldVal(field, &vals[i], true)
 			if err != nil {
 				return nil, err
 			}
@@ -368,9 +369,9 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						return nil, err
 					}
 				}
-				bindVar, err = tp.bindFieldVal(field, newVal)
+				bindVar, err = tp.bindFieldVal(field, newVal, true)
 			} else {
-				bindVar, err = tp.bindFieldVal(field, &vals[i])
+				bindVar, err = tp.bindFieldVal(field, &vals[i], true)
 			}
 			if err != nil {
 				return nil, err
@@ -520,7 +521,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
 		for n, field := range tp.Fields {
-			bindVar, err := tp.bindFieldVal(field, &vals[n])
+			bindVar, err := tp.bindFieldVal(field, &vals[n], false)
 			if err != nil {
 				return nil, err
 			}

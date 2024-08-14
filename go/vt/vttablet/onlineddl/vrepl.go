@@ -304,13 +304,18 @@ func (v *VRepl) generateFilterQuery() error {
 			if trivialCharset(fromCollation) && trivialCharset(toCollation) && targetCol.Type() != "json" {
 				sb.WriteString(escapeName(name))
 			} else if fromCollation == toCollation && targetCol.Type() != "json" {
+				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
+					FromCharset: sourceCol.Charset(),
+					ToCharset:   targetCol.Charset(),
+				}
 				sb.WriteString(escapeName(name))
 			} else {
 				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
 					FromCharset: sourceCol.Charset(),
 					ToCharset:   targetCol.Charset(),
 				}
-				sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+				// sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+				sb.WriteString(escapeName(name))
 			}
 		case targetCol.Type() == "json" && sourceCol.Type() != "json":
 			// Convert any type to JSON: encode the type as utf8mb4 text
