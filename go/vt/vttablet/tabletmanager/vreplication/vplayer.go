@@ -559,8 +559,9 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 						if table != "" {
 							tableLogMsg = fmt.Sprintf(" for table %s", table)
 						}
-						if vp.unsavedEvent != nil && vp.unsavedEvent.Gtid != "" {
-							gtidLogMsg = fmt.Sprintf(" that were part of GTID %s", vp.unsavedEvent.Gtid)
+						pos := getNextPosition(items, i, j+1)
+						if pos != "" {
+							gtidLogMsg = fmt.Sprintf(" while processing position %s", pos)
 						}
 						log.Errorf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error())
 						err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
@@ -594,6 +595,30 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 		i++
 	}
 	return false
+}
+
+// getNextPosition returns the GTID set/position we would be at if the current
+// transaction was committed. This is useful for error handling as we can then
+// determine which GTID we're failing to process from the source and examine the
+// binlog events for that GTID directly on the source to debug the issue.
+// This is needed as it's not as simple as the user incrementing the current
+// position in the stream by 1 as we may be skipping N intermediate GTIDs in the
+// stream due to filtering. For GTIDs that we filter out we still replicate the
+// GTID event itself, just without any internal events and a COMMIT event (see
+// the unsavedEvent handling).
+func getNextPosition(items [][]*binlogdatapb.VEvent, i, j int) string {
+	for i < len(items) {
+		for j < len(items[i]) {
+			switch items[i][j].Type {
+			case binlogdatapb.VEventType_GTID:
+				return items[i][j].Gtid
+			}
+			j++
+		}
+		j = 0
+		i++
+	}
+	return ""
 }
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
