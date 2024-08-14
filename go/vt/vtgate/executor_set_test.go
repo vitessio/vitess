@@ -364,6 +364,13 @@ func TestExecutorSetOp(t *testing.T) {
 		in:      "set tx_isolation = 'read-committed'",
 		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
 		result:  returnResult("tx_isolation", "varchar", "read-committed"),
+	}, {
+		in:      "set @@innodb_lock_wait_timeout=120",
+		sysVars: map[string]string{"innodb_lock_wait_timeout": "120"},
+		result:  returnResult("innodb_lock_wait_timeout", "int64", "120"),
+	}, {
+		in:     "set @@global.innodb_lock_wait_timeout=120",
+		result: returnResult("innodb_lock_wait_timeout", "int64", "120"),
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
