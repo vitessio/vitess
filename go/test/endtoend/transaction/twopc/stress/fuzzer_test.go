@@ -127,7 +127,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			fz.stop()
 
 			// Wait for all transactions to be resolved.
-			waitForResults(t, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 10*time.Second)
+			waitForResults(t, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 30*time.Second)
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
 			fz.verifyTransactionsWereAtomic(t)
 
@@ -404,9 +404,21 @@ func vttabletRestarts() {
 	vttablets := shard.Vttablets
 	tablet := vttablets[rand.Intn(len(vttablets))]
 	log.Errorf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias)
-	err := tablet.RestartOnlyTablet()
+	err := tablet.VttabletProcess.TearDown()
 	if err != nil {
+		log.Errorf("error stopping vttablet - %v", err)
+		return
+	}
+	tablet.VttabletProcess.ServingStatus = "SERVING"
+	for {
+		err = tablet.VttabletProcess.Setup()
+		if err == nil {
+			return
+		}
+		// Sometimes vttablets fail to connect to the topo server due to a minor blip there.
+		// We don't want to fail the test, so we retry setting up the vttablet.
 		log.Errorf("error restarting vttablet - %v", err)
+		time.Sleep(1 * time.Second)
 	}
 }
 

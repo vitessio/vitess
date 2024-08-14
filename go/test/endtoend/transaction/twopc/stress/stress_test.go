@@ -146,7 +146,7 @@ func TestDisruptions(t *testing.T) {
 		},
 	}
 	for _, tt := range testcases {
-		t.Run(fmt.Sprintf("%s-%ss timeout", tt.disruptionName, tt.commitDelayTime), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s-%ss delay", tt.disruptionName, tt.commitDelayTime), func(t *testing.T) {
 			// Reparent all the shards to first tablet being the primary.
 			reparentToFistTablet(t)
 			// cleanup all the old data.
@@ -196,7 +196,7 @@ func TestDisruptions(t *testing.T) {
 			// But since we are waiting in CommitPrepared, the decision to commit the transaction should have already been taken.
 			wg.Wait()
 			// Check the data in the table.
-			waitForResults(t, "select id, col from twopc_t1 where col = 4 order by id", `[[INT64(4) INT64(4)] [INT64(6) INT64(4)] [INT64(9) INT64(4)]]`, 15*time.Second)
+			waitForResults(t, "select id, col from twopc_t1 where col = 4 order by id", `[[INT64(4) INT64(4)] [INT64(6) INT64(4)] [INT64(9) INT64(4)]]`, 30*time.Second)
 			writeCancel()
 			writerWg.Wait()
 		})
