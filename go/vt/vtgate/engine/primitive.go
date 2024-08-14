@@ -135,6 +135,7 @@ type (
 		// ReadTransaction reads the state of the given transaction from the metadata manager
 		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
 
+		// UnresolvedTransactions reads the state of all the unresolved atomic transactions in the given keyspace.
 		UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error)
 	}
 
