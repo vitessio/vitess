@@ -222,6 +222,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
 			return err
 		}
+		// Tables may have varying character sets. To ship the bits without interpreting them
+		// we set the character set to be binary.
+		if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
+			return err
+		}
 		if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 10000); err != nil {
 			return err
 		}

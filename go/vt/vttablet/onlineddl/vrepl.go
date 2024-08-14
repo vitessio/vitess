@@ -289,6 +289,9 @@ func (v *VRepl) generateFilterQuery() error {
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
 		case sourceCol.Type() == "json":
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+		case targetCol.Type() == "json" && sourceCol.Type() != "json":
+			// Convert any type to JSON: encode the type as utf8mb4 text
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		case sourceCol.IsTextual():
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
@@ -304,22 +307,16 @@ func (v *VRepl) generateFilterQuery() error {
 			if trivialCharset(fromCollation) && trivialCharset(toCollation) && targetCol.Type() != "json" {
 				sb.WriteString(escapeName(name))
 			} else if fromCollation == toCollation && targetCol.Type() != "json" {
-				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
-					FromCharset: sourceCol.Charset(),
-					ToCharset:   targetCol.Charset(),
-				}
+				// No need for charset conversions as both have the same collation.
 				sb.WriteString(escapeName(name))
 			} else {
+				// Charset conversion required:
 				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
 					FromCharset: sourceCol.Charset(),
 					ToCharset:   targetCol.Charset(),
 				}
-				// sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 				sb.WriteString(escapeName(name))
 			}
-		case targetCol.Type() == "json" && sourceCol.Type() != "json":
-			// Convert any type to JSON: encode the type as utf8mb4 text
-			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
 		}
