@@ -1673,6 +1673,7 @@ type (
 
 	// ShowTransactionStatus is used to see the status of a distributed transaction in progress.
 	ShowTransactionStatus struct {
+		Keyspace      string
 		TransactionID string
 	}
 
