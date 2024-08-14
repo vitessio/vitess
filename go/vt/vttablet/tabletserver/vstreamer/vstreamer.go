@@ -585,7 +585,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
 		}
 
-		if tm.Database == sidecar.GetName() {
+		// If user is streaming from a sidecar table, we need to build a special plan since we only
+		// stream from a limited set of tables. However, if they are streaming the sidecar database itself: in the
+		// latter case we build a normal plan since we want to stream all sidecar tables.
+		if tm.Database == sidecar.GetName() && vs.cp.DBName() != sidecar.GetName() {
 			return vs.buildSidecarTablePlan(id, tm)
 		}
 
