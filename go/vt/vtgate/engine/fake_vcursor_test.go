@@ -406,7 +406,7 @@ type loggingVCursor struct {
 	resultErr error
 
 	warnings                []*querypb.QueryWarning
-	transactionStatusOutput *querypb.TransactionMetadata
+	transactionStatusOutput []*querypb.TransactionMetadata
 
 	// Optional errors that can be returned from nextResult() alongside the results for
 	// multi-shard queries
@@ -827,14 +827,18 @@ func (f *loggingVCursor) ReadTransaction(_ context.Context, _ string) (*querypb.
 	if f.resultErr != nil {
 		return nil, f.resultErr
 	}
-	return f.transactionStatusOutput, nil
+	var out *querypb.TransactionMetadata
+	if len(f.transactionStatusOutput) > 0 {
+		out = f.transactionStatusOutput[0]
+	}
+	return out, nil
 }
 
 func (f *loggingVCursor) UnresolvedTransactions(_ context.Context, _ string) ([]*querypb.TransactionMetadata, error) {
 	if f.resultErr != nil {
 		return nil, f.resultErr
 	}
-	return nil, nil
+	return f.transactionStatusOutput, nil
 }
 
 // SQLParser implements VCursor

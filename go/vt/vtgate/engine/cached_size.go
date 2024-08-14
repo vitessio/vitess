@@ -1299,8 +1299,10 @@ func (cached *TransactionStatus) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(32)
 	}
+	// field Keyspace string
+	size += hack.RuntimeAllocSize(int64(len(cached.Keyspace)))
 	// field TransactionID string
 	size += hack.RuntimeAllocSize(int64(len(cached.TransactionID)))
 	return size
