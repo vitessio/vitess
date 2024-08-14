@@ -210,50 +210,6 @@ func enableDelegateAggregation(ctx *plancontext.PlanningContext, op Operator) Op
 	return prepareForAggregationPushing(ctx, op)
 }
 
-// addColumnsToInput adds columns needed by an operator to its input.
-// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
-func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator {
-
-	addColumnsNeededByFilter := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
-		addedCols := false
-		filter, ok := in.(*Filter)
-		if !ok {
-			return in, NoRewrite
-		}
-
-		var neededAggrs []sqlparser.Expr
-		extractAggrs := func(cursor *sqlparser.CopyOnWriteCursor) {
-			node := cursor.Node()
-			if ctx.IsAggr(node) {
-				neededAggrs = append(neededAggrs, node.(sqlparser.Expr))
-			}
-		}
-
-		for _, expr := range filter.Predicates {
-			_ = sqlparser.CopyOnRewrite(expr, dontEnterSubqueries, extractAggrs, nil)
-		}
-
-		if neededAggrs == nil {
-			return in, NoRewrite
-		}
-
-		aggregator := findAggregatorInSource(filter.Source)
-		for _, aggr := range neededAggrs {
-			if aggregator.FindCol(ctx, aggr, false) == -1 {
-				aggregator.addColumnWithoutPushing(ctx, aeWrap(aggr), false)
-				addedCols = true
-			}
-		}
-
-		if addedCols {
-			return in, Rewrote("added columns because filter needs it")
-		}
-		return in, NoRewrite
-	}
-
-	return TopDown(root, TableID, addColumnsNeededByFilter, stopAtRoute)
-}
-
 // addOrderingForAllAggregations is run we have pushed down Aggregators as far down as possible.
 func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
