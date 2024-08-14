@@ -610,7 +610,7 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	output := qh.Expect(
 		"begin",
 		"rollback",
-		"/update _vt.vreplication set message='filter rules are not supported for SBR",
+		"/update _vt.vreplication set message='error applying event while processing position .* filter rules are not supported for SBR.*",
 	)
 
 	execStatements(t, input)
@@ -1758,8 +1758,8 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
-		"/update _vt.vreplication set message='Duplicate",
-		"/update _vt.vreplication set state='Error', message='Duplicate",
+		"/update _vt.vreplication set message='error applying event: Duplicate",
+		"/update _vt.vreplication set state='Error', message='error applying event: Duplicate",
 	))
 	cancel()
 
