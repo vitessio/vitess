@@ -158,6 +158,9 @@ func (te *TxEngine) transition(state txEngineState) {
 		// This check is required because during a Promotion, we would have already setup the prepared pool
 		// and redid the prepared transactions when we turn super_read_only off. So we don't need to do it again.
 		if !te.preparedPool.IsOpen() {
+			// We need to redo prepared transactions here to handle vttablet restarts.
+			// If MySQL continues to work fine, then we won't end up redoing the prepared transactions as part of any RPC call
+			// since VTOrc won't call `UndoDemotePrimary`. We need to do them as part of this transition.
 			_ = te.redoPreparedTransactionsLocked()
 		}
 		te.startTransactionWatcher()
