@@ -213,7 +213,7 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		// 	 dc.t.Logf("Invariant is %v", k)
 		// }
 
-		msg := "**************** DBClientMock: query: %s, no more requests are expected"
+		msg := "???????????? DBClientMock: query: %s, no more requests are expected"
 		if dc.Tag != "" {
 			msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
 		}
@@ -222,7 +222,7 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	result := dc.expect[dc.currentResult]
 	if result.re == nil {
 		if query != result.query {
-			msg := "**************** DBClientMock: query: \n%s, want \n%s"
+			msg := "!!!!!!!!!!!! DBClientMock: query: \n%s, want \n%s"
 			if dc.Tag != "" {
 				msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
 			}
