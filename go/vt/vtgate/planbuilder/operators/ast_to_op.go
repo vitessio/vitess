@@ -148,14 +148,22 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	if isRHSUnion {
 		panic(vterrors.VT12001("nesting of UNIONs on the right-hand side"))
 	}
-	opLHS := translateQueryToOp(ctx, node.Left)
-	opRHS := translateQueryToOp(ctx, node.Right)
+	opLHS := translateQueryToOpForUnion(ctx, node.Left)
+	opRHS := translateQueryToOpForUnion(ctx, node.Right)
 	lexprs := ctx.SemTable.SelectExprs(node.Left)
 	rexprs := ctx.SemTable.SelectExprs(node.Right)
 
 	unionCols := ctx.SemTable.SelectExprs(node)
 	union := newUnion([]Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
 	return newHorizon(union, node)
+}
+
+func translateQueryToOpForUnion(ctx *plancontext.PlanningContext, node sqlparser.SelectStatement) Operator {
+	op := translateQueryToOp(ctx, node)
+	if hz, ok := op.(*Horizon); ok {
+		hz.Truncate = true
+	}
+	return op
 }
 
 // createOpFromStmt creates an operator from the given statement. It takes in two additional arguments—

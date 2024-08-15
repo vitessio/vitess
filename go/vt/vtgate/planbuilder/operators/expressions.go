@@ -59,3 +59,15 @@ func breakExpressionInLHSandRHS(
 	col.Original = expr
 	return
 }
+
+// nothingNeedsFetching will return true if all the nodes in the expression are constant
+func nothingNeedsFetching(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (constant bool) {
+	constant = true
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if mustFetchFromInput(ctx, node) {
+			constant = false
+		}
+		return true, nil
+	}, expr)
+	return
+}
