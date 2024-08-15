@@ -455,8 +455,16 @@ func testScheduler(t *testing.T) {
 		})
 	}
 
+	var originalLockWaitTimeout int64
 	t.Run("set low lock_wait_timeout", func(t *testing.T) {
-		_, err := primaryTablet.VttabletProcess.QueryTablet("set global lock_wait_timeout=1", keyspaceName, false)
+		rs, err := primaryTablet.VttabletProcess.QueryTablet("select @@lock_wait_timeout as lock_wait_timeout", keyspaceName, false)
+		require.NoError(t, err)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		originalLockWaitTimeout = row.AsInt64("lock_wait_timeout", 0)
+		require.NotZero(t, originalLockWaitTimeout)
+
+		_, err = primaryTablet.VttabletProcess.QueryTablet("set global lock_wait_timeout=1", keyspaceName, false)
 		require.NoError(t, err)
 	})
 
@@ -584,7 +592,7 @@ func testScheduler(t *testing.T) {
 	})
 
 	t.Run("low @@lock_wait_timeout", func(t *testing.T) {
-		defer primaryTablet.VttabletProcess.QueryTablet("set global lock_wait_timeout=100000", keyspaceName, false)
+		defer primaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf("set global lock_wait_timeout=%d", originalLockWaitTimeout), keyspaceName, false)
 
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", false)) // wait
 		t.Run("trivial t1 migration", func(t *testing.T) {
