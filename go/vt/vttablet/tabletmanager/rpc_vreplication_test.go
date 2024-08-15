@@ -542,7 +542,6 @@ func TestMoveTables(t *testing.T) {
 		Direction:                 int32(workflow.DirectionForward),
 	})
 	require.NoError(t, err)
-
 	for _, ftc := range targetShards {
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, wf, tenv.dbName), sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -1195,7 +1194,6 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	require.NoError(t, err, "failed to save routing rules")
 
 	addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
-
 	tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(
 		fmt.Sprintf("%s %s",
@@ -1220,7 +1218,6 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		),
 		nil,
 	)
-
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, wf, tenv.dbName), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
@@ -1228,7 +1225,21 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		),
 		fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
 	), nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(insertStreamsCreatedLog, bls), &sqltypes.Result{}, nil)
+
+	targetTablet.vrdbClient.ExpectRequest(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
+			"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
+		),
+		fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
+	), nil)
+	targetTablet.vrdbClient.ExpectRequest(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
+			"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
+		),
+		fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
+	), nil)
 
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet,
 		fmt.Sprintf("select convert_tz('2006-01-02 15:04:05', '%s', 'UTC')", invalidTimeZone),
@@ -1255,7 +1266,6 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	// Save the current target vschema.
 	vs, err := tenv.ts.GetVSchema(ctx, targetKs)
 	require.NoError(t, err, "failed to get target vschema")
-
 	_, err = ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       wf,
 		SourceKeyspace: sourceKs,
