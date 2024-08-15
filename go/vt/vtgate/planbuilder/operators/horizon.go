@@ -49,6 +49,8 @@ type Horizon struct {
 	// Columns needed to feed other plans
 	Columns       []*sqlparser.ColName
 	ColumnsOffset []int
+
+	Truncate bool
 }
 
 func newHorizon(src Operator, query sqlparser.SelectStatement) *Horizon {
