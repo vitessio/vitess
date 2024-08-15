@@ -1288,8 +1288,7 @@ func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *conn
 	}
 	timeoutSeconds := int64(lockWaitTimeout.Seconds())
 	setQuery := fmt.Sprintf("set @@session.lock_wait_timeout=%d", timeoutSeconds)
-	_, err = conn.Exec(ctx, setQuery, 0, false)
-	if err != nil {
+	if _, err := conn.Exec(ctx, setQuery, 0, false); err != nil {
 		return deferFunc, err
 	}
 	deferFunc = func() {
