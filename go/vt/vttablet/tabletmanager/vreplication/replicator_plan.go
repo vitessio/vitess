@@ -258,7 +258,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 		if i > 0 {
 			sqlbuffer.WriteString(", ")
 		}
-		if err := tp.appendFromRow(tp.BulkInsertValues, sqlbuffer, row); err != nil {
+		if err := tp.appendFromRow(sqlbuffer, row); err != nil {
 			return nil, err
 		}
 	}
@@ -596,8 +596,8 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 // note: there can be more fields than bind locations since extra columns might be requested from the source if not all
 // primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
 // values from the database on the source: sum/count for aggregation queries, for example
-func (tp *TablePlan) appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer, row *querypb.Row) error {
-	bindLocations := pq.BindLocations()
+func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
+	bindLocations := tp.BulkInsertValues.BindLocations()
 	if len(tp.Fields) < len(bindLocations) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ",
 			len(tp.Fields), len(bindLocations))
@@ -631,7 +631,7 @@ func (tp *TablePlan) appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer
 	var offsetQuery int
 	for i, loc := range bindLocations {
 		col := rowInfo[i]
-		buf.WriteString(pq.Query[offsetQuery:loc.Offset])
+		buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:loc.Offset])
 		typ := col.typ
 
 		switch typ {
@@ -677,6 +677,6 @@ func (tp *TablePlan) appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer
 		}
 		offsetQuery = loc.Offset + loc.Length
 	}
-	buf.WriteString(pq.Query[offsetQuery:])
+	buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:])
 	return nil
 }
