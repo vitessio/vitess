@@ -66,6 +66,7 @@ type testKeyspace struct {
 type queryResult struct {
 	query  string
 	result *querypb.QueryResult
+	err    error
 }
 
 func TestMain(m *testing.M) {
@@ -228,6 +229,23 @@ func (env *testEnv) deleteTablet(tablet *topodatapb.Tablet) {
 	delete(env.tablets[tablet.Keyspace], int(tablet.Alias.Uid))
 }
 
+func (env *testEnv) confirmRoutingAllTablesToTarget(t *testing.T) {
+	t.Helper()
+	env.tmc.mu.Lock()
+	defer env.tmc.mu.Unlock()
+	wantRR := make(map[string][]string)
+	for _, sd := range env.tmc.schema {
+		for _, td := range sd.TableDefinitions {
+			for _, tt := range []string{"", "@rdonly", "@replica"} {
+				wantRR[td.Name+tt] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
+				wantRR[fmt.Sprintf("%s.%s", env.sourceKeyspace.KeyspaceName, td.Name+tt)] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
+				wantRR[fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name+tt)] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
+			}
+		}
+	}
+	checkRouting(t, env.ws, wantRR)
+}
+
 type testTMClient struct {
 	tmclient.TabletManagerClient
 	schema map[string]*tabletmanagerdatapb.SchemaDefinition
@@ -239,6 +257,7 @@ type testTMClient struct {
 
 	env     *testEnv    // For access to the env config from tmc methods.
 	reverse atomic.Bool // Are we reversing traffic?
+	frozen  atomic.Bool // Are the workflows frozen?
 }
 
 func newTestTMClient(env *testEnv) *testTMClient {
@@ -304,6 +323,9 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 					Rules: rules,
 				},
 			},
+		}
+		if tmc.frozen.Load() {
+			stream.Message = Frozen
 		}
 		res.Streams = append(res.Streams, stream)
 	}
@@ -389,7 +411,7 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 		return nil, fmt.Errorf("tablet %v:\nunexpected query\n%s\nwant:\n%s", tablet, query, qrs[0].query)
 	}
 	tmc.vrQueries[int(tablet.Alias.Uid)] = qrs[1:]
-	return qrs[0].result, nil
+	return qrs[0].result, qrs[0].err
 }
 
 func (tmc *testTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
@@ -501,4 +523,91 @@ func (tmc *testTMClient) WaitForPosition(ctx context.Context, tablet *topodatapb
 
 func (tmc *testTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	return nil
+}
+
+//
+// Utility / helper functions.
+//
+
+func checkRouting(t *testing.T, ws *Server, want map[string][]string) {
+	t.Helper()
+	ctx := context.Background()
+	got, err := topotools.GetRoutingRules(ctx, ws.ts)
+	require.NoError(t, err)
+	require.EqualValues(t, got, want, "routing rules don't match: got: %v, want: %v", got, want)
+	cells, err := ws.ts.GetCellInfoNames(ctx)
+	require.NoError(t, err)
+	for _, cell := range cells {
+		checkCellRouting(t, ws, cell, want)
+	}
+}
+
+func checkCellRouting(t *testing.T, ws *Server, cell string, want map[string][]string) {
+	t.Helper()
+	ctx := context.Background()
+	svs, err := ws.ts.GetSrvVSchema(ctx, cell)
+	require.NoError(t, err)
+	got := make(map[string][]string, len(svs.RoutingRules.Rules))
+	for _, rr := range svs.RoutingRules.Rules {
+		got[rr.FromTable] = append(got[rr.FromTable], rr.ToTables...)
+	}
+	require.EqualValues(t, got, want, "routing rules don't match for cell %s: got: %v, want: %v", cell, got, want)
+}
+
+func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, want []string) {
+	t.Helper()
+	ctx := context.Background()
+	si, err := ts.GetShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+	tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
+	var got []string
+	if tc != nil {
+		got = tc.DeniedTables
+	}
+	require.EqualValues(t, got, want, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, want)
+}
+
+func checkServedTypes(t *testing.T, ts *topo.Server, keyspace, shard string, want int) {
+	t.Helper()
+	ctx := context.Background()
+	si, err := ts.GetShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+	servedTypes, err := ts.GetShardServingTypes(ctx, si)
+	require.NoError(t, err)
+	require.Equal(t, want, len(servedTypes), "shard %s/%s has wrong served types: got: %v, want: %v",
+		keyspace, shard, len(servedTypes), want)
+}
+
+func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspace, shard, cell string, want int) {
+	t.Helper()
+	ctx := context.Background()
+	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+	require.NoError(t, err)
+	count := 0
+outer:
+	for _, partition := range srvKeyspace.GetPartitions() {
+		for _, ref := range partition.ShardReferences {
+			if ref.Name == shard {
+				count++
+				continue outer
+			}
+		}
+	}
+	require.Equal(t, want, count, "serving types for %s/%s in cell %s: got: %d, want: %d", keyspace, shard, cell, count, want)
+}
+
+func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspace, shard string, want bool) {
+	t.Helper()
+	ctx := context.Background()
+	si, err := ts.GetShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+	require.Equal(t, want, si.IsPrimaryServing, "primary serving for %s/%s: got: %v, want: %v", keyspace, shard, si.IsPrimaryServing, want)
+}
+
+func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Server, keyspace, table string) bool {
+	vschema, err := ts.GetVSchema(ctx, keyspace)
+	require.NoError(t, err)
+	require.NotNil(t, vschema)
+	_, ok := vschema.Tables[table]
+	return ok
 }

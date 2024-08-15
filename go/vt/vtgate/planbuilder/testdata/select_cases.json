@@ -1836,7 +1836,6 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum(0) AS avg_col, sum_count(3) AS count(intcol)",
                 "GroupBy": "1 COLLATE latin1_swedish_ci, (2|4) COLLATE ",
-                "ResultColumns": 4,
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -1880,6 +1879,112 @@
       },
       "TablesUsed": [
         "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "Complex expression in a subquery used in IN clause of an aggregate query",
+    "query": "select count(*) from user where user.id = 2 or user.id in (select id from unsharded_a where colb = 2)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user where user.id = 2 or user.id in (select id from unsharded_a where colb = 2)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from unsharded_a where 1 != 1",
+                "Query": "select id from unsharded_a where colb = 2",
+                "Table": "unsharded_a"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from `user` where 1 != 1",
+                "Query": "select count(*) from `user` where `user`.id = 2 or :__sq_has_values and `user`.id in ::__sq1",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Complex expression in a subquery used in NOT IN clause of an aggregate query",
+    "query": "select count(*) from user where user.id = 2 or user.id not in (select id from unsharded_a where colb = 2)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user where user.id = 2 or user.id not in (select id from unsharded_a where colb = 2)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutNotIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from unsharded_a where 1 != 1",
+                "Query": "select id from unsharded_a where colb = 2",
+                "Table": "unsharded_a"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from `user` where 1 != 1",
+                "Query": "select count(*) from `user` where `user`.id = 2 or (not :__sq_has_values or `user`.id not in ::__sq1)",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "user.user"
       ]
     }
   },
@@ -4224,7 +4329,6 @@
             "Variant": "Ordered",
             "Aggregates": "any_value(0) AS id",
             "GroupBy": "(1|2)",
-            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4390,7 +4494,6 @@
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
             "Aggregates": "max(0|1) AS max(music.id)",
-            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4927,7 +5030,6 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum_count_star(1) AS b",
                 "GroupBy": "(2|3), (0|4)",
-                "ResultColumns": 3,
                 "Inputs": [
                   {
                     "OperatorType": "Route",

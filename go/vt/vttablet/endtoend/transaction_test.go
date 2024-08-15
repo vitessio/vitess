@@ -773,7 +773,7 @@ func TestUnresolvedTransactions(t *testing.T) {
 	client := framework.NewClient()
 
 	participants := []*querypb.Target{
-		{Keyspace: "ks1", Shard: "80-c0"},
+		{Keyspace: "ks1", Shard: "80-c0", TabletType: topodatapb.TabletType_PRIMARY},
 	}
 	err := client.CreateTransaction("dtid01", participants)
 	require.NoError(t, err)
@@ -802,16 +802,16 @@ func TestUnresolvedTransactionsOrdering(t *testing.T) {
 	client := framework.NewClient()
 
 	participants1 := []*querypb.Target{
-		{Keyspace: "ks1", Shard: "c0-"},
-		{Keyspace: "ks1", Shard: "80-c0"},
+		{Keyspace: "ks1", Shard: "c0-", TabletType: topodatapb.TabletType_PRIMARY},
+		{Keyspace: "ks1", Shard: "80-c0", TabletType: topodatapb.TabletType_PRIMARY},
 	}
 	participants2 := []*querypb.Target{
-		{Keyspace: "ks1", Shard: "-40"},
-		{Keyspace: "ks1", Shard: "80-c0"},
+		{Keyspace: "ks1", Shard: "-40", TabletType: topodatapb.TabletType_PRIMARY},
+		{Keyspace: "ks1", Shard: "80-c0", TabletType: topodatapb.TabletType_PRIMARY},
 	}
 	participants3 := []*querypb.Target{
-		{Keyspace: "ks1", Shard: "c0-"},
-		{Keyspace: "ks1", Shard: "-40"},
+		{Keyspace: "ks1", Shard: "c0-", TabletType: topodatapb.TabletType_PRIMARY},
+		{Keyspace: "ks1", Shard: "-40", TabletType: topodatapb.TabletType_PRIMARY},
 	}
 	// prepare state
 	err := client.CreateTransaction("dtid01", participants1)

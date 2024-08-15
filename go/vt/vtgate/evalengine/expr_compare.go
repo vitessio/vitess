@@ -275,7 +275,7 @@ func evalCompare(left, right eval, collationEnv *collations.Environment) (comp i
 // TODO: Clean this up as we add more properly supported types and comparisons.
 func fallbackBinary(t sqltypes.Type) bool {
 	switch t {
-	case sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry:
+	case sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.Vector:
 		return true
 	}
 	return false

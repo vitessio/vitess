@@ -1,0 +1,39 @@
+use customer;
+create table if not exists customer
+(
+    customer_id bigint not null,
+    email       varbinary(128),
+    primary key (customer_id)
+) ENGINE = InnoDB;
+
+insert into customer.customer(customer_id, email)
+values (1, '[alice@domain.com](mailto:alice@domain.com)'),
+       (2, '[bob@domain.com](mailto:bob@domain.com)'),
+       (3, '[charlie@domain.com](mailto:charlie@domain.com)'),
+       (4, '[dan@domain.com](mailto:dan@domain.com)'),
+       (5, '[eve@domain.com](mailto:eve@domain.com)');
+use corder;
+create table if not exists corder
+(
+    order_id    bigint not null,
+    customer_id bigint,
+    sku         varbinary(128),
+    price       bigint,
+    primary key (order_id)
+) ENGINE = InnoDB;
+insert into corder.corder(order_id, customer_id, sku, price)
+values (1, 1, 'SKU-1001', 100),
+       (2, 2, 'SKU-1002', 30),
+       (3, 3, 'SKU-1002', 30),
+       (4, 4, 'SKU-1002', 30),
+       (5, 5, 'SKU-1002', 30);
+
+select co.order_id, co.customer_id, co.price
+from corder.corder co
+         left join customer.customer cu on co.customer_id = cu.customer_id
+where cu.customer_id = 1;
+
+# This query was accidentally disallowed by https://github.com/vitessio/vitess/pull/16520
+select 1
+from customer.customer
+where customer_id in (select customer_id from corder.corder where price > 50);

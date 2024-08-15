@@ -18,7 +18,6 @@ package throttle
 
 import (
 	"context"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,8 +30,11 @@ const (
 	throttleCheckDuration = 250 * time.Millisecond
 )
 
-var throttleTicks int64
-var throttleInit sync.Once
+var (
+	throttleTicks    int64
+	throttleInit     sync.Once
+	emptyCheckResult = &CheckResult{}
+)
 
 func initThrottleTicker() {
 	throttleInit.Do(func() {
@@ -87,14 +89,14 @@ func (c *Client) clearSuccessfulResultsCache() {
 // The function caches results for a brief amount of time, hence it's safe and efficient to
 // be called very frequently.
 // The function is not thread safe.
-func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlerapp.Name) (throttleCheckOK bool) {
+func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlerapp.Name) (checkResult *CheckResult, throttleCheckOK bool) {
 	if c == nil {
 		// no client
-		return true
+		return emptyCheckResult, true
 	}
 	if c.throttler == nil {
 		// no throttler
-		return true
+		return emptyCheckResult, true
 	}
 	checkApp := c.appName
 	if overrideAppName != "" {
@@ -104,20 +106,20 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	defer c.lastSuccessfulThrottleMu.Unlock()
 	if c.lastSuccessfulThrottle[checkApp.String()] >= atomic.LoadInt64(&throttleTicks) {
 		// if last check was OK just very recently there is no need to check again
-		return true
+		return emptyCheckResult, true
 	}
 	// It's time to run a throttler check
-	checkResult := c.throttler.Check(ctx, checkApp.String(), nil, &c.flags)
-	if checkResult.StatusCode != http.StatusOK {
-		return false
+	checkResult = c.throttler.Check(ctx, checkApp.String(), nil, &c.flags)
+	if !checkResult.IsOK() {
+		return checkResult, false
 	}
 	for _, metricResult := range checkResult.Metrics {
-		if metricResult.StatusCode != http.StatusOK {
-			return false
+		if !metricResult.IsOK() {
+			return checkResult, false
 		}
 	}
 	c.lastSuccessfulThrottle[checkApp.String()] = atomic.LoadInt64(&throttleTicks)
-	return true
+	return checkResult, true
 
 }
 
@@ -125,22 +127,23 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 // otherwise it briefly sleeps and returns 'false'.
 // Non-empty appName overrides the default appName.
 // The function is not thread safe.
-func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) bool {
-	if c.ThrottleCheckOK(ctx, appName) {
-		return true
+func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) (checkResult *CheckResult, throttleCheckOK bool) {
+	checkResult, throttleCheckOK = c.ThrottleCheckOK(ctx, appName)
+	if throttleCheckOK {
+		return checkResult, true
 	}
 	if ctx.Err() != nil {
 		// context expired, skip sleeping
-		return false
+		return checkResult, false
 	}
 	time.Sleep(throttleCheckDuration)
-	return false
+	return checkResult, false
 }
 
 // ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' immediately,
 // otherwise it briefly sleeps and returns 'false'.
 // The function is not thread safe.
-func (c *Client) ThrottleCheckOKOrWait(ctx context.Context) bool {
+func (c *Client) ThrottleCheckOKOrWait(ctx context.Context) (checkResult *CheckResult, throttleCheckOK bool) {
 	return c.ThrottleCheckOKOrWaitAppName(ctx, "")
 }
 
@@ -148,7 +151,10 @@ func (c *Client) ThrottleCheckOKOrWait(ctx context.Context) bool {
 // The function sleeps between throttle checks.
 // The function is not thread safe.
 func (c *Client) Throttle(ctx context.Context) {
-	for !c.ThrottleCheckOKOrWait(ctx) {
+	for {
+		if _, ok := c.ThrottleCheckOKOrWait(ctx); ok {
+			return
+		}
 		// The function incorporates a bit of sleep so this is not a busy wait.
 	}
 }

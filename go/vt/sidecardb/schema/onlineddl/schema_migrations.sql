@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `special_plan`                    text             NOT NULL,
     `last_throttled_timestamp`        timestamp        NULL     DEFAULT NULL,
     `component_throttled`             tinytext         NOT NULL,
+    `reason_throttled`                text             NOT NULL,
     `cancelled_timestamp`             timestamp        NULL     DEFAULT NULL,
     `postpone_launch`                 tinyint unsigned NOT NULL DEFAULT '0',
     `stage`                           text             NOT NULL,

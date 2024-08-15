@@ -18,6 +18,8 @@ package schemadiff
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -195,7 +197,7 @@ func TestPermutations(t *testing.T) {
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
 				numEquals := 0
-				earlyBreak, err := permutateDiffs(ctx, allDiffs, hints, func(pdiffs []EntityDiff, hints *DiffHints) (earlyBreak bool) {
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, hints, func(pdiffs []EntityDiff, hints *DiffHints) (earlyBreak bool, errorIndex int) {
 					defer func() { iteration++ }()
 					// cover all permutations
 					singleString := toSingleString(pdiffs)
@@ -204,7 +206,7 @@ func TestPermutations(t *testing.T) {
 					if originalSingleString == singleString {
 						numEquals++
 					}
-					return false
+					return false, -1
 				})
 				assert.NoError(t, err)
 				if len(allDiffs) > 0 {
@@ -218,13 +220,13 @@ func TestPermutations(t *testing.T) {
 				allPerms := map[string]bool{}
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
-				earlyBreak, err := permutateDiffs(ctx, allDiffs, hints, func(pdiffs []EntityDiff, hints *DiffHints) (earlyBreak bool) {
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, hints, func(pdiffs []EntityDiff, hints *DiffHints) (earlyBreak bool, errorIndex int) {
 					// Single visit
 					allPerms[toSingleString(pdiffs)] = true
 					// First permutation should be the same as original
 					require.Equal(t, originalSingleString, toSingleString(pdiffs))
 					// early break; this callback function should not be invoked again
-					return true
+					return true, -1
 				})
 				assert.NoError(t, err)
 				if len(allDiffs) > 0 {
@@ -246,8 +248,8 @@ func TestPermutationsContext(t *testing.T) {
 
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
 	allDiffs := []EntityDiff{&DropViewEntityDiff{}}
-	earlyBreak, err := permutateDiffs(ctx, allDiffs, hints, func(pdiffs []EntityDiff, hints *DiffHints) (earlyBreak bool) {
-		return false
+	earlyBreak, err := permutateDiffs(ctx, allDiffs, hints, func(pdiffs []EntityDiff, hints *DiffHints) (earlyBreak bool, errorIndex int) {
+		return false, -1
 	})
 	assert.True(t, earlyBreak) // proves that termination was due to context cancel
 	assert.Error(t, err)       // proves that termination was due to context cancel
@@ -1319,6 +1321,41 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability := schemaDiff.InstantDDLCapability()
 			assert.Equal(t, tc.instantCapability, instantCapability, "for instant capability")
 		})
+	}
+}
 
+// TestDiffFiles diffs two schema files on the local file system. It requires the $TEST_SCHEMADIFF_DIFF_FILES
+// environment variable to be set to a comma-separated list of two file paths, e.g. "/tmp/from.sql,/tmp/to.sql".
+// If the variable is unspecified, the test is skipped. It is useful for ad-hoc testing of schema diffs.
+func TestDiffFiles(t *testing.T) {
+	ctx := context.Background()
+
+	envName := "TEST_SCHEMADIFF_DIFF_FILES"
+	filesVar := os.Getenv(envName)
+	if filesVar == "" {
+		t.Skipf("no diff files specified in $%s", envName)
+	}
+	files := strings.Split(filesVar, ",")
+	require.Len(t, files, 2, "expecting two files in $%s: <file1>,<file2>", envName)
+	fromSchemaSQL, err := os.ReadFile(files[0])
+	require.NoError(t, err)
+	toSchemaSQL, err := os.ReadFile(files[1])
+	require.NoError(t, err)
+
+	env := NewTestEnv()
+	fromSchema, err := NewSchemaFromSQL(env, string(fromSchemaSQL))
+	require.NoError(t, err)
+	toSchema, err := NewSchemaFromSQL(env, string(toSchemaSQL))
+	require.NoError(t, err)
+
+	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
+	schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
+	require.NoError(t, err)
+	t.Logf("diff length: %v", len(schemaDiff.UnorderedDiffs()))
+	orderedDiffs, err := schemaDiff.OrderedDiffs(ctx)
+	require.NoError(t, err)
+	t.Logf("ordered diffs length: %v", len(orderedDiffs))
+	for _, diff := range orderedDiffs {
+		fmt.Printf("%s;\n", diff.CanonicalStatementString())
 	}
 }

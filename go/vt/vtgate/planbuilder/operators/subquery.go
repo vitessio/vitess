@@ -208,7 +208,9 @@ func (sq *SubQuery) GetMergePredicates() []sqlparser.Expr {
 }
 
 func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Operator {
-	if !sq.TopLevel {
+	// We can allow uncorrelated queries even when subquery isn't the top level construct,
+	// like if its underneath an Aggregator, because they will be pulled out and run separately.
+	if !sq.TopLevel && sq.correlated {
 		panic(subqueryNotAtTopErr)
 	}
 	if sq.correlated && sq.FilterType != opcode.PulloutExists {
@@ -253,6 +255,20 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	}
 	post := func(cursor *sqlparser.CopyOnWriteCursor) {
 		node := cursor.Node()
+		// For IN and NOT IN type filters, we have to add a Expression that checks if we got any rows back or not
+		// for correctness. That expression should be ANDed with the expression that has the IN/NOT IN comparison.
+		if compExpr, isCompExpr := node.(*sqlparser.ComparisonExpr); sq.FilterType.NeedsListArg() && isCompExpr {
+			if listArg, isListArg := compExpr.Right.(sqlparser.ListArg); isListArg && listArg.String() == sq.ArgName {
+				if sq.FilterType == opcode.PulloutIn {
+					cursor.Replace(sqlparser.AndExpressions(sqlparser.NewArgument(hasValuesArg()), compExpr))
+				} else {
+					cursor.Replace(&sqlparser.OrExpr{
+						Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())),
+						Right: compExpr,
+					})
+				}
+			}
+		}
 		if _, ok := node.(*sqlparser.Subquery); !ok {
 			return
 		}
@@ -277,13 +293,18 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		sq.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
 		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
 	case opcode.PulloutIn:
-		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()), rhsPred)
+		// Because we replace the comparison expression with an AND expression, it might be the top level construct there.
+		// In this case, it is better to send the two sides of the AND expression separately in the predicates because it can
+		// lead to better routing. This however might not always be true for example we can have the rhsPred to be something like
+		// `user.id = 2 OR (:__sq_has_values AND user.id IN ::sql1)`
+		if andExpr, isAndExpr := rhsPred.(*sqlparser.AndExpr); isAndExpr {
+			predicates = append(predicates, andExpr.Left, andExpr.Right)
+		} else {
+			predicates = append(predicates, rhsPred)
+		}
 		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutNotIn:
-		predicates = append(predicates, &sqlparser.OrExpr{
-			Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())),
-			Right: rhsPred,
-		})
+		predicates = append(predicates, rhsPred)
 		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutValue:
 		predicates = append(predicates, rhsPred)

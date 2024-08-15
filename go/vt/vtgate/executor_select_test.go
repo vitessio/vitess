@@ -427,6 +427,19 @@ func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
 	sbc1.Queries = nil
 }
 
+func TestSelectVindexFunc(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	query := "select * from hash_index where id = 1"
+	session := NewAutocommitSession(&vtgatepb.Session{})
+	_, err := executor.Execute(context.Background(), nil, "TestSelectVindexFunc", session, query, nil)
+	require.ErrorContains(t, err, "VT09005: no database selected")
+
+	session.TargetString = KsTestSharded
+	_, err = executor.Execute(context.Background(), nil, "TestSelectVindexFunc", session, query, nil)
+	require.NoError(t, err)
+}
+
 func TestCreateTableValidTimestamp(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 	executor.normalize = true
@@ -3900,15 +3913,15 @@ func TestSelectAggregationNoData(t *testing.T) {
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64")),
-			expSandboxQ: "select x.col1, x.col2, 1 from (select col1, col2 from `user`) as x limit 2",
-			expField:    `[name:"count(*)" type:INT64]`,
+			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit 2",
+			expField:    `[name:"count(*)" type:INT64 charset:63 flags:32769]`,
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 2) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary")),
-			expSandboxQ: "select x.col1, x.col2, 1, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 2",
-			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 2",
+			expField:    `[name:"col2" type:INT64 charset:63 flags:32768 name:"count(*)" type:INT64 charset:63 flags:32769]`,
 			expRow:      `[]`,
 		},
 	}
@@ -3992,15 +4005,15 @@ func TestSelectAggregationData(t *testing.T) {
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64"), "100|200|1", "200|300|1"),
-			expSandboxQ: "select x.col1, x.col2, 1 from (select col1, col2 from `user`) as x limit 2",
-			expField:    `[name:"count(*)" type:INT64]`,
+			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit 2",
+			expField:    `[name:"count(*)" type:INT64 charset:63 flags:32769]`,
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 9) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary"), "100|3|1|NULL", "200|2|1|NULL"),
-			expSandboxQ: "select x.col1, x.col2, 1, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 9",
-			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 9",
+			expField:    `[name:"col2" type:INT64 charset:63 flags:32768 name:"count(*)" type:INT64 charset:63 flags:32769]`,
 			expRow:      `[[INT64(2) INT64(4)] [INT64(3) INT64(5)]]`,
 		},
 		{
@@ -4334,4 +4347,51 @@ func TestStreamJoinQuery(t *testing.T) {
 	for idx := 0; idx < 64; idx++ {
 		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
 	}
+}
+
+// TestSysVarGlobalAndSession tests that global and session variables are set correctly.
+// It also tests that setting a global variable does not affect the session variable and vice versa.
+// Also, test what happens on running select @@global and select @@session for a system variable.
+func TestSysVarGlobalAndSession(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, SystemVariables: map[string]string{}})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("innodb_lock_wait_timeout", "uint64"), "20"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("innodb_lock_wait_timeout", "uint64"), "20"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "uint64"), "40"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("reserve_execute", "uint64")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.innodb_lock_wait_timeout", "uint64"), "20"),
+	})
+	qr, err := executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"select @@innodb_lock_wait_timeout", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[UINT64(20)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"select @@global.innodb_lock_wait_timeout", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[UINT64(20)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	_, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"set @@global.innodb_lock_wait_timeout = 120", nil)
+	require.NoError(t, err)
+	require.Empty(t, session.SystemVariables["innodb_lock_wait_timeout"])
+
+	_, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"set @@innodb_lock_wait_timeout = 40", nil)
+	require.NoError(t, err)
+	require.EqualValues(t, "40", session.SystemVariables["innodb_lock_wait_timeout"])
+
+	qr, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"select @@innodb_lock_wait_timeout", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[INT64(40)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = executor.Execute(context.Background(), nil, "TestSetStmt", session,
+		"select @@global.innodb_lock_wait_timeout", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[UINT64(20)]]`, fmt.Sprintf("%v", qr.Rows))
 }

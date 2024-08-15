@@ -86,6 +86,8 @@ type iExecute interface {
 	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
 
 	environment() *vtenv.Environment
+	ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
+	UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error)
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -248,6 +250,27 @@ func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
 // IsShardRoutingEnabled implements the VCursor interface.
 func (vc *vcursorImpl) IsShardRoutingEnabled() bool {
 	return enableShardRouting
+}
+
+func (vc *vcursorImpl) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	return vc.executor.ReadTransaction(ctx, transactionID)
+}
+
+// UnresolvedTransactions gets the unresolved transactions for the given keyspace. If the keyspace is not given,
+// then we use the default keyspace.
+func (vc *vcursorImpl) UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error) {
+	if keyspace == "" {
+		keyspace = vc.GetKeyspace()
+	}
+	rss, _, err := vc.ResolveDestinations(ctx, keyspace, nil, []key.Destination{key.DestinationAllShards{}})
+	if err != nil {
+		return nil, err
+	}
+	var targets []*querypb.Target
+	for _, rs := range rss {
+		targets = append(targets, rs.Target)
+	}
+	return vc.executor.UnresolvedTransactions(ctx, targets)
 }
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
@@ -814,7 +837,7 @@ func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sq
 
 // TargetDestination implements the ContextVSchema interface
 func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
-	keyspaceName := vc.keyspace
+	keyspaceName := vc.getActualKeyspace()
 	if vc.destination == nil && qualifier != "" {
 		keyspaceName = qualifier
 	}

@@ -247,18 +247,6 @@ func (vtg *VTGate) CloseSession(ctx context.Context, request *vtgatepb.CloseSess
 	}, nil
 }
 
-// ResolveTransaction is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.ResolveTransactionRequest) (response *vtgatepb.ResolveTransactionResponse, err error) {
-	defer vtg.server.HandlePanic(&err)
-	ctx = withCallerIDContext(ctx, request.CallerId)
-	vtgErr := vtg.server.ResolveTransaction(ctx, request.Dtid)
-	response = &vtgatepb.ResolveTransactionResponse{}
-	if vtgErr == nil {
-		return response, nil
-	}
-	return nil, vterrors.ToGRPC(vtgErr)
-}
-
 // VStream is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservicepb.Vitess_VStreamServer) (err error) {
 	defer vtg.server.HandlePanic(&err)

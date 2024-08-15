@@ -63,14 +63,14 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 
 	// If no queries were executed, we just rollback.
 	if len(conn.TxProperties().Queries) == 0 {
-		conn.Release(tx.TxRollback)
+		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
 		return nil
 	}
 
 	// If the connection is tainted, we cannot prepare it. As there could be temporary tables involved.
 	if conn.IsTainted() {
-		conn.Release(tx.TxRollback)
-		return vterrors.VT12001("cannot prepare the transaction on a reserved connection")
+		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
+		return vterrors.VT10002("cannot prepare the transaction on a reserved connection")
 	}
 
 	err = dte.te.preparedPool.Put(conn, dtid)
@@ -88,30 +88,34 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 // CommitPrepared commits a prepared transaction. If the operation
 // fails, an error counter is incremented and the transaction is
 // marked as failed in the redo log.
-func (dte *DTExecutor) CommitPrepared(dtid string) error {
+func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	if !dte.te.twopcEnabled {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("COMMIT_PREPARED", time.Now())
-	conn, err := dte.te.preparedPool.FetchForCommit(dtid)
+	var conn *StatefulConnection
+	conn, err = dte.te.preparedPool.FetchForCommit(dtid)
 	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit dtid %s, state: %v", dtid, err)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit dtid %s, err: %v", dtid, err)
 	}
+	// No connection means the transaction was already committed.
 	if conn == nil {
 		return nil
 	}
 	// We have to use a context that will never give up,
 	// even if the original context expires.
 	ctx := trace.CopySpan(context.Background(), dte.ctx)
-	defer dte.te.txPool.RollbackAndRelease(ctx, conn)
-	err = dte.te.twoPC.DeleteRedo(ctx, conn, dtid)
-	if err != nil {
-		dte.markFailed(ctx, dtid)
+	defer func() {
+		if err != nil {
+			dte.markFailed(ctx, dtid)
+			log.Warningf("failed to commit the prepared transaction '%s' with error: %v", dtid, err)
+		}
+		dte.te.txPool.RollbackAndRelease(ctx, conn)
+	}()
+	if err = dte.te.twoPC.DeleteRedo(ctx, conn, dtid); err != nil {
 		return err
 	}
-	_, err = dte.te.txPool.Commit(ctx, conn)
-	if err != nil {
-		dte.markFailed(ctx, dtid)
+	if _, err = dte.te.txPool.Commit(ctx, conn); err != nil {
 		return err
 	}
 	dte.te.preparedPool.Forget(dtid)
@@ -207,6 +211,15 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) error {
 	}
 	defer dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
 
+	// If the connection is tainted, we cannot take a commit decision on it.
+	if conn.IsTainted() {
+		dte.inTransaction(func(conn *StatefulConnection) error {
+			return dte.te.twoPC.Transition(dte.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
+		})
+		// return the error, defer call above will roll back the transaction.
+		return vterrors.VT10002("cannot commit the transaction on a reserved connection")
+	}
+
 	err = dte.te.twoPC.Transition(dte.ctx, conn, dtid, querypb.TransactionState_COMMIT)
 	if err != nil {
 		return err
@@ -225,7 +238,12 @@ func (dte *DTExecutor) SetRollback(dtid string, transactionID int64) error {
 	dte.logStats.TransactionID = transactionID
 
 	if transactionID != 0 {
+		// If the transaction is still open, it will be rolled back.
+		// Otherwise, it would have been rolled back by other means, like a timeout or vttablet/mysql restart.
 		dte.te.Rollback(dte.ctx, transactionID)
+	} else {
+		// This is a warning because it should not happen in normal operation.
+		log.Warningf("SetRollback called with no transactionID for dtid %s", dtid)
 	}
 
 	return dte.inTransaction(func(conn *StatefulConnection) error {

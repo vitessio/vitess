@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/require"
@@ -43,11 +45,42 @@ func TestTxExecutorEmptyPrepare(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
+
+	// start a transaction.
 	txid := newTransaction(tsv, nil)
-	err := txe.Prepare(txid, "aa")
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	require.NoError(t, err)
+	sc.Taint(ctx, nil)
+	sc.Unlock()
+
+	err = txe.Prepare(txid, "aa")
 	require.NoError(t, err)
 	// Nothing should be prepared.
 	require.Empty(t, txe.te.preparedPool.conns, "txe.te.preparedPool.conns")
+	require.False(t, sc.IsInTransaction(), "transaction should be roll back before returning the connection to the pool")
+}
+
+func TestExecutorPrepareFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	require.NoError(t, err)
+	sc.Taint(ctx, nil)
+	sc.Unlock()
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.Prepare(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction on a reserved connection")
 }
 
 func TestTxExecutorPrepare(t *testing.T) {
@@ -82,7 +115,7 @@ func TestDTExecutorPrepareResevedConn(t *testing.T) {
 	txe.te.Reserve(ctx, nil, txid, nil)
 
 	err := txe.Prepare(txid, "aa")
-	require.ErrorContains(t, err, "VT12001: unsupported: cannot prepare the transaction on a reserved connection")
+	require.ErrorContains(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction on a reserved connection")
 }
 
 func TestTxExecutorPrepareNotInTx(t *testing.T) {
@@ -174,20 +207,31 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor(t, ctx)
 	defer db.Close()
 	defer tsv.StopService()
+
+	tl := syslogger.NewTestLogger()
+	defer tl.Close()
+
+	// start a transaction.
 	txid := newTxForPrep(ctx, tsv)
-	// Allow all additions to redo logs to succeed
+
+	// prepare the transaction
 	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
 	require.NoError(t, err)
-	defer txe.RollbackPrepared("bb", 0)
-	db.AddQuery("update _vt.redo_state set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
+
+	// fail commit prepare as the delete redo query is in rejected query.
+	db.AddRejectedQuery("delete from _vt.redo_state where dtid = 'bb'", errors.New("delete redo log fail"))
+	db.AddQuery("update _vt.redo_state set state = 0 where dtid = 'bb'", sqltypes.MakeTestResult(nil))
+	err = txe.CommitPrepared("bb")
+	require.ErrorContains(t, err, "delete redo log fail")
+
+	// A retry should fail differently as the prepared transaction is marked as failed.
 	err = txe.CommitPrepared("bb")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "is not supported")
-	// A retry should fail differently.
-	err = txe.CommitPrepared("bb")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot commit dtid bb, state: failed")
+	require.Contains(t, err.Error(), "cannot commit dtid bb, err: VT09025: atomic transaction error: failed to commit")
+
+	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"),
+		"failed to commit the prepared transaction 'bb' with error: unknown error: delete redo log fail")
 }
 
 func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
@@ -271,6 +315,31 @@ func TestExecutorStartCommit(t *testing.T) {
 	err = txe.StartCommit(txid, "aa")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "could not transition to COMMIT: aa")
+}
+
+func TestExecutorStartCommitFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	require.NoError(t, err)
+	sc.Taint(ctx, nil)
+	sc.Unlock()
+
+	// add rollback state update expectation
+	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
+	db.AddQuery(rollbackTransition, sqltypes.MakeTestResult(nil))
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.StartCommit(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot commit the transaction on a reserved connection")
 }
 
 func TestExecutorSetRollback(t *testing.T) {

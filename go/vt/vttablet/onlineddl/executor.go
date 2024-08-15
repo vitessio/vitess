@@ -616,7 +616,7 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 	}
 	createTable, ok := stmt.(*sqlparser.CreateTable)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.CanonicalString(stmt))
+		return nil, schemadiff.ErrExpectedCreateTable
 	}
 	return createTable, nil
 }
@@ -1518,7 +1518,10 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalCreateTable, vreplCreateTable, alterTable, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
+	v, err = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, originalCreateTable, vreplCreateTable, alterTable, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
+	if err != nil {
+		return v, err
+	}
 	return v, nil
 }
 
@@ -1526,7 +1529,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 // This function is called after both source and target tables have been analyzed, so there's more information
 // about the two, and about the transition between the two.
 func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
-	if v.sourceAutoIncrement > 0 && !v.parser.IsAutoIncrementDefined() {
+	if v.analysis.SourceAutoIncrement > 0 && !v.alterTableAnalysis.IsAutoIncrementChangeRequested {
 		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
 		if err != nil {
@@ -1534,9 +1537,9 @@ func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, on
 		}
 
 		// Apply ALTER TABLE AUTO_INCREMENT=?
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTable, ":auto_increment")
+		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTableName(), ":auto_increment")
 		bindVars := map[string]*querypb.BindVariable{
-			"auto_increment": sqltypes.Uint64BindVariable(v.sourceAutoIncrement),
+			"auto_increment": sqltypes.Uint64BindVariable(v.analysis.SourceAutoIncrement),
 		}
 		bound, err := parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
@@ -1572,7 +1575,18 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, nil, nil, nil, false)
+	originalCreateTable, err := e.getCreateTableStatement(ctx, onlineDDL.Table)
+	if err != nil {
+		return v, err
+	}
+	vreplCreateTable, err := e.getCreateTableStatement(ctx, vreplTableName)
+	if err != nil {
+		return v, err
+	}
+	v, err = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, originalCreateTable, vreplCreateTable, nil, false)
+	if err != nil {
+		return v, err
+	}
 	v.pos = revertStream.pos
 	return v, nil
 }
@@ -1614,19 +1628,15 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	if err := e.updateMigrationTableRows(ctx, onlineDDL.UUID, v.tableRows); err != nil {
 		return err
 	}
-	removedUniqueKeyNames := []string{}
-	for _, uniqueKey := range v.removedUniqueKeys {
-		removedUniqueKeyNames = append(removedUniqueKeyNames, uniqueKey.Name)
-	}
 
 	if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
-		len(v.addedUniqueKeys),
-		len(v.removedUniqueKeys),
-		strings.Join(sqlescape.EscapeIDs(removedUniqueKeyNames), ","),
-		strings.Join(sqlescape.EscapeIDs(v.removedForeignKeyNames), ","),
-		strings.Join(sqlescape.EscapeIDs(v.droppedNoDefaultColumnNames), ","),
-		strings.Join(sqlescape.EscapeIDs(v.expandedColumnNames), ","),
-		v.revertibleNotes,
+		v.analysis.AddedUniqueKeys.Len(),
+		v.analysis.RemovedUniqueKeys.Len(),
+		strings.Join(sqlescape.EscapeIDs(v.analysis.RemovedUniqueKeys.Names()), ","),
+		strings.Join(sqlescape.EscapeIDs(v.analysis.RemovedForeignKeyNames), ","),
+		strings.Join(sqlescape.EscapeIDs(v.analysis.DroppedNoDefaultColumns.Names()), ","),
+		strings.Join(sqlescape.EscapeIDs(v.analysis.ExpandedColumns.Names()), ","),
+		v.analysis.RevertibleNotes,
 	); err != nil {
 		return err
 	}
@@ -1654,7 +1664,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		}
 
 		// create vreplication entry
-		insertVReplicationQuery, err := v.generateInsertStatement(ctx)
+		insertVReplicationQuery, err := v.generateInsertStatement()
 		if err != nil {
 			return err
 		}
@@ -1671,7 +1681,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 			}
 		}
 		// start stream!
-		startVReplicationQuery, err := v.generateStartStatement(ctx)
+		startVReplicationQuery, err := v.generateStartStatement()
 		if err != nil {
 			return err
 		}
@@ -2967,7 +2977,7 @@ func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL 
 		// Write analysis:
 	}
 	if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
-		0, 0, "", strings.Join(sqlescape.EscapeIDs(removedForeignKeyNames), ","), "", "", "",
+		0, 0, "", strings.Join(sqlescape.EscapeIDs(removedForeignKeyNames), ","), "", "", nil,
 	); err != nil {
 		return err
 	}
@@ -3640,6 +3650,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		timeHeartbeat:        row.AsInt64("time_heartbeat", 0),
 		timeThrottled:        row.AsInt64("time_throttled", 0),
 		componentThrottled:   row.AsString("component_throttled", ""),
+		reasonThrottled:      row.AsString("reason_throttled", ""),
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
 		state:                binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row.AsString("state", "")]),
 		message:              row.AsString("message", ""),
@@ -3872,7 +3883,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
 				if s.timeThrottled != 0 {
 					// Avoid creating a 0000-00-00 00:00:00 timestamp
-					_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled)
+					_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled, s.reasonThrottled)
 				}
 				if onlineDDL.StrategySetting().IsInOrderCompletion() {
 					// We will fail an in-order migration if there's _prior_ migrations within the same migration-context
@@ -4491,7 +4502,8 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 	addedUniqueKeys, removedUniqueKeys int, removedUniqueKeyNames string,
 	removedForeignKeyNames string,
 	droppedNoDefaultColumnNames string, expandedColumnNames string,
-	revertibleNotes string) error {
+	revertibleNotes []string) error {
+	notes := strings.Join(revertibleNotes, "\n")
 	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
 		sqltypes.Int64BindVariable(int64(removedUniqueKeys)),
@@ -4499,7 +4511,7 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 		sqltypes.StringBindVariable(removedForeignKeyNames),
 		sqltypes.StringBindVariable(droppedNoDefaultColumnNames),
 		sqltypes.StringBindVariable(expandedColumnNames),
-		sqltypes.StringBindVariable(revertibleNotes),
+		sqltypes.StringBindVariable(notes),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4575,10 +4587,17 @@ func (e *Executor) updateMigrationETASecondsByProgress(ctx context.Context, uuid
 	return err
 }
 
-func (e *Executor) updateMigrationLastThrottled(ctx context.Context, uuid string, lastThrottledTime time.Time, throttledCompnent string) error {
+func (e *Executor) updateMigrationLastThrottled(
+	ctx context.Context,
+	uuid string,
+	lastThrottledTime time.Time,
+	throttledCompnent string,
+	reasonThrottled string,
+) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateLastThrottled,
 		sqltypes.StringBindVariable(lastThrottledTime.Format(sqltypes.TimestampFormat)),
 		sqltypes.StringBindVariable(throttledCompnent),
+		sqltypes.StringBindVariable(reasonThrottled),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4756,6 +4775,26 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 		return nil, err
 	}
 	log.Infof("CleanupMigration: migration %s marked as ready to clean up", uuid)
+	defer e.triggerNextCheckInterval()
+	return rs, nil
+}
+
+// CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
+// all we do is set retain_artifacts_seconds to a very small number (it's actually a negative) so that the
+// next iteration of gcArtifacts() picks up the migration's artifacts and schedules them for deletion
+func (e *Executor) CleanupAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
+	}
+	log.Infof("CleanupMigration: request to cleanup all terminal migrations")
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	rs, err := e.execQuery(ctx, sqlUpdateReadyForCleanupAll)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("CleanupMigration: %v migrations marked as ready to clean up", rs.RowsAffected)
 	defer e.triggerNextCheckInterval()
 	return rs, nil
 }

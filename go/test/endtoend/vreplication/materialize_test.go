@@ -108,7 +108,6 @@ const smMaterializeSchemaSource = `
 
 const smMaterializeVSchemaSource = `
 {
-  "sharded": true,
   "tables": {
       "mat": {
           "column_vindexes": [
@@ -196,6 +195,8 @@ func testMaterialize(t *testing.T, useVtctldClient bool) {
 	ks2Primary := vc.getPrimaryTablet(t, targetKs, shard)
 	_, err = ks2Primary.QueryTablet(customFunc, targetKs, true)
 	require.NoError(t, err)
+
+	testMaterializeWithNonExistentTable(t)
 
 	materialize(t, smMaterializeSpec2, useVtctldClient)
 	catchup(t, ks2Primary, "wf1", "Materialize")

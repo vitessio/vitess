@@ -3922,6 +3922,20 @@ func (cached *ShowThrottlerStatus) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ShowTransactionStatus) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Keyspace string
+	size += hack.RuntimeAllocSize(int64(len(cached.Keyspace)))
+	// field TransactionID string
+	size += hack.RuntimeAllocSize(int64(len(cached.TransactionID)))
+	return size
+}
 func (cached *StarExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -1229,6 +1229,9 @@ var (
 	}, {
 		input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
 	}, {
+		input:  "select 1 as vector",
+		output: "select 1 as `vector` from dual",
+	}, {
 		input:  "/*!show databases*/",
 		output: "show databases",
 	}, {
@@ -2429,6 +2432,21 @@ var (
 	}, {
 		input: "show vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' logs",
 	}, {
+		input: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input:  "show transaction status for \"ks:-80:232323238342\"",
+		output: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input:  "show transaction status 'ks:-80:232323238342'",
+		output: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input:  "show transaction status \"ks:-80:232323238342\"",
+		output: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input: "show unresolved transactions",
+	}, {
+		input: "show unresolved transactions for ks",
+	}, {
 		input: "revert vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
 		input: "revert /*vt+ uuid=123 */ vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
@@ -2436,6 +2454,8 @@ var (
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' retry",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cleanup",
+	}, {
+		input: "alter vitess_migration cleanup all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch",
 	}, {
@@ -2647,8 +2667,23 @@ var (
 		input:  "select sql_no_cache straight_join distinct 'foo' from t",
 		output: "select distinct sql_no_cache straight_join 'foo' from t",
 	}, {
+		input:  "select sql_buffer_result 'foo' from t",
+		output: "select sql_buffer_result 'foo' from t",
+	}, {
+		input:  "select high_priority 'foo' from t",
+		output: "select high_priority 'foo' from t",
+	}, {
 		input:  "select straight_join distinct sql_no_cache 'foo' from t",
 		output: "select distinct sql_no_cache straight_join 'foo' from t",
+	}, {
+		input:  "select sql_small_result 'foo' from t",
+		output: "select sql_small_result 'foo' from t",
+	}, {
+		input:  "select distinct sql_small_result 'foo' from t",
+		output: "select distinct sql_small_result 'foo' from t",
+	}, {
+		input:  "select sql_big_result 'foo' from t",
+		output: "select sql_big_result 'foo' from t",
 	}, {
 		input:  "select sql_calc_found_rows 'foo' from t",
 		output: "select sql_calc_found_rows 'foo' from t",
@@ -5898,6 +5933,10 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			input:  "create table t (id int, s varchar(255) default 'foo\"bar')",
 			output: "create table t (\n\tid int,\n\ts varchar(255) default 'foo\"bar'\n)",
 		},
+		{
+			input:  "create table t (id int, vec VECTOR(4))",
+			output: "create table t (\n\tid int,\n\tvec VECTOR(4)\n)",
+		},
 	}
 	parser := NewTestParser()
 	for _, test := range createTableQueries {
@@ -6426,8 +6465,11 @@ func testFile(t *testing.T, filename, tempDir string) {
 					errPresent := ""
 					if err != nil {
 						errPresent = err.Error()
+						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
+					} else {
+						out := String(tree)
+						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
 					}
-					expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
 						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, errPresent), tcase.errStr, errPresent)
