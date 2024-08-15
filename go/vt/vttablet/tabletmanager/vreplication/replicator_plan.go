@@ -323,11 +323,11 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 		// Non-null string value, for which we have a charset conversion instruction
 		fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
 		if fromCollation == collations.Unknown {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.FromCharset, field.Name)
 		}
 		toCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.ToCharset)
 		if toCollation == collations.Unknown {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.ToCharset, field.Name)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.ToCharset, field.Name)
 		}
 
 		out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), val.Raw(), colldata.Lookup(fromCollation).Charset())
@@ -659,11 +659,11 @@ func (tp *TablePlan) appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer
 					// Non-null string value, for which we have a charset conversion instruction
 					fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
 					if fromCollation == collations.Unknown {
-						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, col.field.Name)
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.FromCharset, col.field.Name)
 					}
 					toCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.ToCharset)
 					if toCollation == collations.Unknown {
-						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.ToCharset, col.field.Name)
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.ToCharset, col.field.Name)
 					}
 					out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), vv.Raw(), colldata.Lookup(fromCollation).Charset())
 					if err != nil {
