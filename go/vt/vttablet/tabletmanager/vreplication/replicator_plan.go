@@ -313,6 +313,30 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 	return false
 }
 
+// convertStringCharset does a charset conversion given raw data and an applicable conversion rule.
+// In case of a conversion error, it returns an equivalent of MySQL error 1366, which is what you'd
+// get in a failed `CONVERT()` function, e.g.:
+//
+//	> create table tascii(v varchar(100) charset ascii);
+//	> insert into tascii values ('€');
+//	ERROR 1366 (HY000): Incorrect string value: '\xE2\x82\xAC' for column 'v' at row 1
+func (tp *TablePlan) convertStringCharset(raw []byte, conversion *binlogdatapb.CharsetConversion, fieldName string) ([]byte, error) {
+	fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
+	if fromCollation == collations.Unknown {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.FromCharset, fieldName)
+	}
+	toCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.ToCharset)
+	if toCollation == collations.Unknown {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.ToCharset, fieldName)
+	}
+
+	out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), raw, colldata.Lookup(fromCollation).Charset())
+	if err != nil {
+		return nil, sqlerror.NewSQLError(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, "Incorrect string value: %s", err.Error())
+	}
+	return out, nil
+}
+
 // bindFieldVal returns a bind variable based on given field and value.
 // Most values will just bind directly. But some values may need manipulation:
 // - text values with charset conversion
@@ -321,18 +345,9 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
-		fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
-		if fromCollation == collations.Unknown {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.FromCharset, field.Name)
-		}
-		toCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.ToCharset)
-		if toCollation == collations.Unknown {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.ToCharset, field.Name)
-		}
-
-		out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), val.Raw(), colldata.Lookup(fromCollation).Charset())
+		out, err := tp.convertStringCharset(val.Raw(), conversion, field.Name)
 		if err != nil {
-			return nil, sqlerror.NewSQLError(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, "Incorrect string value: %s", err.Error())
+			return nil, err
 		}
 		return sqltypes.StringBindVariable(string(out)), nil
 	}
@@ -653,23 +668,18 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 				// -1 means a null variable; serialize it directly
 				buf.WriteString(sqltypes.NullStr)
 			} else {
-				vv := sqltypes.MakeTrusted(typ, row.Values[col.offset:col.offset+col.length])
+				raw := row.Values[col.offset : col.offset+col.length]
+				var vv sqltypes.Value
 
 				if conversion, ok := tp.ConvertCharset[col.field.Name]; ok && col.length >= 0 {
 					// Non-null string value, for which we have a charset conversion instruction
-					fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
-					if fromCollation == collations.Unknown {
-						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.FromCharset, col.field.Name)
-					}
-					toCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.ToCharset)
-					if toCollation == collations.Unknown {
-						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.ToCharset, col.field.Name)
-					}
-					out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), vv.Raw(), colldata.Lookup(fromCollation).Charset())
+					out, err := tp.convertStringCharset(raw, conversion, col.field.Name)
 					if err != nil {
-						return sqlerror.NewSQLError(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, "Incorrect string value: %s", err.Error())
+						return err
 					}
 					vv = sqltypes.MakeTrusted(typ, out)
+				} else {
+					vv = sqltypes.MakeTrusted(typ, raw)
 				}
 
 				vv.EncodeSQLBytes2(buf)
