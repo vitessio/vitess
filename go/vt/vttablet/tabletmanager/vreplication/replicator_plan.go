@@ -258,7 +258,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 		if i > 0 {
 			sqlbuffer.WriteString(", ")
 		}
-		if err := tp.appendFromRow(tp.BulkInsertValues, sqlbuffer, tp.Fields, row, tp.FieldsToSkip); err != nil {
+		if err := tp.appendFromRow(tp.BulkInsertValues, sqlbuffer, row); err != nil {
 			return nil, err
 		}
 	}
@@ -596,11 +596,11 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 // note: there can be more fields than bind locations since extra columns might be requested from the source if not all
 // primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
 // values from the database on the source: sum/count for aggregation queries, for example
-func (tp *TablePlan) appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row, skipFields map[string]bool) error {
+func (tp *TablePlan) appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer, row *querypb.Row) error {
 	bindLocations := pq.BindLocations()
-	if len(fields) < len(bindLocations) {
+	if len(tp.Fields) < len(bindLocations) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ",
-			len(fields), len(bindLocations))
+			len(tp.Fields), len(bindLocations))
 	}
 
 	type colInfo struct {
@@ -612,9 +612,9 @@ func (tp *TablePlan) appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer
 	rowInfo := make([]*colInfo, 0)
 
 	offset := int64(0)
-	for i, field := range fields { // collect info required for fields to be bound
+	for i, field := range tp.Fields { // collect info required for fields to be bound
 		length := row.Lengths[i]
-		if !skipFields[strings.ToLower(field.Name)] {
+		if !tp.FieldsToSkip[strings.ToLower(field.Name)] {
 			rowInfo = append(rowInfo, &colInfo{
 				typ:    field.Type,
 				length: length,
