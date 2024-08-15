@@ -57,6 +57,9 @@ type (
 		// This is used to truncate the columns in the final result
 		ResultColumns int
 
+		// Truncate is set to true if the columns produced by this operator should be truncated if we added any additional columns
+		Truncate bool
+
 		QP *QueryProjection
 
 		DT *DerivedTable
@@ -151,6 +154,8 @@ func (a *Aggregator) checkOffset(offset int) {
 }
 
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) (offset int) {
+	a.planOffsets(ctx)
+
 	defer func() {
 		a.checkOffset(offset)
 	}()
@@ -199,6 +204,10 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 }
 
 func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	if !underRoute {
+		a.planOffsets(ctx)
+	}
+
 	if len(a.Columns) <= offset {
 		panic(vterrors.VT13001("offset out of range"))
 	}
@@ -221,7 +230,7 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	}
 
 	if expr == nil {
-		for _, aggr := range a.Aggregations {
+		for i, aggr := range a.Aggregations {
 			if aggr.ColOffset != offset {
 				continue
 			}
@@ -230,9 +239,13 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 				return aggr.WSOffset
 			}
 
-			panic(vterrors.VT13001("expected to find a weight string for aggregation"))
+			a.Aggregations[i].WSOffset = len(a.Columns)
+			expr = a.Columns[offset].Expr
+			break
 		}
+	}
 
+	if expr == nil {
 		panic(vterrors.VT13001("could not find expression at offset"))
 	}
 
@@ -515,7 +528,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			continue
 		}
 
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.Inner)), false)
+		offset := a.internalAddWSColumn(ctx, a.Grouping[idx].ColOffset, aeWrap(weightStringFor(gb.Inner)))
 		a.Grouping[idx].WSOffset = offset
 	}
 	for idx, aggr := range a.Aggregations {
@@ -524,9 +537,26 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 		}
 
 		arg := aggr.getPushColumn()
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), false)
+		offset := a.internalAddWSColumn(ctx, aggr.ColOffset, aeWrap(weightStringFor(arg)))
+
 		a.Aggregations[idx].WSOffset = offset
 	}
+}
+
+func (a *Aggregator) internalAddWSColumn(ctx *plancontext.PlanningContext, inOffset int, aliasedExpr *sqlparser.AliasedExpr) int {
+	if a.ResultColumns == 0 && a.Truncate {
+		// if we need to use `internalAddColumn`, it means we are adding columns that are not part of the original list,
+		// so we need to set the ResultColumns to the current length of the columns list
+		a.ResultColumns = len(a.Columns)
+	}
+
+	offset := a.Source.AddWSColumn(ctx, inOffset, false)
+
+	if offset == len(a.Columns) {
+		// if we get an offset at the end of our current column list, it means we added a new column
+		a.Columns = append(a.Columns, aliasedExpr)
+	}
+	return offset
 }
 
 func (a *Aggregator) setTruncateColumnCount(offset int) {
@@ -538,7 +568,7 @@ func (a *Aggregator) getTruncateColumnCount() int {
 }
 
 func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) int {
-	if a.ResultColumns == 0 {
+	if a.ResultColumns == 0 && a.Truncate {
 		// if we need to use `internalAddColumn`, it means we are adding columns that are not part of the original list,
 		// so we need to set the ResultColumns to the current length of the columns list
 		a.ResultColumns = len(a.Columns)

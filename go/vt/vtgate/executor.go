@@ -1623,6 +1623,10 @@ func (e *Executor) ReadTransaction(ctx context.Context, transactionID string) (*
 	return e.txConn.ReadTransaction(ctx, transactionID)
 }
 
+func (e *Executor) UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	return e.txConn.UnresolvedTransactions(ctx, targets)
+}
+
 type (
 	errorTransformer interface {
 		TransformError(err error) error

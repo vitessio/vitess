@@ -535,6 +535,13 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		default:
 			return nil, argError(method)
 		}
+	case "period_diff":
+		switch len(args) {
+		case 2:
+			return &builtinPeriodDiff{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
 	case "inet_aton":
 		if len(args) != 1 {
 			return nil, argError(method)
