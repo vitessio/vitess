@@ -38,7 +38,7 @@ type ParsedQuery struct {
 }
 
 type bindLocation struct {
-	offset, length int
+	Offset, Length int
 }
 
 // NewParsedQuery returns a ParsedQuery of the ast.
@@ -67,8 +67,8 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]*querypb.BindVaria
 func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*querypb.BindVariable, extras map[string]Encodable) error {
 	current := 0
 	for _, loc := range pq.bindLocations {
-		buf.WriteString(pq.Query[current:loc.offset])
-		name := pq.Query[loc.offset : loc.offset+loc.length]
+		buf.WriteString(pq.Query[current:loc.Offset])
+		name := pq.Query[loc.Offset : loc.Offset+loc.Length]
 		if encodable, ok := extras[name[1:]]; ok {
 			encodable.EncodeSQL(buf)
 		} else {
@@ -78,7 +78,7 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 			}
 			EncodeValue(buf, supplied)
 		}
-		current = loc.offset + loc.length
+		current = loc.Offset + loc.Length
 	}
 	buf.WriteString(pq.Query[current:])
 	return nil
@@ -122,7 +122,7 @@ func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field
 	var offsetQuery int
 	for i, loc := range pq.bindLocations {
 		col := rowInfo[i]
-		buf.WriteString(pq.Query[offsetQuery:loc.offset])
+		buf.WriteString(pq.Query[offsetQuery:loc.Offset])
 		typ := col.typ
 
 		switch typ {
@@ -148,10 +148,14 @@ func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field
 				vv.EncodeSQLBytes2(buf)
 			}
 		}
-		offsetQuery = loc.offset + loc.length
+		offsetQuery = loc.Offset + loc.Length
 	}
 	buf.WriteString(pq.Query[offsetQuery:])
 	return nil
+}
+
+func (pq *ParsedQuery) BindLocations() []bindLocation {
+	return pq.bindLocations
 }
 
 // MarshalJSON is a custom JSON marshaler for ParsedQuery.

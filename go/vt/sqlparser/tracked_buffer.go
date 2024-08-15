@@ -285,8 +285,8 @@ func areBothISExpr(op Expr, val Expr) bool {
 // tracking information for future substitutions.
 func (buf *TrackedBuffer) WriteArg(prefix, arg string) {
 	buf.bindLocations = append(buf.bindLocations, bindLocation{
-		offset: buf.Len(),
-		length: len(prefix) + len(arg),
+		Offset: buf.Len(),
+		Length: len(prefix) + len(arg),
 	})
 	buf.WriteString(prefix)
 	buf.WriteString(arg)
