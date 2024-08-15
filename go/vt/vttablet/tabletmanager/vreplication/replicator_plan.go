@@ -671,7 +671,7 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 				raw := row.Values[col.offset : col.offset+col.length]
 				var vv sqltypes.Value
 
-				if conversion, ok := tp.ConvertCharset[col.field.Name]; ok && col.length >= 0 {
+				if conversion, ok := tp.ConvertCharset[col.field.Name]; ok && col.length > 0 {
 					// Non-null string value, for which we have a charset conversion instruction
 					out, err := tp.convertStringCharset(raw, conversion, col.field.Name)
 					if err != nil {
