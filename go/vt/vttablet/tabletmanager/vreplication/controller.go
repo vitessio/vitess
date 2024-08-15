@@ -78,7 +78,8 @@ func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationCon
 	vttablet.InitVReplicationConfigDefaults()
 	options, ok := params["options"]
 	if !ok {
-		return nil, fmt.Errorf("options column not found")
+		options = "{}"
+		// return nil, fmt.Errorf("options column not found")
 	}
 	var workflowOptions vtctldata.WorkflowOptions
 	if err := json.Unmarshal([]byte(options), &workflowOptions); err != nil {

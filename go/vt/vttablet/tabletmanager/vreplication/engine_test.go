@@ -93,8 +93,8 @@ func TestEngineOpenRetry(t *testing.T) {
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|state|source",
-			"int64|varchar|varchar",
+			"id|state|source|options",
+			"int64|varchar|varchar|varchar",
 		),
 	), nil)
 
