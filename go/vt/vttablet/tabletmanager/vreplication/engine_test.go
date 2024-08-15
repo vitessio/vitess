@@ -57,7 +57,7 @@ func TestEngineOpen(t *testing.T) {
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest(getWorkflowQuery, testSettingsResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.GetWorkflowQuery, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -168,7 +168,7 @@ func TestEngineExec(t *testing.T) {
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest(getWorkflowQuery, testSettingsResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.GetWorkflowQuery, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -187,6 +187,7 @@ func TestEngineExec(t *testing.T) {
 	ct := vre.controllers[1]
 	if ct == nil || ct.id != 1 {
 		t.Errorf("ct: %v, id should be 1", ct)
+		return
 	}
 
 	// Verify stats
@@ -210,7 +211,7 @@ func TestEngineExec(t *testing.T) {
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest(getWorkflowQuery, testSettingsResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.GetWorkflowQuery, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)

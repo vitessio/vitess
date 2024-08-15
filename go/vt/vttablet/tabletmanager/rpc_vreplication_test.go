@@ -395,8 +395,6 @@ func TestMoveTables(t *testing.T) {
 	tenv.tmc.SetSchema(defaultSchema)
 
 	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, checkForJournal, &sqltypes.Result{})
-	const getWorkflowQuery = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1"
-
 	for _, ftc := range targetShards {
 		addInvariants(ftc.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		getCopyStateQuery := fmt.Sprintf(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), vreplID)
@@ -415,14 +413,14 @@ func TestMoveTables(t *testing.T) {
 				),
 				fmt.Sprintf("%d|%s|{}", vreplID, bls),
 			), nil)
-		ftc.vrdbClient.ExpectRequest(getWorkflowQuery, sqltypes.MakeTestResult(
+		ftc.vrdbClient.ExpectRequest(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
 			),
 			fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
 		), nil)
-		ftc.vrdbClient.ExpectRequest(getWorkflowQuery, sqltypes.MakeTestResult(
+		ftc.vrdbClient.ExpectRequest(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -501,9 +499,10 @@ func TestMoveTables(t *testing.T) {
 		AutoStart:      true,
 	})
 	require.NoError(t, err)
+
 	for _, ftc := range targetShards {
 		ftc.vrdbClient.Reset()
-		ftc.vrdbClient.AddInvariant(getWorkflowQuery, sqltypes.MakeTestResult(
+		ftc.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -518,6 +517,13 @@ func TestMoveTables(t *testing.T) {
 			fmt.Sprintf("%s|%d|%s|%s|NULL|0|0|||1686577659|0|Running||%s|1||0|0|0||0|1|{}", wf, vreplID, bls, position, targetKs),
 		))
 		ftc.vrdbClient.AddInvariant(fmt.Sprintf(readWorkflow, wf, tenv.dbName), sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
+				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
+			),
+			fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Running||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
+		))
+		ftc.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",

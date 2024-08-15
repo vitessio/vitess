@@ -78,6 +78,8 @@ var (
 
 var TruncationIndicator = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 
+const GetWorkflowQuery = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1"
+
 // Stats is the internal stats of a player. It is a different
 // structure that is passed in so stats can be collected over the life
 // of multiple individual players.

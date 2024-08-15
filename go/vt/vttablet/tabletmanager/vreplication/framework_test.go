@@ -84,8 +84,6 @@ type LogExpectation struct {
 
 var heartbeatRe *regexp.Regexp
 
-const getWorkflowQuery = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1"
-
 // setFlag() sets a flag for a test in a non-racy way:
 //   - it registers the flag using a different flagset scope
 //   - clears other flags by passing a dummy os.Args() while parsing this flagset
