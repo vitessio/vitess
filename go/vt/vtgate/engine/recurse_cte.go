@@ -125,7 +125,7 @@ func (r *RecurseCTE) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 }
 
 func (r *RecurseCTE) NeedsTransaction() bool {
-	return false
+	return r.Seed.NeedsTransaction() || r.Term.NeedsTransaction()
 }
 
 func (r *RecurseCTE) Inputs() ([]Primitive, []map[string]any) {
