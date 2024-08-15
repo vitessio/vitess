@@ -733,8 +733,12 @@ func TestWorkflowDelete(t *testing.T) {
 				}
 			}
 			logs := memlogger.String()
-			// To confirm that the custom logger was passed on to the trafficSwitcher.
-			require.Contains(t, logs, "traffic_switcher.go")
+			// Confirm that the custom logger was passed on to the trafficSwitcher
+			// if we didn't expect/want an error as otherwise we may not have made
+			// it into the trafficSwitcher.
+			if tc.wantErr == "" {
+				require.Contains(t, logs, "traffic_switcher.go")
+			}
 			for _, expectedLog := range tc.expectedLogs {
 				require.Contains(t, logs, expectedLog)
 			}
