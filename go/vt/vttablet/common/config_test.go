@@ -26,6 +26,7 @@ import (
 )
 
 func TestNewVReplicationConfig(t *testing.T) {
+	InitVReplicationConfigDefaults()
 	tests := []struct {
 		name    string
 		config  map[string]string
@@ -53,21 +54,25 @@ func TestNewVReplicationConfig(t *testing.T) {
 			},
 			wantErr: 0,
 			want: &VReplicationConfig{
-				ExperimentalFlags:              3,
-				NetReadTimeout:                 100,
-				NetWriteTimeout:                200,
-				CopyPhaseDuration:              2 * time.Hour,
-				RetryDelay:                     10 * time.Second,
-				MaxTimeToRetryError:            1 * time.Hour,
-				RelayLogMaxSize:                500000,
-				RelayLogMaxItems:               10000,
-				ReplicaLagTolerance:            2 * time.Minute,
-				HeartbeatUpdateInterval:        2,
-				StoreCompressedGTID:            true,
-				ParallelInsertWorkers:          4,
-				VStreamPacketSize:              1024,
-				VStreamDynamicPacketSize:       true,
-				VStreamBinlogRotationThreshold: 2048,
+				ExperimentalFlags:                      3,
+				NetReadTimeout:                         100,
+				NetWriteTimeout:                        200,
+				CopyPhaseDuration:                      2 * time.Hour,
+				RetryDelay:                             10 * time.Second,
+				MaxTimeToRetryError:                    1 * time.Hour,
+				RelayLogMaxSize:                        500000,
+				RelayLogMaxItems:                       10000,
+				ReplicaLagTolerance:                    2 * time.Minute,
+				HeartbeatUpdateInterval:                2,
+				StoreCompressedGTID:                    true,
+				ParallelInsertWorkers:                  4,
+				VStreamPacketSize:                      1024,
+				VStreamDynamicPacketSize:               true,
+				VStreamBinlogRotationThreshold:         2048,
+				TabletTypesStr:                         DefaultVReplicationConfig.TabletTypesStr,
+				VStreamPacketSizeOverride:              true,
+				VStreamDynamicPacketSizeOverride:       true,
+				VStreamBinlogRotationThresholdOverride: true,
 			},
 		},
 		{
@@ -101,27 +106,30 @@ func TestNewVReplicationConfig(t *testing.T) {
 			},
 			wantErr: 0,
 			want: &VReplicationConfig{
-				ExperimentalFlags:              5,
-				NetReadTimeout:                 150,
-				NetWriteTimeout:                DefaultVReplicationConfig.NetWriteTimeout,
-				CopyPhaseDuration:              DefaultVReplicationConfig.CopyPhaseDuration,
-				RetryDelay:                     DefaultVReplicationConfig.RetryDelay,
-				MaxTimeToRetryError:            DefaultVReplicationConfig.MaxTimeToRetryError,
-				RelayLogMaxSize:                DefaultVReplicationConfig.RelayLogMaxSize,
-				RelayLogMaxItems:               DefaultVReplicationConfig.RelayLogMaxItems,
-				ReplicaLagTolerance:            DefaultVReplicationConfig.ReplicaLagTolerance,
-				HeartbeatUpdateInterval:        DefaultVReplicationConfig.HeartbeatUpdateInterval,
-				StoreCompressedGTID:            !DefaultVReplicationConfig.StoreCompressedGTID,
-				ParallelInsertWorkers:          DefaultVReplicationConfig.ParallelInsertWorkers,
-				VStreamPacketSize:              DefaultVReplicationConfig.VStreamPacketSize,
-				VStreamDynamicPacketSize:       !DefaultVReplicationConfig.VStreamDynamicPacketSize,
-				VStreamBinlogRotationThreshold: DefaultVReplicationConfig.VStreamBinlogRotationThreshold,
+				ExperimentalFlags:                5,
+				NetReadTimeout:                   150,
+				NetWriteTimeout:                  DefaultVReplicationConfig.NetWriteTimeout,
+				CopyPhaseDuration:                DefaultVReplicationConfig.CopyPhaseDuration,
+				RetryDelay:                       DefaultVReplicationConfig.RetryDelay,
+				MaxTimeToRetryError:              DefaultVReplicationConfig.MaxTimeToRetryError,
+				RelayLogMaxSize:                  DefaultVReplicationConfig.RelayLogMaxSize,
+				RelayLogMaxItems:                 DefaultVReplicationConfig.RelayLogMaxItems,
+				ReplicaLagTolerance:              DefaultVReplicationConfig.ReplicaLagTolerance,
+				HeartbeatUpdateInterval:          DefaultVReplicationConfig.HeartbeatUpdateInterval,
+				StoreCompressedGTID:              !DefaultVReplicationConfig.StoreCompressedGTID,
+				ParallelInsertWorkers:            DefaultVReplicationConfig.ParallelInsertWorkers,
+				VStreamPacketSize:                DefaultVReplicationConfig.VStreamPacketSize,
+				VStreamDynamicPacketSize:         !DefaultVReplicationConfig.VStreamDynamicPacketSize,
+				VStreamBinlogRotationThreshold:   DefaultVReplicationConfig.VStreamBinlogRotationThreshold,
+				VStreamDynamicPacketSizeOverride: true,
+				TabletTypesStr:                   DefaultVReplicationConfig.TabletTypesStr,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			InitVReplicationConfigDefaults()
 			got, err := NewVReplicationConfig(tt.config)
 			if tt.wantErr > 0 && err == nil || tt.wantErr == 0 && err != nil {
 				t.Errorf("NewVReplicationConfig() got num errors = %v, want %v", err, tt.wantErr)
