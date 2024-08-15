@@ -4802,8 +4802,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.foo from (select u.foo as foo from `user` as u where 1 != 1) as dt where 1 != 1",
-            "Query": "select dt.foo from (select u.foo as foo from `user` as u) as dt",
+            "FieldQuery": "select dt.foo from (select u.foo from `user` as u where 1 != 1) as dt where 1 != 1",
+            "Query": "select dt.foo from (select u.foo from `user` as u) as dt",
             "Table": "`user`"
           },
           {

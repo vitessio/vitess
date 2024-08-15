@@ -361,11 +361,10 @@ func splitUnexploredExpression(
 	case col.IsPureRight():
 		rhs.add(pe, alias)
 		col.RHSExpr = colName
-	case col.IsMixedLeftAndRight():
+	default:
 		for _, lhsExpr := range col.LHSExprs {
 			ae := aeWrap(lhsExpr.Expr)
 			columnName := ae.ColumnName()
-			ae.As = sqlparser.NewIdentifierCI(columnName)
 			lhs.add(newProjExpr(ae), columnName)
 		}
 		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)

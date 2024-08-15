@@ -1190,8 +1190,8 @@
                                                   "Name": "main",
                                                   "Sharded": true
                                                 },
-                                                "FieldQuery": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, weight_string(profit.l_suppkey) from (select l_extendedprice as l_extendedprice, l_discount as l_discount, l_quantity as l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
-                                                "Query": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, weight_string(profit.l_suppkey) from (select l_extendedprice as l_extendedprice, l_discount as l_discount, l_quantity as l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
+                                                "FieldQuery": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, weight_string(profit.l_suppkey) from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
+                                                "Query": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, weight_string(profit.l_suppkey) from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
                                                 "Table": "lineitem"
                                               }
                                             ]
