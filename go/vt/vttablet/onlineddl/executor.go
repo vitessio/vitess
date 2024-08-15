@@ -1283,7 +1283,7 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, lockWaitTimeout time.Duration) (deferFunc func(), err error) {
 	deferFunc = func() {}
 
-	if _, err := conn.Exec(ctx, `set @lock_wait_timeout=@@lock_wait_timeout`, 0, false); err != nil {
+	if _, err := conn.Exec(ctx, `set @lock_wait_timeout=@@session.lock_wait_timeout`, 0, false); err != nil {
 		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read lock_wait_timeout: %v", err)
 	}
 	timeoutSeconds := int64(lockWaitTimeout.Seconds())
@@ -1293,7 +1293,7 @@ func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *conn
 		return deferFunc, err
 	}
 	deferFunc = func() {
-		conn.Exec(ctx, "SET lock_wait_timeout=@lock_wait_timeout", 0, false)
+		conn.Exec(ctx, "set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
 	}
 	return deferFunc, nil
 }
