@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -520,6 +521,7 @@ func TestWorkflowDelete(t *testing.T) {
 		want                           *vtctldatapb.WorkflowDeleteResponse
 		wantErr                        string
 		postFunc                       func(t *testing.T, env *testEnv)
+		expectedLogs                   []string
 	}{
 		{
 			name: "missing table",
@@ -561,6 +563,9 @@ func TestWorkflowDelete(t *testing.T) {
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
+			},
+			expectedLogs: []string{ // Confirm that the custom logger is working as expected
+				fmt.Sprintf("Table `%s` did not exist when attempting to remove it", table2Name),
 			},
 			want: &vtctldatapb.WorkflowDeleteResponse{
 				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
@@ -685,6 +690,9 @@ func TestWorkflowDelete(t *testing.T) {
 			require.NotNil(t, tc.req)
 			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
 			defer env.close()
+			memlogger := logutil.NewMemoryLogger()
+			defer memlogger.Clear()
+			env.ws.options.logger = memlogger
 			env.tmc.schema = schema
 			if tc.expectedSourceQueries != nil {
 				require.NotNil(t, env.tablets[tc.sourceKeyspace.KeyspaceName])
@@ -723,6 +731,16 @@ func TestWorkflowDelete(t *testing.T) {
 						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil)
 					}
 				}
+			}
+			logs := memlogger.String()
+			// Confirm that the custom logger was passed on to the trafficSwitcher
+			// if we didn't expect/want an error as otherwise we may not have made
+			// it into the trafficSwitcher.
+			if tc.wantErr == "" {
+				require.Contains(t, logs, "traffic_switcher.go")
+			}
+			for _, expectedLog := range tc.expectedLogs {
+				require.Contains(t, logs, expectedLog)
 			}
 		})
 	}
