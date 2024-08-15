@@ -66,7 +66,7 @@ var (
 
 func registerRestoreFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&restoreFromBackup, "restore_from_backup", restoreFromBackup, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
-	fs.StringVar(&restoreFromBackupIgnoreEngines, "restore_from_backup_ignore_engines", restoreFromBackupIgnoreEngines, "")
+	fs.StringVar(&restoreFromBackupIgnoreEngines, "restore_from_backup_ignore_engines", restoreFromBackupIgnoreEngines, "ignore backups taken with the backup engines provided in this comma-separated list")
 	fs.StringVar(&restoreFromBackupTsStr, "restore_from_backup_ts", restoreFromBackupTsStr, "(init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'")
 	fs.IntVar(&restoreConcurrency, "restore_concurrency", restoreConcurrency, "(init restore parameter) how many concurrent files to restore at once")
 	fs.DurationVar(&waitForBackupInterval, "wait_for_backup_interval", waitForBackupInterval, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")

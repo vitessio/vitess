@@ -221,7 +221,7 @@ func registerBackupEngineFlags(fs *pflag.FlagSet) {
 // This must only be called after flags have been parsed.
 func GetBackupEngine(backupEngine *string) (BackupEngine, error) {
 	var name string
-	if backupEngine == nil {
+	if backupEngine == nil || *backupEngine == "" {
 		name = backupEngineImplementation
 	} else {
 		name = *backupEngine
