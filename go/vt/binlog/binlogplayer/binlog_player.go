@@ -567,6 +567,7 @@ type VRSettings struct {
 
 // ReadVRSettings retrieves the settings for a vreplication stream.
 func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
+	log.Infof("ReadVRSettings: Reading vreplication settings for %v", uid)
 	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
