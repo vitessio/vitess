@@ -55,7 +55,7 @@ var (
 	// VStreamerBinlogRotationThreshold is the threshold, above which we rotate binlogs, before taking a GTID snapshot
 	VStreamerBinlogRotationThreshold = int64(64 * 1024 * 1024) // 64MiB
 	VStreamerDefaultPacketSize       = 250000
-	VStreamerUseDynamicPacketSize    = false
+	VStreamerUseDynamicPacketSize    = true
 )
 
 func GetVReplicationExperimentalFlags() int64 {
