@@ -87,6 +87,8 @@ type ClusterConfig struct {
 	vtorcPort            int
 
 	vreplicationCompressGTID bool
+	// Set overrideHeartbeatOptions to true to override the default heartbeat options:
+	// which are set to only on demand (5s) and 250ms interval.
 	overrideHeartbeatOptions bool
 }
 

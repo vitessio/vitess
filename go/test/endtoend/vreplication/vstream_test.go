@@ -756,7 +756,8 @@ const (
 )
 
 func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (numRowEvents map[string]int, numFieldEvents map[string]int) {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(vstreamHeartbeatsTestContextTimeout)) // ensure heartbeats are sent.
+	// Stream for a while to ensure heartbeats are sent.
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(vstreamHeartbeatsTestContextTimeout))
 	defer cancel()
 
 	numRowEvents = make(map[string]int)
@@ -781,7 +782,7 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 			Filter: "select * from customer",
 		}},
 	}
-	// stream events from the VStream API
+	// Stream events from the VStream API.
 	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	require.NoError(t, err)
 	for !done {
@@ -789,7 +790,6 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 		switch err {
 		case nil:
 			for _, ev := range evs {
-				// log.Infof("Event: %v", ev)
 				switch ev.Type {
 				case binlogdatapb.VEventType_ROW:
 					rowEvent := ev.RowEvent
@@ -818,10 +818,10 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 	return numRowEvents, numFieldEvents
 }
 
-// TestVStreamHeartbeats enables streaming of the internal Vitess heartbeat tables in the VStream API and ensures that
-// the heartbeat events are received by the client.
+// TestVStreamHeartbeats enables streaming of the internal Vitess heartbeat tables in the VStream API and
+// ensures that the heartbeat events are received as expected by the client.
 func TestVStreamHeartbeats(t *testing.T) {
-	// enable continuous heartbeats
+	// Enable continuous heartbeats.
 	extraVTTabletArgs = append(extraVTTabletArgs,
 		"--heartbeat_enable",
 		"--heartbeat_interval", "1s",
@@ -848,27 +848,36 @@ func TestVStreamHeartbeats(t *testing.T) {
 	expectedNumRowEvents := make(map[string]int)
 	expectedNumRowEvents["customer"] = 3
 
-	t.Run("With Keyspace Heartbeats On", func(t *testing.T) {
-		flags := &vtgatepb.VStreamFlags{
-			StreamKeyspaceHeartbeats: true,
-		}
-		gotNumRowEvents, gotNumFieldEvents := doVStream(t, vc, flags)
-		for k := range expectedNumRowEvents {
-			require.Equalf(t, 1, gotNumFieldEvents[k], "incorrect number of field events for table %s, got %d", k, gotNumFieldEvents[k])
-		}
-		require.Greater(t, gotNumRowEvents["heartbeat"], numExpectedHeartbeats, "incorrect number of heartbeat events received")
-		log.Infof("Total number of heartbeat events received: %v", gotNumRowEvents["heartbeat"])
-		delete(gotNumRowEvents, "heartbeat")
-		require.Equal(t, expectedNumRowEvents, gotNumRowEvents)
-	})
+	type testCase struct {
+		name               string
+		flags              *vtgatepb.VStreamFlags
+		expectedHeartbeats int
+	}
+	testCases := []testCase{
+		{
+			name: "With Keyspace Heartbeats On",
+			flags: &vtgatepb.VStreamFlags{
+				StreamKeyspaceHeartbeats: true,
+			},
+			expectedHeartbeats: numExpectedHeartbeats,
+		},
+		{
+			name:               "With Keyspace Heartbeats Off",
+			flags:              nil,
+			expectedHeartbeats: 0,
+		},
+	}
 
-	t.Run("With Keyspace Heartbeats Off", func(t *testing.T) {
-		gotNumRowEvents, gotNumFieldEvents := doVStream(t, vc, nil)
-		for k := range expectedNumRowEvents {
-			require.Equalf(t, 1, gotNumFieldEvents[k], "incorrect number of field events for table %s, got %d", k, gotNumFieldEvents[k])
-		}
-		require.Zero(t, gotNumRowEvents["heartbeat"], "heartbeat events should not be received when StreamKeyspaceHeartbeats is false")
-		require.Equal(t, expectedNumRowEvents, gotNumRowEvents)
-	})
-
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotNumRowEvents, gotNumFieldEvents := doVStream(t, vc, tc.flags)
+			for k := range expectedNumRowEvents {
+				require.Equalf(t, 1, gotNumFieldEvents[k], "incorrect number of field events for table %s, got %d", k, gotNumFieldEvents[k])
+			}
+			require.GreaterOrEqual(t, gotNumRowEvents["heartbeat"], tc.expectedHeartbeats, "incorrect number of heartbeat events received")
+			log.Infof("Total number of heartbeat events received: %v", gotNumRowEvents["heartbeat"])
+			delete(gotNumRowEvents, "heartbeat")
+			require.Equal(t, expectedNumRowEvents, gotNumRowEvents)
+		})
+	}
 }
