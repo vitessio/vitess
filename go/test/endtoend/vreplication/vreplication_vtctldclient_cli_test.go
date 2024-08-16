@@ -24,19 +24,21 @@ import (
 	"strings"
 	"testing"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // TestVtctldclientCLI tests the vreplication vtctldclient CLI commands, primarily to check that non-standard flags
@@ -50,6 +52,7 @@ func TestVtctldclientCLI(t *testing.T) {
 	}()
 	defaultRdonly = 0
 	vc = setupMinimalCluster(t)
+	vttablet.InitVReplicationConfigDefaults()
 
 	err = vc.Vtctl.AddCellInfo("zone2")
 	require.NoError(t, err)
@@ -72,6 +75,9 @@ func TestVtctldclientCLI(t *testing.T) {
 	})
 	t.Run("MoveTablesCreateFlags1", func(t *testing.T) {
 		testMoveTablesFlags1(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
+	})
+	t.Run("testWorkflowUpdateConfig", func(t *testing.T) {
+		testWorkflowUpdateConfig(t, &mt, targetTabs, targetKeyspaceName, workflowName)
 	})
 	t.Run("MoveTablesCreateFlags2", func(t *testing.T) {
 		testMoveTablesFlags2(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
@@ -210,6 +216,95 @@ func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
 	}
 	slices.Sort(workflowNames)
 	require.EqualValues(t, wfNames, workflowNames)
+}
+
+func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[string]*cluster.VttabletProcess, targetKeyspace, workflow string) {
+	updateConfig := func(t *testing.T, config map[string]string) error {
+		c := ""
+		for k, v := range config {
+			if len(c) > 0 {
+				c += ","
+			}
+			c += fmt.Sprintf("%s=%s", k, v)
+		}
+		_, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKeyspace, "update", "--workflow", workflow, "--config-overrides", c)
+		return err
+	}
+	getConfig := func(t *testing.T, tab *cluster.VttabletProcess) map[string]string {
+		configJson, err := getDebugVar(t, tab.Port, []string{"VReplicationConfig"})
+		require.NoError(t, err)
+		var config map[string]string
+		err = json2.Unmarshal([]byte(configJson), &config)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(config))
+		configJson = config[maps.Keys(config)[0]]
+		config = nil
+		err = json2.Unmarshal([]byte(configJson), &config)
+		require.NoError(t, err)
+		return config
+	}
+	var tab *cluster.VttabletProcess
+	for _, tab = range targetTabs {
+		break
+	}
+	require.NotNil(t, tab)
+
+	type testCase struct {
+		name      string
+		config    map[string]string
+		needError bool
+		clears    bool
+	}
+	testCases := []testCase{
+		{
+			name:   "no change",
+			config: nil,
+		},
+		{
+			name:   "one value",
+			config: map[string]string{"vreplication_heartbeat_update_interval": "10"},
+		},
+		{
+			name:   "two values",
+			config: map[string]string{"vreplication_heartbeat_update_interval": "100", "vreplication_store_compressed_gtid": "true"},
+		},
+		{
+			name:      "invalid value",
+			config:    map[string]string{"vreplication_heartbeat_update_interval": "12s", "vreplication_store_compressed_gtid": "true"},
+			needError: true,
+		},
+		{
+			name:      "unknown flag",
+			config:    map[string]string{"vreplication_heartbeat_update_interval": "1", "vreplication_store_compressed_gtid": "true", "unknown": "value"},
+			needError: true,
+		},
+		{
+			name:   "clear flags",
+			config: map[string]string{"vreplication_heartbeat_update_interval": "", "vreplication_store_compressed_gtid": ""},
+			clears: true,
+		},
+	}
+
+	expectedConfig, err := vttablet.NewVReplicationConfig(nil)
+	require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := updateConfig(t, tc.config)
+			if tc.needError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				expectedConfig, err = vttablet.NewVReplicationConfig(tc.config)
+				require.NoError(t, err)
+			}
+			config := getConfig(t, tab)
+			if tc.clears {
+				expectedConfig, err = vttablet.NewVReplicationConfig(nil)
+				require.NoError(t, err)
+			}
+			require.EqualValues(t, expectedConfig.Map(), config)
+		})
+	}
 }
 
 func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tables string,

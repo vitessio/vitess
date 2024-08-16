@@ -548,7 +548,7 @@ func (st *vrStats) register() {
 		defer st.mu.Unlock()
 		result := make(map[string]string, len(st.controllers))
 		for _, ct := range st.controllers {
-			result[fmt.Sprintf("%s.%d", ct.workflow, ct.id)] = fmt.Sprintf("%+v", ct.blpStats.WorkflowConfig)
+			result[fmt.Sprintf("%s.%d", ct.workflow, ct.id)] = ct.WorkflowConfig.String()
 		}
 		return result
 	}))

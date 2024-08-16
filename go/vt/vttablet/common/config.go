@@ -17,6 +17,7 @@ limitations under the License.
 package vttablet
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -82,12 +83,16 @@ func InitVReplicationConfigDefaults() *VReplicationConfig {
 }
 
 func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error) {
+	InitVReplicationConfigDefaults()
 	configMutex.Lock()
 	defer configMutex.Unlock()
 	c := &VReplicationConfig{}
 	*c = *DefaultVReplicationConfig
 	var errors []string
 	for k, v := range config {
+		if v == "" {
+			continue
+		}
 		switch k {
 		case "vreplication_experimental_flags":
 			value, err := strconv.ParseInt(v, 10, 64)
@@ -202,13 +207,14 @@ func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error
 		}
 	}
 	if len(errors) > 0 {
-		return nil, fmt.Errorf(strings.Join(errors, ", "))
+
+		return c, fmt.Errorf(strings.Join(errors, ", "))
 	}
 	return c, nil
 }
 
-func (c VReplicationConfig) String() string {
-	all := map[string]string{
+func (c VReplicationConfig) Map() map[string]string {
+	return map[string]string{
 		"vreplication_experimental_flags":         strconv.FormatInt(c.ExperimentalFlags, 10),
 		"vreplication_net_read_timeout":           strconv.Itoa(c.NetReadTimeout),
 		"vreplication_net_write_timeout":          strconv.Itoa(c.NetWriteTimeout),
@@ -225,6 +231,9 @@ func (c VReplicationConfig) String() string {
 		"vstream_dynamic_packet_size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_binlog_rotation_threshold":       strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10),
 	}
+}
 
-	return fmt.Sprintf("%+v", all)
+func (c VReplicationConfig) String() string {
+	s, _ := json.Marshal(c.Map())
+	return string(s)
 }
