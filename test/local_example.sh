@@ -50,7 +50,7 @@ for shard in "customer/0"; do
 done
 
 ./202_move_tables.sh
-
+exit
 ./203_switch_reads.sh
 
 ./204_switch_writes.sh

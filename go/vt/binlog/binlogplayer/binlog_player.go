@@ -34,8 +34,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtctldata"
-
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
@@ -48,6 +46,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
@@ -55,6 +54,8 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+const GetWorkflowQuery = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=%v"
 
 var (
 	// SlowQueryThreshold will cause we logging anything that's higher than it.
@@ -73,12 +74,12 @@ var (
 
 	// Truncate values in the middle to preserve the end of the message which
 	// typically contains the error text.
-	TruncationLocation = textutil.TruncationLocationMiddle
+	TruncationLocation  = textutil.TruncationLocationMiddle
+	TruncationIndicator = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
+
+	// TestGetWorkflowQueryId1 is only used in tests.
+	TestGetWorkflowQueryId1 = fmt.Sprintf(GetWorkflowQuery, 1)
 )
-
-var TruncationIndicator = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
-
-const GetWorkflowQuery = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1"
 
 // Stats is the internal stats of a player. It is a different
 // structure that is passed in so stats can be collected over the life
@@ -122,6 +123,8 @@ type Stats struct {
 	ThrottledCounts *stats.CountersWithMultiLabels // By throttler and component
 
 	DDLEventActions *stats.CountersWithSingleLabel
+
+	WorkflowConfig string
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -569,8 +572,7 @@ type VRSettings struct {
 
 // ReadVRSettings retrieves the settings for a vreplication stream.
 func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
-	log.Infof("ReadVRSettings: Reading vreplication settings for %v", uid)
-	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=%v", uid)
+	query := fmt.Sprintf(GetWorkflowQuery, uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)

@@ -419,7 +419,7 @@ func TestMoveTablesUnsharded(t *testing.T) {
 			),
 			fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
 		))
-		ftc.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		ftc.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -473,7 +473,7 @@ func TestMoveTablesUnsharded(t *testing.T) {
 
 	for _, ftc := range targetShards {
 		ftc.vrdbClient.Reset()
-		ftc.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		ftc.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -494,7 +494,7 @@ func TestMoveTablesUnsharded(t *testing.T) {
 			),
 			fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Running||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
 		))
-		ftc.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		ftc.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -674,7 +674,7 @@ func TestMoveTablesSharded(t *testing.T) {
 			),
 			fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
 		))
-		ftc.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		ftc.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -728,7 +728,7 @@ func TestMoveTablesSharded(t *testing.T) {
 
 	for _, ftc := range targetShards {
 		ftc.vrdbClient.Reset()
-		ftc.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		ftc.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -749,7 +749,7 @@ func TestMoveTablesSharded(t *testing.T) {
 			),
 			fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Running||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
 		))
-		ftc.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		ftc.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -1452,7 +1452,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|0|0||0|1|{}", vreplID, bls, position, targetKs),
 	))
 
-	targetTablet.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+	targetTablet.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 			"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -2174,7 +2174,7 @@ func TestMaterializerManyToOne(t *testing.T) {
 			fmt.Sprintf(` values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1"} rules:{match:"t2" filter:"select * from t3"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, tenv.cells[0], tenv.dbName)
 		if vreplID == 1 {
-			targetTablet.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+			targetTablet.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 					"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -2276,7 +2276,7 @@ func TestMaterializerOneToMany(t *testing.T) {
 		insert := insertVReplicationPrefix +
 			fmt.Sprintf(` values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1 where in_keyrange(c1, \'%s.xxhash\', \'%s\')"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
-		targetTablet.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		targetTablet.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -2384,7 +2384,7 @@ func TestMaterializerManyToMany(t *testing.T) {
 			insert := insertVReplicationPrefix +
 				fmt.Sprintf(` values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1 where in_keyrange(c1, \'%s.xxhash\', \'%s\')"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 					wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
-			targetTablet.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+			targetTablet.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 					"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -2492,7 +2492,7 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 		insert := insertVReplicationPrefix +
 			fmt.Sprintf(` values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1 where in_keyrange(c1, c2, \'%s.region\', \'%s\')"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
-		targetTablet.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		targetTablet.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -2739,7 +2739,7 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 		insert := insertVReplicationPrefix +
 			fmt.Sprintf(` values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select c1, c1 + c2, c2 from t1 where in_keyrange(c1, c2, \'%s.region\', \'%s\')"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
-		targetTablet.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		targetTablet.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
@@ -2846,7 +2846,7 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 		insert := insertVReplicationPrefix +
 			fmt.Sprintf(` values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select c3 as c1, c1 + c2, c4 as c2 from t1 where in_keyrange(c3, c4, \'%s.region\', \'%s\')"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
-		targetTablet.vrdbClient.AddInvariant(binlogplayer.GetWorkflowQuery, sqltypes.MakeTestResult(
+		targetTablet.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
 				"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",

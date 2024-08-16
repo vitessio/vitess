@@ -543,6 +543,15 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+	stats.Publish("VReplicationConfig", stats.StringMapFunc(func() map[string]string {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		result := make(map[string]string, len(st.controllers))
+		for _, ct := range st.controllers {
+			result[fmt.Sprintf("%s.%d", ct.workflow, ct.id)] = fmt.Sprintf("%+v", ct.blpStats.WorkflowConfig)
+		}
+		return result
+	}))
 }
 
 func (st *vrStats) numControllers() int64 {

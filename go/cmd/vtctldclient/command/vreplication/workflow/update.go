@@ -100,15 +100,11 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 	for _, kv := range updateOptions.ConfigOverrides {
 		parts := strings.SplitN(kv, "=", 2)
 		if len(parts) != 2 {
-			fmt.Printf("Invalid key-value pair: %s\n", kv)
-			continue
+			return fmt.Errorf("Invalid config override: %s\n", kv)
 		}
 		key := parts[0]
 		value := parts[1]
 		configOverrides[key] = value
-	}
-	if len(configOverrides) > 0 {
-		fmt.Printf("Config overrides: %v\n", configOverrides)
 	}
 
 	req := &vtctldatapb.WorkflowUpdateRequest{

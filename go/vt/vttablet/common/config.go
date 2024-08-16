@@ -198,11 +198,33 @@ func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error
 				c.VStreamBinlogRotationThreshold = value
 			}
 		default:
-			errors = append(errors, "unknown vreplication config flag: %s", k)
+			errors = append(errors, fmt.Sprintf("unknown vreplication config flag: %s", k))
 		}
 	}
 	if len(errors) > 0 {
 		return nil, fmt.Errorf(strings.Join(errors, ", "))
 	}
 	return c, nil
+}
+
+func (c VReplicationConfig) String() string {
+	all := map[string]string{
+		"vreplication_experimental_flags":         strconv.FormatInt(c.ExperimentalFlags, 10),
+		"vreplication_net_read_timeout":           strconv.Itoa(c.NetReadTimeout),
+		"vreplication_net_write_timeout":          strconv.Itoa(c.NetWriteTimeout),
+		"vreplication_copy_phase_duration":        c.CopyPhaseDuration.String(),
+		"vreplication_retry_delay":                c.RetryDelay.String(),
+		"vreplication_max_time_to_retry_on_error": c.MaxTimeToRetryError.String(),
+		"relay_log_max_size":                      strconv.Itoa(c.RelayLogMaxSize),
+		"relay_log_max_items":                     strconv.Itoa(c.RelayLogMaxItems),
+		"vreplication_replica_lag_tolerance":      c.ReplicaLagTolerance.String(),
+		"vreplication_heartbeat_update_interval":  strconv.Itoa(c.HeartbeatUpdateInterval),
+		"vreplication_store_compressed_gtid":      strconv.FormatBool(c.StoreCompressedGTID),
+		"vreplication-parallel-insert-workers":    strconv.Itoa(c.ParallelInsertWorkers),
+		"vstream_packet_size":                     strconv.Itoa(c.VStreamPacketSize),
+		"vstream_dynamic_packet_size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
+		"vstream_binlog_rotation_threshold":       strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10),
+	}
+
+	return fmt.Sprintf("%+v", all)
 }

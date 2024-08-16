@@ -112,6 +112,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		source:          &binlogdatapb.BinlogSource{},
 		WorkflowConfig:  workflowConfig,
 	}
+	blpStats.WorkflowConfig = workflowConfig.String()
 	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
