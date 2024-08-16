@@ -3497,11 +3497,11 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			}
 		}
 
-		// Ensure that the source positions are correct now that writes are stopped, the streams were
-		// stopped (e.g. intra-keyspace materializations that write on the source), and any in progress
-		// writes are done.
-		if err := ts.updateSourcePositions(ctx); err != nil {
-			return handleError("failed to update source replication positions", err)
+		// Get the source positions now that writes are stopped, the streams were stopped (e.g.
+		// intra-keyspace materializations that write on the source), and we know for certain
+		// that any in progress writes are done.
+		if err := ts.gatherSourcePositions(ctx); err != nil {
+			return handleError("failed to get replication positions on migration sources", err)
 		}
 
 		if err := confirmKeyspaceLocksHeld(); err != nil {

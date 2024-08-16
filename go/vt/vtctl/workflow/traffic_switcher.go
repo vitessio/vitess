@@ -1016,19 +1016,10 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
 	}
 	if err != nil {
-		ts.Logger().Warningf("Error: %s", err)
+		ts.Logger().Warningf("Error stopping writes: %s", err)
 		return err
 	}
-	return ts.ForAllSources(func(source *MigrationSource) error {
-		var err error
-		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
-		ts.Logger().Infof("Stopped Source Writes. Position for source %v:%v: %v",
-			ts.SourceKeyspaceName(), source.GetShard().ShardName(), source.Position)
-		if err != nil {
-			ts.Logger().Warningf("Error: %s", err)
-		}
-		return err
-	})
+	return nil
 }
 
 // switchDeniedTables switches the denied tables rules for the traffic switch.
@@ -1318,15 +1309,21 @@ func (ts *trafficSwitcher) gatherPositions(ctx context.Context) error {
 	})
 }
 
-// updateSourcePositions will update the Position for all migration sources.
-func (ts *trafficSwitcher) updateSourcePositions(ctx context.Context) error {
-	err := ts.ForAllSources(func(source *MigrationSource) error {
+// gatherSourcePositions will get the current replication position for all
+// migration sources.
+func (ts *trafficSwitcher) gatherSourcePositions(ctx context.Context) error {
+	return ts.ForAllSources(func(source *MigrationSource) error {
 		var err error
-		source.Position, err = ts.ws.tmc.PrimaryPosition(ctx, source.GetPrimary().Tablet)
-		ts.Logger().Infof("Updated position for source %v:%v: %v", ts.SourceKeyspaceName(), source.GetShard().ShardName(), source.Position)
-		return err
+		tablet := source.GetPrimary().Tablet
+		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, tablet)
+		tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+		ts.Logger().Infof("Position on migration source %s after having stopped writes: %s", tabletAlias, source.Position)
+		if err != nil {
+			ts.Logger().Errorf("Error getting migration source position on %s: %s", tabletAlias, err)
+			return vterrors.Wrapf(err, "failed to get position on %s", tabletAlias)
+		}
+		return nil
 	})
-	return err
 }
 
 func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, error) {
