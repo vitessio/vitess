@@ -40,6 +40,7 @@ const (
 	InstantAddDropColumnFlavorCapability                                // Adding/dropping column in any position/ordinal.
 	InstantChangeColumnDefaultFlavorCapability                          //
 	InstantExpandEnumCapability                                         //
+	InstantChangeColumnVisibilityCapability                             //
 	MySQLUpgradeInServerFlavorCapability                                //
 	DynamicRedoLogCapacityFlavorCapability                              // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
 	DisableRedoLogFlavorCapability                                      // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
@@ -105,6 +106,8 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 	case DisableRedoLogFlavorCapability:
 		return atLeast(8, 0, 21)
 	case FastDropTableFlavorCapability:
+		return atLeast(8, 0, 23)
+	case InstantChangeColumnVisibilityCapability:
 		return atLeast(8, 0, 23)
 	case InstantAddDropColumnFlavorCapability:
 		return atLeast(8, 0, 29)

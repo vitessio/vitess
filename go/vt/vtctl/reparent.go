@@ -119,6 +119,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newPrimary := subFlags.String("new_primary", "", "alias of a tablet that should be the new primary")
 	avoidTablet := subFlags.String("avoid_tablet", "", "alias of a tablet that should not be the primary, i.e. reparent to any other tablet if this one is the primary")
+	allowCrossCellPromotion := subFlags.Bool("allow-cross-cell-promotion", false, "allow cross cell promotions")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -153,10 +154,11 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	}
 
 	return wr.PlannedReparentShard(ctx, keyspace, shard, reparentutil.PlannedReparentOptions{
-		NewPrimaryAlias:     newPrimaryAlias,
-		AvoidPrimaryAlias:   avoidTabletAlias,
-		WaitReplicasTimeout: *waitReplicasTimeout,
-		TolerableReplLag:    *tolerableReplicationLag,
+		NewPrimaryAlias:         newPrimaryAlias,
+		AvoidPrimaryAlias:       avoidTabletAlias,
+		WaitReplicasTimeout:     *waitReplicasTimeout,
+		TolerableReplLag:        *tolerableReplicationLag,
+		AllowCrossCellPromotion: *allowCrossCellPromotion,
 	})
 }
 

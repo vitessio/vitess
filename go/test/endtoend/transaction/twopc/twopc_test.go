@@ -20,6 +20,8 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
+	"path"
 	"reflect"
 	"sort"
 	"strings"
@@ -31,11 +33,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+)
+
+const (
+	DebugDelayCommitShard = "VT_DELAY_COMMIT_SHARD"
+	DebugDelayCommitTime  = "VT_DELAY_COMMIT_TIME"
 )
 
 // TestDTCommit tests distributed transaction commit for insert, update and delete operations
@@ -580,6 +590,10 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail After MM commit")
 
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during metadata manager commit; transaction will be committed/rollbacked based on the state on recovery",
+		false, "COMMIT", "ks:40-80,ks:-40")
+
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
@@ -656,6 +670,10 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail After RM prepared")
 
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during transaction prepare phase; prepare transaction rollback attempted; conclude on recovery",
+		true /* transaction concluded */, "", "")
+
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
@@ -713,6 +731,10 @@ func TestDTResolveDuringRMPrepare(t *testing.T) {
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMPrepare_-40_FailNow", "", ""), nil)
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail During RM prepare")
+
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during transaction prepare phase; prepare transaction rollback attempted; conclude on recovery",
+		true, "", "")
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
@@ -775,6 +797,10 @@ func TestDTResolveDuringRMCommit(t *testing.T) {
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMCommit_-40_FailNow", "", ""), nil)
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail During RM commit")
+
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during resource manager commit; transaction will be committed on recovery",
+		false, "COMMIT", "ks:40-80,ks:-40")
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
@@ -851,18 +877,9 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 	_, err = conn.Execute(newCtx, "commit", nil)
 	require.ErrorContains(t, err, "Fail After TR created")
 
-	t.Run("ReadTransactionState", func(t *testing.T) {
-		errStr := err.Error()
-		indx := strings.Index(errStr, "Fail")
-		require.Greater(t, indx, 0)
-		dtid := errStr[0 : indx-2]
-		res, err := conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil)
-		require.NoError(t, err)
-		resStr := fmt.Sprintf("%v", res.Rows)
-		require.Contains(t, resStr, `[[VARCHAR("ks:80-`)
-		require.Contains(t, resStr, `VARCHAR("PREPARE") DATETIME("`)
-		require.Contains(t, resStr, `+0000 UTC") VARCHAR("ks:40-80")]]`)
-	})
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during transaction record creation; rollback attempted; conclude on recovery",
+		false, "PREPARE", "ks:40-80")
 
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 	tableMap := make(map[string][]*querypb.Field)
@@ -881,4 +898,186 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 	}
 	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+}
+
+type warn struct {
+	level string
+	code  uint16
+	msg   string
+}
+
+func toWarn(row sqltypes.Row) warn {
+	code, _ := row[1].ToUint16()
+	return warn{
+		level: row[0].ToString(),
+		code:  code,
+		msg:   row[2].ToString(),
+	}
+}
+
+type txStatus struct {
+	dtid         string
+	state        string
+	rTime        string
+	participants string
+}
+
+func toTxStatus(row sqltypes.Row) txStatus {
+	return txStatus{
+		dtid:         row[0].ToString(),
+		state:        row[1].ToString(),
+		rTime:        row[2].ToString(),
+		participants: row[3].ToString(),
+	}
+}
+
+func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSession, warnMsg string,
+	txConcluded bool, txState string, txParticipants string) {
+	t.Helper()
+
+	qr, err := conn.Execute(context.Background(), "show warnings", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+
+	// validate warning output
+	w := toWarn(qr.Rows[0])
+	assert.Equal(t, "Warning", w.level)
+	assert.EqualValues(t, 302, w.code)
+	assert.Contains(t, w.msg, warnMsg)
+
+	// extract transaction ID
+	indx := strings.Index(w.msg, " ")
+	require.Greater(t, indx, 0)
+	dtid := w.msg[:indx]
+
+	qr, err = conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil)
+	require.NoError(t, err)
+
+	// validate transaction status
+	if txConcluded {
+		require.Empty(t, qr.Rows)
+	} else {
+		tx := toTxStatus(qr.Rows[0])
+		assert.Equal(t, dtid, tx.dtid)
+		assert.Equal(t, txState, tx.state)
+		assert.Equal(t, txParticipants, tx.participants)
+	}
+}
+
+// TestDisruptions tests that atomic transactions persevere through various disruptions.
+func TestDisruptions(t *testing.T) {
+	testcases := []struct {
+		disruptionName  string
+		commitDelayTime string
+		disruption      func() error
+	}{
+		{
+			disruptionName:  "No Disruption",
+			commitDelayTime: "1",
+			disruption: func() error {
+				return nil
+			},
+		},
+		{
+			disruptionName:  "PlannedReparentShard",
+			commitDelayTime: "5",
+			disruption:      prsShard3,
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(fmt.Sprintf("%s-%ss timeout", tt.disruptionName, tt.commitDelayTime), func(t *testing.T) {
+			// Reparent all the shards to first tablet being the primary.
+			reparentToFistTablet(t)
+			// cleanup all the old data.
+			conn, closer := start(t)
+			defer closer()
+			// Start an atomic transaction.
+			utils.Exec(t, conn, "begin")
+			// Insert rows such that they go to all the three shards. Given that we have sharded the table `twopc_t1` on reverse_bits
+			// it is very easy to figure out what value will end up in which shard.
+			utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+			utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+			utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+			// We want to delay the commit on one of the shards to simulate slow commits on a shard.
+			writeTestCommunicationFile(t, DebugDelayCommitShard, "80-")
+			defer deleteFile(DebugDelayCommitShard)
+			writeTestCommunicationFile(t, DebugDelayCommitTime, tt.commitDelayTime)
+			defer deleteFile(DebugDelayCommitTime)
+			// We will execute a commit in a go routine, because we know it will take some time to complete.
+			// While the commit is ongoing, we would like to run the disruption.
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := utils.ExecAllowError(t, conn, "commit")
+				if err != nil {
+					log.Errorf("Error in commit - %v", err)
+				}
+			}()
+			// Allow enough time for the commit to have started.
+			time.Sleep(1 * time.Second)
+			// Run the disruption.
+			err := tt.disruption()
+			require.NoError(t, err)
+			// Wait for the commit to have returned. We don't actually check for an error in the commit because the user might receive an error.
+			// But since we are waiting in CommitPrepared, the decision to commit the transaction should have already been taken.
+			wg.Wait()
+			// Check the data in the table.
+			waitForResults(t, "select id, col from twopc_t1 where col = 4 order by id", `[[INT64(4) INT64(4)] [INT64(6) INT64(4)] [INT64(9) INT64(4)]]`, 10*time.Second)
+		})
+	}
+}
+
+// reparentToFistTablet reparents all the shards to first tablet being the primary.
+func reparentToFistTablet(t *testing.T) {
+	ks := clusterInstance.Keyspaces[0]
+	for _, shard := range ks.Shards {
+		primary := shard.Vttablets[0]
+		err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, primary.Alias)
+		require.NoError(t, err)
+	}
+}
+
+// writeTestCommunicationFile writes the content to the file with the given name.
+// We use these files to coordinate with the vttablets running in the debug mode.
+func writeTestCommunicationFile(t *testing.T, fileName string, content string) {
+	err := os.WriteFile(path.Join(os.Getenv("VTDATAROOT"), fileName), []byte(content), 0644)
+	require.NoError(t, err)
+}
+
+// deleteFile deletes the file specified.
+func deleteFile(fileName string) {
+	_ = os.Remove(path.Join(os.Getenv("VTDATAROOT"), fileName))
+}
+
+// waitForResults waits for the results of the query to be as expected.
+func waitForResults(t *testing.T, query string, resultExpected string, waitTime time.Duration) {
+	timeout := time.After(waitTime)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("didn't reach expected results for %s", query)
+		default:
+			ctx := context.Background()
+			conn, err := mysql.Connect(ctx, &vtParams)
+			require.NoError(t, err)
+			res := utils.Exec(t, conn, query)
+			conn.Close()
+			if fmt.Sprintf("%v", res.Rows) == resultExpected {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+/*
+Cluster Level Disruptions for the fuzzer
+*/
+
+// prsShard3 runs a PRS in shard 3 of the keyspace. It promotes the second tablet to be the new primary.
+func prsShard3() error {
+	shard := clusterInstance.Keyspaces[0].Shards[2]
+	newPrimary := shard.Vttablets[1]
+	return clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, newPrimary.Alias)
 }

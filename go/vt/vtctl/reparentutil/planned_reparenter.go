@@ -59,10 +59,11 @@ type PlannedReparenter struct {
 // operations. Options are passed by value, so it is safe for callers to mutate
 // resue options structs for multiple calls.
 type PlannedReparentOptions struct {
-	NewPrimaryAlias     *topodatapb.TabletAlias
-	AvoidPrimaryAlias   *topodatapb.TabletAlias
-	WaitReplicasTimeout time.Duration
-	TolerableReplLag    time.Duration
+	NewPrimaryAlias         *topodatapb.TabletAlias
+	AvoidPrimaryAlias       *topodatapb.TabletAlias
+	WaitReplicasTimeout     time.Duration
+	TolerableReplLag        time.Duration
+	AllowCrossCellPromotion bool
 
 	// Private options managed internally. We use value-passing semantics to
 	// set these options inside a PlannedReparent without leaking these details
@@ -181,7 +182,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	}
 
 	event.DispatchUpdate(ev, "electing a primary candidate")
-	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, innodbBufferPoolData, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, innodbBufferPoolData, opts, pr.logger)
 	if err != nil {
 		return true, err
 	}

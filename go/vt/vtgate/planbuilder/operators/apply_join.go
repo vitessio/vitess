@@ -37,8 +37,6 @@ type (
 		// JoinType is permitted to store only 3 of the possible values
 		// NormalJoinType, StraightJoinType and LeftJoinType.
 		JoinType sqlparser.JoinType
-		// LeftJoin will be true in the case of an outer join
-		LeftJoin bool
 
 		// JoinColumns keeps track of what AST expression is represented in the Columns array
 		JoinColumns *applyJoinColumns
@@ -295,7 +293,7 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if len(aj.Columns) > 0 {
 		// we've already done offset planning
-		return aj
+		return nil
 	}
 	for _, col := range aj.JoinColumns.columns {
 		// Read the type description for applyJoinColumn to understand the following code
@@ -344,6 +342,10 @@ func (aj *ApplyJoin) ShortDescription() string {
 	}
 
 	firstPart := fmt.Sprintf("on %s columns: %s", fn(aj.JoinPredicates), fn(aj.JoinColumns))
+	if aj.JoinType == sqlparser.LeftJoinType {
+		firstPart = "LEFT JOIN " + firstPart
+	}
+
 	if len(aj.ExtraLHSVars) == 0 {
 		return firstPart
 	}

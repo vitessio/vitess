@@ -53,31 +53,36 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "nil checkResult")
 	}
 	resp := &tabletmanagerdatapb.CheckThrottlerResponse{
+		ResponseCode:    throttle.ResponseCodeFromStatus(checkResult.ResponseCode, checkResult.StatusCode),
 		StatusCode:      int32(checkResult.StatusCode),
 		Value:           checkResult.Value,
 		Threshold:       checkResult.Threshold,
 		Message:         checkResult.Message,
 		RecentlyChecked: checkResult.RecentlyChecked,
+		AppName:         checkResult.AppName,
+		Summary:         checkResult.Summary(),
 		Metrics:         make(map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric),
 	}
 	for name, metric := range checkResult.Metrics {
 		resp.Metrics[name] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
-			Name:       name,
-			Scope:      metric.Scope,
-			StatusCode: int32(metric.StatusCode),
-			Value:      metric.Value,
-			Threshold:  metric.Threshold,
-			Message:    metric.Message,
+			Name:         name,
+			Scope:        metric.Scope,
+			StatusCode:   int32(metric.StatusCode),
+			ResponseCode: throttle.ResponseCodeFromStatus(metric.ResponseCode, metric.StatusCode),
+			Value:        metric.Value,
+			Threshold:    metric.Threshold,
+			Message:      metric.Message,
 		}
 	}
 	if len(checkResult.Metrics) == 0 {
 		// For backwards compatibility, when the checked tablet is of lower version, it does not return a
 		// matrics map, but only the one metric.
 		resp.Metrics[base.DefaultMetricName.String()] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
-			StatusCode: int32(checkResult.StatusCode),
-			Value:      checkResult.Value,
-			Threshold:  checkResult.Threshold,
-			Message:    checkResult.Message,
+			StatusCode:   int32(checkResult.StatusCode),
+			ResponseCode: throttle.ResponseCodeFromStatus(checkResult.ResponseCode, checkResult.StatusCode),
+			Value:        checkResult.Value,
+			Threshold:    checkResult.Threshold,
+			Message:      checkResult.Message,
 		}
 	}
 	if checkResult.Error != nil {
@@ -138,8 +143,9 @@ func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmana
 	}
 	for _, recentApp := range status.RecentApps {
 		resp.RecentApps[recentApp.AppName] = &tabletmanagerdatapb.GetThrottlerStatusResponse_RecentApp{
-			CheckedAt:  protoutil.TimeToProto(recentApp.CheckedAt),
-			StatusCode: int32(recentApp.StatusCode),
+			CheckedAt:    protoutil.TimeToProto(recentApp.CheckedAt),
+			StatusCode:   int32(recentApp.StatusCode),
+			ResponseCode: recentApp.ResponseCode,
 		}
 	}
 	return resp, nil

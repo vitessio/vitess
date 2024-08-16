@@ -61,24 +61,13 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 	}
 
-	isGeneratedColumn := func(col *sqlparser.ColumnDefinition) (bool, sqlparser.ColumnStorage) {
-		if col == nil {
-			return false, 0
-		}
-		if col.Type.Options == nil {
-			return false, 0
-		}
-		if col.Type.Options.As == nil {
-			return false, 0
-		}
-		return true, col.Type.Options.Storage
-	}
-	colStringStrippedDown := func(col *sqlparser.ColumnDefinition, stripDefault bool, stripEnum bool) string {
+	colStringStrippedDown := func(col *sqlparser.ColumnDefinition, stripEnum bool) string {
 		strippedCol := sqlparser.Clone(col)
-		if stripDefault {
-			strippedCol.Type.Options.Default = nil
-			strippedCol.Type.Options.DefaultLiteral = false
-		}
+		// strip `default`
+		strippedCol.Type.Options.Default = nil
+		strippedCol.Type.Options.DefaultLiteral = false
+		// strip `visibility`
+		strippedCol.Type.Options.Invisible = nil
 		if stripEnum {
 			strippedCol.Type.EnumValues = nil
 		}
@@ -95,15 +84,53 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		return true
 	}
+	changeModifyColumnCapableOfInstantDDL := func(col *sqlparser.ColumnDefinition, newCol *sqlparser.ColumnDefinition) (bool, error) {
+		// Check if only diff is change of default.
+		// We temporarily remove the DEFAULT expression (if any) from both
+		// table and ALTER statement, and compare the columns: if they're otherwise equal,
+		// then the only change can be an addition/change/removal of DEFAULT, which
+		// is instant-table.
+		tableColDefinition := colStringStrippedDown(col, false)
+		newColDefinition := colStringStrippedDown(newCol, false)
+		if tableColDefinition == newColDefinition {
+			return capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
+		}
+		// Check if:
+		// 1. this an ENUM/SET
+		// 2. and the change is to append values to the end of the list
+		// 3. and the number of added values does not increase the storage size for the enum/set
+		// 4. while still not caring about a change in the default value
+		if len(col.Type.EnumValues) > 0 && len(newCol.Type.EnumValues) > 0 {
+			// both are enum or set
+			if !hasPrefix(newCol.Type.EnumValues, col.Type.EnumValues) {
+				return false, nil
+			}
+			// we know the new column definition is identical to, or extends, the old definition.
+			// Now validate storage:
+			if strings.EqualFold(col.Type.Type, "enum") {
+				if len(col.Type.EnumValues) <= 255 && len(newCol.Type.EnumValues) > 255 {
+					// this increases the SET storage size (1 byte for up to 8 values, 2 bytes beyond)
+					return false, nil
+				}
+			}
+			if strings.EqualFold(col.Type.Type, "set") {
+				if (len(col.Type.EnumValues)+7)/8 != (len(newCol.Type.EnumValues)+7)/8 {
+					// this increases the SET storage size (1 byte for up to 8 values, 2 bytes for 8-15, etc.)
+					return false, nil
+				}
+			}
+			// Now don't care about change of default:
+			tableColDefinition := colStringStrippedDown(col, true)
+			newColDefinition := colStringStrippedDown(newCol, true)
+			if tableColDefinition == newColDefinition {
+				return capableOf(capabilities.InstantExpandEnumCapability)
+			}
+		}
+		return false, nil
+	}
+
 	// Up to 8.0.26 we could only ADD COLUMN as last column
 	switch opt := alterOption.(type) {
-	case *sqlparser.ChangeColumn:
-		// We do not support INSTANT for renaming a column (ALTER TABLE ...CHANGE) because:
-		// 1. We discourage column rename
-		// 2. We do not produce CHANGE statements in declarative diff
-		// 3. The success of the operation depends on whether the column is referenced by a foreign key
-		//    in another table. Which is a bit too much to compute here.
-		return false, nil
 	case *sqlparser.AddColumns:
 		if tableHasFulltextIndex {
 			// not supported if the table has a FULLTEXT index
@@ -114,7 +141,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			return false, nil
 		}
 		for _, column := range opt.Columns {
-			if isGenerated, storage := isGeneratedColumn(column); isGenerated {
+			if isGenerated, storage := IsGeneratedColumn(column); isGenerated {
 				if storage == sqlparser.StoredStorage {
 					// Adding a generated "STORED" column is unsupported
 					return false, nil
@@ -149,7 +176,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			// not supported if the column is part of an index
 			return false, nil
 		}
-		if isGenerated, _ := isGeneratedColumn(col); isGenerated {
+		if isGenerated, _ := IsGeneratedColumn(col); isGenerated {
 			// supported by all 8.0 versions
 			// Note: according to the docs dropping a STORED generated column is not INSTANT-able,
 			// but in practice this is supported. This is why we don't test for STORED here, like
@@ -157,49 +184,30 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			return capableOf(capabilities.InstantAddDropVirtualColumnFlavorCapability)
 		}
 		return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
+	case *sqlparser.ChangeColumn:
+		// We do not support INSTANT for renaming a column (ALTER TABLE ...CHANGE) because:
+		// 1. We discourage column rename
+		// 2. We do not produce CHANGE statements in declarative diff
+		// 3. The success of the operation depends on whether the column is referenced by a foreign key
+		//    in another table. Which is a bit too much to compute here.
+		if opt.OldColumn.Name.String() != opt.NewColDefinition.Name.String() {
+			return false, nil
+		}
+		if col := findColumn(opt.OldColumn.Name.String()); col != nil {
+			return changeModifyColumnCapableOfInstantDDL(col, opt.NewColDefinition)
+		}
+		return false, nil
 	case *sqlparser.ModifyColumn:
 		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
-			// Check if only diff is change of default.
-			// We temporarily remove the DEFAULT expression (if any) from both
-			// table and ALTER statement, and compare the columns: if they're otherwise equal,
-			// then the only change can be an addition/change/removal of DEFAULT, which
-			// is instant-table.
-			tableColDefinition := colStringStrippedDown(col, true, false)
-			newColDefinition := colStringStrippedDown(opt.NewColDefinition, true, false)
-			if tableColDefinition == newColDefinition {
-				return capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
-			}
-			// Check if:
-			// 1. this an ENUM/SET
-			// 2. and the change is to append values to the end of the list
-			// 3. and the number of added values does not increase the storage size for the enum/set
-			// 4. while still not caring about a change in the default value
-			if len(col.Type.EnumValues) > 0 && len(opt.NewColDefinition.Type.EnumValues) > 0 {
-				// both are enum or set
-				if !hasPrefix(opt.NewColDefinition.Type.EnumValues, col.Type.EnumValues) {
-					return false, nil
-				}
-				// we know the new column definition is identical to, or extends, the old definition.
-				// Now validate storage:
-				if strings.EqualFold(col.Type.Type, "enum") {
-					if len(col.Type.EnumValues) <= 255 && len(opt.NewColDefinition.Type.EnumValues) > 255 {
-						// this increases the SET storage size (1 byte for up to 8 values, 2 bytes beyond)
-						return false, nil
-					}
-				}
-				if strings.EqualFold(col.Type.Type, "set") {
-					if (len(col.Type.EnumValues)+7)/8 != (len(opt.NewColDefinition.Type.EnumValues)+7)/8 {
-						// this increases the SET storage size (1 byte for up to 8 values, 2 bytes for 8-15, etc.)
-						return false, nil
-					}
-				}
-				// Now don't care about change of default:
-				tableColDefinition := colStringStrippedDown(col, true, true)
-				newColDefinition := colStringStrippedDown(opt.NewColDefinition, true, true)
-				if tableColDefinition == newColDefinition {
-					return capableOf(capabilities.InstantExpandEnumCapability)
-				}
-			}
+			return changeModifyColumnCapableOfInstantDDL(col, opt.NewColDefinition)
+		}
+		return false, nil
+	case *sqlparser.AlterColumn:
+		if opt.DropDefault || opt.DefaultLiteral || opt.DefaultVal != nil {
+			return capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
+		}
+		if opt.Invisible != nil {
+			return capableOf(capabilities.InstantChangeColumnVisibilityCapability)
 		}
 		return false, nil
 	default:
