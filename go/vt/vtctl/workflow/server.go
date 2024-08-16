@@ -3501,7 +3501,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		// intra-keyspace materializations that write on the source), and we know for certain
 		// that any in progress writes are done.
 		if err := ts.gatherSourcePositions(ctx); err != nil {
-			return handleError("failed to get replication positions on migration sources", err)
+			return handleError("failed to gather replication positions on migration sources", err)
 		}
 
 		if err := confirmKeyspaceLocksHeld(); err != nil {

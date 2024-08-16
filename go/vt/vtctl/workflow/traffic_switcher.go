@@ -1016,7 +1016,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
 	}
 	if err != nil {
-		ts.Logger().Warningf("Error stopping writes: %s", err)
+		ts.Logger().Warningf("Error stopping writes on migration sources: %v", err)
 		return err
 	}
 	return nil
@@ -1315,13 +1315,14 @@ func (ts *trafficSwitcher) gatherSourcePositions(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
 		var err error
 		tablet := source.GetPrimary().Tablet
-		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, tablet)
 		tabletAlias := topoproto.TabletAliasString(tablet.Alias)
-		ts.Logger().Infof("Position on migration source %s after having stopped writes: %s", tabletAlias, source.Position)
+		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, tablet)
 		if err != nil {
 			ts.Logger().Errorf("Error getting migration source position on %s: %s", tabletAlias, err)
-			return vterrors.Wrapf(err, "failed to get position on %s", tabletAlias)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get position on migration source %s: %v",
+				tabletAlias, err)
 		}
+		ts.Logger().Infof("Position on migration source %s after having stopped writes: %s", tabletAlias, source.Position)
 		return nil
 	})
 }
