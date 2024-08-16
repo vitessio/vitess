@@ -176,7 +176,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		timeLastSaved:    time.Now(),
 		tablePlans:       make(map[string]*TablePlan),
 		phase:            phase,
-		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
+		throttlerAppName: throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
 		query:            queryFunc,
 		commit:           commitFunc,
 		batchMode:        batchMode,
@@ -476,12 +476,18 @@ func (vp *vplayer) recordHeartbeat() error {
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.dbClient.Rollback()
 
+	estimateLag := func() {
+		behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
+		vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
+		vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
+	}
+
 	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
 	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
-	var sbm int64 = -1
+	var lagSecs int64
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -489,6 +495,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// Check throttler.
 		if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
+			estimateLag()
 			continue
 		}
 
@@ -496,13 +503,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if err != nil {
 			return err
 		}
-		// No events were received. This likely means that there's a network partition.
-		// So, we should assume we're falling behind.
-		if len(items) == 0 {
-			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-			vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
-			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
-		}
+
 		// Empty transactions are saved at most once every idleTimeout.
 		// This covers two situations:
 		// 1. Fetch was idle for idleTimeout.
@@ -520,12 +521,20 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
+		lagSecs = -1
 		for i, events := range items {
 			for j, event := range events {
 				if event.Timestamp != 0 {
-					vp.lastTimestampNs = event.Timestamp * 1e9
-					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
-					sbm = event.CurrentTime/1e9 - event.Timestamp
+					// If the event is a heartbeat sent while throttled then do not update
+					// the lag based on it.
+					// If the batch consists only of throttled heartbeat events then we cannot
+					// determine the actual lag, as the vstreamer is fully throttled, and we
+					// will estimate it after processing the batch.
+					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
+						vp.lastTimestampNs = event.Timestamp * 1e9
+						vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
+						lagSecs = event.CurrentTime/1e9 - event.Timestamp
+					}
 				}
 				mustSave := false
 				switch event.Type {
@@ -566,11 +575,12 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
-		if sbm >= 0 {
-			vp.vr.stats.ReplicationLagSeconds.Store(sbm)
-			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
+		if lagSecs >= 0 {
+			vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
+			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(lagSecs)*time.Second)
+		} else { // We couldn't determine the lag, so we need to estimate it
+			estimateLag()
 		}
-
 	}
 }
 

@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -544,7 +545,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		_ = ts.ForAllSources(func(source *MigrationSource) error {
 			wg.Add(1)
 			if source.GetShard().IsPrimaryServing {
-				rec.RecordError(fmt.Errorf(fmt.Sprintf("Shard %s is still serving", source.GetShard().ShardName())))
+				rec.RecordError(fmt.Errorf("shard %s is still serving", source.GetShard().ShardName()))
 			}
 			wg.Done()
 			return nil
@@ -958,4 +959,12 @@ func IsTableDidNotExistError(err error) bool {
 		return sqlErr.Num == sqlerror.ERNoSuchTable || sqlErr.Num == sqlerror.ERBadTable
 	}
 	return false
+}
+
+// defaultErrorHandler provides a way to consistently handle errors by logging and
+// returning them.
+func defaultErrorHandler(logger logutil.Logger, message string, err error) (*[]string, error) {
+	werr := vterrors.Wrap(err, message)
+	logger.Error(werr)
+	return nil, werr
 }

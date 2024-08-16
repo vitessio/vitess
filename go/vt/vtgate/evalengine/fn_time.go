@@ -181,6 +181,10 @@ type (
 		CallExpr
 	}
 
+	builtinPeriodDiff struct {
+		CallExpr
+	}
+
 	builtinDateMath struct {
 		CallExpr
 		sub     bool
@@ -222,6 +226,7 @@ var _ IR = (*builtinWeekOfYear)(nil)
 var _ IR = (*builtinYear)(nil)
 var _ IR = (*builtinYearWeek)(nil)
 var _ IR = (*builtinPeriodAdd)(nil)
+var _ IR = (*builtinPeriodDiff)(nil)
 
 func (call *builtinNow) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(call.utc)
@@ -2019,6 +2024,56 @@ func (call *builtinPeriodAdd) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_PERIOD_ADD()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Int64, Flag: period.Flag | months.Flag | flagNullable}, nil
+}
+
+func periodDiff(period1, period2 int64) (*evalInt64, error) {
+	if !datetime.ValidatePeriod(period1) || !datetime.ValidatePeriod(period2) {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "Incorrect arguments to period_diff")
+	}
+	res := datetime.PeriodToMonths(period1) - datetime.PeriodToMonths(period2)
+	return newEvalInt64(res), nil
+}
+
+func (b *builtinPeriodDiff) eval(env *ExpressionEnv) (eval, error) {
+	p1, p2, err := b.arg2(env)
+	if err != nil {
+		return nil, err
+	}
+	if p1 == nil || p2 == nil {
+		return nil, nil
+	}
+	period1 := evalToInt64(p1)
+	period2 := evalToInt64(p2)
+	return periodDiff(period1.i, period2.i)
+}
+
+func (call *builtinPeriodDiff) compile(c *compiler) (ctype, error) {
+	period1, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	period2, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(period1, period2)
+
+	switch period1.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(2)
+	}
+
+	switch period2.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(1)
+	}
+
+	c.asm.Fn_PERIOD_DIFF()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Flag: period1.Flag | period2.Flag | flagNullable}, nil
 }
 
 func evalToInterval(itv eval, unit datetime.IntervalType, negate bool) *datetime.Interval {

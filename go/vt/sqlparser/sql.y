@@ -336,6 +336,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
 %token <str> CONSISTENT SNAPSHOT
+%token <str> UNRESOLVED TRANSACTIONS
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -4239,6 +4240,14 @@ show_statement:
 | SHOW TRANSACTION STATUS for_opt STRING
   {
     $$ = &Show{&ShowTransactionStatus{TransactionID: string($5)}}
+  }
+| SHOW UNRESOLVED TRANSACTIONS
+  {
+    $$ = &Show{&ShowTransactionStatus{}}
+  }
+| SHOW UNRESOLVED TRANSACTIONS FOR table_id
+  {
+    $$ = &Show{&ShowTransactionStatus{Keyspace: $5.String()}}
   }
 
 for_opt:
@@ -8634,6 +8643,7 @@ non_reserved_keyword:
 | TINYTEXT
 | TRADITIONAL
 | TRANSACTION
+| TRANSACTIONS
 | TREE
 | TRIGGER
 | TRIGGERS
@@ -8644,6 +8654,7 @@ non_reserved_keyword:
 | UNDEFINED
 | UNICODE
 | UNKNOWN
+| UNRESOLVED
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED
