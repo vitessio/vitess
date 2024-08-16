@@ -254,6 +254,7 @@ type testTMClient struct {
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
 	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
+	primaryPositions                   map[uint32]string
 
 	env     *testEnv    // For access to the env config from tmc methods.
 	reverse atomic.Bool // Are we reversing traffic?
@@ -266,6 +267,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
 		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
+		primaryPositions:                   make(map[uint32]string),
 		env:                                env,
 	}
 }
@@ -513,7 +515,21 @@ func (tmc *testTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet 
 	}, nil
 }
 
+func (tmc *testTMClient) setPrimaryPosition(tablet *topodatapb.Tablet, position string) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if tmc.primaryPositions == nil {
+		tmc.primaryPositions = make(map[uint32]string)
+	}
+	tmc.primaryPositions[tablet.Alias.Uid] = position
+}
+
 func (tmc *testTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if tmc.primaryPositions != nil && tmc.primaryPositions[tablet.Alias.Uid] != "" {
+		return tmc.primaryPositions[tablet.Alias.Uid], nil
+	}
 	return position, nil
 }
 
