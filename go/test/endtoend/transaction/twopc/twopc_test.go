@@ -1030,6 +1030,24 @@ func TestReadingUnresolvedTransactions(t *testing.T) {
 	}
 }
 
+// TestSemiSyncRequiredWithTwoPC tests that semi-sync is required when using two-phase commit.
+func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	require.NoError(t, err, out)
+	defer clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+
+	// After changing the durability policy for the given keyspace to none, we try to PRS.
+	// This call should fail.
+	shard := clusterInstance.Keyspaces[0].Shards[2]
+	newPrimary := shard.Vttablets[1]
+	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", keyspaceName, shard.Name),
+		"--new-primary", newPrimary.Alias)
+	require.Error(t, err)
+	require.Contains(t, output, "two-pc is enabled, but semi-sync is not")
+}
+
 // TestDisruptions tests that atomic transactions persevere through various disruptions.
 func TestDisruptions(t *testing.T) {
 	testcases := []struct {
