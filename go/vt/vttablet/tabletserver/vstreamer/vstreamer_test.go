@@ -481,6 +481,7 @@ func TestVStreamMissingFieldsInLastPK(t *testing.T) {
 	}
 	ts.Init()
 	defer ts.Close()
+
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",

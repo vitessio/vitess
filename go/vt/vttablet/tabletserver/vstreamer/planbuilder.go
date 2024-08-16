@@ -65,6 +65,7 @@ type Plan struct {
 
 	env *vtenv.Environment
 
+	// IsInternal is set to true if the plan is for a sidecar table.
 	IsInternal bool
 }
 

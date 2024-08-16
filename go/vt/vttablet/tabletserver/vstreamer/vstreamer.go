@@ -585,9 +585,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
 		}
 
-		// If user is streaming from a sidecar table, we need to build a special plan since we only
-		// stream from a limited set of tables. However, if they are streaming the sidecar database itself: in the
-		// latter case we build a normal plan since we want to stream all sidecar tables.
+		// If the database being streamed is the sidecar database we stream all tables with the usual flow.
+		// If not, we only stream the schema_version and journal tables and those specified in the internal_tables list.
 		if tm.Database == sidecar.GetName() && vs.cp.DBName() != sidecar.GetName() {
 			return vs.buildSidecarTablePlan(id, tm)
 		}
@@ -707,6 +706,7 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 			return nil, nil
 		}
 	}
+
 	conn, err := vs.cp.Connect(vs.ctx)
 	if err != nil {
 		return nil, err
@@ -725,6 +725,7 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 		Name:   tableName,
 		Fields: fields[:len(tm.Types)],
 	}
+
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling may be done when we actually
 	// receive the row event, example: we'll build a JOURNAL or VERSION event instead.
@@ -737,6 +738,7 @@ func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*bi
 		Plan:     plan,
 		TableMap: tm,
 	}
+
 	var vevents []*binlogdatapb.VEvent
 	switch tm.Name {
 	case "resharding_journal":

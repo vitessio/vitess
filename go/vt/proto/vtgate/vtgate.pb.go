@@ -1082,7 +1082,7 @@ type VStreamFlags struct {
 	Cells          string `protobuf:"bytes,4,opt,name=cells,proto3" json:"cells,omitempty"`
 	CellPreference string `protobuf:"bytes,5,opt,name=cell_preference,json=cellPreference,proto3" json:"cell_preference,omitempty"`
 	TabletOrder    string `protobuf:"bytes,6,opt,name=tablet_order,json=tabletOrder,proto3" json:"tablet_order,omitempty"`
-	// When set, all new row events from the `heartbeat` table, in all shards, in the sidecardb will be streamed.
+	// When set, all new row events from the `heartbeat` table, for all shards, in the sidecardb will be streamed.
 	StreamKeyspaceHeartbeats bool `protobuf:"varint,7,opt,name=stream_keyspace_heartbeats,json=streamKeyspaceHeartbeats,proto3" json:"stream_keyspace_heartbeats,omitempty"`
 }
 

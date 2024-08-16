@@ -321,7 +321,8 @@ func (ts *TestSpec) Init() {
 func (ts *TestSpec) Close() {
 	for _, table := range ts.schema.TableNames() {
 		dropStatement := fmt.Sprintf("drop table %s", table)
-		env.Mysqld.ExecuteSuperQuery(context.Background(), dropStatement)
+		// Ignore the error as the table may not exist.
+		_ = env.Mysqld.ExecuteSuperQuery(context.Background(), dropStatement)
 	}
 }
 
