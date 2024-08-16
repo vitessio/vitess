@@ -226,6 +226,11 @@ func (tqsc *Controller) GetThrottlerStatus(ctx context.Context) *throttle.Thrott
 	return nil
 }
 
+// TwoPCEnabled returns whether TwoPC is enabled or not.
+func (tqsc *Controller) TwoPCEnabled() bool {
+	return false
+}
+
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
 	tqsc.mu.Lock()

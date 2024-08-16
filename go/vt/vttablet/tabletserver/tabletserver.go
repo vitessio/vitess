@@ -1692,6 +1692,11 @@ func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.Throt
 	return r
 }
 
+// TwoPCEnabled returns whether TwoPC is enabled or not.
+func (tsv *TabletServer) TwoPCEnabled() bool {
+	return tsv.config.TwoPCEnable
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
