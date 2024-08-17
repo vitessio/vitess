@@ -1,5 +1,5 @@
 # Instructions
- **Note**: For the best experience, it is recommended to use the latest stable version of Kubernetes. Please refer to the [Vitess Operator Compatibility Matrix](https://github.com/planetscale/vitess-operator#compatibility) to ensure compatibility with your Kube
+ **Note**: For the best experience, Please refer to the [Vitess Operator Compatibility Matrix](https://github.com/planetscale/vitess-operator#compatibility) to ensure compatibility with your Kube
 ```
 # Start minikube
 minikube start --cpus=8 --memory=11000 --disk-size=50g
