@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -62,6 +63,25 @@ create table mfg2 (id int, name varchar(128), primary key(id));
 		"mfg2": {
 			"type": "reference",
 		  		"source": "uks.mfg"
+		}
+	},
+	"vindexes": {
+		"hash": {
+			"type": "hash"
+		}
+	}
+}`
+	sksVSchemNoReferencesa = `
+{	
+	"sharded": true,
+	"tables": {
+		"product": {
+			"column_vindexes": [
+				{	
+					"column": "id",	
+					"name": "hash"
+				}
+			]
 		}
 	},
 	"vindexes": {
@@ -163,4 +183,66 @@ func execRefQuery(t *testing.T, query string) {
 	defer vtgateConn.Close()
 	_, err := vtgateConn.ExecuteFetch(query, 0, false)
 	require.NoError(t, err)
+}
+
+func TestMaterializeOfReferenceTables(t *testing.T) {
+	var err error
+	defaultCellName := "zone1"
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
+	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
+	defer func() { defaultReplicas = 1 }()
+	uks := "uks"
+	sks := "sks"
+
+	defaultCell := vc.Cells[defaultCellName]
+	vc.AddKeyspace(t, []*Cell{defaultCell}, uks, "0", uksVSchema, uksSchema, defaultReplicas, defaultRdonly, 100, nil)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, sks, "-80,80-", sksVSchema, sksSchema, defaultReplicas, defaultRdonly, 200, nil)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+
+	verifyClusterHealth(t, vc)
+	_, _, err = vtgateConn.ExecuteFetchMulti(initializeTables, 0, false)
+	require.NoError(t, err)
+	vtgateConn.Close()
+
+	wfName := "wfMat"
+	materializeReference(t, "uks", "sks", wfName, []string{"cat", "mfg"})
+
+	tabDash80 := vc.getPrimaryTablet(t, sks, "-80")
+	tab80Dash := vc.getPrimaryTablet(t, sks, "80-")
+	catchup(t, tabDash80, "wfMat", "Materialize Reference")
+	catchup(t, tab80Dash, "wfMat", "Materialize Reference")
+
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	waitForRowCount(t, vtgateConn, sks, "cat", 3)
+	waitForRowCount(t, vtgateConn, sks, "mfg2", 4)
+
+	execRefQuery(t, "insert into mfg values (5, 'm5')")
+	execRefQuery(t, "insert into mfg values (6, 'm6')")
+	execRefQuery(t, "insert into uks.mfg values (7, 'm7')")
+	execRefQuery(t, "insert into sks.mfg2 values (8, 'm8')")
+	waitForRowCount(t, vtgateConn, uks, "mfg", 8)
+
+	execRefQuery(t, "update mfg set name = concat(name, '-updated') where id = 1")
+	execRefQuery(t, "update mfg2 set name = concat(name, '-updated') where id = 2")
+	execRefQuery(t, "update uks.mfg set name = concat(name, '-updated') where id = 3")
+	execRefQuery(t, "update sks.mfg2 set name = concat(name, '-updated') where id = 4")
+
+	waitForRowCount(t, vtgateConn, uks, "mfg", 8)
+	qr := execVtgateQuery(t, vtgateConn, "uks", "select count(*) from uks.mfg where name like '%updated%'")
+	require.NotNil(t, qr)
+	require.Equal(t, "4", qr.Rows[0][0].ToString())
+
+	execRefQuery(t, "delete from mfg where id = 5")
+	execRefQuery(t, "delete from mfg2 where id = 6")
+	execRefQuery(t, "delete from uks.mfg where id = 7")
+	execRefQuery(t, "delete from sks.mfg2 where id = 8")
+	waitForRowCount(t, vtgateConn, uks, "mfg", 4)
+}
+
+func materializeReference(t *testing.T, sourceKeyspace, targetKeyspace, workflow string, tables []string) {
+	err := vc.VtctldClient.ExecuteCommand("materialize", "--workflow", workflow, "--target-keyspace", targetKeyspace,
+		"create", "--reference", "--source-keyspace", sourceKeyspace, "--tables", strings.Join(tables, ","))
+	require.NoError(t, err, "Materialize")
 }
