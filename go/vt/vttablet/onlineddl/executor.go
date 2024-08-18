@@ -979,12 +979,25 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return err
 	}
+	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
+	// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
+	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 5*migrationCutOverThreshold)
+	if err != nil {
+		return err
+	}
 	defer lockConn.Recycle()
+	defer lockConnRestoreLockWaitTimeout()
 	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
 	renameWasSuccessful := false
 	renameConn, err := e.pool.Get(ctx, nil)
+	if err != nil {
+		return err
+	}
+	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
+	// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
+	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 5*migrationCutOverThreshold*4)
 	if err != nil {
 		return err
 	}
@@ -997,6 +1010,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			}
 		}
 	}()
+	defer renameConnRestoreLockWaitTimeout()
+
 	// See if backend MySQL server supports 'rename_table_preserve_foreign_key' variable
 	preserveFKSupported, err := e.isPreserveForeignKeySupported(ctx)
 	if err != nil {
@@ -1256,6 +1271,24 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	changeSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
 	if _, err := conn.ExecuteFetch(changeSQLModeQuery, 0, false); err != nil {
 		return deferFunc, err
+	}
+	return deferFunc, nil
+}
+
+// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function
+func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, lockWaitTimeout time.Duration) (deferFunc func(), err error) {
+	deferFunc = func() {}
+
+	if _, err := conn.Exec(ctx, `set @lock_wait_timeout=@@session.lock_wait_timeout`, 0, false); err != nil {
+		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read lock_wait_timeout: %v", err)
+	}
+	timeoutSeconds := int64(lockWaitTimeout.Seconds())
+	setQuery := fmt.Sprintf("set @@session.lock_wait_timeout=%d", timeoutSeconds)
+	if _, err := conn.Exec(ctx, setQuery, 0, false); err != nil {
+		return deferFunc, err
+	}
+	deferFunc = func() {
+		conn.Exec(ctx, "set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
 	}
 	return deferFunc, nil
 }
