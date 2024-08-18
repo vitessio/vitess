@@ -7,7 +7,6 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/exec"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -91,9 +90,7 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, rules, len(tc.shards))
 			want := getExpectedRules(tc.sourceKeyspace, tc.targetKeyspace)
-			if !reflect.DeepEqual(want, rules) {
-				require.FailNowf(t, "unexpected rules", "got: %v, want: %v", rules, tc.want)
-			}
+			require.EqualValues(t, want, rules)
 		})
 	}
 }
