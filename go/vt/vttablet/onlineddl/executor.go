@@ -981,8 +981,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	}
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
-	// Setting `lock_wait_timeout` here is done to just ensure MySQL does not interrupt prematurely. It is not
-	// done by means of ensuring cleanup/termination of operations.
 	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 5*migrationCutOverThreshold)
 	if err != nil {
 		return err
@@ -999,8 +997,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	}
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
-	// Setting `lock_wait_timeout` here is done to just ensure MySQL does not interrupt prematurely. It is not
-	// done by means of ensuring cleanup/termination of operations.
 	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 5*migrationCutOverThreshold*4)
 	if err != nil {
 		return err
