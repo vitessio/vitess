@@ -141,13 +141,10 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 		{
 			name: "Collect all foreign key constraints",
 			fkManager: &fkManager{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t0"],
-						tbl["t1"],
-						&DerivedTable{},
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t0"],
+					tbl["t1"],
+					&DerivedTable{}),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks":           vschemapb.Keyspace_managed,
@@ -171,12 +168,10 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 		{
 			name: "keyspace not found in schema information",
 			fkManager: &fkManager{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t2"],
-						tbl["t3"],
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t2"],
+					tbl["t3"],
+				),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks": vschemapb.Keyspace_managed,
@@ -188,12 +183,9 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 		{
 			name: "Cyclic fk constraints error",
 			fkManager: &fkManager{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t0"], tbl["t1"],
-						&DerivedTable{},
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t0"], tbl["t1"],
+					&DerivedTable{}),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks":           vschemapb.Keyspace_managed,
@@ -236,17 +228,11 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 			},
 		},
 		getError: func() error { return fmt.Errorf("ambiguous test error") },
-		tables: &tableCollector{
-			Tables: []TableInfo{
-				tbl["t4"],
-				tbl["t5"],
-			},
-			si: &FakeSI{
-				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-					"ks": vschemapb.Keyspace_managed,
-				},
-			},
-		},
+		tables: makeTableCollector(&FakeSI{
+			KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+				"ks": vschemapb.Keyspace_managed,
+			}}, tbl["t4"],
+			tbl["t5"]),
 	}
 	updateExprs := sqlparser.UpdateExprs{
 		&sqlparser.UpdateExpr{Name: cola, Expr: sqlparser.NewIntLiteral("1")},
@@ -350,12 +336,10 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 			name: "Delete Query",
 			stmt: &sqlparser.Delete{},
 			fkManager: &fkManager{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t0"],
-						tbl["t1"],
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t0"],
+					tbl["t1"],
+				),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks":           vschemapb.Keyspace_managed,
@@ -389,12 +373,10 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 						cold: SingleTableSet(1),
 					},
 				},
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t4"],
-						tbl["t5"],
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t4"],
+					tbl["t5"],
+				),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks": vschemapb.Keyspace_managed,
@@ -433,12 +415,10 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 				Action: sqlparser.ReplaceAct,
 			},
 			fkManager: &fkManager{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t0"],
-						tbl["t1"],
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t0"],
+					tbl["t1"],
+				),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks":           vschemapb.Keyspace_managed,
@@ -465,12 +445,9 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 				Action: sqlparser.InsertAct,
 			},
 			fkManager: &fkManager{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t0"],
-						tbl["t1"],
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t0"],
+					tbl["t1"]),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks":           vschemapb.Keyspace_managed,
@@ -502,12 +479,9 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 						colb: SingleTableSet(0),
 					},
 				},
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t6"],
-						tbl["t1"],
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t6"],
+					tbl["t1"]),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks":           vschemapb.Keyspace_managed,
@@ -536,12 +510,9 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 			name: "Insert error",
 			stmt: &sqlparser.Insert{},
 			fkManager: &fkManager{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t2"],
-						tbl["t3"],
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t2"],
+					tbl["t3"]),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks": vschemapb.Keyspace_managed,
@@ -554,12 +525,9 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 			name: "Update error",
 			stmt: &sqlparser.Update{},
 			fkManager: &fkManager{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t2"],
-						tbl["t3"],
-					},
-				},
+				tables: makeTableCollector(nil,
+					tbl["t2"],
+					tbl["t3"]),
 				si: &FakeSI{
 					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 						"ks": vschemapb.Keyspace_managed,
@@ -598,5 +566,14 @@ func pkInfo(parentTable *vindexes.Table, pCols []string, cCols []string) vindexe
 		Table:         parentTable,
 		ParentColumns: sqlparser.MakeColumns(pCols...),
 		ChildColumns:  sqlparser.MakeColumns(cCols...),
+	}
+}
+
+func makeTableCollector(si SchemaInformation, tables ...TableInfo) *tableCollector {
+	return &tableCollector{
+		earlyTableCollector: earlyTableCollector{
+			Tables: tables,
+			si:     si,
+		},
 	}
 }

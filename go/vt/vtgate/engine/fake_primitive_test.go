@@ -80,7 +80,7 @@ func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 	if r == nil {
 		return nil, f.sendErr
 	}
-	return r, nil
+	return r.Copy(), nil
 }
 
 func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
