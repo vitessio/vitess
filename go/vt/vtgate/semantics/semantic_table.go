@@ -77,12 +77,13 @@ type (
 
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
-		Aggregation bool
-		DML         bool
-		Distinct    bool
-		HashJoin    bool
-		SubQueries  bool
-		Union       bool
+		Aggregation  bool
+		DML          bool
+		Distinct     bool
+		HashJoin     bool
+		SubQueries   bool
+		Union        bool
+		RecursiveCTE bool
 	}
 
 	// SemTable contains semantic analysis information about the query.
@@ -773,10 +774,6 @@ func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tab
 	}
 
 	for _, table := range tableInfos {
-		if _, isDT := table.(*DerivedTable); isDT {
-			continue
-		}
-
 		sc := table.canShortCut()
 		var vtbl *vindexes.Table
 
