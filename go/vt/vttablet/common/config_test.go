@@ -141,7 +141,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 				}
 			}
 			if tt.want == nil {
-				require.Nil(t, got)
+				require.EqualValues(t, *DefaultVReplicationConfig, *got)
 			} else {
 				require.EqualValues(t, *tt.want, *got)
 			}
