@@ -31,7 +31,7 @@ func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator
 }
 
 func tryMergeCTE(ctx *plancontext.PlanningContext, seed, term Operator, in *RecurseCTE) *Route {
-	seedRoute, termRoute, _, routingB, a, b, sameKeyspace := prepareInputRoutes(seed, term)
+	seedRoute, termRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(seed, term)
 	if seedRoute == nil || !sameKeyspace {
 		return nil
 	}
@@ -39,6 +39,8 @@ func tryMergeCTE(ctx *plancontext.PlanningContext, seed, term Operator, in *Recu
 	switch {
 	case a == dual:
 		return mergeCTE(ctx, seedRoute, termRoute, routingB, in)
+	case b == dual:
+		return mergeCTE(ctx, seedRoute, termRoute, routingA, in)
 	case a == sharded && b == sharded:
 		return tryMergeCTESharded(ctx, seedRoute, termRoute, in)
 	default:

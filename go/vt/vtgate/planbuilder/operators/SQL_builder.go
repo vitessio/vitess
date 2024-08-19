@@ -134,6 +134,10 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 		addPred = stmt.AddWhere
 	case *sqlparser.Delete:
 		addPred = stmt.AddWhere
+	case nil:
+		sel := &sqlparser.Select{}
+		addPred = sel.AddWhere
+		qb.stmt = sel
 	default:
 		panic(fmt.Sprintf("cant add WHERE to %T", qb.stmt))
 	}

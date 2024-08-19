@@ -108,3 +108,14 @@ GROUP BY manager_id;
 with recursive cte as (select 1 as n union all select n+1 from cte)
 select *
 from cte;
+
+# Define recursive CTE and then use it on the RHS of UNION
+WITH RECURSIVE foo AS (SELECT id
+                       FROM employees
+                       WHERE id = 1
+                       UNION ALL
+                       SELECT id + 1
+                       FROM foo
+                       WHERE id < 5)
+SELECT id
+FROM foo;

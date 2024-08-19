@@ -2438,5 +2438,32 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Query that can be merged, dual on the RHS of the UNION",
+    "query": "with recursive cte as (select id from user where id = 72 union all select id+1 from cte where id < 100) select * from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id from user where id = 72 union all select id+1 from cte where id < 100) select * from cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select id from `user` where 1 != 1 union all select id + 1 from cte where 1 != 1) select id from cte where 1 != 1",
+        "Query": "with recursive cte as (select id from `user` where id = 72 union all select id + 1 from cte where id < 100) select id from cte",
+        "Table": "`user`, dual",
+        "Values": [
+          "72"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
   }
 ]
