@@ -94,7 +94,7 @@ type Controller interface {
 	CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult
 	GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus
 
-	RedoPreparedTransactions() error
+	RedoPreparedTransactions()
 }
 
 // Ensure TabletServer satisfies Controller interface.

@@ -161,7 +161,7 @@ func (te *TxEngine) transition(state txEngineState) {
 			// We need to redo prepared transactions here to handle vttablet restarts.
 			// If MySQL continues to work fine, then we won't end up redoing the prepared transactions as part of any RPC call
 			// since VTOrc won't call `UndoDemotePrimary`. We need to do them as part of this transition.
-			_ = te.redoPreparedTransactionsLocked()
+			te.redoPreparedTransactionsLocked()
 		}
 		te.startTransactionWatcher()
 	}
@@ -169,13 +169,12 @@ func (te *TxEngine) transition(state txEngineState) {
 }
 
 // RedoPreparedTransactions acquires the state lock and calls redoPreparedTransactionsLocked.
-func (te *TxEngine) RedoPreparedTransactions() error {
-	if !te.twopcEnabled {
-		return nil
+func (te *TxEngine) RedoPreparedTransactions() {
+	if te.twopcEnabled {
+		te.stateLock.Lock()
+		defer te.stateLock.Unlock()
+		te.redoPreparedTransactionsLocked()
 	}
-	te.stateLock.Lock()
-	defer te.stateLock.Unlock()
-	return te.redoPreparedTransactionsLocked()
 }
 
 // redoPreparedTransactionsLocked redoes the prepared transactions.
@@ -184,7 +183,7 @@ func (te *TxEngine) RedoPreparedTransactions() error {
 // than blocking everything for the sake of a few transactions.
 // We do this async; so we do not end up blocking writes on
 // failover for our setup tasks if using semi-sync replication.
-func (te *TxEngine) redoPreparedTransactionsLocked() error {
+func (te *TxEngine) redoPreparedTransactionsLocked() {
 	oldState := te.state
 	// We shutdown to ensure no other writes are in progress.
 	te.shutdownLocked()
@@ -195,7 +194,7 @@ func (te *TxEngine) redoPreparedTransactionsLocked() error {
 	if err := te.twoPC.Open(te.env.Config().DB); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
 		log.Errorf("Could not open TwoPC engine: %v", err)
-		return err
+		return
 	}
 
 	// We should only open the prepared pool and the transaction pool if the opening of twoPC pool is successful.
@@ -210,9 +209,7 @@ func (te *TxEngine) redoPreparedTransactionsLocked() error {
 	if err := te.prepareFromRedo(); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
 		log.Errorf("Could not prepare transactions: %v", err)
-		return err
 	}
-	return nil
 }
 
 // Close will disregard common rules for when to kill transactions

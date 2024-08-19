@@ -1688,8 +1688,8 @@ func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.Throt
 }
 
 // RedoPreparedTransactions redoes the prepared transactions.
-func (tsv *TabletServer) RedoPreparedTransactions() error {
-	return tsv.te.RedoPreparedTransactions()
+func (tsv *TabletServer) RedoPreparedTransactions() {
+	tsv.te.RedoPreparedTransactions()
 }
 
 // HandlePanic is part of the queryservice.QueryService interface

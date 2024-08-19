@@ -765,7 +765,7 @@ func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Con
 			return err
 		}
 	}
-	_ = tm.QueryServiceControl.RedoPreparedTransactions()
+	tm.QueryServiceControl.RedoPreparedTransactions()
 	err = tm.MysqlDaemon.SetReadOnly(ctx, false)
 	return err
 }
