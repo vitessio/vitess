@@ -77,6 +77,8 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return transformSequential(ctx, op)
 	case *operators.DMLWithInput:
 		return transformDMLWithInput(ctx, op)
+	case *operators.RecurseCTE:
+		return transformRecurseCTE(ctx, op)
 	case *operators.PercentBasedMirror:
 		return transformPercentBasedMirror(ctx, op)
 	}
@@ -995,6 +997,22 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 		}
 	}
 	return prim, nil
+}
+
+func transformRecurseCTE(ctx *plancontext.PlanningContext, op *operators.RecurseCTE) (engine.Primitive, error) {
+	seed, err := transformToPrimitive(ctx, op.Seed)
+	if err != nil {
+		return nil, err
+	}
+	term, err := transformToPrimitive(ctx, op.Term)
+	if err != nil {
+		return nil, err
+	}
+	return &engine.RecurseCTE{
+		Seed: seed,
+		Term: term,
+		Vars: op.Vars,
+	}, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {

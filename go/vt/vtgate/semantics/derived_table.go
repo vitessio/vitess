@@ -146,7 +146,7 @@ func (dt *DerivedTable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 }
 
 func (dt *DerivedTable) canShortCut() shortCut {
-	panic(vterrors.VT12001("should not be called"))
+	return canShortCut
 }
 
 // GetVindexTable implements the TableInfo interface

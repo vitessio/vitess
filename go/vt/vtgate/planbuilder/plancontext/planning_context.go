@@ -67,6 +67,10 @@ type PlanningContext struct {
 	// Used to set the nullable flag on the columns
 	OuterTables semantics.TableSet
 
+	// This is a stack of CTEs being built. It's used when we have CTEs inside CTEs,
+	// to remember which is the CTE currently being assembled
+	CurrentCTE []*ContextCTE
+
 	// mirror contains a mirrored clone of this planning context.
 	mirror *PlanningContext
 
@@ -387,6 +391,46 @@ func (ctx *PlanningContext) IsMirrored() bool {
 	return ctx.isMirrored
 }
 
+type ContextCTE struct {
+	*semantics.CTE
+	Id         semantics.TableSet
+	Predicates []*RecurseExpression
+}
+
+type RecurseExpression struct {
+	Original  sqlparser.Expr
+	RightExpr sqlparser.Expr
+	LeftExprs []BindVarExpr
+}
+
+type BindVarExpr struct {
+	Name string
+	Expr *sqlparser.ColName
+}
+
+func (ctx *PlanningContext) PushCTE(def *semantics.CTE, id semantics.TableSet) {
+	ctx.CurrentCTE = append(ctx.CurrentCTE, &ContextCTE{
+		CTE: def,
+		Id:  id,
+	})
+}
+
+func (ctx *PlanningContext) PopCTE() (*ContextCTE, error) {
+	if len(ctx.CurrentCTE) == 0 {
+		return nil, vterrors.VT13001("no CTE to pop")
+	}
+	activeCTE := ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
+	ctx.CurrentCTE = ctx.CurrentCTE[:len(ctx.CurrentCTE)-1]
+	return activeCTE, nil
+}
+
+func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
+	if len(ctx.CurrentCTE) == 0 {
+		return nil
+	}
+	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
+}
+
 func (ctx *PlanningContext) UseMirror() *PlanningContext {
 	if ctx.isMirrored {
 		panic(vterrors.VT13001("cannot mirror already mirrored planning context"))
@@ -407,6 +451,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		ctx.CurrentPhase,
 		ctx.Statement,
 		ctx.OuterTables,
+		ctx.CurrentCTE,
 		nil,
 		true,
 	}

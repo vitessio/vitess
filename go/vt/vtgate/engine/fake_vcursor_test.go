@@ -124,6 +124,10 @@ func (t *noopVCursor) ReadTransaction(ctx context.Context, transactionID string)
 	panic("implement me")
 }
 
+func (t *noopVCursor) UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -412,7 +416,7 @@ type loggingVCursor struct {
 	resultErr error
 
 	warnings                []*querypb.QueryWarning
-	transactionStatusOutput *querypb.TransactionMetadata
+	transactionStatusOutput []*querypb.TransactionMetadata
 
 	// Optional errors that can be returned from nextResult() alongside the results for
 	// multi-shard queries
@@ -853,6 +857,17 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 }
 
 func (f *loggingVCursor) ReadTransaction(_ context.Context, _ string) (*querypb.TransactionMetadata, error) {
+	if f.resultErr != nil {
+		return nil, f.resultErr
+	}
+	var out *querypb.TransactionMetadata
+	if len(f.transactionStatusOutput) > 0 {
+		out = f.transactionStatusOutput[0]
+	}
+	return out, nil
+}
+
+func (f *loggingVCursor) UnresolvedTransactions(_ context.Context, _ string) ([]*querypb.TransactionMetadata, error) {
 	if f.resultErr != nil {
 		return nil, f.resultErr
 	}

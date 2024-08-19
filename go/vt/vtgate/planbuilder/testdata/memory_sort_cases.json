@@ -14,9 +14,8 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "any_value(1) AS b, sum_count_star(2) AS count(*), any_value(4)",
+            "Aggregates": "any_value(1|4) AS b, sum_count_star(2) AS count(*)",
             "GroupBy": "(0|3)",
-            "ResultColumns": 5,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -25,9 +24,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(`user`.b) from `user` where 1 != 1 group by a, weight_string(a)",
+                "FieldQuery": "select dt.c0 as a, dt.c1 as b, dt.c2 as `count(*)`, dt.c3 as `weight_string(a)`, weight_string(dt.c1) from (select a, b, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)) as dt(c0, c1, c2, c3) where 1 != 1",
                 "OrderBy": "(0|3) ASC",
-                "Query": "select a, b, count(*), weight_string(a), weight_string(`user`.b) from `user` group by a, weight_string(a) order by a asc",
+                "Query": "select dt.c0 as a, dt.c1 as b, dt.c2 as `count(*)`, dt.c3 as `weight_string(a)`, weight_string(dt.c1) from (select a, b, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc) as dt(c0, c1, c2, c3)",
                 "Table": "`user`"
               }
             ]
@@ -49,13 +48,13 @@
         "OperatorType": "Sort",
         "Variant": "Memory",
         "OrderBy": "2 ASC",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k",
             "GroupBy": "(0|3)",
-            "ResultColumns": 3,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -93,9 +92,8 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k, any_value(4)",
+            "Aggregates": "any_value(1|4) AS b, sum_count_star(2) AS k",
             "GroupBy": "(0|3)",
-            "ResultColumns": 5,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -104,9 +102,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select a, b, count(*) as k, weight_string(a), weight_string(`user`.b) from `user` where 1 != 1 group by a, weight_string(a)",
+                "FieldQuery": "select dt.c0 as a, dt.c1 as b, dt.c2 as k, dt.c3 as `weight_string(a)`, weight_string(dt.c1) from (select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)) as dt(c0, c1, c2, c3) where 1 != 1",
                 "OrderBy": "(0|3) ASC",
-                "Query": "select a, b, count(*) as k, weight_string(a), weight_string(`user`.b) from `user` group by a, weight_string(a) order by a asc",
+                "Query": "select dt.c0 as a, dt.c1 as b, dt.c2 as k, dt.c3 as `weight_string(a)`, weight_string(dt.c1) from (select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc) as dt(c0, c1, c2, c3)",
                 "Table": "`user`"
               }
             ]
@@ -132,13 +130,13 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "2 DESC",
+            "ResultColumns": 3,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k",
                 "GroupBy": "(0|3)",
-                "ResultColumns": 3,
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -180,7 +178,6 @@
             "Variant": "Ordered",
             "Aggregates": "any_value(1) AS b, sum_count_star(2) AS k",
             "GroupBy": "(0|3)",
-            "ResultColumns": 4,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -360,9 +357,9 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1,R:0,L:2,R:1,L:3",
+            "JoinColumnIndexes": "L:0,L:1,R:0,L:3,R:1,L:4",
             "JoinVars": {
-              "user_id": 4
+              "user_id": 2
             },
             "TableName": "`user`_music",
             "Inputs": [
@@ -373,8 +370,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where `user`.id = 1",
+                "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where 1 != 1",
+                "Query": "select `user`.col1 as a, `user`.col2, `user`.id, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where `user`.id = 1",
                 "Table": "`user`",
                 "Values": [
                   "1"
