@@ -391,12 +391,12 @@ func (te *TxEngine) shutdownLocked() {
 	te.stopTransactionWatcher()
 
 	// Mark the prepared pool closed.
-	log.Infof("TxEngine - closing the prepared pool")
-	te.preparedPool.Close()
 	log.Infof("TxEngine - closing the txPool")
 	te.txPool.Close()
 	log.Infof("TxEngine - closing twoPC")
 	te.twoPC.Close()
+	log.Infof("TxEngine - closing the prepared pool")
+	te.preparedPool.Close()
 	log.Infof("TxEngine - finished shutdownLocked")
 }
 
