@@ -101,6 +101,9 @@ func TestDropAndRecreateWithSameShards(t *testing.T) {
 
 	cur := conn.Session(ks1+"@primary", nil)
 
+	mysqlConnCountBefore, err := getMySQLConnectionCount(ctx, cur)
+	require.Nil(t, err)
+
 	_, err = cur.Execute(ctx, "DROP DATABASE "+ks1, nil)
 	require.Nil(t, err)
 
@@ -108,6 +111,26 @@ func TestDropAndRecreateWithSameShards(t *testing.T) {
 	require.Nil(t, err)
 
 	assertTabletsPresent(t)
+
+	mysqlConnCountAfter, err := getMySQLConnectionCount(ctx, cur)
+	require.Nil(t, err)
+
+	// Assert that we're not leaking mysql connections, but allow for some wiggle room due to transient connections
+	assert.InDelta(t, mysqlConnCountBefore, mysqlConnCountAfter, 5,
+		"not within allowable delta: mysqlConnCountBefore=%d, mysqlConnCountAfter=%d", mysqlConnCountBefore, mysqlConnCountAfter)
+}
+
+func getMySQLConnectionCount(ctx context.Context, session *vtgateconn.VTGateSession) (int, error) {
+	result, err := session.Execute(ctx, "SELECT COUNT(*) FROM information_schema.processlist", nil)
+	if err != nil {
+		return 0, err
+	}
+	row := result.Rows[0][0]
+	toInt, err := row.ToInt()
+	if err != nil {
+		return 0, err
+	}
+	return toInt, nil
 }
 
 func assertTabletsPresent(t *testing.T) {
