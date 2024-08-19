@@ -103,3 +103,8 @@ WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
 SELECT manager_id, COUNT(*) AS employee_count
 FROM emp_cte
 GROUP BY manager_id;
+
+--error infinite recursion
+with recursive cte as (select 1 as n union all select n+1 from cte)
+select *
+from cte;

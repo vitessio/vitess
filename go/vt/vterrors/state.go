@@ -66,6 +66,7 @@ const (
 	CTERecursiveRequiresUnion
 	CTERecursiveForbidsAggregation
 	CTERecursiveForbiddenJoinOrder
+	CTEMaxRecursionDepth
 
 	// not found
 	BadDb

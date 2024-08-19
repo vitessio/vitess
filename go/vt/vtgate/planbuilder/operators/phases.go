@@ -36,6 +36,7 @@ const (
 	initialPlanning
 	pullDistinctFromUnion
 	delegateAggregation
+	recursiveCTEHorizons
 	addAggrOrdering
 	cleanOutPerfDistinct
 	dmlWithInput
@@ -53,6 +54,8 @@ func (p Phase) String() string {
 		return "pull distinct from UNION"
 	case delegateAggregation:
 		return "split aggregation between vtgate and mysql"
+	case recursiveCTEHorizons:
+		return "expand recursive CTE horizons"
 	case addAggrOrdering:
 		return "optimize aggregations with ORDER BY"
 	case cleanOutPerfDistinct:
@@ -72,6 +75,8 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.Union
 	case delegateAggregation:
 		return s.Aggregation
+	case recursiveCTEHorizons:
+		return s.RecursiveCTE
 	case addAggrOrdering:
 		return s.Aggregation
 	case cleanOutPerfDistinct:
@@ -93,6 +98,8 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 		return enableDelegateAggregation(ctx, op)
 	case addAggrOrdering:
 		return addOrderingForAllAggregations(ctx, op)
+	case recursiveCTEHorizons:
+		return planRecursiveCTEHorizons(ctx, op)
 	case cleanOutPerfDistinct:
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
@@ -301,7 +308,7 @@ func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult) {
 // prepareForAggregationPushing adds columns needed by an operator to its input.
 // This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
 func prepareForAggregationPushing(ctx *plancontext.PlanningContext, root Operator) Operator {
-	addColumnsNeededByFilter := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+	return TopDown(root, TableID, func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		filter, ok := in.(*Filter)
 		if !ok {
 			return in, NoRewrite
@@ -336,10 +343,13 @@ func prepareForAggregationPushing(ctx *plancontext.PlanningContext, root Operato
 			return in, Rewrote("added columns because filter needs it")
 		}
 		return in, NoRewrite
-	}
+	}, stopAtRoute)
+}
 
-	step1 := TopDown(root, TableID, addColumnsNeededByFilter, stopAtRoute)
-	pushDownHorizon := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+// prepareForAggregationPushing adds columns needed by an operator to its input.
+// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
+func planRecursiveCTEHorizons(ctx *plancontext.PlanningContext, root Operator) Operator {
+	return TopDown(root, TableID, func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		// These recursive CTEs have not been pushed under a route, so we will have to evaluate it one the vtgate
 		// That means that we need to turn anything that is coming from the recursion into arguments
 		rcte, ok := in.(*RecurseCTE)
@@ -364,9 +374,7 @@ func prepareForAggregationPushing(ctx *plancontext.PlanningContext, root Operato
 		rcte.Projections = projections
 		rcte.Term = newTerm
 		return rcte, Rewrote("expanded horizon on term side of recursive CTE")
-	}
-
-	return TopDown(step1, TableID, pushDownHorizon, stopAtRoute)
+	}, stopAtRoute)
 }
 
 func findProjection(op Operator) *Projection {

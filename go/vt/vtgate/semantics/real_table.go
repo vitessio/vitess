@@ -127,22 +127,14 @@ func (r *RealTable) getCTEColumns() []ColumnInfo {
 
 // Authoritative implements the TableInfo interface
 func (r *RealTable) authoritative() bool {
-	if r.Table != nil {
+	switch {
+	case r.Table != nil:
 		return r.Table.ColumnListAuthoritative
+	case r.CTE != nil:
+		return r.CTE.isAuthoritative
+	default:
+		return false
 	}
-	if r.CTE != nil {
-		if len(r.CTE.Columns) > 0 {
-			return true
-		}
-		for _, se := range r.CTE.Query.GetColumns() {
-			_, isAe := se.(*sqlparser.AliasedExpr)
-			if !isAe {
-				return false
-			}
-		}
-		return true
-	}
-	return false
 }
 
 func extractSelectExprsFromCTE(selectExprs sqlparser.SelectExprs) []ColumnInfo {

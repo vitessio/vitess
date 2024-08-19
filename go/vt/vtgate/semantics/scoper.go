@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
 	"reflect"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -188,9 +187,6 @@ func (s *scoper) enterJoinScope(cursor *sqlparser.Cursor) {
 
 func (s *scoper) pushSelectScope(node *sqlparser.Select) {
 	currScope := newScope(s.currentScope())
-	if len(s.scopes) > 0 && s.scopes[len(s.scopes)-1] != s.currentScope() {
-		fmt.Println("BUG: scope counts did not match")
-	}
 	currScope.stmtScope = true
 	s.push(currScope)
 

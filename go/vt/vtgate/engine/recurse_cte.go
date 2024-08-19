@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // RecurseCTE is used to represent recursive CTEs
@@ -45,6 +46,7 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	// recurseRows contains the rows used in the next recursion
 	recurseRows := res.Rows
 	joinVars := make(map[string]*querypb.BindVariable)
+	loops := 0
 	for len(recurseRows) > 0 {
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
@@ -53,12 +55,20 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			for k, col := range r.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(row[col])
 			}
+			// check if the context is done - we might be in a long running recursion
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
 				return nil, err
 			}
 			recurseRows = append(recurseRows, rresult.Rows...)
 			res.Rows = append(res.Rows, rresult.Rows...)
+			loops++
+			if loops > 1000 { // TODO: This should be controlled with a system variable setting
+				return nil, vterrors.VT09030("")
+			}
 		}
 	}
 	return res, nil

@@ -198,7 +198,7 @@ func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
 				}
 			}
 
-			panic("couldn't find column")
+			panic(vterrors.VT13001("couldn't find column"))
 		}
 	}
 	return r

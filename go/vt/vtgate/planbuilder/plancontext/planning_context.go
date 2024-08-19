@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -408,7 +407,7 @@ func (ctx *PlanningContext) PushCTE(def *semantics.CTE, id semantics.TableSet) {
 
 func (ctx *PlanningContext) PopCTE() (*ContextCTE, error) {
 	if len(ctx.CurrentCTE) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no CTE to pop")
+		return nil, vterrors.VT13001("no CTE to pop")
 	}
 	activeCTE := ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
 	ctx.CurrentCTE = ctx.CurrentCTE[:len(ctx.CurrentCTE)-1]

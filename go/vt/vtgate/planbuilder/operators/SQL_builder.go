@@ -63,7 +63,7 @@ func (qb *queryBuilder) includeTable(op *Table) bool {
 	}
 	tbl, err := qb.ctx.SemTable.TableInfoFor(op.QTable.ID)
 	if err != nil {
-		return true
+		panic(err)
 	}
 	cteTbl, isCTE := tbl.(*semantics.CTETable)
 	if !isCTE {
@@ -236,7 +236,7 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 	}
 }
 
-func (qb *queryBuilder) cteWith(other *queryBuilder, name, alias string) {
+func (qb *queryBuilder) recursiveCteWith(other *queryBuilder, name, alias string) {
 	cteUnion := &sqlparser.Union{
 		Left:  qb.stmt.(sqlparser.SelectStatement),
 		Right: other.stmt.(sqlparser.SelectStatement),
@@ -451,7 +451,7 @@ func buildQuery(op Operator, qb *queryBuilder) {
 	case *Insert:
 		buildDML(op, qb)
 	case *RecurseCTE:
-		buildCTE(op, qb)
+		buildRecursiveCTE(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
 	}
@@ -700,7 +700,7 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 	sqlparser.RemoveKeyspaceInCol(qb.stmt)
 }
 
-func buildCTE(op *RecurseCTE, qb *queryBuilder) {
+func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
 	predicates := slice.Map(op.Predicates, func(jc *plancontext.RecurseExpression) sqlparser.Expr {
 		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
 		err := qb.ctx.SkipJoinPredicates(jc.Original)
@@ -719,7 +719,7 @@ func buildCTE(op *RecurseCTE, qb *queryBuilder) {
 		panic(err)
 	}
 
-	qb.cteWith(qbR, op.Def.Name, infoFor.GetAliasedTableExpr().As.String())
+	qb.recursiveCteWith(qbR, op.Def.Name, infoFor.GetAliasedTableExpr().As.String())
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {

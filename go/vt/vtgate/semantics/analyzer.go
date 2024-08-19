@@ -450,8 +450,7 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 		}
 	case *sqlparser.With:
 		if node.Recursive {
-			// TODO: hacky - we should split this into it's own thing
-			a.sig.Aggregation = true
+			a.sig.RecursiveCTE = true
 		}
 	case sqlparser.AggrFunc:
 		a.sig.Aggregation = true

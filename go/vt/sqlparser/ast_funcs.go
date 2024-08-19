@@ -436,7 +436,7 @@ func (node *AliasedTableExpr) TableNameString() string {
 
 	tableName, ok := node.Expr.(TableName)
 	if !ok {
-		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: Derived table should have an alias. This should not be possible"))
+		panic(vterrors.VT13001("Derived table should have an alias. This should not be possible"))
 	}
 
 	return tableName.Name.String()

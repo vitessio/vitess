@@ -260,6 +260,7 @@ const (
 	ERCTERecursiveForbidsAggregation      = ErrorCode(3575)
 	ERCTERecursiveForbiddenJoinOrder      = ErrorCode(3576)
 	ERCTERecursiveRequiresSingleReference = ErrorCode(3577)
+	ERCTEMaxRecursionDepth                = ErrorCode(3636)
 	ERRegexpStringNotTerminated           = ErrorCode(3684)
 	ERRegexpBufferOverflow                = ErrorCode(3684)
 	ERRegexpIllegalArgument               = ErrorCode(3685)

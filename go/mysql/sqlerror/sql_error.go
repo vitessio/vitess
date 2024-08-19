@@ -250,6 +250,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.CTERecursiveRequiresUnion:           {num: ERCTERecursiveRequiresUnion, state: SSUnknownSQLState},
 	vterrors.CTERecursiveForbidsAggregation:      {num: ERCTERecursiveForbidsAggregation, state: SSUnknownSQLState},
 	vterrors.CTERecursiveForbiddenJoinOrder:      {num: ERCTERecursiveForbiddenJoinOrder, state: SSUnknownSQLState},
+	vterrors.CTEMaxRecursionDepth:                {num: ERCTEMaxRecursionDepth, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {
