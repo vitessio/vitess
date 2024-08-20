@@ -683,7 +683,7 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 					if tcase.Skip {
 						t.Skip(message)
 					} else {
-						t.Errorf(message)
+						t.Error(message)
 					}
 				} else if tcase.Skip {
 					t.Errorf("query is correct even though it is skipped:\n %s", tcase.Query)

@@ -158,10 +158,10 @@ func (s *TestRowEventSpec) String() string {
 		TableName: s.table,
 	}
 	var rowChanges []*binlogdatapb.RowChange
-	if s.changes != nil && len(s.changes) > 0 {
+	if len(s.changes) > 0 {
 		for _, c := range s.changes {
 			rowChange := binlogdatapb.RowChange{}
-			if c.before != nil && len(c.before) > 0 {
+			if len(c.before) > 0 {
 				rowChange.Before = &query.Row{}
 				for _, val := range c.before {
 					if val == sqltypes.NullStr {
@@ -171,7 +171,7 @@ func (s *TestRowEventSpec) String() string {
 					rowChange.Before.Values = append(rowChange.Before.Values, []byte(val)...)
 				}
 			}
-			if c.after != nil && len(c.after) > 0 {
+			if len(c.after) > 0 {
 				rowChange.After = &query.Row{}
 				for i, val := range c.after {
 					if val == sqltypes.NullStr {

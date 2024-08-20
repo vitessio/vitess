@@ -182,7 +182,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		return errors.New("--sidecar-db-name cannot be empty when creating a keyspace")
 	}
 	if len(createKeyspaceOptions.SidecarDBName) > mysql.MaxIdentifierLength {
-		return sqlerror.NewSQLError(sqlerror.ERTooLongIdent, sqlerror.SSDataTooLong, "--sidecar-db-name identifier value of %q is too long (%d chars), max length for database identifiers is %d characters",
+		return sqlerror.NewSQLErrorf(sqlerror.ERTooLongIdent, sqlerror.SSDataTooLong, "--sidecar-db-name identifier value of %q is too long (%d chars), max length for database identifiers is %d characters",
 			createKeyspaceOptions.SidecarDBName, len(createKeyspaceOptions.SidecarDBName), mysql.MaxIdentifierLength)
 	}
 
