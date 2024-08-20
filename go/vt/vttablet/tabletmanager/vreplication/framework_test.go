@@ -194,7 +194,7 @@ func TestMain(m *testing.M) {
 
 		return 0
 
-		runNoBlobTest = true
+		runNoBlobTest = true //nolint:govet
 		if err := utils.SetBinlogRowImageMode("noblob", tempDir); err != nil {
 			panic(err)
 		}

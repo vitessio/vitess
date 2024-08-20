@@ -26,7 +26,9 @@ const mvSchema = `
 		price int NOT NULL,
 		name varchar(128) NOT NULL,
 		description varbinary(128) NOT NULL,
-		PRIMARY KEY (oid)
+		PRIMARY KEY (oid),
+		KEY idx_cid (cid),
+		KEY idx_pid (pid)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 

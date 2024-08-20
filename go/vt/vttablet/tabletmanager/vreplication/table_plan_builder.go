@@ -181,7 +181,7 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	if len(joinTables) == 0 {
 		return buildReplicatorPlan(source, colInfoMap, copyState, stats, collationEnv, parser)
 	}
-	log.Infof("In buildReplicatorPlanForJoin")
+	log.Infof("In buildReplicatorPlanForJoin with join tables %v", joinTables)
 	filter := source.Filter
 	joinPlan := &ReplicatorJoinPlan{
 		Tables: joinTables,
@@ -293,11 +293,11 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	if !copy {
 		plan.VStreamFilter.Rules[0].Match = fmt.Sprintf("/\\b(%s)\\b", strings.Join(plan.joinPlan.Tables, "|"))
 	} else {
-		plan.VStreamFilter.Rules[0].Filter = fmt.Sprintf("/*vt+ view=% */ %s", view, plan.VStreamFilter.Rules[0].Filter)
+		plan.VStreamFilter.Rules[0].Filter = fmt.Sprintf("/*vt+ view=%s */ %s", view, plan.VStreamFilter.Rules[0].Filter)
 	}
 	plan.TablePlans[view] = tablePlan
 	plan.TargetTables[view] = tablePlan
-	log.Infof("Added table plan for view %s", view)
+	log.Infof("Added table plan for view %s: %v, insert %v, updates %+v, deletes %+v", view, tablePlan, insert, updates, deletes)
 	for _, tableName := range joinTables {
 		rule := &binlogdatapb.Rule{
 			Match: tableName,
@@ -653,6 +653,8 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			switch node := node.(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() {
+					_ = 1
+					// FIXME
 					// return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 				}
 				colName = node.Name
@@ -717,6 +719,8 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !node.Qualifier.IsEmpty() {
+				_ = 1
+				// FIXME
 				// return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 			}
 			tpb.addCol(node.Name)

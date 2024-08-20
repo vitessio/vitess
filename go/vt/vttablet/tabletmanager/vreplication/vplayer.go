@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -378,11 +379,13 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		if rowEvent.TableName == vp.replicatorPlan.joinPlan.MainTableName {
 			log.Infof("Join plan detected for table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.MainTableName)
 			return vp.applyRowEventForJoin(ctx, rowEvent)
-		} else {
-			log.Infof("Ignoring row event for table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.MainTableName)
-
-			return nil
 		}
+		if slices.Contains(vp.replicatorPlan.joinPlan.Tables, rowEvent.TableName) {
+			log.Infof("Join plan detected for lookup table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.MainTableName)
+			return vp.applyRowEventForJoin(ctx, rowEvent)
+		}
+		log.Infof("Ignoring row event for table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.MainTableName)
+		return nil
 	}
 
 	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
