@@ -382,8 +382,6 @@ func (te *TxEngine) shutdownLocked() {
 	log.Infof("TxEngine - making sure the goroutine has returned")
 	<-rollbackDone
 
-	// Shut down functions are idempotent.
-	// No need to check if 2pc is enabled.
 	// We stop the transaction watcher so late, because if the user isn't running
 	// with any shutdown grace period, we still want the watcher to run while we are waiting
 	// for resolving transactions.
