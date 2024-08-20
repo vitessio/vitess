@@ -1857,8 +1857,9 @@ func (m mockTxThrottler) Open() (err error) {
 	return nil
 }
 
-func (m mockTxThrottler) Close() {
-}
+func (m mockTxThrottler) Close()          {}
+func (m mockTxThrottler) MakePrimary()    {}
+func (m mockTxThrottler) MakeNonPrimary() {}
 
 func (m mockTxThrottler) Throttle(priority int, workload string) (result bool) {
 	return m.throttle
