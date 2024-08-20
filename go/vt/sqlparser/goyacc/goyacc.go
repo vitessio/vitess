@@ -85,7 +85,7 @@ const (
 	ERRCODE    = 8190
 	ACCEPTCODE = 8191
 	YYLEXUNK   = 3
-	TOKSTART   = 4 //index of first defined token
+	TOKSTART   = 4 // index of first defined token
 )
 
 // no, left, right, binary assoc.
@@ -617,7 +617,7 @@ outer:
 				}
 				j = chfind(2, tokname)
 				if j >= NTBASE {
-					lerrorf(ruleline, "nonterminal "+nontrst[j-NTBASE].name+" illegal after %%prec")
+					lerrorf(ruleline, "nonterminal %s illegal after %%prec", nontrst[j-NTBASE].name)
 				}
 				levprd[nprod] = toklev[j]
 				t = gettok()
@@ -1730,7 +1730,7 @@ more:
 		}
 		if pempty[i] != OK {
 			fatfl = 0
-			errorf("nonterminal " + nontrst[i].name + " never derives any token string")
+			errorf("nonterminal %s never derives any token string", nontrst[i].name)
 		}
 	}
 
@@ -2937,7 +2937,7 @@ func others() {
 	aryfil(temp1, nprod, 0)
 
 	//
-	//yyr2 is the number of rules for each production
+	// yyr2 is the number of rules for each production
 	//
 	for i = 1; i < nprod; i++ {
 		temp1[i] = len(prdptr[i]) - 2
@@ -3276,7 +3276,7 @@ func getrune(f *bufio.Reader) rune {
 	if err != nil {
 		errorf("read error: %v", err)
 	}
-	//fmt.Printf("rune = %v n=%v\n", string(c), n);
+	// fmt.Printf("rune = %v n=%v\n", string(c), n);
 	return c
 }
 
@@ -3295,7 +3295,7 @@ func open(s string) *bufio.Reader {
 	if err != nil {
 		errorf("error opening %v: %v", s, err)
 	}
-	//fmt.Printf("open %v\n", s);
+	// fmt.Printf("open %v\n", s);
 	return bufio.NewReader(fi)
 }
 
@@ -3304,7 +3304,7 @@ func create(s string) *bufio.Writer {
 	if err != nil {
 		errorf("error creating %v: %v", s, err)
 	}
-	//fmt.Printf("create %v mode %v\n", s);
+	// fmt.Printf("create %v mode %v\n", s);
 	return bufio.NewWriter(fo)
 }
 

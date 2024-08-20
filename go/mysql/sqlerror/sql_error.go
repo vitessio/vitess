@@ -38,14 +38,18 @@ type SQLError struct {
 // NewSQLError creates a new SQLError.
 // If sqlState is left empty, it will default to "HY000" (general error).
 // TODO: Should be aligned with vterrors, stack traces and wrapping
-func NewSQLError(number ErrorCode, sqlState string, format string, args ...any) *SQLError {
+func NewSQLErrorf(number ErrorCode, sqlState string, format string, args ...any) *SQLError {
+	return NewSQLError(number, sqlState, fmt.Sprintf(format, args...))
+}
+
+func NewSQLError(number ErrorCode, sqlState string, msg string) *SQLError {
 	if sqlState == "" {
 		sqlState = SSUnknownSQLState
 	}
 	return &SQLError{
 		Num:     number,
 		State:   sqlState,
-		Message: fmt.Sprintf(format, args...),
+		Message: msg,
 	}
 }
 
@@ -290,7 +294,7 @@ func convertToMysqlError(err error) error {
 	if !ok {
 		return err
 	}
-	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
+	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error()) //nolint:govet
 }
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
