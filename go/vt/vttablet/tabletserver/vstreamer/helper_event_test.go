@@ -35,7 +35,6 @@ package vstreamer
 // The test framework will not work if the queries use double quotes for string literals at the moment.
 
 import (
-	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -319,11 +318,8 @@ func (ts *TestSpec) Init() {
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
 func (ts *TestSpec) Close() {
-	for _, table := range ts.schema.TableNames() {
-		dropStatement := fmt.Sprintf("drop table %s", table)
-		// Ignore the error as the table may not exist.
-		_ = env.Mysqld.ExecuteSuperQuery(context.Background(), dropStatement)
-	}
+	dropStatement := fmt.Sprintf("drop table if exists %s", strings.Join(ts.schema.TableNames(), ", "))
+	execStatement(ts.t, dropStatement)
 }
 
 func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[string]string) {

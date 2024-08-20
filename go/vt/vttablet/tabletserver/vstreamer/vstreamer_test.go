@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -398,8 +399,8 @@ func TestMissingTables(t *testing.T) {
 	runCases(t, filter, testcases, startPos, nil)
 }
 
-// TestInternalTables tests streaming of sidecar db tables.
-func TestInternalTables(t *testing.T) {
+// TestSidecarDBTables tests streaming of sidecar db tables.
+func TestSidecarDBTables(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
 		ddls: []string{
@@ -416,8 +417,6 @@ func TestInternalTables(t *testing.T) {
 		})
 	}()
 	defer ts.Close()
-	ctx := context.Background()
-	engine.se.Reload(ctx)
 	position := primaryPosition(t)
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -444,19 +443,11 @@ func TestInternalTables(t *testing.T) {
 	}
 	gotRowEvents := make(map[string]int)
 	gotFieldEvents := make(map[string]int)
-	for k := range wantRowEvents {
-		gotRowEvents[k] = 0
-		gotFieldEvents[k] = 0
-	}
 	err := engine.Stream(ctx, position, nil, filter, "", func(events []*binlogdatapb.VEvent) error {
 		for _, ev := range events {
 			if ev.Type == binlogdatapb.VEventType_ROW {
 				gotRowEvents[ev.RowEvent.TableName]++
-				if strings.Contains(ev.RowEvent.TableName, "internal") {
-					require.True(t, ev.RowEvent.IsInternal)
-				} else {
-					require.False(t, ev.RowEvent.IsInternal)
-				}
+				require.Equal(t, slices.Contains(options.InternalTables, ev.RowEvent.TableName), ev.RowEvent.IsInternal)
 			}
 			if ev.Type == binlogdatapb.VEventType_FIELD {
 				gotFieldEvents[ev.FieldEvent.TableName]++

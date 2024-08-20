@@ -585,7 +585,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
 		}
 
-		// If the database being streamed is the sidecar database we stream all tables with the usual flow.
+		// The database connector `vs.cp` points to the keyspace's database.
+		// If this is also setup as the sidecar database name, as is the case in the distributed transaction unit tests,
+		// for example, we stream all tables as usual.
 		// If not, we only stream the schema_version and journal tables and those specified in the internal_tables list.
 		if tm.Database == sidecar.GetName() && vs.cp.DBName() != sidecar.GetName() {
 			return vs.buildSidecarTablePlan(id, tm)

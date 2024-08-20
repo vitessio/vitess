@@ -757,15 +757,13 @@ const (
 
 func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (numRowEvents map[string]int, numFieldEvents map[string]int) {
 	// Stream for a while to ensure heartbeats are sent.
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(vstreamHeartbeatsTestContextTimeout))
+	ctx, cancel := context.WithTimeout(context.Background(), vstreamHeartbeatsTestContextTimeout)
 	defer cancel()
 
 	numRowEvents = make(map[string]int)
 	numFieldEvents = make(map[string]int)
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	if err != nil {
-		log.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer vstreamConn.Close()
 
 	done := false
@@ -793,14 +791,18 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 				switch ev.Type {
 				case binlogdatapb.VEventType_ROW:
 					rowEvent := ev.RowEvent
-					tableName := strings.Split(rowEvent.TableName, ".")[1]
+					arr := strings.Split(rowEvent.TableName, ".")
+					require.Equal(t, len(arr), 2)
+					tableName := arr[1]
 					require.Equal(t, "product", rowEvent.Keyspace)
 					require.Equal(t, "0", rowEvent.Shard)
 					numRowEvents[tableName]++
 
 				case binlogdatapb.VEventType_FIELD:
 					fieldEvent := ev.FieldEvent
-					tableName := strings.Split(fieldEvent.TableName, ".")[1]
+					arr := strings.Split(fieldEvent.TableName, ".")
+					require.Equal(t, len(arr), 2)
+					tableName := arr[1]
 					require.Equal(t, "product", fieldEvent.Keyspace)
 					require.Equal(t, "0", fieldEvent.Shard)
 					numFieldEvents[tableName]++
@@ -811,7 +813,7 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 			log.Infof("Stream Ended")
 			done = true
 		default:
-			log.Infof("%s:: remote error: %v", time.Now(), err)
+			log.Errorf("remote error: %v", err)
 			done = true
 		}
 	}
@@ -828,10 +830,10 @@ func TestVStreamHeartbeats(t *testing.T) {
 		"--heartbeat_on_demand_duration", "0",
 	)
 	setSidecarDBName("_vt")
-	config := mainClusterConfig
+	config := *mainClusterConfig
 	config.overrideHeartbeatOptions = true
 	vc = NewVitessCluster(t, &clusterOptions{
-		clusterConfig: config,
+		clusterConfig: &config,
 	})
 	defer vc.TearDown()
 
@@ -846,7 +848,7 @@ func TestVStreamHeartbeats(t *testing.T) {
 	insertInitialData(t)
 
 	expectedNumRowEvents := make(map[string]int)
-	expectedNumRowEvents["customer"] = 3
+	expectedNumRowEvents["customer"] = 3 // 3 rows inserted in the customer table in insertInitialData()
 
 	type testCase struct {
 		name               string
