@@ -332,7 +332,7 @@ func (tp *TablePlan) convertStringCharset(raw []byte, conversion *binlogdatapb.C
 
 	out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), raw, colldata.Lookup(fromCollation).Charset())
 	if err != nil {
-		return nil, sqlerror.NewSQLError(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, fmt.Sprintf("Incorrect string value: %s", err.Error()))
+		return nil, sqlerror.NewSQLErrorf(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, "Incorrect string value: %s", err.Error())
 	}
 	return out, nil
 }
