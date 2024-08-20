@@ -6,9 +6,7 @@ after successfully running `bootstrap.sh` and `dev.env`.
 The `vitess/bootstrap` image comes in different flavors:
 
 * `vitess/bootstrap:common`    - dependencies that are common to all flavors
-* `vitess/bootstrap:mysql57`   - bootstrap image for MySQL 5.7
 * `vitess/bootstrap:mysql80`   - bootstrap image for MySQL 8.0
-* `vitess/bootstrap:percona57` - bootstrap image for Percona Server 5.7
 * `vitess/bootstrap:percona80` - bootstrap image for Percona Server 8.0
 
 **NOTE: Unlike the base image that builds Vitess itself, this bootstrap image
