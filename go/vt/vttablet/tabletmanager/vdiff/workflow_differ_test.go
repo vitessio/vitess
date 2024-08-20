@@ -588,7 +588,7 @@ func TestBuildPlanInclude(t *testing.T) {
 	vdenv := newTestVDiffEnv(t)
 	defer vdenv.close()
 
-	ct := vdenv.createController(t)
+	ct := vdenv.createController(t, 1)
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{

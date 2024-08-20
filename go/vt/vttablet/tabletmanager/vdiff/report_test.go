@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,7 +40,6 @@ func TestGenRowDiff(t *testing.T) {
 		row           []sqltypes.Value
 		reportOptions *tabletmanagerdatapb.VDiffReportOptions
 		want          *RowDiff
-		wantErr       bool
 	}{
 		{
 			name: "defaults",
@@ -48,24 +47,27 @@ func TestGenRowDiff(t *testing.T) {
 				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					{
 						Name:              "t1",
-						Columns:           []string{"c1", "c2"},
-						PrimaryKeyColumns: []string{"c1"},
-						Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+						Columns:           []string{"c1", "c2", "c3", "c4", "c5"},
+						PrimaryKeyColumns: []string{"c1", "c5"},
+						Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4|c5", "int64|int64|varchar|varchar|int64"),
 					},
 				},
 			},
-			query: "select c1,c2 from t1",
+			query: "select c1,c2,c3,c4,c5 from t1",
 			tablePlan: &tablePlan{
-				selectPks: []int{0},
+				selectPks: []int{0, 4},
 			},
 			row: []sqltypes.Value{
 				sqltypes.NewInt64(1),
 				sqltypes.NewInt64(2),
+				sqltypes.NewVarChar("hi3"),
+				sqltypes.NewVarChar("hi4"),
+				sqltypes.NewInt64(5),
 			},
 			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
 			want: &RowDiff{
-				Row: map[string]string{
-					"c1": "1", "c2": "2",
+				Row: map[string]string{ // The two PK cols should be first
+					"c1": "1", "c5": "5", "c2": "2", "c3": "hi3", "c4": "hi4",
 				},
 			},
 		},
@@ -167,23 +169,18 @@ func TestGenRowDiff(t *testing.T) {
 			require.NotNil(t, tc.reportOptions)
 
 			vdenv.tmc.schema = tc.schema
-			ct := vdenv.createController(t)
+			ct := vdenv.createController(t, 1)
 			wd, err := newWorkflowDiffer(ct, vdenv.opts, collations.MySQL8())
 			require.NoError(t, err)
-
 			td := &tableDiffer{
 				wd:          wd,
 				sourceQuery: tc.query,
 				tablePlan:   tc.tablePlan,
 			}
+
 			got, err := td.genRowDiff(tc.query, tc.row, tc.reportOptions)
-			if tc.wantErr {
-				require.Error(t, err, "tableDiffer.genRowDiff() error = %v, wantErr %v",
-					err, tc.wantErr)
-				return
-			} else {
-				require.EqualValues(t, tc.want, got)
-			}
+			require.NoError(t, err)
+			require.EqualValues(t, tc.want, got)
 		})
 	}
 }

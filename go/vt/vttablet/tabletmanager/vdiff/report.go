@@ -63,7 +63,7 @@ type RowDiff struct {
 	Query string            `json:"Query,omitempty"`
 }
 
-func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, reportOptions *tabletmanagerdatapb.VDiffReportOptions) (*RowDiff, error) {
+func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *tabletmanagerdatapb.VDiffReportOptions) (*RowDiff, error) {
 	rd := &RowDiff{}
 	rd.Row = make(map[string]string)
 	statement, err := td.wd.ct.vde.parser.Parse(queryStmt)
@@ -75,8 +75,8 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, report
 		return nil, fmt.Errorf("unexpected: %+v", sqlparser.String(statement))
 	}
 
-	if reportOptions.GetDebugQuery() {
-		rd.Query = td.genDebugQueryDiff(sel, row, reportOptions.GetOnlyPks())
+	if opts.GetDebugQuery() {
+		rd.Query = td.genDebugQueryDiff(sel, row, opts.GetOnlyPks())
 	}
 
 	addVal := func(index int, truncateAt int) {
@@ -101,14 +101,14 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, report
 		pks[pkI] = struct{}{}
 	}
 
-	if reportOptions.GetOnlyPks() {
+	if opts.GetOnlyPks() {
 		return rd, nil
 	}
 
-	rowDiffColumnTruncateAt := int(reportOptions.GetRowDiffColumnTruncateAt())
+	truncateAt := int(opts.GetRowDiffColumnTruncateAt())
 	for i := range sel.SelectExprs {
 		if _, pk := pks[i]; !pk {
-			addVal(i, rowDiffColumnTruncateAt)
+			addVal(i, truncateAt)
 		}
 	}
 

@@ -662,14 +662,14 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 	return tvde.tablets[id]
 }
 
-func (tvde *testVDiffEnv) createController(t *testing.T) *controller {
+func (tvde *testVDiffEnv) createController(t *testing.T, id int) *controller {
 	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), tvde.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
+		fmt.Sprintf("%d|%s|%s|%s|%s|%s|%s|%s|", id, uuid.New(), tvde.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
-	tvde.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	tvde.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %d", id), noResults, nil)
 	ct, err := newController(context.Background(), controllerQR.Named().Row(), tvde.dbClientFactory, tstenv.TopoServ, tvde.vde, tvde.opts)
 	require.NoError(t, err)
 	return ct
