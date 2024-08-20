@@ -54,7 +54,7 @@ func (t *TimeoutHandler) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 	ctx, cancel := addQueryTimeout(ctx, vcursor, t.Timeout)
 	defer cancel()
 
-	var complete chan any
+	complete := make(chan any)
 	go func() {
 		res, err = t.Input.TryExecute(ctx, vcursor, bindVars, wantfields)
 		close(complete)
@@ -73,7 +73,7 @@ func (t *TimeoutHandler) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 	ctx, cancel := addQueryTimeout(ctx, vcursor, t.Timeout)
 	defer cancel()
 
-	var complete chan any
+	complete := make(chan any)
 	go func() {
 		err = t.Input.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
 		close(complete)

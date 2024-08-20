@@ -54,7 +54,8 @@ var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
-	inTx bool
+	inTx         bool
+	queryTimeout int
 }
 
 // MySQLVersion implements VCursor.
@@ -298,7 +299,10 @@ func (t *noopVCursor) SetQueryTimeout(maxExecutionTime int64) {
 }
 
 func (t *noopVCursor) GetQueryTimeout(queryTimeoutFromComments int) int {
-	return queryTimeoutFromComments
+	if queryTimeoutFromComments != 0 {
+		return queryTimeoutFromComments
+	}
+	return t.queryTimeout
 }
 
 func (t *noopVCursor) SetSkipQueryPlanCache(context.Context, bool) error {

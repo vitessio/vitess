@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -40,6 +41,9 @@ type fakePrimitive struct {
 	sendErr error
 
 	log []string
+
+	// sleepTime is the time for which the fake primitive sleeps before returning the results.
+	sleepTime time.Duration
 
 	allResultsInOneCall bool
 
@@ -71,6 +75,9 @@ func (f *fakePrimitive) GetTableName() string {
 
 func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
+	if f.sleepTime != 0 {
+		time.Sleep(f.sleepTime)
+	}
 	if f.results == nil {
 		return nil, f.sendErr
 	}
@@ -85,6 +92,9 @@ func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 
 func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
+	if f.sleepTime != 0 {
+		time.Sleep(f.sleepTime)
+	}
 	if f.results == nil {
 		return f.sendErr
 	}
