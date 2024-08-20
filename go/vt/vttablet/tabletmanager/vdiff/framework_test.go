@@ -623,10 +623,10 @@ func (tvde *testVDiffEnv) close() {
 		tstenv.SchemaEngine.Reload(context.Background())
 	}
 	tvde.tablets = nil
-	vdiffenv.vse.Close()
-	vdiffenv.vre.Close()
-	vdiffenv.vde.Close()
-	vdiffenv.dbClient.Close()
+	tvde.vse.Close()
+	tvde.vre.Close()
+	tvde.vde.Close()
+	tvde.dbClient.Close()
 }
 
 func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *fakeTabletConn {
