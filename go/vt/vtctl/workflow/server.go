@@ -1541,7 +1541,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 				migrationID, strings.Join(tablets, ","))
 			msg += fmt.Sprintf("please review and delete it before proceeding and then start the workflow using: MoveTables --workflow %s --target-keyspace %s start",
 				req.Workflow, req.TargetKeyspace)
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, msg)
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, msg)
 		}
 	}
 
@@ -3346,7 +3346,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
-		werr := vterrors.Wrapf(err, message)
+		werr := vterrors.Wrap(err, message)
 		ts.Logger().Error(werr)
 		return 0, nil, werr
 	}

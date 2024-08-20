@@ -414,7 +414,7 @@ func (vp *vplayer) recordHeartbeat() error {
 		return nil
 	}
 	if err := vp.vr.updateHeartbeatTime(tm); err != nil {
-		return vterrors.Wrapf(errVPlayerStalled, fmt.Sprintf("%s: %v", failedToRecordHeartbeatMsg, err))
+		return vterrors.Wrapf(errVPlayerStalled, "%s: %v", failedToRecordHeartbeatMsg, err)
 	}
 	// Only reset the pending heartbeat count if the update was successful.
 	// Otherwise the vplayer may not actually be making progress and nobody
