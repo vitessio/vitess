@@ -4168,7 +4168,9 @@ func (s *VtctldServer) ValidateVersionShard(ctx context.Context, req *vtctldatap
 		}
 
 		wg.Add(1)
-		go s.diffVersion(ctx, primaryVersion.Version, shard.PrimaryAlias, alias, &wg, &er)
+		go func(alias *topodatapb.TabletAlias) {
+			s.diffVersion(ctx, primaryVersion.Version, shard.PrimaryAlias, alias, &wg, &er)
+		}(alias)
 	}
 
 	wg.Wait()

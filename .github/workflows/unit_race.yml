@@ -90,7 +90,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       uses: nick-fields/retry@v2
       with:
-        timeout_minutes: 30
+        timeout_minutes: 45
         max_attempts: 3
         retry_on: error
         command: |

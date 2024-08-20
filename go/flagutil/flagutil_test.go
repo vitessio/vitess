@@ -159,3 +159,49 @@ func TestDurationOrIntVar(t *testing.T) {
 		assert.Equal(t, tt.want, flag.Value())
 	}
 }
+
+func TestDurationOrSecondsFloatFlag(t *testing.T) {
+	testCases := []struct {
+		Set         string
+		Expected    float64
+		ExpectedErr string
+	}{
+		{
+			Set:      "1",
+			Expected: 1,
+		},
+		{
+			Set:      "0.5",
+			Expected: 0.5,
+		},
+		{
+			Set:      "1800",
+			Expected: 1800,
+		},
+		{
+			Set:      "50ms",
+			Expected: 0.05,
+		},
+		{
+			Set:      "42m",
+			Expected: 2520,
+		},
+		{
+			Set:         "wont-parse",
+			ExpectedErr: `strconv.ParseFloat: parsing "wont-parse": invalid syntax`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.Set, func(t *testing.T) {
+			t.Parallel()
+			var f DurationOrSecondsFloatFlag
+			err := f.Set(testCase.Set)
+			if testCase.ExpectedErr != "" {
+				assert.ErrorContains(t, err, testCase.ExpectedErr)
+			}
+			assert.Equal(t, testCase.Expected, float64(f))
+		})
+	}
+}

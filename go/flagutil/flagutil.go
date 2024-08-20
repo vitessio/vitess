@@ -268,3 +268,24 @@ func (v *DurationOrIntVar) Type() string { return "duration" }
 
 // Value returns the underlying Duration value passed to the flag.
 func (v *DurationOrIntVar) Value() time.Duration { return v.val }
+
+type DurationOrSecondsFloatFlag float64
+
+func (set *DurationOrSecondsFloatFlag) Set(s string) error {
+	if dur, err := time.ParseDuration(s); err == nil {
+		*set = DurationOrSecondsFloatFlag(dur.Seconds())
+	} else {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return err
+		}
+		*set = DurationOrSecondsFloatFlag(f)
+	}
+	return nil
+}
+
+func (set *DurationOrSecondsFloatFlag) String() string {
+	return strconv.FormatFloat(float64(*set), 'f', -1, 64)
+}
+
+func (set *DurationOrSecondsFloatFlag) Type() string { return "DurationOrSecondsFloat" }
