@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -659,4 +660,17 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 	}
 	tstenv.SchemaEngine.Reload(context.Background())
 	return tvde.tablets[id]
+}
+
+func (tvde *testVDiffEnv) createController(t *testing.T) *controller {
+	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		vdiffTestCols,
+		vdiffTestColTypes,
+	),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), tvde.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
+	)
+	tvde.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), tvde.dbClientFactory, tstenv.TopoServ, tvde.vde, tvde.opts)
+	require.NoError(t, err)
+	return ct
 }
