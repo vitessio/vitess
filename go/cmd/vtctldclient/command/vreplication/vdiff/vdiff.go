@@ -69,6 +69,7 @@ var (
 		WaitUpdateInterval          time.Duration
 		AutoRetry                   bool
 		MaxDiffDuration             time.Duration
+		RowDiffColumnTruncateAt     int64
 	}{}
 
 	deleteOptions = struct {
@@ -294,6 +295,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		AutoRetry:                   createOptions.AutoRetry,
 		MaxReportSampleRows:         createOptions.MaxReportSampleRows,
 		MaxDiffDuration:             protoutil.DurationToProto(createOptions.MaxDiffDuration),
+		RowDiffColumnTruncateAt:     createOptions.RowDiffColumnTruncateAt,
 	})
 
 	if err != nil {
@@ -887,6 +889,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().BoolVar(&createOptions.AutoRetry, "auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors.")
 	create.Flags().BoolVar(&createOptions.UpdateTableStats, "update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the VDiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
 	create.Flags().DurationVar(&createOptions.MaxDiffDuration, "max-diff-duration", 0, "How long should an individual table diff run before being stopped and restarted in order to lessen the impact on tablets due to holding open database snapshots for long periods of time (0 is the default and means no time limit).")
+	create.Flags().Int64Var(&createOptions.RowDiffColumnTruncateAt, "row-diff-column-truncate-at", 128, "When showing row differences, truncate the non Primary Key column values to this length. A value less than 1 means do not truncate.")
 	base.AddCommand(create)
 
 	base.AddCommand(delete)

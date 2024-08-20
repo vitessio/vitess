@@ -657,6 +657,7 @@ message VDiffReportOptions {
   bool debug_query = 2;
   string format = 3;
   int64 max_sample_rows = 4;
+  int64 row_diff_column_truncate_at = 5;
 }
 
 message VDiffCoreOptions {

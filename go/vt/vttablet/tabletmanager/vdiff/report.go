@@ -21,6 +21,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 const (
@@ -61,7 +63,7 @@ type RowDiff struct {
 	Query string            `json:"Query,omitempty"`
 }
 
-func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
+func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, reportOptions *tabletmanagerdatapb.VDiffReportOptions) (*RowDiff, error) {
 	rd := &RowDiff{}
 	rd.Row = make(map[string]string)
 	statement, err := td.wd.ct.vde.parser.Parse(queryStmt)
@@ -73,8 +75,8 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug,
 		return nil, fmt.Errorf("unexpected: %+v", sqlparser.String(statement))
 	}
 
-	if debug {
-		rd.Query = td.genDebugQueryDiff(sel, row, onlyPks)
+	if reportOptions.GetDebugQuery() {
+		rd.Query = td.genDebugQueryDiff(sel, row, reportOptions.GetOnlyPks())
 	}
 
 	addVal := func(index int, truncateAt int) {
@@ -90,23 +92,23 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug,
 		}
 	}
 
-	// Include PK columns first as when these are truncated the
-	// row diff is virtually useless as it is unlikely to show
-	// the difference(s) and it won't provide the values needed
-	// to locate the given rows on both sides yourself.
+	// Include PK columns first and do not truncate them so that
+	// the user can always at a minimum identify the row for
+	// further investigation.
 	pks := make(map[int]struct{})
 	for _, pkI := range td.tablePlan.selectPks {
 		addVal(pkI, 0)
 		pks[pkI] = struct{}{}
 	}
 
-	if onlyPks {
+	if reportOptions.GetOnlyPks() {
 		return rd, nil
 	}
 
+	rowDiffColumnTruncateAt := int(reportOptions.GetRowDiffColumnTruncateAt())
 	for i := range sel.SelectExprs {
 		if _, pk := pks[i]; !pk {
-			addVal(i, 128)
+			addVal(i, rowDiffColumnTruncateAt)
 		}
 	}
 
