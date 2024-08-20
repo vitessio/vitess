@@ -18,8 +18,6 @@ package vdiff
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -64,8 +62,8 @@ type RowDiff struct {
 }
 
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
-	drp := &RowDiff{}
-	drp.Row = make(map[string]string)
+	rd := &RowDiff{}
+	rd.Row = make(map[string]string)
 	statement, err := td.wd.ct.vde.parser.Parse(queryStmt)
 	if err != nil {
 		return nil, err
@@ -76,29 +74,43 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug,
 	}
 
 	if debug {
-		drp.Query = td.genDebugQueryDiff(sel, row, onlyPks)
+		rd.Query = td.genDebugQueryDiff(sel, row, onlyPks)
 	}
 
-	setVal := func(index int) {
+	addVal := func(index int, truncateAt int) {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		sel.SelectExprs[index].Format(buf)
 		col := buf.String()
-		drp.Row[col] = row[index].ToString()
+		// Let's truncate if it's really worth it to avoid losing
+		// value for a few chars.
+		if truncateAt > 0 && row[index].Len() >= truncateAt+len(truncatedNotation)+20 {
+			rd.Row[col] = row[index].ToString()[:truncateAt] + truncatedNotation
+		} else {
+			rd.Row[col] = row[index].ToString()
+		}
+	}
+
+	// Include PK columns first as when these are truncated the
+	// row diff is virtually useless as it is unlikely to show
+	// the difference(s) and it won't provide the values needed
+	// to locate the given rows on both sides yourself.
+	pks := make(map[int]struct{})
+	for _, pkI := range td.tablePlan.selectPks {
+		addVal(pkI, 0)
+		pks[pkI] = struct{}{}
 	}
 
 	if onlyPks {
-		for _, pkI := range td.tablePlan.selectPks {
-			setVal(pkI)
-		}
-		return drp, nil
+		return rd, nil
 	}
 
 	for i := range sel.SelectExprs {
-		setVal(i)
+		if _, pk := pks[i]; !pk {
+			addVal(i, 128)
+		}
 	}
-	formatSampleRow(drp)
 
-	return drp, nil
+	return rd, nil
 }
 
 func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.Value, onlyPks bool) string {
@@ -129,23 +141,4 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 	}
 	buf.Myprintf(";")
 	return buf.String()
-}
-
-// formatSampleRow returns a formatted string representing a sample
-// extra/mismatched row
-func formatSampleRow(rd *RowDiff) {
-	keys := make([]string, 0, len(rd.Row))
-	rowString := strings.Builder{}
-	for k := range rd.Row {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-	for _, k := range keys {
-		// Let's truncate if it's really worth it to avoid losing value for a few chars
-		if len(rd.Row[k]) >= 30+len(truncatedNotation)+20 {
-			rd.Row[k] = rd.Row[k][:30] + truncatedNotation
-		}
-		rowString.WriteString(fmt.Sprintf("%s: %s\n", k, rd.Row[k]))
-	}
 }

@@ -238,9 +238,8 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 			return err
 		}
 		if qr.RowsAffected == 0 {
-			msg := fmt.Sprintf("no completed or stopped vdiff found for UUID %s on tablet %v",
+			return fmt.Errorf("no completed or stopped vdiff found for UUID %s on tablet %v",
 				req.VdiffUuid, vde.thisTablet.Alias)
-			return fmt.Errorf(msg)
 		}
 	}
 
