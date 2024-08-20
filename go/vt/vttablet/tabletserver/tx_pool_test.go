@@ -365,7 +365,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	assertErrorMatch := func(id int64, reason string) {
 		conn, err := txPool.GetAndLock(id, "for query")
 		if err == nil { //
-			conn.Releasef("fail")
+			conn.ReleaseString("fail")
 			t.Errorf("expected to get an error")
 			return
 		}
@@ -385,7 +385,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	_, err := txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
 
-	conn1.Releasef("transaction committed")
+	conn1.ReleaseString("transaction committed")
 
 	assertErrorMatch(id, "transaction committed")
 

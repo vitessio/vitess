@@ -22,6 +22,7 @@ import (
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net"
@@ -937,7 +938,7 @@ func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	errorString := make([]byte, 17000)
-	handler := &testRun{t: t, err: fmt.Errorf(string(errorString))}
+	handler := &testRun{t: t, err: errors.New(string(errorString))}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }

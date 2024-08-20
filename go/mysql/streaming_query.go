@@ -78,7 +78,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		// EOF is only present here if it's not deprecated.
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+			return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
 		defer c.recycleReadPacket()
 		if c.isEOFPacket(data) {
@@ -88,7 +88,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		} else if isErrorPacket(data) {
 			return ParseErrorPacket(data)
 		} else {
-			return sqlerror.NewSQLError(sqlerror.CRCommandsOutOfSync, sqlerror.SSUnknownSQLState, "unexpected packet after fields: %v", data)
+			return sqlerror.NewSQLErrorf(sqlerror.CRCommandsOutOfSync, sqlerror.SSUnknownSQLState, "unexpected packet after fields: %v", data)
 		}
 	}
 

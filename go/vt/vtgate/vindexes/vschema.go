@@ -963,7 +963,7 @@ outer:
 			toTable, err = escapeQualifiedTable(toTable)
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-					Error: vterrors.Errorf(
+					Error: vterrors.New(
 						vtrpcpb.Code_INVALID_ARGUMENT,
 						err.Error(),
 					),
@@ -1392,7 +1392,7 @@ func ChooseVindexForType(typ querypb.Type) (string, error) {
 
 // FindBestColVindex finds the best ColumnVindex for VReplication.
 func FindBestColVindex(table *Table) (*ColumnVindex, error) {
-	if table.ColumnVindexes == nil || len(table.ColumnVindexes) == 0 {
+	if len(table.ColumnVindexes) == 0 {
 		return nil, vterrors.Errorf(
 			vtrpcpb.Code_INVALID_ARGUMENT,
 			"table %s has no vindex",

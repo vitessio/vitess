@@ -37,7 +37,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-type VDiffAction string //nolint
+type VDiffAction string // nolint
 
 const (
 	CreateAction  VDiffAction = "create"
