@@ -3913,15 +3913,15 @@ func TestSelectAggregationNoData(t *testing.T) {
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64")),
-			expSandboxQ: "select x.col1, x.col2, 1 from (select col1, col2 from `user`) as x limit 2",
-			expField:    `[name:"count(*)" type:INT64]`,
+			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit 2",
+			expField:    `[name:"count(*)" type:INT64 charset:63 flags:32769]`,
 			expRow:      `[[INT64(0)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 2) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary")),
-			expSandboxQ: "select x.col1, x.col2, 1, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 2",
-			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 2",
+			expField:    `[name:"col2" type:INT64 charset:63 flags:32768 name:"count(*)" type:INT64 charset:63 flags:32769]`,
 			expRow:      `[]`,
 		},
 	}
@@ -4005,15 +4005,15 @@ func TestSelectAggregationData(t *testing.T) {
 		{
 			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1", "int64|int64|int64"), "100|200|1", "200|300|1"),
-			expSandboxQ: "select x.col1, x.col2, 1 from (select col1, col2 from `user`) as x limit 2",
-			expField:    `[name:"count(*)" type:INT64]`,
+			expSandboxQ: "select 1 from (select col1, col2 from `user`) as x limit 2",
+			expField:    `[name:"count(*)" type:INT64 charset:63 flags:32769]`,
 			expRow:      `[[INT64(2)]]`,
 		},
 		{
 			sql:         `select col2, count(*) from (select col1, col2 from user limit 9) x group by col2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|1|weight_string(col2)", "int64|int64|int64|varbinary"), "100|3|1|NULL", "200|2|1|NULL"),
-			expSandboxQ: "select x.col1, x.col2, 1, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 9",
-			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
+			expSandboxQ: "select x.col1, x.col2, weight_string(x.col2) from (select col1, col2 from `user`) as x limit 9",
+			expField:    `[name:"col2" type:INT64 charset:63 flags:32768 name:"count(*)" type:INT64 charset:63 flags:32769]`,
 			expRow:      `[[INT64(2) INT64(4)] [INT64(3) INT64(5)]]`,
 		},
 		{

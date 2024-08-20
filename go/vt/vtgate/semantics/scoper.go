@@ -35,9 +35,10 @@ type (
 		binder *binder
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
-		specialExprScopes map[*sqlparser.Literal]*scope
-		statementIDs      map[sqlparser.Statement]TableSet
-		si                SchemaInformation
+		specialExprScopes     map[*sqlparser.Literal]*scope
+		statementIDs          map[sqlparser.Statement]TableSet
+		commonTableExprScopes []*sqlparser.CommonTableExpr
+		si                    SchemaInformation
 	}
 
 	scope struct {
@@ -105,6 +106,8 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			s.currentScope().inHaving = true
 			return nil
 		}
+	case *sqlparser.CommonTableExpr:
+		s.commonTableExprScopes = append(s.commonTableExprScopes, node)
 	}
 	return nil
 }
@@ -240,6 +243,9 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	case sqlparser.AggrFunc:
 		s.currentScope().inHavingAggr = false
 	case sqlparser.TableExpr:
+		// inside joins and derived tables, we can only see the tables in the table/join.
+		// we also want the tables available in the outer query, for SELECT expressions and the WHERE clause,
+		// so we copy the tables from the current scope to the parent scope
 		if isParentSelect(cursor) {
 			curScope := s.currentScope()
 			s.popScope()
@@ -258,6 +264,8 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 				s.binder.usingJoinInfo[ts] = m
 			}
 		}
+	case *sqlparser.CommonTableExpr:
+		s.commonTableExprScopes = s.commonTableExprScopes[:len(s.commonTableExprScopes)-1]
 	}
 	return nil
 }
@@ -367,7 +375,7 @@ func checkForInvalidAliasUse(cte *sqlparser.CommonTableExpr, name string) (err e
 		}
 		return err == nil
 	}
-	_ = sqlparser.CopyOnRewrite(cte.Subquery.Select, down, nil, nil)
+	_ = sqlparser.CopyOnRewrite(cte.Subquery, down, nil, nil)
 	return err
 }
 

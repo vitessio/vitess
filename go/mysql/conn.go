@@ -1624,9 +1624,15 @@ func (c *Conn) TLSEnabled() bool {
 	return c.Capabilities&CapabilityClientSSL > 0
 }
 
-// IsUnixSocket returns true if this connection is over a Unix socket.
+// IsUnixSocket returns true if the server connection is over a Unix socket.
 func (c *Conn) IsUnixSocket() bool {
 	_, ok := c.listener.listener.(*net.UnixListener)
+	return ok
+}
+
+// IsClientUnixSocket returns true if the client connection is over a Unix socket with the server.
+func (c *Conn) IsClientUnixSocket() bool {
+	_, ok := c.conn.(*net.UnixConn)
 	return ok
 }
 

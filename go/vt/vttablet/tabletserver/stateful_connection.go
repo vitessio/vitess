@@ -321,3 +321,8 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 func (sc *StatefulConnection) resetExpiryTime() {
 	sc.expiryTime = time.Now().Add(sc.timeout)
 }
+
+// IsUnixSocket returns true if the connection is using a unix socket
+func (sc *StatefulConnection) IsUnixSocket() bool {
+	return sc.dbConn.Conn.IsUnixSocket()
+}
