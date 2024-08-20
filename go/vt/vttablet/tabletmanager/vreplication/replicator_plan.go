@@ -297,7 +297,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		case !before && after:
 			bindvar = bindvars["a_"+tp.PKReferences[0]]
 		}
-		if bindvar == nil { //should never happen
+		if bindvar == nil { // should never happen
 			return false
 		}
 
@@ -332,7 +332,7 @@ func (tp *TablePlan) convertStringCharset(raw []byte, conversion *binlogdatapb.C
 
 	out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), raw, colldata.Lookup(fromCollation).Charset())
 	if err != nil {
-		return nil, sqlerror.NewSQLError(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, "Incorrect string value: %s", err.Error())
+		return nil, sqlerror.NewSQLError(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, fmt.Sprintf("Incorrect string value: %s", err.Error()))
 	}
 	return out, nil
 }
