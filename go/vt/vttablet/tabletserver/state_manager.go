@@ -485,7 +485,7 @@ func (sm *stateManager) unservePrimary() error {
 	sm.se.MakePrimary(false)
 	sm.hs.MakePrimary(false)
 	sm.rt.MakePrimary()
-	sm.txThrottler.MakeNonPrimary()
+	sm.txThrottler.MakePrimary()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateNotServing)
 	return nil
 }
