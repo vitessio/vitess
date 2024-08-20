@@ -119,6 +119,8 @@ var (
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
+	VT15001 = errorWithoutState("VT15001", vtrpcpb.Code_DEADLINE_EXCEEDED, "Query execution was interrupted, maximum statement execution time exceeded", "Query execution was interrupted, maximum statement execution time exceeded")
+
 	// Errors is a list of errors that must match all the variables
 	// defined above to enable auto-documentation of error codes.
 	Errors = []func(args ...any) *VitessError{

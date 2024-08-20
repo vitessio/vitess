@@ -6,19 +6,24 @@
       "QueryType": "SELECT",
       "Original": "SELECT c FROM sbtest34 WHERE id=15",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": true
-        },
-        "FieldQuery": "select c from sbtest34 where 1 != 1",
-        "Query": "select c from sbtest34 where id = 15",
-        "Table": "sbtest34",
-        "Values": [
-          "15"
-        ],
-        "Vindex": "hash"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select c from sbtest34 where 1 != 1",
+            "Query": "select c from sbtest34 where id = 15",
+            "Table": "sbtest34",
+            "Values": [
+              "15"
+            ],
+            "Vindex": "hash"
+          }
+        ]
       },
       "TablesUsed": [
         "main.sbtest34"
@@ -32,15 +37,20 @@
       "QueryType": "SELECT",
       "Original": "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": true
-        },
-        "FieldQuery": "select c from sbtest12 where 1 != 1",
-        "Query": "select c from sbtest12 where id between 1 and 10",
-        "Table": "sbtest12"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select c from sbtest12 where 1 != 1",
+            "Query": "select c from sbtest12 where id between 1 and 10",
+            "Table": "sbtest12"
+          }
+        ]
       },
       "TablesUsed": [
         "main.sbtest12"
@@ -54,20 +64,25 @@
       "QueryType": "SELECT",
       "Original": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(k)",
+        "OperatorType": "TimeoutHandler",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": true
-            },
-            "FieldQuery": "select sum(k) from sbtest43 where 1 != 1",
-            "Query": "select sum(k) from sbtest43 where id between 90 and 990",
-            "Table": "sbtest43"
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS sum(k)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(k) from sbtest43 where 1 != 1",
+                "Query": "select sum(k) from sbtest43 where id between 90 and 990",
+                "Table": "sbtest43"
+              }
+            ]
           }
         ]
       },
@@ -83,16 +98,21 @@
       "QueryType": "SELECT",
       "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": true
-        },
-        "FieldQuery": "select c from sbtest1 where 1 != 1",
-        "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-        "Query": "select c from sbtest1 where id between 50 and 235 order by sbtest1.c asc",
-        "Table": "sbtest1"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select c from sbtest1 where 1 != 1",
+            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+            "Query": "select c from sbtest1 where id between 50 and 235 order by sbtest1.c asc",
+            "Table": "sbtest1"
+          }
+        ]
       },
       "TablesUsed": [
         "main.sbtest1"
@@ -106,21 +126,26 @@
       "QueryType": "SELECT",
       "Original": "SELECT DISTINCT c FROM sbtest30 WHERE id BETWEEN 1 AND 10 ORDER BY c",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0 COLLATE latin1_swedish_ci",
+        "OperatorType": "TimeoutHandler",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": true
-            },
-            "FieldQuery": "select c from sbtest30 where 1 != 1 group by c",
-            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-            "Query": "select c from sbtest30 where id between 1 and 10 group by c order by sbtest30.c asc",
-            "Table": "sbtest30"
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "GroupBy": "0 COLLATE latin1_swedish_ci",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select c from sbtest30 where 1 != 1 group by c",
+                "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+                "Query": "select c from sbtest30 where id between 1 and 10 group by c order by sbtest30.c asc",
+                "Table": "sbtest30"
+              }
+            ]
           }
         ]
       },

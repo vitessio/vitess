@@ -28,15 +28,20 @@
       "QueryType": "SELECT",
       "Original": "select user.col from user join ambiguous_ref_with_source",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user`, ambiguous_ref_with_source where 1 != 1",
-        "Query": "select `user`.col from `user`, ambiguous_ref_with_source",
-        "Table": "`user`, ambiguous_ref_with_source"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user`, ambiguous_ref_with_source where 1 != 1",
+            "Query": "select `user`.col from `user`, ambiguous_ref_with_source",
+            "Table": "`user`, ambiguous_ref_with_source"
+          }
+        ]
       },
       "TablesUsed": [
         "user.ambiguous_ref_with_source",
@@ -73,15 +78,20 @@
       "QueryType": "SELECT",
       "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join user",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source, `user` where 1 != 1",
-        "Query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source, `user`",
-        "Table": "`user`, ambiguous_ref_with_source"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source, `user` where 1 != 1",
+            "Query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source, `user`",
+            "Table": "`user`, ambiguous_ref_with_source"
+          }
+        ]
       },
       "TablesUsed": [
         "user.ambiguous_ref_with_source",
@@ -96,19 +106,24 @@
       "QueryType": "SELECT",
       "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join (select aa from user where user.id=1) user",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select ambiguous_ref_with_source.col from (select aa from `user` where 1 != 1) as `user`, ambiguous_ref_with_source where 1 != 1",
-        "Query": "select ambiguous_ref_with_source.col from (select aa from `user` where `user`.id = 1) as `user`, ambiguous_ref_with_source",
-        "Table": "`user`, ambiguous_ref_with_source",
-        "Values": [
-          "1"
-        ],
-        "Vindex": "user_index"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ambiguous_ref_with_source.col from (select aa from `user` where 1 != 1) as `user`, ambiguous_ref_with_source where 1 != 1",
+            "Query": "select ambiguous_ref_with_source.col from (select aa from `user` where `user`.id = 1) as `user`, ambiguous_ref_with_source",
+            "Table": "`user`, ambiguous_ref_with_source",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
       },
       "TablesUsed": [
         "user.ambiguous_ref_with_source",
@@ -123,15 +138,20 @@
       "QueryType": "SELECT",
       "Original": "select user.col from user join main.ambiguous_ref_with_source",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user`, ambiguous_ref_with_source where 1 != 1",
-        "Query": "select `user`.col from `user`, ambiguous_ref_with_source",
-        "Table": "`user`, ambiguous_ref_with_source"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user`, ambiguous_ref_with_source where 1 != 1",
+            "Query": "select `user`.col from `user`, ambiguous_ref_with_source",
+            "Table": "`user`, ambiguous_ref_with_source"
+          }
+        ]
       },
       "TablesUsed": [
         "user.ambiguous_ref_with_source",
@@ -168,35 +188,40 @@
       "QueryType": "SELECT",
       "Original": "SELECT u.id FROM ( SELECT a.id, a.u_id FROM user.ref_with_source AS a WHERE a.id IN (3) ORDER BY a.d_at LIMIT 1) as u LEFT JOIN user.ref_with_source AS u0 ON u.u_id = u0.u_uid ORDER BY u.id",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "LeftJoin",
-        "JoinColumnIndexes": "L:0",
-        "JoinVars": {
-          "u_u_id": 1
-        },
-        "TableName": "ref_with_source_ref_with_source",
+        "OperatorType": "TimeoutHandler",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "u_u_id": 1
             },
-            "FieldQuery": "select u.id, u.u_id from (select a.id, a.u_id from ref_with_source as a where 1 != 1) as u where 1 != 1",
-            "Query": "select u.id, u.u_id from (select a.id, a.u_id from ref_with_source as a where a.id in (3) order by a.d_at asc limit 1) as u order by u.id asc",
-            "Table": "ref_with_source"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from ref_with_source as u0 where 1 != 1",
-            "Query": "select 1 from ref_with_source as u0 where u0.u_uid = :u_u_id",
-            "Table": "ref_with_source"
+            "TableName": "ref_with_source_ref_with_source",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.id, u.u_id from (select a.id, a.u_id from ref_with_source as a where 1 != 1) as u where 1 != 1",
+                "Query": "select u.id, u.u_id from (select a.id, a.u_id from ref_with_source as a where a.id in (3) order by a.d_at asc limit 1) as u order by u.id asc",
+                "Table": "ref_with_source"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from ref_with_source as u0 where 1 != 1",
+                "Query": "select 1 from ref_with_source as u0 where u0.u_uid = :u_u_id",
+                "Table": "ref_with_source"
+              }
+            ]
           }
         ]
       },
@@ -322,15 +347,20 @@
       "QueryType": "SELECT",
       "Original": "select user.col from user join ref_with_source",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user`, ref_with_source where 1 != 1",
-        "Query": "select `user`.col from `user`, ref_with_source",
-        "Table": "`user`, ref_with_source"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user`, ref_with_source where 1 != 1",
+            "Query": "select `user`.col from `user`, ref_with_source",
+            "Table": "`user`, ref_with_source"
+          }
+        ]
       },
       "TablesUsed": [
         "user.ref_with_source",
@@ -345,15 +375,20 @@
       "QueryType": "SELECT",
       "Original": "select user.col from user join source_of_ref",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user`, ref_with_source as source_of_ref where 1 != 1",
-        "Query": "select `user`.col from `user`, ref_with_source as source_of_ref",
-        "Table": "`user`, ref_with_source"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user`, ref_with_source as source_of_ref where 1 != 1",
+            "Query": "select `user`.col from `user`, ref_with_source as source_of_ref",
+            "Table": "`user`, ref_with_source"
+          }
+        ]
       },
       "TablesUsed": [
         "user.ref_with_source",
@@ -368,15 +403,20 @@
       "QueryType": "SELECT",
       "Original": "select user.col from user join rerouted_ref",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user`, ref as rerouted_ref where 1 != 1",
-        "Query": "select `user`.col from `user`, ref as rerouted_ref",
-        "Table": "`user`, ref"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user`, ref as rerouted_ref where 1 != 1",
+            "Query": "select `user`.col from `user`, ref as rerouted_ref",
+            "Table": "`user`, ref"
+          }
+        ]
       },
       "TablesUsed": [
         "user.ref",
@@ -391,15 +431,20 @@
       "QueryType": "SELECT",
       "Original": "select user.col from user join global_ref",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user`, global_ref where 1 != 1",
-        "Query": "select `user`.col from `user`, global_ref",
-        "Table": "`user`, global_ref"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user`, global_ref where 1 != 1",
+            "Query": "select `user`.col from `user`, global_ref",
+            "Table": "`user`, global_ref"
+          }
+        ]
       },
       "TablesUsed": [
         "user.global_ref",
@@ -700,18 +745,23 @@
       "QueryType": "SELECT",
       "Original": "select * from user.ref_with_source ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
       "Instructions": {
-        "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Vindex": "user_index",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
-        "Table": "`user`, ref_with_source",
-        "Values": [
-          "2"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
+            "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
+            "Table": "`user`, ref_with_source",
+            "Values": [
+              "2"
+            ],
+            "Vindex": "user_index"
+          }
         ]
       },
       "TablesUsed": [
@@ -727,18 +777,23 @@
       "QueryType": "SELECT",
       "Original": "select * from source_of_ref ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
       "Instructions": {
-        "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Vindex": "user_index",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
-        "Table": "`user`, ref_with_source",
-        "Values": [
-          "2"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
+            "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
+            "Table": "`user`, ref_with_source",
+            "Values": [
+              "2"
+            ],
+            "Vindex": "user_index"
+          }
         ]
       },
       "TablesUsed": [
@@ -754,15 +809,20 @@
       "QueryType": "SELECT",
       "Original": "select 1 from user u join user_extra ue on u.id = ue.user_id join main.source_of_ref sr on sr.foo = ue.foo join main.rerouted_ref rr on rr.bar = sr.bar",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where 1 != 1",
-        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where rr.bar = sr.bar and u.id = ue.user_id and sr.foo = ue.foo",
-        "Table": "`user`, ref, ref_with_source, user_extra"
+        "OperatorType": "TimeoutHandler",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where 1 != 1",
+            "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where rr.bar = sr.bar and u.id = ue.user_id and sr.foo = ue.foo",
+            "Table": "`user`, ref, ref_with_source, user_extra"
+          }
+        ]
       },
       "TablesUsed": [
         "user.ref",

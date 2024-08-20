@@ -346,40 +346,12 @@
   {
     "comment": "Alter View",
     "query": "alter view user.user_extra as select * from user.user",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "alter view user.user_extra as select * from user.user",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "alter view user_extra as select * from `user`"
-      },
-      "TablesUsed": [
-        "user.user_extra"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "Create View with authoritative column",
     "query": "create view user.tmp_view as select * from user.authoritative",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.tmp_view as select * from user.authoritative",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view tmp_view as select * from authoritative"
-      },
-      "TablesUsed": [
-        "user.tmp_view"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "drop table without qualifier",

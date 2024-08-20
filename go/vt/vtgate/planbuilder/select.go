@@ -229,6 +229,8 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
+	plan = engine.NewTimeoutHandler(plan, queryTimeout(selStmt.GetParsedComments().Directives()))
+
 	return plan, operators.TablesUsed(op), nil
 }
 

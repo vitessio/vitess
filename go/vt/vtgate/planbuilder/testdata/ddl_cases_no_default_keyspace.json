@@ -2,249 +2,67 @@
   {
     "comment": "Create View with qualifier",
     "query": "create view user.a as select* from user",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.a as select* from user",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view a as select * from `user`"
-      },
-      "TablesUsed": [
-        "user.a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with qualifier in select as well",
     "query": "create view user.a as select* from user.user",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.a as select* from user.user",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view a as select * from `user`"
-      },
-      "TablesUsed": [
-        "user.a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with No column referenced",
     "query": "create view user.view_a as select 1 from user",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select 1 from user",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select 1 from `user`"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with '*' expression for simple route",
     "query": "create view user.view_a as select user.* from user",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user.* from user",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select `user`.* from `user`"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with unqualified '*' expression for simple route",
     "query": "create view user.view_a as select * from user",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from user",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from `user`"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with fully qualified '*' expression for simple route",
     "query": "create view user.view_a as select user.user.* from user.user",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user.user.* from user.user",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select `user`.* from `user`"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with select * from authoritative table",
     "query": "create view user.view_a as select * from authoritative",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from authoritative",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from authoritative"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with select * from join of authoritative tables",
     "query": "create view user.view_a as select * from authoritative a join authoritative b on a.user_id=b.user_id",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from authoritative a join authoritative b on a.user_id=b.user_id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from authoritative as a join authoritative as b on a.user_id = b.user_id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with select * from qualified authoritative table",
     "query": "create view user.view_a as select a.* from authoritative a",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select a.* from authoritative a",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select a.* from authoritative as a"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with select * from intermixing of authoritative table with non-authoritative results in no expansion",
     "query": "create view user.view_a as select * from authoritative join user on authoritative.user_id=user.id",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from authoritative join user on authoritative.user_id=user.id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from authoritative join `user` on authoritative.user_id = `user`.id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with select authoritative.* with intermixing still expands",
     "query": "create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select `user`.id, a.*, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with auto-resolve anonymous columns for simple route",
     "query": "create view user.view_a as select user.col from user join user_extra on user.id = user_extra.user_id",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user.col from user join user_extra on user.id = user_extra.user_id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with join that can be solved in each shard separately",
     "query": "create view user.view_a as select user.id from user join user_extra on user.id = user_extra.user_id",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user.id from user join user_extra on user.id = user_extra.user_id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select `user`.id from `user` join user_extra on `user`.id = user_extra.user_id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with last_insert_id for unsharded route",
@@ -268,97 +86,27 @@
   {
     "comment": "create view with select from pinned table",
     "query": "create view user.view_a as select * from pin_test",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from pin_test",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from pin_test"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with Expression with single-route reference",
     "query": "create view user.view_a as select user.col, user_extra.id + user_extra.col from user join user_extra on user.id = user_extra.user_id",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user.col, user_extra.id + user_extra.col from user join user_extra on user.id = user_extra.user_id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select `user`.col, user_extra.id + user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with Comments",
     "query": "create view user.view_a as select /* comment */ user.col from user join user_extra on user.id = user_extra.user_id",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select /* comment */ user.col from user join user_extra on user.id = user_extra.user_id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select /* comment */ `user`.col from `user` join user_extra on `user`.id = user_extra.user_id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with for update",
     "query": "create view user.view_a as select user.col from user join user_extra on user.id = user_extra.user_id for update",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user.col from user join user_extra on user.id = user_extra.user_id for update",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id for update"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with Case preservation",
     "query": "create view user.view_a as select user.Col, user_extra.Id from user join user_extra on user.id = user_extra.user_id",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user.Col, user_extra.Id from user join user_extra on user.id = user_extra.user_id",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select `user`.Col, user_extra.Id from `user` join user_extra on `user`.id = user_extra.user_id"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with syntax error",
@@ -368,192 +116,52 @@
   {
     "comment": "create view with Hex number is not treated as a simple value",
     "query": "create view user.view_a as select * from user where id = 0x04",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from user where id = 0x04",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from `user` where id = 0x04"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with limit works if it can be dropped",
     "query": "create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from `user` where `name` = 'abc' and id = 4 limit 5"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with Multiple parenthesized expressions",
     "query": "create view user.view_a as select * from user where (id = 4) AND (name ='abc') limit 5",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from user where (id = 4) AND (name ='abc') limit 5",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from `user` where id = 4 and `name` = 'abc' limit 5"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with Multiple parenthesized expressions",
     "query": "create view user.view_a as select * from user where (id = 4 and name ='abc') limit 5",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from user where (id = 4 and name ='abc') limit 5",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from `user` where id = 4 and `name` = 'abc' limit 5"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with Column Aliasing with Table.Column",
     "query": "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col asc"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with Column Aliasing with Column",
     "query": "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with Booleans and parenthesis",
     "query": "create view user.view_a as select * from user where (id = 1) AND name = true",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from user where (id = 1) AND name = true",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from `user` where id = 1 and `name` = true"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with union with the same target shard",
     "query": "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from music where user_id = 1 union select * from `user` where id = 1"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with testing SingleRow Projection",
     "query": "create view user.view_a as select 42 from user",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select 42 from user",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select 42 from `user`"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "create view with sql_calc_found_rows without limit",
     "query": "create view user.view_a as select sql_calc_found_rows * from music where user_id = 1",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as select sql_calc_found_rows * from music where user_id = 1",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select * from music where user_id = 1"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "DDL",
@@ -596,21 +204,7 @@
   {
     "comment": "Alter View",
     "query": "alter view user_extra as select* from user",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "alter view user_extra as select* from user",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "alter view user_extra as select * from `user`"
-      },
-      "TablesUsed": [
-        "user.user_extra"
-      ]
-    }
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
   },
   {
     "comment": "Alter View with unknown view",

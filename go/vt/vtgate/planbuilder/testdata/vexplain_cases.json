@@ -25,15 +25,20 @@
         "Type": "queries",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user`",
-            "Table": "`user`"
+            "OperatorType": "TimeoutHandler",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select * from `user` where 1 != 1",
+                "Query": "select * from `user`",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       },
@@ -53,15 +58,20 @@
         "Type": "all",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user`",
-            "Table": "`user`"
+            "OperatorType": "TimeoutHandler",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select * from `user` where 1 != 1",
+                "Query": "select * from `user`",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       },
