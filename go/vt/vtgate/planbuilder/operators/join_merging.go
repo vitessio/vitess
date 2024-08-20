@@ -111,10 +111,6 @@ func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Ro
 	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
 
 	a, b := getRoutingType(routingA), getRoutingType(routingB)
-	if a == dual || b == dual {
-		// if either side is a dual, we can merge them
-		sameKeyspace = true
-	}
 	return lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace
 }
 
