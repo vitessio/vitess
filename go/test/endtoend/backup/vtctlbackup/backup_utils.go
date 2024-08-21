@@ -1371,7 +1371,6 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 		if backupstorage.BackupStorageImplementation == "file" {
 			require.Contains(t, bb, "BackupStorage.File.File:Write")
 		}
-	case XtraBackup, MySQLShell:
 	}
 
 	require.Contains(t, vars, "BackupCount")
@@ -1386,7 +1385,6 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
 		require.Contains(t, bc, "BackupEngine.Builtin.Source:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Source:Open")
-	case XtraBackup, MySQLShell:
 	}
 
 	require.Contains(t, vars, "BackupDurationNanoseconds")
@@ -1404,7 +1402,6 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Close")
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
-	case XtraBackup, MySQLShell:
 	}
 
 	if backupstorage.BackupStorageImplementation == "file" {
@@ -1439,7 +1436,6 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
 		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
 		require.Contains(t, bb, "BackupStorage.File.File:Read")
-	case XtraBackup, MySQLShell:
 	}
 
 	require.Contains(t, vars, "RestoreCount")
@@ -1454,7 +1450,6 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
 		require.Contains(t, bc, "BackupEngine.Builtin.Source:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Source:Open")
-	case XtraBackup, MySQLShell:
 	}
 
 	require.Contains(t, vars, "RestoreDurationNanoseconds")
@@ -1472,7 +1467,6 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Close")
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
-	case XtraBackup, MySQLShell:
 	}
 
 	require.Contains(t, bd, "BackupStorage.File.File:Read")
