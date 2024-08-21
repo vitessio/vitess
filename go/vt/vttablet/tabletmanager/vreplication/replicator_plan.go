@@ -67,21 +67,6 @@ type ReplicatorPlan struct {
 	joinPlan *ReplicatorJoinPlan
 }
 
-// ReplicatorJoinPlan is for a materialized view that joins multiple tables.
-type ReplicatorJoinPlan struct {
-	Tables        []string // all tables in the join
-	ViewTableName string   // the view table
-	BaseTableName string   // the base table for which we run the copy phase
-}
-
-type TableJoinPlan struct {
-	Insert        *sqlparser.ParsedQuery            // insert query for the view table
-	Updates       map[string]*sqlparser.ParsedQuery // update queries for each participating table
-	Deletes       map[string]*sqlparser.ParsedQuery // delete queries for each participating table
-	TableColumns  *map[string][]*ViewColumn         // columns for each participating table
-	BaseTableName string                            // the base table for which we run the copy phase
-}
-
 // buildExecution plan uses the field info as input and the partially built
 // TablePlan for that table to build a full plan.
 func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent) (*TablePlan, error) {
@@ -380,19 +365,27 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	return sqltypes.ValueBindVariable(*val), nil
 }
 
+/*
+applyChangeForJoin applies the DML change to the view table in case of a materialized view. Depending on the table
+involved the query plan used will differ. We only insert into the base table if the source has an insert. However for
+updates and deletes, we need to update the base table differently. For the base table, we rerun
+*/
 func (tp *TablePlan) applyChangeForJoin(eventTableName string, eventTablePlan *TablePlan, rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	var before, after bool
-	bindvars := make(map[string]*querypb.BindVariable, len(eventTablePlan.Fields))
-	tc := (*tp.JoinPlan.TableColumns)[eventTableName]
-	mapFieldName := func(fieldName string) string {
-		for _, col := range tc {
-			if col.SourceColumnName == fieldName {
+
+	// mapColumnName maps a field name from the source table to the view table, if names are different
+	// since the applied DML is on the view table, we need to map the field names to the view table
+	cols := (*tp.JoinPlan.TableColumns)[eventTableName]
+	mapColumnName := func(colName string) string {
+		for _, col := range cols {
+			if col.SourceColumnName == colName {
 				return col.ViewColumnName
 			}
 		}
-		return fieldName
+		return colName
 	}
 
+	var before, after bool
+	bindvars := make(map[string]*querypb.BindVariable, len(eventTablePlan.Fields))
 	if rowChange.Before != nil {
 		before = true
 		vals := sqltypes.MakeRowTrusted(eventTablePlan.Fields, rowChange.Before)
@@ -401,7 +394,7 @@ func (tp *TablePlan) applyChangeForJoin(eventTableName string, eventTablePlan *T
 			if err != nil {
 				return nil, err
 			}
-			bindvars["b_"+mapFieldName(field.Name)] = bindVar
+			bindvars["b_"+mapColumnName(field.Name)] = bindVar
 		}
 	}
 	if rowChange.After != nil {
@@ -412,25 +405,27 @@ func (tp *TablePlan) applyChangeForJoin(eventTableName string, eventTablePlan *T
 			if err != nil {
 				return nil, err
 			}
-			bindvars["a_"+mapFieldName(field.Name)] = bindVar
+			bindvars["a_"+mapColumnName(field.Name)] = bindVar
 		}
 	}
 	switch {
-	case !before && after:
+	case !before && after: // insert
 		if eventTableName != tp.JoinPlan.BaseTableName {
-			log.Infof("Ignoring non-main table insert for %v", eventTableName)
+			// We expect that any insert into a lookup table is not resulting in a new row in the base table.
+			// This means that cases where the view had lookup entries that didn't exist earlier and were added later
+			// will not work with the current implementation.
 			return nil, nil
 		}
-		log.Infof("Inserting into main table %v: %s, bindvars %+q", tp.JoinPlan.BaseTableName, tp.JoinPlan.Insert.Query, bindvars)
+		log.Infof("Inserting into base table %v: %s, bindvars %+q", tp.JoinPlan.BaseTableName, tp.JoinPlan.Insert.Query, bindvars)
 		return execParsedQuery(tp.JoinPlan.Insert, bindvars, executor)
-	case before && after:
+	case before && after: // update
 		upd := tp.JoinPlan.Updates[eventTableName]
 		if upd == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "update query not found for %v", eventTableName)
 		}
 		log.Infof("Updating %v: %s with bindvars %+q", eventTableName, upd.Query, bindvars)
 		return execParsedQuery(upd, bindvars, executor)
-	case before && !after:
+	case before && !after: // delete
 		del := tp.JoinPlan.Deletes[eventTableName]
 		if del == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "delete query not found for %v", eventTableName)
