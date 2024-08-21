@@ -356,7 +356,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 
 func buildJoinPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	log.Infof("buildJoinPlan: %v, table %v", query, ti.Name)
-	tables, err := vttablet.GetJoinTables(env.Parser(), query)
+	tables, err := vttablet.GetJoinedTables(env.Parser(), query)
 	if err != nil {
 		return nil, err
 	}

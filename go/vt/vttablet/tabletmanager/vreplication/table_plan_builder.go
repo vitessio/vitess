@@ -174,7 +174,7 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment,
 	parser *sqlparser.Parser, dbClient *vdbClient, copy bool) (*ReplicatorPlan, error) {
 
-	joinTables, err := vttablet.GetJoinTables(parser, source.Filter.Rules[0].Filter)
+	joinTables, err := vttablet.GetJoinedTables(parser, source.Filter.Rules[0].Filter)
 	if err != nil {
 		return nil, err
 	}

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -180,11 +182,7 @@ func (ts *tableSettings) Set(v string) error {
 
 	isMaterializeView := false
 	if len(ts.val) == 1 {
-		stmt, err := ts.parser.Parse(ts.val[0].SourceExpression)
-		if err != nil {
-			return fmt.Errorf("invalid source_expression: %q", ts.val[0].SourceExpression)
-		}
-		tables, err := handleJoin(stmt)
+		tables, err := vttablet.GetJoinedTables(ts.parser, ts.val[0].SourceExpression)
 		if err != nil {
 			return fmt.Errorf("error parsing join query: %v", err)
 		}
