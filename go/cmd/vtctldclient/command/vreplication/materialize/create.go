@@ -153,23 +153,6 @@ func (ts *tableSettings) String() string {
 	return string(tsj)
 }
 
-func handleJoin(stmt sqlparser.Statement) (tables []string, err error) {
-	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.AliasedTableExpr:
-			if tableName, ok := node.Expr.(sqlparser.TableName); ok {
-				tables = append(tables, tableName.Name.String())
-			}
-		}
-		return true, nil
-	}, stmt)
-	if err != nil {
-		return nil, err
-	}
-
-	return tables, nil
-}
-
 func (ts *tableSettings) Set(v string) error {
 	ts.val = make([]*vtctldatapb.TableMaterializeSettings, 0)
 	err := json.Unmarshal([]byte(v), &ts.val)
@@ -181,7 +164,7 @@ func (ts *tableSettings) Set(v string) error {
 	}
 
 	isMaterializeView := false
-	if len(ts.val) == 1 {
+	if len(ts.val) == 1 { // currently only support one view in a workflow and no other tables or views
 		tables, err := vttablet.GetJoinedTables(ts.parser, ts.val[0].SourceExpression)
 		if err != nil {
 			return fmt.Errorf("error parsing join query: %v", err)

@@ -344,11 +344,11 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 }
 
 func (vp *vplayer) applyRowEventForJoin(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
-	tplan := vp.tablePlans[vp.replicatorPlan.joinPlan.TableName]
+	tplan := vp.tablePlans[vp.replicatorPlan.joinPlan.ViewTableName]
 	if tplan == nil {
-		log.Infof("No table plan found for join table %s", vp.replicatorPlan.joinPlan.TableName)
+		log.Infof("No table plan found for join table %s", vp.replicatorPlan.joinPlan.ViewTableName)
 		log.Infof("Tables plans are %q", vp.tablePlans)
-		return fmt.Errorf("unexpected event on table %s", vp.replicatorPlan.joinPlan.TableName)
+		return fmt.Errorf("unexpected event on table %s", vp.replicatorPlan.joinPlan.ViewTableName)
 	}
 	applyFunc := func(sql string) (*sqltypes.Result, error) {
 		stats := NewVrLogStats("ROWCHANGE")
@@ -376,15 +376,15 @@ func (vp *vplayer) applyRowEventForJoin(ctx context.Context, rowEvent *binlogdat
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
 	if vp.replicatorPlan.joinPlan != nil {
-		if rowEvent.TableName == vp.replicatorPlan.joinPlan.MainTableName {
-			log.Infof("Join plan detected for table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.MainTableName)
+		if rowEvent.TableName == vp.replicatorPlan.joinPlan.BaseTableName {
+			log.Infof("Join plan detected for table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.BaseTableName)
 			return vp.applyRowEventForJoin(ctx, rowEvent)
 		}
 		if slices.Contains(vp.replicatorPlan.joinPlan.Tables, rowEvent.TableName) {
-			log.Infof("Join plan detected for lookup table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.MainTableName)
+			log.Infof("Join plan detected for lookup table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.BaseTableName)
 			return vp.applyRowEventForJoin(ctx, rowEvent)
 		}
-		log.Infof("Ignoring row event for table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.MainTableName)
+		log.Infof("Ignoring row event for table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.BaseTableName)
 		return nil
 	}
 

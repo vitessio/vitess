@@ -200,8 +200,8 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 
 	plan.VStreamFilter = source.Filter.CloneVT()
 	view := source.Filter.Rules[0].Match
-	joinPlan.TableName = view
-	joinPlan.MainTableName = joinTables[0]
+	joinPlan.ViewTableName = view
+	joinPlan.BaseTableName = joinTables[0]
 	query := source.Filter.Rules[0].Filter
 	log.Infof("View %s, query %s", view, query)
 	tablePlan := &TablePlan{
@@ -284,11 +284,11 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	updates := generateUpdatesForJoin(view, tableColumns)
 	deletes := generateDeletesForJoin(view, tableColumns)
 	tablePlan.JoinPlan = &TableJoinPlan{
-		MainTable:    joinTables[0],
-		TableColumns: &tableColumns,
-		Insert:       insert,
-		Updates:      updates,
-		Deletes:      deletes,
+		BaseTableName: joinTables[0],
+		TableColumns:  &tableColumns,
+		Insert:        insert,
+		Updates:       updates,
+		Deletes:       deletes,
 	}
 	if !copy {
 		plan.VStreamFilter.Rules[0].Match = fmt.Sprintf("/\\b(%s)\\b", strings.Join(plan.joinPlan.Tables, "|"))
@@ -583,8 +583,8 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		FieldsToSkip:            fieldsToSkip,
 		HasExtraSourcePkColumns: len(tpb.extraSourcePkCols) > 0,
 		TablePlanBuilder:        tpb,
-		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
-		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
+		PartialInserts:          make(map[string]*sqlparser.ParsedQuery),
+		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery),
 		CollationEnv:            tpb.collationEnv,
 	}
 }

@@ -67,18 +67,19 @@ type ReplicatorPlan struct {
 	joinPlan *ReplicatorJoinPlan
 }
 
+// ReplicatorJoinPlan is for a materialized view that joins multiple tables.
 type ReplicatorJoinPlan struct {
-	Tables        []string
-	TableName     string
-	MainTableName any
+	Tables        []string // all tables in the join
+	ViewTableName string   // the view table
+	BaseTableName string   // the base table for which we run the copy phase
 }
 
 type TableJoinPlan struct {
-	Insert       *sqlparser.ParsedQuery
-	Updates      map[string]*sqlparser.ParsedQuery
-	Deletes      map[string]*sqlparser.ParsedQuery
-	TableColumns *map[string][]*ViewColumn
-	MainTable    string
+	Insert        *sqlparser.ParsedQuery            // insert query for the view table
+	Updates       map[string]*sqlparser.ParsedQuery // update queries for each participating table
+	Deletes       map[string]*sqlparser.ParsedQuery // delete queries for each participating table
+	TableColumns  *map[string][]*ViewColumn         // columns for each participating table
+	BaseTableName string                            // the base table for which we run the copy phase
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -240,6 +241,7 @@ type TablePlan struct {
 
 	CollationEnv *collations.Environment
 
+	// set for materialized views
 	JoinPlan *TableJoinPlan
 }
 
@@ -317,7 +319,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		case !before && after:
 			bindvar = bindvars["a_"+tp.PKReferences[0]]
 		}
-		if bindvar == nil { // should never happen
+		if bindvar == nil { //should never happen
 			return false
 		}
 
@@ -415,11 +417,11 @@ func (tp *TablePlan) applyChangeForJoin(eventTableName string, eventTablePlan *T
 	}
 	switch {
 	case !before && after:
-		if eventTableName != tp.JoinPlan.MainTable {
+		if eventTableName != tp.JoinPlan.BaseTableName {
 			log.Infof("Ignoring non-main table insert for %v", eventTableName)
 			return nil, nil
 		}
-		log.Infof("Inserting into main table %v: %s, bindvars %+q", tp.JoinPlan.MainTable, tp.JoinPlan.Insert.Query, bindvars)
+		log.Infof("Inserting into main table %v: %s, bindvars %+q", tp.JoinPlan.BaseTableName, tp.JoinPlan.Insert.Query, bindvars)
 		return execParsedQuery(tp.JoinPlan.Insert, bindvars, executor)
 	case before && after:
 		upd := tp.JoinPlan.Updates[eventTableName]

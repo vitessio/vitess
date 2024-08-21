@@ -15,7 +15,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// select oid, c.cid, p.pid, mname, qty, price, name, description from orders o join customer c on o.cid = c.cid join product p on p.pid = o.pid;
+const ViewQuery = "select /*vt+ view=orders_view */ orders.oid, customer.cid, product.pid, orders.mname, orders.qty, orders.price, customer.name, product.description from orders join customer on orders.cid = customer.cid join product on product.pid = orders.pid;"
+
 const mvSchema = `
 	CREATE TABLE orders_view (
 		oid int NOT NULL,
@@ -51,8 +52,7 @@ func TestMaterializeView(t *testing.T) {
 	workflow := "wf1"
 	sourceKeyspace := "product"
 	targetKeyspace := "product"
-	viewQuery := "select /*vt+ view=orders_view */ orders.oid, customer.cid, product.pid, orders.mname, orders.qty, orders.price, customer.name, product.description from orders join customer on orders.cid = customer.cid join product on product.pid = orders.pid;"
-	tableSettings := fmt.Sprintf("[ {\"target_table\": \"orders_view\", \"source_expression\": \"%s\"  }]", viewQuery)
+	tableSettings := fmt.Sprintf("[ {\"target_table\": \"orders_view\", \"source_expression\": \"%s\"  }]", ViewQuery)
 
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--workflow", workflow, "--target-keyspace", targetKeyspace,
 		"create", "--source-keyspace", sourceKeyspace, "--table-settings", tableSettings, "--stop-after-copy=false")
@@ -60,36 +60,32 @@ func TestMaterializeView(t *testing.T) {
 	require.NoError(t, err, "Materialize")
 
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflow), binlogdatapb.VReplicationWorkflowState_Running.String())
-	diffViews(t, vtgateConn, viewQuery, "After copy phase")
+	diffViews(t, vtgateConn, ViewQuery, "After copy phase")
 
 	queries := []string{
 		"insert into orders (oid, cid, pid, mname, qty, price) values (11, 1, 1, 'mname1', 1, 1100)",
 		"update orders set qty = 2 where oid = 11",
 		"insert into orders (oid, cid, pid, mname, qty, price) values (12, 1, 1, 'mname1', 1, 1200)",
 	}
-	for _, query := range queries {
-		execVtgateQuery(t, vtgateConn, "product", query)
-	}
-	time.Sleep(3 * time.Second)
-	diffViews(t, vtgateConn, viewQuery, "After DMLs")
+	execQueriesAndDiff(t, vtgateConn, queries, "After DMLs")
 
 	queries = []string{
 		"delete from orders where oid = 11",
 	}
-	for _, query := range queries {
-		execVtgateQuery(t, vtgateConn, "product", query)
-	}
-	time.Sleep(3 * time.Second)
-	diffViews(t, vtgateConn, viewQuery, "After Delete")
+	execQueriesAndDiff(t, vtgateConn, queries, "After Delete")
 
 	queries = []string{
 		"update orders set qty = 3 where oid = 12",
 	}
+	execQueriesAndDiff(t, vtgateConn, queries, "After Update")
+}
+
+func execQueriesAndDiff(t *testing.T, vtgateConn *mysql.Conn, queries []string, message string) {
 	for _, query := range queries {
 		execVtgateQuery(t, vtgateConn, "product", query)
 	}
-	time.Sleep(3 * time.Second)
-	diffViews(t, vtgateConn, viewQuery, "After Update")
+	time.Sleep(3 * time.Second) // FIXME: hack to wait for the view to be updated. Need a better way to do this: check lag?
+	diffViews(t, vtgateConn, ViewQuery, message)
 }
 
 func diffViews(t *testing.T, vtgateConn *mysql.Conn, viewQuery, message string) {
