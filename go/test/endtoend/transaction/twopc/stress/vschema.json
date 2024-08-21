@@ -21,6 +21,14 @@
           "name": "reverse_bits"
         }
       ]
+    },
+    "twopc_t1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
     }
   }
 }

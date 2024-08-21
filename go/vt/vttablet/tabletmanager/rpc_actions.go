@@ -78,7 +78,20 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 		return err
 	}
 	defer tm.unlock()
+	superRo, err := tm.MysqlDaemon.IsSuperReadOnly(ctx)
+	if err != nil {
+		return err
+	}
 
+	if !rdonly && superRo {
+		// If super read only is set, then we need to prepare the transactions before setting read_only OFF.
+		// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
+		// setting read_only OFF will also set super_read_only OFF if it was set.
+		// If super read only is already off, then we probably called this function from PRS or some other place
+		// because it is idempotent. We only need to redo prepared transactions the first time we transition from super read only
+		// to read write.
+		return tm.redoPreparedTransactionsAndSetReadWrite(ctx)
+	}
 	return tm.MysqlDaemon.SetReadOnly(ctx, rdonly)
 }
 
