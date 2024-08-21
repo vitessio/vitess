@@ -511,5 +511,6 @@ func TestInsertJson(t *testing.T) {
 
 	// insert unsharded select sharded
 	utils.Exec(t, mcmp.VtConn, `insert into uks.j_utbl(id, jdoc) select * from sks.j_tbl`)
-	utils.Exec(t, mcmp.VtConn, `select * from uks.j_utbl order by id`)
+	utils.AssertMatches(t, mcmp.VtConn, `select * from uks.j_utbl order by id`,
+		`[[INT64(1) JSON("{}")] [INT64(2) JSON("{\"a\": 1, \"b\": 2}")] [INT64(3) JSON("{\"k\": \"a\"}")] [INT64(10) JSON("{}")] [INT64(20) JSON("{\"a\": 1, \"b\": 2}")]]`)
 }
