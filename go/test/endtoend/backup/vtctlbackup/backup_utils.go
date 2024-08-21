@@ -66,7 +66,6 @@ var (
 	replica3         *cluster.Vttablet
 	localCluster     *cluster.LocalProcessCluster
 	newInitDBFile    string
-	useXtrabackup    bool
 	currentSetupType int
 	cell             = cluster.DefaultCell
 
@@ -150,8 +149,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	// Update arguments for different backup engines
 	switch setupType {
 	case XtraBackup:
-		useXtrabackup = true
-
 		xtrabackupArgs := []string{
 			"--backup_engine_implementation", "xtrabackup",
 			fmt.Sprintf("--xtrabackup_stream_mode=%s", streamMode),
@@ -1059,12 +1056,8 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 
 func terminateBackup(t *testing.T, alias string) {
 	stopBackupMsg := "Completed backing up"
-	if useXtrabackup {
+	if currentSetupType == XtraBackup {
 		stopBackupMsg = "Starting backup with"
-		useXtrabackup = false
-		defer func() {
-			useXtrabackup = true
-		}()
 	}
 
 	args := append([]string{"--server", localCluster.VtctldClientProcess.Server, "--alsologtostderr"}, "Backup", alias)
@@ -1093,12 +1086,8 @@ func terminateBackup(t *testing.T, alias string) {
 
 func terminateRestore(t *testing.T) {
 	stopRestoreMsg := "Copying file 10"
-	if useXtrabackup {
+	if currentSetupType == XtraBackup {
 		stopRestoreMsg = "Restore: Preparing"
-		useXtrabackup = false
-		defer func() {
-			useXtrabackup = true
-		}()
 	}
 
 	args := append([]string{"--server", localCluster.VtctldClientProcess.Server, "--alsologtostderr"}, "RestoreFromBackup", primary.Alias)

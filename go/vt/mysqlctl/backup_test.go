@@ -714,7 +714,7 @@ func TestShouldRestore(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func Test_scanLinesToLogger(t *testing.T) {
+func TestScanLinesToLogger(t *testing.T) {
 	reader, writer := io.Pipe()
 	logger := logutil.NewMemoryLogger()
 	var wg sync.WaitGroup

@@ -52,7 +52,7 @@ func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
 func TestIncrementalBackupAndRestoreToTimestamp(t *testing.T) {
 	tcase := &backup.PITRTestCase{
 		Name:      "MySQLShell",
-		SetupType: backup.XtraBackup,
+		SetupType: backup.MySQLShell,
 		ComprssDetails: &backup.CompressionDetails{
 			CompressorEngineName: "pgzip",
 		},
