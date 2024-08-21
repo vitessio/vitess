@@ -256,6 +256,9 @@ type testTMClient struct {
 	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
 	primaryPositions                   map[uint32]string
 
+	// Stack of ReadVReplicationWorkflowsResponse to return, in order, for each shard
+	readVReplicationWorkflowsResponses map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
+
 	env     *testEnv    // For access to the env config from tmc methods.
 	reverse atomic.Bool // Are we reversing traffic?
 	frozen  atomic.Bool // Are the workflows frozen?
@@ -267,6 +270,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
 		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
+		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
 		env:                                env,
 	}
@@ -283,6 +287,10 @@ func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 	}
 	res := sqltypes.MakeTestResult(sqltypes.MakeTestFields("rowsaffected", "int64"), "1")
 	return &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+}
+
+func (tmc *testTMClient) GetWorkflowKey(keyspace, shard string) string {
+	return fmt.Sprintf("%s/%s", keyspace, shard)
 }
 
 func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
@@ -463,6 +471,10 @@ func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
+	workflowKey := tmc.GetWorkflowKey(tablet.Keyspace, tablet.Shard)
+	if resp := tmc.getVReplicationWorkflowsResponse(workflowKey); resp != nil {
+		return resp, nil
+	}
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
 	if len(req.IncludeWorkflows) > 0 {
 		for _, wf := range req.IncludeWorkflows {
@@ -494,7 +506,7 @@ func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 									},
 								},
 							},
-							Pos:           "MySQL56/" + position,
+							Pos:           position,
 							TimeUpdated:   protoutil.TimeToProto(time.Now()),
 							TimeHeartbeat: protoutil.TimeToProto(time.Now()),
 						},
@@ -539,6 +551,25 @@ func (tmc *testTMClient) WaitForPosition(ctx context.Context, tablet *topodatapb
 
 func (tmc *testTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	return nil
+}
+
+func (tmc *testTMClient) AddVReplicationWorkflowsResponse(key string, resp *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	tmc.readVReplicationWorkflowsResponses[key] = append(tmc.readVReplicationWorkflowsResponses[key], resp)
+}
+
+func (tmc *testTMClient) getVReplicationWorkflowsResponse(key string) *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse {
+	if len(tmc.readVReplicationWorkflowsResponses) == 0 {
+		return nil
+	}
+	responses, ok := tmc.readVReplicationWorkflowsResponses[key]
+	if !ok || len(responses) == 0 {
+		return nil
+	}
+	resp := tmc.readVReplicationWorkflowsResponses[key][0]
+	tmc.readVReplicationWorkflowsResponses[key] = tmc.readVReplicationWorkflowsResponses[key][1:]
+	return resp
 }
 
 //
