@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (pitr_mysqlshell)
+name: Cluster (backup_pitr_mysqlshell)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (pitr_mysqlshell)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (backup_pitr_mysqlshell)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,7 +15,7 @@ env:
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (pitr_mysqlshell)
+    name: Run endtoend tests on Cluster (backup_pitr_mysqlshell)
     runs-on: gh-hosted-runners-4cores-1
 
     steps:
@@ -67,7 +67,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_pitr_mysqlshell.yml'
+            - '.github/workflows/cluster_endtoend_backup_pitr_mysqlshell.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -136,7 +136,7 @@ jobs:
         set -exo pipefail
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard pitr_mysqlshell | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard backup_pitr_mysqlshell | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
