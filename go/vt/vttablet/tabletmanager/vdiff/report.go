@@ -95,7 +95,7 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 	// Include PK columns first and do not truncate them so that
 	// the user can always at a minimum identify the row for
 	// further investigation.
-	pks := make(map[int]struct{})
+	pks := make(map[int]struct{}, len(td.tablePlan.selectPks))
 	for _, pkI := range td.tablePlan.selectPks {
 		addVal(pkI, 0)
 		pks[pkI] = struct{}{}
