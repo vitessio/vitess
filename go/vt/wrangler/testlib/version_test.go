@@ -56,7 +56,7 @@ func expvarHandler(gitRev *string) func(http.ResponseWriter, *http.Request) {
 			http.Error(w, fmt.Sprintf("cannot marshal json: %s", err), http.StatusInternalServerError)
 			return
 		}
-		fmt.Fprintf(w, string(result)+"\n")
+		fmt.Fprint(w, string(result)+"\n")
 	}
 }
 

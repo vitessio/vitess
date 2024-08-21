@@ -92,3 +92,4 @@ report
 
 # mise files
 .mise.toml
+/errors/

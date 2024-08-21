@@ -67,6 +67,13 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 		return nil
 	}
 
+	// We can only prepare on a Unix socket connection.
+	// Unix socket are reliable and we can be sure that the connection is not lost with the server after prepare.
+	if !conn.IsUnixSocket() {
+		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
+		return vterrors.VT10002("cannot prepare the transaction on a network connection")
+	}
+
 	// If the connection is tainted, we cannot prepare it. As there could be temporary tables involved.
 	if conn.IsTainted() {
 		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)

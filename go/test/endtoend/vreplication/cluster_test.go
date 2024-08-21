@@ -472,7 +472,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	}
 
 	if err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName); err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 
 	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
@@ -498,13 +498,13 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	require.NoError(t, vc.AddShards(t, cells, keyspace, shards, numReplicas, numRdonly, tabletIDBase, opts))
 	if schema != "" {
 		if err := vc.VtctlClient.ApplySchema(ksName, schema); err != nil {
-			t.Fatalf(err.Error())
+			t.Fatal(err.Error())
 		}
 	}
 	keyspace.Schema = schema
 	if vschema != "" {
 		if err := vc.VtctlClient.ApplyVSchema(ksName, vschema); err != nil {
-			t.Fatalf(err.Error())
+			t.Fatal(err.Error())
 		}
 	}
 	keyspace.VSchema = vschema
@@ -682,7 +682,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			for ind, tablet := range tablets {
 				log.Infof("Running Setup() for vttablet %s", tablets[ind].Name)
 				if err := tablet.Vttablet.Setup(); err != nil {
-					t.Fatalf(err.Error())
+					t.Fatal(err.Error())
 				}
 				// Set time_zone to UTC for all tablets. Without this it fails locally on some MacOS setups.
 				query := "SET GLOBAL time_zone = '+00:00';"
@@ -782,7 +782,7 @@ func (vc *VitessCluster) StartVtgate(t testing.TB, cell *Cell, cellsToWatch stri
 		vc.ClusterConfig.vtgatePlannerVersion)
 	require.NotNil(t, vtgate)
 	if err := vtgate.Setup(); err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 	cell.Vtgates = append(cell.Vtgates, vtgate)
 }

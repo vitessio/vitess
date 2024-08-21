@@ -282,7 +282,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 			errStr := fmt.Sprintf("SetServingType(serving=false) failed: %v", err)
 			log.Errorf(errStr)
 			// No need to short circuit. Apply all steps and return error in the end.
-			returnErr = vterrors.Wrapf(err, errStr)
+			returnErr = vterrors.Wrap(err, errStr)
 		}
 	}
 
@@ -290,7 +290,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		errStr := fmt.Sprintf("Cannot update denied tables rule: %v", err)
 		log.Errorf(errStr)
 		// No need to short circuit. Apply all steps and return error in the end.
-		returnErr = vterrors.Wrapf(err, errStr)
+		returnErr = vterrors.Wrap(err, errStr)
 	}
 
 	if ts.tm.UpdateStream != nil {
@@ -330,7 +330,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, ptsTime, true, ""); err != nil {
 			errStr := fmt.Sprintf("Cannot start query service: %v", err)
 			log.Errorf(errStr)
-			returnErr = vterrors.Wrapf(err, errStr)
+			returnErr = vterrors.Wrap(err, errStr)
 		}
 	}
 

@@ -167,7 +167,7 @@ func (node *With) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CommonTableExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v%v as %v ", node.ID, node.Columns, node.Subquery)
+	buf.astPrintf(node, "%v%v as (%v) ", node.ID, node.Columns, node.Subquery)
 }
 
 // Format formats the node.

@@ -585,7 +585,7 @@ func (c *Conn) readPacket() ([]byte, error) {
 func (c *Conn) ReadPacket() ([]byte, error) {
 	result, err := c.readPacket()
 	if err != nil {
-		return nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+		return nil, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return result, err
 }
@@ -1593,7 +1593,7 @@ func ParseErrorPacket(data []byte) error {
 	// Error code is 2 bytes.
 	code, pos, ok := readUint16(data, pos)
 	if !ok {
-		return sqlerror.NewSQLError(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "invalid error packet code: %v", data)
+		return sqlerror.NewSQLErrorf(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "invalid error packet code: %v", data)
 	}
 
 	// '#' marker of the SQL state is 1 byte. Ignored.
@@ -1602,13 +1602,13 @@ func ParseErrorPacket(data []byte) error {
 	// SQL state is 5 bytes
 	sqlState, pos, ok := readBytes(data, pos, 5)
 	if !ok {
-		return sqlerror.NewSQLError(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "invalid error packet sqlState: %v", data)
+		return sqlerror.NewSQLErrorf(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "invalid error packet sqlState: %v", data)
 	}
 
 	// Human readable error message is the rest.
 	msg := string(data[pos:])
 
-	return sqlerror.NewSQLError(sqlerror.ErrorCode(code), string(sqlState), "%v", msg)
+	return sqlerror.NewSQLErrorf(sqlerror.ErrorCode(code), string(sqlState), "%v", msg)
 }
 
 // GetTLSClientCerts gets TLS certificates.
@@ -1624,9 +1624,15 @@ func (c *Conn) TLSEnabled() bool {
 	return c.Capabilities&CapabilityClientSSL > 0
 }
 
-// IsUnixSocket returns true if this connection is over a Unix socket.
+// IsUnixSocket returns true if the server connection is over a Unix socket.
 func (c *Conn) IsUnixSocket() bool {
 	_, ok := c.listener.listener.(*net.UnixListener)
+	return ok
+}
+
+// IsClientUnixSocket returns true if the client connection is over a Unix socket with the server.
+func (c *Conn) IsClientUnixSocket() bool {
+	_, ok := c.conn.(*net.UnixConn)
 	return ok
 }
 
