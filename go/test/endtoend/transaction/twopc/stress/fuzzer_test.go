@@ -14,13 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fuzzer
+package stress
 
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -28,6 +33,8 @@ import (
 	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/syscallutil"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -67,10 +74,12 @@ var (
 // Moreover, the threadIDs of rows for a given update set in the 3 shards should be the same to ensure that conflicting transactions got committed in the same exact order.
 func TestTwoPCFuzzTest(t *testing.T) {
 	testcases := []struct {
-		name           string
-		threads        int
-		updateSets     int
-		timeForTesting time.Duration
+		name                  string
+		threads               int
+		updateSets            int
+		timeForTesting        time.Duration
+		clusterDisruptions    []func()
+		disruptionProbability []int
 	}{
 		{
 			name:           "Single Thread - Single Set",
@@ -90,15 +99,24 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			updateSets:     15,
 			timeForTesting: 5 * time.Second,
 		},
+		{
+			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL and Vttablet restart disruptions",
+			threads:               15,
+			updateSets:            15,
+			timeForTesting:        5 * time.Second,
+			clusterDisruptions:    []func(){prs, ers, mysqlRestarts, vttabletRestarts},
+			disruptionProbability: []int{5, 5, 5, 5},
+		},
 	}
 
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
 			conn, closer := start(t)
 			defer closer()
-			fz := newFuzzer(tt.threads, tt.updateSets)
+			fz := newFuzzer(tt.threads, tt.updateSets, tt.clusterDisruptions, tt.disruptionProbability)
 
 			fz.initialize(t, conn)
+			conn.Close()
 			// Start the fuzzer.
 			fz.start(t)
 
@@ -108,8 +126,12 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			// Signal the fuzzer to stop.
 			fz.stop()
 
+			// Wait for all transactions to be resolved.
+			waitForResults(t, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 30*time.Second)
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
 			fz.verifyTransactionsWereAtomic(t)
+
+			log.Errorf("Verification complete. All good!")
 		})
 	}
 }
@@ -176,14 +198,20 @@ type fuzzer struct {
 	wg sync.WaitGroup
 	// updateRowVals are the rows that we use to ensure 1 update on each shard with the same increment.
 	updateRowsVals [][]int
+	// clusterDisruptions are the cluster level disruptions that can happen in a running cluster.
+	clusterDisruptions []func()
+	// disruptionProbability is the chance for the disruption to happen. We check this every 100 milliseconds.
+	disruptionProbability []int
 }
 
 // newFuzzer creates a new fuzzer struct.
-func newFuzzer(threads int, updateSets int) *fuzzer {
+func newFuzzer(threads int, updateSets int, clusterDisruptions []func(), disruptionProbability []int) *fuzzer {
 	fz := &fuzzer{
-		threads:    threads,
-		updateSets: updateSets,
-		wg:         sync.WaitGroup{},
+		threads:               threads,
+		updateSets:            updateSets,
+		wg:                    sync.WaitGroup{},
+		clusterDisruptions:    clusterDisruptions,
+		disruptionProbability: disruptionProbability,
 	}
 	// Initially the fuzzer thread is stopped.
 	fz.shouldStop.Store(true)
@@ -202,12 +230,16 @@ func (fz *fuzzer) stop() {
 func (fz *fuzzer) start(t *testing.T) {
 	// We mark the fuzzer thread to be running now.
 	fz.shouldStop.Store(false)
-	fz.wg.Add(fz.threads)
+	// fz.threads is the count of fuzzer threads, and one disruption thread.
+	fz.wg.Add(fz.threads + 1)
 	for i := 0; i < fz.threads; i++ {
 		go func() {
 			fz.runFuzzerThread(t, i)
 		}()
 	}
+	go func() {
+		fz.runClusterDisruptionThread(t)
+	}()
 }
 
 // runFuzzerThread is used to run a thread of the fuzzer.
@@ -307,4 +339,109 @@ func (fz *fuzzer) generateInsertQueries(updateSet int, threadId int) []string {
 		queries[i], queries[j] = queries[j], queries[i]
 	})
 	return queries
+}
+
+// runClusterDisruptionThread runs the cluster level disruptions in a separate thread.
+func (fz *fuzzer) runClusterDisruptionThread(t *testing.T) {
+	// Whenever we finish running this thread, we should mark the thread has stopped.
+	defer func() {
+		fz.wg.Done()
+	}()
+
+	for {
+		// If disruption thread is marked to be stopped, then we should exit this go routine.
+		if fz.shouldStop.Load() == true {
+			return
+		}
+		// Run a potential disruption
+		fz.runClusterDisruption(t)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+}
+
+// runClusterDisruption tries to run a single cluster disruption.
+func (fz *fuzzer) runClusterDisruption(t *testing.T) {
+	for idx, prob := range fz.disruptionProbability {
+		if rand.Intn(100) < prob {
+			fz.clusterDisruptions[idx]()
+			return
+		}
+	}
+}
+
+/*
+Cluster Level Disruptions for the fuzzer
+*/
+
+func prs() {
+	shards := clusterInstance.Keyspaces[0].Shards
+	shard := shards[rand.Intn(len(shards))]
+	vttablets := shard.Vttablets
+	newPrimary := vttablets[rand.Intn(len(vttablets))]
+	log.Errorf("Running PRS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
+	err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, newPrimary.Alias)
+	if err != nil {
+		log.Errorf("error running PRS - %v", err)
+	}
+}
+
+func ers() {
+	shards := clusterInstance.Keyspaces[0].Shards
+	shard := shards[rand.Intn(len(shards))]
+	vttablets := shard.Vttablets
+	newPrimary := vttablets[rand.Intn(len(vttablets))]
+	log.Errorf("Running ERS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
+	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
+	if err != nil {
+		log.Errorf("error running ERS - %v", err)
+	}
+}
+
+func vttabletRestarts() {
+	shards := clusterInstance.Keyspaces[0].Shards
+	shard := shards[rand.Intn(len(shards))]
+	vttablets := shard.Vttablets
+	tablet := vttablets[rand.Intn(len(vttablets))]
+	log.Errorf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias)
+	err := tablet.VttabletProcess.TearDown()
+	if err != nil {
+		log.Errorf("error stopping vttablet - %v", err)
+		return
+	}
+	tablet.VttabletProcess.ServingStatus = "SERVING"
+	for {
+		err = tablet.VttabletProcess.Setup()
+		if err == nil {
+			return
+		}
+		// Sometimes vttablets fail to connect to the topo server due to a minor blip there.
+		// We don't want to fail the test, so we retry setting up the vttablet.
+		log.Errorf("error restarting vttablet - %v", err)
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func mysqlRestarts() {
+	shards := clusterInstance.Keyspaces[0].Shards
+	shard := shards[rand.Intn(len(shards))]
+	vttablets := shard.Vttablets
+	tablet := vttablets[rand.Intn(len(vttablets))]
+	log.Errorf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias)
+	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tablet.TabletUID))
+	pidBytes, err := os.ReadFile(pidFile)
+	if err != nil {
+		// We can't read the file which means the PID file does not exist
+		// The server must have stopped
+		return
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	if err != nil {
+		log.Errorf("Error in conversion to integer: %v", err)
+		return
+	}
+	err = syscallutil.Kill(pid, syscall.SIGKILL)
+	if err != nil {
+		log.Errorf("Error in killing process: %v", err)
+	}
 }

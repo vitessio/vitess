@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fuzzer
+package stress
 
 import (
 	"context"
@@ -75,12 +75,13 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:          keyspaceName,
-			SchemaSQL:     SchemaSQL,
-			VSchema:       VSchema,
-			SidecarDBName: sidecarDBName,
+			Name:             keyspaceName,
+			SchemaSQL:        SchemaSQL,
+			VSchema:          VSchema,
+			SidecarDBName:    sidecarDBName,
+			DurabilityPolicy: "semi_sync",
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
 			return 1
 		}
 
@@ -113,4 +114,5 @@ func cleanup(t *testing.T) {
 
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_insert")
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_update")
+	utils.ClearOutTable(t, vtParams, "twopc_t1")
 }
