@@ -132,40 +132,35 @@
       "QueryType": "SELECT",
       "Original": "select u.col, u.bar from user u join music m on u.foo = m.foo for update nowait",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "u_foo": 2
+        },
+        "TableName": "`user`_music",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1",
-            "JoinVars": {
-              "u_foo": 2
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
             },
-            "TableName": "`user`_music",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u.col, u.bar, u.foo from `user` as u where 1 != 1",
-                "Query": "select u.col, u.bar, u.foo from `user` as u for update nowait",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from music as m where 1 != 1",
-                "Query": "select 1 from music as m where m.foo = :u_foo for update nowait",
-                "Table": "music"
-              }
-            ]
+            "FieldQuery": "select u.col, u.bar, u.foo from `user` as u where 1 != 1",
+            "Query": "select u.col, u.bar, u.foo from `user` as u for update nowait",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.foo = :u_foo for update nowait",
+            "Table": "music"
           }
         ]
       },
@@ -182,40 +177,35 @@
       "QueryType": "SELECT",
       "Original": "select u.col, u.bar from user u join music m on u.foo = m.foo for share skip locked",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "u_foo": 2
+        },
+        "TableName": "`user`_music",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1",
-            "JoinVars": {
-              "u_foo": 2
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
             },
-            "TableName": "`user`_music",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u.col, u.bar, u.foo from `user` as u where 1 != 1",
-                "Query": "select u.col, u.bar, u.foo from `user` as u for share skip locked",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from music as m where 1 != 1",
-                "Query": "select 1 from music as m where m.foo = :u_foo for share skip locked",
-                "Table": "music"
-              }
-            ]
+            "FieldQuery": "select u.col, u.bar, u.foo from `user` as u where 1 != 1",
+            "Query": "select u.col, u.bar, u.foo from `user` as u for share skip locked",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.foo = :u_foo for share skip locked",
+            "Table": "music"
           }
         ]
       },

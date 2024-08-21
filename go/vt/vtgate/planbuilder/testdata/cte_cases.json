@@ -6,25 +6,20 @@
       "QueryType": "SELECT",
       "Original": "with t as (select count(*) as a from user) select a from t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum_count_star(0) AS a",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
           }
         ]
       },
@@ -40,25 +35,20 @@
       "QueryType": "SELECT",
       "Original": "with a as (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) select count(*) from a",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum_count_star(0) AS count(*)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
-                "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
-                "Table": "`user`, user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
+            "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
+            "Table": "`user`, user_extra"
           }
         ]
       },
@@ -75,20 +65,15 @@
       "QueryType": "SELECT",
       "Original": "with a as (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) select col from a",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
-            "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
-            "Table": "`user`, user_extra"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
+        "Query": "select col from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
+        "Table": "`user`, user_extra"
       },
       "TablesUsed": [
         "user.user",
@@ -103,27 +88,22 @@
       "QueryType": "SELECT",
       "Original": "with a as (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) select col, count(*) from a group by col",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(1) AS count(*)",
+        "GroupBy": "0",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*)",
-            "GroupBy": "0",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
-                "OrderBy": "0 ASC",
-                "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a group by col order by col asc",
-                "Table": "`user`, user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a group by col order by col asc",
+            "Table": "`user`, user_extra"
           }
         ]
       },
@@ -140,48 +120,43 @@
       "QueryType": "SELECT",
       "Original": "with t as (select user.col as col, 32 from user join user_extra) select sum(col) from t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0) AS sum(col)",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum(0) AS sum(col)",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "sum(col) * count(*) as sum(col)"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  "sum(col) * count(*) as sum(col)"
-                ],
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0",
+                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
-                    "OperatorType": "Join",
-                    "Variant": "Join",
-                    "JoinColumnIndexes": "L:0,R:0",
-                    "TableName": "`user`_user_extra",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select sum(col) from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
-                        "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t",
-                        "Table": "`user`"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                        "Query": "select count(*) from user_extra group by .0",
-                        "Table": "user_extra"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select sum(col) from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
+                    "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
+                    "Query": "select count(*) from user_extra group by .0",
+                    "Table": "user_extra"
                   }
                 ]
               }
@@ -202,33 +177,28 @@
       "QueryType": "SELECT",
       "Original": "with x as (select phone, id, city from user where id > 12 limit 10) select count(city) from x",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count(0) AS count(city)",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "count(0) AS count(city)",
+            "OperatorType": "SimpleProjection",
+            "Columns": "2",
             "Inputs": [
               {
-                "OperatorType": "SimpleProjection",
-                "Columns": "2",
+                "OperatorType": "Limit",
+                "Count": "10",
                 "Inputs": [
                   {
-                    "OperatorType": "Limit",
-                    "Count": "10",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select x.phone, x.id, x.city from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                        "Query": "select x.phone, x.id, x.city from (select phone, id, city from `user` where id > 12) as x limit 10",
-                        "Table": "`user`"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select x.phone, x.id, x.city from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select x.phone, x.id, x.city from (select phone, id, city from `user` where id > 12) as x limit 10",
+                    "Table": "`user`"
                   }
                 ]
               }
@@ -248,35 +218,30 @@
       "QueryType": "SELECT",
       "Original": "with x as (select phone, id, city from user where id > 12 limit 10) select count(*) from x",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "count_star(0) AS count(*)",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  "1 as 1"
-                ],
+                "OperatorType": "Limit",
+                "Count": "10",
                 "Inputs": [
                   {
-                    "OperatorType": "Limit",
-                    "Count": "10",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                        "Query": "select 1 from (select phone, id, city from `user` where id > 12) as x limit 10",
-                        "Table": "`user`"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select 1 from (select phone, id, city from `user` where id > 12) as x limit 10",
+                    "Table": "`user`"
                   }
                 ]
               }
@@ -296,59 +261,54 @@
       "QueryType": "SELECT",
       "Original": "with x as (select user_extra.col as col from user left join user_extra on user.id = user_extra.id limit 10) select count(col) from x",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count(0) AS count(col)",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "count(0) AS count(col)",
+            "OperatorType": "Limit",
+            "Count": "10",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "10",
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "R:0",
+                "JoinVars": {
+                  "user_id": 0
+                },
+                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
-                    "OperatorType": "Join",
-                    "Variant": "LeftJoin",
-                    "JoinColumnIndexes": "R:0",
-                    "JoinVars": {
-                      "user_id": 0
-                    },
-                    "TableName": "`user`_user_extra",
+                    "OperatorType": "Limit",
+                    "Count": "10",
                     "Inputs": [
                       {
-                        "OperatorType": "Limit",
-                        "Count": "10",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select x.`user.id` from (select `user`.id as `user.id` from `user` where 1 != 1) as x where 1 != 1",
-                            "Query": "select x.`user.id` from (select `user`.id as `user.id` from `user`) as x limit 10",
-                            "Table": "`user`"
-                          }
-                        ]
-                      },
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select x.`user.id` from (select `user`.id as `user.id` from `user` where 1 != 1) as x where 1 != 1",
+                        "Query": "select x.`user.id` from (select `user`.id as `user.id` from `user`) as x limit 10",
+                        "Table": "`user`"
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Limit",
+                    "Count": "10",
+                    "Inputs": [
                       {
-                        "OperatorType": "Limit",
-                        "Count": "10",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select x.col from (select user_extra.col as col from user_extra where 1 != 1) as x where 1 != 1",
-                            "Query": "select x.col from (select user_extra.col as col from user_extra where user_extra.id = :user_id) as x limit 10",
-                            "Table": "user_extra"
-                          }
-                        ]
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select x.col from (select user_extra.col as col from user_extra where 1 != 1) as x where 1 != 1",
+                        "Query": "select x.col from (select user_extra.col as col from user_extra where user_extra.id = :user_id) as x limit 10",
+                        "Table": "user_extra"
                       }
                     ]
                   }
@@ -371,40 +331,35 @@
       "QueryType": "SELECT",
       "Original": "with x as (select id, val1 from user where val2 < 4 order by val1 limit 2) select val1, count(*) from x group by val1",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count_star(1) AS count(*)",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "count_star(1) AS count(*)",
-            "GroupBy": "(0|2)",
-            "ResultColumns": 2,
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":1 as val1",
+              "1 as 1",
+              ":2 as weight_string(val1)"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  ":1 as val1",
-                  "1 as 1",
-                  ":2 as weight_string(val1)"
-                ],
+                "OperatorType": "Limit",
+                "Count": "2",
                 "Inputs": [
                   {
-                    "OperatorType": "Limit",
-                    "Count": "2",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select x.id, x.val1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
-                        "OrderBy": "(1|2) ASC",
-                        "Query": "select x.id, x.val1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2",
-                        "Table": "`user`"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select x.id, x.val1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
+                    "OrderBy": "(1|2) ASC",
+                    "Query": "select x.id, x.val1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2",
+                    "Table": "`user`"
                   }
                 ]
               }
@@ -424,30 +379,25 @@
       "QueryType": "SELECT",
       "Original": "with s as (select id from user having count(*) = 1) select * from s",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Filter",
+        "Predicate": "count(*) = 1",
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Filter",
-            "Predicate": "count(*) = 1",
-            "ResultColumns": 1,
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
             "Inputs": [
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Scalar",
-                "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-                    "Query": "select id, count(*) from `user`",
-                    "Table": "`user`"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+                "Query": "select id, count(*) from `user`",
+                "Table": "`user`"
               }
             ]
           }
@@ -465,33 +415,28 @@
       "QueryType": "SELECT",
       "Original": "with A as (select sum(a) as a, sum(b) as b from user) select A.a, A.b, (A.a / A.b) as d from A",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Projection",
+        "Expressions": [
+          ":0 as a",
+          ":1 as b",
+          "A.a / A.b as d"
+        ],
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              ":0 as a",
-              ":1 as b",
-              "A.a / A.b as d"
-            ],
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS a, sum(1) AS b",
             "Inputs": [
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Scalar",
-                "Aggregates": "sum(0) AS a, sum(1) AS b",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select sum(a) as a, sum(b) as b from `user` where 1 != 1",
-                    "Query": "select sum(a) as a, sum(b) as b from `user`",
-                    "Table": "`user`"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(a) as a, sum(b) as b from `user` where 1 != 1",
+                "Query": "select sum(a) as a, sum(b) as b from `user`",
+                "Table": "`user`"
               }
             ]
           }
@@ -509,20 +454,15 @@
       "QueryType": "SELECT",
       "Original": "with t1 as (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) select t1.portalId, t1.flowId from t1 where count >= :v2",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
-            "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId) as t1 where `count` >= :v2",
-            "Table": "user_extra"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId) as t1 where `count` >= :v2",
+        "Table": "user_extra"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -536,32 +476,27 @@
       "QueryType": "SELECT",
       "Original": "with tt as (SELECT foo, max(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) SELECT foo FROM tt WHERE bazo BETWEEN 100 AND 200",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Filter",
+        "Predicate": "bazo between 100 and 200",
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Filter",
-            "Predicate": "bazo between 100 and 200",
-            "ResultColumns": 1,
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "max(1|3) AS bazo",
+            "GroupBy": "(0|2)",
             "Inputs": [
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Ordered",
-                "Aggregates": "max(1|3) AS bazo",
-                "GroupBy": "(0|2)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
-                    "OrderBy": "(0|2) ASC",
-                    "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
-                    "Table": "`user`"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select foo, max(baz) as bazo, weight_string(foo), weight_string(max(baz)) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
+                "Table": "`user`"
               }
             ]
           }
@@ -579,32 +514,27 @@
       "QueryType": "SELECT",
       "Original": "with tt as (SELECT foo, count(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) SELECT foo FROM tt WHERE bazo BETWEEN 100 AND 200",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Filter",
+        "Predicate": "bazo between 100 and 200",
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Filter",
-            "Predicate": "bazo between 100 and 200",
-            "ResultColumns": 1,
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count(1) AS bazo",
+            "GroupBy": "(0|2)",
             "Inputs": [
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Ordered",
-                "Aggregates": "sum_count(1) AS bazo",
-                "GroupBy": "(0|2)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
-                    "OrderBy": "(0|2) ASC",
-                    "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
-                    "Table": "`user`"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select foo, count(baz) as bazo, weight_string(foo) from (select foo, baz from `user`) as f group by foo, weight_string(foo) order by foo asc",
+                "Table": "`user`"
               }
             ]
           }
@@ -622,70 +552,65 @@
       "QueryType": "SELECT",
       "Original": "with d as (select id, count(*) as a from user) select d.a from music join d on music.user_id = d.id group by 1",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "0",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "GroupBy": "0",
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "d_id": 1
+            },
+            "TableName": "`user`_music",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0",
-                "JoinVars": {
-                  "d_id": 1
-                },
-                "TableName": "`user`_music",
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "GroupBy": "0, (1|2)",
                 "Inputs": [
                   {
-                    "OperatorType": "Aggregate",
-                    "Variant": "Ordered",
-                    "GroupBy": "0, (1|2)",
+                    "OperatorType": "SimpleProjection",
+                    "Columns": "1,0,2",
                     "Inputs": [
                       {
-                        "OperatorType": "SimpleProjection",
-                        "Columns": "1,0,2",
+                        "OperatorType": "Aggregate",
+                        "Variant": "Scalar",
+                        "Aggregates": "any_value(0|2) AS id, sum_count_star(1) AS a",
                         "Inputs": [
                           {
-                            "OperatorType": "Aggregate",
-                            "Variant": "Scalar",
-                            "Aggregates": "any_value(0|2) AS id, sum_count_star(1) AS a",
-                            "Inputs": [
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "Scatter",
-                                "Keyspace": {
-                                  "Name": "user",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select dt.c0 as id, dt.c1 as a, weight_string(dt.c0), weight_string(dt.c0) from (select id, count(*) as a from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
-                                "OrderBy": "1 ASC, (0|3) ASC",
-                                "Query": "select dt.c0 as id, dt.c1 as a, weight_string(dt.c0), weight_string(dt.c0) from (select id, count(*) as a from `user` order by count(*) asc, id asc) as dt(c0, c1)",
-                                "Table": "`user`"
-                              }
-                            ]
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select dt.c0 as id, dt.c1 as a, weight_string(dt.c0), weight_string(dt.c0) from (select id, count(*) as a from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                            "OrderBy": "1 ASC, (0|3) ASC",
+                            "Query": "select dt.c0 as id, dt.c1 as a, weight_string(dt.c0), weight_string(dt.c0) from (select id, count(*) as a from `user` order by count(*) asc, id asc) as dt(c0, c1)",
+                            "Table": "`user`"
                           }
                         ]
                       }
                     ]
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "EqualUnique",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from music where 1 != 1 group by .0",
-                    "Query": "select 1 from music where music.user_id = :d_id group by .0",
-                    "Table": "music",
-                    "Values": [
-                      ":d_id"
-                    ],
-                    "Vindex": "user_index"
                   }
                 ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from music where 1 != 1 group by .0",
+                "Query": "select 1 from music where music.user_id = :d_id group by .0",
+                "Table": "music",
+                "Values": [
+                  ":d_id"
+                ],
+                "Vindex": "user_index"
               }
             ]
           }
@@ -704,39 +629,34 @@
       "QueryType": "SELECT",
       "Original": "with t as (select col from user union all select col from unsharded) select sum(col) from t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0) AS sum(col)",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "sum(0) AS sum(col)",
+            "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select col from `user` where 1 != 1",
-                    "Query": "select col from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Unsharded",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select col from unsharded where 1 != 1",
-                    "Query": "select col from unsharded",
-                    "Table": "unsharded"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col from unsharded where 1 != 1",
+                "Query": "select col from unsharded",
+                "Table": "unsharded"
               }
             ]
           }
@@ -755,33 +675,28 @@
       "QueryType": "SELECT",
       "Original": "with x as (select id, val2 from user where val2 is null limit 2) select count(val2), sum(val2) from x",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count(0) AS count(val2), sum(1) AS sum(val2)",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "count(0) AS count(val2), sum(1) AS sum(val2)",
+            "OperatorType": "SimpleProjection",
+            "Columns": "1,1",
             "Inputs": [
               {
-                "OperatorType": "SimpleProjection",
-                "Columns": "1,1",
+                "OperatorType": "Limit",
+                "Count": "2",
                 "Inputs": [
                   {
-                    "OperatorType": "Limit",
-                    "Count": "2",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select x.id, x.val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
-                        "Query": "select x.id, x.val2 from (select id, val2 from `user` where val2 is null) as x limit 2",
-                        "Table": "`user`"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select x.id, x.val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select x.id, x.val2 from (select id, val2 from `user` where val2 is null) as x limit 2",
+                    "Table": "`user`"
                   }
                 ]
               }
@@ -801,36 +716,31 @@
       "QueryType": "SELECT",
       "Original": "with X as (select distinct count(*) from user) select distinct count(*) from X",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "count_star(0) AS count(*)",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  "1 as 1"
-                ],
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "sum_count_star(0) AS count(*)",
                 "Inputs": [
                   {
-                    "OperatorType": "Aggregate",
-                    "Variant": "Scalar",
-                    "Aggregates": "sum_count_star(0) AS count(*)",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*) from `user` where 1 != 1",
-                        "Query": "select count(*) from `user`",
-                        "Table": "`user`"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from `user` where 1 != 1",
+                    "Query": "select count(*) from `user`",
+                    "Table": "`user`"
                   }
                 ]
               }
@@ -850,24 +760,19 @@
       "QueryType": "SELECT",
       "Original": "with t as (select id, col from user where id = 5) select id from t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from (select id, col from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select id from (select id, col from `user` where id = 5) as t",
-            "Table": "`user`",
-            "Values": [
-              "5"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from (select id, col from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select id from (select id, col from `user` where id = 5) as t",
+        "Table": "`user`",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user"
@@ -881,24 +786,19 @@
       "QueryType": "SELECT",
       "Original": "with t as (select id from user where id = 5) select t.id from t join user_extra on t.id = user_extra.user_id",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t, user_extra where 1 != 1",
-            "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
-            "Table": "`user`, user_extra",
-            "Values": [
-              "5"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t, user_extra where 1 != 1",
+        "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
+        "Table": "`user`, user_extra",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user",
@@ -913,24 +813,19 @@
       "QueryType": "SELECT",
       "Original": "with t as (select user.id from user where user.id = 5) select t.id from t join user_extra on t.id = user_extra.user_id",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1) as t, user_extra where 1 != 1",
-            "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5) as t, user_extra where t.id = user_extra.user_id",
-            "Table": "`user`, user_extra",
-            "Values": [
-              "5"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1) as t, user_extra where 1 != 1",
+        "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5) as t, user_extra where t.id = user_extra.user_id",
+        "Table": "`user`, user_extra",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user",
@@ -945,24 +840,19 @@
       "QueryType": "SELECT",
       "Original": "with t as (select id from user where id = 5) select t.id from user_extra join t on t.id = user_extra.user_id",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t, user_extra where 1 != 1",
-            "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
-            "Table": "`user`, user_extra",
-            "Values": [
-              "5"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t, user_extra where 1 != 1",
+        "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
+        "Table": "`user`, user_extra",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user",
@@ -977,44 +867,39 @@
       "QueryType": "SELECT",
       "Original": "with t as (select id from user where id = 5) select t.id from t join user_extra on t.id = user_extra.col",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "t_id": 0
+        },
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "JoinVars": {
-              "t_id": 0
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
             },
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select t.id from (select id from `user` where id = 5) as t",
-                "Table": "`user`",
-                "Values": [
-                  "5"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where user_extra.col = :t_id",
-                "Table": "user_extra"
-              }
-            ]
+            "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id from (select id from `user` where id = 5) as t",
+            "Table": "`user`",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.col = :t_id",
+            "Table": "user_extra"
           }
         ]
       },
@@ -1031,24 +916,19 @@
       "QueryType": "SELECT",
       "Original": "with t as (select id, col from route1 where id = 5) select id from  t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
-            "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
-            "Table": "`user`",
-            "Values": [
-              "5"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
+        "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
+        "Table": "`user`",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user"
@@ -1062,24 +942,19 @@
       "QueryType": "SELECT",
       "Original": "with t as (select id, col from route1) select id from  t where id = 5",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
-            "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
-            "Table": "`user`",
-            "Values": [
-              "5"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
+        "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
+        "Table": "`user`",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user"
@@ -1098,20 +973,15 @@
       "QueryType": "SELECT",
       "Original": "with t as (select id, textcol1 as baz from route1), s as (select id, textcol1+textcol1 as baz from user) select t.id from t join s ON t.id = s.id WHERE t.baz = '3' AND s.baz = '3'",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select t.id from (select id, textcol1 as baz from `user` as route1 where 1 != 1) as t, (select id, textcol1 + textcol1 as baz from `user` where 1 != 1) as s where 1 != 1",
-            "Query": "select t.id from (select id, textcol1 as baz from `user` as route1 where textcol1 = '3') as t, (select id, textcol1 + textcol1 as baz from `user` where textcol1 + textcol1 = '3') as s where t.id = s.id",
-            "Table": "`user`"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.id from (select id, textcol1 as baz from `user` as route1 where 1 != 1) as t, (select id, textcol1 + textcol1 as baz from `user` where 1 != 1) as s where 1 != 1",
+        "Query": "select t.id from (select id, textcol1 as baz from `user` as route1 where textcol1 = '3') as t, (select id, textcol1 + textcol1 as baz from `user` where textcol1 + textcol1 = '3') as s where t.id = s.id",
+        "Table": "`user`"
       },
       "TablesUsed": [
         "user.user"
@@ -1125,20 +995,15 @@
       "QueryType": "SELECT",
       "Original": "with u as (select colA+colB as foo from user), t as (select foo+4 as bar from u) select bar from t where bar = 5",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where 1 != 1) as u where 1 != 1) as t where 1 != 1",
-            "Query": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where colA + colB + 4 = 5) as u) as t",
-            "Table": "`user`"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where 1 != 1) as u where 1 != 1) as t where 1 != 1",
+        "Query": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where colA + colB + 4 = 5) as u) as t",
+        "Table": "`user`"
       },
       "TablesUsed": [
         "user.user"
@@ -1152,24 +1017,19 @@
       "QueryType": "SELECT",
       "Original": "with u as (select col from user where id = 5), e as (select col from user_extra where user_id = 5) select u.col, e.col from u join e",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u.col, e.col from (select col from `user` where 1 != 1) as u, (select col from user_extra where 1 != 1) as e where 1 != 1",
-            "Query": "select u.col, e.col from (select col from `user` where id = 5) as u, (select col from user_extra where user_id = 5) as e",
-            "Table": "`user`, user_extra",
-            "Values": [
-              "5"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.col, e.col from (select col from `user` where 1 != 1) as u, (select col from user_extra where 1 != 1) as e where 1 != 1",
+        "Query": "select u.col, e.col from (select col from `user` where id = 5) as u, (select col from user_extra where user_id = 5) as e",
+        "Table": "`user`, user_extra",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user",
@@ -1184,60 +1044,55 @@
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "t_col1": 0,
+          "t_id": 1
+        },
+        "TableName": "`user`_user_extra_unsharded",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "JoinVars": {
-              "t_col1": 0,
-              "t_id": 1
-            },
-            "TableName": "`user`_user_extra_unsharded",
+            "JoinColumnIndexes": "L:1,L:0",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:1,L:0",
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user`) as t",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user`) as t",
+                "Table": "`user`"
               },
               {
                 "OperatorType": "Route",
-                "Variant": "Unsharded",
+                "Variant": "Scatter",
                 "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "FieldQuery": "select 1 from unsharded where 1 != 1",
-                "Query": "select 1 from unsharded where unsharded.id = :t_id and unsharded.col1 = :t_col1",
-                "Table": "unsharded"
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
               }
             ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded where 1 != 1",
+            "Query": "select 1 from unsharded where unsharded.id = :t_id and unsharded.col1 = :t_col1",
+            "Table": "unsharded"
           }
         ]
       },
@@ -1255,40 +1110,35 @@
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) select t.id from t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "user_col": 2
+        },
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "JoinVars": {
-              "user_col": 2
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
             },
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select t.id, t.col1, t.`user.col` from (select `user`.id, `user`.col1, `user`.col as `user.col` from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select t.id, t.col1, t.`user.col` from (select `user`.id, `user`.col1, `user`.col as `user.col` from `user`) as t",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */",
-                "Table": "user_extra"
-              }
-            ]
+            "FieldQuery": "select t.id, t.col1, t.`user.col` from (select `user`.id, `user`.col1, `user`.col as `user.col` from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id, t.col1, t.`user.col` from (select `user`.id, `user`.col1, `user`.col as `user.col` from `user`) as t",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col /* INT16 */",
+            "Table": "user_extra"
           }
         ]
       },
@@ -1305,54 +1155,49 @@
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from unsharded_a ua join t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "TableName": "unsharded_a_`user`_user_extra",
         "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded_a as ua where 1 != 1",
+            "Query": "select 1 from unsharded_a as ua",
+            "Table": "unsharded_a"
+          },
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "R:0",
-            "TableName": "unsharded_a_`user`_user_extra",
+            "JoinColumnIndexes": "L:1",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "Unsharded",
+                "Variant": "Scatter",
                 "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "FieldQuery": "select 1 from unsharded_a as ua where 1 != 1",
-                "Query": "select 1 from unsharded_a as ua",
-                "Table": "unsharded_a"
+                "FieldQuery": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user`) as t",
+                "Table": "`user`"
               },
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:1",
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user`) as t",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
               }
             ]
           }
@@ -1372,61 +1217,56 @@
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from unsharded_a ua join t on t.id = ua.id",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ua_id": 0
+        },
+        "TableName": "unsharded_a_`user`_user_extra",
         "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select ua.id from unsharded_a as ua where 1 != 1",
+            "Query": "select ua.id from unsharded_a as ua",
+            "Table": "unsharded_a"
+          },
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "R:0",
-            "JoinVars": {
-              "ua_id": 0
-            },
-            "TableName": "unsharded_a_`user`_user_extra",
+            "JoinColumnIndexes": "L:1",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "Unsharded",
+                "Variant": "EqualUnique",
                 "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "FieldQuery": "select ua.id from unsharded_a as ua where 1 != 1",
-                "Query": "select ua.id from unsharded_a as ua",
-                "Table": "unsharded_a"
+                "FieldQuery": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where `user`.id = :ua_id) as t",
+                "Table": "`user`",
+                "Values": [
+                  ":ua_id"
+                ],
+                "Vindex": "user_index"
               },
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:1",
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "EqualUnique",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select t.id, t.col1 from (select `user`.id, `user`.col1 from `user` where `user`.id = :ua_id) as t",
-                    "Table": "`user`",
-                    "Values": [
-                      ":ua_id"
-                    ],
-                    "Vindex": "user_index"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
               }
             ]
           }
@@ -1446,37 +1286,32 @@
       "QueryType": "SELECT",
       "Original": "with t as (select user.id from user join user_extra) select id, t.id from  t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select t.id from (select `user`.id from `user`) as t",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id from (select `user`.id from `user`) as t",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -1493,31 +1328,26 @@
       "QueryType": "SELECT",
       "Original": "with t as (select count(*) as a from user) select a as k from t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:k"
+        ],
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "ColumnNames": [
-              "0:k"
-            ],
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS a",
             "Inputs": [
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Scalar",
-                "Aggregates": "sum_count_star(0) AS a",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                    "Query": "select count(*) as a from `user`",
-                    "Table": "`user`"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+                "Query": "select count(*) as a from `user`",
+                "Table": "`user`"
               }
             ]
           }
@@ -1557,41 +1387,36 @@
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col from user join user_extra) select id from t where id=5",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select t.id, t.col from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select t.id, t.col from (select `user`.id, `user`.col from `user` where `user`.id = 5) as t",
-                "Table": "`user`",
-                "Values": [
-                  "5"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select t.id, t.col from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id, t.col from (select `user`.id, `user`.col from `user` where `user`.id = 5) as t",
+            "Table": "`user`",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -1608,37 +1433,32 @@
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col from user join user_extra) select id+1 from t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id + 1 from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select id + 1 from (select `user`.id, `user`.col from `user`) as t",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id + 1 from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select id + 1 from (select `user`.id, `user`.col from `user`) as t",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -1655,52 +1475,42 @@
       "QueryType": "SELECT",
       "Original": "with u(a,n) as (select id as b, name from user) select u.a from u where u.n = 1",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "VindexLookup",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Values": [
+          "1"
+        ],
+        "Vindex": "name_user_map",
         "Inputs": [
           {
-            "OperatorType": "VindexLookup",
-            "Variant": "Equal",
+            "OperatorType": "Route",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
+            "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+            "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+            "Table": "name_user_vdx",
             "Values": [
-              "1"
+              "::name"
             ],
-            "Vindex": "name_user_map",
-            "Inputs": [
-              {
-                "OperatorType": "TimeoutHandler",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                    "Table": "name_user_vdx",
-                    "Values": [
-                      "::name"
-                    ],
-                    "Vindex": "user_index"
-                  }
-                ]
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "ByDestination",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-                "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
-                "Table": "`user`"
-              }
-            ]
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
+            "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
+            "Table": "`user`"
           }
         ]
       },
@@ -1716,52 +1526,42 @@
       "QueryType": "SELECT",
       "Original": "with u(a, n) as (select id as b, name from user where b = 1) select u.a from u where u.n = 1",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "VindexLookup",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Values": [
+          "1"
+        ],
+        "Vindex": "name_user_map",
         "Inputs": [
           {
-            "OperatorType": "VindexLookup",
-            "Variant": "Equal",
+            "OperatorType": "Route",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
+            "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+            "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+            "Table": "name_user_vdx",
             "Values": [
-              "1"
+              "::name"
             ],
-            "Vindex": "name_user_map",
-            "Inputs": [
-              {
-                "OperatorType": "TimeoutHandler",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                    "Table": "name_user_vdx",
-                    "Values": [
-                      "::name"
-                    ],
-                    "Vindex": "user_index"
-                  }
-                ]
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "ByDestination",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-                "Query": "select u.a from (select id as b, `name` from `user` where b = 1 and `name` = 1) as u(a, n)",
-                "Table": "`user`"
-              }
-            ]
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
+            "Query": "select u.a from (select id as b, `name` from `user` where b = 1 and `name` = 1) as u(a, n)",
+            "Table": "`user`"
           }
         ]
       },
@@ -1777,37 +1577,32 @@
       "QueryType": "SELECT",
       "Original": "with t(i) as (select user.id from user join user_extra) select i+1 from t",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select i + 1 from (select `user`.id from `user` where 1 != 1) as t(i) where 1 != 1",
-                "Query": "select i + 1 from (select `user`.id from `user`) as t(i)",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select i + 1 from (select `user`.id from `user` where 1 != 1) as t(i) where 1 != 1",
+            "Query": "select i + 1 from (select `user`.id from `user`) as t(i)",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -1824,46 +1619,30 @@
       "QueryType": "SELECT",
       "Original": "with t as (select `user`.col1 from `user` join unsharded) select 0 from t join unsharded on unsharded.col1 = t.col1 and unsharded.a = t.col1",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "t_col1": 1
+        },
+        "TableName": "`user`_unsharded_unsharded",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "JoinVars": {
-              "t_col1": 1
-            },
-            "TableName": "`user`_unsharded_unsharded",
+            "JoinColumnIndexes": "L:0,L:1",
+            "TableName": "`user`_unsharded",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1",
-                "TableName": "`user`_unsharded",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 0, t.col1 from (select `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select 0, t.col1 from (select `user`.col1 from `user`) as t",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Unsharded",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select 1 from unsharded where 1 != 1",
-                    "Query": "select 1 from unsharded",
-                    "Table": "unsharded"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 0, t.col1 from (select `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select 0, t.col1 from (select `user`.col1 from `user`) as t",
+                "Table": "`user`"
               },
               {
                 "OperatorType": "Route",
@@ -1873,10 +1652,21 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from unsharded where 1 != 1",
-                "Query": "select 1 from unsharded where unsharded.a = :t_col1 and unsharded.col1 = :t_col1",
+                "Query": "select 1 from unsharded",
                 "Table": "unsharded"
               }
             ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded where 1 != 1",
+            "Query": "select 1 from unsharded where unsharded.a = :t_col1 and unsharded.col1 = :t_col1",
+            "Table": "unsharded"
           }
         ]
       },
@@ -1893,20 +1683,15 @@
       "QueryType": "SELECT",
       "Original": "with x(id2) as (select id from user) select id2 from x",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id2 from (select id from `user` where 1 != 1) as x(id2) where 1 != 1",
-            "Query": "select id2 from (select id from `user`) as x(id2)",
-            "Table": "`user`"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id2 from (select id from `user` where 1 != 1) as x(id2) where 1 != 1",
+        "Query": "select id2 from (select id from `user`) as x(id2)",
+        "Table": "`user`"
       },
       "TablesUsed": [
         "user.user"
@@ -1944,64 +1729,59 @@
       "QueryType": "SELECT",
       "Original": "with u as (select user.col from user join user_extra) select u.col from u join user_extra ue limit 1",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Limit",
+        "Count": "1",
         "Inputs": [
           {
-            "OperatorType": "Limit",
-            "Count": "1",
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_user_extra_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0",
-                "TableName": "`user`_user_extra_user_extra",
+                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
-                    "OperatorType": "Join",
-                    "Variant": "Join",
-                    "JoinColumnIndexes": "L:0",
-                    "TableName": "`user`_user_extra",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select u.col from (select `user`.col from `user` where 1 != 1) as u where 1 != 1",
-                        "Query": "select u.col from (select `user`.col from `user`) as u",
-                        "Table": "`user`"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select 1 from user_extra where 1 != 1",
-                        "Query": "select 1 from user_extra",
-                        "Table": "user_extra"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col from (select `user`.col from `user` where 1 != 1) as u where 1 != 1",
+                    "Query": "select u.col from (select `user`.col from `user`) as u",
+                    "Table": "`user`"
                   },
                   {
-                    "OperatorType": "Limit",
-                    "Count": "1",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                        "Query": "select 1 from user_extra as ue limit 1",
-                        "Table": "user_extra"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra where 1 != 1",
+                    "Query": "select 1 from user_extra",
+                    "Table": "user_extra"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue limit 1",
+                    "Table": "user_extra"
                   }
                 ]
               }
@@ -2022,20 +1802,15 @@
       "QueryType": "SELECT",
       "Original": "with x as (select * from user) select * from x",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from (select * from `user` where 1 != 1) as x where 1 != 1",
-            "Query": "select * from (select * from `user`) as x",
-            "Table": "`user`"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from (select * from `user` where 1 != 1) as x where 1 != 1",
+        "Query": "select * from (select * from `user`) as x",
+        "Table": "`user`"
       },
       "TablesUsed": [
         "user.user"
@@ -2049,28 +1824,23 @@
       "QueryType": "SELECT",
       "Original": "with x as (select id, foo from user) select * from x union select * from x",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:2)",
+          "(1:3)"
+        ],
+        "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "(0:2)",
-              "(1:3)"
-            ],
-            "ResultColumns": 2,
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1 union select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1) as dt(c0, c1) where 1 != 1",
-                "Query": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user`) as x union select id, foo from (select id, foo from `user`) as x) as dt(c0, c1)",
-                "Table": "`user`"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1 union select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1) as dt(c0, c1) where 1 != 1",
+            "Query": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user`) as x union select id, foo from (select id, foo from `user`) as x) as dt(c0, c1)",
+            "Table": "`user`"
           }
         ]
       },
@@ -2132,69 +1902,64 @@
       "QueryType": "SELECT",
       "Original": "WITH `count_a` AS (SELECT COUNT(`user_id`) AS `num` FROM `user_metadata`), `count_b` AS (SELECT COUNT(`user_id`) AS `num` FROM `user_extra`) SELECT 'count_a' AS `tab`, `num` FROM `count_a` UNION SELECT 'count_b' AS `tab`, `num` FROM `count_b`",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0: utf8mb4_0900_ai_ci",
+          "1"
+        ],
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "0: utf8mb4_0900_ai_ci",
-              "1"
-            ],
+            "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Concatenate",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "'count_a' as tab",
+                  ":0 as num"
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Projection",
-                    "Expressions": [
-                      "'count_a' as tab",
-                      ":0 as num"
-                    ],
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "sum_count(0) AS num",
                     "Inputs": [
                       {
-                        "OperatorType": "Aggregate",
-                        "Variant": "Scalar",
-                        "Aggregates": "sum_count(0) AS num",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select count(user_id) as num from user_metadata where 1 != 1",
-                            "Query": "select count(user_id) as num from user_metadata",
-                            "Table": "user_metadata"
-                          }
-                        ]
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(user_id) as num from user_metadata where 1 != 1",
+                        "Query": "select count(user_id) as num from user_metadata",
+                        "Table": "user_metadata"
                       }
                     ]
-                  },
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "'count_b' as tab",
+                  ":0 as num"
+                ],
+                "Inputs": [
                   {
-                    "OperatorType": "Projection",
-                    "Expressions": [
-                      "'count_b' as tab",
-                      ":0 as num"
-                    ],
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "sum_count(0) AS num",
                     "Inputs": [
                       {
-                        "OperatorType": "Aggregate",
-                        "Variant": "Scalar",
-                        "Aggregates": "sum_count(0) AS num",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select count(user_id) as num from user_extra where 1 != 1",
-                            "Query": "select count(user_id) as num from user_extra",
-                            "Table": "user_extra"
-                          }
-                        ]
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(user_id) as num from user_extra where 1 != 1",
+                        "Query": "select count(user_id) as num from user_extra",
+                        "Table": "user_extra"
                       }
                     ]
                   }
@@ -2217,109 +1982,104 @@
       "QueryType": "SELECT",
       "Original": "WITH `open` AS (SELECT COUNT(*) as `num` FROM (SELECT `user`.`id` FROM `user` WHERE `user`.`textcol1` = 'open' AND `user`.`intcol` = 1 LIMIT 1000) `t` LIMIT 1 ), `closed` AS (SELECT COUNT(*) as `num` FROM ( SELECT `user`.`id` FROM `user` WHERE `user`.`textcol1` = 'closed' AND `user`.`intcol` = 1 LIMIT 1000) `t` LIMIT 1 ), `all` AS (SELECT LEAST(1000, SUM(`num`)) AS `num` FROM ( SELECT `num` FROM `open` UNION ALL SELECT `num` FROM `closed` ) `t` LIMIT 1 )SELECT 'all' AS `tab`, `num`FROM `all`",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Limit",
+        "Count": "1",
         "Inputs": [
           {
-            "OperatorType": "Limit",
-            "Count": "1",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "'all' as tab",
+              ":0 as num"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "'all' as tab",
-                  ":0 as num"
+                  "least(1000, sum(num)) as num"
                 ],
                 "Inputs": [
                   {
-                    "OperatorType": "Projection",
-                    "Expressions": [
-                      "least(1000, sum(num)) as num"
-                    ],
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "any_value(0), sum(1) AS sum(num)",
                     "Inputs": [
                       {
-                        "OperatorType": "Aggregate",
-                        "Variant": "Scalar",
-                        "Aggregates": "any_value(0), sum(1) AS sum(num)",
+                        "OperatorType": "Projection",
+                        "Expressions": [
+                          "1000 as 1000",
+                          ":0 as num"
+                        ],
                         "Inputs": [
                           {
-                            "OperatorType": "Projection",
-                            "Expressions": [
-                              "1000 as 1000",
-                              ":0 as num"
-                            ],
+                            "OperatorType": "Concatenate",
                             "Inputs": [
                               {
-                                "OperatorType": "Concatenate",
+                                "OperatorType": "Limit",
+                                "Count": "1",
                                 "Inputs": [
                                   {
-                                    "OperatorType": "Limit",
-                                    "Count": "1",
+                                    "OperatorType": "Aggregate",
+                                    "Variant": "Scalar",
+                                    "Aggregates": "count_star(0) AS num",
                                     "Inputs": [
                                       {
-                                        "OperatorType": "Aggregate",
-                                        "Variant": "Scalar",
-                                        "Aggregates": "count_star(0) AS num",
+                                        "OperatorType": "Projection",
+                                        "Expressions": [
+                                          "1 as 1"
+                                        ],
                                         "Inputs": [
                                           {
-                                            "OperatorType": "Projection",
-                                            "Expressions": [
-                                              "1 as 1"
-                                            ],
+                                            "OperatorType": "Limit",
+                                            "Count": "1000",
                                             "Inputs": [
                                               {
-                                                "OperatorType": "Limit",
-                                                "Count": "1000",
-                                                "Inputs": [
-                                                  {
-                                                    "OperatorType": "Route",
-                                                    "Variant": "Scatter",
-                                                    "Keyspace": {
-                                                      "Name": "user",
-                                                      "Sharded": true
-                                                    },
-                                                    "FieldQuery": "select 1 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                                                    "Query": "select 1 from (select `user`.id from `user` where `user`.textcol1 = 'open' and `user`.intcol = 1) as t limit :__upper_limit",
-                                                    "Table": "`user`"
-                                                  }
-                                                ]
+                                                "OperatorType": "Route",
+                                                "Variant": "Scatter",
+                                                "Keyspace": {
+                                                  "Name": "user",
+                                                  "Sharded": true
+                                                },
+                                                "FieldQuery": "select 1 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+                                                "Query": "select 1 from (select `user`.id from `user` where `user`.textcol1 = 'open' and `user`.intcol = 1) as t limit :__upper_limit",
+                                                "Table": "`user`"
                                               }
                                             ]
                                           }
                                         ]
                                       }
                                     ]
-                                  },
+                                  }
+                                ]
+                              },
+                              {
+                                "OperatorType": "Limit",
+                                "Count": "1",
+                                "Inputs": [
                                   {
-                                    "OperatorType": "Limit",
-                                    "Count": "1",
+                                    "OperatorType": "Aggregate",
+                                    "Variant": "Scalar",
+                                    "Aggregates": "count_star(0) AS num",
                                     "Inputs": [
                                       {
-                                        "OperatorType": "Aggregate",
-                                        "Variant": "Scalar",
-                                        "Aggregates": "count_star(0) AS num",
+                                        "OperatorType": "Projection",
+                                        "Expressions": [
+                                          "1 as 1"
+                                        ],
                                         "Inputs": [
                                           {
-                                            "OperatorType": "Projection",
-                                            "Expressions": [
-                                              "1 as 1"
-                                            ],
+                                            "OperatorType": "Limit",
+                                            "Count": "1000",
                                             "Inputs": [
                                               {
-                                                "OperatorType": "Limit",
-                                                "Count": "1000",
-                                                "Inputs": [
-                                                  {
-                                                    "OperatorType": "Route",
-                                                    "Variant": "Scatter",
-                                                    "Keyspace": {
-                                                      "Name": "user",
-                                                      "Sharded": true
-                                                    },
-                                                    "FieldQuery": "select 1 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                                                    "Query": "select 1 from (select `user`.id from `user` where `user`.textcol1 = 'closed' and `user`.intcol = 1) as t limit :__upper_limit",
-                                                    "Table": "`user`"
-                                                  }
-                                                ]
+                                                "OperatorType": "Route",
+                                                "Variant": "Scatter",
+                                                "Keyspace": {
+                                                  "Name": "user",
+                                                  "Sharded": true
+                                                },
+                                                "FieldQuery": "select 1 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+                                                "Query": "select 1 from (select `user`.id from `user` where `user`.textcol1 = 'closed' and `user`.intcol = 1) as t limit :__upper_limit",
+                                                "Table": "`user`"
                                               }
                                             ]
                                           }
@@ -2353,44 +2113,39 @@
       "QueryType": "SELECT",
       "Original": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "ColumnNames": [
-              "0:name"
-            ],
-            "Columns": "0",
+            "OperatorType": "RecurseCTE",
+            "JoinVars": {
+              "cte_id": 1
+            },
             "Inputs": [
               {
-                "OperatorType": "RecurseCTE",
-                "JoinVars": {
-                  "cte_id": 1
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `name`, id from `user` where 1 != 1",
-                    "Query": "select `name`, id from `user` where manager_id is null",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select e.`name`, e.id from `user` as e where 1 != 1",
-                    "Query": "select e.`name`, e.id from `user` as e where e.manager_id = :cte_id",
-                    "Table": "`user`, dual"
-                  }
-                ]
+                "FieldQuery": "select `name`, id from `user` where 1 != 1",
+                "Query": "select `name`, id from `user` where manager_id is null",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.`name`, e.id from `user` as e where 1 != 1",
+                "Query": "select e.`name`, e.id from `user` as e where e.manager_id = :cte_id",
+                "Table": "`user`, dual"
               }
             ]
           }
@@ -2409,44 +2164,39 @@
       "QueryType": "SELECT",
       "Original": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from cte join user e on e.manager_id = cte.id) select name from cte",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "ColumnNames": [
-              "0:name"
-            ],
-            "Columns": "0",
+            "OperatorType": "RecurseCTE",
+            "JoinVars": {
+              "cte_id": 1
+            },
             "Inputs": [
               {
-                "OperatorType": "RecurseCTE",
-                "JoinVars": {
-                  "cte_id": 1
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `name`, id from `user` where 1 != 1",
-                    "Query": "select `name`, id from `user` where manager_id is null",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select e.`name`, e.id from `user` as e where 1 != 1",
-                    "Query": "select e.`name`, e.id from `user` as e where e.manager_id = :cte_id",
-                    "Table": "`user`, dual"
-                  }
-                ]
+                "FieldQuery": "select `name`, id from `user` where 1 != 1",
+                "Query": "select `name`, id from `user` where manager_id is null",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.`name`, e.id from `user` as e where 1 != 1",
+                "Query": "select e.`name`, e.id from `user` as e where e.manager_id = :cte_id",
+                "Table": "`user`, dual"
               }
             ]
           }
@@ -2465,20 +2215,15 @@
       "QueryType": "SELECT",
       "Original": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "with recursive cte as (select 1 as n from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
-            "Query": "with recursive cte as (select 1 as n from dual union all select n + 1 from cte where n < 5) select n from cte",
-            "Table": "dual"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "with recursive cte as (select 1 as n from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 as n from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "Table": "dual"
       },
       "TablesUsed": [
         "main.dual"
@@ -2492,20 +2237,15 @@
       "QueryType": "SELECT",
       "Original": "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "with recursive cte as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
-            "Query": "with recursive cte as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte",
-            "Table": "dual"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "with recursive cte as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "Table": "dual"
       },
       "TablesUsed": [
         "main.dual"
@@ -2519,24 +2259,19 @@
       "QueryType": "SELECT",
       "Original": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL and id = 6 UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id and e.id = 6) SELECT * FROM emp_cte",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "with recursive emp_cte as (select id, 1 as `level` from `user` where 1 != 1 union all select e.id, cte.`level` + 1 from cte as cte, `user` as e where 1 != 1) select id, `level` from emp_cte where 1 != 1",
-            "Query": "with recursive emp_cte as (select id, 1 as `level` from `user` where manager_id is null and id = 6 union all select e.id, cte.`level` + 1 from cte as cte, `user` as e where e.id = 6 and e.manager_id = cte.id) select id, `level` from emp_cte",
-            "Table": "`user`, dual",
-            "Values": [
-              "6"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive emp_cte as (select id, 1 as `level` from `user` where 1 != 1 union all select e.id, cte.`level` + 1 from cte as cte, `user` as e where 1 != 1) select id, `level` from emp_cte where 1 != 1",
+        "Query": "with recursive emp_cte as (select id, 1 as `level` from `user` where manager_id is null and id = 6 union all select e.id, cte.`level` + 1 from cte as cte, `user` as e where e.id = 6 and e.manager_id = cte.id) select id, `level` from emp_cte",
+        "Table": "`user`, dual",
+        "Values": [
+          "6"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "main.dual",
@@ -2551,38 +2286,33 @@
       "QueryType": "SELECT",
       "Original": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id) SELECT * FROM emp_cte",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "cte_id": 0,
+          "cte_level": 1
+        },
         "Inputs": [
           {
-            "OperatorType": "RecurseCTE",
-            "JoinVars": {
-              "cte_id": 0,
-              "cte_level": 1
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
             },
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, 1 as `level` from `user` where 1 != 1",
-                "Query": "select id, 1 as `level` from `user` where manager_id is null",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where 1 != 1",
-                "Query": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where e.manager_id = :cte_id",
-                "Table": "`user`, dual"
-              }
-            ]
+            "FieldQuery": "select id, 1 as `level` from `user` where 1 != 1",
+            "Query": "select id, 1 as `level` from `user` where manager_id is null",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where 1 != 1",
+            "Query": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where e.manager_id = :cte_id",
+            "Table": "`user`, dual"
           }
         ]
       },
@@ -2599,44 +2329,39 @@
       "QueryType": "SELECT",
       "Original": "WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 100 AS value, 1 AS manager_id UNION ALL SELECT id + 1, value * 2, id FROM literal_cte WHERE id < 5) SELECT l.id, l.value, l.manager_id, e.name AS employee_name FROM literal_cte l LEFT JOIN user e ON l.id = e.id",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,L:1,L:2,R:0",
+        "JoinVars": {
+          "l_id": 0
+        },
+        "TableName": "dual_`user`",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "LeftJoin",
-            "JoinColumnIndexes": "L:0,L:1,L:2,R:0",
-            "JoinVars": {
-              "l_id": 0
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
             },
-            "TableName": "dual_`user`",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Reference",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "with recursive literal_cte as (select 1 as id, 100 as value, 1 as manager_id from dual where 1 != 1 union all select id + 1, value * 2, id from literal_cte where 1 != 1) select l.id, l.value, l.manager_id from literal_cte as l where 1 != 1",
-                "Query": "with recursive literal_cte as (select 1 as id, 100 as value, 1 as manager_id from dual union all select id + 1, value * 2, id from literal_cte where id < 5) select l.id, l.value, l.manager_id from literal_cte as l",
-                "Table": "dual"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select e.`name` as employee_name from `user` as e where 1 != 1",
-                "Query": "select e.`name` as employee_name from `user` as e where e.id = :l_id",
-                "Table": "`user`",
-                "Values": [
-                  ":l_id"
-                ],
-                "Vindex": "user_index"
-              }
-            ]
+            "FieldQuery": "with recursive literal_cte as (select 1 as id, 100 as value, 1 as manager_id from dual where 1 != 1 union all select id + 1, value * 2, id from literal_cte where 1 != 1) select l.id, l.value, l.manager_id from literal_cte as l where 1 != 1",
+            "Query": "with recursive literal_cte as (select 1 as id, 100 as value, 1 as manager_id from dual union all select id + 1, value * 2, id from literal_cte where id < 5) select l.id, l.value, l.manager_id from literal_cte as l",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select e.`name` as employee_name from `user` as e where 1 != 1",
+            "Query": "select e.`name` as employee_name from `user` as e where e.id = :l_id",
+            "Table": "`user`",
+            "Values": [
+              ":l_id"
+            ],
+            "Vindex": "user_index"
           }
         ]
       },
@@ -2653,57 +2378,52 @@
       "QueryType": "SELECT",
       "Original": "WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, e.name, e.manager_id FROM user e INNER JOIN emp_cte cte ON e.manager_id = cte.id) SELECT manager_id, COUNT(*) AS employee_count FROM emp_cte GROUP BY manager_id",
       "Instructions": {
-        "OperatorType": "TimeoutHandler",
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count_star(1) AS employee_count",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "count_star(1) AS employee_count",
-            "GroupBy": "(0|2)",
-            "ResultColumns": 2,
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":2 as manager_id",
+              "1 as 1",
+              "weight_string(:2) as weight_string(manager_id)"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  ":2 as manager_id",
-                  "1 as 1",
-                  "weight_string(:2) as weight_string(manager_id)"
-                ],
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(2|3) ASC",
                 "Inputs": [
                   {
-                    "OperatorType": "Sort",
-                    "Variant": "Memory",
-                    "OrderBy": "(2|3) ASC",
+                    "OperatorType": "RecurseCTE",
+                    "JoinVars": {
+                      "cte_id": 0
+                    },
                     "Inputs": [
                       {
-                        "OperatorType": "RecurseCTE",
-                        "JoinVars": {
-                          "cte_id": 0
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
                         },
-                        "Inputs": [
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, dt.c2 as manager_id, weight_string(dt.c2) from (select id, `name`, manager_id from `user` where 1 != 1) as dt(c0, c1, c2) where 1 != 1",
-                            "Query": "select dt.c0 as id, dt.c1 as `name`, dt.c2 as manager_id, weight_string(dt.c2) from (select id, `name`, manager_id from `user` where manager_id is null) as dt(c0, c1, c2)",
-                            "Table": "`user`"
-                          },
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select e.id, e.`name`, e.manager_id, weight_string(e.manager_id) from `user` as e where 1 != 1",
-                            "Query": "select e.id, e.`name`, e.manager_id, weight_string(e.manager_id) from `user` as e where e.manager_id = :cte_id",
-                            "Table": "`user`, dual"
-                          }
-                        ]
+                        "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, dt.c2 as manager_id, weight_string(dt.c2) from (select id, `name`, manager_id from `user` where 1 != 1) as dt(c0, c1, c2) where 1 != 1",
+                        "Query": "select dt.c0 as id, dt.c1 as `name`, dt.c2 as manager_id, weight_string(dt.c2) from (select id, `name`, manager_id from `user` where manager_id is null) as dt(c0, c1, c2)",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select e.id, e.`name`, e.manager_id, weight_string(e.manager_id) from `user` as e where 1 != 1",
+                        "Query": "select e.id, e.`name`, e.manager_id, weight_string(e.manager_id) from `user` as e where e.manager_id = :cte_id",
+                        "Table": "`user`, dual"
                       }
                     ]
                   }

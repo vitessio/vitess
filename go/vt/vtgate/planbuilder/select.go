@@ -229,9 +229,21 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	plan = engine.NewTimeoutHandler(plan, queryTimeout(selStmt.GetParsedComments().Directives()))
+	plan = handleTimeout(plan, queryTimeout(selStmt.GetParsedComments().Directives()), vschema)
 
 	return plan, operators.TablesUsed(op), nil
+}
+
+// handleTimeout checks if there is a timeout that needs to be added to the query. If there is one
+// then we wrap the plan in a TimeoutHandler primitive. If there is no timeout, we return the plan as is.
+// Because we are accessing the query timeout stored in the session state, we have to also add this value to the plan key
+// so that we don't end up using the same plan when the session variable changes.
+func handleTimeout(plan engine.Primitive, queryTimeoutComment int, vschema plancontext.VSchema) engine.Primitive {
+	finalQueryTimeout := vschema.GetQueryTimeout(queryTimeoutComment)
+	if finalQueryTimeout == 0 {
+		return plan
+	}
+	return engine.NewTimeoutHandler(plan, finalQueryTimeout)
 }
 
 func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (operators.Operator, error) {

@@ -260,6 +260,16 @@ func (s *planTestSuite) addPKsProvided(vschema *vindexes.VSchema, ks string, tbl
 	}
 }
 
+func (s *planTestSuite) TestQueryTimeout() {
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:                   loadSchema(s.T(), "vschemas/schema.json", true),
+		Env:                 vtenv.NewTestEnv(),
+		SessionQueryTimeout: 200,
+	}
+
+	s.testFile("query_timeout_cases.json", vschemaWrapper, false)
+}
+
 func (s *planTestSuite) TestSystemTables57() {
 	// first we move everything to use 5.7 logic
 	env, err := vtenv.New(vtenv.Options{
@@ -683,7 +693,7 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 					if tcase.Skip {
 						t.Skip(message)
 					} else {
-						t.Errorf(message)
+						t.Error(message)
 					}
 				} else if tcase.Skip {
 					t.Errorf("query is correct even though it is skipped:\n %s", tcase.Query)

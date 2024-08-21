@@ -262,6 +262,7 @@ func TestSetTarget(t *testing.T) {
 func TestKeyForPlan(t *testing.T) {
 	type testCase struct {
 		vschema               *vindexes.VSchema
+		sessionQueryTimeout   int
 		targetString          string
 		expectedPlanPrefixKey string
 	}
@@ -290,6 +291,11 @@ func TestKeyForPlan(t *testing.T) {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1@replica",
 		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "",
+		sessionQueryTimeout:   100,
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+QueryTimeout:100+Query:SELECT 1",
 	}}
 
 	r, _, _, _, _ := createExecutorEnv(t)
@@ -297,6 +303,7 @@ func TestKeyForPlan(t *testing.T) {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
 			ss := NewSafeSession(&vtgatepb.Session{InTransaction: false})
 			ss.SetTargetString(tc.targetString)
+			ss.SetQueryTimeout(int64(tc.sessionQueryTimeout))
 			vc, err := newVCursorImpl(ss, sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
 			require.NoError(t, err)
 			vc.vschema = tc.vschema

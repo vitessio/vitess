@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -51,7 +52,7 @@ func (t *TimeoutHandler) NeedsTransaction() bool {
 
 // TryExecute is part of the Primitive interface
 func (t *TimeoutHandler) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (res *sqltypes.Result, err error) {
-	ctx, cancel := addQueryTimeout(ctx, vcursor, t.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(t.Timeout)*time.Millisecond)
 	defer cancel()
 
 	complete := make(chan any)
@@ -70,7 +71,7 @@ func (t *TimeoutHandler) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 
 // TryStreamExecute is part of the Primitive interface
 func (t *TimeoutHandler) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) (err error) {
-	ctx, cancel := addQueryTimeout(ctx, vcursor, t.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(t.Timeout)*time.Millisecond)
 	defer cancel()
 
 	complete := make(chan any)

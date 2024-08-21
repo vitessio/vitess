@@ -1,28 +1,13 @@
 [
   {
-    "comment": "vexplain json",
-    "query": "vexplain plan select * from user",
+    "comment": "select with timeout directive sets QueryTimeout",
+    "query": "select /*vt+ QUERY_TIMEOUT_MS=1004 */ * from user",
     "plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "vexplain plan select * from user",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ QUERY_TIMEOUT_MS=1004 */ * from user",
       "Instructions": {
-        "OperatorType": "Rows",
-        "Fields": {
-          "JSON": "VARCHAR"
-        },
-        "RowCount": 1
-      }
-    }
-  },
-  {
-    "comment": "vexplain queries",
-    "query": "vexplain QUERIES select * from user",
-    "plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "vexplain QUERIES select * from user",
-      "Instructions": {
-        "OperatorType": "VEXPLAIN",
-        "Type": "queries",
+        "OperatorType": "TimeoutHandler",
+        "Timeout": 1004,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -32,7 +17,8 @@
               "Sharded": true
             },
             "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user`",
+            "Query": "select /*vt+ QUERY_TIMEOUT_MS=1004 */ * from `user`",
+            "QueryTimeout": 1004,
             "Table": "`user`"
           }
         ]
@@ -43,14 +29,14 @@
     }
   },
   {
-    "comment": "vexplain table",
-    "query": "vexplain ALL select * from user",
+    "comment": "select with no timeout directive",
+    "query": "select * from user",
     "plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "vexplain ALL select * from user",
+      "QueryType": "SELECT",
+      "Original": "select * from user",
       "Instructions": {
-        "OperatorType": "VEXPLAIN",
-        "Type": "all",
+        "OperatorType": "TimeoutHandler",
+        "Timeout": 200,
         "Inputs": [
           {
             "OperatorType": "Route",

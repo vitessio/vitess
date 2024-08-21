@@ -280,6 +280,10 @@ func (v *vschema) Environment() *vtenv.Environment {
 	return vtenv.NewTestEnv()
 }
 
+func (v *vschema) GetQueryTimeout(queryTimeoutFromComments int) int {
+	return queryTimeoutFromComments
+}
+
 func (v *vschema) ErrorIfShardedF(keyspace *vindexes.Keyspace, warn, errFmt string, params ...any) error {
 	// TODO implement me
 	panic("implement me")

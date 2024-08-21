@@ -43,6 +43,7 @@ type VSchema interface {
 	SetPlannerVersion(pv PlannerVersion)
 	ConnCollation() collations.ID
 	Environment() *vtenv.Environment
+	GetQueryTimeout(queryTimeoutFromComments int) int
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so

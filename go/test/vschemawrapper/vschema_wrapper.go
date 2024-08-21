@@ -47,6 +47,7 @@ type VSchemaWrapper struct {
 	Dest                  key.Destination
 	SysVarEnabled         bool
 	ForeignKeyChecksState *bool
+	SessionQueryTimeout   int
 	Version               plancontext.PlannerVersion
 	EnableViews           bool
 	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
@@ -130,6 +131,13 @@ func (vw *VSchemaWrapper) ConnCollation() collations.ID {
 
 func (vw *VSchemaWrapper) Environment() *vtenv.Environment {
 	return vw.Env
+}
+
+func (vw *VSchemaWrapper) GetQueryTimeout(queryTimeoutFromComments int) int {
+	if queryTimeoutFromComments != 0 {
+		return queryTimeoutFromComments
+	}
+	return vw.SessionQueryTimeout
 }
 
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {

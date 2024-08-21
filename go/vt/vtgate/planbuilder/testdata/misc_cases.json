@@ -78,24 +78,19 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "TimeoutHandler",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user` where id = :v1",
-                "Table": "`user`",
-                "Values": [
-                  ":v1"
-                ],
-                "Vindex": "user_index"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where id = :v1",
+            "Table": "`user`",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "user_index"
           }
         ]
       },
@@ -118,24 +113,19 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "TimeoutHandler",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "IN",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user` where id in ::__vals",
-                "Table": "`user`",
-                "Values": [
-                  "(:v1, :v2)"
-                ],
-                "Vindex": "user_index"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where id in ::__vals",
+            "Table": "`user`",
+            "Values": [
+              "(:v1, :v2)"
+            ],
+            "Vindex": "user_index"
           }
         ]
       },
@@ -155,20 +145,15 @@
         "Parameters": null,
         "Inputs": [
           {
-            "OperatorType": "TimeoutHandler",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user`",
-                "Table": "`user`"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user`",
+            "Table": "`user`"
           }
         ]
       },

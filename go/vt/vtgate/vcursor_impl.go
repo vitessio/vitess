@@ -1119,6 +1119,10 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
 	_, _ = buf.WriteString("+Collate:")
 	_, _ = buf.WriteString(vc.Environment().CollationEnv().LookupName(vc.collation))
+	sessionQueryTimeout := vc.GetQueryTimeout(0)
+	if sessionQueryTimeout != 0 {
+		_, _ = buf.WriteString(fmt.Sprintf("+QueryTimeout:%d", sessionQueryTimeout))
+	}
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {
