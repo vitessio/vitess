@@ -119,3 +119,13 @@ WITH RECURSIVE foo AS (SELECT id
                        WHERE id < 5)
 SELECT id
 FROM foo;
+
+# Recursive CTE with UNION DISTINCT
+WITH RECURSIVE hierarchy AS (
+    SELECT id, name, manager_id FROM employees
+    UNION ALL
+    SELECT id, name, manager_id FROM employees
+    UNION DISTINCT
+    SELECT id*2, name, manager_id from hierarchy WHERE id < 10
+)
+SELECT * FROM hierarchy;

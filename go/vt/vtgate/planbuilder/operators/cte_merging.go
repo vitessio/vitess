@@ -88,6 +88,7 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 			Term:       newTerm,
 			LeftID:     in.LeftID,
 			OuterID:    in.OuterID,
+			Distinct:   in.Distinct,
 		},
 		MergedWith: []*Route{term},
 	}
