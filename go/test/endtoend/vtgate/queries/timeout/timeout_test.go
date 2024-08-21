@@ -94,8 +94,39 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context deadline exceeded")
+	if utils.BinaryIsAtLeastAtVersion(21, "vtgate") {
+		assert.ErrorContains(t, err, "Query execution was interrupted, maximum statement execution time exceeded")
+	} else {
+		assert.Contains(t, err.Error(), "context deadline exceeded")
+	}
 	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
+}
+
+// TestOverallQueryTimeout tests that the query timeout is applied to the overall execution of a query
+// and not just individual routes.
+func TestOverallQueryTimeout(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (2,2),(3,3)")
+	// After inserting the rows above, if we run the following query, we will end up doing join on vtgate
+	// that issues one select query on the left side and 2 on the right side. The queries on the right side
+	// take 2 and 3 seconds each to run. If we have an overall timeout for 4 seconds, then it should fail.
+
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=4000 */ sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "Query execution was interrupted, maximum statement execution time exceeded")
+
+	// Let's also check that setting the session variable also works.
+	utils.Exec(t, mcmp.VtConn, "set query_timeout=4000")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "Query execution was interrupted, maximum statement execution time exceeded")
+
+	// Increasing the timeout should pass the query.
+	utils.Exec(t, mcmp.VtConn, "set query_timeout=10000")
+	_ = utils.Exec(t, mcmp.VtConn, "select sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
 }
 
 // TestQueryTimeoutWithShardTargeting tests the query timeout with shard targeting.
