@@ -3497,6 +3497,13 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			}
 		}
 
+		// Get the source positions now that writes are stopped, the streams were stopped (e.g.
+		// intra-keyspace materializations that write on the source), and we know for certain
+		// that any in progress writes are done.
+		if err := ts.gatherSourcePositions(ctx); err != nil {
+			return handleError("failed to gather replication positions on migration sources", err)
+		}
+
 		if err := confirmKeyspaceLocksHeld(); err != nil {
 			return handleError("locks were lost", err)
 		}
@@ -3725,7 +3732,7 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	// Notify Replicas to reload schema. This is best-effort.
 	reloadCtx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer cancel()
-	_, ok := schematools.ReloadShard(reloadCtx, s.ts, s.tmc, logutil.NewMemoryLogger(), destKeyspace, destShard, destPrimaryPos, nil, true)
+	_, ok := schematools.ReloadShard(reloadCtx, s.ts, s.tmc, s.Logger(), destKeyspace, destShard, destPrimaryPos, nil, true)
 	if !ok {
 		s.Logger().Error(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "CopySchemaShard: failed to reload schema on all replicas"))
 	}

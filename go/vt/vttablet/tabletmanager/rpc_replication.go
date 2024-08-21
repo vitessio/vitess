@@ -355,7 +355,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	// Check if two-pc is enabled but semi-sync is not.
 	// If so, we return an error, because atomic transactions require semi-sync for correctness.
 	if tm.QueryServiceControl.TwoPCEnabled() && semiSyncAction != SemiSyncActionSet {
-		return "", vterrors.VT09026()
+		return "", vterrors.VT09031()
 	}
 
 	// Setting super_read_only `OFF` so that we can run the DDL commands
@@ -923,7 +923,7 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	// Check if two-pc is enabled but semi-sync is not.
 	// If so, we return an error, because atomic transactions require semi-sync for correctness.
 	if tm.QueryServiceControl.TwoPCEnabled() && semiSyncAction != SemiSyncActionSet {
-		return "", vterrors.VT09026()
+		return "", vterrors.VT09031()
 	}
 
 	pos, err := tm.MysqlDaemon.Promote(ctx, tm.hookExtraEnv())
