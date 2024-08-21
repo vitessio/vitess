@@ -242,7 +242,10 @@ func TestNormalize(t *testing.T) {
 		in:      "insert into t values (JSON_OBJECT('_id', 27, 'name', 'carrot'))",
 		outstmt: "insert into t values (json_object(:bv1 /* VARCHAR */, :bv2 /* INT64 */, :bv3 /* VARCHAR */, :bv4 /* VARCHAR */))",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.StringBindVariable("{\"k\", \"v\"}"),
+			"bv1": sqltypes.StringBindVariable("_id"),
+			"bv2": sqltypes.Int64BindVariable(27),
+			"bv3": sqltypes.StringBindVariable("name"),
+			"bv4": sqltypes.StringBindVariable("carrot"),
 		},
 	}, {
 		// ORDER BY column_position
