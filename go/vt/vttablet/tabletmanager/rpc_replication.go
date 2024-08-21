@@ -547,9 +547,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
+			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// setting read_only OFF will also set super_read_only OFF if it was set
-			if err := tm.MysqlDaemon.SetReadOnly(ctx, false); err != nil {
-				log.Warningf("SetReadOnly(false) failed during revert: %v", err)
+			if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+				log.Warningf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err)
 			}
 		}
 	}()
@@ -602,8 +603,8 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		return err
 	}
 
-	// Now, set the server read-only false.
-	if err := tm.MysqlDaemon.SetReadOnly(ctx, false); err != nil {
+	// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
+	if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 		return err
 	}
 

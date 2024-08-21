@@ -214,9 +214,10 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		}
 
 		if action == DBActionSetReadWrite {
+			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// We call SetReadOnly only after the topo has been updated to avoid
 			// situations where two tablets are primary at the DB level but not at the vitess level
-			if err := ts.tm.MysqlDaemon.SetReadOnly(ctx, false); err != nil {
+			if err = ts.tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 				return err
 			}
 		}

@@ -61,7 +61,7 @@ type testMaterializerEnv struct {
 	venv     *vtenv.Environment
 }
 
-//----------------------------------------------
+// ----------------------------------------------
 // testMaterializerEnv
 
 func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.MaterializeSettings, sourceShards, targetShards []string) *testMaterializerEnv {
@@ -426,7 +426,7 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Conte
 						},
 					},
 				},
-				Pos:           "MySQL56/" + position,
+				Pos:           position,
 				TimeUpdated:   protoutil.TimeToProto(time.Now()),
 				TimeHeartbeat: protoutil.TimeToProto(time.Now()),
 			}
