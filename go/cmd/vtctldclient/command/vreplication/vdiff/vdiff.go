@@ -143,7 +143,7 @@ var (
 		Use:   "create",
 		Short: "Create and run a VDiff to compare the tables involved in a VReplication workflow between the source and target.",
 		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer create
-vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer create b3f59678-5241-11ee-be56-0242ac120002`,
+vtctldclient --server :15999 vdiff --workflow c2c --target-keyspace customer create b3f59678-5241-11ee-be56-0242ac120002 --source-cells zone1 --tablet-types "rdonly,replica" --target-cells zone1 --update-table-stats --max-report-sample-rows 1000 --wait --wait-update-interval 5s --auto-retry --max-diff-duration 1h --row-diff-column-truncate-at 0`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
@@ -200,8 +200,8 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	show = &cobra.Command{
 		Use:   "show",
 		Short: "Show the status of a VDiff.",
-		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show last
-vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show a037a9e2-5628-11ee-8c99-0242ac120002
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show last --verbose --format json
+vtctldclient --server :15999 vdiff --workflow commerce2customer --target-keyspace customer show a037a9e2-5628-11ee-8c99-0242ac120002
 vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show all`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
