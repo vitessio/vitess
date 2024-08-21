@@ -1,6 +1,6 @@
 module vitess-mixin
 
-go 1.23
+go 1.23.0
 
 require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
@@ -130,4 +130,3 @@ require (
 )
 
 replace k8s.io/client-go v2.0.0-alpha.0.0.20181121191925-a47917edff34+incompatible => k8s.io/client-go v2.0.0-alpha.1+incompatible
-e
