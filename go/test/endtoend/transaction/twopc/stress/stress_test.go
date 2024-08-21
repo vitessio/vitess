@@ -77,7 +77,7 @@ func TestDisruptions(t *testing.T) {
 	for _, tt := range testcases {
 		t.Run(fmt.Sprintf("%s-%ss delay", tt.disruptionName, tt.commitDelayTime), func(t *testing.T) {
 			// Reparent all the shards to first tablet being the primary.
-			reparentToFistTablet(t)
+			reparentToFirstTablet(t)
 			// cleanup all the old data.
 			conn, closer := start(t)
 			defer closer()
@@ -148,8 +148,8 @@ func threadToWrite(t *testing.T, ctx context.Context, id int) {
 	}
 }
 
-// reparentToFistTablet reparents all the shards to first tablet being the primary.
-func reparentToFistTablet(t *testing.T) {
+// reparentToFirstTablet reparents all the shards to first tablet being the primary.
+func reparentToFirstTablet(t *testing.T) {
 	ks := clusterInstance.Keyspaces[0]
 	for _, shard := range ks.Shards {
 		primary := shard.Vttablets[0]
