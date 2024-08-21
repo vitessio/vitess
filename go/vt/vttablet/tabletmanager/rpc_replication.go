@@ -352,11 +352,9 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
-	// Check if two-pc is enabled but semi-sync is not.
-	// If so, we return an error, because atomic transactions require semi-sync for correctness.
-	if tm.QueryServiceControl.TwoPCEnabled() && semiSyncAction != SemiSyncActionSet {
-		return "", vterrors.VT09031()
-	}
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
 
 	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false); err != nil {
@@ -920,11 +918,9 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 		return "", err
 	}
 
-	// Check if two-pc is enabled but semi-sync is not.
-	// If so, we return an error, because atomic transactions require semi-sync for correctness.
-	if tm.QueryServiceControl.TwoPCEnabled() && semiSyncAction != SemiSyncActionSet {
-		return "", vterrors.VT09031()
-	}
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
 
 	pos, err := tm.MysqlDaemon.Promote(ctx, tm.hookExtraEnv())
 	if err != nil {

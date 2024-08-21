@@ -75,7 +75,11 @@ type TxEngine struct {
 	// transition while creating new transactions
 	beginRequests sync.WaitGroup
 
-	twopcEnabled        bool
+	// twopcEnabled is the flag value of whether the user has enabled twopc or not.
+	twopcEnabled bool
+	// twopcAllowed is wether it is safe to allow two pc transactions or not.
+	// If the primary tablet doesn't run with semi-sync we set this to false, and disallow any prepared calls.
+	twopcAllowed        bool
 	shutdownGracePeriod time.Duration
 	coordinatorAddress  string
 	abandonAge          time.Duration
