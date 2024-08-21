@@ -36,6 +36,7 @@ const (
 	initialPlanning
 	pullDistinctFromUnion
 	delegateAggregation
+	recursiveCTEHorizons
 	addAggrOrdering
 	cleanOutPerfDistinct
 	dmlWithInput
@@ -53,6 +54,8 @@ func (p Phase) String() string {
 		return "pull distinct from UNION"
 	case delegateAggregation:
 		return "split aggregation between vtgate and mysql"
+	case recursiveCTEHorizons:
+		return "expand recursive CTE horizons"
 	case addAggrOrdering:
 		return "optimize aggregations with ORDER BY"
 	case cleanOutPerfDistinct:
@@ -72,6 +75,8 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.Union
 	case delegateAggregation:
 		return s.Aggregation
+	case recursiveCTEHorizons:
+		return s.RecursiveCTE
 	case addAggrOrdering:
 		return s.Aggregation
 	case cleanOutPerfDistinct:
@@ -93,6 +98,8 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 		return enableDelegateAggregation(ctx, op)
 	case addAggrOrdering:
 		return addOrderingForAllAggregations(ctx, op)
+	case recursiveCTEHorizons:
+		return planRecursiveCTEHorizons(ctx, op)
 	case cleanOutPerfDistinct:
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
@@ -207,7 +214,7 @@ func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op Oper
 }
 
 func enableDelegateAggregation(ctx *plancontext.PlanningContext, op Operator) Operator {
-	return addColumnsToInput(ctx, op)
+	return prepareForAggregationPushing(ctx, op)
 }
 
 // addOrderingForAllAggregations is run we have pushed down Aggregators as far down as possible.
@@ -290,10 +297,101 @@ func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult) {
 			return nil
 		}
 		if len(aggr.Grouping) == 0 {
-			gb := sqlparser.NewIntLiteral(".0")
+			gb := sqlparser.NewFloatLiteral(".0")
 			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb))
 		}
 		return nil
 	})
 	return in, NoRewrite
+}
+
+// prepareForAggregationPushing adds columns needed by an operator to its input.
+// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
+func prepareForAggregationPushing(ctx *plancontext.PlanningContext, root Operator) Operator {
+	return TopDown(root, TableID, func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		filter, ok := in.(*Filter)
+		if !ok {
+			return in, NoRewrite
+		}
+
+		var neededAggrs []sqlparser.Expr
+		extractAggrs := func(cursor *sqlparser.CopyOnWriteCursor) {
+			node := cursor.Node()
+			if ctx.IsAggr(node) {
+				neededAggrs = append(neededAggrs, node.(sqlparser.Expr))
+			}
+		}
+
+		for _, expr := range filter.Predicates {
+			_ = sqlparser.CopyOnRewrite(expr, dontEnterSubqueries, extractAggrs, nil)
+		}
+
+		if neededAggrs == nil {
+			return in, NoRewrite
+		}
+
+		addedCols := false
+		aggregator := findAggregatorInSource(filter.Source)
+		for _, aggr := range neededAggrs {
+			if aggregator.FindCol(ctx, aggr, false) == -1 {
+				aggregator.addColumnWithoutPushing(ctx, aeWrap(aggr), false)
+				addedCols = true
+			}
+		}
+
+		if addedCols {
+			return in, Rewrote("added columns because filter needs it")
+		}
+		return in, NoRewrite
+	}, stopAtRoute)
+}
+
+// prepareForAggregationPushing adds columns needed by an operator to its input.
+// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
+func planRecursiveCTEHorizons(ctx *plancontext.PlanningContext, root Operator) Operator {
+	return TopDown(root, TableID, func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		// These recursive CTEs have not been pushed under a route, so we will have to evaluate it one the vtgate
+		// That means that we need to turn anything that is coming from the recursion into arguments
+		rcte, ok := in.(*RecurseCTE)
+		if !ok {
+			return in, NoRewrite
+		}
+		hz := rcte.Horizon
+		hz.Source = rcte.Term
+		newTerm, _ := expandHorizon(ctx, hz)
+		pr := findProjection(newTerm)
+		ap, err := pr.GetAliasedProjections()
+		if err != nil {
+			panic(vterrors.VT09015())
+		}
+
+		// We need to break the expressions into LHS and RHS, and store them in the CTE for later use
+		projections := slice.Map(ap, func(p *ProjExpr) *plancontext.RecurseExpression {
+			recurseExpression := breakCTEExpressionInLhsAndRhs(ctx, p.EvalExpr, rcte.LeftID)
+			p.EvalExpr = recurseExpression.RightExpr
+			return recurseExpression
+		})
+		rcte.Projections = projections
+		rcte.Term = newTerm
+		return rcte, Rewrote("expanded horizon on term side of recursive CTE")
+	}, stopAtRoute)
+}
+
+func findProjection(op Operator) *Projection {
+	for {
+		proj, ok := op.(*Projection)
+		if ok {
+			return proj
+		}
+		inputs := op.Inputs()
+		if len(inputs) != 1 {
+			panic(vterrors.VT13001("unexpected multiple inputs"))
+		}
+		src := inputs[0]
+		_, isRoute := src.(*Route)
+		if isRoute {
+			panic(vterrors.VT13001("failed to find the projection"))
+		}
+		op = src
+	}
 }

@@ -161,7 +161,7 @@ type (
 	CommonTableExpr struct {
 		ID       IdentifierCS
 		Columns  Columns
-		Subquery *Subquery
+		Subquery SelectStatement
 	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
@@ -1673,6 +1673,7 @@ type (
 
 	// ShowTransactionStatus is used to see the status of a distributed transaction in progress.
 	ShowTransactionStatus struct {
+		Keyspace      string
 		TransactionID string
 	}
 

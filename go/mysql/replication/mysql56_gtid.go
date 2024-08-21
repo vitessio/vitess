@@ -153,11 +153,11 @@ func DecodePositionMySQL56(s string) (rp Position, gtidSet Mysql56GTIDSet, err e
 		return rp, nil, err
 	}
 	if !rp.MatchesFlavor(Mysql56FlavorID) {
-		return rp, nil, vterrors.Wrapf(ErrExpectMysql56Flavor, s)
+		return rp, nil, vterrors.Wrap(ErrExpectMysql56Flavor, s)
 	}
 	gtidSet, ok = rp.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
-		return rp, nil, vterrors.Wrapf(ErrExpectMysql56Flavor, s)
+		return rp, nil, vterrors.Wrap(ErrExpectMysql56Flavor, s)
 	}
 	return rp, gtidSet, nil
 }

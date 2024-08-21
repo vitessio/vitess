@@ -357,7 +357,7 @@ func (a *analyzer) collationEnv() *collations.Environment {
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
-	_ = sqlparser.Rewrite(statement, nil, a.earlyUp)
+	_ = sqlparser.Rewrite(statement, a.earlyTables.down, a.earlyTables.up)
 	if a.err != nil {
 		return a.err
 	}
@@ -424,13 +424,6 @@ func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool)
 	return true
 }
 
-// earlyUp collects tables in the query, so we can check
-// if this a single unsharded query we are dealing with
-func (a *analyzer) earlyUp(cursor *sqlparser.Cursor) bool {
-	a.earlyTables.up(cursor)
-	return true
-}
-
 func (a *analyzer) shouldContinue() bool {
 	return a.err == nil
 }
@@ -454,6 +447,10 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 		}
 		if node.GroupBy != nil {
 			a.sig.Aggregation = true
+		}
+	case *sqlparser.With:
+		if node.Recursive {
+			a.sig.RecursiveCTE = true
 		}
 	case sqlparser.AggrFunc:
 		a.sig.Aggregation = true

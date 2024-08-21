@@ -467,7 +467,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
 	want := "injected error"
-	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf(want))
+	db.AddRejectedQuery(mysql.BaseShowTables, errors.New(want))
 	se := newEngine(1*time.Second, 1*time.Second, 0, db)
 	err := se.Open()
 	if err == nil || !strings.Contains(err.Error(), want) {

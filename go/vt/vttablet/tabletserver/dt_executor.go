@@ -67,6 +67,13 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 		return nil
 	}
 
+	// We can only prepare on a Unix socket connection.
+	// Unix socket are reliable and we can be sure that the connection is not lost with the server after prepare.
+	if !conn.IsUnixSocket() {
+		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
+		return vterrors.VT10002("cannot prepare the transaction on a network connection")
+	}
+
 	// If the connection is tainted, we cannot prepare it. As there could be temporary tables involved.
 	if conn.IsTainted() {
 		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
@@ -214,13 +221,13 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) error {
 	// If the connection is tainted, we cannot take a commit decision on it.
 	if conn.IsTainted() {
 		dte.inTransaction(func(conn *StatefulConnection) error {
-			return dte.te.twoPC.Transition(dte.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
+			return dte.te.twoPC.Transition(dte.ctx, conn, dtid, DTStateRollback)
 		})
 		// return the error, defer call above will roll back the transaction.
 		return vterrors.VT10002("cannot commit the transaction on a reserved connection")
 	}
 
-	err = dte.te.twoPC.Transition(dte.ctx, conn, dtid, querypb.TransactionState_COMMIT)
+	err = dte.te.twoPC.Transition(dte.ctx, conn, dtid, DTStateCommit)
 	if err != nil {
 		return err
 	}
@@ -247,7 +254,7 @@ func (dte *DTExecutor) SetRollback(dtid string, transactionID int64) error {
 	}
 
 	return dte.inTransaction(func(conn *StatefulConnection) error {
-		return dte.te.twoPC.Transition(dte.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
+		return dte.te.twoPC.Transition(dte.ctx, conn, dtid, DTStateRollback)
 	})
 }
 

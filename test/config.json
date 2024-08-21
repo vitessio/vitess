@@ -851,9 +851,9 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vtgate_transaction_twopc_fuzzer": {
+		"vtgate_transaction_twopc_stress": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/transaction/twopc/fuzzer"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/transaction/twopc/stress"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",

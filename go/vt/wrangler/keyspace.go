@@ -19,6 +19,7 @@ package wrangler
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -82,7 +83,7 @@ func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow 
 					return
 				}
 				if p3qr != nil && len(p3qr.Rows) != 0 {
-					allErrors.RecordError(vterrors.Wrap(fmt.Errorf(validation.msg), "validateWorkflowName.VReplicationExec"))
+					allErrors.RecordError(vterrors.Wrap(errors.New(validation.msg), "validateWorkflowName.VReplicationExec"))
 					return
 				}
 			}

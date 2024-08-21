@@ -320,7 +320,7 @@ func splitSubqueryExpression(
 	alias string,
 ) applyJoinColumn {
 	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
-	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
+	return pushDownSplitJoinCol(col, lhs, rhs, pe, alias)
 }
 
 func splitUnexploredExpression(
@@ -334,23 +334,49 @@ func splitUnexploredExpression(
 	original := sqlparser.Clone(pe.Original)
 	expr := pe.ColExpr
 
-	var colName *sqlparser.ColName
-	if dt != nil {
-		if !pe.isSameInAndOut(ctx) {
-			panic(vterrors.VT13001("derived table columns must be the same in and out"))
-		}
-		colName = sqlparser.NewColNameWithQualifier(pe.Original.ColumnName(), sqlparser.NewTableName(dt.Alias))
-		ctx.SemTable.CopySemanticInfo(expr, colName)
-	}
-
 	// Get a applyJoinColumn for the current expression.
 	col := join.getJoinColumnFor(ctx, original, expr, false)
-	col.DTColName = colName
 
-	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
+	if dt == nil {
+		return pushDownSplitJoinCol(col, lhs, rhs, pe, alias)
+	}
+
+	if !pe.isSameInAndOut(ctx) {
+		panic(vterrors.VT13001("derived table columns must be the same in and out"))
+	}
+	// we are pushing a derived projection through a join. that means that after this rewrite, we are on top of the
+	// derived table divider, and can only see the projected columns, not the underlying expressions
+	colName := sqlparser.NewColNameWithQualifier(pe.Original.ColumnName(), sqlparser.NewTableName(dt.Alias))
+	ctx.SemTable.CopySemanticInfo(expr, colName)
+	col.Original = colName
+	if alias == "" {
+		alias = pe.Original.ColumnName()
+	}
+
+	// Update the left and right child columns and names based on the applyJoinColumn type.
+	switch {
+	case col.IsPureLeft():
+		lhs.add(pe, alias)
+		col.LHSExprs[0].Expr = colName
+	case col.IsPureRight():
+		rhs.add(pe, alias)
+		col.RHSExpr = colName
+	default:
+		for _, lhsExpr := range col.LHSExprs {
+			ae := aeWrap(lhsExpr.Expr)
+			columnName := ae.ColumnName()
+			lhs.add(newProjExpr(ae), columnName)
+		}
+		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)
+		innerPE.ColExpr = col.RHSExpr
+		col.RHSExpr = colName
+		innerPE.Info = pe.Info
+		rhs.add(innerPE, alias)
+	}
+	return col
 }
 
-func pushDownSplitJoinCol(col applyJoinColumn, lhs *projector, pe *ProjExpr, alias string, rhs *projector) applyJoinColumn {
+func pushDownSplitJoinCol(col applyJoinColumn, lhs, rhs *projector, pe *ProjExpr, alias string) applyJoinColumn {
 	// Update the left and right child columns and names based on the applyJoinColumn type.
 	switch {
 	case col.IsPureLeft():

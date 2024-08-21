@@ -432,7 +432,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 				userCallback(query)
 			}
 			if pat.err != "" {
-				return fmt.Errorf(pat.err)
+				return errors.New(pat.err)
 			}
 			return callback(pat.result)
 		}
@@ -853,7 +853,7 @@ func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, b
 			userCallback, ok := db.queryPatternUserCallback[pat.expr]
 			if ok {
 				if pat.err != "" {
-					return userCallback, ExpectedResult{pat.result, nil}, true, fmt.Errorf(pat.err)
+					return userCallback, ExpectedResult{pat.result, nil}, true, errors.New(pat.err)
 				}
 				return userCallback, ExpectedResult{pat.result, nil}, true, nil
 			}

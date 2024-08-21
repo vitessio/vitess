@@ -28,6 +28,7 @@ import (
 	"crypto/md5"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -412,7 +413,7 @@ func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) e
 		}
 
 		for _, objError := range out.Errors {
-			return fmt.Errorf(objError.String())
+			return errors.New(objError.String())
 		}
 
 		if objs.NextContinuationToken == nil {

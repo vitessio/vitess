@@ -167,43 +167,43 @@ func compileRegex(pat eval, c colldata.Charset, flags icuregex.RegexpFlag) (*icu
 
 	var compileErr *icuregex.CompileError
 	if errors.Is(err, icuerrors.ErrUnsupported) {
-		err = vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.RegexpUnimplemented, err.Error())
+		err = vterrors.NewError(vtrpcpb.Code_UNIMPLEMENTED, vterrors.RegexpUnimplemented, err.Error())
 	} else if errors.Is(err, icuerrors.ErrIllegalArgument) {
-		err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpIllegalArgument, err.Error())
+		err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpIllegalArgument, err.Error())
 	} else if errors.As(err, &compileErr) {
 		switch compileErr.Code {
 		case icuregex.InternalError:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInternal, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInternal, compileErr.Error())
 		case icuregex.RuleSyntax:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpRuleSyntax, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpRuleSyntax, compileErr.Error())
 		case icuregex.BadEscapeSequence:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpBadEscapeSequence, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpBadEscapeSequence, compileErr.Error())
 		case icuregex.PropertySyntax:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpRuleSyntax, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpRuleSyntax, compileErr.Error())
 		case icuregex.Unimplemented:
-			err = vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.RegexpUnimplemented, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_UNIMPLEMENTED, vterrors.RegexpUnimplemented, compileErr.Error())
 		case icuregex.MismatchedParen:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpMismatchParen, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpMismatchParen, compileErr.Error())
 		case icuregex.BadInterval:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpBadInterval, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpBadInterval, compileErr.Error())
 		case icuregex.MaxLtMin:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpMaxLtMin, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpMaxLtMin, compileErr.Error())
 		case icuregex.InvalidBackRef:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInvalidBackRef, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInvalidBackRef, compileErr.Error())
 		case icuregex.InvalidFlag:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInvalidFlag, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInvalidFlag, compileErr.Error())
 		case icuregex.LookBehindLimit:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpLookBehindLimit, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpLookBehindLimit, compileErr.Error())
 		case icuregex.MissingCloseBracket:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpMissingCloseBracket, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpMissingCloseBracket, compileErr.Error())
 		case icuregex.InvalidRange:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInvalidRange, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInvalidRange, compileErr.Error())
 		case icuregex.PatternTooBig:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpPatternTooBig, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpPatternTooBig, compileErr.Error())
 		case icuregex.InvalidCaptureGroupName:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInvalidCaptureGroup, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInvalidCaptureGroup, compileErr.Error())
 		default:
-			err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInternal, compileErr.Error())
+			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInternal, compileErr.Error())
 		}
 	}
 
