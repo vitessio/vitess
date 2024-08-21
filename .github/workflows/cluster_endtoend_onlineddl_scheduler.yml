@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (onlineddl_revert)
+name: Cluster (onlineddl_scheduler)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_revert)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_scheduler)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,7 +15,7 @@ env:
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (onlineddl_revert)
+    name: Run endtoend tests on Cluster (onlineddl_scheduler)
     runs-on: gh-hosted-runners-4cores-1
 
     steps:
@@ -67,7 +67,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_onlineddl_revert.yml'
+            - '.github/workflows/cluster_endtoend_onlineddl_scheduler.yml'
             - 'go/test/endtoend/onlineddl/vrepl_suite/testdata'
 
     - name: Set up Go
@@ -137,7 +137,7 @@ jobs:
         set -exo pipefail
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard onlineddl_revert | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard onlineddl_scheduler | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
