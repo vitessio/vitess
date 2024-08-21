@@ -73,7 +73,7 @@ func TestSuitePanics(t *testing.T, c throttlerclient.Client) {
 var throttlerNames = []string{"t1", "t2"}
 
 type testFixture struct {
-	throttlers []*throttler.Throttler
+	throttlers []throttler.Throttler
 }
 
 func (tf *testFixture) setUp() error {

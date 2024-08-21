@@ -17,10 +17,18 @@ limitations under the License.
 package throttler
 
 import (
+	"context"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // The main purpose of the benchmarks below is to demonstrate the functionality
@@ -162,7 +170,7 @@ func sinceZero(sinceZero time.Duration) time.Time {
 // threadThrottler.newThreadThrottler() for more details.
 
 // newThrottlerWithClock should only be used for testing.
-func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (Throttler, error) {
 	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
 }
 
@@ -274,14 +282,16 @@ func TestThreadFinished(t *testing.T) {
 
 	// Max rate update to threadThrottlers happens asynchronously. Wait for it.
 	timer := time.NewTimer(2 * time.Second)
+	throttlerImpl, ok := throttler.(*ThrottlerImpl)
+	require.True(t, ok)
 	for {
-		if throttler.threadThrottlers[0].getMaxRate() == 2 {
+		if throttlerImpl.threadThrottlers[0].getMaxRate() == 2 {
 			timer.Stop()
 			break
 		}
 		select {
 		case <-timer.C:
-			t.Fatalf("max rate was not propapgated to threadThrottler[0] in time: %v", throttler.threadThrottlers[0].getMaxRate())
+			t.Fatalf("max rate was not propapgated to threadThrottler[0] in time: %v", throttlerImpl.threadThrottlers[0].getMaxRate())
 		default:
 			// Timer not up yet. Try again.
 		}
@@ -389,7 +399,9 @@ func TestUpdateMaxRate_AllThreadsFinished(t *testing.T) {
 	throttler.ThreadFinished(1)
 
 	// Make sure that there's no division by zero error (threadsRunning == 0).
-	throttler.updateMaxRate()
+	throttlerImpl, ok := throttler.(*ThrottlerImpl)
+	require.True(t, ok)
+	throttlerImpl.updateMaxRate()
 	// We don't care about the Throttler state at this point.
 }
 
@@ -425,4 +437,79 @@ func TestThreadFinished_SecondCallPanics(t *testing.T) {
 		}
 	}()
 	throttler.ThreadFinished(0)
+}
+
+func TestThrottlerMaxLag(t *testing.T) {
+	fc := &fakeClock{}
+	throttler, err := newThrottlerWithClock(t.Name(), "queries", 1, 1, 10, fc.now)
+	require.NoError(t, err)
+	defer throttler.Close()
+
+	require.NotNil(t, throttler)
+	throttlerImpl, ok := throttler.(*ThrottlerImpl)
+	require.True(t, ok)
+	require.NotNil(t, throttlerImpl.maxReplicationLagModule)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+
+	// run .add() and .MaxLag() concurrently to detect races
+	for _, tabletType := range []topodata.TabletType{
+		topodata.TabletType_REPLICA,
+		topodata.TabletType_RDONLY,
+	} {
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, ctx context.Context, t *ThrottlerImpl, tabletType topodata.TabletType) {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					throttler.MaxLag(tabletType)
+				}
+			}
+		}(&wg, ctx, throttlerImpl, tabletType)
+
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, ctx context.Context, throttler *ThrottlerImpl, tabletType topodata.TabletType) {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					cache := throttler.maxReplicationLagModule.lagCacheByType(tabletType)
+					require.NotNil(t, cache)
+					cache.add(replicationLagRecord{
+						time: time.Now(),
+						TabletHealth: discovery.TabletHealth{
+							Serving: true,
+							Stats: &query.RealtimeStats{
+								ReplicationLagSeconds: 5,
+							},
+							Tablet: &topodata.Tablet{
+								Hostname: t.Name(),
+								Type:     tabletType,
+								PortMap: map[string]int32{
+									"test": 15999,
+								},
+							},
+						},
+					})
+				}
+			}
+		}(&wg, ctx, throttlerImpl, tabletType)
+	}
+	time.Sleep(time.Second)
+	cancel()
+	wg.Wait()
+
+	// check .MaxLag()
+	for _, tabletType := range []topodata.TabletType{
+		topodata.TabletType_REPLICA,
+		topodata.TabletType_RDONLY,
+	} {
+		require.Equal(t, uint32(5), throttler.MaxLag(tabletType))
+	}
 }

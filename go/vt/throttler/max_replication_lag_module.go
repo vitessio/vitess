@@ -312,7 +312,7 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRec
 
 	m.memory.ageBadRate(now)
 
-	r := result{
+	r := Result{
 		Now:            now,
 		RateChange:     unchangedRate,
 		lastRateChange: m.lastRateChange,
@@ -445,7 +445,7 @@ func stateGreater(a, b state) bool {
 // and we should not skip the current replica ("lagRecordNow").
 // Even if it's the same replica we may skip it and return false because
 // we want to wait longer for the propagation of the current rate change.
-func (m *MaxReplicationLagModule) isReplicaUnderTest(r *result, now time.Time, testedState state, lagRecordNow replicationLagRecord) bool {
+func (m *MaxReplicationLagModule) isReplicaUnderTest(r *Result, now time.Time, testedState state, lagRecordNow replicationLagRecord) bool {
 	if m.replicaUnderTest == nil {
 		return true
 	}
@@ -471,7 +471,7 @@ func (m *MaxReplicationLagModule) isReplicaUnderTest(r *result, now time.Time, t
 	return true
 }
 
-func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagRecordNow replicationLagRecord) {
+func (m *MaxReplicationLagModule) increaseRate(r *Result, now time.Time, lagRecordNow replicationLagRecord) {
 	m.markCurrentRateAsBadOrGood(r, now, stateIncreaseRate, unknown)
 
 	oldRate := m.rate.Get()
@@ -559,7 +559,7 @@ func (m *MaxReplicationLagModule) minTestDurationUntilNextIncrease(increase floa
 	return minDuration
 }
 
-func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time, lagRecordNow replicationLagRecord) {
+func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *Result, now time.Time, lagRecordNow replicationLagRecord) {
 	// Guess replication rate based on the difference in the replication lag of this
 	// particular replica.
 	lagRecordBefore := m.lagCache(lagRecordNow).atOrAfter(discovery.TabletToMapKey(lagRecordNow.Tablet), m.lastRateChange)
@@ -630,7 +630,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 // guessReplicationRate guesses the actual replication rate based on the new bac
 // Note that "lagDifference" can be positive (lag increased) or negative (lag
 // decreased).
-func (m *MaxReplicationLagModule) guessReplicationRate(r *result, avgPrimaryRate float64, lagBefore, lagNow int64, lagDifference, d time.Duration) (int64, string) {
+func (m *MaxReplicationLagModule) guessReplicationRate(r *Result, avgPrimaryRate float64, lagBefore, lagNow int64, lagDifference, d time.Duration) (int64, string) {
 	// avgReplicationRate is the average rate (per second) at which the replica
 	// applied transactions from the replication stream. We infer the value
 	// from the relative change in the replication lag.
@@ -675,14 +675,14 @@ func (m *MaxReplicationLagModule) guessReplicationRate(r *result, avgPrimaryRate
 	return int64(newRate), reason
 }
 
-func (m *MaxReplicationLagModule) emergency(r *result, now time.Time, lagRecordNow replicationLagRecord) {
+func (m *MaxReplicationLagModule) emergency(r *Result, now time.Time, lagRecordNow replicationLagRecord) {
 	m.markCurrentRateAsBadOrGood(r, now, stateEmergency, unknown)
 
 	decreaseReason := fmt.Sprintf("replication lag went beyond max: %d > %d", lagRecordNow.lag(), m.config.MaxReplicationLagSec)
 	m.decreaseRateByPercentage(r, now, lagRecordNow, stateEmergency, m.config.EmergencyDecrease, decreaseReason)
 }
 
-func (m *MaxReplicationLagModule) decreaseRateByPercentage(r *result, now time.Time, lagRecordNow replicationLagRecord, newState state, decrease float64, decreaseReason string) {
+func (m *MaxReplicationLagModule) decreaseRateByPercentage(r *Result, now time.Time, lagRecordNow replicationLagRecord, newState state, decrease float64, decreaseReason string) {
 	oldRate := m.rate.Get()
 	rate := int64(float64(oldRate) - float64(oldRate)*decrease)
 	if rate == 0 {
@@ -694,7 +694,7 @@ func (m *MaxReplicationLagModule) decreaseRateByPercentage(r *result, now time.T
 	m.updateRate(r, newState, rate, reason, now, lagRecordNow, m.config.MinDurationBetweenDecreases())
 }
 
-func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int64, reason string, now time.Time, lagRecordNow replicationLagRecord, testDuration time.Duration) {
+func (m *MaxReplicationLagModule) updateRate(r *Result, newState state, rate int64, reason string, now time.Time, lagRecordNow replicationLagRecord, testDuration time.Duration) {
 	oldRate := m.rate.Get()
 
 	m.currentState = newState
@@ -722,7 +722,7 @@ func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int
 
 // markCurrentRateAsBadOrGood determines the actual rate between the last rate
 // change and "now" and determines if that rate was bad or good.
-func (m *MaxReplicationLagModule) markCurrentRateAsBadOrGood(r *result, now time.Time, newState state, replicationLagChange replicationLagChange) {
+func (m *MaxReplicationLagModule) markCurrentRateAsBadOrGood(r *Result, now time.Time, newState state, replicationLagChange replicationLagChange) {
 	if m.lastRateChange.IsZero() {
 		// Module was just started. We don't have any data points yet.
 		r.GoodOrBad = ignoredRate
@@ -796,6 +796,6 @@ func (m *MaxReplicationLagModule) markCurrentRateAsBadOrGood(r *result, now time
 	}
 }
 
-func (m *MaxReplicationLagModule) log() []result {
+func (m *MaxReplicationLagModule) log() []Result {
 	return m.results.latestValues()
 }

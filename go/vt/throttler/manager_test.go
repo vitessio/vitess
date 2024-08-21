@@ -37,7 +37,7 @@ var (
 
 type managerTestFixture struct {
 	m      *managerImpl
-	t1, t2 *Throttler
+	t1, t2 Throttler
 }
 
 func (f *managerTestFixture) setUp() error {

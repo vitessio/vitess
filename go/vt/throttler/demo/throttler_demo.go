@@ -101,7 +101,7 @@ type replica struct {
 
 	// throttler is used to enforce the maximum rate at which replica applies
 	// transactions. It must not be confused with the client's throttler.
-	throttler         *throttler.Throttler
+	throttler         throttler.Throttler
 	lastHealthUpdate  time.Time
 	lagUpdateInterval time.Duration
 
@@ -224,7 +224,7 @@ type client struct {
 	primary *primary
 
 	healthCheck discovery.HealthCheck
-	throttler   *throttler.Throttler
+	throttler   throttler.Throttler
 
 	stopChan      chan struct{}
 	wg            sync.WaitGroup
@@ -237,7 +237,7 @@ func newClient(primary *primary, replica *replica, ts *topo.Server) *client {
 		log.Fatal(err)
 	}
 
-	healthCheck := discovery.NewHealthCheck(context.Background(), 5*time.Second, 1*time.Minute, ts, "cell1", "")
+	healthCheck := discovery.NewHealthCheck(context.Background(), 5*time.Second, 1*time.Minute, ts, "cell1", "", nil)
 	c := &client{
 		primary:     primary,
 		healthCheck: healthCheck,
