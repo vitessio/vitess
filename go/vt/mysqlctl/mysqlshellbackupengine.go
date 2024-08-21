@@ -124,9 +124,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 		args = append(args, strings.Fields(mysqlShellFlags)...)
 	}
 
-	args = append(args, "-e", fmt.Sprintf("util.dumpSchemas([\"%s\", \"vt_%s\"], %q, %s)",
-		sidecar.GetName(),
-		params.Keyspace,
+	args = append(args, "-e", fmt.Sprintf("util.dumpInstance(%q, %s)",
 		location,
 		mysqlShellDumpFlags,
 	))
