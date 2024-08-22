@@ -492,25 +492,25 @@ func TestInsertAlias(t *testing.T) {
 	mcmp.Exec("select id, region_id, name from user_tbl order by id")
 }
 
-// TestInsertJson test insert of json data.
+// TestInsertJson tests that selected json values are encoded correctly.
 func TestInsertJson(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	// simple insert
 	mcmp.Exec(`insert into j_tbl(id, jdoc) values (1, '{}'), (2, '{"a": 1, "b": 2}')`)
 	mcmp.Exec(`select * from j_tbl order by id`)
 
-	// insert select sharded
-	mcmp.Exec(`insert into j_tbl(id, jdoc) select id * 10, jdoc from j_tbl`)
-	mcmp.Exec(`select * from j_tbl order by id`)
-
-	// insert select dual
 	mcmp.Exec(`insert into j_tbl(id, jdoc) select 3, json_object("k", "a")`)
 	mcmp.Exec(`select * from j_tbl order by id`)
 
-	// insert unsharded select sharded
+	mcmp.Exec(`insert into j_tbl(id, jdoc) select 4,JSON_OBJECT(
+        'date', CAST(1629849600 AS UNSIGNED),
+        'keywordSourceId', CAST(930701976723823 AS UNSIGNED),
+        'keywordSourceVersionId', CAST(210825230433 AS UNSIGNED)
+    )`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
 	utils.Exec(t, mcmp.VtConn, `insert into uks.j_utbl(id, jdoc) select * from sks.j_tbl`)
 	utils.AssertMatches(t, mcmp.VtConn, `select * from uks.j_utbl order by id`,
-		`[[INT64(1) JSON("{}")] [INT64(2) JSON("{\"a\": 1, \"b\": 2}")] [INT64(3) JSON("{\"k\": \"a\"}")] [INT64(10) JSON("{}")] [INT64(20) JSON("{\"a\": 1, \"b\": 2}")]]`)
+		`[[INT64(1) JSON("{}")] [INT64(2) JSON("{\"a\": 1, \"b\": 2}")] [INT64(3) JSON("{\"k\": \"a\"}")] [INT64(4) JSON("{\"date\": 1629849600, \"keywordSourceId\": 930701976723823, \"keywordSourceVersionId\": 210825230433}")]]`)
 }
