@@ -104,6 +104,9 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	}
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
+	// We initially allow twoPC (handles vttablet restarts).
+	// We will disallow them, when a new tablet is promoted if semi-sync is turned off.
+	te.twopcAllowed = true
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
 		if config.TwoPCAbandonAge <= 0 {
