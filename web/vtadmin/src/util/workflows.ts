@@ -100,21 +100,39 @@ export const getStreamTablets = <W extends pb.IWorkflow>(workflow: W | null | un
  * suffix and the source and target keyspace from all `workflows` list.
  */
 export const getReverseWorkflow = <W extends pb.Workflow>(
-  workflows: W[],
-  originalWorkflow: W | undefined | null
+    workflows: W[],
+    originalWorkflow: W | undefined | null
 ): W | undefined => {
-  if (!originalWorkflow) return;
-  const originalWorkflowName = originalWorkflow.workflow?.name!;
-  let reverseWorkflowName = originalWorkflowName.concat("_reverse");
-  if (originalWorkflowName.endsWith("_reverse")) {
-    reverseWorkflowName = originalWorkflowName.split("_reverse")[0];
-  }
-  return workflows.find(
-    (workflow) =>
-      workflow.workflow?.name === reverseWorkflowName &&
-      workflow.workflow?.source?.keyspace ===
-        originalWorkflow.workflow?.target?.keyspace &&
-      workflow.workflow?.target?.keyspace ===
-        originalWorkflow.workflow?.source?.keyspace
-  );
+    if (!originalWorkflow) return;
+    const originalWorkflowName = originalWorkflow.workflow?.name!;
+    let reverseWorkflowName = originalWorkflowName.concat('_reverse');
+    if (originalWorkflowName.endsWith('_reverse')) {
+        reverseWorkflowName = originalWorkflowName.split('_reverse')[0];
+    }
+    return workflows.find(
+        (workflow) =>
+            workflow.workflow?.name === reverseWorkflowName &&
+            workflow.workflow?.source?.keyspace === originalWorkflow.workflow?.target?.keyspace &&
+            workflow.workflow?.target?.keyspace === originalWorkflow.workflow?.source?.keyspace
+    );
+};
+
+export interface TableCopyState extends vtctldata.WorkflowStatusResponse.ITableCopyState {
+    tableName: string;
+}
+
+export const getTableCopyStates = (
+    workflowStatus: vtctldata.WorkflowStatusResponse | undefined
+): TableCopyState[] | undefined => {
+    if (!workflowStatus) return;
+    const tableNames = Object.keys(workflowStatus.table_copy_state);
+    if (!tableNames.length) return;
+    const tableCopyState: TableCopyState[] = tableNames.map((tableName) => {
+        const tableState = workflowStatus.table_copy_state[tableName];
+        return {
+            tableName,
+            ...tableState,
+        };
+    });
+    return tableCopyState;
 };
