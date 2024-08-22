@@ -3794,7 +3794,7 @@ func shouldCutOverAccordingToBackoff(
 	// is beyond the --force-cut-over-after setting, or the column `force_cutover` is "1", and this means:
 	// - we do not want to backoff, we want to cutover asap
 	// - we agree to brute-force KILL any pending queries on the migrated table so as to ensure it's unlocked.
-	if forceCutOverAfter > 0 && sinceReadyToComplete > forceCutOverAfter {
+	if forceCutOverAfter != 0 && sinceReadyToComplete > forceCutOverAfter {
 		// time since migration was ready to complete is beyond the --force-cut-over-after setting
 		return true, true
 	}
