@@ -3794,7 +3794,7 @@ func shouldCutOverAccordingToBackoff(
 	// is beyond the --force-cut-over-after setting, or the column `force_cutover` is "1", and this means:
 	// - we do not want to backoff, we want to cutover asap
 	// - we agree to brute-force KILL any pending queries on the migrated table so as to ensure it's unlocked.
-	if forceCutOverAfter != 0 && sinceReadyToComplete > forceCutOverAfter {
+	if forceCutOverAfter > 0 && sinceReadyToComplete > forceCutOverAfter {
 		// time since migration was ready to complete is beyond the --force-cut-over-after setting
 		return true, true
 	}
@@ -3845,7 +3845,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		uuid := row["migration_uuid"].ToString()
 		cutoverAttempts := row.AsInt64("cutover_attempts", 0)
 		sinceLastCutoverAttempt := time.Second * time.Duration(row.AsInt64("seconds_since_last_cutover_attempt", 0))
-		sinceReadyToComplete := time.Second * time.Duration(row.AsInt64("seconds_since_ready_to_complete", 0))
+		sinceReadyToComplete := time.Microsecond * time.Duration(row.AsInt64("microseconds_since_ready_to_complete", 0))
 		onlineDDL, migrationRow, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return countRunnning, cancellable, err

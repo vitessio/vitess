@@ -482,7 +482,7 @@ func TestShouldCutOverAccordingToBackoff(t *testing.T) {
 			expectShouldForceCutOver: false,
 		},
 		{
-			name:                     "backoff; cutover-after still not in effect yet",
+			name:                     "zero since ready",
 			cutoverAttempts:          3,
 			forceCutOverAfter:        time.Second,
 			sinceReadyToComplete:     0,
@@ -490,7 +490,7 @@ func TestShouldCutOverAccordingToBackoff(t *testing.T) {
 			expectShouldForceCutOver: false,
 		},
 		{
-			name:                     "backoff; cutover-after still not in effect yet",
+			name:                     "zero since read, zero cut-over-after",
 			cutoverAttempts:          3,
 			forceCutOverAfter:        0,
 			sinceReadyToComplete:     0,
@@ -498,12 +498,20 @@ func TestShouldCutOverAccordingToBackoff(t *testing.T) {
 			expectShouldForceCutOver: false,
 		},
 		{
-			name:                     "backoff; cutover-after still not in effect yet",
+			name:                     "microsecond",
 			cutoverAttempts:          3,
-			forceCutOverAfter:        -time.Millisecond,
-			sinceReadyToComplete:     0,
+			forceCutOverAfter:        time.Microsecond,
+			sinceReadyToComplete:     time.Millisecond,
 			expectShouldCutOver:      true,
 			expectShouldForceCutOver: true,
+		},
+		{
+			name:                     "microsecond, not ready",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Millisecond,
+			sinceReadyToComplete:     time.Microsecond,
+			expectShouldCutOver:      false,
+			expectShouldForceCutOver: false,
 		},
 		{
 			name:                     "cutover-after overrides backoff",
