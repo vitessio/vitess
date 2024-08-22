@@ -101,6 +101,9 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 			sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
 		}
 		buf.WriteByte(')')
+	case querypb.Type_RAW:
+		v, _ := sqltypes.BindVariableToValue(value)
+		buf.Write(v.Raw())
 	default:
 		v, _ := sqltypes.BindVariableToValue(value)
 		v.EncodeSQLStringBuilder(buf)
