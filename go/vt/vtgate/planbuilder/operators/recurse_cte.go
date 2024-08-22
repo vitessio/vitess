@@ -108,8 +108,7 @@ func (r *RecurseCTE) SetInputs(operators []Operator) {
 }
 
 func (r *RecurseCTE) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Expr) Operator {
-	r.Term = newFilter(r, e)
-	return r
+	return newFilter(r, e)
 }
 
 func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, _, _ bool, expr *sqlparser.AliasedExpr) int {

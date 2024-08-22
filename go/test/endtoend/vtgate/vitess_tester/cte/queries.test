@@ -6,6 +6,11 @@ CREATE TABLE employees
     manager_id INT
 );
 
+# Simple recursive CTE using a real table. Select everything from empty table
+with recursive cte as (select * from employees union all select * from cte)
+select *
+from cte;
+
 # Insert data into the tables
 INSERT INTO employees (id, name, manager_id)
 VALUES (1, 'CEO', NULL),
@@ -129,3 +134,32 @@ WITH RECURSIVE hierarchy AS (
     SELECT id*2, name, manager_id from hierarchy WHERE id < 10
 )
 SELECT * FROM hierarchy;
+
+# Select with false condition
+with recursive cte as (select * from employees where false union all select * from cte)
+select *
+from cte;
+
+# Select with no matching rows
+with recursive cte as (select * from employees where id > 100 union all select * from cte)
+select *
+from cte;
+
+# Recursive CTE joined with a normal table. Predicate on the outside should not be pushed in
+WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id
+                           FROM employees e
+                                    INNER JOIN emp_cte cte ON e.manager_id = cte.id)
+SELECT *
+FROM emp_cte where name = 'Engineer1';
+
+# Query with a recursive CTE in a subquery
+SELECT *
+FROM (SELECT 1 UNION ALL SELECT 2) AS dt(a)
+WHERE EXISTS(WITH RECURSIVE qn AS (SELECT a * 0 AS b UNION ALL SELECT b + 1 FROM qn WHERE b = 0)
+             SELECT *
+             FROM qn
+             WHERE b = a);
