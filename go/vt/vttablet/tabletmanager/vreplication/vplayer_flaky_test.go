@@ -49,12 +49,12 @@ func TestJoin(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table t1(id int, tname varbinary(128), t2id int, primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, tname varbinary(128), t2id int, primary key(id))", vrepldb),
-		"create table t2(id int, company varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.t2(id int, company varbinary(128), primary key(id))", vrepldb),
-		"create table t12(t1id int, t2id int, tname varbinary(128), company varbinary(128), primary key(t1id))",
-		fmt.Sprintf("create table %s.t12(t1id int, t2id int, tname varbinary(128), company varbinary(128), primary key(t1id))", vrepldb),
+		"create table t1(id int, name varbinary(128), id2 int, t2id int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, name varbinary(128), id2 int, t2id int, primary key(id))", vrepldb),
+		"create table t2(id int, name varbinary(128), company varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t2(id int, name varbinary(128), company varbinary(128), primary key(id))", vrepldb),
+		"create table t12(t1id int, t2id int, name varbinary(128), name2 varbinary(128), company varbinary(128), primary key(t1id))",
+		fmt.Sprintf("create table %s.t12(t1id int, t2id int, name varbinary(128), name2 varbinary(128), company varbinary(128), primary key(t1id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -68,7 +68,7 @@ func TestJoin(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t12",
-			Filter: "select t1.id t1id, t2.id t2id, t1.tname, t2.company from t1 join t2 on t1.t2id = t2.id",
+			Filter: "select t1.id t1id, t2.id t2id, t1.name, t2.name name2, t2.company from t1 join t2 on t1.t2id = t2.id",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -78,10 +78,10 @@ func TestJoin(t *testing.T) {
 	}
 	position := primaryPosition(t)
 	execStatements(t, []string{
-		"insert into t2(id, company) values(1, 'company1')",
-		fmt.Sprintf("insert into %s.t2(id, company) values(1, 'company1')", vrepldb),
-		"insert into t1(id,tname,t2id) values (1,'name1',1)",
-		fmt.Sprintf("insert into %s.t1(id,tname,t2id) values (1,'name1',1)", vrepldb),
+		"insert into t2(id, name, company) values(1, 'name2', 'company1')",
+		fmt.Sprintf("insert into %s.t2(id, name,  company) values(1, 'name2', 'company1')", vrepldb),
+		"insert into t1(id,name,t2id,id2) values (1,'name1',1, 10)",
+		fmt.Sprintf("insert into %s.t1(id,name,t2id,id2) values (1,'name1',1,10)", vrepldb),
 	})
 	cancel, _ := startVReplication(t, bls, position)
 	defer cancel()
@@ -94,17 +94,17 @@ func TestJoin(t *testing.T) {
 		query       string
 		queryResult [][]string
 	}{{
-		output: "insert into t12(t1id,t2id,tname,company) values (1,1,'name1','company1')",
+		output: "insert into t12(t1id,t2id,name,name2,company) values (1,1,'name1','name2','company1')",
 		table:  "t12",
 		data: [][]string{
-			{"1", "1", "name1", "company1"},
+			{"1", "1", "name1", "name2", "company1"},
 		},
 	}, {
-		input:  "update t1 set tname='name2' where id=1",
+		input:  "update t1 set name='name1a' where id=1",
 		output: "update t12 set tname='name2' where t1id=1",
 		table:  fmt.Sprintf("%s.t12", vrepldb),
 		data: [][]string{
-			{"1", "1", "name2", "company1"},
+			{"1", "1", "name1a", "name2", "company1"},
 		},
 	}}
 
