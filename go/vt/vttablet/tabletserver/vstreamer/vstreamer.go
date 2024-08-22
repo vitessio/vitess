@@ -629,7 +629,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_VERSION,
 			}
 			vevents = append(vevents, vevent)
-
 		} else {
 			vevents, err = vs.processRowEvent(vevents, plan, rows)
 		}

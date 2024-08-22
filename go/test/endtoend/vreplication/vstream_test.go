@@ -603,8 +603,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	// Stream events but stop once we have a VGTID with positions for the old/original shards.
 	var newVGTID *binlogdatapb.VGtid
 	func() {
-		var reader vtgateconn.VStreamReader
-		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 		require.NoError(t, err)
 		for {
 			evs, err := reader.Recv()
@@ -658,8 +657,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 
 	// Now start a new VStream from our previous VGTID which only has the old/original shards.
 	func() {
-		var reader vtgateconn.VStreamReader
-		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, newVGTID, filter, flags)
+		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, newVGTID, filter, flags)
 		require.NoError(t, err)
 		for {
 			evs, err := reader.Recv()
@@ -712,7 +710,7 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 	tabletType := topodatapb.TabletType_PRIMARY.String()
 	oldShards := "-80,80-"
 	newShards := "-40,40-80,80-c0,c0-"
-	oldShardRowEvents, newShardRowEvents, journalEvents := 0, 0, 0
+	oldShardRowEvents, journalEvents := 0, 0
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
 	defaultCell := vc.Cells[vc.CellNames[0]]
@@ -791,8 +789,7 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 	// Stream events but stop once we have a VGTID with positions for the old/original shards.
 	var newVGTID *binlogdatapb.VGtid
 	func() {
-		var reader vtgateconn.VStreamReader
-		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 		require.NoError(t, err)
 		for {
 			evs, err := reader.Recv()
@@ -846,9 +843,11 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 	reshardAction(t, "SwitchTraffic", wf, ks, oldShards, newShards, defaultCellName, tabletType)
 
 	// Now start a new VStream from our previous VGTID which only has the old/original shards.
-	func() {
-		var reader vtgateconn.VStreamReader
-		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, newVGTID, filter, flags)
+	expectedJournalEvents := 2 // One for each old shard
+	runResumeStream := func() {
+		journalEvents = 0
+		t.Logf("Streaming from position: %+v", newVGTID.GetShardGtids())
+		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, newVGTID, filter, flags)
 		require.NoError(t, err)
 		for {
 			evs, err := reader.Recv()
@@ -860,20 +859,20 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 					case binlogdatapb.VEventType_ROW:
 						shard := ev.RowEvent.Shard
 						switch shard {
-						case "-80", "80-":
-							oldShardRowEvents++
-						case "-40", "40-80", "80-c0", "c0-":
-							newShardRowEvents++
-						case "0":
-							// Again, we expect some for the sequence backing table, but don't care.
+						case "0", "-80", "80-":
 						default:
 							require.FailNow(t, fmt.Sprintf("received event for unexpected shard: %s", shard))
 						}
 					case binlogdatapb.VEventType_JOURNAL:
 						t.Logf("Journal event: %+v", ev)
 						journalEvents++
+						if journalEvents == expectedJournalEvents {
+							return
+						}
 					}
 				}
+			case io.EOF:
+				return
 			default:
 				require.FailNow(t, fmt.Sprintf("VStream returned unexpected error: %v", err))
 			}
@@ -883,14 +882,15 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 			default:
 			}
 		}
-	}()
+	}
 
-	// We should have stopped on the reshard event and thus only have events for the old shards.
-	require.Greater(t, oldShardRowEvents, 0)
-	require.Equal(t, 0, newShardRowEvents)
-
-	// We should have seen the journal event in the stream due to using StopOnReshard.
-	require.Equal(t, 2, journalEvents)
+	// Multiple VStream clients should be able to resume from where they left off and
+	// get the reshard journal event.
+	for i := 1; i <= 2; i++ {
+		runResumeStream()
+		// We should have seen the journal event for each shard in the stream due to using StopOnReshard.
+		require.Equal(t, 2, journalEvents, "did not get expected journal events on resume vstream #%d", i)
+	}
 }
 
 func TestVStreamFailover(t *testing.T) {

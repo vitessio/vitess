@@ -661,7 +661,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 				case binlogdatapb.VEventType_JOURNAL:
 					journal := event.Journal
-					// Journal events are not sent to clients by default, but only when StopOnReshard is set
+					// Journal events are not sent to clients by default, but only when
+					// StopOnReshard is set.
 					if vs.stopOnReshard && journal.MigrationType == binlogdatapb.MigrationType_SHARDS {
 						sendevents = append(sendevents, event)
 						eventss = append(eventss, sendevents)
