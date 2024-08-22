@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet"
 )
@@ -37,8 +36,7 @@ type ReplicatorJoinPlan struct {
 	BaseTableName string   // the base table for which we run the copy phase
 }
 
-// The materialized view can have different column names than the source. Hence we need to map the source column names
-// to the view column names.
+// ViewColumnMap maps the source column names to the view column names, since they can be different.
 type ViewColumnMap struct {
 	SourceColumnName string
 	ViewColumnName   string
@@ -48,7 +46,7 @@ type TableJoinPlan struct {
 	Insert        *sqlparser.ParsedQuery            // insert query for the view table
 	Updates       map[string]*sqlparser.ParsedQuery // update queries for each participating table
 	Deletes       map[string]*sqlparser.ParsedQuery // delete queries for each participating table
-	TableColumns  *map[string][]*ViewColumnMap      // columns for each participating table
+	ColumnNameMap *map[string][]*ViewColumnMap      // columns for each participating table
 	BaseTableName string                            // the base table for which we run the copy phase
 }
 
@@ -62,7 +60,7 @@ func (tjp *TableJoinPlan) String() string {
 	for table, del := range tjp.Deletes {
 		s += fmt.Sprintf("Delete for %s: %s\n", table, del.Query)
 	}
-	for table, cols := range *tjp.TableColumns {
+	for table, cols := range *tjp.ColumnNameMap {
 		s += fmt.Sprintf("Columns for %s: %v\n", table, cols)
 	}
 	return s
@@ -80,6 +78,7 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 		return buildReplicatorPlan(source, colInfoMap, copyState, stats, collationEnv, parser)
 	}
 	log.Infof("In buildReplicatorPlanForJoin with join tables %v", joinTables)
+
 	filter := source.Filter
 	joinPlan := &ReplicatorJoinPlan{
 		Tables: joinTables,
@@ -95,6 +94,7 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 		joinPlan:      joinPlan,
 	}
 	plan.VStreamFilter = source.Filter.CloneVT()
+	// Note the view corresponds to a mysql table and it is the table into which data is being replicated.
 	view := source.Filter.Rules[0].Match
 	joinPlan.ViewTableName = view
 	joinPlan.BaseTableName = joinTables[0]
@@ -136,7 +136,7 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	}
 	tpb.pkCols = append(tpb.pkCols, tpb.colExprs[0])
 	tablePlan.PKReferences = []string{tpb.colExprs[0].colName.String()}
-	tableColumns := make(map[string][]*ViewColumnMap)
+	columnNameMap := make(map[string][]*ViewColumnMap)
 
 	for _, selExpr := range sel.SelectExprs {
 		aliasExpr, ok := selExpr.(*sqlparser.AliasedExpr)
@@ -156,7 +156,7 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 		if !aliasExpr.As.IsEmpty() {
 			aliasName = aliasExpr.As.String()
 		}
-		tableColumns[tableName] = append(tableColumns[tableName], &ViewColumnMap{
+		columnNameMap[tableName] = append(columnNameMap[tableName], &ViewColumnMap{
 			SourceColumnName: columnName,
 			ViewColumnName:   aliasName,
 		})
@@ -171,17 +171,25 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	}
 	tablePlan.Fields = qr.Fields
 
-	insert := generateInsertForJoin(view, query, tablePlan.Fields)
-	updates := generateUpdatesForJoin(view, tableColumns)
-	deletes := generateDeletesForJoin(view, tableColumns)
+	baseTableColInfos := colInfoMap[joinTables[0]]
+	for _, colInfo := range baseTableColInfos {
+		log.Infof("ColInfo: %v, isPK %t", colInfo.Name, colInfo.IsPK)
+	}
+	var pkCol *ColumnInfo
+	for _, colInfo := range baseTableColInfos {
+		if colInfo.IsPK {
+			pkCol = colInfo
+			break
+		}
+	}
 	tablePlan.JoinPlan = &TableJoinPlan{
 		BaseTableName: joinTables[0],
-		TableColumns:  &tableColumns,
-		Insert:        insert,
-		Updates:       updates,
-		Deletes:       deletes,
+		ColumnNameMap: &columnNameMap,
 	}
-	log.Info(tablePlan.JoinPlan)
+	tablePlan.JoinPlan.Insert = generateInsertForJoin(tablePlan, query, pkCol)
+	tablePlan.JoinPlan.Updates = generateUpdatesForJoin(view, columnNameMap)
+	tablePlan.JoinPlan.Deletes = generateDeletesForJoin(view, columnNameMap)
+	log.Infof("Table Join plan is %v", tablePlan.JoinPlan)
 
 	if copy {
 		// In copy phase we stream the view ordered by the primary key of the base table.
@@ -192,7 +200,6 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	}
 	plan.TablePlans[view] = tablePlan
 	plan.TargetTables[view] = tablePlan
-	log.Infof("Added table plan for view %s: %v, insert %v, updates %+v, deletes %+v", view, tablePlan, insert, updates, deletes)
 	for _, tableName := range joinTables {
 		rule := &binlogdatapb.Rule{
 			Match: tableName,
@@ -206,20 +213,21 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	return plan, nil
 }
 
-func generateInsertForJoin(view string, viewQuery string, fields []*querypb.Field) *sqlparser.ParsedQuery {
+// tablePlan, query, pkCol
+func generateInsertForJoin(tablePlan *TablePlan, viewQuery string, pkColInfo *ColumnInfo) *sqlparser.ParsedQuery {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	bvf.mode = bvAfter
-	buf.Myprintf("insert into %v (", sqlparser.NewIdentifierCS(view))
+	buf.Myprintf("insert into %v (", sqlparser.NewIdentifierCS(tablePlan.TargetName))
 	separator := ""
-	for _, field := range fields {
+	for _, field := range tablePlan.Fields {
 		buf.Myprintf("%s%v", separator, sqlparser.NewIdentifierCI(field.Name))
 		separator = ","
 	}
 	buf.Myprintf(") ")
 	buf.Myprintf("%s", viewQuery)
-	buf.Myprintf(" where oid = ")
-	buf.Myprintf("%v", sqlparser.NewColName("oid"))
+	buf.Myprintf(" where %s.%s = ", tablePlan.JoinPlan.BaseTableName, sqlparser.NewColName(pkColInfo.Name).CompliantName())
+	buf.Myprintf("%v", sqlparser.NewColName(pkColInfo.Name))
 	return buf.ParsedQuery()
 }
 
@@ -256,15 +264,9 @@ func generateDeletesForJoin(view string, viewColumns map[string][]*ViewColumnMap
 		buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 		bvf.mode = bvBefore
 		buf.Myprintf("delete from %v where ", sqlparser.NewIdentifierCS(view))
-		separator := ""
-		for i, col := range cols {
-			if i == 0 {
-				continue
-			}
-			buf.Myprintf("%s%s = ", separator, sqlparser.NewIdentifierCI(col.ViewColumnName).CompliantName())
-			buf.Myprintf("%v", sqlparser.NewColName(col.ViewColumnName))
-			separator = " and "
-		}
+		col := cols[0]
+		buf.Myprintf("%s = ", sqlparser.NewIdentifierCI(col.ViewColumnName).CompliantName())
+		buf.Myprintf("%v", sqlparser.NewColName(col.ViewColumnName))
 		deletes[table] = buf.ParsedQuery()
 		log.Infof("Delete for table %s is %s, bindLocations %d", table, buf.String(), len(deletes[table].BindLocations()))
 	}
