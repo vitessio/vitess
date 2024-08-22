@@ -167,11 +167,7 @@ func (ins *InsertSelect) getInsertUnshardedQuery(rows []sqltypes.Row, bindVars m
 		row := sqlparser.ValTuple{}
 		for c, value := range inputRow {
 			bvName := insertVarOffset(r, c)
-			if value.Type() == querypb.Type_JSON {
-				bindVars[bvName] = sqltypes.StringBindVariable(value.RawStr())
-			} else {
-				bindVars[bvName] = sqltypes.ValueBindVariable(value)
-			}
+			bindVars[bvName] = sqltypes.ValueBindVariable(value)
 			row = append(row, sqlparser.NewArgument(bvName))
 		}
 		mids = append(mids, row)
@@ -268,11 +264,7 @@ func (ins *InsertSelect) getInsertShardedQueries(
 				row := sqlparser.ValTuple{}
 				for colOffset, value := range rows[index] {
 					bvName := insertVarOffset(index, colOffset)
-					if value.Type() == querypb.Type_JSON {
-						bvs[bvName] = sqltypes.StringBindVariable(value.RawStr())
-					} else {
-						bvs[bvName] = sqltypes.ValueBindVariable(value)
-					}
+					bvs[bvName] = sqltypes.ValueBindVariable(value)
 					row = append(row, sqlparser.NewArgument(bvName))
 				}
 				mids = append(mids, row)
