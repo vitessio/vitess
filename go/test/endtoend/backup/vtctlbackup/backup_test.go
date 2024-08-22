@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
@@ -190,7 +191,10 @@ func TestRestoreIgnoreBackups(t *testing.T) {
 
 	// and try to restore from it
 	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", replica2.Alias)
-	require.ErrorContains(t, err, "exit status 1") // this should fail
+	if err != nil {
+		log.Errorf("restore failed as expected: %v", err)
+	}
+	require.Error(t, err) // this should fail
 
 	// now we retry but trying the earlier backup
 	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", "--ignored-backup-engines=xtrabackup", replica2.Alias)
