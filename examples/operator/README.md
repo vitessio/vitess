@@ -1,5 +1,7 @@
 # Instructions
- **Note**: For the best experience, please refer to the [Vitess Operator Compatibility Matrix](https://github.com/planetscale/vitess-operator#compatibility) to ensure compatibility between your version of Vitess and Kubernetes.
+{{< info >}}
+For the best experience, please refer to the [Vitess Operator Compatibility Matrix](https://github.com/planetscale/vitess-operator#compatibility) to ensure compatibility between your version of Vitess and Kubernetes.
+{{< /info >}}
 ```
 # Start minikube
 minikube start --cpus=8 --memory=11000 --disk-size=50g
