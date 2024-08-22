@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
@@ -85,9 +86,10 @@ type Engine struct {
 
 	historian *historian
 
-	conns         *connpool.Pool
-	ticks         *timer.Timer
-	reloadTimeout time.Duration
+	conns           *connpool.Pool
+	ticks           *timer.Timer
+	reloadTimeout   time.Duration
+	throttledLogger *logutil.ThrottledLogger
 
 	// dbCreationFailed is for preventing log spam.
 	dbCreationFailed bool
@@ -109,7 +111,8 @@ func NewEngine(env tabletenv.Env) *Engine {
 			Size:        3,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
-		ticks: timer.NewTimer(reloadTime),
+		ticks:           timer.NewTimer(reloadTime),
+		throttledLogger: logutil.NewThrottledLogger("schema-tracker", 1*time.Minute),
 	}
 	se.schemaCopy = env.Config().SignalWhenSchemaChange
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
@@ -448,7 +451,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	udfsChanged, err := getChangedUserDefinedFunctions(ctx, conn.Conn, shouldUseDatabase)
 	if err != nil {
-		return err
+		se.throttledLogger.Errorf("error in getting changed UDFs: %v", err)
 	}
 
 	rec := concurrency.AllErrorRecorder{}
