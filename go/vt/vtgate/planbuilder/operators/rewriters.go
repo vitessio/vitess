@@ -257,11 +257,7 @@ func breakableTopDown(
 		}
 	}
 
-	if anythingChanged.Changed() {
-		return newOp, NoRewrite, nil
-	}
-
-	return newOp.Clone(newInputs), anythingChanged, nil
+	return newOp, anythingChanged, nil
 }
 
 // topDown is a helper function that recursively traverses the operator tree from the
