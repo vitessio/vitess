@@ -99,7 +99,7 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 		},
 		Autocommit: false,
 	}
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(session), true /*autocommit*/, false)
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
 	err := vterrors.Aggregate(errs)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
@@ -123,7 +123,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			}
 		}
 
-		qr, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(nil), false /*autocommit*/, false)
+		qr, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(nil), false /*autocommit*/, false, nullResultsObserver{})
 		return qr, vterrors.Aggregate(errs)
 	})
 }
@@ -143,7 +143,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 			defer mu.Unlock()
 			qr.AppendResult(r)
 			return nil
-		})
+		}, nullResultsObserver{})
 		return qr, vterrors.Aggregate(errors)
 	})
 }
@@ -310,7 +310,7 @@ func TestMaxMemoryRows(t *testing.T) {
 		sbc0.SetResults([]*sqltypes.Result{tworows, tworows})
 		sbc1.SetResults([]*sqltypes.Result{tworows, tworows})
 
-		_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, test.ignoreMaxMemoryRows)
+		_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, test.ignoreMaxMemoryRows, nullResultsObserver{})
 		if test.ignoreMaxMemoryRows {
 			require.NoError(t, err)
 		} else {
@@ -342,7 +342,7 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 		})
 	}
 
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false)
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false, nullResultsObserver{})
 	require.Error(t, vterrors.Aggregate(errs))
 }
 
@@ -365,7 +365,7 @@ func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.R
 		})
 	}
 
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false)
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false, nullResultsObserver{})
 	return vterrors.Aggregate(errs)
 }
 
@@ -411,7 +411,7 @@ func TestMultiExecs(t *testing.T) {
 	}
 
 	session := NewSafeSession(&vtgatepb.Session{})
-	_, err := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false)
+	_, err := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false, nullResultsObserver{})
 	require.NoError(t, vterrors.Aggregate(err))
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
@@ -457,7 +457,7 @@ func TestMultiExecs(t *testing.T) {
 	}
 	_ = sc.StreamExecuteMulti(ctx, nil, "query", rss, bvs, session, false /* autocommit */, func(*sqltypes.Result) error {
 		return nil
-	})
+	}, nullResultsObserver{})
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars0)
 	}
@@ -487,27 +487,27 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// TransactionMode_SINGLE in session
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
 	queries := []*querypb.BoundQuery{{Sql: "query1"}}
-	_, errors := sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	_, errors := sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{})
 	require.Error(t, errors[0])
 	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_SINGLE in txconn
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{})
 	require.Error(t, errors[0])
 	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_MULTI in txconn. Should not fail.
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
 }
 
