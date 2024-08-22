@@ -37,23 +37,36 @@ type RealTable struct {
 	VindexHint        *sqlparser.IndexHint
 	isInfSchema       bool
 	collationEnv      *collations.Environment
+	cache             map[string]dependencies
 }
 
 var _ TableInfo = (*RealTable)(nil)
 
 // dependencies implements the TableInfo interface
-func (r *RealTable) dependencies(colName string, org originable) (dependencies, error) {
-	ts := org.tableSetFor(r.ASTNode)
-	for _, info := range r.getColumns(false /* ignoreInvisbleCol */) {
-		if strings.EqualFold(info.Name, colName) {
-			return createCertain(ts, ts, info.Type), nil
+func (r *RealTable) dependencies(colName string, org originable) (deps dependencies, err error) {
+	var myID *TableSet
+	if r.cache == nil {
+		r.cache = make(map[string]dependencies)
+		ts := org.tableSetFor(r.ASTNode)
+		myID = &ts
+		for _, info := range r.getColumns(false /* ignoreInvisbleCol */) {
+			r.cache[strings.ToLower(info.Name)] = createCertain(ts, ts, info.Type)
 		}
+	}
+
+	if deps, ok := r.cache[strings.ToLower(colName)]; ok {
+		return deps, nil
 	}
 
 	if r.authoritative() {
 		return &nothing{}, nil
 	}
-	return createUncertain(ts, ts), nil
+
+	if myID == nil {
+		ts := org.tableSetFor(r.ASTNode)
+		myID = &ts
+	}
+	return createUncertain(*myID, *myID), nil
 }
 
 // GetTables implements the TableInfo interface
