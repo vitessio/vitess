@@ -374,9 +374,12 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		go stc.runLockQuery(ctx, session)
 	}
 
+	var observeMu sync.Mutex
 	observedCallback := func(reply *sqltypes.Result) error {
 		if reply != nil {
+			observeMu.Lock()
 			resultsObserver.observe(reply)
+			observeMu.Unlock()
 		}
 		return callback(reply)
 	}
