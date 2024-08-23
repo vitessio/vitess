@@ -514,6 +514,20 @@ export namespace vtadmin {
         public getWorkflows(request: vtadmin.IGetWorkflowsRequest): Promise<vtadmin.GetWorkflowsResponse>;
 
         /**
+         * Calls GetWorkflowStatus.
+         * @param request GetWorkflowStatusRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and WorkflowStatusResponse
+         */
+        public getWorkflowStatus(request: vtadmin.IGetWorkflowStatusRequest, callback: vtadmin.VTAdmin.GetWorkflowStatusCallback): void;
+
+        /**
+         * Calls GetWorkflowStatus.
+         * @param request GetWorkflowStatusRequest message or plain object
+         * @returns Promise
+         */
+        public getWorkflowStatus(request: vtadmin.IGetWorkflowStatusRequest): Promise<vtctldata.WorkflowStatusResponse>;
+
+        /**
          * Calls LaunchSchemaMigration.
          * @param request LaunchSchemaMigrationRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and LaunchSchemaMigrationResponse
@@ -1082,6 +1096,13 @@ export namespace vtadmin {
          * @param [response] GetWorkflowsResponse
          */
         type GetWorkflowsCallback = (error: (Error|null), response?: vtadmin.GetWorkflowsResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getWorkflowStatus}.
+         * @param error Error, if any
+         * @param [response] WorkflowStatusResponse
+         */
+        type GetWorkflowStatusCallback = (error: (Error|null), response?: vtctldata.WorkflowStatusResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#launchSchemaMigration}.
@@ -8610,6 +8631,115 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for GetWorkflowRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetWorkflowStatusRequest. */
+    interface IGetWorkflowStatusRequest {
+
+        /** GetWorkflowStatusRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetWorkflowStatusRequest keyspace */
+        keyspace?: (string|null);
+
+        /** GetWorkflowStatusRequest name */
+        name?: (string|null);
+    }
+
+    /** Represents a GetWorkflowStatusRequest. */
+    class GetWorkflowStatusRequest implements IGetWorkflowStatusRequest {
+
+        /**
+         * Constructs a new GetWorkflowStatusRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetWorkflowStatusRequest);
+
+        /** GetWorkflowStatusRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetWorkflowStatusRequest keyspace. */
+        public keyspace: string;
+
+        /** GetWorkflowStatusRequest name. */
+        public name: string;
+
+        /**
+         * Creates a new GetWorkflowStatusRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetWorkflowStatusRequest instance
+         */
+        public static create(properties?: vtadmin.IGetWorkflowStatusRequest): vtadmin.GetWorkflowStatusRequest;
+
+        /**
+         * Encodes the specified GetWorkflowStatusRequest message. Does not implicitly {@link vtadmin.GetWorkflowStatusRequest.verify|verify} messages.
+         * @param message GetWorkflowStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetWorkflowStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetWorkflowStatusRequest message, length delimited. Does not implicitly {@link vtadmin.GetWorkflowStatusRequest.verify|verify} messages.
+         * @param message GetWorkflowStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetWorkflowStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetWorkflowStatusRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetWorkflowStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetWorkflowStatusRequest;
+
+        /**
+         * Decodes a GetWorkflowStatusRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetWorkflowStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetWorkflowStatusRequest;
+
+        /**
+         * Verifies a GetWorkflowStatusRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetWorkflowStatusRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetWorkflowStatusRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetWorkflowStatusRequest;
+
+        /**
+         * Creates a plain object from a GetWorkflowStatusRequest message. Also converts values to other types if specified.
+         * @param message GetWorkflowStatusRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetWorkflowStatusRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetWorkflowStatusRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetWorkflowStatusRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

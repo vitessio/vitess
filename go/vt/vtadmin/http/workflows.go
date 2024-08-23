@@ -69,3 +69,19 @@ func GetWorkflows(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(workflows, err)
 }
+
+// GetWorkflowStatus implements the http wrapper for the VTAdminServer.GetWorkflowStatus
+// method.
+//
+// Its route is /workflow/{cluster_id}/{keyspace}/{name}/status
+func GetWorkflowStatus(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	workflowStatus, err := api.server.GetWorkflowStatus(ctx, &vtadminpb.GetWorkflowStatusRequest{
+		ClusterId: vars["cluster_id"],
+		Keyspace:  vars["keyspace"],
+		Name:      vars["name"],
+	})
+
+	return NewJSONResponse(workflowStatus, err)
+}
