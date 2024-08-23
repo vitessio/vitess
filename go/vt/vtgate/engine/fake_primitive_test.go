@@ -112,7 +112,7 @@ func (f *fakePrimitive) syncCall(wantfields bool, callback func(*sqltypes.Result
 		}
 		result := &sqltypes.Result{}
 		for i := 0; i < len(r.Rows); i++ {
-			result.Rows = append(result.Rows, r.Rows[i])
+			result.Rows = append(result.Rows, sqltypes.CopyRow(r.Rows[i]))
 			// Send only two rows at a time.
 			if i%2 == 1 {
 				if err := callback(result); err != nil {

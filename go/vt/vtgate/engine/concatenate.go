@@ -102,12 +102,14 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}
 
 	var rows [][]sqltypes.Value
-	err = c.coerceAndVisitResults(res, fields, fieldTypes, func(result *sqltypes.Result) error {
+	callback := func(result *sqltypes.Result) error {
 		rows = append(rows, result.Rows...)
 		return nil
-	}, evalengine.ParseSQLMode(vcursor.SQLMode()))
-	if err != nil {
-		return nil, err
+	}
+	for _, r := range res {
+		if err = c.coerceAndVisitResultsForOneSource([]*sqltypes.Result{r}, fields, fieldTypes, callback, evalengine.ParseSQLMode(vcursor.SQLMode())); err != nil {
+			return nil, err
+		}
 	}
 
 	return &sqltypes.Result{
@@ -378,7 +380,7 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 		return err
 	}
 	for _, res := range results {
-		if err = c.coerceAndVisitResults(res, fields, fieldTypes, callback, sqlmode); err != nil {
+		if err = c.coerceAndVisitResultsForOneSource(res, fields, fieldTypes, callback, sqlmode); err != nil {
 			return err
 		}
 	}
@@ -386,26 +388,30 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 	return nil
 }
 
-func (c *Concatenate) coerceAndVisitResults(
+func (c *Concatenate) coerceAndVisitResultsForOneSource(
 	res []*sqltypes.Result,
 	fields []*querypb.Field,
 	fieldTypes []evalengine.Type,
 	callback func(*sqltypes.Result) error,
 	sqlmode evalengine.SQLMode,
 ) error {
+	if len(res) == 0 {
+		return nil
+	}
+	needsCoercion := false
+	for idx, field := range res[0].Fields {
+		if fieldTypes[idx].Type() != field.Type {
+			needsCoercion = true
+			break
+		}
+	}
+
 	for _, r := range res {
 		if len(r.Rows) > 0 &&
 			len(fieldTypes) != len(r.Rows[0]) {
 			return errWrongNumberOfColumnsInSelect
 		}
 
-		needsCoercion := false
-		for idx, field := range r.Fields {
-			if fieldTypes[idx].Type() != field.Type {
-				needsCoercion = true
-				break
-			}
-		}
 		if needsCoercion {
 			for _, row := range r.Rows {
 				err := c.coerceValuesTo(row, fieldTypes, sqlmode)
