@@ -685,7 +685,10 @@ func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(ctx context.Context, target
 	if state, ok := ks.shards[target.Shard]; ok {
 		// If the primary tablet was present then externallyReparented will be non-zero and
 		// currentPrimary will be not nil.
-		return state.currentPrimary, !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
+
+		// serving := state.serving && ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
+		// notServing := !state.serving || !ks.consistent || state.externallyReparented == 0 || state.currentPrimary == nil
+		return state.currentPrimary, !state.serving || !ks.consistent || state.externallyReparented == 0 || state.currentPrimary == nil
 	}
 	return nil, false
 }
