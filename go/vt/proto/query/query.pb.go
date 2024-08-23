@@ -318,8 +318,7 @@ const (
 	// VECTOR specifies a VECTOR type
 	// Properties: 35, IsQuoted.
 	Type_VECTOR Type = 2083
-	// RAW specifies a type which won't be quoted but used as is.
-	// Internal use only. TODO: check if we can use EXPRESSION instead of defining a new one
+	// RAW specifies a type which won't be quoted but the value used as-is while encoding.
 	Type_RAW Type = 2084
 )
 
