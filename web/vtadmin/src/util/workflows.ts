@@ -121,6 +121,10 @@ export interface TableCopyState extends vtctldata.WorkflowStatusResponse.ITableC
     tableName: string;
 }
 
+/**
+ * getTableCopyStates returns a list of table copy states with `tableName` included
+ * in the `TableCopyState` object, from the `workflowStatus` output.
+ */
 export const getTableCopyStates = (
     workflowStatus: vtctldata.WorkflowStatusResponse | undefined
 ): TableCopyState[] | undefined => {

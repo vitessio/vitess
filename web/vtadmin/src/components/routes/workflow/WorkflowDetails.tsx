@@ -43,8 +43,10 @@ const LOG_COLUMNS = ['Type', 'State', 'Updated At', 'Message', 'Count'];
 
 const TABLE_COPY_STATE_COLUMNS = ['Table Name', 'Total Bytes', 'Bytes Copied', 'Total Rows', 'Rows Copied'];
 
+const STREAM_COLUMNS = ['Stream', 'State', 'Message', 'Transaction Timestamp', 'Database Name'];
+
 export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
-    const { data } = useWorkflow({ clusterID, keyspace, name });
+    const { data: workflowData } = useWorkflow({ clusterID, keyspace, name });
 
     const { data: workflowsData = [] } = useWorkflows();
 
@@ -54,20 +56,95 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
         name,
     });
 
+    const reverseWorkflow = getReverseWorkflow(workflowsData, workflowData);
+
+    const tableCopyStates = getTableCopyStates(workflowStatus);
+
     const streams = useMemo(() => {
-        const rows = getStreams(data).map((stream) => ({
+        const rows = getStreams(workflowData).map((stream) => ({
             key: formatStreamKey(stream),
             ...stream,
         }));
 
         return orderBy(rows, 'streamKey');
-    }, [data]);
+    }, [workflowData]);
 
-    const renderRows = (rows: vtctldata.Workflow.Stream.ILog[]) => {
+    const getStreamsSummary = (streamList: typeof streams): string => {
+        const numStreamsByState: { [key: string]: number } = {
+            Copying: 0,
+            Throttled: 0,
+            Stopped: 0,
+            Running: 0,
+            Error: 0,
+        };
+        streamList.forEach((stream) => {
+            var isThrottled =
+                Number(stream.throttler_status?.time_throttled?.seconds) > Date.now() / 1000 - ThrottleThresholdSeconds;
+            const streamState = isThrottled ? 'Throttled' : stream.state;
+            if (streamState) {
+                numStreamsByState[streamState]++;
+            }
+        });
+        const states = Object.keys(numStreamsByState);
+        let message = '';
+        states.forEach((state) => {
+            if (numStreamsByState[state]) {
+                let desc = state;
+                if (state === 'Error') {
+                    desc = 'Failed';
+                }
+                desc += numStreamsByState[state] > 1 ? ' Streams' : ' Stream';
+                message += `${numStreamsByState[state]} ${desc}. `;
+            }
+        });
+        return message;
+    };
+
+    const renderStreamRows = (rows: typeof streams) => {
         return rows.map((row) => {
-            let message = row.message ? `${row.message}` : '-';
-            // TODO(@beingnoble03): Investigate how message can be parsed and displayed to JSON in case of "Stream Created"
-            if (row.type == 'Stream Created') {
+            const href =
+                row.tablet && row.id
+                    ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
+                    : null;
+
+            var isThrottled =
+                Number(row?.throttler_status?.time_throttled?.seconds) > Date.now() / 1000 - ThrottleThresholdSeconds;
+            const rowState = isThrottled ? 'Throttled' : row.state;
+            return (
+                <tr key={row.key}>
+                    <DataCell>
+                        <StreamStatePip state={rowState} />{' '}
+                        <Link className="font-bold" to={href}>
+                            {row.key}
+                        </Link>
+                        <div className="text-sm text-secondary">
+                            Updated {formatDateTime(row.time_updated?.seconds)}
+                        </div>
+                        {isThrottled ? (
+                            <div className="text-sm text-secondary">
+                                <span className="font-bold text-danger">Throttled: </span>
+                                in {row.throttler_status?.component_throttled}
+                            </div>
+                        ) : null}
+                    </DataCell>
+                    <DataCell>{rowState}</DataCell>
+                    <DataCell>{row.message ? row.message : '-'}</DataCell>
+                    <DataCell>
+                        {row.transaction_timestamp && row.transaction_timestamp.seconds
+                            ? formatDateTime(row.transaction_timestamp.seconds)
+                            : '-'}
+                    </DataCell>
+                    <DataCell>{row.db_name}</DataCell>
+                </tr>
+            );
+        });
+    };
+
+    const renderLogRows = (rows: vtctldata.Workflow.Stream.ILog[]) => {
+        return rows.map((row) => {
+            let message: string = row.message ? `${row.message}` : '-';
+            // TODO: Investigate if message needs to be JSON parsed in case of "Stream Created"
+            if (row.type === 'Stream Created') {
                 message = '-';
             }
             return (
@@ -81,10 +158,6 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
             );
         });
     };
-
-    const reverseWorkflow = getReverseWorkflow(workflowsData, data);
-
-    const tableCopyStates = getTableCopyStates(workflowStatus);
 
     const renderTableCopyStateRows = (tableCopyStates: TableCopyState[]) => {
         return tableCopyStates.map((copyState, index) => {
@@ -109,9 +182,38 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
 
     return (
         <div className="mt-12 mb-16">
+            <h3 className="mt-8 mb-4">Summary</h3>
+            <p className="text-base my-2">
+                <strong>Streams Status</strong> <br />
+                {getStreamsSummary(streams)}
+            </p>
+            {workflowStatus && (
+                <p className="text-base my-2">
+                    <strong>Traffic Status</strong> <br />
+                    {workflowStatus.traffic_state}
+                </p>
+            )}
+            {workflowData && workflowData.workflow?.max_v_replication_lag && (
+                <p className="text-base my-2">
+                    <strong>Max VReplication Lag</strong> <br />
+                    {`${workflowData.workflow.max_v_replication_lag}`}
+                </p>
+            )}
+            {reverseWorkflow && (
+                <p className="text-base my-2">
+                    <strong>Reverse Workflow</strong> <br />
+                    <div className="text-base">
+                        <Link
+                            to={`/workflow/${reverseWorkflow.cluster?.id}/${reverseWorkflow.keyspace}/${reverseWorkflow.workflow?.name}`}
+                        >
+                            {reverseWorkflow.workflow?.name}
+                        </Link>
+                    </div>
+                </p>
+            )}
             {tableCopyStates && (
                 <div>
-                    <h3 className="my-8">Table Copy State</h3>
+                    <h3 className="mt-8 mb-4">Table Copy State</h3>
                     <DataTable
                         columns={TABLE_COPY_STATE_COLUMNS}
                         data={tableCopyStates}
@@ -120,72 +222,20 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                     />
                 </div>
             )}
-            <h3 className="my-8">Streams</h3>
-            {streams.map((stream) => {
-                const href =
-                    stream.tablet && stream.id
-                        ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${stream.tablet.cell}/${stream.tablet.uid}/${stream.id}`
-                        : null;
-
-                var isThrottled =
-                    Number(stream.throttler_status?.time_throttled?.seconds) >
-                    Date.now() / 1000 - ThrottleThresholdSeconds;
-                const streamState = isThrottled ? 'Throttled' : stream.state;
-                return (
-                    <div className="my-8">
-                        <div className="text-lg font-bold">
-                            <StreamStatePip state={streamState} /> <Link to={href}>{`${stream.key}`}</Link>
-                        </div>
-                        <p className="text-base">
-                            <strong>State</strong> <br />
-                            {streamState}
-                        </p>
-                        {isThrottled && (
-                            <p className="text-base">
-                                <strong>Component Throttled</strong> <br />
-                                {stream.throttler_status?.component_throttled}
-                            </p>
-                        )}
-                        {streamState == 'Running' && data?.workflow?.max_v_replication_lag && (
-                            <p className="text-base">
-                                <strong>Max VReplication Lag</strong> <br />
-                                {`${data?.workflow?.max_v_replication_lag}`}
-                            </p>
-                        )}
-                        <DataTable
-                            columns={LOG_COLUMNS}
-                            data={stream.logs?.reverse()!}
-                            renderRows={renderRows}
-                            pageSize={1000}
-                            title="Recent Logs"
-                        />
-                    </div>
-                );
-            })}
-            {reverseWorkflow && (
-                <div>
-                    <h3 className="my-8">Reverse Workflow</h3>
-                    <div className="font-bold text-lg">
-                        <Link
-                            to={`/workflow/${reverseWorkflow.cluster?.id}/${reverseWorkflow.keyspace}/${reverseWorkflow.workflow?.name}`}
-                        >
-                            {reverseWorkflow.workflow?.name}
-                        </Link>
-                    </div>
-                    <p className="text-base">
-                        <strong>Keyspace</strong> <br />
-                        <Link to={`/keyspace/${reverseWorkflow.cluster?.id}/${reverseWorkflow.keyspace}`}>
-                            {`${reverseWorkflow.keyspace}`}
-                        </Link>
-                    </p>
-                    {reverseWorkflow.workflow?.max_v_replication_lag && (
-                        <p className="text-base">
-                            <strong>Max VReplication Lag</strong> <br />
-                            {`${reverseWorkflow.workflow?.max_v_replication_lag}`}
-                        </p>
-                    )}
+            <h3 className="mt-8 mb-4">Streams</h3>
+            <DataTable columns={STREAM_COLUMNS} data={streams} renderRows={renderStreamRows} pageSize={10} />
+            <h3 className="mt-8 mb-4">Recent Logs</h3>
+            {streams.map((stream) => (
+                <div className="mt-2" key={stream.key}>
+                    <DataTable
+                        columns={LOG_COLUMNS}
+                        data={orderBy(stream.logs, 'id', 'desc')}
+                        renderRows={renderLogRows}
+                        pageSize={10}
+                        title={stream.key!}
+                    />
                 </div>
-            )}
+            ))}
         </div>
     );
 };
