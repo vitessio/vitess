@@ -169,3 +169,22 @@ func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	pp.reserved = make(map[string]error)
 	return conns
 }
+
+func (pp *TxPreparedPool) IsPreparedForTable(tableName string) bool {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	// If the pool is shutdown, we do not know the correct state of prepared transactions.
+	if !pp.open {
+		return false
+	}
+	for _, connection := range pp.conns {
+		for _, query := range connection.txProps.Queries {
+			for _, table := range query.Tables {
+				if table == tableName {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}

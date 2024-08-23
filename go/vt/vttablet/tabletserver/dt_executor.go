@@ -84,6 +84,9 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 		return vterrors.VT10002("cannot prepare the transaction on a reserved connection")
 	}
 
+	// Fail Prepare if any query rule disallows it.
+	// This could be due to ongoing cutover happening in vreplication workflow
+	// regarding OnlineDDL or MoveTables.
 	for _, query := range conn.TxProperties().Queries {
 		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, query.PlanType, query.Tables...)
 		if qr != nil {
@@ -99,6 +102,28 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	if err != nil {
 		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
 		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
+	}
+
+	// Recheck the rules. As some prepare transaction could have passed the first check.
+	// If they are put in the prepared pool, then vreplication workflow waits.
+	// This check helps reject the prepare that came later.
+	for _, query := range conn.TxProperties().Queries {
+		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, query.PlanType, query.Tables...)
+		if qr != nil {
+			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
+			if act != rules.QRContinue {
+				dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
+				dte.te.preparedPool.FetchForRollback(dtid)
+				return vterrors.VT10002("cannot prepare the transaction due to query rule")
+			}
+		}
+	}
+
+	// If OnlineDDL killed the connection. We should avoid the prepare for it.
+	if conn.IsClosed() {
+		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
+		dte.te.preparedPool.FetchForRollback(dtid)
+		return vterrors.VT10002("cannot prepare the transaction on a closed connection")
 	}
 
 	return dte.inTransaction(func(localConn *StatefulConnection) error {

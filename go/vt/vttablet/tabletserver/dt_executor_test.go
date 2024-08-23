@@ -26,6 +26,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/event/syslogger"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/require"
@@ -183,6 +187,61 @@ func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 	defer txe.RollbackPrepared("aa", 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "commit fail")
+}
+
+func TestExecutorPrepareRuleFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+
+	alterRule := rules.NewQueryRule("disable update", "disable update", rules.QRBuffer)
+	alterRule.AddTableCond("test_table")
+
+	r := rules.New()
+	r.Add(alterRule)
+	txe.qe.queryRuleSources.RegisterSource("bufferQuery")
+	err := txe.qe.queryRuleSources.SetRules("bufferQuery", r)
+	require.NoError(t, err)
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "adding query property")
+	require.NoError(t, err)
+	sc.txProps.Queries = append(sc.txProps.Queries, tx.Query{
+		Sql:      "update test_table set col = 5",
+		PlanType: planbuilder.PlanUpdate,
+		Tables:   []string{"test_table"},
+	})
+	sc.Unlock()
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.Prepare(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction due to query rule")
+}
+
+func TestExecutorPrepareConnFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "adding query property")
+	require.NoError(t, err)
+	sc.Unlock()
+	sc.dbConn.Close()
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.Prepare(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction on a closed connection")
 }
 
 func TestTxExecutorCommit(t *testing.T) {
@@ -610,6 +669,11 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv 
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
+	se := schema.NewEngine(env)
+	qe := NewQueryEngine(env, se)
 	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
@@ -619,6 +683,7 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv 
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
+		qe:       qe,
 	}, tsv, db
 }
 
