@@ -54,7 +54,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	if !dte.te.twopcAllowed {
-		return vterrors.VT09031()
+		return vterrors.VT10002("two-pc is enabled, but semi-sync is not")
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("PREPARE", time.Now())
 	dte.logStats.TransactionID = transactionID
