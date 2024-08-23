@@ -210,7 +210,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 	// Only the following patterns are possible:
 	// BEGIN->ROWs or Statements->GTID->COMMIT. In the case of large transactions, this can be broken into chunks.
-	// BEGIN->JOURNAL->GTID->COMMIT
+	// BEGIN->JOURNAL
+	//   ->GTID->COMMIT. This is a special case where the journal is sent immediately as some consumers stop on reshard events.
 	// GTID->DDL
 	// GTID->OTHER
 	// HEARTBEAT is issued if there's inactivity, which is likely

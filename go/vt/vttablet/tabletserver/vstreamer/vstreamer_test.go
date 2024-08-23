@@ -1731,12 +1731,16 @@ func TestJournal(t *testing.T) {
 			"commit",
 		},
 		// External table events don't get sent.
-		output: [][]string{{
-			`begin`,
-			`type:JOURNAL journal:{id:1 migration_type:SHARDS}`,
-			`gtid`,
-			`commit`,
-		}},
+		output: [][]string{
+			{
+				`begin`,
+				`type:JOURNAL journal:{id:1 migration_type:SHARDS}`,
+			},
+			{
+				`gtid`,
+				`commit`,
+			},
+		},
 	}}
 	runCases(t, nil, testcases, "", nil)
 }
