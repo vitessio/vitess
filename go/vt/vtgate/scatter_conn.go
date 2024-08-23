@@ -261,9 +261,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
 			session.logging.log(primitive, rs.Target, rs.Gateway, queries[i].Sql, info.actionNeeded == begin || info.actionNeeded == reserveBegin, queries[i].BindVariables)
-			if innerqr != nil {
-				resultsObserver.observe(innerqr)
-			}
 
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
@@ -272,6 +269,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			}
 			mu.Lock()
 			defer mu.Unlock()
+
+			if innerqr != nil {
+				resultsObserver.observe(innerqr)
+			}
 
 			// Don't append more rows if row count is exceeded.
 			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
