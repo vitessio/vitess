@@ -665,6 +665,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					// StopOnReshard is set.
 					if vs.stopOnReshard && journal.MigrationType == binlogdatapb.MigrationType_SHARDS {
 						sendevents = append(sendevents, event)
+						// Include our own commit event to complete the BEGIN->JOURNAL-COMMIT
+						// sequence in the stream.
+						sendevents := append(sendevents, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT})
 						eventss = append(eventss, sendevents)
 						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
 							return err
