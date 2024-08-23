@@ -775,7 +775,7 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out ops.Operator,
 
 	// sharded routing is complex, so we handle it in a separate method
 	case inner == sharded && outer == sharded:
-		return tryMergeShardedRouting(ctx, inRoute, outRoute, m, joinPredicates, true /*isSubquery*/)
+		return tryMergeShardedRouting(ctx, inRoute, outRoute, m, joinPredicates)
 
 	default:
 		return nil, nil
