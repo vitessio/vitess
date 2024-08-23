@@ -608,7 +608,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			}
 
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
-			for _, event := range events {
+			for i, event := range events {
 				switch event.Type {
 				case binlogdatapb.VEventType_FIELD:
 					// Update table names and send.
@@ -658,22 +658,36 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
 						return err
 					}
-
 				case binlogdatapb.VEventType_JOURNAL:
 					journal := event.Journal
 					// Journal events are not sent to clients by default, but only when
 					// StopOnReshard is set.
 					if vs.stopOnReshard && journal.MigrationType == binlogdatapb.MigrationType_SHARDS {
 						sendevents = append(sendevents, event)
-						// Include our own commit event to complete the BEGIN->JOURNAL-COMMIT
-						// sequence in the stream.
-						sendevents := append(sendevents, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT})
+						// Read any subsequent events until we get the VGTID->COMMIT events that
+						// always follow the JOURNAL event which is generated as a result of
+						// an autocommit insert into the _vt.resharding_journal table on the
+						// tablet. This batch of events we're currently processing may not
+						// contain these events.
+						for j := i + 1; j < len(events); j++ {
+							sendevents = append(sendevents, events[j])
+							if events[j].Type == binlogdatapb.VEventType_COMMIT {
+								break
+							}
+						}
 						eventss = append(eventss, sendevents)
 						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
 							return err
 						}
 						eventss = nil
 						sendevents = nil
+						// We're going to be stopping the stream anyway, so we pause to give clients
+						// time to recv the journal event before the stream's context is cancelled
+						// (which causes the grpc SendMsg to fail).
+						// If the client doesn't (grpc) Recv the journal event before the stream
+						// ends then they'll have to resume from the last ShardGtid they received
+						// before the journal event.
+						time.Sleep(2 * time.Second)
 					}
 					je, err := vs.getJournalEvent(ctx, sgtid, journal)
 					if err != nil {
