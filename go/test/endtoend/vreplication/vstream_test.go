@@ -843,7 +843,7 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 	reshardAction(t, "SwitchTraffic", wf, ks, oldShards, newShards, defaultCellName, tabletType)
 
 	// Now start a new VStream from our previous VGTID which only has the old/original shards.
-	expectedJournalEvents := 2 // One for each old shard
+	expectedJournalEvents := 2 // One for each old shard: -80,80-
 	runResumeStream := func() {
 		journalEvents = 0
 		t.Logf("Streaming from position: %+v", newVGTID.GetShardGtids())
@@ -886,10 +886,10 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 
 	// Multiple VStream clients should be able to resume from where they left off and
 	// get the reshard journal event.
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= expectedJournalEvents; i++ {
 		runResumeStream()
 		// We should have seen the journal event for each shard in the stream due to using StopOnReshard.
-		require.Equal(t, 2, journalEvents, "did not get expected journal events on resume vstream #%d", i)
+		require.Equal(t, expectedJournalEvents, journalEvents, "did not get expected journal events on resume vstream #%d", i)
 	}
 }
 
