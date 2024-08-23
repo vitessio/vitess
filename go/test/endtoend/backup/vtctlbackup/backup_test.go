@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
@@ -38,6 +37,7 @@ func TestBuiltinBackup(t *testing.T) {
 
 func TestBuiltinBackupWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	defer setDefaultCommonArgs()
 	cDetails := &CompressionDetails{
 		CompressorEngineName:    "zstd",
 		ExternalCompressorCmd:   "zstd",
@@ -50,6 +50,7 @@ func TestBuiltinBackupWithZstdCompression(t *testing.T) {
 
 func TestBuiltinBackupWithExternalZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	defer setDefaultCommonArgs()
 	cDetails := &CompressionDetails{
 		CompressorEngineName:    "external",
 		ExternalCompressorCmd:   "zstd",
@@ -62,6 +63,7 @@ func TestBuiltinBackupWithExternalZstdCompression(t *testing.T) {
 
 func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	defer setDefaultCommonArgs()
 	cDetails := &CompressionDetails{
 		CompressorEngineName:            "external",
 		ExternalCompressorCmd:           "zstd",
@@ -80,8 +82,11 @@ func setDefaultCompressionFlag() {
 	mysqlctl.ManifestExternalDecompressorCmd = ""
 }
 
+func setDefaultCommonArgs() { commonTabletArg = getDefaultCommonArgs() }
+
 func TestBackupEngineSelector(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	defer setDefaultCommonArgs()
 	defer cluster.PanicHandler(t)
 
 	// launch the custer with xtrabackup as the default engine
@@ -149,10 +154,13 @@ func getLastBackup(t *testing.T) string {
 
 func TestRestoreIgnoreBackups(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	defer setDefaultCommonArgs()
 	defer cluster.PanicHandler(t)
 
+	cDetails := &CompressionDetails{CompressorEngineName: "pgzip"}
+
 	// launch the custer with xtrabackup as the default engine
-	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"})
+	code, err := LaunchCluster(XtraBackup, "xbstream", 0, cDetails)
 	require.Nilf(t, err, "setup failed with status code %d", code)
 
 	defer TearDownCluster()
@@ -176,7 +184,7 @@ func TestRestoreIgnoreBackups(t *testing.T) {
 	require.NoError(t, err)
 
 	// now bring up the other replica, letting it restore from backup.
-	restoreWaitForBackup(t, "replica", nil, true)
+	restoreWaitForBackup(t, "replica", cDetails, true)
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.NoError(t, err)
 
@@ -191,9 +199,6 @@ func TestRestoreIgnoreBackups(t *testing.T) {
 
 	// and try to restore from it
 	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", replica2.Alias)
-	if err != nil {
-		log.Errorf("restore failed as expected: %v", err)
-	}
 	require.Error(t, err) // this should fail
 
 	// now we retry but trying the earlier backup

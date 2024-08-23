@@ -74,14 +74,7 @@ var (
 	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
 	dbCredentialFile string
 	shardName        = "0"
-	commonTabletArg  = []string{
-		"--vreplication_retry_delay", "1s",
-		"--degraded_threshold", "5s",
-		"--lock_tables_timeout", "5s",
-		"--watch_replication_stream",
-		"--enable_replication_reporter",
-		"--serving_state_grace_period", "1s",
-	}
+	commonTabletArg  = getDefaultCommonArgs()
 
 	vtInsertTest = `
 		create table vt_insert_test (
@@ -1444,4 +1437,15 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
 	}
 	require.Contains(t, bd, "BackupStorage.File.File:Read")
+}
+
+func getDefaultCommonArgs() []string {
+	return []string{
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_replication_reporter",
+		"--serving_state_grace_period", "1s",
+	}
 }
