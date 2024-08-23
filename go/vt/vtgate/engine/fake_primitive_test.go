@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -188,6 +189,15 @@ func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*que
 		if result == nil {
 			result = r
 		} else {
+			if r.Fields != nil {
+				for i, field := range r.Fields {
+					aField := field
+					bField := result.Fields[i]
+					if !proto.Equal(aField, bField) {
+						return fmt.Errorf("fields differ: %s <> %s", aField.String(), bField.String())
+					}
+				}
+			}
 			result.Rows = append(result.Rows, r.Rows...)
 		}
 		return nil

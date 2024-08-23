@@ -102,7 +102,7 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}
 
 	var rows [][]sqltypes.Value
-	err = c.coerceAndVisitResults(res, fieldTypes, func(result *sqltypes.Result) error {
+	err = c.coerceAndVisitResults(res, fields, fieldTypes, func(result *sqltypes.Result) error {
 		rows = append(rows, result.Rows...)
 		return nil
 	}, evalengine.ParseSQLMode(vcursor.SQLMode()))
@@ -245,12 +245,13 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 
 	// Mutexes for dealing with concurrent access to shared state.
 	var (
-		muCallback sync.Mutex                                 // Protects callback
-		muFields   sync.Mutex                                 // Protects field state
-		condFields = sync.NewCond(&muFields)                  // Condition var for field arrival
-		wg         errgroup.Group                             // Wait group for all streaming goroutines
-		rest       = make([]*sqltypes.Result, len(c.Sources)) // Collects first result from each source to derive fields
-		fieldTypes []evalengine.Type                          // Cached final field types
+		muCallback   sync.Mutex                                 // Protects callback
+		muFields     sync.Mutex                                 // Protects field state
+		condFields   = sync.NewCond(&muFields)                  // Condition var for field arrival
+		wg           errgroup.Group                             // Wait group for all streaming goroutines
+		rest         = make([]*sqltypes.Result, len(c.Sources)) // Collects first result from each source to derive fields
+		fieldTypes   []evalengine.Type                          // Cached final field types
+		resultFields []*querypb.Field
 	)
 
 	// Process each result chunk, considering type coercion.
@@ -277,6 +278,9 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 				}
 			}
 		}
+		if res.Fields != nil {
+			res.Fields = resultFields
+		}
 		return in(res)
 	}
 
@@ -296,7 +300,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 					if !slices.Contains(rest, nil) {
 						// We have received fields from all sources. We can now calculate the output types
 						var err error
-						resultChunk.Fields, fieldTypes, err = c.getFieldTypes(vcursor, rest)
+						resultFields, fieldTypes, err = c.getFieldTypes(vcursor, rest)
 						if err != nil {
 							muFields.Unlock()
 							return err
@@ -310,6 +314,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 
 				// Wait for fields from all sources.
 				for slices.Contains(rest, nil) {
+					// This wait call lets go of the muFields lock and acquires it again later after waiting.
 					condFields.Wait()
 				}
 				muFields.Unlock()
@@ -368,12 +373,12 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 		firsts[i] = result[0]
 	}
 
-	_, fieldTypes, err := c.getFieldTypes(vcursor, firsts)
+	fields, fieldTypes, err := c.getFieldTypes(vcursor, firsts)
 	if err != nil {
 		return err
 	}
 	for _, res := range results {
-		if err = c.coerceAndVisitResults(res, fieldTypes, callback, sqlmode); err != nil {
+		if err = c.coerceAndVisitResults(res, fields, fieldTypes, callback, sqlmode); err != nil {
 			return err
 		}
 	}
@@ -383,6 +388,7 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 
 func (c *Concatenate) coerceAndVisitResults(
 	res []*sqltypes.Result,
+	fields []*querypb.Field,
 	fieldTypes []evalengine.Type,
 	callback func(*sqltypes.Result) error,
 	sqlmode evalengine.SQLMode,
@@ -407,6 +413,9 @@ func (c *Concatenate) coerceAndVisitResults(
 					return err
 				}
 			}
+		}
+		if r.Fields != nil {
+			r.Fields = fields
 		}
 		err := callback(r)
 		if err != nil {
