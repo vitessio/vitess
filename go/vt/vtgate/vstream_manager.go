@@ -978,6 +978,9 @@ func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string
 		return false, err
 	}
 
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+
 	// First check the typical case, where the VGTID shards match the serving shards.
 	// In that case it's NOT possible that an applicable reshard has happened because
 	// the VGTID contains shards that are all serving.
