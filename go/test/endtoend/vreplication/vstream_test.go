@@ -702,6 +702,8 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	require.Equal(t, customerCount, int64(oldShardRowEvents+newShardRowEvents))
 }
 
+// TestMultiVStreamsKeyspaceStopOnReshard confirms that journal events are received
+// when resuming a VStream after a reshard.
 func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 	ctx := context.Background()
 	ks := "testks"
@@ -854,7 +856,7 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 
 			switch err {
 			case nil:
-				for _, ev := range evs {
+				for i, ev := range evs {
 					switch ev.Type {
 					case binlogdatapb.VEventType_ROW:
 						shard := ev.RowEvent.Shard
@@ -866,6 +868,9 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 					case binlogdatapb.VEventType_JOURNAL:
 						t.Logf("Journal event: %+v", ev)
 						journalEvents++
+						require.Equal(t, binlogdatapb.VEventType_BEGIN, evs[i-1].Type, "JOURNAL event not preceded by BEGIN event")
+						require.Equal(t, binlogdatapb.VEventType_VGTID, evs[i+1].Type, "JOURNAL event not followed by VGTID event")
+						require.Equal(t, binlogdatapb.VEventType_COMMIT, evs[i+2].Type, "JOURNAL event not followed by COMMIT event")
 						if journalEvents == expectedJournalEvents {
 							return
 						}
@@ -888,8 +893,10 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 	// get the reshard journal event.
 	for i := 1; i <= expectedJournalEvents; i++ {
 		runResumeStream()
-		// We should have seen the journal event for each shard in the stream due to using StopOnReshard.
-		require.Equal(t, expectedJournalEvents, journalEvents, "did not get expected journal events on resume vstream #%d", i)
+		// We should have seen the journal event for each shard in the stream due to
+		// using StopOnReshard.
+		require.Equal(t, expectedJournalEvents, journalEvents,
+			"did not get expected journal events on resume vstream #%d", i)
 	}
 }
 
