@@ -693,7 +693,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						// We're going to be ending the tablet stream, so we ensure a reasonable
 						// minimum amount of time is alloted for clients to Recv the journal event
 						// before the stream's context is cancelled (which would cause the grpc
-						// Send or Recv to fail). If the client doesn't (grpc) Recv the journal
+						// SendMsg or RecvMsg to fail). If the client doesn't Recv the journal
 						// event before the stream ends then they'll have to resume from the last
 						// ShardGtid they received before the journal event.
 						endTimer := time.NewTimer(stopOnReshardDelay)
