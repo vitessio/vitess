@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -954,4 +955,99 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 		assert.Equal(t, txState, tx.state)
 		assert.Equal(t, txParticipants, tx.participants)
 	}
+}
+
+// TestReadingUnresolvedTransactions tests the reading of unresolved transactions
+func TestReadingUnresolvedTransactions(t *testing.T) {
+	testcases := []struct {
+		name    string
+		queries []string
+	}{
+		{
+			name: "show transaction status for explicit keyspace",
+			queries: []string{
+				fmt.Sprintf("show unresolved transactions for %v", keyspaceName),
+			},
+		},
+		{
+			name: "show transaction status with use command",
+			queries: []string{
+				fmt.Sprintf("use %v", keyspaceName),
+				"show unresolved transactions",
+			},
+		},
+	}
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			conn, closer := start(t)
+			defer closer()
+			// Start an atomic transaction.
+			utils.Exec(t, conn, "begin")
+			// Insert rows such that they go to all the three shards. Given that we have sharded the table `twopc_t1` on reverse_bits
+			// it is very easy to figure out what value will end up in which shard.
+			utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+			utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+			utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+			// We want to delay the commit on one of the shards to simulate slow commits on a shard.
+			twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitShard, "80-")
+			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
+			twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitTime, "5")
+			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
+			// We will execute a commit in a go routine, because we know it will take some time to complete.
+			// While the commit is ongoing, we would like to check that we see the unresolved transaction.
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := utils.ExecAllowError(t, conn, "commit")
+				if err != nil {
+					fmt.Println("Error in commit: ", err.Error())
+				}
+			}()
+			// Allow enough time for the commit to have started.
+			time.Sleep(1 * time.Second)
+			var lastRes *sqltypes.Result
+			newConn, err := mysql.Connect(context.Background(), &vtParams)
+			require.NoError(t, err)
+			defer newConn.Close()
+			for _, query := range testcase.queries {
+				lastRes = utils.Exec(t, newConn, query)
+			}
+			require.NotNil(t, lastRes)
+			require.Len(t, lastRes.Rows, 1)
+			// This verifies that we already decided to commit the transaction, but it is still unresolved.
+			assert.Contains(t, fmt.Sprintf("%v", lastRes.Rows), `VARCHAR("COMMIT")`)
+			// Wait for the commit to have returned.
+			wg.Wait()
+		})
+	}
+}
+
+// TestSemiSyncRequiredWithTwoPC tests that semi-sync is required when using two-phase commit.
+func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
+	// cleanup all the old data.
+	conn, closer := start(t)
+	defer closer()
+
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	require.NoError(t, err, out)
+	defer clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+
+	// After changing the durability policy for the given keyspace to none, we run PRS.
+	shard := clusterInstance.Keyspaces[0].Shards[2]
+	newPrimary := shard.Vttablets[1]
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", keyspaceName, shard.Name),
+		"--new-primary", newPrimary.Alias)
+	require.NoError(t, err)
+
+	// A new distributed transaction should fail.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	_, err = utils.ExecAllowError(t, conn, "commit")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "two-pc is enabled, but semi-sync is not")
 }

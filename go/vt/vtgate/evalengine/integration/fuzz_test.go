@@ -20,6 +20,7 @@ package integration
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -205,11 +206,11 @@ func TestGenerateFuzzCases(t *testing.T) {
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 		if localErr != nil && strings.Contains(localErr.Error(), "syntax error at position") {
-			localErr = fmt.Errorf(localSyntaxErr)
+			localErr = errors.New(localSyntaxErr)
 		}
 
 		if remoteErr != nil && strings.Contains(remoteErr.Error(), "You have an error in your SQL syntax") {
-			remoteErr = fmt.Errorf(syntaxErr)
+			remoteErr = errors.New(syntaxErr)
 		}
 
 		res := mismatch{

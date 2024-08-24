@@ -55,7 +55,36 @@ func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement
 	return q.stmt, q.dmlOperator, nil
 }
 
+// includeTable will return false if the table is a CTE, and it is not merged
+// it will return true if the table is not a CTE or if it is a CTE and it is merged
+func (qb *queryBuilder) includeTable(op *Table) bool {
+	if qb.ctx.SemTable == nil {
+		return true
+	}
+	tbl, err := qb.ctx.SemTable.TableInfoFor(op.QTable.ID)
+	if err != nil {
+		panic(err)
+	}
+	cteTbl, isCTE := tbl.(*semantics.CTETable)
+	if !isCTE {
+		return true
+	}
+
+	return cteTbl.Merged
+}
+
 func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
+	if tableID.NumberOfTables() == 1 && qb.ctx.SemTable != nil {
+		tblInfo, err := qb.ctx.SemTable.TableInfoFor(tableID)
+		if err != nil {
+			panic(err)
+		}
+		cte, isCTE := tblInfo.(*semantics.CTETable)
+		if isCTE {
+			tableName = cte.TableName
+			db = ""
+		}
+	}
 	tableExpr := sqlparser.TableName{
 		Name:      sqlparser.NewIdentifierCS(tableName),
 		Qualifier: sqlparser.NewIdentifierCS(db),
@@ -205,6 +234,26 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 		Right:    other.asSelectStatement(),
 		Distinct: distinct,
 	}
+}
+
+func (qb *queryBuilder) recursiveCteWith(other *queryBuilder, name, alias string) {
+	cteUnion := &sqlparser.Union{
+		Left:  qb.stmt.(sqlparser.SelectStatement),
+		Right: other.stmt.(sqlparser.SelectStatement),
+	}
+
+	qb.stmt = &sqlparser.Select{
+		With: &sqlparser.With{
+			Recursive: true,
+			CTEs: []*sqlparser.CommonTableExpr{{
+				ID:       sqlparser.NewIdentifierCS(name),
+				Columns:  nil,
+				Subquery: cteUnion,
+			}},
+		},
+	}
+
+	qb.addTable("", name, alias, "", nil)
 }
 
 type FromStatement interface {
@@ -401,6 +450,8 @@ func buildQuery(op Operator, qb *queryBuilder) {
 		buildDelete(op, qb)
 	case *Insert:
 		buildDML(op, qb)
+	case *RecurseCTE:
+		buildRecursiveCTE(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
 	}
@@ -492,6 +543,10 @@ func buildLimit(op *Limit, qb *queryBuilder) {
 }
 
 func buildTable(op *Table, qb *queryBuilder) {
+	if !qb.includeTable(op) {
+		return
+	}
+
 	dbName := ""
 
 	if op.QTable.IsInfSchema {
@@ -551,7 +606,16 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.RHS, qbR)
-	qb.joinWith(qbR, pred, op.JoinType)
+
+	switch {
+	// if we have a recursive cte, we might be missing a statement from one of the sides
+	case qbR.stmt == nil:
+		// do nothing
+	case qb.stmt == nil:
+		qb.stmt = qbR.stmt
+	default:
+		qb.joinWith(qbR, pred, op.JoinType)
+	}
 }
 
 func buildUnion(op *Union, qb *queryBuilder) {
@@ -634,6 +698,28 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
 	stripDownQuery(op.Query, qb.asSelectStatement())
 	sqlparser.RemoveKeyspaceInCol(qb.stmt)
+}
+
+func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
+	predicates := slice.Map(op.Predicates, func(jc *plancontext.RecurseExpression) sqlparser.Expr {
+		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
+		err := qb.ctx.SkipJoinPredicates(jc.Original)
+		if err != nil {
+			panic(err)
+		}
+		return jc.Original
+	})
+	pred := sqlparser.AndExpressions(predicates...)
+	buildQuery(op.Seed, qb)
+	qbR := &queryBuilder{ctx: qb.ctx}
+	buildQuery(op.Term, qbR)
+	qbR.addPredicate(pred)
+	infoFor, err := qb.ctx.SemTable.TableInfoFor(op.OuterID)
+	if err != nil {
+		panic(err)
+	}
+
+	qb.recursiveCteWith(qbR, op.Def.Name, infoFor.GetAliasedTableExpr().As.String())
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {

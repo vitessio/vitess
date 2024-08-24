@@ -17,9 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
@@ -141,9 +143,47 @@ func addJoinPredicates(
 		if subq != nil {
 			continue
 		}
+
+		// if we are inside a CTE, we need to check if we depend on the recursion table
+		if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(pred).IsOverlapping(cte.Id) {
+			original := pred
+			pred = addCTEPredicate(ctx, pred, cte)
+			ctx.AddJoinPredicates(original, pred)
+		}
 		op = op.AddPredicate(ctx, pred)
 	}
 	return sqc.getRootOperator(op, nil)
+}
+
+// addCTEPredicate breaks the expression into LHS and RHS
+func addCTEPredicate(
+	ctx *plancontext.PlanningContext,
+	pred sqlparser.Expr,
+	cte *plancontext.ContextCTE,
+) sqlparser.Expr {
+	expr := breakCTEExpressionInLhsAndRhs(ctx, pred, cte.Id)
+	cte.Predicates = append(cte.Predicates, expr)
+	return expr.RightExpr
+}
+
+func breakCTEExpressionInLhsAndRhs(ctx *plancontext.PlanningContext, pred sqlparser.Expr, lhsID semantics.TableSet) *plancontext.RecurseExpression {
+	col := breakExpressionInLHSandRHS(ctx, pred, lhsID)
+
+	lhsExprs := slice.Map(col.LHSExprs, func(bve BindVarExpr) plancontext.BindVarExpr {
+		col, ok := bve.Expr.(*sqlparser.ColName)
+		if !ok {
+			panic(vterrors.VT13001("expected column name"))
+		}
+		return plancontext.BindVarExpr{
+			Name: bve.Name,
+			Expr: col,
+		}
+	})
+	return &plancontext.RecurseExpression{
+		Original:  col.Original,
+		RightExpr: col.RHSExpr,
+		LeftExprs: lhsExprs,
+	}
 }
 
 func createJoin(ctx *plancontext.PlanningContext, LHS, RHS Operator) Operator {

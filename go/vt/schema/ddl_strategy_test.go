@@ -329,6 +329,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			forceCutOverAfter: 3 * time.Minute,
 		},
 		{
+			strategyVariable:  "vitess --force-cut-over-after=-1ms",
+			strategy:          DDLStrategyVitess,
+			options:           "--force-cut-over-after=-1ms",
+			runtimeOptions:    "",
+			forceCutOverAfter: -1 * time.Millisecond,
+		},
+		{
 			strategyVariable: "vitess --force-cut-over-after=r3m",
 			strategy:         DDLStrategyVitess,
 			runtimeOptions:   "",

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fuzzer
+package stress
 
 import (
 	"context"
@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 )
 
 var (
@@ -74,12 +75,13 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:          keyspaceName,
-			SchemaSQL:     SchemaSQL,
-			VSchema:       VSchema,
-			SidecarDBName: sidecarDBName,
+			Name:             keyspaceName,
+			SchemaSQL:        SchemaSQL,
+			VSchema:          VSchema,
+			SidecarDBName:    sidecarDBName,
+			DurabilityPolicy: "semi_sync",
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
 			return 1
 		}
 
@@ -110,29 +112,7 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 func cleanup(t *testing.T) {
 	cluster.PanicHandler(t)
 
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	clearOutTable(t, conn, "twopc_fuzzer_insert")
-	clearOutTable(t, conn, "twopc_fuzzer_update")
-}
-
-// clearOutTable deletes everything from a table. Sometimes the table might have more rows than allowed in a single delete query,
-// so we have to do the deletions iteratively.
-func clearOutTable(t *testing.T, conn *mysql.Conn, tableName string) {
-	for {
-		res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT count(*) FROM %v", tableName), 1, false)
-		require.NoError(t, err)
-		require.Len(t, res.Rows, 1)
-		require.Len(t, res.Rows[0], 1)
-		rowCount, err := res.Rows[0][0].ToInt()
-		require.NoError(t, err)
-		if rowCount == 0 {
-			return
-		}
-		_, err = conn.ExecuteFetch(fmt.Sprintf("DELETE FROM %v LIMIT 10000", tableName), 10000, false)
-		require.NoError(t, err)
-	}
+	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_insert")
+	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_update")
+	utils.ClearOutTable(t, vtParams, "twopc_t1")
 }

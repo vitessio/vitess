@@ -24,44 +24,33 @@ import (
 )
 
 func TestEmptyPrep(t *testing.T) {
-	pp := NewTxPreparedPool(0)
-	want := "prepared transactions exceeded limit: 0"
+	pp := createAndOpenPreparedPool(0)
 	err := pp.Put(nil, "aa")
-	if err == nil || err.Error() != want {
-		t.Errorf("Put err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "prepared transactions exceeded limit: 0")
 }
 
 func TestPrepPut(t *testing.T) {
-	pp := NewTxPreparedPool(2)
+	pp := createAndOpenPreparedPool(2)
 	err := pp.Put(nil, "aa")
 	require.NoError(t, err)
 	err = pp.Put(nil, "bb")
 	require.NoError(t, err)
-	want := "prepared transactions exceeded limit: 2"
 	err = pp.Put(nil, "cc")
-	if err == nil || err.Error() != want {
-		t.Errorf("Put err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "prepared transactions exceeded limit: 2")
 	err = pp.Put(nil, "aa")
-	want = "duplicate DTID in Prepare: aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("Put err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "duplicate DTID in Prepare: aa")
+
 	_, err = pp.FetchForCommit("aa")
 	require.NoError(t, err)
 	err = pp.Put(nil, "aa")
-	want = "duplicate DTID in Prepare: aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("Put err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "duplicate DTID in Prepare: aa")
 	pp.Forget("aa")
 	err = pp.Put(nil, "aa")
 	require.NoError(t, err)
 }
 
 func TestPrepFetchForRollback(t *testing.T) {
-	pp := NewTxPreparedPool(2)
+	pp := createAndOpenPreparedPool(2)
 	conn := &StatefulConnection{}
 	pp.Put(conn, "aa")
 	got := pp.FetchForRollback("bb")
@@ -79,7 +68,7 @@ func TestPrepFetchForRollback(t *testing.T) {
 }
 
 func TestPrepFetchForCommit(t *testing.T) {
-	pp := NewTxPreparedPool(2)
+	pp := createAndOpenPreparedPool(2)
 	conn := &StatefulConnection{}
 	got, err := pp.FetchForCommit("aa")
 	require.NoError(t, err)
@@ -108,16 +97,22 @@ func TestPrepFetchForCommit(t *testing.T) {
 }
 
 func TestPrepFetchAll(t *testing.T) {
-	pp := NewTxPreparedPool(2)
+	pp := createAndOpenPreparedPool(2)
 	conn1 := &StatefulConnection{}
 	conn2 := &StatefulConnection{}
 	pp.Put(conn1, "aa")
 	pp.Put(conn2, "bb")
-	got := pp.FetchAll()
-	if len(got) != 2 {
-		t.Errorf("FetchAll len: %d, want 2", len(got))
-	}
-	if len(pp.conns) != 0 {
-		t.Errorf("len(pp.conns): %d, want 0", len(pp.conns))
-	}
+	got := pp.FetchAllForRollback()
+	require.Len(t, got, 2)
+	require.Len(t, pp.conns, 0)
+	_, err := pp.FetchForCommit("aa")
+	require.ErrorContains(t, err, "pool is shutdown")
+}
+
+// createAndOpenPreparedPool creates a new transaction prepared pool and opens it.
+// Used as a helper function for testing.
+func createAndOpenPreparedPool(capacity int) *TxPreparedPool {
+	pp := NewTxPreparedPool(capacity)
+	pp.Open()
+	return pp
 }

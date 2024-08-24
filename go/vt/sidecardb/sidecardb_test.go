@@ -18,6 +18,7 @@ package sidecardb
 
 import (
 	"context"
+	"errors"
 	"expvar"
 	"fmt"
 	"sort"
@@ -80,7 +81,7 @@ func TestInitErrors(t *testing.T) {
 		if ok {
 			for _, e := range schemaErrors {
 				if strings.EqualFold(e.tableName, createTable.Table.Name.String()) {
-					return nil, fmt.Errorf(e.errorValue)
+					return nil, errors.New(e.errorValue)
 				}
 			}
 		}

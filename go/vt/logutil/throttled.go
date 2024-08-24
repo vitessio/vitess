@@ -54,6 +54,11 @@ var (
 	errorDepth   = log.ErrorDepth
 )
 
+// GetLastLogTime gets the last log time for the throttled logger.
+func (tl *ThrottledLogger) GetLastLogTime() time.Time {
+	return tl.lastlogTime
+}
+
 func (tl *ThrottledLogger) log(logF logFunc, format string, v ...any) {
 	now := time.Now()
 

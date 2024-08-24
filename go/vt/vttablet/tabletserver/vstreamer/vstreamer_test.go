@@ -51,10 +51,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("show variables like '%s'", variable))
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	if qr.Rows != nil && len(qr.Rows) == 1 {
-		return true
-	}
-	return false
+	return len(qr.Rows) == 1
 }
 
 // TestPlayerNoBlob sets up a new environment with mysql running with
@@ -667,7 +664,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	}()
 	wg.Wait()
 	if errGoroutine != nil {
-		t.Fatalf(errGoroutine.Error())
+		t.Fatal(errGoroutine.Error())
 	}
 }
 

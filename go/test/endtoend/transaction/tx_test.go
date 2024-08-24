@@ -69,9 +69,10 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:             keyspaceName,
+			SchemaSQL:        SchemaSQL,
+			VSchema:          VSchema,
+			DurabilityPolicy: "semi_sync",
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1, err

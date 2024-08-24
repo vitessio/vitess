@@ -301,10 +301,12 @@ func (er *astRewriter) rewriteVariable(cursor *Cursor, node *Variable) {
 	if v, isSet := cursor.Parent().(*SetExpr); isSet && v.Var == node {
 		return
 	}
+	// no rewriting for global scope variable.
+	// this should be returned from the underlying database.
 	switch node.Scope {
 	case VariableScope:
 		er.udvRewrite(cursor, node)
-	case GlobalScope, SessionScope, NextTxScope:
+	case SessionScope, NextTxScope:
 		er.sysVarRewrite(cursor, node)
 	}
 }
