@@ -39,6 +39,8 @@ interface Props {
     name: string;
 }
 
+const SUMMARY_COLUMNS = ['Stream Status', 'Traffic Status', 'Max VReplication Lag', 'Reverse Workflow'];
+
 const LOG_COLUMNS = ['Type', 'State', 'Updated At', 'Message', 'Count'];
 
 const TABLE_COPY_STATE_COLUMNS = ['Table Name', 'Total Bytes', 'Bytes Copied', 'Total Rows', 'Rows Copied'];
@@ -98,6 +100,42 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
             }
         });
         return message;
+    };
+
+    const workflowSummary = {
+        streamSummary: getStreamsSummary(streams),
+        workflowStatus,
+        workflowData,
+        reverseWorkflow,
+    };
+
+    const renderSummaryRows = (rows: (typeof workflowSummary)[]) => {
+        return rows.map((row) => {
+            const reverseWorkflow = row.reverseWorkflow;
+            return (
+                <tr>
+                    <DataCell>{row.streamSummary ? row.streamSummary : '-'}</DataCell>
+                    <DataCell>{row.workflowStatus ? row.workflowStatus.traffic_state : '-'}</DataCell>
+                    <DataCell>
+                        {row.workflowData && row.workflowData.workflow?.max_v_replication_lag
+                            ? `${row.workflowData.workflow?.max_v_replication_lag}`
+                            : '-'}
+                    </DataCell>
+                    <DataCell>
+                        {reverseWorkflow ? (
+                            <Link
+                                to={`/workflow/${reverseWorkflow.cluster?.id}/${reverseWorkflow.keyspace}/${reverseWorkflow.workflow?.name}`}
+                                className="text-base"
+                            >
+                                {reverseWorkflow.workflow?.name}
+                            </Link>
+                        ) : (
+                            '-'
+                        )}
+                    </DataCell>
+                </tr>
+            );
+        });
     };
 
     const renderStreamRows = (rows: typeof streams) => {
@@ -182,48 +220,29 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
 
     return (
         <div className="mt-12 mb-16">
-            <h3 className="mt-8 mb-4">Summary</h3>
-            <p className="text-base my-2">
-                <strong>Streams Status</strong> <br />
-                {getStreamsSummary(streams)}
-            </p>
-            {workflowStatus && (
-                <p className="text-base my-2">
-                    <strong>Traffic Status</strong> <br />
-                    {workflowStatus.traffic_state}
-                </p>
-            )}
-            {workflowData && workflowData.workflow?.max_v_replication_lag && (
-                <p className="text-base my-2">
-                    <strong>Max VReplication Lag</strong> <br />
-                    {`${workflowData.workflow.max_v_replication_lag}`}
-                </p>
-            )}
-            {reverseWorkflow && (
-                <p className="text-base my-2">
-                    <strong>Reverse Workflow</strong> <br />
-                    <div className="text-base">
-                        <Link
-                            to={`/workflow/${reverseWorkflow.cluster?.id}/${reverseWorkflow.keyspace}/${reverseWorkflow.workflow?.name}`}
-                        >
-                            {reverseWorkflow.workflow?.name}
-                        </Link>
-                    </div>
-                </p>
-            )}
+            <DataTable
+                columns={SUMMARY_COLUMNS}
+                data={[workflowSummary]}
+                renderRows={renderSummaryRows}
+                pageSize={1}
+                title="Summary"
+            />
+            <DataTable
+                columns={STREAM_COLUMNS}
+                data={streams}
+                renderRows={renderStreamRows}
+                pageSize={10}
+                title="Streams"
+            />
             {tableCopyStates && (
-                <div>
-                    <h3 className="mt-8 mb-4">Table Copy State</h3>
-                    <DataTable
-                        columns={TABLE_COPY_STATE_COLUMNS}
-                        data={tableCopyStates}
-                        renderRows={renderTableCopyStateRows}
-                        pageSize={1000}
-                    />
-                </div>
+                <DataTable
+                    columns={TABLE_COPY_STATE_COLUMNS}
+                    data={tableCopyStates}
+                    renderRows={renderTableCopyStateRows}
+                    pageSize={1000}
+                    title="Table Copy State"
+                />
             )}
-            <h3 className="mt-8 mb-4">Streams</h3>
-            <DataTable columns={STREAM_COLUMNS} data={streams} renderRows={renderStreamRows} pageSize={10} />
             <h3 className="mt-8 mb-4">Recent Logs</h3>
             {streams.map((stream) => (
                 <div className="mt-2" key={stream.key}>
