@@ -61,6 +61,10 @@ const maxSkewTimeoutSeconds = 10 * 60
 // for a vstream
 const tabletPickerContextTimeout = 90 * time.Second
 
+// stopOnReshardDelay is how long we wait after sending a reshard journal event before ending the stream
+// from the tablet.
+const stopOnReshardDelay = 2 * time.Second
+
 // vstream contains the metadata for one VStream request.
 type vstream struct {
 	// mu protects parts of vgtid, the semantics of a send, and journaler.
@@ -681,13 +685,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						}
 						eventss = nil
 						sendevents = nil
-						// We're going to be stopping the stream anyway, so we pause to give clients
-						// time to recv the journal event before the stream's context is cancelled
-						// (which causes the grpc SendMsg to fail).
-						// If the client doesn't (grpc) Recv the journal event before the stream
-						// ends then they'll have to resume from the last ShardGtid they received
-						// before the journal event.
-						time.Sleep(2 * time.Second)
 					}
 					je, err := vs.getJournalEvent(ctx, sgtid, journal)
 					if err != nil {
@@ -700,6 +697,13 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						case <-ctx.Done():
 							return ctx.Err()
 						case <-journalDone:
+							// We're going to be ending the tablet stream anyway, so we pause to give
+							// clients time to recv the journal event before the stream's context is
+							// cancelled (which causes the grpc SendMsg to fail).
+							// If the client doesn't (grpc) Recv the journal event before the stream
+							// ends then they'll have to resume from the last ShardGtid they received
+							// before the journal event.
+							time.Sleep(stopOnReshardDelay)
 							return io.EOF
 						}
 					}
