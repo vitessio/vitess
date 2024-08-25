@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `migration_context`               varchar(1024)    NOT NULL DEFAULT '',
     `ddl_action`                      varchar(16)      NOT NULL DEFAULT '',
     `message`                         text             NOT NULL,
+    `message_timestamp`               timestamp(6)     NULL     DEFAULT NULL,
     `eta_seconds`                     bigint           NOT NULL DEFAULT '-1',
     `rows_copied`                     bigint unsigned  NOT NULL DEFAULT '0',
     `table_rows`                      bigint           NOT NULL DEFAULT '0',

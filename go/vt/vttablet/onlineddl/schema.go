@@ -209,7 +209,9 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateMessage = `UPDATE _vt.schema_migrations
-			SET message=%a
+			SET
+				message=%a,
+				message_timestamp=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
