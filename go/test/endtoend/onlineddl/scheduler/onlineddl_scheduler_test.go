@@ -1320,6 +1320,7 @@ func testScheduler(t *testing.T) {
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
 			require.Contains(t, message, "errno 1146")
+			require.False(t, row["message_timestamp"].IsNull())
 		}
 	})
 
@@ -1463,6 +1464,7 @@ func testScheduler(t *testing.T) {
 				for _, row := range rs.Named().Rows {
 					message := row["message"].ToString()
 					require.Contains(t, message, vuuids[2]) // Indicating this migration failed due to vuuids[2] failure
+					require.False(t, row["message_timestamp"].IsNull())
 				}
 			}
 		})
