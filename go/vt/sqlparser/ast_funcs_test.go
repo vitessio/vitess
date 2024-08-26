@@ -172,3 +172,50 @@ func TestColumns_Indexes(t *testing.T) {
 		})
 	}
 }
+
+// TestExtractTables verifies the functionality of extracting all the tables from the SQLNode.
+func TestExtractTables(t *testing.T) {
+	tcases := []struct {
+		sql      string
+		expected []string
+	}{{
+		sql:      "select 1 from a",
+		expected: []string{"a"},
+	}, {
+		sql:      "select 1 from a, b",
+		expected: []string{"a", "b"},
+	}, {
+		sql:      "select 1 from a join b on a.id = b.id",
+		expected: []string{"a", "b"},
+	}, {
+		sql:      "select 1 from a join b on a.id = b.id join c on b.id = c.id",
+		expected: []string{"a", "b", "c"},
+	}, {
+		sql:      "select 1 from a join (select id from b) as c on a.id = c.id",
+		expected: []string{"a", "b"},
+	}, {
+		sql:      "(select 1 from a) union (select 1 from b)",
+		expected: []string{"a", "b"},
+	}, {
+		sql:      "select 1 from a where exists (select 1 from (select id from c) b where a.id = b.id)",
+		expected: []string{"a", "c"},
+	}, {
+		sql:      "select 1 from k.a join k.b on a.id = b.id",
+		expected: []string{"k.a", "k.b"},
+	}, {
+		sql:      "select 1 from k.a join l.a on k.a.id = l.a.id",
+		expected: []string{"k.a", "l.a"},
+	}, {
+		sql:      "select 1 from a join (select id from a) as c on a.id = c.id",
+		expected: []string{"a"},
+	}}
+	parser := NewTestParser()
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			stmt, err := parser.Parse(tcase.sql)
+			require.NoError(t, err)
+			tables := ExtractAllTables(stmt)
+			require.Equal(t, tcase.expected, tables)
+		})
+	}
+}
