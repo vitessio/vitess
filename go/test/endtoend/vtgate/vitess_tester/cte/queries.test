@@ -6,6 +6,11 @@ CREATE TABLE employees
     manager_id INT
 );
 
+# Simple recursive CTE using a real table. Select everything from empty table
+with recursive cte as (select * from employees union all select * from cte)
+select *
+from cte;
+
 # Insert data into the tables
 INSERT INTO employees (id, name, manager_id)
 VALUES (1, 'CEO', NULL),
@@ -108,3 +113,114 @@ GROUP BY manager_id;
 with recursive cte as (select 1 as n union all select n+1 from cte)
 select *
 from cte;
+
+# Define recursive CTE and then use it on the RHS of UNION
+WITH RECURSIVE foo AS (SELECT id
+                       FROM employees
+                       WHERE id = 1
+                       UNION ALL
+                       SELECT id + 1
+                       FROM foo
+                       WHERE id < 5)
+SELECT id
+FROM foo;
+
+# Recursive CTE with UNION DISTINCT
+WITH RECURSIVE hierarchy AS (SELECT id, name, manager_id
+                             FROM employees
+                             UNION ALL
+                             SELECT id, name, manager_id
+                             FROM employees
+                             UNION
+                             DISTINCT
+                             SELECT id * 2, name, manager_id
+                             from hierarchy
+                             WHERE id < 10)
+SELECT *
+FROM hierarchy;
+
+# Select with false condition
+with recursive cte as (select * from employees where false union all select * from cte)
+select *
+from cte;
+
+# Select with no matching rows
+with recursive cte as (select * from employees where id > 100 union all select * from cte)
+select *
+from cte;
+
+# Recursive CTE joined with a normal table. Predicate on the outside should not be pushed in
+WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
+                           FROM employees
+                           WHERE manager_id IS NULL
+                           UNION ALL
+                           SELECT e.id, e.name, e.manager_id
+                           FROM employees e
+                                    INNER JOIN emp_cte cte ON e.manager_id = cte.id)
+SELECT *
+FROM emp_cte
+where name = 'Engineer1';
+
+# Query with a recursive CTE in a subquery
+SELECT *
+FROM (SELECT 1 UNION ALL SELECT 2) AS dt(a)
+WHERE EXISTS(WITH RECURSIVE qn AS (SELECT a * 0 AS b UNION ALL SELECT b + 1 FROM qn WHERE b = 0)
+             SELECT *
+             FROM qn
+             WHERE b = a);
+
+# Join with recursive CTE inside a derived table using data from DUAL
+SELECT e.id, e.name, e.manager_id, d.id AS cte_id
+FROM employees e
+         JOIN (WITH RECURSIVE foo AS (SELECT 1 AS id
+                                      UNION ALL
+                                      SELECT id + 1
+                                      FROM foo
+                                      WHERE id < 5)
+               SELECT id
+               FROM foo) d ON e.id = d.id;
+
+# Join with recursive CTE inside a derived table using data from employees table
+SELECT e.id, e.name, e.manager_id, d.id AS cte_id
+FROM employees e
+         JOIN (WITH RECURSIVE foo AS (SELECT id
+                                      FROM employees
+                                      WHERE manager_id IS NULL
+                                      UNION ALL
+                                      SELECT e.id
+                                      FROM employees e
+                                               JOIN foo f ON e.manager_id = f.id)
+               SELECT id
+               FROM foo) d ON e.id = d.id;
+
+# Recursive CTE within an uncorrelated subquery as a select expression
+SELECT e.id,
+       e.name,
+       e.manager_id,
+       (SELECT MAX(cte_id)
+        FROM (WITH RECURSIVE foo AS (SELECT 1 AS cte_id
+                                     UNION ALL
+                                     SELECT cte_id + 1
+                                     FROM foo
+                                     WHERE cte_id < e.id)
+              SELECT cte_id
+              FROM foo) AS recursive_result) AS max_cte_id
+FROM employees e;
+
+# Recursive CTE used twice in the same query
+WITH RECURSIVE employee_hierarchy AS (SELECT id, name, manager_id, 1 AS level
+                                      FROM employees
+                                      WHERE manager_id IS NULL
+                                      UNION ALL
+                                      SELECT e.id, e.name, e.manager_id, h.level + 1
+                                      FROM employees e
+                                               JOIN employee_hierarchy h ON e.manager_id = h.id)
+SELECT h1.id    AS employee_id,
+       h1.name  AS employee_name,
+       h1.level AS employee_level,
+       h2.name  AS manager_name,
+       h2.level AS manager_level
+FROM employee_hierarchy h1
+         LEFT JOIN
+     employee_hierarchy h2 ON h1.manager_id = h2.id
+ORDER BY h1.level, h1.id;
