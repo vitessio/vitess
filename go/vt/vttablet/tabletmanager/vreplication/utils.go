@@ -123,6 +123,17 @@ func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
 	}
+<<<<<<< HEAD
+=======
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		if vterrors.RxWrongTablet.MatchString(err.Error()) {
+			// If the chosen tablet type picked changes, say due to PRS/ERS, we should retry.
+			return false
+		}
+		return true
+	}
+>>>>>>> d1d6bd8864 (VReplication workflows: retry "wrong tablet type" errors (#16645))
 	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 	if !isSQLErr {
 		return false
