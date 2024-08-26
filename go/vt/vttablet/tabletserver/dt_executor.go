@@ -88,7 +88,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// This could be due to ongoing cutover happening in vreplication workflow
 	// regarding OnlineDDL or MoveTables.
 	for _, query := range conn.TxProperties().Queries {
-		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, query.PlanType, query.Tables...)
+		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
 			if act != rules.QRContinue {
@@ -108,7 +108,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// If they are put in the prepared pool, then vreplication workflow waits.
 	// This check helps reject the prepare that came later.
 	for _, query := range conn.TxProperties().Queries {
-		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, query.PlanType, query.Tables...)
+		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
 			if act != rules.QRContinue {

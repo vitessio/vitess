@@ -25,7 +25,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
 type (
@@ -64,9 +63,8 @@ type (
 )
 
 type Query struct {
-	Sql      string
-	PlanType planbuilder.PlanType
-	Tables   []string
+	Sql    string
+	Tables []string
 }
 
 const (
@@ -121,15 +119,32 @@ var txNames = map[ReleaseReason]string{
 	ConnRenewFail: "renewFail",
 }
 
-// RecordQuery records the query against this transaction.
-func (p *Properties) RecordQuery(query string, planType planbuilder.PlanType, tables []string) {
+// RecordQueryDetail records the query and tables against this transaction.
+func (p *Properties) RecordQueryDetail(query string, tables []string) {
 	if p == nil {
 		return
 	}
 	p.Queries = append(p.Queries, Query{
-		Sql:      query,
-		PlanType: planType,
-		Tables:   tables,
+		Sql:    query,
+		Tables: tables,
+	})
+}
+
+// RecordQuery records the query and extract tables against this transaction.
+func (p *Properties) RecordQuery(query string, parser *sqlparser.Parser) {
+	if p == nil {
+		return
+	}
+	stmt, err := parser.Parse(query)
+	if err != nil {
+		// This should neven happen, but if it does,
+		// we would not be able to block cut-overs on this query.
+		return
+	}
+	tables := sqlparser.ExtractAllTables(stmt)
+	p.Queries = append(p.Queries, Query{
+		Sql:    query,
+		Tables: tables,
 	})
 }
 

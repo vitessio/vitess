@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -212,9 +211,8 @@ func TestExecutorPrepareRuleFailure(t *testing.T) {
 	sc, err := tsv.te.txPool.GetAndLock(txid, "adding query property")
 	require.NoError(t, err)
 	sc.txProps.Queries = append(sc.txProps.Queries, tx.Query{
-		Sql:      "update test_table set col = 5",
-		PlanType: planbuilder.PlanUpdate,
-		Tables:   []string{"test_table"},
+		Sql:    "update test_table set col = 5",
+		Tables: []string{"test_table"},
 	})
 	sc.Unlock()
 

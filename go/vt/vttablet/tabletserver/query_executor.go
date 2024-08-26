@@ -806,7 +806,7 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 	}
 	// Only record successful queries.
 	if record {
-		conn.TxProperties().RecordQuery(sql, qre.plan.PlanID, qre.plan.TableNames())
+		conn.TxProperties().RecordQueryDetail(sql, qre.plan.TableNames())
 	}
 	return qr, nil
 }
