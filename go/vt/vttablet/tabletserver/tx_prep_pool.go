@@ -39,19 +39,43 @@ type TxPreparedPool struct {
 	// open tells if the prepared pool is open for accepting transactions.
 	open     bool
 	capacity int
+	// twoPCEnabled is set to true if 2PC is enabled.
+	twoPCEnabled bool
 }
 
 // NewTxPreparedPool creates a new TxPreparedPool.
-func NewTxPreparedPool(capacity int) *TxPreparedPool {
+func NewTxPreparedPool(capacity int, twoPCEnabled bool) *TxPreparedPool {
 	if capacity < 0 {
 		// If capacity is 0 all prepares will fail.
 		capacity = 0
 	}
 	return &TxPreparedPool{
-		conns:    make(map[string]*StatefulConnection, capacity),
-		reserved: make(map[string]error),
-		capacity: capacity,
+		conns:        make(map[string]*StatefulConnection, capacity),
+		reserved:     make(map[string]error),
+		capacity:     capacity,
+		twoPCEnabled: twoPCEnabled,
 	}
+}
+
+// Open marks the prepared pool open for use.
+func (pp *TxPreparedPool) Open() {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	pp.open = true
+}
+
+// Close marks the prepared pool closed.
+func (pp *TxPreparedPool) Close() {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	pp.open = false
+}
+
+// IsOpen checks if the prepared pool is open for use.
+func (pp *TxPreparedPool) IsOpen() bool {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	return pp.open
 }
 
 // Put adds the connection to the pool. It returns an error
@@ -91,27 +115,6 @@ func (pp *TxPreparedPool) FetchForRollback(dtid string) *StatefulConnection {
 	c := pp.conns[dtid]
 	delete(pp.conns, dtid)
 	return c
-}
-
-// Open marks the prepared pool open for use.
-func (pp *TxPreparedPool) Open() {
-	pp.mu.Lock()
-	defer pp.mu.Unlock()
-	pp.open = true
-}
-
-// Close marks the prepared pool closed.
-func (pp *TxPreparedPool) Close() {
-	pp.mu.Lock()
-	defer pp.mu.Unlock()
-	pp.open = false
-}
-
-// IsOpen checks if the prepared pool is open for use.
-func (pp *TxPreparedPool) IsOpen() bool {
-	pp.mu.Lock()
-	defer pp.mu.Unlock()
-	return pp.open
 }
 
 // FetchForCommit returns the connection for commit. Before returning,
@@ -170,9 +173,16 @@ func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	return conns
 }
 
-func (pp *TxPreparedPool) IsPreparedForTable(tableName string) bool {
+func (pp *TxPreparedPool) IsEmpty(tableName string) bool {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+	if !pp.twoPCEnabled {
+		return true
+	}
+	// If the pool is shutdown, we do not know the correct state of prepared transactions.
+	if !pp.open {
+		return false
+	}
 	for _, connection := range pp.conns {
 		for _, query := range connection.txProps.Queries {
 			for _, table := range query.Tables {

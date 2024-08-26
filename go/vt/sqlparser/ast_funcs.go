@@ -2819,8 +2819,8 @@ func Clone[K SQLNode](x K) K {
 	return CloneSQLNode(x).(K)
 }
 
-// ExtractAllTables returns all the table names in the SQLNode
-func ExtractAllTables(node SQLNode) []string {
+// ExtractAllTables returns all the table names in the SQLNode as slice of string
+func ExtractAllTables(stmt Statement) []string {
 	var tables []string
 	tableMap := make(map[string]any)
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
@@ -2836,6 +2836,6 @@ func ExtractAllTables(node SQLNode) []string {
 			}
 		}
 		return true, nil
-	}, node)
+	}, stmt)
 	return tables
 }

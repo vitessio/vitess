@@ -122,7 +122,7 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	// perform metadata state change operations. Without this,
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
-	te.preparedPool = NewTxPreparedPool(config.TxPool.Size - 2)
+	te.preparedPool = NewTxPreparedPool(config.TxPool.Size-2, te.twopcEnabled)
 	readPool := connpool.NewPool(env, "TxReadPool", tabletenv.ConnPoolConfig{
 		Size:        3,
 		IdleTimeout: env.Config().TxPool.IdleTimeout,
