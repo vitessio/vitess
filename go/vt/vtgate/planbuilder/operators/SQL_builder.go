@@ -135,6 +135,8 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	case *sqlparser.Delete:
 		addPred = stmt.AddWhere
 	case nil:
+		// this would happen if we are adding a predicate on a dual query.
+		// we use this when building recursive CTE queries
 		sel := &sqlparser.Select{}
 		addPred = sel.AddWhere
 		qb.stmt = sel
