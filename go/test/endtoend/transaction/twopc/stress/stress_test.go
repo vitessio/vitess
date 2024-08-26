@@ -239,7 +239,7 @@ func mysqlRestartShard3(t *testing.T) error {
 	return syscallutil.Kill(pid, syscall.SIGKILL)
 }
 
-var randomDDL = []string{
+var orderedDDL = []string{
 	"alter table twopc_t1 add column extra_col1 varchar(20)",
 	"alter table twopc_t1 add column extra_col2 varchar(20)",
 	"alter table twopc_t1 add column extra_col3 varchar(20)",
@@ -250,7 +250,7 @@ var count = 0
 
 // onlineDDL runs a DDL statement.
 func onlineDDL(t *testing.T) error {
-	output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, randomDDL[count], cluster.ApplySchemaParams{
+	output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, orderedDDL[count%len(orderedDDL)], cluster.ApplySchemaParams{
 		DDLStrategy: "vitess --force-cut-over-after=1ms",
 	})
 	require.NoError(t, err)
@@ -285,7 +285,11 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		if err != nil {
 			continue
 		}
-		r := utils.Exec(t, conn, query)
+		r, err := utils.ExecAllowError(t, conn, query)
+		conn.Close()
+		if err != nil {
+			continue
+		}
 		for _, row := range r.Named().Rows {
 			shardName := row["shard"].ToString()
 			if !shardNames[shardName] {
