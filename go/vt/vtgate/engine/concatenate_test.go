@@ -124,27 +124,24 @@ func TestConcatenate_NoErrors(t *testing.T) {
 			if !tx {
 				txStr = "NotInTx"
 			}
-			t.Run(fmt.Sprintf("%s-%s-Exec", txStr, tc.testName), func(t *testing.T) {
-				qr, err := concatenate.TryExecute(context.Background(), vcursor, nil, true)
+			checkResult := func(t *testing.T, qr *sqltypes.Result, err error) {
 				if tc.expectedError == "" {
 					require.NoError(t, err)
 					utils.MustMatch(t, tc.expectedResult.Fields, qr.Fields, "fields")
-					utils.MustMatch(t, tc.expectedResult.Rows, qr.Rows)
-				} else {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), tc.expectedError)
-				}
-			})
-
-			t.Run(fmt.Sprintf("%s-%s-StreamExec", txStr, tc.testName), func(t *testing.T) {
-				qr, err := wrapStreamExecute(concatenate, vcursor, nil, true)
-				if tc.expectedError == "" {
-					require.NoError(t, err)
 					require.NoError(t, sqltypes.RowsEquals(tc.expectedResult.Rows, qr.Rows))
 				} else {
 					require.Error(t, err)
 					require.Contains(t, err.Error(), tc.expectedError)
 				}
+			}
+			t.Run(fmt.Sprintf("%s-%s-Exec", txStr, tc.testName), func(t *testing.T) {
+				qr, err := concatenate.TryExecute(context.Background(), vcursor, nil, true)
+				checkResult(t, qr, err)
+			})
+
+			t.Run(fmt.Sprintf("%s-%s-StreamExec", txStr, tc.testName), func(t *testing.T) {
+				qr, err := wrapStreamExecute(concatenate, vcursor, nil, true)
+				checkResult(t, qr, err)
 			})
 		}
 	}
