@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ package balancer
 import (
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -43,17 +45,6 @@ func createTestTablet(cell string) *discovery.TabletHealth {
 		Stats:                nil,
 		PrimaryTermStartTime: 0,
 	}
-}
-
-// allow 2% fuzz
-const FUZZ = 2
-
-func fuzzyEquals(a, b int) bool {
-	diff := a - b
-	if diff < 0 {
-		diff = -diff
-	}
-	return diff < a*FUZZ/100
 }
 
 func TestAllocateFlows(t *testing.T) {
@@ -180,15 +171,13 @@ func TestAllocateFlows(t *testing.T) {
 			a := b.allocateFlows(tablets)
 			b.allocations[discovery.KeyFromTarget(target)] = a
 
-			t.Logf("Target Flows %v, Balancer: %s XXX %d %v \n", expectedPerCell, b.print(), len(b.allocations), b.allocations)
+			t.Logf("Target Flows %v, Balancer: %s, Allocations: %v \n", expectedPerCell, b.print(), b.allocations)
 
 			// Accumulate all the output per tablet cell
 			outflowPerCell := make(map[string]int)
 			for _, outflow := range a.Outflows {
 				for tabletCell, flow := range outflow {
-					if flow < 0 {
-						t.Errorf("balancer %v negative outflow", b.print())
-					}
+					assert.GreaterOrEqual(t, flow, 0, b.print())
 					outflowPerCell[tabletCell] += flow
 				}
 			}
@@ -197,10 +186,12 @@ func TestAllocateFlows(t *testing.T) {
 			for cell := range tabletsByCell {
 				expectedForCell := expectedPerCell[cell]
 
-				if !fuzzyEquals(a.Inflows[cell], expectedForCell) || !fuzzyEquals(outflowPerCell[cell], expectedForCell) {
-					t.Errorf("Balancer {%s} ExpectedPerCell {%v} did not allocate correct flow to cell %s: expected %d, inflow %d outflow %d",
-						b.print(), expectedPerCell, cell, expectedForCell, a.Inflows[cell], outflowPerCell[cell])
-				}
+				assert.InEpsilonf(t, expectedForCell, a.Inflows[cell], 0.01,
+					"did not allocate correct inflow to cell %s. Balancer {%s} ExpectedPerCell {%v}",
+					cell, b.print(), expectedPerCell)
+				assert.InEpsilonf(t, expectedForCell, outflowPerCell[cell], 0.01,
+					"did not allocate correct outflow to cell %s. Balancer {%s} ExpectedPerCell {%v}",
+					cell, b.print(), expectedPerCell)
 			}
 
 			// Accumulate the allocations for all runs to compare what the system does as a whole
@@ -215,10 +206,8 @@ func TestAllocateFlows(t *testing.T) {
 			uid := tablet.Tablet.Alias.Uid
 
 			allocation := allocationPerTablet[uid]
-			if !fuzzyEquals(allocation, expectedPerTablet) {
-				t.Errorf("did not allocate full allocation to tablet %d: expected %d got %d",
-					uid, expectedPerTablet, allocation)
-			}
+			assert.InEpsilonf(t, expectedPerTablet, allocation, 0.01,
+				"did not allocate full allocation to tablet %d", uid)
 		}
 	}
 }
@@ -324,11 +313,9 @@ func TestBalancedPick(t *testing.T) {
 		for _, tablet := range tablets {
 			got := routed[tablet.Tablet.Alias.Uid]
 			delta[tablet.Tablet.Alias.Uid] = got - expected
-			if !fuzzyEquals(got, expected) {
-				t.Errorf("routing to tablet %d got %d expected %d", tablet.Tablet.Alias.Uid, got, expected)
-			}
+			assert.InEpsilonf(t, expected, got, 0.01,
+				"routing to tablet %d", tablet.Tablet.Alias.Uid)
 		}
-		t.Logf("Expected %d per tablet, Routed %v, Delta %v, Max delta %d", N/len(tablets), routed, delta, expected*FUZZ/100)
 	}
 }
 
@@ -353,17 +340,9 @@ func TestTopologyChanged(t *testing.T) {
 		th := b.Pick(target, tablets)
 		allocation, totalAllocation := b.getAllocation(target, tablets)
 
-		if totalAllocation != ALLOCATION/2 {
-			t.Errorf("totalAllocation mismatch %s", b.print())
-		}
-
-		if allocation[th.Tablet.Alias.Uid] != ALLOCATION/4 {
-			t.Errorf("allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
-		}
-
-		if th.Tablet.Alias.Cell != "a" {
-			t.Errorf("shuffle promoted wrong tablet from cell %s", tablets[0].Tablet.Alias.Cell)
-		}
+		assert.Equalf(t, ALLOCATION/2, totalAllocation, "totalAllocation mismatch %s", b.print())
+		assert.Equalf(t, ALLOCATION/4, allocation[th.Tablet.Alias.Uid], "allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
+		assert.Equalf(t, "a", th.Tablet.Alias.Cell, "shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
 	}
 
 	// Run again with the full topology. Now traffic should go to cell b
@@ -372,17 +351,9 @@ func TestTopologyChanged(t *testing.T) {
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)
 
-		if totalAllocation != ALLOCATION/2 {
-			t.Errorf("totalAllocation mismatch %s", b.print())
-		}
-
-		if allocation[th.Tablet.Alias.Uid] != ALLOCATION/4 {
-			t.Errorf("allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
-		}
-
-		if th.Tablet.Alias.Cell != "b" {
-			t.Errorf("shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
-		}
+		assert.Equalf(t, ALLOCATION/2, totalAllocation, "totalAllocation mismatch %s", b.print())
+		assert.Equalf(t, ALLOCATION/4, allocation[th.Tablet.Alias.Uid], "allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
+		assert.Equalf(t, "b", th.Tablet.Alias.Cell, "shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
 	}
 
 	// Run again with a node in the topology replaced.
@@ -393,17 +364,9 @@ func TestTopologyChanged(t *testing.T) {
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)
 
-		if totalAllocation != ALLOCATION/2 {
-			t.Errorf("totalAllocation mismatch %s", b.print())
-		}
-
-		if allocation[th.Tablet.Alias.Uid] != ALLOCATION/4 {
-			t.Errorf("allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
-		}
-
-		if th.Tablet.Alias.Cell != "b" {
-			t.Errorf("shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
-		}
+		assert.Equalf(t, ALLOCATION/2, totalAllocation, "totalAllocation mismatch %s", b.print())
+		assert.Equalf(t, ALLOCATION/4, allocation[th.Tablet.Alias.Uid], "allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
+		assert.Equalf(t, "b", th.Tablet.Alias.Cell, "shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
 	}
 
 }
