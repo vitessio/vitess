@@ -77,3 +77,5 @@ from t1
 where t1.id IN (1, 2)
 group by t2.id, t4.col;
 
+# Dual query that is using tilda operator in a complex expression
+SELECT 1 WHERE (~ (1||0)) IS NULL;

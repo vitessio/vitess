@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "SELECT 1 WHERE (~ (1||0)) IS NULL",
     "plan": {
     }
   }

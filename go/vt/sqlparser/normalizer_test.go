@@ -418,6 +418,13 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.Int64BindVariable(2),
 			"bv3": sqltypes.TestBindVariable([]any{1, 2}),
 		},
+	}, {
+		in:      "SELECT 1 WHERE (~ (1||0)) IS NULL",
+		outstmt: "select :bv1 /* INT64 */ from dual where ~(:bv1 /* INT64 */ or :bv2 /* INT64 */) is null",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.Int64BindVariable(0),
+		},
 	}}
 	parser := NewTestParser()
 	for _, tc := range testcases {
@@ -508,6 +515,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 	err = Normalize(tree, NewReservedVars("vtg", known), bv)
 	require.NoError(t, err)
 	normalizerOutput := String(tree)
+	require.EqualValues(t, testOne.output, normalizerOutput)
 	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 		return
 	}
