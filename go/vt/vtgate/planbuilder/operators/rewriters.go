@@ -227,7 +227,7 @@ func bottomUp(
 	}
 
 	if anythingChanged.Changed() {
-		root = root.Clone(newInputs)
+		root.SetInputs(newInputs)
 	}
 
 	newOp, treeIdentity := rewriter(root, rootID, isRoot)
@@ -257,11 +257,7 @@ func breakableTopDown(
 		}
 	}
 
-	if anythingChanged.Changed() {
-		return newOp, NoRewrite, nil
-	}
-
-	return newOp.Clone(newInputs), anythingChanged, nil
+	return newOp, anythingChanged, nil
 }
 
 // topDown is a helper function that recursively traverses the operator tree from the
@@ -301,7 +297,8 @@ func topDown(
 	}
 
 	if anythingChanged != NoRewrite {
-		return root.Clone(newInputs), anythingChanged
+		root.SetInputs(newInputs)
+		return root, anythingChanged
 	}
 
 	return root, NoRewrite

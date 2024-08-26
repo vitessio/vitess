@@ -2438,5 +2438,128 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Query that can be merged, dual on the RHS of the UNION",
+    "query": "with recursive cte as (select id from user where id = 72 union all select id+1 from cte where id < 100) select * from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id from user where id = 72 union all select id+1 from cte where id < 100) select * from cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select id from `user` where 1 != 1 union all select id + 1 from cte where 1 != 1) select id from cte where 1 != 1",
+        "Query": "with recursive cte as (select id from `user` where id = 72 union all select id + 1 from cte where id < 100) select id from cte",
+        "Table": "`user`, dual",
+        "Values": [
+          "72"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Merge CTE with reference tables",
+    "query": "with recursive cte as (select ue.id, ue.foo from user u join user_extra ue on u.id = ue.user_id union all select sr.id, sr.foo from cte join main.source_of_ref sr on sr.foo = cte.foo join main.rerouted_ref rr on rr.bar = sr.bar) select * from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select ue.id, ue.foo from user u join user_extra ue on u.id = ue.user_id union all select sr.id, sr.foo from cte join main.source_of_ref sr on sr.foo = cte.foo join main.rerouted_ref rr on rr.bar = sr.bar) select * from cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select ue.id, ue.foo from `user` as u, user_extra as ue where 1 != 1 union all select sr.id, sr.foo from ref_with_source as sr, ref as rr where 1 != 1) select id, foo from cte where 1 != 1",
+        "Query": "with recursive cte as (select ue.id, ue.foo from `user` as u, user_extra as ue where u.id = ue.user_id union all select sr.id, sr.foo from ref_with_source as sr, ref as rr where rr.bar = sr.bar and sr.foo = cte.foo) select id, foo from cte",
+        "Table": "`user`, ref, ref_with_source, user_extra"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.ref_with_source",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Merge CTE with reference tables 2",
+    "query": "with recursive cte as (select sr.id, sr.foo from main.source_of_ref sr join main.rerouted_ref rr on rr.bar = sr.bar union all select ue.id, ue.foo from cte join user_extra ue on cte.foo = ue.foo join user u on ue.user_id = u.id) select * from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select sr.id, sr.foo from main.source_of_ref sr join main.rerouted_ref rr on rr.bar = sr.bar union all select ue.id, ue.foo from cte join user_extra ue on cte.foo = ue.foo join user u on ue.user_id = u.id) select * from cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select 1 from ref_with_source as sr, ref as rr where 1 != 1 union all select ue.id, ue.foo from cte, user_extra as ue, `user` as u where 1 != 1) select id, foo from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 from ref_with_source as sr, ref as rr where rr.bar = sr.bar union all select ue.id, ue.foo from cte, user_extra as ue, `user` as u where ue.user_id = u.id and cte.foo = ue.foo) select id, foo from cte",
+        "Table": "`user`, dual, ref, ref_with_source, user_extra"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.ref",
+        "user.ref_with_source",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Merged recursive CTE with DISTINCT",
+    "query": "WITH RECURSIVE hierarchy AS (SELECT id, name, manager_id FROM user UNION ALL SELECT id, name, manager_id FROM user UNION DISTINCT SELECT id*2, name, manager_id from hierarchy WHERE id < 10 ) SELECT * FROM hierarchy",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE hierarchy AS (SELECT id, name, manager_id FROM user UNION ALL SELECT id, name, manager_id FROM user UNION DISTINCT SELECT id*2, name, manager_id from hierarchy WHERE id < 10 ) SELECT * FROM hierarchy",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive hierarchy as (select id, `name`, manager_id from `user` where 1 != 1 union all select id, `name`, manager_id from `user` where 1 != 1 union select id * 2, `name`, manager_id from hierarchy where 1 != 1) select id, `name`, manager_id from hierarchy where 1 != 1",
+        "Query": "with recursive hierarchy as (select id, `name`, manager_id from `user` union all select id, `name`, manager_id from `user` union select id * 2, `name`, manager_id from hierarchy where id < 10) select id, `name`, manager_id from hierarchy",
+        "Table": "`user`, dual"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Query that caused planner to stack overflow",
+    "query": "SELECT * FROM (SELECT 1 UNION ALL SELECT 2) AS dt(a) WHERE EXISTS(WITH RECURSIVE qn AS (SELECT a * 0 AS b UNION ALL SELECT b + 1 FROM qn WHERE b = 0) SELECT * FROM qn WHERE b = a)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM (SELECT 1 UNION ALL SELECT 2) AS dt(a) WHERE EXISTS(WITH RECURSIVE qn AS (SELECT a * 0 AS b UNION ALL SELECT b + 1 FROM qn WHERE b = 0) SELECT * FROM qn WHERE b = a)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select a from (select 1 from dual where 1 != 1 union all select 2 from dual where 1 != 1) as dt(a) where 1 != 1",
+        "Query": "select a from (select 1 from dual union all select 2 from dual) as dt(a) where exists (with recursive qn as (select a * 0 as b from dual union all select b + 1 from qn where b = 0) select 1 from qn where b = a)",
+        "Table": "dual"
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
   }
 ]

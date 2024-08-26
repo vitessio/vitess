@@ -80,9 +80,6 @@ func (a *Aggregator) Inputs() []Operator {
 }
 
 func (a *Aggregator) SetInputs(operators []Operator) {
-	if len(operators) != 1 {
-		panic(fmt.Sprintf("unexpected number of operators as input in aggregator: %d", len(operators)))
-	}
 	a.Source = operators[0]
 }
 

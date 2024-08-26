@@ -209,7 +209,9 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateMessage = `UPDATE _vt.schema_migrations
-			SET message=%a
+			SET
+				message=%a,
+				message_timestamp=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
@@ -304,7 +306,7 @@ const (
 			postpone_completion,
 			force_cutover,
 			cutover_attempts,
-			ifnull(timestampdiff(second, ready_to_complete_timestamp, now()), 0) as seconds_since_ready_to_complete,
+			ifnull(timestampdiff(microsecond, ready_to_complete_timestamp, now(6)), 0) as microseconds_since_ready_to_complete,
 			ifnull(timestampdiff(second, last_cutover_attempt_timestamp, now()), 0) as seconds_since_last_cutover_attempt,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations

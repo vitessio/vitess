@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -56,6 +57,9 @@ type RecurseCTE struct {
 
 	// The OuterID is the id for this use of the CTE
 	OuterID semantics.TableSet
+
+	// Distinct is used to determine if the result set should be distinct
+	Distinct bool
 }
 
 var _ Operator = (*RecurseCTE)(nil)
@@ -67,6 +71,7 @@ func newRecurse(
 	predicates []*plancontext.RecurseExpression,
 	horizon *Horizon,
 	leftID, outerID semantics.TableSet,
+	distinct bool,
 ) *RecurseCTE {
 	for _, pred := range predicates {
 		ctx.AddJoinPredicates(pred.Original, pred.RightExpr)
@@ -79,21 +84,18 @@ func newRecurse(
 		Horizon:    horizon,
 		LeftID:     leftID,
 		OuterID:    outerID,
+		Distinct:   distinct,
 	}
 }
 
 func (r *RecurseCTE) Clone(inputs []Operator) Operator {
-	return &RecurseCTE{
-		Seed:        inputs[0],
-		Term:        inputs[1],
-		Def:         r.Def,
-		Predicates:  r.Predicates,
-		Projections: r.Projections,
-		Vars:        maps.Clone(r.Vars),
-		Horizon:     r.Horizon,
-		LeftID:      r.LeftID,
-		OuterID:     r.OuterID,
-	}
+	klone := *r
+	klone.Seed = inputs[0]
+	klone.Term = inputs[1]
+	klone.Vars = maps.Clone(r.Vars)
+	klone.Predicates = slices.Clone(r.Predicates)
+	klone.Projections = slices.Clone(r.Projections)
+	return &klone
 }
 
 func (r *RecurseCTE) Inputs() []Operator {
@@ -106,8 +108,7 @@ func (r *RecurseCTE) SetInputs(operators []Operator) {
 }
 
 func (r *RecurseCTE) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Expr) Operator {
-	r.Term = newFilter(r, e)
-	return r
+	return newFilter(r, e)
 }
 
 func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, _, _ bool, expr *sqlparser.AliasedExpr) int {
@@ -162,13 +163,17 @@ func (r *RecurseCTE) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.
 }
 
 func (r *RecurseCTE) ShortDescription() string {
+	distinct := ""
+	if r.Distinct {
+		distinct = "distinct "
+	}
 	if len(r.Vars) > 0 {
-		return fmt.Sprintf("%v", r.Vars)
+		return fmt.Sprintf("%s%v", distinct, r.Vars)
 	}
 	expressions := slice.Map(r.expressions(), func(expr *plancontext.RecurseExpression) string {
 		return sqlparser.String(expr.Original)
 	})
-	return fmt.Sprintf("%v %v", r.Def.Name, strings.Join(expressions, ", "))
+	return fmt.Sprintf("%s%v %v", distinct, r.Def.Name, strings.Join(expressions, ", "))
 }
 
 func (r *RecurseCTE) GetOrdering(*plancontext.PlanningContext) []OrderBy {

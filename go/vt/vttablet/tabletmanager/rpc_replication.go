@@ -22,11 +22,10 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
-
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -348,6 +347,15 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	if err != nil {
+		return "", err
+	}
+
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
+
 	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false); err != nil {
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
@@ -365,11 +373,6 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
 	}
@@ -594,6 +597,10 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	if err != nil {
 		return err
 	}
+
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
 
 	// If using semi-sync, we need to enable source-side.
 	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
@@ -911,12 +918,16 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	}
 	defer tm.unlock()
 
-	pos, err := tm.MysqlDaemon.Promote(ctx, tm.hookExtraEnv())
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
 	}
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
+
+	pos, err := tm.MysqlDaemon.Promote(ctx, tm.hookExtraEnv())
 	if err != nil {
 		return "", err
 	}
