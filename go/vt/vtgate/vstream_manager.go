@@ -63,7 +63,7 @@ const tabletPickerContextTimeout = 90 * time.Second
 
 // stopOnReshardDelay is how long we wait, at a minimum, after sending a reshard journal event before
 // ending the stream from the tablet.
-const stopOnReshardDelay = 2 * time.Second
+const stopOnReshardDelay = 500 * time.Millisecond
 
 // vstream contains the metadata for one VStream request.
 type vstream struct {
