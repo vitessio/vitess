@@ -66,9 +66,6 @@ func (u *Update) Inputs() []Operator {
 }
 
 func (u *Update) SetInputs(inputs []Operator) {
-	if len(inputs) != 1 {
-		panic(vterrors.VT13001("unexpected number of inputs for Update operator"))
-	}
 	u.Source = inputs[0]
 }
 
@@ -388,7 +385,6 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 			Ignore:           updStmt.Ignore,
 			Target:           targetTbl,
 			OwnedVindexQuery: ovq,
-			Source:           op,
 		},
 		Assignments:                  assignments,
 		ChangedVindexValues:          cvv,
@@ -397,7 +393,9 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	if len(updStmt.OrderBy) > 0 {
-		addOrdering(ctx, updStmt.OrderBy, updOp)
+		updOp.Source = addOrdering(ctx, op, updStmt.OrderBy)
+	} else {
+		updOp.Source = op
 	}
 
 	if updStmt.Limit != nil {
