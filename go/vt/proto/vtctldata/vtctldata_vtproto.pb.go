@@ -1405,6 +1405,7 @@ func (m *EmergencyReparentShardRequest) CloneVT() *EmergencyReparentShardRequest
 		WaitReplicasTimeout:       m.WaitReplicasTimeout.CloneVT(),
 		PreventCrossCellPromotion: m.PreventCrossCellPromotion,
 		WaitForAllTablets:         m.WaitForAllTablets,
+		CurrentPrimary:            m.CurrentPrimary.CloneVT(),
 	}
 	if rhs := m.IgnoreReplicas; rhs != nil {
 		tmpContainer := make([]*topodata.TabletAlias, len(rhs))
@@ -9786,6 +9787,16 @@ func (m *EmergencyReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.CurrentPrimary != nil {
+		size, err := m.CurrentPrimary.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x42
 	}
 	if m.WaitForAllTablets {
 		i--
@@ -22474,6 +22485,10 @@ func (m *EmergencyReparentShardRequest) SizeVT() (n int) {
 	}
 	if m.WaitForAllTablets {
 		n += 2
+	}
+	if m.CurrentPrimary != nil {
+		l = m.CurrentPrimary.SizeVT()
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -37219,6 +37234,42 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.WaitForAllTablets = bool(v != 0)
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CurrentPrimary", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.CurrentPrimary == nil {
+				m.CurrentPrimary = &topodata.TabletAlias{}
+			}
+			if err := m.CurrentPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

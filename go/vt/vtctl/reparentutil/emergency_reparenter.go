@@ -60,6 +60,7 @@ type EmergencyReparentOptions struct {
 	WaitAllTablets            bool
 	WaitReplicasTimeout       time.Duration
 	PreventCrossCellPromotion bool
+	CurrentPrimaryAlias       *topodatapb.TabletAlias
 
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
@@ -164,6 +165,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 	ev.ShardInfo = *shardInfo
+
+	if opts.CurrentPrimaryAlias != nil && opts.CurrentPrimaryAlias != shardInfo.PrimaryAlias {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "CurrentPrimary %q is not equal to %q", shardInfo.PrimaryAlias, opts.CurrentPrimaryAlias)
+	}
 
 	keyspaceDurability, err := erp.ts.GetKeyspaceDurability(ctx, keyspace)
 	if err != nil {

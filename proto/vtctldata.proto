@@ -680,6 +680,8 @@ message EmergencyReparentShardRequest {
   // WaitForAllTablets makes ERS wait for a response from all the tablets before proceeding.
   // Useful when all the tablets are up and reachable.
   bool wait_for_all_tablets = 7;
+  // CurrentPrimary is the alias we expect to be the current primary.
+  topodata.TabletAlias current_primary = 8;
 }
 
 message EmergencyReparentShardResponse {
