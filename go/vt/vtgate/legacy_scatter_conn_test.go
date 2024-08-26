@@ -370,11 +370,14 @@ func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.R
 }
 
 type recordingResultsObserver struct {
+	mu       sync.Mutex
 	recorded []*sqltypes.Result
 }
 
 func (o *recordingResultsObserver) observe(result *sqltypes.Result) {
+	mu.Lock()
 	o.recorded = append(o.recorded, result)
+	mu.Unlock()
 }
 
 func TestMultiExecs(t *testing.T) {
