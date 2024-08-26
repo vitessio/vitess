@@ -45,9 +45,6 @@ func (d *Delete) Inputs() []Operator {
 }
 
 func (d *Delete) SetInputs(inputs []Operator) {
-	if len(inputs) != 1 {
-		panic(vterrors.VT13001("unexpected number of inputs for Delete operator"))
-	}
 	d.Source = inputs[0]
 }
 
@@ -260,16 +257,16 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 			Ignore:           del.Ignore,
 			Target:           targetTbl,
 			OwnedVindexQuery: ovq,
-			Source:           op,
 		},
 	}
 
 	if del.Limit != nil {
-		addOrdering(ctx, del.OrderBy, delOp)
 		delOp.Source = &Limit{
-			Source: delOp.Source,
+			Source: addOrdering(ctx, op, del.OrderBy),
 			AST:    del.Limit,
 		}
+	} else {
+		delOp.Source = op
 	}
 
 	return sqc.getRootOperator(delOp, nil), vTbl
@@ -302,26 +299,24 @@ func makeColName(col sqlparser.IdentifierCI, table TargetTable, isMultiTbl bool)
 	return sqlparser.NewColName(col.String())
 }
 
-func addOrdering(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy, op Operator) {
+func addOrdering(ctx *plancontext.PlanningContext, op Operator, orderBy sqlparser.OrderBy) Operator {
 	es := &expressionSet{}
-	ordering := &Ordering{}
-	ordering.SetInputs(op.Inputs())
-	for _, order := range orderBy {
-		if sqlparser.IsNull(order.Expr) {
-			// ORDER BY null can safely be ignored
+	var order []OrderBy
+	for _, ord := range orderBy {
+		if sqlparser.IsNull(ord.Expr) || !es.add(ctx, ord.Expr) {
+			// ORDER BY null, or expression repeated can safely be ignored
 			continue
 		}
-		if !es.add(ctx, order.Expr) {
-			continue
-		}
-		ordering.Order = append(ordering.Order, OrderBy{
-			Inner:          sqlparser.Clone(order),
-			SimplifiedExpr: order.Expr,
+
+		order = append(order, OrderBy{
+			Inner:          sqlparser.Clone(ord),
+			SimplifiedExpr: ord.Expr,
 		})
 	}
-	if len(ordering.Order) > 0 {
-		op.SetInputs([]Operator{ordering})
+	if len(order) == 0 {
+		return op
 	}
+	return &Ordering{Source: op, Order: order}
 }
 
 func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator, tblID semantics.TableSet, vTbl *vindexes.Table) *vindexes.Table {
