@@ -297,7 +297,8 @@ func topDown(
 	}
 
 	if anythingChanged != NoRewrite {
-		return root.Clone(newInputs), anythingChanged
+		root.SetInputs(newInputs)
+		return root, anythingChanged
 	}
 
 	return root, NoRewrite

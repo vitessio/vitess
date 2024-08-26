@@ -66,9 +66,6 @@ func (u *Update) Inputs() []Operator {
 }
 
 func (u *Update) SetInputs(inputs []Operator) {
-	if len(inputs) != 1 {
-		panic(vterrors.VT13001("unexpected number of inputs for Update operator"))
-	}
 	u.Source = inputs[0]
 }
 

@@ -45,9 +45,6 @@ func (d *Delete) Inputs() []Operator {
 }
 
 func (d *Delete) SetInputs(inputs []Operator) {
-	if len(inputs) != 1 {
-		panic(vterrors.VT13001("unexpected number of inputs for Delete operator"))
-	}
 	d.Source = inputs[0]
 }
 
