@@ -111,7 +111,6 @@ func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Ro
 	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
 
 	a, b := getRoutingType(routingA), getRoutingType(routingB)
-
 	return lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace
 }
 
