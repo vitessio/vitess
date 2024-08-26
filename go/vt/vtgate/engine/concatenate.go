@@ -253,7 +253,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 		wg            errgroup.Group                             // Wait group for all streaming goroutines
 		rest          = make([]*sqltypes.Result, len(c.Sources)) // Collects first result from each source to derive fields
 		fieldTypes    []evalengine.Type                          // Cached final field types
-		resultFields  []*querypb.Field                           // Final fields that need to be set for any result having fields.
+		resultFields  []*querypb.Field                           // Final fields that need to be set for the first result.
 		needsCoercion = make([]bool, len(c.Sources))             // Tracks if coercion is needed for each individual source
 	)
 
@@ -269,9 +269,6 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 					return err
 				}
 			}
-		}
-		if res.Fields != nil {
-			res.Fields = resultFields
 		}
 		return in(res)
 	}
@@ -312,6 +309,9 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 							needsCoercion[srcIdx] = srcNeedsCoercion
 						}
 
+						// We only need to send the fields in the first result.
+						// We set this field after the coercion check to avoid calculating incorrect needs coercion value.
+						resultChunk.Fields = resultFields
 						muFields.Unlock()
 						defer condFields.Broadcast()
 						return callback(resultChunk, currIndex)
@@ -323,6 +323,8 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 					// This wait call lets go of the muFields lock and acquires it again later after waiting.
 					condFields.Wait()
 				}
+				// We only need to send fields in the first result.
+				resultChunk.Fields = nil
 				muFields.Unlock()
 
 				// Context check to avoid extra work.
@@ -409,6 +411,9 @@ func (c *Concatenate) coerceAndVisitResultsForOneSource(
 			break
 		}
 	}
+	if res[0].Fields != nil {
+		res[0].Fields = fields
+	}
 
 	for _, r := range res {
 		if len(r.Rows) > 0 &&
@@ -423,9 +428,6 @@ func (c *Concatenate) coerceAndVisitResultsForOneSource(
 					return err
 				}
 			}
-		}
-		if r.Fields != nil {
-			r.Fields = fields
 		}
 		err := callback(r)
 		if err != nil {
