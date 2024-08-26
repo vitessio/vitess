@@ -1,6 +1,6 @@
 # Instructions
 {{< info >}}
-For the best experience, please refer to the [Vitess Operator Compatibility Matrix](https://github.com/planetscale/vitess-operator#compatibility) to ensure compatibility between your version of Vitess and Kubernetes.
+For the best experience, please refer to the [Vitess Operator Compatibility Matrix](https://github.com/planetscale/vitess-operator#compatibility) to ensure compatibility between your version of Vitess and Kubernetes. You would then specify the appropriate Kubernetes version to Minikube using the `--kubernetes-version` flag.
 {{< /info >}}
 ```
 # Start minikube
