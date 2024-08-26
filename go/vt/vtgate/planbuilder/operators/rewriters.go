@@ -227,7 +227,7 @@ func bottomUp(
 	}
 
 	if anythingChanged.Changed() {
-		root = root.Clone(newInputs)
+		root.SetInputs(newInputs)
 	}
 
 	newOp, treeIdentity := rewriter(root, rootID, isRoot)
