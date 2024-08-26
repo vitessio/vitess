@@ -385,7 +385,6 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 			Ignore:           updStmt.Ignore,
 			Target:           targetTbl,
 			OwnedVindexQuery: ovq,
-			Source:           op,
 		},
 		Assignments:                  assignments,
 		ChangedVindexValues:          cvv,
@@ -394,7 +393,9 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	if len(updStmt.OrderBy) > 0 {
-		addOrdering(ctx, updStmt.OrderBy, updOp)
+		updOp.Source = addOrdering(ctx, op, updStmt.OrderBy)
+	} else {
+		updOp.Source = op
 	}
 
 	if updStmt.Limit != nil {
