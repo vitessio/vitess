@@ -447,9 +447,10 @@ func TestSidecarDBTables(t *testing.T) {
 		for _, ev := range events {
 			if ev.Type == binlogdatapb.VEventType_ROW {
 				gotRowEvents[ev.RowEvent.TableName]++
-				require.Equal(t, slices.Contains(options.InternalTables, ev.RowEvent.TableName), ev.RowEvent.IsInternal)
+				require.Equal(t, slices.Contains(options.InternalTables, ev.RowEvent.TableName), ev.RowEvent.IsInternalTable)
 			}
 			if ev.Type == binlogdatapb.VEventType_FIELD {
+				require.Equal(t, slices.Contains(options.InternalTables, ev.FieldEvent.TableName), ev.FieldEvent.IsInternalTable)
 				gotFieldEvents[ev.FieldEvent.TableName]++
 			}
 		}

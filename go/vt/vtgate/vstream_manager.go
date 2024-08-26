@@ -579,10 +579,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}()
 
 		var options *binlogdatapb.VStreamOptions
-		const SidecardHeartbeatTableName = "heartbeat"
+		const SidecarDBHeartbeatTableName = "heartbeat"
 		if vs.flags.GetStreamKeyspaceHeartbeats() {
 			options = &binlogdatapb.VStreamOptions{
-				InternalTables: []string{SidecardHeartbeatTableName},
+				InternalTables: []string{SidecarDBHeartbeatTableName},
 			}
 		}
 
