@@ -44,7 +44,7 @@ import (
 )
 
 const (
-	position             = "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97"
+	position             = "MySQL56/9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97"
 	mzSelectFrozenQuery  = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
 	mzCheckJournal       = "/select val from _vt.resharding_journal where id="
 	mzGetCopyState       = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
@@ -55,6 +55,14 @@ const (
 var (
 	defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 )
+
+func gtid(position string) string {
+	arr := strings.Split(position, "/")
+	if len(arr) != 2 {
+		return ""
+	}
+	return arr[1]
+}
 
 func TestStripForeignKeys(t *testing.T) {
 	tcs := []struct {
@@ -577,7 +585,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			sourceShard, err := env.topoServ.GetShardNames(ctx, ms.SourceKeyspace)
 			require.NoError(t, err)
 			want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"%s\" status:\"Running\" info:\"VStream Lag: 0s\"}}} traffic_state:\"Reads Not Switched. Writes Not Switched\"",
-				ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0], position)
+				ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0], gtid(position))
 
 			res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 				Workflow:       ms.Workflow,
@@ -636,7 +644,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 							Uid:  200,
 						},
 						SourceShard: fmt.Sprintf("%s/%s", ms.SourceKeyspace, sourceShard[0]),
-						Position:    position,
+						Position:    gtid(position),
 						Status:      binlogdatapb.VReplicationWorkflowState_Running.String(),
 						Info:        "VStream Lag: 0s",
 					},

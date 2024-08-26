@@ -575,8 +575,19 @@ func TestPlayerForeignKeyCheck(t *testing.T) {
 	cancel()
 }
 
-func TestPlayerStatementModeWithFilter(t *testing.T) {
+// TestPlayerStatementModeWithFilterAndErrorHandling confirms that we get the
+// expected error when using a filter with statement mode. It also tests the
+// general vplayer applyEvent error and log message handling.
+func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
+
+	// We want to check for the expected log message.
+	ole := log.Errorf
+	logger := logutil.NewMemoryLogger()
+	log.Errorf = logger.Errorf
+	defer func() {
+		log.Errorf = ole
+	}()
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
@@ -600,21 +611,29 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
+	const gtid = "37f16b4c-5a74-11ef-87de-56bfd605e62e:100"
 	input := []string{
 		"set @@session.binlog_format='STATEMENT'",
+		fmt.Sprintf("set @@session.gtid_next='%s'", gtid),
 		"insert into src1 values(1, 'aaa')",
+		"set @@session.gtid_next='AUTOMATIC'",
 		"set @@session.binlog_format='ROW'",
 	}
+
+	expectedMsg := fmt.Sprintf("[Ee]rror applying event while processing position .*%s.* filter rules are not supported for SBR.*", gtid)
 
 	// It does not work when filter is enabled
 	output := qh.Expect(
 		"begin",
 		"rollback",
-		"/update _vt.vreplication set message='filter rules are not supported for SBR",
+		fmt.Sprintf("/update _vt.vreplication set message='%s", expectedMsg),
 	)
 
 	execStatements(t, input)
 	expectDBClientQueries(t, output)
+
+	logs := logger.String()
+	require.Regexp(t, expectedMsg, logs)
 }
 
 func TestPlayerStatementMode(t *testing.T) {
@@ -1758,8 +1777,8 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
-		"/update _vt.vreplication set message='Duplicate",
-		"/update _vt.vreplication set state='Error', message='Duplicate",
+		"/update _vt.vreplication set message='error applying event: Duplicate",
+		"/update _vt.vreplication set state='Error', message='error applying event: Duplicate",
 	))
 	cancel()
 

@@ -3856,7 +3856,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		uuid := row["migration_uuid"].ToString()
 		cutoverAttempts := row.AsInt64("cutover_attempts", 0)
 		sinceLastCutoverAttempt := time.Second * time.Duration(row.AsInt64("seconds_since_last_cutover_attempt", 0))
-		sinceReadyToComplete := time.Second * time.Duration(row.AsInt64("seconds_since_ready_to_complete", 0))
+		sinceReadyToComplete := time.Microsecond * time.Duration(row.AsInt64("microseconds_since_ready_to_complete", 0))
 		onlineDDL, migrationRow, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return countRunnning, cancellable, err

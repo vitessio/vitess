@@ -337,7 +337,7 @@ func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE, ou
 		panic(err)
 	}
 
-	return newRecurse(ctx, def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def), outerID)
+	return newRecurse(ctx, def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def), outerID, union.Distinct)
 }
 
 func idForRecursiveTable(ctx *plancontext.PlanningContext, def *semantics.CTE) semantics.TableSet {

@@ -1692,6 +1692,11 @@ func (tsv *TabletServer) RedoPreparedTransactions() {
 	tsv.te.RedoPreparedTransactions()
 }
 
+// SetTwoPCAllowed sets whether TwoPC is allowed or not.
+func (tsv *TabletServer) SetTwoPCAllowed(allowed bool) {
+	tsv.te.twopcAllowed = allowed
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
