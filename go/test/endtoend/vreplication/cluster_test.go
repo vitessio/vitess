@@ -471,9 +471,8 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		SidecarDBName: sidecarDBName,
 	}
 
-	if err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName); err != nil {
-		t.Fatal(err.Error())
-	}
+	err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
+	require.NoError(t, err)
 
 	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
 	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: throttlerConfig.Threshold, CustomQuery: throttlerConfig.Query}
@@ -497,15 +496,13 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 
 	require.NoError(t, vc.AddShards(t, cells, keyspace, shards, numReplicas, numRdonly, tabletIDBase, opts))
 	if schema != "" {
-		if err := vc.VtctlClient.ApplySchema(ksName, schema); err != nil {
-			t.Fatal(err.Error())
-		}
+		err := vc.VtctlClient.ApplySchema(ksName, schema)
+		require.NoError(t, err)
 	}
 	keyspace.Schema = schema
 	if vschema != "" {
-		if err := vc.VtctlClient.ApplyVSchema(ksName, vschema); err != nil {
-			t.Fatal(err.Error())
-		}
+		err := vc.VtctlClient.ApplyVSchema(ksName, vschema)
+		require.NoError(t, err)
 	}
 	keyspace.VSchema = vschema
 
@@ -681,9 +678,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			}
 			for ind, tablet := range tablets {
 				log.Infof("Running Setup() for vttablet %s", tablets[ind].Name)
-				if err := tablet.Vttablet.Setup(); err != nil {
-					t.Fatal(err.Error())
-				}
+				err := tablet.Vttablet.Setup()
+				require.NoError(t, err)
 				// Set time_zone to UTC for all tablets. Without this it fails locally on some MacOS setups.
 				query := "SET GLOBAL time_zone = '+00:00';"
 				qr, err := tablet.Vttablet.QueryTablet(query, tablet.Vttablet.Keyspace, false)
@@ -781,9 +777,8 @@ func (vc *VitessCluster) StartVtgate(t testing.TB, cell *Cell, cellsToWatch stri
 		extraVTGateArgs,
 		vc.ClusterConfig.vtgatePlannerVersion)
 	require.NotNil(t, vtgate)
-	if err := vtgate.Setup(); err != nil {
-		t.Fatal(err.Error())
-	}
+	err := vtgate.Setup()
+	require.NoError(t, err)
 	cell.Vtgates = append(cell.Vtgates, vtgate)
 }
 

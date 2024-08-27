@@ -1862,6 +1862,7 @@ message VDiffCreateRequest {
   bool verbose = 18;
   int64 max_report_sample_rows = 19;
   vttime.Duration max_diff_duration = 20;
+  int64 row_diff_column_truncate_at = 21;
 }
 
 message VDiffCreateResponse {
