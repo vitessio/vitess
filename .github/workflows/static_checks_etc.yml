@@ -52,6 +52,7 @@ jobs:
               - '*.go'
               - 'go.sum'
               - 'go.mod'
+              - '.github/workflows/static_checks_etc.yml'
             parser_changes:
               - 'go/vt/sqlparser/**'
               - 'go.sum'
@@ -118,6 +119,7 @@ jobs:
               - '.github/**'
               - 'Makefile'
               - 'test/ci_workflow_gen.go'
+              - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
