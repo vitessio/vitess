@@ -166,7 +166,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 	ev.ShardInfo = *shardInfo
 
-	if opts.CurrentPrimaryAlias != nil && opts.CurrentPrimaryAlias != shardInfo.PrimaryAlias {
+	if opts.CurrentPrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.CurrentPrimaryAlias, shardInfo.PrimaryAlias) {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "CurrentPrimary %q is not equal to %q", shardInfo.PrimaryAlias, opts.CurrentPrimaryAlias)
 	}
 
