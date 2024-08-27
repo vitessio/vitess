@@ -1405,7 +1405,7 @@ func (m *EmergencyReparentShardRequest) CloneVT() *EmergencyReparentShardRequest
 		WaitReplicasTimeout:       m.WaitReplicasTimeout.CloneVT(),
 		PreventCrossCellPromotion: m.PreventCrossCellPromotion,
 		WaitForAllTablets:         m.WaitForAllTablets,
-		CurrentPrimary:            m.CurrentPrimary.CloneVT(),
+		ExpectedPrimary:           m.ExpectedPrimary.CloneVT(),
 	}
 	if rhs := m.IgnoreReplicas; rhs != nil {
 		tmpContainer := make([]*topodata.TabletAlias, len(rhs))
@@ -9788,8 +9788,8 @@ func (m *EmergencyReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.CurrentPrimary != nil {
-		size, err := m.CurrentPrimary.MarshalToSizedBufferVT(dAtA[:i])
+	if m.ExpectedPrimary != nil {
+		size, err := m.ExpectedPrimary.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -22486,8 +22486,8 @@ func (m *EmergencyReparentShardRequest) SizeVT() (n int) {
 	if m.WaitForAllTablets {
 		n += 2
 	}
-	if m.CurrentPrimary != nil {
-		l = m.CurrentPrimary.SizeVT()
+	if m.ExpectedPrimary != nil {
+		l = m.ExpectedPrimary.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -37236,7 +37236,7 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 			m.WaitForAllTablets = bool(v != 0)
 		case 8:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field CurrentPrimary", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ExpectedPrimary", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -37263,10 +37263,10 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.CurrentPrimary == nil {
-				m.CurrentPrimary = &topodata.TabletAlias{}
+			if m.ExpectedPrimary == nil {
+				m.ExpectedPrimary = &topodata.TabletAlias{}
 			}
-			if err := m.CurrentPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.ExpectedPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

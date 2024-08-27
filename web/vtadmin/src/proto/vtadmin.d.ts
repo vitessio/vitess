@@ -52975,8 +52975,8 @@ export namespace vtctldata {
         /** EmergencyReparentShardRequest wait_for_all_tablets */
         wait_for_all_tablets?: (boolean|null);
 
-        /** EmergencyReparentShardRequest current_primary */
-        current_primary?: (topodata.ITabletAlias|null);
+        /** EmergencyReparentShardRequest expected_primary */
+        expected_primary?: (topodata.ITabletAlias|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -53009,8 +53009,8 @@ export namespace vtctldata {
         /** EmergencyReparentShardRequest wait_for_all_tablets. */
         public wait_for_all_tablets: boolean;
 
-        /** EmergencyReparentShardRequest current_primary. */
-        public current_primary?: (topodata.ITabletAlias|null);
+        /** EmergencyReparentShardRequest expected_primary. */
+        public expected_primary?: (topodata.ITabletAlias|null);
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
