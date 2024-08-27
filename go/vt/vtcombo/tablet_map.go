@@ -254,7 +254,11 @@ func DeleteKs(
 			tablet.tm.Stop()
 			tablet.tm.Close()
 			tablet.qsc.SchemaEngine().Close()
-			err := ts.DeleteTablet(ctx, tablet.alias)
+			err := tablet.qsc.QueryService().Close(ctx)
+			if err != nil {
+				return err
+			}
+			err = ts.DeleteTablet(ctx, tablet.alias)
 			if err != nil {
 				return err
 			}
