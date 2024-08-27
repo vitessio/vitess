@@ -97,15 +97,15 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			return nil, err
 		}
 	case ShowAction:
-		if err := vde.handleShowAction(ctx, dbClient, action, req, resp); err != nil {
+		if err := vde.handleShowAction(ctx, dbClient, req, resp); err != nil {
 			return nil, err
 		}
 	case StopAction:
-		if err := vde.handleStopAction(ctx, dbClient, action, req, resp); err != nil {
+		if err := vde.handleStopAction(ctx, dbClient, req, resp); err != nil {
 			return nil, err
 		}
 	case DeleteAction:
-		if err := vde.handleDeleteAction(ctx, dbClient, action, req, resp); err != nil {
+		if err := vde.handleDeleteAction(ctx, dbClient, req, resp); err != nil {
 			return nil, err
 		}
 	default:
@@ -187,8 +187,8 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 
 	if action == CreateAction {
 		if recordFound {
-			return fmt.Errorf("vdiff with UUID %s already exists on tablet %v",
-				req.VdiffUuid, vde.thisTablet.Alias)
+			return fmt.Errorf("vdiff with UUID %s already exists on tablet %s",
+				req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias))
 		}
 		// Use the options specified via the vdiff create client
 		// command, which we'll then store in the vdiff record.
@@ -219,42 +219,44 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 			return err
 		}
 		if qr.InsertID == 0 {
-			return fmt.Errorf("unable to create vdiff for UUID %s on tablet %v (%w)",
-				req.VdiffUuid, vde.thisTablet.Alias, err)
+			return fmt.Errorf("unable to create vdiff for UUID %s on tablet %s (%w)",
+				req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias), err)
 		}
 		resp.Id = int64(qr.InsertID)
 	} else {
 		if !recordFound {
-			return fmt.Errorf("vdiff with UUID %s not found on tablet %v",
-				req.VdiffUuid, vde.thisTablet.Alias)
+			return fmt.Errorf("vdiff with UUID %s not found on tablet %s",
+				req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias))
 		}
 		if resp.Id, err = qr.Named().Row().ToInt64("id"); err != nil {
-			return fmt.Errorf("vdiff found with invalid id on tablet %v: %w",
-				vde.thisTablet.Alias, err)
+			return fmt.Errorf("vdiff found with invalid id on tablet %s: %w",
+				topoproto.TabletAliasString(vde.thisTablet.Alias), err)
 		}
-		query, err := sqlparser.ParseAndBind(sqlResumeVDiff,
-			sqltypes.StringBindVariable(req.VdiffUuid),
-		)
-		if err != nil {
-			return err
-		}
-		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
-			return err
-		}
-		if qr.RowsAffected == 0 { // See if it's a vdiff that was never started
-			query, err := sqlparser.ParseAndBind(sqlStartVDiff,
+		execResume := func(query string) (rowsAffected uint64, err error) {
+			query, err = sqlparser.ParseAndBind(query,
 				sqltypes.StringBindVariable(req.VdiffUuid),
 			)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
+				return 0, err
+			}
+			return qr.RowsAffected, nil
+		}
+		rowsAffected, err := execResume(sqlResumeVDiff)
+		if err != nil {
+			return err
+		}
+		if rowsAffected == 0 { // See if it's a vdiff that was never started
+			rowsAffected, err := execResume(sqlStartVDiff)
+			if err != nil {
 				return err
 			}
-		}
-		if qr.RowsAffected == 0 {
-			return fmt.Errorf("no completed or stopped vdiff found for UUID %s on tablet %v",
-				req.VdiffUuid, vde.thisTablet.Alias)
+			if rowsAffected == 0 {
+				return fmt.Errorf("no completed or stopped vdiff found for UUID %s on tablet %s",
+					req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias))
+			}
 		}
 	}
 
@@ -266,7 +268,7 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	vdiffRecord := qr.Named().Row()
 	if vdiffRecord == nil {
 		return fmt.Errorf("unable to %s vdiff for UUID %s as it was not found on tablet %v (%w)",
-			action, req.VdiffUuid, vde.thisTablet.Alias, err)
+			action, req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias), err)
 	}
 	if action == ResumeAction {
 		// Use the existing options from the vdiff record.
@@ -286,7 +288,7 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	return nil
 }
 
-func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
+func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.DBClient, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
 	var qr *sqltypes.Result
 	vdiffUUID := ""
 
@@ -326,8 +328,8 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 		}
 		switch len(qr.Rows) {
 		case 0:
-			return fmt.Errorf("no vdiff found for UUID %s keyspace %s and workflow %s on tablet %v",
-				vdiffUUID, req.Keyspace, req.Workflow, vde.thisTablet.Alias)
+			return fmt.Errorf("no vdiff found for UUID %s keyspace %s and workflow %s on tablet %s",
+				vdiffUUID, req.Keyspace, req.Workflow, topoproto.TabletAliasString(vde.thisTablet.Alias))
 		case 1:
 			row := qr.Named().Row()
 			vdiffID, _ := row["id"].ToInt64()
@@ -337,8 +339,8 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 				return err
 			}
 		default:
-			return fmt.Errorf("too many vdiffs found (%d) for UUID %s keyspace %s and workflow %s on tablet %v",
-				len(qr.Rows), vdiffUUID, req.Keyspace, req.Workflow, vde.thisTablet.Alias)
+			return fmt.Errorf("too many vdiffs found (%d) for UUID %s keyspace %s and workflow %s on tablet %s",
+				len(qr.Rows), vdiffUUID, req.Keyspace, req.Workflow, topoproto.TabletAliasString(vde.thisTablet.Alias))
 		}
 	}
 	switch req.ActionArg {
@@ -365,7 +367,7 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 	return nil
 }
 
-func (vde *Engine) handleStopAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
+func (vde *Engine) handleStopAction(ctx context.Context, dbClient binlogplayer.DBClient, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
 	vde.mu.Lock()
 	defer vde.mu.Unlock()
 	for _, controller := range vde.controllers {
@@ -380,7 +382,7 @@ func (vde *Engine) handleStopAction(ctx context.Context, dbClient binlogplayer.D
 	return nil
 }
 
-func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
+func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer.DBClient, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
 	vde.mu.Lock()
 	defer vde.mu.Unlock()
 	var deleteQuery string
@@ -439,8 +441,8 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		}
 		row := res.Named().Row() // Must only be one
 		if row == nil {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID %s on tablet %v",
-				uuid, vde.thisTablet.Alias)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID %s on tablet %s",
+				uuid, topoproto.TabletAliasString(vde.thisTablet.Alias))
 		}
 		cleanupController(vde.controllers[row.AsInt64("id", -1)])
 		deleteQuery, err = sqlparser.ParseAndBind(sqlDeleteVDiffByUUID,
