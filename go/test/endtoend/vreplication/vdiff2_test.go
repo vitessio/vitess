@@ -385,8 +385,9 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			TabletTypes: "replica,primary,rdonly",
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			MaxSampleRows: 888,
-			OnlyPks:       true,
+			MaxSampleRows:           888,
+			OnlyPks:                 true,
+			RowDiffColumnTruncateAt: 444,
 		},
 	}
 
@@ -404,6 +405,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			fmt.Sprintf("--update-table-stats=%t", expectedOptions.CoreOptions.UpdateTableStats),
 			fmt.Sprintf("--auto-retry=%t", expectedOptions.CoreOptions.AutoRetry),
 			fmt.Sprintf("--only-pks=%t", expectedOptions.ReportOptions.OnlyPks),
+			fmt.Sprintf("--row-diff-column-truncate-at=%d", expectedOptions.ReportOptions.RowDiffColumnTruncateAt),
 			"--tablet-types-in-preference-order=false", // So tablet_types should not start with "in_order:", which is the default
 			"--format=json") // So we can easily grab the UUID
 		require.NoError(t, err, "vdiff command failed: %s", res)
