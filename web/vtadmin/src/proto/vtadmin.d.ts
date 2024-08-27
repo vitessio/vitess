@@ -29648,6 +29648,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions max_sample_rows */
         max_sample_rows?: (number|Long|null);
+
+        /** VDiffReportOptions row_diff_column_truncate_at */
+        row_diff_column_truncate_at?: (number|Long|null);
     }
 
     /** Represents a VDiffReportOptions. */
@@ -29670,6 +29673,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions max_sample_rows. */
         public max_sample_rows: (number|Long);
+
+        /** VDiffReportOptions row_diff_column_truncate_at. */
+        public row_diff_column_truncate_at: (number|Long);
 
         /**
          * Creates a new VDiffReportOptions instance using the specified properties.
@@ -71479,6 +71485,9 @@ export namespace vtctldata {
         /** VDiffCreateRequest max_diff_duration */
         max_diff_duration?: (vttime.IDuration|null);
 
+        /** VDiffCreateRequest row_diff_column_truncate_at */
+        row_diff_column_truncate_at?: (number|Long|null);
+
         /** VDiffCreateRequest do_not_start */
         do_not_start?: (boolean|null);
     }
@@ -71551,6 +71560,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest max_diff_duration. */
         public max_diff_duration?: (vttime.IDuration|null);
+
+        /** VDiffCreateRequest row_diff_column_truncate_at. */
+        public row_diff_column_truncate_at: (number|Long);
 
         /** VDiffCreateRequest do_not_start. */
         public do_not_start: boolean;

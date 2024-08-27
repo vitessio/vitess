@@ -1821,9 +1821,10 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			DoNotStart:            req.GetDoNotStart(),
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPks:       req.OnlyPKs,
-			DebugQuery:    req.DebugQuery,
-			MaxSampleRows: req.MaxReportSampleRows,
+			OnlyPks:                 req.OnlyPKs,
+			DebugQuery:              req.DebugQuery,
+			MaxSampleRows:           req.MaxReportSampleRows,
+			RowDiffColumnTruncateAt: req.RowDiffColumnTruncateAt,
 		},
 	}
 
