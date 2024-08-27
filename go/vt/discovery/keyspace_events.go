@@ -684,8 +684,12 @@ func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(ctx context.Context, target
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
 	if state, ok := ks.shards[target.Shard]; ok {
-		// If the primary tablet was present then externallyReparented will be non-zero and
-		// currentPrimary will be not nil.
+		// The first time we receive an update for a serving primary, we set the externallyReparented value and currentPrimary values.
+		// These never get reset, so the last two checks checking for them being non-empty is purely for defensive reasons, so that we don't
+		// return that the primary is not serving when there is no primary that the keyspace event watcher has seen yet.
+		// The reason this function returns if the Primary is not serving and not just if it is serving, because we want to very defensive in when we say
+		// the primary is not serving. This function is used to start buffering and we don't want to start buffering when we don't know for sure if the primary
+		// is not serving and we will receive an update that stops buffering soon.
 		return state.currentPrimary, !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
 	}
 	return nil, false
