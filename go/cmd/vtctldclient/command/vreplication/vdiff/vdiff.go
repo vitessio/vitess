@@ -69,7 +69,7 @@ var (
 		WaitUpdateInterval          time.Duration
 		AutoRetry                   bool
 		MaxDiffDuration             time.Duration
-		AutoStart                   bool
+		DoNotStart                  bool
 	}{}
 
 	deleteOptions = struct {
@@ -297,7 +297,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		AutoRetry:                   createOptions.AutoRetry,
 		MaxReportSampleRows:         createOptions.MaxReportSampleRows,
 		MaxDiffDuration:             protoutil.DurationToProto(createOptions.MaxDiffDuration),
-		AutoStart:                   createOptions.AutoStart,
+		DoNotStart:                  createOptions.DoNotStart,
 	})
 
 	if err != nil {
@@ -891,7 +891,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().BoolVar(&createOptions.AutoRetry, "auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors.")
 	create.Flags().BoolVar(&createOptions.UpdateTableStats, "update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the VDiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
 	create.Flags().DurationVar(&createOptions.MaxDiffDuration, "max-diff-duration", 0, "How long should an individual table diff run before being stopped and restarted in order to lessen the impact on tablets due to holding open database snapshots for long periods of time (0 is the default and means no time limit).")
-	create.Flags().BoolVar(&createOptions.AutoStart, "auto-start", true, "Start the vdiff upon creation. When false, the vdiff will be created but will not run until resumed.")
+	create.Flags().BoolVar(&createOptions.DoNotStart, "do-not-start", false, "Don't start the vdiff upon creation. When specified, the vdiff will be created but will not run until resumed.")
 	base.AddCommand(create)
 
 	base.AddCommand(delete)

@@ -669,7 +669,7 @@ message VDiffCoreOptions {
   int64 max_extra_rows_to_compare = 7;
   bool update_table_stats = 8;
   int64 max_diff_seconds = 9;
-  bool auto_start = 10;
+  bool do_not_start = 10;
 }
 
 message VDiffOptions {
