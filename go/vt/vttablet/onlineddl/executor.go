@@ -178,7 +178,7 @@ type Executor struct {
 	ts                    *topo.Server
 	lagThrottler          *throttle.Throttler
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool)
-	IsPreparedPoolEmpty   func(tableName string) bool
+	isPreparedPoolEmpty   func(tableName string) bool
 	requestGCChecksFunc   func()
 	tabletAlias           *topodatapb.TabletAlias
 
@@ -257,7 +257,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		ts:                    ts,
 		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
-		IsPreparedPoolEmpty:   isPreparedPoolEmpty,
+		isPreparedPoolEmpty:   isPreparedPoolEmpty,
 		requestGCChecksFunc:   requestGCChecksFunc,
 		ticks:                 timer.NewTimer(migrationCheckInterval),
 		// Gracefully return an error if any caller tries to execute
@@ -5357,7 +5357,7 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
 }
 
 func (e *Executor) checkOnPreparedPool(ctx context.Context, table string, waitTime time.Duration) error {
-	if e.IsPreparedPoolEmpty(table) {
+	if e.isPreparedPoolEmpty(table) {
 		return nil
 	}
 
@@ -5366,7 +5366,7 @@ func (e *Executor) checkOnPreparedPool(ctx context.Context, table string, waitTi
 		// Return context error if context is done
 		return ctx.Err()
 	case <-time.After(waitTime):
-		if e.IsPreparedPoolEmpty(table) {
+		if e.isPreparedPoolEmpty(table) {
 			return nil
 		}
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot force cut-over on non-empty prepared pool for table: %s", table)
