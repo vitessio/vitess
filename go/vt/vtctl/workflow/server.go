@@ -1927,9 +1927,9 @@ func (s *Server) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRe
 	}
 
 	if len(targetShards) > 0 {
-		for k, target := range ts.targets {
-			if !slices.Contains(targetShards, key.KeyRangeString(target.GetShard().GetKeyRange())) {
-				delete(ts.targets, k)
+		for key, target := range ts.targets {
+			if !slices.Contains(targetShards, target.GetShard().ShardName()) {
+				delete(ts.targets, key)
 			}
 		}
 	}
@@ -2012,9 +2012,9 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 	}
 
 	if len(targetShards) > 0 {
-		for k, target := range ts.targets {
-			if !slices.Contains(targetShards, key.KeyRangeString(target.GetShard().GetKeyRange())) {
-				delete(ts.targets, k)
+		for key, target := range ts.targets {
+			if !slices.Contains(targetShards, target.GetShard().ShardName()) {
+				delete(ts.targets, key)
 			}
 		}
 	}
