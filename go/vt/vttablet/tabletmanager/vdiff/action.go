@@ -208,7 +208,7 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 			return err
 		}
 		state := PendingState
-		if options.GetCoreOptions().GetAutoStart() {
+		if !options.GetCoreOptions().GetAutoStart() {
 			state = StoppedState
 		}
 		query, err := sqlparser.ParseAndBind(sqlNewVDiff,
