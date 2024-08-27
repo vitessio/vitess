@@ -66,6 +66,27 @@ func Append(buf *strings.Builder, node SQLNode) {
 	node.FormatFast(tbuf)
 }
 
+func createAndExpr(exprL, exprR Expr) *AndExpr {
+	leftAnd, isLeftAnd := exprL.(*AndExpr)
+	rightAnd, isRightAnd := exprR.(*AndExpr)
+	if isLeftAnd && isRightAnd {
+		return &AndExpr{
+			Predicates: append(leftAnd.Predicates, rightAnd.Predicates...),
+		}
+	}
+	if isLeftAnd {
+		leftAnd.Predicates = append(leftAnd.Predicates, exprR)
+		return leftAnd
+	}
+	if isRightAnd {
+		rightAnd.Predicates = append([]Expr{exprL}, rightAnd.Predicates...)
+		return rightAnd
+	}
+	return &AndExpr{
+		Predicates: Exprs{exprL, exprR},
+	}
+}
+
 // IndexColumn describes a column or expression in an index definition with optional length (for column)
 type IndexColumn struct {
 	// Only one of Column or Expression can be specified
@@ -1239,10 +1260,8 @@ func addPredicate(where *Where, pred Expr) *Where {
 			Expr: pred,
 		}
 	}
-	where.Expr = &AndExpr{
-		Left:  where.Expr,
-		Right: pred,
-	}
+
+	where.Expr = createAndExpr(where.Expr, pred)
 	return where
 }
 
@@ -2336,8 +2355,7 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	}
 	switch node := node.(type) {
 	case *AndExpr:
-		filters = SplitAndExpression(filters, node.Left)
-		return SplitAndExpression(filters, node.Right)
+		return append(filters, node.Predicates...)
 	}
 	return append(filters, node)
 }
@@ -2350,26 +2368,30 @@ func AndExpressions(exprs ...Expr) Expr {
 	case 1:
 		return exprs[0]
 	default:
-		result := (Expr)(nil)
-	outer:
+		var unique Exprs
 		// we'll loop and remove any duplicates
-		for i, expr := range exprs {
-			if expr == nil {
-				continue
-			}
-			if result == nil {
-				result = expr
-				continue outer
-			}
-
-			for j := 0; j < i; j++ {
-				if Equals.Expr(expr, exprs[j]) {
-					continue outer
+		uniqueAdd := func(e Expr) {
+			for _, existing := range unique {
+				if Equals.Expr(e, existing) {
+					return
 				}
 			}
-			result = &AndExpr{Left: result, Right: expr}
+			unique = append(unique, e)
 		}
-		return result
+
+		for _, expr := range exprs {
+			switch expr := expr.(type) {
+			case *AndExpr:
+				for _, p := range expr.Predicates {
+					uniqueAdd(p)
+				}
+			case nil:
+				continue
+			default:
+				uniqueAdd(expr)
+			}
+		}
+		return &AndExpr{Predicates: unique}
 	}
 }
 

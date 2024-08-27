@@ -231,10 +231,7 @@ func (g *Generator) makeAggregateIfNecessary(genConfig ExprGeneratorConfig, expr
 	// if the generated expression must be an aggregate, and it is not,
 	// tack on an extra "and count(*)" to make it aggregate
 	if genConfig.AggrRule == IsAggregate && !g.isAggregate && g.depth == 0 {
-		expr = &AndExpr{
-			Left:  expr,
-			Right: &CountStar{},
-		}
+		expr = createAndExpr(expr, &CountStar{})
 		g.isAggregate = true
 	}
 
@@ -269,7 +266,7 @@ func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.orExpr(genConfig) },
 		func() Expr { return g.comparison(genConfig.intTypeConfig()) },
 		func() Expr { return g.comparison(genConfig.stringTypeConfig()) },
-		//func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
+		// func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
 		func() Expr { return g.inExpr(genConfig) },
 		func() Expr { return g.existsExpr(genConfig) },
 		func() Expr { return g.between(genConfig.intTypeConfig()) },
@@ -374,7 +371,7 @@ func (g *Generator) randomBool(prob float32) bool {
 }
 
 func (g *Generator) intLiteral() Expr {
-	t := fmt.Sprintf("%d", rand.IntN(100)-rand.IntN(100)) //nolint SA4000
+	t := fmt.Sprintf("%d", rand.IntN(100)-rand.IntN(100)) // nolint SA4000
 
 	return NewIntLiteral(t)
 }
@@ -477,10 +474,10 @@ func (g *Generator) randomOfS(options []string) string {
 func (g *Generator) andExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
-	return &AndExpr{
-		Left:  g.Expression(genConfig),
-		Right: g.Expression(genConfig),
-	}
+	return createAndExpr(
+		g.Expression(genConfig),
+		g.Expression(genConfig),
+	)
 }
 
 func (g *Generator) orExpr(genConfig ExprGeneratorConfig) Expr {

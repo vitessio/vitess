@@ -811,11 +811,10 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Left, f); err != nil {
-		return err
-	}
-	if err := VisitExpr(in.Right, f); err != nil {
-		return err
+	for _, el := range in.Predicates {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -209,10 +209,10 @@ func TestAndExpressions(t *testing.T) {
 				equalExpr,
 				equalExpr,
 			},
-			expectedOutput: &AndExpr{
-				Left:  greaterThanExpr,
-				Right: equalExpr,
-			},
+			expectedOutput: &AndExpr{Predicates: Exprs{
+				greaterThanExpr,
+				equalExpr,
+			}},
 		},
 		{
 			name: "two equal inputs",

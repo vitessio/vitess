@@ -1863,8 +1863,7 @@ func (cmp *Comparator) RefOfAndExpr(a, b *AndExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Left, b.Left) &&
-		cmp.Expr(a.Right, b.Right)
+	return cmp.SliceOfExpr(a.Predicates, b.Predicates)
 }
 
 // RefOfAnyValue does deep equals between the two objects.
@@ -7246,6 +7245,19 @@ func (cmp *Comparator) SliceOfIdentifierCI(a, b []IdentifierCI) bool {
 	return true
 }
 
+// SliceOfExpr does deep equals between the two objects.
+func (cmp *Comparator) SliceOfExpr(a, b []Expr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.Expr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // SliceOfTxAccessMode does deep equals between the two objects.
 func (cmp *Comparator) SliceOfTxAccessMode(a, b []TxAccessMode) bool {
 	if len(a) != len(b) {
@@ -7348,19 +7360,6 @@ func (cmp *Comparator) SliceOfRefOfVariable(a, b []*Variable) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !cmp.RefOfVariable(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// SliceOfExpr does deep equals between the two objects.
-func (cmp *Comparator) SliceOfExpr(a, b []Expr) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.Expr(a[i], b[i]) {
 			return false
 		}
 	}

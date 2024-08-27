@@ -1088,15 +1088,14 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
-		parent.(*AndExpr).Left = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
-		parent.(*AndExpr).Right = newNode.(Expr)
-	}) {
-		return false
+	for x, el := range node.Predicates {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*AndExpr).Predicates[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

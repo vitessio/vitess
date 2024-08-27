@@ -1297,7 +1297,13 @@ func (node Exprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AndExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%l and %r", node.Left, node.Right)
+	for idx, expr := range node.Predicates {
+		if idx == len(node.Predicates)-1 {
+			buf.astPrintf(node, "%r", expr)
+			continue
+		}
+		buf.astPrintf(node, "%l and ", expr)
+	}
 }
 
 // Format formats the node.

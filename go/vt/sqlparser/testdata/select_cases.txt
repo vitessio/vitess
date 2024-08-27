@@ -3872,7 +3872,7 @@ INPUT
 select a1,a2,b,min(c) from t1 where ((a1 > 'a') or (a1 < '9')) and ((a2 >= 'b') and (a2 < 'z')) and (b = 'a') and ((c < 'h112') or (c = 'j121') or (c > 'k121' and c < 'm122') or (c > 'o122')) group by a1,a2,b;
 END
 OUTPUT
-select a1, a2, b, min(c) from t1 where (a1 > 'a' or a1 < '9') and (a2 >= 'b' and a2 < 'z') and b = 'a' and (c < 'h112' or c = 'j121' or c > 'k121' and c < 'm122' or c > 'o122') group by a1, a2, b
+select a1, a2, b, min(c) from t1 where (a1 > 'a' or a1 < '9') and a2 >= 'b' and a2 < 'z' and b = 'a' and (c < 'h112' or c = 'j121' or c > 'k121' and c < 'm122' or c > 'o122') group by a1, a2, b
 END
 INPUT
 select a, quote(a), isnull(quote(a)), quote(a) is null, ifnull(quote(a), 'n') from t1;
@@ -6434,7 +6434,7 @@ INPUT
 select distinct t1.project_id as project_id, t1.project_name as project_name, t1.client_ptr as client_ptr, t1.comments as comments, sum( t3.amount_received ) + sum( t3.adjustment ) as total_budget from t2 as client_period , t2 as project_period, t3 left join t1 on (t3.project_ptr = t1.project_id and t3.date_received <= '2001-03-22 14:15:09') left join t4 on t4.client_id = t1.client_ptr where 1 and ( client_period.period_type = 'client_table' and client_period.period_key = t4.client_id and ( client_period.start_date <= '2001-03-22 14:15:09' or isnull( client_period.start_date )) and ( client_period.end_date > '2001-03-21 14:15:09' or isnull( client_period.end_date )) ) and ( project_period.period_type = 'project_table' and project_period.period_key = t1.project_id and ( project_period.start_date <= '2001-03-22 14:15:09' or isnull( project_period.start_date )) and ( project_period.end_date > '2001-03-21 14:15:09' or isnull( project_period.end_date )) ) group by client_id, project_id , client_period.period_id , project_period.period_id order by client_name asc, project_name asc;
 END
 OUTPUT
-select distinct t1.project_id as project_id, t1.project_name as project_name, t1.client_ptr as client_ptr, t1.comments as comments, sum(t3.amount_received) + sum(t3.adjustment) as total_budget from t2 as client_period, t2 as project_period, t3 left join t1 on t3.project_ptr = t1.project_id and t3.date_received <= '2001-03-22 14:15:09' left join t4 on t4.client_id = t1.client_ptr where 1 and (client_period.period_type = 'client_table' and client_period.period_key = t4.client_id and (client_period.start_date <= '2001-03-22 14:15:09' or isnull(client_period.start_date)) and (client_period.end_date > '2001-03-21 14:15:09' or isnull(client_period.end_date))) and (project_period.period_type = 'project_table' and project_period.period_key = t1.project_id and (project_period.start_date <= '2001-03-22 14:15:09' or isnull(project_period.start_date)) and (project_period.end_date > '2001-03-21 14:15:09' or isnull(project_period.end_date))) group by client_id, project_id, client_period.period_id, project_period.period_id order by client_name asc, project_name asc
+select distinct t1.project_id as project_id, t1.project_name as project_name, t1.client_ptr as client_ptr, t1.comments as comments, sum(t3.amount_received) + sum(t3.adjustment) as total_budget from t2 as client_period, t2 as project_period, t3 left join t1 on t3.project_ptr = t1.project_id and t3.date_received <= '2001-03-22 14:15:09' left join t4 on t4.client_id = t1.client_ptr where 1 and client_period.period_type = 'client_table' and client_period.period_key = t4.client_id and (client_period.start_date <= '2001-03-22 14:15:09' or isnull(client_period.start_date)) and (client_period.end_date > '2001-03-21 14:15:09' or isnull(client_period.end_date)) and project_period.period_type = 'project_table' and project_period.period_key = t1.project_id and (project_period.start_date <= '2001-03-22 14:15:09' or isnull(project_period.start_date)) and (project_period.end_date > '2001-03-21 14:15:09' or isnull(project_period.end_date)) group by client_id, project_id, client_period.period_id, project_period.period_id order by client_name asc, project_name asc
 END
 INPUT
 select a1,a2,b,min(c) from t2 where b is NULL group by a1,a2;
@@ -9368,7 +9368,7 @@ INPUT
 select a1,a2,b,min(c) from t1 where ((a1 > 'a') or (a1 < '9')) and ((a2 >= 'b') and (a2 < 'z')) and (b = 'a') and ((c = 'j121') or (c > 'k121' and c < 'm122') or (c > 'o122') or (c < 'h112') or (c = 'c111')) group by a1,a2,b;
 END
 OUTPUT
-select a1, a2, b, min(c) from t1 where (a1 > 'a' or a1 < '9') and (a2 >= 'b' and a2 < 'z') and b = 'a' and (c = 'j121' or c > 'k121' and c < 'm122' or c > 'o122' or c < 'h112' or c = 'c111') group by a1, a2, b
+select a1, a2, b, min(c) from t1 where (a1 > 'a' or a1 < '9') and a2 >= 'b' and a2 < 'z' and b = 'a' and (c = 'j121' or c > 'k121' and c < 'm122' or c > 'o122' or c < 'h112' or c = 'c111') group by a1, a2, b
 END
 INPUT
 select count(distinct n1) from t1;
@@ -10886,7 +10886,7 @@ INPUT
 select a1,a2,b,min(c) from t2 where ((a1 > 'a') or (a1 < '9')) and ((a2 >= 'b') and (a2 < 'z')) and (b = 'a') and ((c = 'j121') or (c > 'k121' and c < 'm122') or (c > 'o122') or (c < 'h112') or (c = 'c111')) group by a1,a2,b;
 END
 OUTPUT
-select a1, a2, b, min(c) from t2 where (a1 > 'a' or a1 < '9') and (a2 >= 'b' and a2 < 'z') and b = 'a' and (c = 'j121' or c > 'k121' and c < 'm122' or c > 'o122' or c < 'h112' or c = 'c111') group by a1, a2, b
+select a1, a2, b, min(c) from t2 where (a1 > 'a' or a1 < '9') and a2 >= 'b' and a2 < 'z' and b = 'a' and (c = 'j121' or c > 'k121' and c < 'm122' or c > 'o122' or c < 'h112' or c = 'c111') group by a1, a2, b
 END
 INPUT
 select * from t1 where a > 5 xor a < 10;
@@ -20882,7 +20882,7 @@ INPUT
 select a1,a2,b,min(c) from t2 where ((a1 > 'a') or (a1 < '9')) and ((a2 >= 'b') and (a2 < 'z')) and (b = 'a') and ((c < 'h112') or (c = 'j121') or (c > 'k121' and c < 'm122') or (c > 'o122')) group by a1,a2,b;
 END
 OUTPUT
-select a1, a2, b, min(c) from t2 where (a1 > 'a' or a1 < '9') and (a2 >= 'b' and a2 < 'z') and b = 'a' and (c < 'h112' or c = 'j121' or c > 'k121' and c < 'm122' or c > 'o122') group by a1, a2, b
+select a1, a2, b, min(c) from t2 where (a1 > 'a' or a1 < '9') and a2 >= 'b' and a2 < 'z' and b = 'a' and (c < 'h112' or c = 'j121' or c > 'k121' and c < 'm122' or c > 'o122') group by a1, a2, b
 END
 INPUT
 select group_concat(c1 order by c1) from t1 group by c1 collate utf8_latvian_ci;

@@ -97,10 +97,7 @@ func (p *Parser) NormalizeAlphabetically(query string) (normalized string, err e
 					Expr: expr,
 				}
 			} else {
-				newWhere.Expr = &AndExpr{
-					Left:  newWhere.Expr,
-					Right: expr,
-				}
+				newWhere.Expr = AndExpressions(newWhere.Expr, expr)
 			}
 		}
 		switch stmt := stmt.(type) {

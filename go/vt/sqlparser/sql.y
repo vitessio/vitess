@@ -5306,7 +5306,7 @@ expression:
   }
 | expression AND expression %prec AND
   {
-    $$ = &AndExpr{Left: $1, Right: $3}
+    $$ = createAndExpr($1,$3)
   }
 | NOT expression %prec NOT
   {

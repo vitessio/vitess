@@ -319,15 +319,17 @@ func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
-	}
-	// field Left vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Left.(cachedObject); ok {
-		size += cc.CachedSize(true)
+		size += int64(64)
 	}
 	// field Right vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Right.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field Predicates vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Predicates)) * int64(16))
+		for _, elem := range cached.Predicates {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
 	return size
 }

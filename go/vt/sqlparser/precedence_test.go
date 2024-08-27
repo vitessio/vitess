@@ -18,10 +18,13 @@ package sqlparser
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/slice"
 )
 
 func readable(node Expr) string {
@@ -29,7 +32,10 @@ func readable(node Expr) string {
 	case *OrExpr:
 		return fmt.Sprintf("(%s or %s)", readable(node.Left), readable(node.Right))
 	case *AndExpr:
-		return fmt.Sprintf("(%s and %s)", readable(node.Left), readable(node.Right))
+		predicates := slice.Map(node.Predicates, func(from Expr) string {
+			return readable(from)
+		})
+		return fmt.Sprintf("(%s)", strings.Join(predicates, " and "))
 	case *XorExpr:
 		return fmt.Sprintf("(%s xor %s)", readable(node.Left), readable(node.Right))
 	case *BinaryExpr:
@@ -153,7 +159,7 @@ func TestParens(t *testing.T) {
 		{in: "((((((1000))))))", expected: "1000"},
 		{in: "100 - (50 + 10)", expected: "100 - (50 + 10)"},
 		{in: "100 - 50 + 10", expected: "100 - 50 + 10"},
-		{in: "true and (true and true)", expected: "true and (true and true)"},
+		{in: "true and (true and true)", expected: "true and true and true"},
 		{in: "10 - 2 - 1", expected: "10 - 2 - 1"},
 		{in: "(10 - 2) - 1", expected: "10 - 2 - 1"},
 		{in: "10 - (2 - 1)", expected: "10 - (2 - 1)"},
@@ -193,6 +199,6 @@ func TestRandom(t *testing.T) {
 
 		// Then the unparsing should be the same as the input query
 		outputOfParseResult := String(parsedInput)
-		require.Equal(t, outputOfParseResult, inputQ)
+		require.Equal(t, inputQ, outputOfParseResult)
 	}
 }

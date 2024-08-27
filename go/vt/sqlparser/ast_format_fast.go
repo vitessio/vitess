@@ -1684,9 +1684,14 @@ func (node Exprs) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *AndExpr) FormatFast(buf *TrackedBuffer) {
-	buf.printExpr(node, node.Left, true)
-	buf.WriteString(" and ")
-	buf.printExpr(node, node.Right, false)
+	for idx, expr := range node.Predicates {
+		if idx == len(node.Predicates)-1 {
+			buf.printExpr(node, expr, false)
+			continue
+		}
+		buf.printExpr(node, expr, true)
+		buf.WriteString(" and ")
+	}
 }
 
 // FormatFast formats the node.
