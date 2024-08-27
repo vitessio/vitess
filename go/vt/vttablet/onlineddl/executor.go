@@ -1110,8 +1110,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if shouldForceCutOver {
 		// We should only proceed with forceful cut over if there is no pending atomic transaction for the table.
 		// This will help in keeping the atomicity guarantee of a prepared transaction.
-		if !e.IsPreparedPoolEmpty(onlineDDL.Table) {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot force cut-over on non-empty prepared pool for table: %s", onlineDDL.Table)
+		if err := e.checkOnPreparedPool(onlineDDL.Table, 100*time.Millisecond, 1); err != nil {
+			return err
 		}
 		if err := e.killTableLockHoldersAndAccessors(ctx, onlineDDL.Table); err != nil {
 			return err
@@ -5354,4 +5354,16 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
 	}
 
 	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct, etaSeconds, rowsCopied, hint)
+}
+
+func (e *Executor) checkOnPreparedPool(table string, waitTime time.Duration, retries int) error {
+	for i := 0; i <= retries; i++ {
+		if e.IsPreparedPoolEmpty(table) {
+			return nil
+		}
+		if i < retries {
+			time.Sleep(waitTime)
+		}
+	}
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot force cut-over on non-empty prepared pool for table: %s", table)
 }
