@@ -69,6 +69,7 @@ var (
 		WaitUpdateInterval          time.Duration
 		AutoRetry                   bool
 		MaxDiffDuration             time.Duration
+		AutoStart                   bool
 	}{}
 
 	deleteOptions = struct {
@@ -76,7 +77,8 @@ var (
 	}{}
 
 	resumeOptions = struct {
-		UUID uuid.UUID
+		UUID         uuid.UUID
+		TargetShards []string
 	}{}
 
 	showOptions = struct {
@@ -85,7 +87,8 @@ var (
 	}{}
 
 	stopOptions = struct {
-		UUID uuid.UUID
+		UUID         uuid.UUID
+		TargetShards []string
 	}{}
 
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
@@ -887,15 +890,18 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().BoolVar(&createOptions.AutoRetry, "auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors.")
 	create.Flags().BoolVar(&createOptions.UpdateTableStats, "update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the VDiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
 	create.Flags().DurationVar(&createOptions.MaxDiffDuration, "max-diff-duration", 0, "How long should an individual table diff run before being stopped and restarted in order to lessen the impact on tablets due to holding open database snapshots for long periods of time (0 is the default and means no time limit).")
+	create.Flags().BoolVar(&createOptions.AutoStart, "auto-start", true, "Start the VDiff upon creation. When false, the VDiff will be created but will not run until resumed.")
 	base.AddCommand(create)
 
 	base.AddCommand(delete)
 
+	create.Flags().StringSliceVar(&resumeOptions.TargetShards, "target-shards", nil, "The target shards to resume the VDiff on; default is all shards.")
 	base.AddCommand(resume)
 
 	show.Flags().BoolVar(&showOptions.Verbose, "verbose", false, "Show verbose output in summaries")
 	base.AddCommand(show)
 
+	create.Flags().StringSliceVar(&stopOptions.TargetShards, "target-shards", nil, "The target shards to stop the VDiff on; default is all shards.")
 	base.AddCommand(stop)
 }
 
