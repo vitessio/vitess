@@ -164,7 +164,7 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 
 func (gw *TabletGateway) setupBalancer(ctx context.Context) {
 	if len(balancerVtgateCells) == 0 {
-		log.Exitf("balancer_vtgate_cells is required for balanced mode")
+		log.Exitf("balancer-vtgate-cells is required for balanced mode")
 	}
 	gw.balancer = balancer.NewTabletBalancer(gw.localCell, balancerVtgateCells)
 }
