@@ -328,6 +328,7 @@ $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,frouioui/lite:$*}
 
 docker_lite_push:
+	echo "pushing lite image: latest" && docker push frouioui/lite:latest
 	for i in $(DOCKER_LITE_SUFFIX); do echo "pushing lite image: $$i"; docker push frouioui/lite:$$i || exit 1; done
 
 docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
