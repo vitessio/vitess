@@ -41,9 +41,9 @@ As part of this transition we need to ensure that we redo the prepared transacti
 During an Online DDL cutover, we need to ensure that all the prepared transactions on the online DDL table needs to be completed before we can proceed with the cutover. 
 This is because the cutover involves a schema change and we cannot have any prepared transactions that are dependent on the old schema.
 
-In Online DDL code, once it adds query rules to buffer new queries on the table.
-It now checks for any open prepared transaction on the table and waits for 100ms. 
-If it becomes empty then it moves forwards otherwise it fails the cutover and retry later.
+As part of the cut-over process, Online DDL adds query rules to buffer new queries on the table.
+It then checks for any open prepared transaction on the table and waits for up to 100ms if found, then checks again.
+If it finds no prepared transaction of the table, it moves forward with the cut-over, otherwise it fails. The Online DDL mechanism will later retry the cut-over.
 
 In the Prepare code, we check the query rules before adding the transaction to the prepared list and re-check the rules before storing the transaction logs in the transaction redo table.
 Any transaction that went past the first check will fail the second check if the cutover proceeds.
