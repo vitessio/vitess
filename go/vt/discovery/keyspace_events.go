@@ -717,7 +717,9 @@ func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context,
 
 			// Get the keyspace status and see it is consistent yet or not.
 			kss := kew.getKeyspaceStatus(ctx, ks)
-			if kss.consistent {
+			// If kss is nil, then it must be deleted. In that case too it is fine for us to consider
+			// it consistent since the keyspace has been deleted.
+			if kss == nil || kss.consistent {
 				keyspaces[i] = ""
 			} else {
 				allConsistent = false

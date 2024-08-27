@@ -200,12 +200,12 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 		return err
 	}
 	// After having waited for all serving tablets. We should also wait for the keyspace event watcher to have seen
-	// the updates and marked all the keyspaces as consistent.
+	// the updates and marked all the keyspaces as consistent (if we want to wait for primary tablets).
 	// Otherwise, we could be in a situation where even though the healthchecks have arrived, the keyspace event watcher hasn't finished processing them.
 	// So, if a primary tablet goes non-serving (because of a PRS or some other reason), we won't be able to start buffering.
 	// Waiting for the keyspaces to become consistent ensures that all the primary tablets for all the shards should be serving as seen by the keyspace event watcher
 	// and any disruption from now on, will make sure we start buffering properly.
-	if gw.kev != nil {
+	if topoproto.IsTypeInList(topodatapb.TabletType_PRIMARY, tabletTypesToWait) && gw.kev != nil {
 		return gw.kev.WaitForConsistentKeyspaces(ctx, keyspaces)
 	}
 	return nil
