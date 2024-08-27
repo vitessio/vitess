@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
@@ -702,4 +703,42 @@ func (kew *KeyspaceEventWatcher) GetServingKeyspaces() []string {
 		}
 	}
 	return servingKeyspaces
+}
+
+// WaitForConsistentKeyspaces waits for the given set of keyspaces to be marked consistent.
+func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context, keyspaces []string) error {
+	for {
+		// We empty keyspaces as we find them to be consistent.
+		allConsistent := true
+		for i, ks := range keyspaces {
+			if ks == "" {
+				continue
+			}
+
+			// Get the keyspace status and see it is consistent yet or not.
+			kss := kew.getKeyspaceStatus(ctx, ks)
+			if kss.consistent {
+				keyspaces[i] = ""
+			} else {
+				allConsistent = false
+			}
+		}
+
+		if allConsistent {
+			// all the keyspaces are consistent.
+			return nil
+		}
+
+		// Unblock after the sleep or when the context has expired.
+		select {
+		case <-ctx.Done():
+			for _, ks := range keyspaces {
+				if ks != "" {
+					log.Infof("keyspace %v didn't become consistent", ks)
+				}
+			}
+			return ctx.Err()
+		case <-time.After(waitConsistentKeyspacesCheck):
+		}
+	}
 }

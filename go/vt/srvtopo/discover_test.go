@@ -49,7 +49,7 @@ func (a TargetArray) Less(i, j int) bool {
 	return a[i].TabletType < a[j].TabletType
 }
 
-func TestFindAllTargets(t *testing.T) {
+func TestFindAllTargetsAndKeyspaces(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
@@ -65,7 +65,7 @@ func TestFindAllTargets(t *testing.T) {
 	rs := NewResilientServer(ctx, ts, counts)
 
 	// No keyspace / shards.
-	ks, err := FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
+	ks, _, err := FindAllTargetsAndKeyspaces(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	assert.NoError(t, err)
 	assert.Len(t, ks, 0)
 
@@ -84,7 +84,7 @@ func TestFindAllTargets(t *testing.T) {
 	}))
 
 	// Get it.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
+	ks, _, err = FindAllTargetsAndKeyspaces(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []*querypb.Target{
 		{
@@ -96,7 +96,7 @@ func TestFindAllTargets(t *testing.T) {
 	}, ks)
 
 	// Get any keyspace.
-	ks, err = FindAllTargets(ctx, rs, "cell1", nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
+	ks, _, err = FindAllTargetsAndKeyspaces(ctx, rs, "cell1", nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []*querypb.Target{
 		{
@@ -130,7 +130,7 @@ func TestFindAllTargets(t *testing.T) {
 	}))
 
 	// Get it for any keyspace, all types.
-	ks, err = FindAllTargets(ctx, rs, "cell1", nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
+	ks, _, err = FindAllTargetsAndKeyspaces(ctx, rs, "cell1", nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
 	assert.NoError(t, err)
 	sort.Sort(TargetArray(ks))
 	assert.EqualValues(t, []*querypb.Target{
@@ -155,7 +155,7 @@ func TestFindAllTargets(t *testing.T) {
 	}, ks)
 
 	// Only get 1 keyspace for all types.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace2"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
+	ks, _, err = FindAllTargetsAndKeyspaces(ctx, rs, "cell1", []string{"test_keyspace2"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []*querypb.Target{
 		{
@@ -173,7 +173,7 @@ func TestFindAllTargets(t *testing.T) {
 	}, ks)
 
 	// Only get the REPLICA targets for any keyspace.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []string{}, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	ks, _, err = FindAllTargetsAndKeyspaces(ctx, rs, "cell1", []string{}, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 	assert.NoError(t, err)
 	assert.Equal(t, []*querypb.Target{
 		{
@@ -185,7 +185,7 @@ func TestFindAllTargets(t *testing.T) {
 	}, ks)
 
 	// Get non-existent keyspace.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"doesnt-exist"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
+	ks, _, err = FindAllTargetsAndKeyspaces(ctx, rs, "cell1", []string{"doesnt-exist"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
 	assert.NoError(t, err)
 	assert.Len(t, ks, 0)
 }
