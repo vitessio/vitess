@@ -4013,7 +4013,7 @@ type EmergencyReparentShardRequest struct {
 	// Useful when all the tablets are up and reachable.
 	WaitForAllTablets bool `protobuf:"varint,7,opt,name=wait_for_all_tablets,json=waitForAllTablets,proto3" json:"wait_for_all_tablets,omitempty"`
 	// ExpectedPrimary is the optional alias we expect to be the current primary in order for
-	// the reparent request to succeed.
+	// the reparent operation to succeed.
 	ExpectedPrimary *topodata.TabletAlias `protobuf:"bytes,8,opt,name=expected_primary,json=expectedPrimary,proto3" json:"expected_primary,omitempty"`
 }
 

@@ -681,7 +681,7 @@ message EmergencyReparentShardRequest {
   // Useful when all the tablets are up and reachable.
   bool wait_for_all_tablets = 7;
   // ExpectedPrimary is the optional alias we expect to be the current primary in order for
-  // the reparent request to succeed.
+  // the reparent operation to succeed.
   topodata.TabletAlias expected_primary = 8;
 }
 
