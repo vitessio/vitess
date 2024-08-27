@@ -214,7 +214,7 @@ func shortCircuitTestAfterQuery(query string, dbClient *binlogplayer.MockDBClien
 	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'Error: Short circuiting test')", singleRowAffected, nil)
 }
 
-//--------------------------------------
+// --------------------------------------
 // Topos and tablets
 
 // fakeTabletConn implement TabletConn interface. We only care about the
@@ -250,7 +250,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return vdiffenv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
+	return vdiffenv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, nil)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
@@ -284,7 +284,7 @@ func (ftc *fakeTabletConn) Close(ctx context.Context) error {
 	return nil
 }
 
-//--------------------------------------
+// --------------------------------------
 // Binlog Client to TabletManager
 
 // fakeBinlogClient satisfies binlogplayer.Client.
@@ -345,7 +345,7 @@ func (bts *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 	return nil, bts.ctx.Err()
 }
 
-//--------------------------------------
+// --------------------------------------
 // DBCLient wrapper
 
 func realDBClientFactory() binlogplayer.DBClient {
@@ -428,7 +428,7 @@ func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapabi
 	return dbc.conn.SupportsCapability(capability)
 }
 
-//----------------------------------------------
+// ----------------------------------------------
 // fakeTMClient
 
 type fakeTMClient struct {

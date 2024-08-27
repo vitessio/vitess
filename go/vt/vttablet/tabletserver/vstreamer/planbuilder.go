@@ -64,6 +64,9 @@ type Plan struct {
 	EnumSetValuesMap map[int](map[int]string)
 
 	env *vtenv.Environment
+
+	// IsInternal is set to true if the plan is for a sidecar table.
+	IsInternal bool
 }
 
 // Opcode enumerates the operators supported in a where clause
