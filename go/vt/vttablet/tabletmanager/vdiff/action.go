@@ -207,10 +207,14 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		if err != nil {
 			return err
 		}
+		state := PendingState
+		if options.GetCoreOptions().GetAutoStart() {
+			state = StoppedState
+		}
 		query, err := sqlparser.ParseAndBind(sqlNewVDiff,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
-			sqltypes.StringBindVariable("pending"),
+			sqltypes.StringBindVariable(string(state)),
 			sqltypes.StringBindVariable(string(optionsJSON)),
 			sqltypes.StringBindVariable(vde.thisTablet.Shard),
 			sqltypes.StringBindVariable(topoproto.TabletDbName(vde.thisTablet)),
