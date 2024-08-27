@@ -126,7 +126,12 @@ func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	if vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		if vterrors.RxWrongTablet.MatchString(err.Error()) {
+			// If the chosen tablet type picked changes, say due to PRS/ERS, we should retry.
+			return false
+		}
 		return true
 	}
 	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
