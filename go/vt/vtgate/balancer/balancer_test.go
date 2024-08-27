@@ -301,7 +301,6 @@ func TestBalancedPick(t *testing.T) {
 				th := b.Pick(target, tablets)
 				if i == 0 {
 					t.Logf("Target Flows %v, Balancer: %s\n", expectedPerCell, b.print())
-					t.Logf(b.print())
 				}
 
 				routed[th.Tablet.Alias.Uid]++
