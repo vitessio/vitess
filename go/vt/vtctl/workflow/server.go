@@ -1906,9 +1906,12 @@ func (s *Server) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRe
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffResume")
 	defer span.Finish()
 
+	targetShards := req.GetTargetShards()
+
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("target_shards", targetShards)
 
 	tabletreq := &tabletmanagerdatapb.VDiffRequest{
 		Keyspace:  req.TargetKeyspace,
@@ -1920,6 +1923,14 @@ func (s *Server) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRe
 	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(targetShards) > 0 {
+		for k, target := range ts.targets {
+			if !slices.Contains(targetShards, key.KeyRangeString(target.GetShard().GetKeyRange())) {
+				delete(ts.targets, k)
+			}
+		}
 	}
 
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
@@ -1980,9 +1991,12 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffStop")
 	defer span.Finish()
 
+	targetShards := req.GetTargetShards()
+
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("target_shards", targetShards)
 
 	tabletreq := &tabletmanagerdatapb.VDiffRequest{
 		Keyspace:  req.TargetKeyspace,
@@ -1994,6 +2008,14 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(targetShards) > 0 {
+		for k, target := range ts.targets {
+			if !slices.Contains(targetShards, key.KeyRangeString(target.GetShard().GetKeyRange())) {
+				delete(ts.targets, k)
+			}
+		}
 	}
 
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {

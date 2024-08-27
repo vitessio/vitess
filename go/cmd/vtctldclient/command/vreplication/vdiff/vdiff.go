@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
@@ -193,6 +194,13 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 				return fmt.Errorf("invalid UUID provided: %v", err)
 			}
 			resumeOptions.UUID = uuid
+
+			for _, shard := range resumeOptions.TargetShards {
+				if !key.IsValidKeyRange(shard) {
+					return fmt.Errorf("invalid target shard provided: %s", shard)
+				}
+			}
+
 			return nil
 		},
 		RunE: commandResume,
@@ -238,6 +246,13 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 				return fmt.Errorf("invalid UUID provided: %v", err)
 			}
 			stopOptions.UUID = uuid
+
+			for _, shard := range stopOptions.TargetShards {
+				if !key.IsValidKeyRange(shard) {
+					return fmt.Errorf("invalid target shard provided: %s", shard)
+				}
+			}
+
 			return nil
 		},
 		RunE: commandStop,
@@ -381,6 +396,7 @@ func commandResume(cmd *cobra.Command, args []string) error {
 		Workflow:       common.BaseOptions.Workflow,
 		TargetKeyspace: common.BaseOptions.TargetKeyspace,
 		Uuid:           resumeOptions.UUID.String(),
+		TargetShards:   resumeOptions.TargetShards,
 	})
 
 	if err != nil {
@@ -860,6 +876,7 @@ func commandStop(cmd *cobra.Command, args []string) error {
 		Workflow:       common.BaseOptions.Workflow,
 		TargetKeyspace: common.BaseOptions.TargetKeyspace,
 		Uuid:           stopOptions.UUID.String(),
+		TargetShards:   stopOptions.TargetShards,
 	})
 
 	if err != nil {

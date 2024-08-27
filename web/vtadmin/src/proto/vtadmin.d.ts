@@ -71941,6 +71941,9 @@ export namespace vtctldata {
 
         /** VDiffResumeRequest uuid */
         uuid?: (string|null);
+
+        /** VDiffResumeRequest target_shards */
+        target_shards?: (string[]|null);
     }
 
     /** Represents a VDiffResumeRequest. */
@@ -71960,6 +71963,9 @@ export namespace vtctldata {
 
         /** VDiffResumeRequest uuid. */
         public uuid: string;
+
+        /** VDiffResumeRequest target_shards. */
+        public target_shards: string[];
 
         /**
          * Creates a new VDiffResumeRequest instance using the specified properties.
@@ -72347,6 +72353,9 @@ export namespace vtctldata {
 
         /** VDiffStopRequest uuid */
         uuid?: (string|null);
+
+        /** VDiffStopRequest target_shards */
+        target_shards?: (string[]|null);
     }
 
     /** Represents a VDiffStopRequest. */
@@ -72366,6 +72375,9 @@ export namespace vtctldata {
 
         /** VDiffStopRequest uuid. */
         public uuid: string;
+
+        /** VDiffStopRequest target_shards. */
+        public target_shards: string[];
 
         /**
          * Creates a new VDiffStopRequest instance using the specified properties.
