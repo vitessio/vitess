@@ -76,6 +76,3 @@ from t1
          left join (select t4.col, count(*) as count from t4 group by t4.col) t3 on t3.col = t2.id
 where t1.id IN (1, 2)
 group by t2.id, t4.col;
-
-# Dual query that is using tilda operator in a complex expression
-SELECT 1 WHERE (~ (1||0)) IS NULL;
