@@ -98,9 +98,6 @@ var (
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
 
-	// waitConsistentKeyspacesCheck is the amount of time to wait for between checks to verify the keyspace is consistent.
-	waitConsistentKeyspacesCheck = 100 * time.Millisecond
-
 	// HealthCheckCacheTemplate uses healthCheckTemplate with the `HealthCheck Tablet - Cache` title to create the
 	// HTML code required to render the cache of the HealthCheck.
 	HealthCheckCacheTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck - Cache")

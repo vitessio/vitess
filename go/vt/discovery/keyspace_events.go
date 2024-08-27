@@ -38,6 +38,11 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
+var (
+	// waitConsistentKeyspacesCheck is the amount of time to wait for between checks to verify the keyspace is consistent.
+	waitConsistentKeyspacesCheck = 100 * time.Millisecond
+)
+
 // KeyspaceEventWatcher is an auxiliary watcher that watches all availability incidents
 // for all keyspaces in a Vitess cell and notifies listeners when the events have been resolved.
 // Right now this is capable of detecting the end of failovers, both planned and unplanned,
