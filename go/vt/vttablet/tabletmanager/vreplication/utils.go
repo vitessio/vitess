@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"strconv"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -123,8 +126,6 @@ func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
 	}
-<<<<<<< HEAD
-=======
 	switch vterrors.Code(err) {
 	case vtrpcpb.Code_FAILED_PRECONDITION:
 		if vterrors.RxWrongTablet.MatchString(err.Error()) {
@@ -133,7 +134,6 @@ func isUnrecoverableError(err error) bool {
 		}
 		return true
 	}
->>>>>>> d1d6bd8864 (VReplication workflows: retry "wrong tablet type" errors (#16645))
 	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 	if !isSQLErr {
 		return false
