@@ -184,20 +184,12 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		return err
 	}
 	recordFound := len(qr.Rows) == 1
-	if recordFound && action == CreateAction {
-		return fmt.Errorf("vdiff with UUID %s already exists on tablet %v",
-			req.VdiffUuid, vde.thisTablet.Alias)
-	} else if action == ResumeAction {
-		if !recordFound {
-			return fmt.Errorf("vdiff with UUID %s not found on tablet %v",
+
+	if action == CreateAction {
+		if recordFound {
+			return fmt.Errorf("vdiff with UUID %s already exists on tablet %v",
 				req.VdiffUuid, vde.thisTablet.Alias)
 		}
-		if resp.Id, err = qr.Named().Row().ToInt64("id"); err != nil {
-			return fmt.Errorf("vdiff found with invalid id on tablet %v: %w",
-				vde.thisTablet.Alias, err)
-		}
-	}
-	if action == CreateAction {
 		// Use the options specified via the vdiff create client
 		// command, which we'll then store in the vdiff record.
 		if options, err = vde.fixupOptions(options); err != nil {
@@ -232,6 +224,14 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		}
 		resp.Id = int64(qr.InsertID)
 	} else {
+		if !recordFound {
+			return fmt.Errorf("vdiff with UUID %s not found on tablet %v",
+				req.VdiffUuid, vde.thisTablet.Alias)
+		}
+		if resp.Id, err = qr.Named().Row().ToInt64("id"); err != nil {
+			return fmt.Errorf("vdiff found with invalid id on tablet %v: %w",
+				vde.thisTablet.Alias, err)
+		}
 		query, err := sqlparser.ParseAndBind(sqlResumeVDiff,
 			sqltypes.StringBindVariable(req.VdiffUuid),
 		)
@@ -240,6 +240,17 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		}
 		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
+		}
+		if qr.RowsAffected == 0 { // See if it's a vdiff that was never started
+			query, err := sqlparser.ParseAndBind(sqlStartVDiff,
+				sqltypes.StringBindVariable(req.VdiffUuid),
+			)
+			if err != nil {
+				return err
+			}
+			if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
+				return err
+			}
 		}
 		if qr.RowsAffected == 0 {
 			return fmt.Errorf("no completed or stopped vdiff found for UUID %s on tablet %v",

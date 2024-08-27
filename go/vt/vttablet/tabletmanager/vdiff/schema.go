@@ -22,6 +22,8 @@ const (
 	sqlResumeVDiff  = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
 					vdt.state = 'pending' where vd.vdiff_uuid = %a and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
 					and vdt.state in ('completed', 'stopped')`
+	sqlStartVDiff = `update _vt.vdiff as vd set vd.state = 'pending' where vd.vdiff_uuid = %a and vd.state = 'stopped' and
+					vd.started_at is NULL and vd.completed_at is NULL`
 	sqlRetryVDiff = `update _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) set vd.state = 'pending',
 					vd.last_error = '', vdt.state = 'pending' where vd.id = %a and (vd.state = 'error' or vdt.state = 'error')`
 	sqlGetVDiffByKeyspaceWorkflowUUID       = "select * from _vt.vdiff where keyspace = %a and workflow = %a and vdiff_uuid = %a"
