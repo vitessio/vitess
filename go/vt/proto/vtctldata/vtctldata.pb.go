@@ -4012,7 +4012,7 @@ type EmergencyReparentShardRequest struct {
 	// WaitForAllTablets makes ERS wait for a response from all the tablets before proceeding.
 	// Useful when all the tablets are up and reachable.
 	WaitForAllTablets bool `protobuf:"varint,7,opt,name=wait_for_all_tablets,json=waitForAllTablets,proto3" json:"wait_for_all_tablets,omitempty"`
-	// CurrentPrimary is the alias we expect to be the current primary.
+	// CurrentPrimary is the optional alias we require to be the current primary.
 	CurrentPrimary *topodata.TabletAlias `protobuf:"bytes,8,opt,name=current_primary,json=currentPrimary,proto3" json:"current_primary,omitempty"`
 }
 
