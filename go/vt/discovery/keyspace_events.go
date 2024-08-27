@@ -19,6 +19,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -715,7 +716,10 @@ func (kew *KeyspaceEventWatcher) GetServingKeyspaces() []string {
 }
 
 // WaitForConsistentKeyspaces waits for the given set of keyspaces to be marked consistent.
-func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context, keyspaces []string) error {
+func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context, ksList []string) error {
+	// We don't want to change the original keyspace list that we receive so we clone it
+	// before we empty it elements down below.
+	keyspaces := slices.Clone(ksList)
 	for {
 		// We empty keyspaces as we find them to be consistent.
 		allConsistent := true
