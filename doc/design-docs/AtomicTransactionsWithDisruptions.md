@@ -35,3 +35,17 @@ Therefore, the safest option was to always check if we need to redo the prepared
 
 When Vttabet restarts, all the previous connections are dropped. It starts in a non-serving state, and then after reading the shard and tablet records from the topo, it transitions to a serving state. 
 As part of this transition we need to ensure that we redo the prepared transactions before we start accepting any writes. This is done as part of the `TxEngine.transition` function when we transition to an `AcceptingReadWrite` state. We call the same code for redoing the prepared transactions that we called for MySQL restarts, PRS and ERS.
+
+## Online DDL
+
+During an Online DDL cutover, we need to ensure that all the prepared transactions on the online DDL table needs to be completed before we can proceed with the cutover. 
+This is because the cutover involves a schema change and we cannot have any prepared transactions that are dependent on the old schema.
+
+In Online DDL code, once it adds query rules to buffer new queries on the table.
+It now checks for any open prepared transaction on the table and waits for 100ms. 
+If it becomes empty then it moves forwards otherwise it fails the cutover and retry later.
+
+In the Prepare code, we check the query rules before adding the transaction to the prepared list and re-check the rules before storing the transaction logs in the transaction redo table.
+Any transaction that went past the first check will fail the second check if the cutover proceeds.
+
+The check on both sides prevents either the cutover from proceeding or the transaction from being prepared.
