@@ -69,6 +69,7 @@ const (
 	bulkInsertQuery  = "insert into %s (id%d1, id%d2) values "
 	insertQuery      = "insert into %s (id%d1, id%d2) values (%d, %d)"
 	numInitialRows   = 10
+	copyPhaseStart   = "Copy Start"
 )
 
 type state struct {
@@ -443,7 +444,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 	pos := ""
 	go func() {
 		err := engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
-			//t.Logf("Received events: %v", evs)
+			// t.Logf("Received events: %v", evs)
 			muAllEvents.Lock()
 			defer muAllEvents.Unlock()
 			for _, ev := range evs {
@@ -463,7 +464,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 				allEvents = append(allEvents, ev)
 			}
 			return nil
-		})
+		}, nil)
 		require.Nil(t, err)
 	}()
 }
@@ -492,8 +493,8 @@ var expectedEvents = []string{
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"11110\"}}}",
 	"type:GTID",
-	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
-	"type:OTHER gtid:\"Copy Start t2\"",
+	"type:COMMIT", // insert for t2 done along with t1 does not generate an event since t2 is not yet copied
+	fmt.Sprintf("type:OTHER gtid:\"%s t2\"", copyPhaseStart),
 	"type:BEGIN",
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"12120\"}}}",

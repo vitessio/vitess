@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -232,7 +233,7 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		if qr.RowsAffected == 0 {
 			msg := fmt.Sprintf("no completed or stopped vdiff found for UUID %s on tablet %v",
 				req.VdiffUuid, vde.thisTablet.Alias)
-			return fmt.Errorf(msg)
+			return errors.New(msg)
 		}
 	}
 

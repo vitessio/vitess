@@ -51,7 +51,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("show variables like '%s'", variable))
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	if qr.Rows != nil && len(qr.Rows) == 1 {
+	if qr != nil && len(qr.Rows) == 1 {
 		return true
 	}
 	return false
@@ -739,12 +739,10 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 				return io.EOF
 			}
 			return nil
-		})
+		}, nil)
 	}()
 	wg.Wait()
-	if errGoroutine != nil {
-		t.Fatalf(errGoroutine.Error())
-	}
+	require.NoError(t, errGoroutine)
 }
 
 func TestFilteredVarBinary(t *testing.T) {
@@ -2030,7 +2028,7 @@ func TestMinimalMode(t *testing.T) {
 		engine = oldEngine
 		env = oldEnv
 	}()
-	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil })
+	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
@@ -2431,7 +2429,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 			return io.EOF
 		}
 		return nil
-	})
+	}, nil)
 }
 
 func execStatement(t *testing.T, query string) {

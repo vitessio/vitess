@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestVrLog(t *testing.T) {
@@ -49,9 +51,8 @@ func TestVrLog(t *testing.T) {
 	}
 
 	want := fmt.Sprintf("%s Event	%s", eventType, detail)
-	if !strings.Contains(s, want) {
-		t.Fatalf(fmt.Sprintf("want %s, got %s", want, s))
-	}
+	require.Contains(t, s, want)
+
 	if strings.HasSuffix(s, "\\n") {
 		t.Fatalf("does not end in a newline: %s", s)
 	}

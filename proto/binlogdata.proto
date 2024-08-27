@@ -344,6 +344,7 @@ message RowEvent {
   string keyspace = 3;
   string shard = 4;
   uint32 flags = 5; // https://dev.mysql.com/doc/dev/mysql-server/latest/classbinary__log_1_1Rows__event.html
+  bool is_internal_table = 6; // set for sidecardb tables
 }
 
 // FieldEvent represents the field info for a table.
@@ -352,6 +353,7 @@ message FieldEvent {
   repeated query.Field fields = 2;
   string keyspace = 3;
   string shard = 4;
+  bool is_internal_table = 26; // set for sidecardb tables
 }
 
 // ShardGtid contains the GTID position for one shard.
@@ -466,6 +468,10 @@ message MinimalSchema {
   repeated MinimalTable tables = 1;
 }
 
+message VStreamOptions {
+  repeated string internal_tables = 1;
+}
+
 // VStreamRequest is the payload for VStreamer
 message VStreamRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -475,6 +481,8 @@ message VStreamRequest {
   string position = 4;
   Filter filter = 5;
   repeated TableLastPK table_last_p_ks = 6;
+
+  VStreamOptions options = 7;
 }
 
 // VStreamResponse is the response from VStreamer
