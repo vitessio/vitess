@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"strconv"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -122,6 +125,14 @@ func insertLogWithParams(dbClient *vdbClient, action string, vreplID int32, para
 func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
+	}
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		if vterrors.RxWrongTablet.MatchString(err.Error()) {
+			// If the chosen tablet type picked changes, say due to PRS/ERS, we should retry.
+			return false
+		}
+		return true
 	}
 	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 	if !isSQLErr {
