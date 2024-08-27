@@ -967,3 +967,34 @@ func defaultErrorHandler(logger logutil.Logger, message string, err error) (*[]s
 	logger.Error(werr)
 	return nil, werr
 }
+
+// applyTargetShards applies the targetShards, coming from a command, to the trafficSwitcher.
+// It will return an error if the targetShards list contains a shard that does not exist in
+// the target keyspace.
+// It will then remove any target shards from the trafficSwitcher that are not in the
+// targetShards list.
+func applyTargetShards(ts *trafficSwitcher, targetShards []string) error {
+	if ts == nil {
+		return nil
+	}
+	if ts.targets == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no targets found for workflow %s", ts.workflow)
+	}
+	tsm := make(map[string]struct{}, len(targetShards))
+	for _, targetShard := range targetShards {
+		if _, ok := ts.targets[targetShard]; !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "specified target shard %s not a valid target for workflow %s",
+				targetShard, ts.workflow)
+		}
+		tsm[targetShard] = struct{}{}
+	}
+	for key, target := range ts.targets {
+		if target == nil || target.GetShard() == nil { // Should never happen
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid target found for workflow %s", ts.workflow)
+		}
+		if _, ok := tsm[target.GetShard().ShardName()]; !ok {
+			delete(ts.targets, key)
+		}
+	}
+	return nil
+}

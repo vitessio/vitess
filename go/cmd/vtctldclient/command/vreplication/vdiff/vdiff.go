@@ -198,7 +198,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 
 			for _, shard := range resumeOptions.TargetShards {
 				if !key.IsValidKeyRange(shard) {
-					return fmt.Errorf("invalid target shard provided: %s", shard)
+					return fmt.Errorf("invalid target shard provided: %q", shard)
 				}
 			}
 
@@ -250,7 +250,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 
 			for _, shard := range stopOptions.TargetShards {
 				if !key.IsValidKeyRange(shard) {
-					return fmt.Errorf("invalid target shard provided: %s", shard)
+					return fmt.Errorf("invalid target shard provided: %q", shard)
 				}
 			}
 
