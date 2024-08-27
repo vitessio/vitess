@@ -113,7 +113,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
         return rows.map((row) => {
             const reverseWorkflow = row.reverseWorkflow;
             return (
-                <tr>
+                <tr key={reverseWorkflow?.workflow?.name}>
                     <DataCell>{row.streamSummary ? row.streamSummary : '-'}</DataCell>
                     <DataCell>{row.workflowStatus ? row.workflowStatus.traffic_state : '-'}</DataCell>
                     <DataCell>
