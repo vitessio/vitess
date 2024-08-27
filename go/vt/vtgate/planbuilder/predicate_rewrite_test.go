@@ -64,10 +64,10 @@ func (tc testCase) createPredicate(lvl int) sqlparser.Expr {
 			Expr: tc.createPredicate(lvl + 1),
 		}
 	case AND:
-		return &sqlparser.AndExpr{
-			Left:  tc.createPredicate(lvl + 1),
-			Right: tc.createPredicate(lvl + 1),
-		}
+		return sqlparser.AndExpressions(
+			tc.createPredicate(lvl+1),
+			tc.createPredicate(lvl+1),
+		)
 	case OR:
 		return &sqlparser.OrExpr{
 			Left:  tc.createPredicate(lvl + 1),

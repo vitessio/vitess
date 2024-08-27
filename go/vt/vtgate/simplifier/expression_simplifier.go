@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/slice"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -97,7 +99,10 @@ func (s *shrinker) fillQueue() bool {
 	before := len(s.queue)
 	switch e := s.orig.(type) {
 	case *sqlparser.AndExpr:
-		s.queue = append(s.queue, e.Left, e.Right)
+		addThese := slice.Map(e.Predicates, func(e sqlparser.Expr) sqlparser.SQLNode {
+			return e
+		})
+		s.queue = append(s.queue, addThese...)
 	case *sqlparser.OrExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
 	case *sqlparser.ComparisonExpr:

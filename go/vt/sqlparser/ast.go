@@ -2263,7 +2263,7 @@ type (
 	}
 
 	// AndExpr represents an AND expression.
-	AndExpr struct{ Predicates []Expr }
+	AndExpr struct{ Predicates Exprs }
 
 	// OrExpr represents an OR expression.
 	OrExpr struct {

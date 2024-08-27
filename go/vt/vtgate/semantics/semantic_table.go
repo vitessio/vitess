@@ -911,7 +911,7 @@ func (st *SemTable) AndExpressions(exprs ...sqlparser.Expr) sqlparser.Expr {
 					continue outer
 				}
 			}
-			result = &sqlparser.AndExpr{Left: result, Right: expr}
+			result = sqlparser.AndExpressions(result, expr)
 		}
 		return result
 	}

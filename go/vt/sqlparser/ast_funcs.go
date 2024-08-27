@@ -2360,6 +2360,17 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
+func CreateAndExpr(exprs ...Expr) Expr {
+	switch len(exprs) {
+	case 0:
+		return nil
+	case 1:
+		return exprs[0]
+	default:
+		return &AndExpr{Predicates: exprs}
+	}
+}
+
 // AndExpressions ands together two or more expressions, minimising the expr when possible
 func AndExpressions(exprs ...Expr) Expr {
 	switch len(exprs) {

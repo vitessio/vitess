@@ -864,13 +864,13 @@ func rewriteOrExpr(env *vtenv.Environment, cursor *sqlparser.Cursor, node *sqlpa
 
 // rewriteAndExpr rewrites AND expressions when either side is TRUE.
 func rewriteAndExpr(env *vtenv.Environment, cursor *sqlparser.Cursor, node *sqlparser.AndExpr) {
-	newNode := rewriteAndTrue(env, *node)
+	newNode := rewriteAndTrue(env, node)
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
 }
 
-func rewriteAndTrue(env *vtenv.Environment, andExpr sqlparser.AndExpr) sqlparser.Expr {
+func rewriteAndTrue(env *vtenv.Environment, andExpr *sqlparser.AndExpr) sqlparser.Expr {
 	// we are looking for the pattern `WHERE c = 1 AND 1 = 1`
 	isTrue := func(subExpr sqlparser.Expr) bool {
 		coll := env.CollationEnv().DefaultConnectionCharset()
@@ -896,13 +896,18 @@ func rewriteAndTrue(env *vtenv.Environment, andExpr sqlparser.AndExpr) sqlparser
 		return boolValue
 	}
 
-	if isTrue(andExpr.Left) {
-		return andExpr.Right
-	} else if isTrue(andExpr.Right) {
-		return andExpr.Left
+	var remaining sqlparser.Exprs
+	for _, p := range andExpr.Predicates {
+		if !isTrue(p) {
+			remaining = append(remaining, p)
+		}
 	}
 
-	return nil
+	if len(remaining) == len(andExpr.Predicates) {
+		return nil
+	}
+
+	return sqlparser.AndExpressions(remaining...)
 }
 
 // handleComparisonExpr processes Comparison expressions, specifically for tuples with equal length and EqualOp operator.

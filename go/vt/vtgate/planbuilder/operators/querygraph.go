@@ -141,10 +141,7 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 	if qg.NoDeps == nil {
 		qg.NoDeps = predicate
 	} else {
-		qg.NoDeps = &sqlparser.AndExpr{
-			Left:  qg.NoDeps,
-			Right: predicate,
-		}
+		qg.NoDeps = sqlparser.AndExpressions(qg.NoDeps, predicate)
 	}
 }
 

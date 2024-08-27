@@ -744,7 +744,7 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 		return nil
 	}
 	out := *n
-	out.Predicates = CloneSliceOfExpr(n.Predicates)
+	out.Predicates = CloneExprs(n.Predicates)
 	return &out
 }
 
@@ -4368,18 +4368,6 @@ func CloneSliceOfIdentifierCI(n []IdentifierCI) []IdentifierCI {
 	return res
 }
 
-// CloneSliceOfExpr creates a deep clone of the input.
-func CloneSliceOfExpr(n []Expr) []Expr {
-	if n == nil {
-		return nil
-	}
-	res := make([]Expr, len(n))
-	for i, x := range n {
-		res[i] = CloneExpr(x)
-	}
-	return res
-}
-
 // CloneSliceOfTxAccessMode creates a deep clone of the input.
 func CloneSliceOfTxAccessMode(n []TxAccessMode) []TxAccessMode {
 	if n == nil {
@@ -4465,6 +4453,18 @@ func CloneSliceOfRefOfVariable(n []*Variable) []*Variable {
 	res := make([]*Variable, len(n))
 	for i, x := range n {
 		res[i] = CloneRefOfVariable(x)
+	}
+	return res
+}
+
+// CloneSliceOfExpr creates a deep clone of the input.
+func CloneSliceOfExpr(n []Expr) []Expr {
+	if n == nil {
+		return nil
+	}
+	res := make([]Expr, len(n))
+	for i, x := range n {
+		res[i] = CloneExpr(x)
 	}
 	return res
 }

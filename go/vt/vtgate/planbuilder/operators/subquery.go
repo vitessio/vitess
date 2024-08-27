@@ -298,7 +298,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		// lead to better routing. This however might not always be true for example we can have the rhsPred to be something like
 		// `user.id = 2 OR (:__sq_has_values AND user.id IN ::sql1)`
 		if andExpr, isAndExpr := rhsPred.(*sqlparser.AndExpr); isAndExpr {
-			predicates = append(predicates, andExpr.Left, andExpr.Right)
+			predicates = append(predicates, andExpr.Predicates...)
 		} else {
 			predicates = append(predicates, rhsPred)
 		}

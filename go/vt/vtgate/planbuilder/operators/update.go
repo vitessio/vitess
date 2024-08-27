@@ -743,10 +743,7 @@ func buildChildUpdOpForSetNull(
 		updatedTable,
 		updateExprs, fk, updatedTable.GetTableName(), nonLiteralUpdateInfo, false /* appendQualifier */)
 	if compExpr != nil {
-		childWhereExpr = &sqlparser.AndExpr{
-			Left:  childWhereExpr,
-			Right: compExpr,
-		}
+		childWhereExpr = sqlparser.AndExpressions(childWhereExpr, compExpr)
 	}
 	parsedComments := getParsedCommentsForFkChecks(ctx)
 	childUpdStmt := &sqlparser.Update{
@@ -847,13 +844,12 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, upda
 		var predicate sqlparser.Expr = parentIsNullExpr
 		var joinExpr sqlparser.Expr
 		if matchedExpr == nil {
-			predicate = &sqlparser.AndExpr{
-				Left: predicate,
-				Right: &sqlparser.IsExpr{
+			predicate = sqlparser.AndExpressions(
+				predicate,
+				&sqlparser.IsExpr{
 					Left:  sqlparser.NewColNameWithQualifier(pFK.ChildColumns[idx].String(), childTbl),
 					Right: sqlparser.IsNotNullOp,
-				},
-			}
+				})
 			joinExpr = &sqlparser.ComparisonExpr{
 				Operator: sqlparser.EqualOp,
 				Left:     sqlparser.NewColNameWithQualifier(pFK.ParentColumns[idx].String(), parentTbl),
@@ -868,35 +864,33 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, upda
 				Left:     sqlparser.NewColNameWithQualifier(pFK.ParentColumns[idx].String(), parentTbl),
 				Right:    prefixedMatchExpr,
 			}
-			predicate = &sqlparser.AndExpr{
-				Left: predicate,
-				Right: &sqlparser.IsExpr{
+			predicate = sqlparser.AndExpressions(
+				predicate,
+				&sqlparser.IsExpr{
 					Left:  prefixedMatchExpr,
 					Right: sqlparser.IsNotNullOp,
-				},
-			}
+				})
 		}
 
 		if idx == 0 {
 			joinCond, whereCond = joinExpr, predicate
 			continue
 		}
-		joinCond = &sqlparser.AndExpr{Left: joinCond, Right: joinExpr}
-		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: predicate}
+		joinCond = sqlparser.AndExpressions(joinCond, joinExpr)
+		whereCond = sqlparser.AndExpressions(whereCond, predicate)
 	}
-	whereCond = &sqlparser.AndExpr{
-		Left: whereCond,
-		Right: &sqlparser.NotExpr{
+	whereCond = sqlparser.AndExpressions(
+		whereCond,
+		&sqlparser.NotExpr{
 			Expr: &sqlparser.ComparisonExpr{
 				Operator: sqlparser.NullSafeEqualOp,
 				Left:     notEqualColNames,
 				Right:    notEqualExprs,
 			},
-		},
-	}
+		})
 	// add existing where condition on the update statement
 	if updStmt.Where != nil {
-		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: prefixColNames(ctx, childTbl, updStmt.Where.Expr)}
+		whereCond = sqlparser.AndExpressions(whereCond, prefixColNames(ctx, childTbl, updStmt.Where.Expr))
 	}
 	return createSelectionOp(ctx,
 		sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
@@ -959,7 +953,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updat
 			joinCond = joinExpr
 			continue
 		}
-		joinCond = &sqlparser.AndExpr{Left: joinCond, Right: joinExpr}
+		joinCond = sqlparser.AndExpressions(joinCond, joinExpr)
 	}
 
 	var whereCond sqlparser.Expr

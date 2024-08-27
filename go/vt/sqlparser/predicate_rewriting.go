@@ -181,10 +181,13 @@ func simplifyOr(or *OrExpr) (Expr, bool) {
 	// Distribution Law
 	var distributedPredicates []Expr
 	for _, lp := range and.Predicates {
-		distributedPredicates = append(distributedPredicates, &OrExpr{
-			Left:  lp,
-			Right: other,
-		})
+		var or *OrExpr
+		if lok {
+			or = &OrExpr{Left: lp, Right: other}
+		} else {
+			or = &OrExpr{Left: other, Right: lp}
+		}
+		distributedPredicates = append(distributedPredicates, or)
 	}
 	return AndExpressions(distributedPredicates...), true
 }

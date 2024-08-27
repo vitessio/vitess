@@ -953,18 +953,10 @@ func (c *cow) copyOnRewriteRefOfAndExpr(n *AndExpr, parent SQLNode) (out SQLNode
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		var changedPredicates bool
-		_Predicates := make([]Expr, len(n.Predicates))
-		for x, el := range n.Predicates {
-			this, changed := c.copyOnRewriteExpr(el, n)
-			_Predicates[x] = this.(Expr)
-			if changed {
-				changedPredicates = true
-			}
-		}
+		_Predicates, changedPredicates := c.copyOnRewriteExprs(n.Predicates, n)
 		if changedPredicates {
 			res := *n
-			res.Predicates = _Predicates
+			res.Predicates, _ = _Predicates.(Exprs)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

@@ -99,15 +99,35 @@ func (ast *astCompiler) translateLogicalNot(node *sqlparser.NotExpr) (IR, error)
 	return &NotExpr{UnaryExpr{inner}}, nil
 }
 
+func (ast *astCompiler) translateLogicalAnd(node *sqlparser.AndExpr) (IR, error) {
+	var acc IR
+	for i, pred := range node.Predicates {
+		ir, err := ast.translateExpr(pred)
+		if err != nil {
+			return nil, err
+		}
+		if i == 0 {
+			acc = ir
+			continue
+		}
+
+		acc = &LogicalExpr{
+			BinaryExpr: BinaryExpr{
+				Left:  acc,
+				Right: ir,
+			},
+			op: opLogicalAnd{},
+		}
+	}
+
+	return acc, nil
+}
+
 func (ast *astCompiler) translateLogicalExpr(node sqlparser.Expr) (IR, error) {
 	var left, right sqlparser.Expr
 
 	var logic opLogical
 	switch n := node.(type) {
-	case *sqlparser.AndExpr:
-		left = n.Left
-		right = n.Right
-		logic = opLogicalAnd{}
 	case *sqlparser.OrExpr:
 		left = n.Left
 		right = n.Right
@@ -521,7 +541,7 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (IR, error) {
 	case *sqlparser.Literal:
 		return translateLiteral(node, ast.cfg.Collation)
 	case *sqlparser.AndExpr:
-		return ast.translateLogicalExpr(node)
+		return ast.translateLogicalAnd(node)
 	case *sqlparser.OrExpr:
 		return ast.translateLogicalExpr(node)
 	case *sqlparser.XorExpr:
