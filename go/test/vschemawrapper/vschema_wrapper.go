@@ -213,7 +213,6 @@ func (vw *VSchemaWrapper) TargetDestination(qualifier string) (key.Destination, 
 		return nil, nil, 0, vterrors.VT05003(keyspaceName)
 	}
 	return vw.Dest, keyspace.Keyspace, vw.TabletType_, nil
-
 }
 
 func (vw *VSchemaWrapper) TabletType() topodatapb.TabletType {
@@ -317,7 +316,6 @@ func (vw *VSchemaWrapper) TargetString() string {
 }
 
 func (vw *VSchemaWrapper) WarnUnshardedOnly(_ string, _ ...any) {
-
 }
 
 func (vw *VSchemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt string, params ...any) error {
@@ -341,4 +339,18 @@ func (vw *VSchemaWrapper) FindRoutedShard(keyspace, shard string) (string, error
 
 func (vw *VSchemaWrapper) IsViewsEnabled() bool {
 	return vw.EnableViews
+}
+
+// FindMirrorRule finds the mirror rule for the requested keyspace, table
+// name, and the tablet type in the VSchema.
+func (vs *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	destKeyspace, destTabletType, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	if err != nil {
+		return nil, err
+	}
+	mirrorRule, err := vs.V.FindMirrorRule(destKeyspace, tab.Name.String(), destTabletType)
+	if err != nil {
+		return nil, err
+	}
+	return mirrorRule, err
 }

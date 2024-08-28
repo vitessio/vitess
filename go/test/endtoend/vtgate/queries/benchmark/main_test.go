@@ -20,8 +20,10 @@ import (
 	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -34,35 +36,33 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
-	sKs             = "sks"
-	uKs             = "uks"
+	sKs1            = "sks1"
+	sKs2            = "sks2"
+	sKs3            = "sks3"
 	cell            = "test"
 
-	//go:embed sharded_schema.sql
-	sSchemaSQL string
+	//go:embed sharded_schema1.sql
+	sSchemaSQL1 string
 
-	//go:embed vschema.json
-	sVSchema string
+	//go:embed vschema1.json
+	sVSchema1 string
+
+	//go:embed sharded_schema2.sql
+	sSchemaSQL2 string
+
+	//go:embed vschema2.json
+	sVSchema2 string
+
+	//go:embed sharded_schema3.sql
+	sSchemaSQL3 string
+
+	//go:embed vschema3.json
+	sVSchema3 string
 )
 
-var (
-	shards4 = []string{
-		"-40", "40-80", "80-c0", "c0-",
-	}
-
-	shards8 = []string{
-		"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-",
-	}
-
-	shards16 = []string{
-		"-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80", "80-90", "90-a0", "a0-b0", "b0-c0", "c0-d0", "d0-e0", "e0-f0", "f0-",
-	}
-
-	shards32 = []string{
-		"-05", "05-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35-40", "40-45", "45-50", "50-55", "55-60", "60-65", "65-70", "70-75", "75-80",
-		"80-85", "85-90", "90-95", "95-a0", "a0-a5", "a5-b0", "b0-b5", "b5-c0", "c0-c5", "c5-d0", "d0-d5", "d5-e0", "e0-e5", "e5-f0", "f0-f5", "f5-",
-	}
-)
+var shards4 = []string{
+	"-40", "40-80", "80-c0", "c0-",
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -78,14 +78,38 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Start sharded keyspace
-		sKeyspace := &cluster.Keyspace{
-			Name:      sKs,
-			SchemaSQL: sSchemaSQL,
-			VSchema:   sVSchema,
+		// Start sharded keyspace 1
+		sKeyspace1 := &cluster.Keyspace{
+			Name:      sKs1,
+			SchemaSQL: sSchemaSQL1,
+			VSchema:   sVSchema1,
 		}
 
-		err = clusterInstance.StartKeyspace(*sKeyspace, shards4, 0, false)
+		err = clusterInstance.StartKeyspace(*sKeyspace1, shards4, 0, false)
+		if err != nil {
+			return 1
+		}
+
+		// Start sharded keyspace 2
+		sKeyspace2 := &cluster.Keyspace{
+			Name:      sKs2,
+			SchemaSQL: sSchemaSQL2,
+			VSchema:   sVSchema2,
+		}
+
+		err = clusterInstance.StartKeyspace(*sKeyspace2, shards4, 0, false)
+		if err != nil {
+			return 1
+		}
+
+		// Start sharded keyspace 3
+		sKeyspace3 := &cluster.Keyspace{
+			Name:      sKs3,
+			SchemaSQL: sSchemaSQL3,
+			VSchema:   sVSchema3,
+		}
+
+		err = clusterInstance.StartKeyspace(*sKeyspace3, shards4, 0, false)
 		if err != nil {
 			return 1
 		}
@@ -96,7 +120,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		vtParams = clusterInstance.GetVTParams(sKs)
+		vtParams = clusterInstance.GetVTParams("@primary")
 
 		return m.Run()
 	}()
@@ -108,12 +132,38 @@ func start(b *testing.B) (*mysql.Conn, func()) {
 	require.NoError(b, err)
 
 	deleteAll := func() {
-		tables := []string{"tbl_no_lkp_vdx"}
+		tables := []string{
+			fmt.Sprintf("%s.tbl_no_lkp_vdx", sKs1),
+			fmt.Sprintf("%s.mirror_tbl1", sKs1),
+			fmt.Sprintf("%s.mirror_tbl2", sKs1),
+			fmt.Sprintf("%s.mirror_tbl1", sKs2),
+			fmt.Sprintf("%s.mirror_tbl2", sKs3),
+		}
 		for _, table := range tables {
 			_, _ = utils.ExecAllowError(b, conn, "delete from "+table)
 		}
 	}
 
+	// Make sure all keyspaces are serving.
+	pending := map[string]string{
+		sKs1: "mirror_tbl1",
+		sKs2: "mirror_tbl1",
+		sKs3: "mirror_tbl2",
+	}
+	for len(pending) > 0 {
+		for ks, tbl := range pending {
+			_, err := conn.ExecuteFetch(
+				fmt.Sprintf("SELECT COUNT(id) FROM %s.%s", ks, tbl), 1, false)
+			if err != nil {
+				b.Logf("waiting for keyspace %s to be serving; last error: %v", ks, err)
+				time.Sleep(1 * time.Second)
+			} else {
+				delete(pending, ks)
+			}
+		}
+	}
+
+	// Delete any pre-existing data.
 	deleteAll()
 
 	return conn, func() {

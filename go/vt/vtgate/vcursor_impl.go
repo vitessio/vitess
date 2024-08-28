@@ -58,10 +58,12 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
-var _ engine.VCursor = (*vcursorImpl)(nil)
-var _ plancontext.VSchema = (*vcursorImpl)(nil)
-var _ iExecute = (*Executor)(nil)
-var _ vindexes.VCursor = (*vcursorImpl)(nil)
+var (
+	_ engine.VCursor      = (*vcursorImpl)(nil)
+	_ plancontext.VSchema = (*vcursorImpl)(nil)
+	_ iExecute            = (*Executor)(nil)
+	_ vindexes.VCursor    = (*vcursorImpl)(nil)
+)
 
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
@@ -922,7 +924,6 @@ func (vc *vcursorImpl) SetPriority(priority string) {
 	} else if vc.safeSession.Options != nil && vc.safeSession.Options.Priority != "" {
 		vc.safeSession.Options.Priority = ""
 	}
-
 }
 
 // SetConsolidator implements the SessionActions interface
@@ -1102,6 +1103,23 @@ func (vc *vcursorImpl) GetAggregateUDFs() []string {
 	return vc.vschema.GetAggregateUDFs()
 }
 
+// FindMirrorRule finds the mirror rule for the requested table name and
+// VSchema tablet type.
+func (vc *vcursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	destKeyspace, destTabletType, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	if destKeyspace == "" {
+		destKeyspace = vc.keyspace
+	}
+	mirrorRule, err := vc.vschema.FindMirrorRule(destKeyspace, name.Name.String(), destTabletType)
+	if err != nil {
+		return nil, err
+	}
+	return mirrorRule, err
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
@@ -1162,7 +1180,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	allowed := vschemaacl.Authorized(user)
 	if !allowed {
 		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform vschema operations", user.GetUsername())
-
 	}
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
@@ -1179,7 +1196,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 
 	ks := srvVschema.Keyspaces[ksName]
 	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, vschemaDDL)
-
 	if err != nil {
 		return err
 	}
@@ -1187,7 +1203,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	srvVschema.Keyspaces[ksName] = ks
 
 	return vc.vm.UpdateVSchema(ctx, ksName, srvVschema)
-
 }
 
 func (vc *vcursorImpl) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
@@ -1320,6 +1335,7 @@ func (vc *vcursorImpl) VExplainLogging() {
 func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
 }
+
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
 }
@@ -1384,6 +1400,37 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
+
+	return v
+}
+
+func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
+	callerId := callerid.EffectiveCallerIDFromContext(ctx)
+	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
+
+	clonedCtx := callerid.NewContext(ctx, callerId, immediateCallerId)
+
+	v := &vcursorImpl{
+		safeSession:         NewAutocommitSession(vc.safeSession.Session),
+		keyspace:            vc.keyspace,
+		tabletType:          vc.tabletType,
+		destination:         vc.destination,
+		marginComments:      vc.marginComments,
+		executor:            vc.executor,
+		resolver:            vc.resolver,
+		topoServer:          vc.topoServer,
+		logStats:            &logstats.LogStats{Ctx: clonedCtx},
+		collation:           vc.collation,
+		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
+		vschema:             vc.vschema,
+		vm:                  vc.vm,
+		semTable:            vc.semTable,
+		warnShardedOnly:     vc.warnShardedOnly,
+		warnings:            vc.warnings,
+		pv:                  vc.pv,
+	}
+
+	v.marginComments.Trailing += "/* mirror query */"
 
 	return v
 }

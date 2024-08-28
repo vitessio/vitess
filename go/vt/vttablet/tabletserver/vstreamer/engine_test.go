@@ -106,6 +106,7 @@ func TestUpdateVSchema(t *testing.T) {
 	expectUpdateCount(t, startCount+1)
 
 	want := `{
+  "mirror_rules": {},
   "routing_rules": {},
   "keyspaces": {
     "vttest": {

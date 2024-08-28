@@ -195,3 +195,8 @@ func (dt *DerivedTable) checkForDuplicates() error {
 	}
 	return nil
 }
+
+// GetMirrorRule implements TableInfo.
+func (dt *DerivedTable) GetMirrorRule() *vindexes.MirrorRule {
+	return nil
+}

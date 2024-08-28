@@ -1,0 +1,103 @@
+{
+  "mirror_rules": {
+    "rules": [
+      {
+        "from_table": "unsharded_src1.t1",
+        "to_table": "unsharded_dst1.t1",
+        "percent": 1
+      },
+      {
+        "from_table": "unsharded_src1.t2",
+        "to_table": "sharded_dst1.t1",
+        "percent": 2
+      },
+      {
+        "from_table": "unsharded_src2.t1",
+        "to_table": "unsharded_src2.t1",
+        "percent": 3
+      },
+      {
+        "from_table": "unsharded_src2.t2",
+        "to_table": "unsharded_dst2.t2",
+        "percent": 4
+      },
+      {
+        "from_table": "unsharded_dst2.t2",
+        "to_table": "unsharded_dst3.t2",
+        "percent": 5
+      },
+      {
+        "from_table": "unsharded_src3.t1",
+        "to_table": "unsharded_dst4.t1",
+        "percent": 6
+      },
+      {
+        "from_table": "unsharded_dst4.t2",
+        "to_table": "unsharded_src3.t2",
+        "percent": 7
+      },
+      {
+        "from_table": "sharded_src1.t1",
+        "to_table": "sharded_dst1.t1",
+        "percent": 8
+      },
+      {
+        "from_table": "unsharded_src1.t3",
+        "to_table": "unsharded_dst1.t2",
+        "percent": 0
+      }
+    ]
+  },
+  "keyspaces": {
+    "main": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_src1": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_src2": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_src3": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_dst1": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_dst2": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_dst3": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_dst4": {
+      "sharded": false,
+      "tables": {}
+    },
+    "sharded_dst1": {
+      "sharded": true,
+      "vindexes": {
+        "xxhash": {
+          "type": "xxhash"
+        }
+      },
+      "tables": {
+        "t1": {
+          "columnVindexes": [
+            {
+              "column": "id",
+              "name": "xxhash"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

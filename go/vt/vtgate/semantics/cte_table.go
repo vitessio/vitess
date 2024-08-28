@@ -143,6 +143,11 @@ func (cte *CTETable) getTableSet(org originable) TableSet {
 	return org.tableSetFor(cte.ASTNode)
 }
 
+// GetMirrorRule implements TableInfo.
+func (cte *CTETable) GetMirrorRule() *vindexes.MirrorRule {
+	return nil
+}
+
 type CTE struct {
 	Name            string
 	Query           sqlparser.SelectStatement
