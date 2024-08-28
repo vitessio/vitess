@@ -793,23 +793,6 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 	}, nil
 }
 
-func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
-	if sel.Where != nil {
-		sel.Where = &sqlparser.Where{
-			Type: sqlparser.WhereClause,
-			Expr: &sqlparser.AndExpr{
-				Left:  filter,
-				Right: sel.Where.Expr,
-			},
-		}
-	} else {
-		sel.Where = &sqlparser.Where{
-			Type: sqlparser.WhereClause,
-			Expr: filter,
-		}
-	}
-}
-
 func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser) (*sqlparser.Expr, error) {
 	if vrOptions.TenantId == "" {

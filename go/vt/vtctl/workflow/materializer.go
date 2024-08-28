@@ -234,10 +234,10 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
 				}
-				addFilter(sel, inKeyRange)
+				sel.AddWhere(inKeyRange)
 			}
 			if tenantClause != nil {
-				addFilter(sel, *tenantClause)
+				sel.AddWhere(*tenantClause)
 			}
 			rule.Filter = sqlparser.String(sel)
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)

@@ -354,10 +354,7 @@ func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (Q
 		case nil:
 			targetWhere.Expr = expr
 		default:
-			targetWhere.Expr = &sqlparser.AndExpr{
-				Left:  expr,
-				Right: where.Expr,
-			}
+			targetWhere.Expr = sqlparser.CreateAndExpr(expr, where.Expr)
 		}
 
 		sel.Where = targetWhere
@@ -408,10 +405,7 @@ func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.W
 				Expr: expr,
 			}
 		default:
-			newWhere.Expr = &sqlparser.AndExpr{
-				Left:  newWhere.Expr,
-				Right: expr,
-			}
+			newWhere.Expr = sqlparser.CreateAndExpr(newWhere.Expr, expr)
 		}
 	}
 
@@ -424,10 +418,7 @@ func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.W
 			Right:    sqlparser.NewStrLiteral(params.Workflow),
 		}
 
-		newWhere.Expr = &sqlparser.AndExpr{
-			Left:  newWhere.Expr,
-			Right: expr,
-		}
+		newWhere.Expr = sqlparser.CreateAndExpr(newWhere.Expr, expr)
 	}
 
 	return newWhere

@@ -1439,16 +1439,13 @@ func removeKeyrange(where *sqlparser.Where) *sqlparser.Where {
 func removeExprKeyrange(node sqlparser.Expr) sqlparser.Expr {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
-		if isFuncKeyrange(node.Left) {
-			return removeExprKeyrange(node.Right)
+		var keep sqlparser.Exprs
+		for _, p := range node.Predicates {
+			if !isFuncKeyrange(p) {
+				keep = append(keep, removeExprKeyrange(p))
+			}
 		}
-		if isFuncKeyrange(node.Right) {
-			return removeExprKeyrange(node.Left)
-		}
-		return &sqlparser.AndExpr{
-			Left:  removeExprKeyrange(node.Left),
-			Right: removeExprKeyrange(node.Right),
-		}
+		return sqlparser.CreateAndExpr(keep...)
 	}
 	return node
 }

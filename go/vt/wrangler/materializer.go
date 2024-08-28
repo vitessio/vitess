@@ -1405,21 +1405,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
 				}
-				if sel.Where != nil {
-					sel.Where = &sqlparser.Where{
-						Type: sqlparser.WhereClause,
-						Expr: &sqlparser.AndExpr{
-							Left:  inKeyRange,
-							Right: sel.Where.Expr,
-						},
-					}
-				} else {
-					sel.Where = &sqlparser.Where{
-						Type: sqlparser.WhereClause,
-						Expr: inKeyRange,
-					}
-				}
-
+				sel.AddWhere(inKeyRange)
 				filter = sqlparser.String(sel)
 			}
 

@@ -720,6 +720,11 @@ type (
 
 	// IndexType is the type of index in a DDL statement
 	IndexType int8
+
+	WhereAble interface {
+		AddWhere(e Expr)
+		GetWherePredicate() Expr
+	}
 )
 
 var _ OrderAndLimit = (*Select)(nil)

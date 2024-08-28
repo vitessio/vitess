@@ -518,7 +518,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 	if where == nil {
 		return nil
 	}
-	exprs := splitAndExpression(nil, where.Expr)
+	exprs := sqlparser.SplitAndExpression(nil, where.Expr)
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
 		case *sqlparser.ComparisonExpr:
@@ -593,21 +593,6 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 		}
 	}
 	return nil
-}
-
-// splitAndExpression breaks up the Expr into AND-separated conditions
-// and appends them to filters, which can be shuffled and recombined
-// as needed.
-func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *sqlparser.AndExpr:
-		filters = splitAndExpression(filters, node.Left)
-		return splitAndExpression(filters, node.Right)
-	}
-	return append(filters, node)
 }
 
 func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {

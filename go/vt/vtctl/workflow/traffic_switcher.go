@@ -968,7 +968,7 @@ func (ts *trafficSwitcher) addTenantFilter(ctx context.Context, filter string) (
 	if !ok {
 		return "", fmt.Errorf("unrecognized statement: %s", filter)
 	}
-	addFilter(sel, *tenantClause)
+	sel.AddWhere(*tenantClause)
 	filter = sqlparser.String(sel)
 	return filter, nil
 }

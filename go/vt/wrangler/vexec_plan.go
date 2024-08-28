@@ -158,7 +158,7 @@ func (vx *vexec) buildPlan(ctx context.Context) (plan *vexecPlan, err error) {
 	case *sqlparser.Insert:
 		plan, err = vx.buildInsertPlan(ctx, vx.planner, stmt)
 	case *sqlparser.Select:
-		plan, err = vx.buildSelectPlan(ctx, vx.planner, stmt)
+		plan, err = vx.buildSelectPlan(vx.planner, stmt)
 	default:
 		return nil, fmt.Errorf("query not supported by vexec: %s", sqlparser.String(stmt))
 	}
@@ -166,12 +166,12 @@ func (vx *vexec) buildPlan(ctx context.Context) (plan *vexecPlan, err error) {
 }
 
 // analyzeWhereEqualsColumns identifies column names in a WHERE clause that have a comparison expression
-func (vx *vexec) analyzeWhereEqualsColumns(where *sqlparser.Where) []string {
+func (vx *vexec) analyzeWhereEqualsColumns(expr sqlparser.Expr) []string {
 	var cols []string
-	if where == nil {
+	if expr == nil {
 		return cols
 	}
-	exprs := sqlparser.SplitAndExpression(nil, where.Expr)
+	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
 		case *sqlparser.ComparisonExpr:
@@ -185,8 +185,8 @@ func (vx *vexec) analyzeWhereEqualsColumns(where *sqlparser.Where) []string {
 }
 
 // addDefaultWheres modifies the query to add, if appropriate, the workflow and DB-name column modifiers
-func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) *sqlparser.Where {
-	cols := vx.analyzeWhereEqualsColumns(where)
+func (vx *vexec) addDefaultWheres(planner vexecPlanner, stmt sqlparser.WhereAble) {
+	cols := vx.analyzeWhereEqualsColumns(stmt.GetWherePredicate())
 	var hasDBName, hasWorkflow bool
 	plannerParams := planner.params()
 	for _, col := range cols {
@@ -196,24 +196,13 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 			hasWorkflow = true
 		}
 	}
-	newWhere := where
 	if !hasDBName {
 		expr := &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(plannerParams.dbNameColumn)},
 			Operator: sqlparser.EqualOp,
 			Right:    sqlparser.NewStrLiteral(vx.primaries[0].DbName()),
 		}
-		if newWhere == nil {
-			newWhere = &sqlparser.Where{
-				Type: sqlparser.WhereClause,
-				Expr: expr,
-			}
-		} else {
-			newWhere.Expr = &sqlparser.AndExpr{
-				Left:  newWhere.Expr,
-				Right: expr,
-			}
-		}
+		stmt.AddWhere(expr)
 	}
 	if !hasWorkflow && vx.workflow != "" {
 		expr := &sqlparser.ComparisonExpr{
@@ -221,12 +210,8 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 			Operator: sqlparser.EqualOp,
 			Right:    sqlparser.NewStrLiteral(vx.workflow),
 		}
-		newWhere.Expr = &sqlparser.AndExpr{
-			Left:  newWhere.Expr,
-			Right: expr,
-		}
+		stmt.AddWhere(expr)
 	}
-	return newWhere
 }
 
 // buildUpdatePlan builds a plan for an UPDATE query
@@ -262,7 +247,7 @@ func (vx *vexec) buildUpdatePlan(ctx context.Context, planner vexecPlanner, upd 
 			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(templates, "; "))
 		}
 	}
-	upd.Where = vx.addDefaultWheres(planner, upd.Where)
+	vx.addDefaultWheres(planner, upd)
 
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", upd)
@@ -285,7 +270,7 @@ func (vx *vexec) buildDeletePlan(ctx context.Context, planner vexecPlanner, del 
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
 	}
 
-	del.Where = vx.addDefaultWheres(planner, del.Where)
+	vx.addDefaultWheres(planner, del)
 
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", del)
@@ -325,8 +310,8 @@ func (vx *vexec) buildInsertPlan(ctx context.Context, planner vexecPlanner, ins 
 }
 
 // buildSelectPlan builds a plan for a SELECT query
-func (vx *vexec) buildSelectPlan(ctx context.Context, planner vexecPlanner, sel *sqlparser.Select) (*vexecPlan, error) {
-	sel.Where = vx.addDefaultWheres(planner, sel.Where)
+func (vx *vexec) buildSelectPlan(planner vexecPlanner, sel *sqlparser.Select) (*vexecPlan, error) {
+	vx.addDefaultWheres(planner, sel)
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", sel)
 
