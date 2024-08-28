@@ -1445,7 +1445,7 @@ func removeExprKeyrange(node sqlparser.Expr) sqlparser.Expr {
 				keep = append(keep, removeExprKeyrange(p))
 			}
 		}
-		return sqlparser.CreateAndExpr(keep...)
+		return sqlparser.AndExpressions(keep...)
 	}
 	return node
 }

@@ -231,7 +231,7 @@ func (g *Generator) makeAggregateIfNecessary(genConfig ExprGeneratorConfig, expr
 	// if the generated expression must be an aggregate, and it is not,
 	// tack on an extra "and count(*)" to make it aggregate
 	if genConfig.AggrRule == IsAggregate && !g.isAggregate && g.depth == 0 {
-		expr = createAndExpr(expr, &CountStar{})
+		expr = CreateAndExpr(expr, &CountStar{})
 		g.isAggregate = true
 	}
 
@@ -474,7 +474,7 @@ func (g *Generator) randomOfS(options []string) string {
 func (g *Generator) andExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
-	return createAndExpr(
+	return CreateAndExpr(
 		g.Expression(genConfig),
 		g.Expression(genConfig),
 	)

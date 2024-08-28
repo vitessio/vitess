@@ -17811,7 +17811,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5308
 		{
-			yyLOCAL = createAndExpr(yyDollar[1].exprUnion(), yyDollar[3].exprUnion())
+			yyLOCAL = CreateAndExpr(yyDollar[1].exprUnion(), yyDollar[3].exprUnion())
 		}
 		yyVAL.union = yyLOCAL
 	case 1013:

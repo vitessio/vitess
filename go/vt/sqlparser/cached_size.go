@@ -319,9 +319,8 @@ func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(24)
 	}
-	// field Right vitess.io/vitess/go/vt/sqlparser.Expr
 	// field Predicates vitess.io/vitess/go/vt/sqlparser.Exprs
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Predicates)) * int64(16))

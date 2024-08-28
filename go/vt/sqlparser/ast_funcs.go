@@ -66,7 +66,7 @@ func Append(buf *strings.Builder, node SQLNode) {
 	node.FormatFast(tbuf)
 }
 
-func createAndExpr(exprL, exprR Expr) *AndExpr {
+func CreateAndExpr(exprL, exprR Expr) *AndExpr {
 	leftAnd, isLeftAnd := exprL.(*AndExpr)
 	rightAnd, isRightAnd := exprR.(*AndExpr)
 	if isLeftAnd && isRightAnd {
@@ -1261,7 +1261,7 @@ func addPredicate(where *Where, pred Expr) *Where {
 		}
 	}
 
-	where.Expr = createAndExpr(where.Expr, pred)
+	where.Expr = CreateAndExpr(where.Expr, pred)
 	return where
 }
 
@@ -2358,17 +2358,6 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 		return append(filters, node.Predicates...)
 	}
 	return append(filters, node)
-}
-
-func CreateAndExpr(exprs ...Expr) Expr {
-	switch len(exprs) {
-	case 0:
-		return nil
-	case 1:
-		return exprs[0]
-	default:
-		return &AndExpr{Predicates: exprs}
-	}
 }
 
 // AndExpressions ands together two or more expressions, minimising the expr when possible
