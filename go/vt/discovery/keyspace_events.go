@@ -669,32 +669,52 @@ func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(ctx context.Context, tar
 	return ks.beingResharded(target.Shard)
 }
 
-// PrimaryIsNotServing checks if the reason why the given target is not accessible right now is
-// that the primary tablet for that shard is not serving. This is possible during a Planned
-// Reparent Shard operation. Just as the operation completes, a new primary will be elected, and
+// ShouldStartBufferingForTarget checks if we should be starting buffering for the given target.
+// We check the following things before we start buffering -
+//  1. The shard must have a primary.
+//  2. The primary must be non-serving.
+//  3. The keyspace must be marked inconsistent.
+//
+// This buffering is meant to kick in during a Planned Reparent Shard operation.
+// As part of that operation the old primary will become non-serving. At that point
+// this code should return true to start buffering requests.
+// Just as the PRS operation completes, a new primary will be elected, and
 // it will send its own healthcheck stating that it is serving. We should buffer requests until
-// that point. There are use cases where people do not run with a Primary server at all, so we must
+// that point.
+//
+// There are use cases where people do not run with a Primary server at all, so we must
 // verify that we only start buffering when a primary was present, and it went not serving.
 // The shard state keeps track of the current primary and the last externally reparented time, which
 // we can use to determine that there was a serving primary which now became non serving. This is
 // only possible in a DemotePrimary RPC which are only called from ERS and PRS. So buffering will
-// stop when these operations succeed. We return the tablet alias of the primary if it is serving.
-func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(ctx context.Context, target *querypb.Target) (*topodatapb.TabletAlias, bool) {
+// stop when these operations succeed. We also return the tablet alias of the primary if it is serving.
+func (kew *KeyspaceEventWatcher) ShouldStartBufferingForTarget(ctx context.Context, target *querypb.Target) (*topodatapb.TabletAlias, bool) {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
+		// We don't support buffering for any target tablet type other than the primary.
 		return nil, false
 	}
 	ks := kew.getKeyspaceStatus(ctx, target.Keyspace)
 	if ks == nil {
+		// If the keyspace status is nil, then the keyspace must be deleted.
+		// The user query is trying to access a keyspace that has been deleted.
+		// There is no reason to buffer this query.
 		return nil, false
 	}
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
 	if state, ok := ks.shards[target.Shard]; ok {
-		// The first time we receive an update for a serving primary, we set the externallyReparented value and currentPrimary values.
-		// These never get reset, so the last two checks checking for them being non-empty is purely for defensive reasons, so that we don't
-		// return that the primary is not serving when there is no primary that the keyspace event watcher has seen yet.
-		// The reason this function returns if the Primary is not serving and not just if it is serving, because we want to very defensive in when we say
-		// the primary is not serving. This function is used to start buffering and we don't want to start buffering when we don't know for sure if the primary
+		// As described in the function comment, we only want to start buffering when all the following conditions are met -
+		// 1. The shard must have a primary. We check this by checking the currentPrimary and externallyReparented fields being non-empty.
+		//    They are set the first time the shard registers an update from a serving primary and are never cleared out after that.
+		//    If the user has configred vtgates to wait for the primary tablet healthchecks before starting query service, this condition
+		//    will always be true.
+		// 2. The primary must be non-serving. We check this by checking the serving field in the shard state.
+		// 	  When a primary becomes non-serving, it also marks the keyspace inconsistent. So the next check is only added
+		//    for being defensive against any bugs.
+		// 3. The keyspace must be marked inconsistent. We check this by checking the consistent field in the keyspace state.
+		//
+		// The reason we need all the three checks is that we want to be very defensive in when we start buffering.
+		// We don't want to start buffering when we don't know for sure if the primary
 		// is not serving and we will receive an update that stops buffering soon.
 		return state.currentPrimary, !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
 	}

@@ -303,12 +303,13 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReshardingInProgress)
 					continue
 				}
-				primary, notServing := kev.PrimaryIsNotServing(ctx, target)
-				if notServing {
+				primary, shouldBuffer := kev.ShouldStartBufferingForTarget(ctx, target)
+				if shouldBuffer {
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReparentInProgress)
 					continue
 				}
-				// if primary is serving, but we initially found no tablet, we're in an inconsistent state
+				// if the keyspace event manager doesn't think we should buffer queries, and also sees a primary tablet,
+				// but we initially found no tablet, we're in an inconsistent state
 				// we then retry the entire loop
 				if primary != nil {
 					err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "inconsistent state detected, primary is serving but initially found no available tablet")

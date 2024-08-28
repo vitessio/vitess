@@ -148,11 +148,11 @@ func TestKeyspaceEventTypes(t *testing.T) {
 	kew := NewKeyspaceEventWatcher(ctx, ts2, hc, cell)
 
 	type testCase struct {
-		name                    string
-		kss                     *keyspaceState
-		shardToCheck            string
-		expectResharding        bool
-		expectPrimaryNotServing bool
+		name               string
+		kss                *keyspaceState
+		shardToCheck       string
+		expectResharding   bool
+		expectShouldBuffer bool
 	}
 
 	testCases := []testCase{
@@ -189,9 +189,9 @@ func TestKeyspaceEventTypes(t *testing.T) {
 				},
 				consistent: false,
 			},
-			shardToCheck:            "-",
-			expectResharding:        true,
-			expectPrimaryNotServing: false,
+			shardToCheck:       "-",
+			expectResharding:   true,
+			expectShouldBuffer: false,
 		},
 		{
 			name: "two to four resharding in progress",
@@ -250,9 +250,9 @@ func TestKeyspaceEventTypes(t *testing.T) {
 				},
 				consistent: false,
 			},
-			shardToCheck:            "-80",
-			expectResharding:        true,
-			expectPrimaryNotServing: false,
+			shardToCheck:       "-80",
+			expectResharding:   true,
+			expectShouldBuffer: false,
 		},
 		{
 			name: "unsharded primary not serving",
@@ -276,9 +276,9 @@ func TestKeyspaceEventTypes(t *testing.T) {
 				},
 				consistent: false,
 			},
-			shardToCheck:            "-",
-			expectResharding:        false,
-			expectPrimaryNotServing: true,
+			shardToCheck:       "-",
+			expectResharding:   false,
+			expectShouldBuffer: true,
 		},
 		{
 			name: "sharded primary not serving",
@@ -310,9 +310,9 @@ func TestKeyspaceEventTypes(t *testing.T) {
 				},
 				consistent: false,
 			},
-			shardToCheck:            "-80",
-			expectResharding:        false,
-			expectPrimaryNotServing: true,
+			shardToCheck:       "-80",
+			expectResharding:   false,
+			expectShouldBuffer: true,
 		},
 	}
 
@@ -327,8 +327,8 @@ func TestKeyspaceEventTypes(t *testing.T) {
 			resharding := kew.TargetIsBeingResharded(ctx, tc.kss.shards[tc.shardToCheck].target)
 			require.Equal(t, resharding, tc.expectResharding, "TargetIsBeingResharded should return %t", tc.expectResharding)
 
-			_, primaryDown := kew.PrimaryIsNotServing(ctx, tc.kss.shards[tc.shardToCheck].target)
-			require.Equal(t, primaryDown, tc.expectPrimaryNotServing, "PrimaryIsNotServing should return %t", tc.expectPrimaryNotServing)
+			_, shouldBuffer := kew.ShouldStartBufferingForTarget(ctx, tc.kss.shards[tc.shardToCheck].target)
+			require.Equal(t, shouldBuffer, tc.expectShouldBuffer, "ShouldStartBufferingForTarget should return %t", tc.expectShouldBuffer)
 		})
 	}
 }
