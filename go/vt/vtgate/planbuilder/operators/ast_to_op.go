@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -50,9 +52,7 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {
 	op := crossJoin(ctx, sel.From)
 
-	if expr := sel.GetWherePredicate(); expr != nil {
-		op = addWherePredicates(ctx, expr, op)
-	}
+	op = addWherePredicates(ctx, sel.GetWherePredicate(), op)
 
 	if sel.Comments != nil || sel.Lock != sqlparser.NoLock {
 		op = &LockAndComment{
@@ -75,17 +75,54 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 
 func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
 	outerID := TableID(op)
-	exprs := sqlparser.SplitAndExpression(nil, expr)
-	for _, expr := range exprs {
+	for _, expr := range sqlparser.SplitAndExpression(nil, expr) {
 		sqlparser.RemoveKeyspaceInCol(expr)
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
 		}
+		b := constantPredicate(ctx, expr)
+		if b != nil {
+			if *b {
+				// If the predicate is true, we can ignore it.
+				continue
+			}
+
+			// If the predicate is false, we push down a false predicate to influence routing
+			expr = sqlparser.NewIntLiteral("0")
+		}
+
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
 	return op
+}
+
+// constantPredicate evaluates the given expression and returns the result if it is a constant,
+// in other words - can it be evaluated without any table data.
+func constantPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *bool {
+	env := ctx.VSchema.Environment()
+	coll := env.CollationEnv().DefaultConnectionCharset()
+	evalEnginePred, err := evalengine.Translate(expr, &evalengine.Config{
+		Environment: env,
+		Collation:   coll,
+	})
+	if err != nil {
+		return nil
+	}
+
+	evalEnv := evalengine.EmptyExpressionEnv(env)
+	res, err := evalEnv.Evaluate(evalEnginePred)
+	if err != nil {
+		return nil
+	}
+
+	boolValue, err := res.Value(coll).ToBool()
+	if err != nil {
+		return nil
+	}
+
+	return &boolValue
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.

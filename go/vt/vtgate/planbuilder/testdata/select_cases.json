@@ -1874,7 +1874,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 42 from dual where 1 != 1",
-        "Query": "select 42 from dual where false",
+        "Query": "select 42 from dual where 0",
         "Table": "dual"
       },
       "TablesUsed": [
