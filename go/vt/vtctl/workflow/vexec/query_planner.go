@@ -330,12 +330,11 @@ func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (Q
 				Right: sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamIDs[0])),
 			}
 		default: // WHERE vreplication_log.vrepl_id IN (?)
-			vals := []sqlparser.Expr{}
+			var tuple sqlparser.ValTuple
 			for _, streamID := range streamIDs {
-				vals = append(vals, sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamID)))
+				tuple = append(tuple, sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamID)))
 			}
 
-			var tuple sqlparser.ValTuple = vals
 			expr = &sqlparser.ComparisonExpr{
 				Operator: sqlparser.InOp,
 				Left: &sqlparser.ColName{

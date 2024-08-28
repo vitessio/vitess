@@ -52,22 +52,16 @@ type FixedQueryPlan struct {
 }
 
 // Execute is part of the QueryPlan interface.
-func (qp *FixedQueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (qr *querypb.QueryResult, err error) {
+func (qp *FixedQueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (*querypb.QueryResult, error) {
 	if qp.ParsedQuery == nil {
 		return nil, fmt.Errorf("%w: call PlanQuery on a query planner first", ErrUnpreparedQuery)
 	}
 
 	targetAliasStr := target.AliasString()
 
-	defer func() {
-		if err != nil {
-			log.Warningf("Result on %v: %v", targetAliasStr, err)
-			return
-		}
-	}()
-
-	qr, err = qp.tmc.VReplicationExec(ctx, target.Tablet, qp.ParsedQuery.Query)
+	qr, err := qp.tmc.VReplicationExec(ctx, target.Tablet, qp.ParsedQuery.Query)
 	if err != nil {
+		log.Warningf("Result on %v: %v", targetAliasStr, err)
 		return nil, err
 	}
 	return qr, nil

@@ -246,119 +246,114 @@ func TestVReplicationQueryPlanner_planDelete(t *testing.T) {
 func TestVReplicationLogQueryPlanner(t *testing.T) {
 	t.Parallel()
 
-	t.Run("planSelect", func(t *testing.T) {
-		t.Parallel()
-
-		tests := []struct {
-			name            string
-			targetStreamIDs map[string][]int64
-			query           string
-			assertion       func(t *testing.T, plan QueryPlan)
-			shouldErr       bool
-		}{
-			{
-				targetStreamIDs: map[string][]int64{
-					"a": {1, 2},
-				},
-				query: "select * from _vt.vreplication_log",
-				assertion: func(t *testing.T, plan QueryPlan) {
-					t.Helper()
-					qp, ok := plan.(*PerTargetQueryPlan)
-					if !ok {
-						require.FailNow(t, "failed type check", "expected plan to be PerTargetQueryPlan, got %T: %v", plan, plan)
-					}
-
-					expected := map[string]string{
-						"a": "select * from _vt.vreplication_log where vrepl_id in (1, 2)",
-					}
-					assertQueryMapsMatch(t, expected, qp.ParsedQueries)
-				},
+	tests := []struct {
+		targetStreamIDs map[string][]int64
+		query           string
+		assertion       func(t *testing.T, plan QueryPlan)
+		shouldErr       bool
+	}{
+		{
+			targetStreamIDs: map[string][]int64{
+				"a": {1, 2},
 			},
-			{
-				targetStreamIDs: map[string][]int64{
-					"a": nil,
-				},
-				query: "select * from _vt.vreplication_log",
-				assertion: func(t *testing.T, plan QueryPlan) {
-					t.Helper()
-					qp, ok := plan.(*PerTargetQueryPlan)
-					if !ok {
-						require.FailNow(t, "failed type check", "expected plan to be PerTargetQueryPlan, got %T: %v", plan, plan)
-					}
-
-					expected := map[string]string{
-						"a": "select * from _vt.vreplication_log where 1 != 1",
-					}
-					assertQueryMapsMatch(t, expected, qp.ParsedQueries)
-				},
-			},
-			{
-				targetStreamIDs: map[string][]int64{
-					"a": {1},
-				},
-				query: "select * from _vt.vreplication_log",
-				assertion: func(t *testing.T, plan QueryPlan) {
-					t.Helper()
-					qp, ok := plan.(*PerTargetQueryPlan)
-					if !ok {
-						require.FailNow(t, "failed type check", "expected plan to be PerTargetQueryPlan, got %T: %v", plan, plan)
-					}
-
-					expected := map[string]string{
-						"a": "select * from _vt.vreplication_log where vrepl_id = 1",
-					}
-					assertQueryMapsMatch(t, expected, qp.ParsedQueries)
-				},
-			},
-			{
-				query: "select * from _vt.vreplication_log where vrepl_id = 1",
-				assertion: func(t *testing.T, plan QueryPlan) {
-					t.Helper()
-					qp, ok := plan.(*FixedQueryPlan)
-					if !ok {
-						require.FailNow(t, "failed type check", "expected plan to be FixedQueryPlan, got %T: %v", plan, plan)
-					}
-
-					assert.Equal(t, "select * from _vt.vreplication_log where vrepl_id = 1", qp.ParsedQuery.Query)
-				},
-			},
-			{
-				targetStreamIDs: map[string][]int64{
-					"a": {1, 2},
-				},
-				query: "select * from _vt.vreplication_log where foo = 'bar'",
-				assertion: func(t *testing.T, plan QueryPlan) {
-					t.Helper()
-					qp, ok := plan.(*PerTargetQueryPlan)
-					if !ok {
-						require.FailNow(t, "failed type check", "expected plan to be PerTargetQueryPlan, got %T: %v", plan, plan)
-					}
-
-					expected := map[string]string{
-						"a": "select * from _vt.vreplication_log where vrepl_id in (1, 2) and foo = 'bar'",
-					}
-					assertQueryMapsMatch(t, expected, qp.ParsedQueries)
-				},
-			},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-
-				planner := NewVReplicationLogQueryPlanner(nil, tt.targetStreamIDs)
-				stmt, err := sqlparser.NewTestParser().Parse(tt.query)
-				require.NoError(t, err, "could not parse query %q", tt.query)
-				qp, err := planner.planSelect(stmt.(*sqlparser.Select))
-				if tt.shouldErr {
-					assert.Error(t, err)
-					return
+			query: "select * from _vt.vreplication_log",
+			assertion: func(t *testing.T, plan QueryPlan) {
+				t.Helper()
+				qp, ok := plan.(*PerTargetQueryPlan)
+				if !ok {
+					require.FailNow(t, "failed type check", "expected plan to be PerTargetQueryPlan, got %T: %v", plan, plan)
 				}
 
-				tt.assertion(t, qp)
-			})
-		}
-	})
+				expected := map[string]string{
+					"a": "select * from _vt.vreplication_log where vrepl_id in (1, 2)",
+				}
+				assertQueryMapsMatch(t, expected, qp.ParsedQueries)
+			},
+		},
+		{
+			targetStreamIDs: map[string][]int64{
+				"a": nil,
+			},
+			query: "select * from _vt.vreplication_log",
+			assertion: func(t *testing.T, plan QueryPlan) {
+				t.Helper()
+				qp, ok := plan.(*PerTargetQueryPlan)
+				if !ok {
+					require.FailNow(t, "failed type check", "expected plan to be PerTargetQueryPlan, got %T: %v", plan, plan)
+				}
+
+				expected := map[string]string{
+					"a": "select * from _vt.vreplication_log where 1 != 1",
+				}
+				assertQueryMapsMatch(t, expected, qp.ParsedQueries)
+			},
+		},
+		{
+			targetStreamIDs: map[string][]int64{
+				"a": {1},
+			},
+			query: "select * from _vt.vreplication_log",
+			assertion: func(t *testing.T, plan QueryPlan) {
+				t.Helper()
+				qp, ok := plan.(*PerTargetQueryPlan)
+				if !ok {
+					require.FailNow(t, "failed type check", "expected plan to be PerTargetQueryPlan, got %T: %v", plan, plan)
+				}
+
+				expected := map[string]string{
+					"a": "select * from _vt.vreplication_log where vrepl_id = 1",
+				}
+				assertQueryMapsMatch(t, expected, qp.ParsedQueries)
+			},
+		},
+		{
+			query: "select * from _vt.vreplication_log where vrepl_id = 1",
+			assertion: func(t *testing.T, plan QueryPlan) {
+				t.Helper()
+				qp, ok := plan.(*FixedQueryPlan)
+				if !ok {
+					require.FailNow(t, "failed type check", "expected plan to be FixedQueryPlan, got %T: %v", plan, plan)
+				}
+
+				assert.Equal(t, "select * from _vt.vreplication_log where vrepl_id = 1", qp.ParsedQuery.Query)
+			},
+		},
+		{
+			targetStreamIDs: map[string][]int64{
+				"a": {1, 2},
+			},
+			query: "select * from _vt.vreplication_log where foo = 'bar'",
+			assertion: func(t *testing.T, plan QueryPlan) {
+				t.Helper()
+				qp, ok := plan.(*PerTargetQueryPlan)
+				if !ok {
+					require.FailNow(t, "failed type check", "expected plan to be PerTargetQueryPlan, got %T: %v", plan, plan)
+				}
+
+				expected := map[string]string{
+					"a": "select * from _vt.vreplication_log where foo = 'bar' and vrepl_id in (1, 2)",
+				}
+				assertQueryMapsMatch(t, expected, qp.ParsedQueries)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			t.Parallel()
+
+			planner := NewVReplicationLogQueryPlanner(nil, tt.targetStreamIDs)
+			stmt, err := sqlparser.NewTestParser().Parse(tt.query)
+			require.NoError(t, err, "could not parse query %q", tt.query)
+			qp, err := planner.planSelect(stmt.(*sqlparser.Select))
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			tt.assertion(t, qp)
+		})
+	}
 }
 
 func assertQueryMapsMatch(t *testing.T, expected map[string]string, actual map[string]*sqlparser.ParsedQuery, msgAndArgs ...any) {
