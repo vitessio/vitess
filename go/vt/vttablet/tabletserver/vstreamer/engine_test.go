@@ -96,7 +96,7 @@ func TestUpdateVSchema(t *testing.T) {
 	// Stream should terminate immediately due to invalid pos.
 	_ = engine.Stream(ctx, "invalid", nil, filter, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
 		return nil
-	})
+	}, nil)
 
 	startCount := expectUpdateCount(t, 1)
 
@@ -106,6 +106,7 @@ func TestUpdateVSchema(t *testing.T) {
 	expectUpdateCount(t, startCount+1)
 
 	want := `{
+  "mirror_rules": {},
   "routing_rules": {},
   "keyspaces": {
     "vttest": {

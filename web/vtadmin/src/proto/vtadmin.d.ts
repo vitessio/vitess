@@ -528,6 +528,34 @@ export namespace vtadmin {
         public getWorkflowStatus(request: vtadmin.IGetWorkflowStatusRequest): Promise<vtctldata.WorkflowStatusResponse>;
 
         /**
+         * Calls StartWorkflow.
+         * @param request StartWorkflowRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and WorkflowUpdateResponse
+         */
+        public startWorkflow(request: vtadmin.IStartWorkflowRequest, callback: vtadmin.VTAdmin.StartWorkflowCallback): void;
+
+        /**
+         * Calls StartWorkflow.
+         * @param request StartWorkflowRequest message or plain object
+         * @returns Promise
+         */
+        public startWorkflow(request: vtadmin.IStartWorkflowRequest): Promise<vtctldata.WorkflowUpdateResponse>;
+
+        /**
+         * Calls StopWorkflow.
+         * @param request StopWorkflowRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and WorkflowUpdateResponse
+         */
+        public stopWorkflow(request: vtadmin.IStopWorkflowRequest, callback: vtadmin.VTAdmin.StopWorkflowCallback): void;
+
+        /**
+         * Calls StopWorkflow.
+         * @param request StopWorkflowRequest message or plain object
+         * @returns Promise
+         */
+        public stopWorkflow(request: vtadmin.IStopWorkflowRequest): Promise<vtctldata.WorkflowUpdateResponse>;
+
+        /**
          * Calls LaunchSchemaMigration.
          * @param request LaunchSchemaMigrationRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and LaunchSchemaMigrationResponse
@@ -1103,6 +1131,20 @@ export namespace vtadmin {
          * @param [response] WorkflowStatusResponse
          */
         type GetWorkflowStatusCallback = (error: (Error|null), response?: vtctldata.WorkflowStatusResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#startWorkflow}.
+         * @param error Error, if any
+         * @param [response] WorkflowUpdateResponse
+         */
+        type StartWorkflowCallback = (error: (Error|null), response?: vtctldata.WorkflowUpdateResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#stopWorkflow}.
+         * @param error Error, if any
+         * @param [response] WorkflowUpdateResponse
+         */
+        type StopWorkflowCallback = (error: (Error|null), response?: vtctldata.WorkflowUpdateResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#launchSchemaMigration}.
@@ -8740,6 +8782,224 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for GetWorkflowStatusRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StartWorkflowRequest. */
+    interface IStartWorkflowRequest {
+
+        /** StartWorkflowRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** StartWorkflowRequest keyspace */
+        keyspace?: (string|null);
+
+        /** StartWorkflowRequest workflow */
+        workflow?: (string|null);
+    }
+
+    /** Represents a StartWorkflowRequest. */
+    class StartWorkflowRequest implements IStartWorkflowRequest {
+
+        /**
+         * Constructs a new StartWorkflowRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IStartWorkflowRequest);
+
+        /** StartWorkflowRequest cluster_id. */
+        public cluster_id: string;
+
+        /** StartWorkflowRequest keyspace. */
+        public keyspace: string;
+
+        /** StartWorkflowRequest workflow. */
+        public workflow: string;
+
+        /**
+         * Creates a new StartWorkflowRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StartWorkflowRequest instance
+         */
+        public static create(properties?: vtadmin.IStartWorkflowRequest): vtadmin.StartWorkflowRequest;
+
+        /**
+         * Encodes the specified StartWorkflowRequest message. Does not implicitly {@link vtadmin.StartWorkflowRequest.verify|verify} messages.
+         * @param message StartWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IStartWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StartWorkflowRequest message, length delimited. Does not implicitly {@link vtadmin.StartWorkflowRequest.verify|verify} messages.
+         * @param message StartWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IStartWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StartWorkflowRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StartWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.StartWorkflowRequest;
+
+        /**
+         * Decodes a StartWorkflowRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StartWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.StartWorkflowRequest;
+
+        /**
+         * Verifies a StartWorkflowRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StartWorkflowRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StartWorkflowRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.StartWorkflowRequest;
+
+        /**
+         * Creates a plain object from a StartWorkflowRequest message. Also converts values to other types if specified.
+         * @param message StartWorkflowRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.StartWorkflowRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StartWorkflowRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartWorkflowRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StopWorkflowRequest. */
+    interface IStopWorkflowRequest {
+
+        /** StopWorkflowRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** StopWorkflowRequest keyspace */
+        keyspace?: (string|null);
+
+        /** StopWorkflowRequest workflow */
+        workflow?: (string|null);
+    }
+
+    /** Represents a StopWorkflowRequest. */
+    class StopWorkflowRequest implements IStopWorkflowRequest {
+
+        /**
+         * Constructs a new StopWorkflowRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IStopWorkflowRequest);
+
+        /** StopWorkflowRequest cluster_id. */
+        public cluster_id: string;
+
+        /** StopWorkflowRequest keyspace. */
+        public keyspace: string;
+
+        /** StopWorkflowRequest workflow. */
+        public workflow: string;
+
+        /**
+         * Creates a new StopWorkflowRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StopWorkflowRequest instance
+         */
+        public static create(properties?: vtadmin.IStopWorkflowRequest): vtadmin.StopWorkflowRequest;
+
+        /**
+         * Encodes the specified StopWorkflowRequest message. Does not implicitly {@link vtadmin.StopWorkflowRequest.verify|verify} messages.
+         * @param message StopWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IStopWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StopWorkflowRequest message, length delimited. Does not implicitly {@link vtadmin.StopWorkflowRequest.verify|verify} messages.
+         * @param message StopWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IStopWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StopWorkflowRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StopWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.StopWorkflowRequest;
+
+        /**
+         * Decodes a StopWorkflowRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StopWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.StopWorkflowRequest;
+
+        /**
+         * Verifies a StopWorkflowRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StopWorkflowRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StopWorkflowRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.StopWorkflowRequest;
+
+        /**
+         * Creates a plain object from a StopWorkflowRequest message. Also converts values to other types if specified.
+         * @param message StopWorkflowRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.StopWorkflowRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StopWorkflowRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopWorkflowRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -29648,6 +29908,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions max_sample_rows */
         max_sample_rows?: (number|Long|null);
+
+        /** VDiffReportOptions row_diff_column_truncate_at */
+        row_diff_column_truncate_at?: (number|Long|null);
     }
 
     /** Represents a VDiffReportOptions. */
@@ -29670,6 +29933,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions max_sample_rows. */
         public max_sample_rows: (number|Long);
+
+        /** VDiffReportOptions row_diff_column_truncate_at. */
+        public row_diff_column_truncate_at: (number|Long);
 
         /**
          * Creates a new VDiffReportOptions instance using the specified properties.
@@ -33256,6 +33522,9 @@ export namespace binlogdata {
 
         /** RowEvent flags */
         flags?: (number|null);
+
+        /** RowEvent is_internal_table */
+        is_internal_table?: (boolean|null);
     }
 
     /** Represents a RowEvent. */
@@ -33281,6 +33550,9 @@ export namespace binlogdata {
 
         /** RowEvent flags. */
         public flags: number;
+
+        /** RowEvent is_internal_table. */
+        public is_internal_table: boolean;
 
         /**
          * Creates a new RowEvent instance using the specified properties.
@@ -33377,6 +33649,9 @@ export namespace binlogdata {
 
         /** FieldEvent enum_set_string_values */
         enum_set_string_values?: (boolean|null);
+
+        /** FieldEvent is_internal_table */
+        is_internal_table?: (boolean|null);
     }
 
     /** Represents a FieldEvent. */
@@ -33402,6 +33677,9 @@ export namespace binlogdata {
 
         /** FieldEvent enum_set_string_values. */
         public enum_set_string_values: boolean;
+
+        /** FieldEvent is_internal_table. */
+        public is_internal_table: boolean;
 
         /**
          * Creates a new FieldEvent instance using the specified properties.
@@ -34328,6 +34606,103 @@ export namespace binlogdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a VStreamOptions. */
+    interface IVStreamOptions {
+
+        /** VStreamOptions internal_tables */
+        internal_tables?: (string[]|null);
+    }
+
+    /** Represents a VStreamOptions. */
+    class VStreamOptions implements IVStreamOptions {
+
+        /**
+         * Constructs a new VStreamOptions.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamOptions);
+
+        /** VStreamOptions internal_tables. */
+        public internal_tables: string[];
+
+        /**
+         * Creates a new VStreamOptions instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamOptions instance
+         */
+        public static create(properties?: binlogdata.IVStreamOptions): binlogdata.VStreamOptions;
+
+        /**
+         * Encodes the specified VStreamOptions message. Does not implicitly {@link binlogdata.VStreamOptions.verify|verify} messages.
+         * @param message VStreamOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamOptions message, length delimited. Does not implicitly {@link binlogdata.VStreamOptions.verify|verify} messages.
+         * @param message VStreamOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamOptions message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamOptions;
+
+        /**
+         * Decodes a VStreamOptions message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamOptions;
+
+        /**
+         * Verifies a VStreamOptions message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamOptions message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamOptions
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamOptions;
+
+        /**
+         * Creates a plain object from a VStreamOptions message. Also converts values to other types if specified.
+         * @param message VStreamOptions
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamOptions, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamOptions to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamOptions
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a VStreamRequest. */
     interface IVStreamRequest {
 
@@ -34348,6 +34723,9 @@ export namespace binlogdata {
 
         /** VStreamRequest table_last_p_ks */
         table_last_p_ks?: (binlogdata.ITableLastPK[]|null);
+
+        /** VStreamRequest options */
+        options?: (binlogdata.IVStreamOptions|null);
     }
 
     /** Represents a VStreamRequest. */
@@ -34376,6 +34754,9 @@ export namespace binlogdata {
 
         /** VStreamRequest table_last_p_ks. */
         public table_last_p_ks: binlogdata.ITableLastPK[];
+
+        /** VStreamRequest options. */
+        public options?: (binlogdata.IVStreamOptions|null);
 
         /**
          * Creates a new VStreamRequest instance using the specified properties.
@@ -71472,6 +71853,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest max_diff_duration */
         max_diff_duration?: (vttime.IDuration|null);
+
+        /** VDiffCreateRequest row_diff_column_truncate_at */
+        row_diff_column_truncate_at?: (number|Long|null);
     }
 
     /** Represents a VDiffCreateRequest. */
@@ -71542,6 +71926,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest max_diff_duration. */
         public max_diff_duration?: (vttime.IDuration|null);
+
+        /** VDiffCreateRequest row_diff_column_truncate_at. */
+        public row_diff_column_truncate_at: (number|Long);
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.

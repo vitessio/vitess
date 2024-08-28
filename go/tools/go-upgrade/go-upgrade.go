@@ -418,7 +418,7 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 	}
 
 	if !isSameMajorMinorVersion(old, new) {
-		goModFiles := []string{"./go.mod", "./vitess-mixin/go.mod"}
+		goModFiles := []string{"./go.mod"}
 		for _, file := range goModFiles {
 			err = replaceInFile(
 				[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},

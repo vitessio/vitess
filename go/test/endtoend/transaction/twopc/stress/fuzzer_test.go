@@ -34,7 +34,9 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/syscallutil"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 )
 
 var (
@@ -78,7 +80,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 		threads               int
 		updateSets            int
 		timeForTesting        time.Duration
-		clusterDisruptions    []func()
+		clusterDisruptions    []func(t *testing.T)
 		disruptionProbability []int
 	}{
 		{
@@ -100,12 +102,12 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			timeForTesting: 5 * time.Second,
 		},
 		{
-			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL and Vttablet restart disruptions",
+			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL disruptions",
 			threads:               15,
 			updateSets:            15,
 			timeForTesting:        5 * time.Second,
-			clusterDisruptions:    []func(){prs, ers, mysqlRestarts, vttabletRestarts},
-			disruptionProbability: []int{5, 5, 5, 5},
+			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer},
+			disruptionProbability: []int{5, 5, 5, 5, 5},
 		},
 	}
 
@@ -113,7 +115,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			conn, closer := start(t)
 			defer closer()
-			fz := newFuzzer(tt.threads, tt.updateSets, tt.clusterDisruptions, tt.disruptionProbability)
+			fz := newFuzzer(t, tt.threads, tt.updateSets, tt.clusterDisruptions, tt.disruptionProbability)
 
 			fz.initialize(t, conn)
 			conn.Close()
@@ -190,6 +192,7 @@ func getThreadIDsForUpdateSetFromFuzzInsert(t *testing.T, conn *mysql.Conn, upda
 type fuzzer struct {
 	threads    int
 	updateSets int
+	t          *testing.T
 
 	// shouldStop is an internal state variable, that tells the fuzzer
 	// whether it should stop or not.
@@ -199,14 +202,15 @@ type fuzzer struct {
 	// updateRowVals are the rows that we use to ensure 1 update on each shard with the same increment.
 	updateRowsVals [][]int
 	// clusterDisruptions are the cluster level disruptions that can happen in a running cluster.
-	clusterDisruptions []func()
+	clusterDisruptions []func(t *testing.T)
 	// disruptionProbability is the chance for the disruption to happen. We check this every 100 milliseconds.
 	disruptionProbability []int
 }
 
 // newFuzzer creates a new fuzzer struct.
-func newFuzzer(threads int, updateSets int, clusterDisruptions []func(), disruptionProbability []int) *fuzzer {
+func newFuzzer(t *testing.T, threads int, updateSets int, clusterDisruptions []func(t *testing.T), disruptionProbability []int) *fuzzer {
 	fz := &fuzzer{
+		t:                     t,
 		threads:               threads,
 		updateSets:            updateSets,
 		wg:                    sync.WaitGroup{},
@@ -364,7 +368,7 @@ func (fz *fuzzer) runClusterDisruptionThread(t *testing.T) {
 func (fz *fuzzer) runClusterDisruption(t *testing.T) {
 	for idx, prob := range fz.disruptionProbability {
 		if rand.Intn(100) < prob {
-			fz.clusterDisruptions[idx]()
+			fz.clusterDisruptions[idx](fz.t)
 			return
 		}
 	}
@@ -374,7 +378,7 @@ func (fz *fuzzer) runClusterDisruption(t *testing.T) {
 Cluster Level Disruptions for the fuzzer
 */
 
-func prs() {
+func prs(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	shard := shards[rand.Intn(len(shards))]
 	vttablets := shard.Vttablets
@@ -386,7 +390,7 @@ func prs() {
 	}
 }
 
-func ers() {
+func ers(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	shard := shards[rand.Intn(len(shards))]
 	vttablets := shard.Vttablets
@@ -398,7 +402,7 @@ func ers() {
 	}
 }
 
-func vttabletRestarts() {
+func vttabletRestarts(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	shard := shards[rand.Intn(len(shards))]
 	vttablets := shard.Vttablets
@@ -422,7 +426,27 @@ func vttabletRestarts() {
 	}
 }
 
-func mysqlRestarts() {
+var orderedDDLFuzzer = []string{
+	"alter table twopc_fuzzer_insert add column extra_col1 varchar(20)",
+	"alter table twopc_fuzzer_insert add column extra_col2 varchar(20)",
+	"alter table twopc_fuzzer_insert drop column extra_col1",
+	"alter table twopc_fuzzer_insert drop column extra_col2",
+}
+
+// onlineDDLFuzzer runs an online DDL statement while ignoring any errors for the fuzzer.
+func onlineDDLFuzzer(t *testing.T) {
+	output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, orderedDDLFuzzer[count%len(orderedDDLFuzzer)], cluster.ApplySchemaParams{
+		DDLStrategy: "vitess --force-cut-over-after=1ms",
+	})
+	count++
+	if err != nil {
+		return
+	}
+	fmt.Println("Running online DDL with uuid: ", output)
+	WaitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+}
+
+func mysqlRestarts(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	shard := shards[rand.Intn(len(shards))]
 	vttablets := shard.Vttablets

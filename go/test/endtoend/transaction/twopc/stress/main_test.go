@@ -71,6 +71,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--twopc_enable",
 			"--twopc_abandon_age", "1",
+			"--migration_check_interval", "2s",
 		)
 
 		// Start keyspace

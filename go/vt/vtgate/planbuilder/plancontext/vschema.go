@@ -96,6 +96,10 @@ type VSchema interface {
 
 	// GetAggregateUDFs returns the list of aggregate UDFs.
 	GetAggregateUDFs() []string
+
+	// FindMirrorRule finds the mirror rule for the requested keyspace, table
+	// name, and the tablet type in the VSchema.
+	FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error)
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

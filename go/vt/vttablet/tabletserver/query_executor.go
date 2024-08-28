@@ -670,7 +670,6 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				newLast += cache
 			}
 			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(tableName), newLast)
-			conn.TxProperties().RecordQuery(query)
 			_, err = qre.execStatefulConn(conn, query, false)
 			if err != nil {
 				return nil, err
@@ -807,7 +806,7 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 	}
 	// Only record successful queries.
 	if record {
-		conn.TxProperties().RecordQuery(sql)
+		conn.TxProperties().RecordQueryDetail(sql, qre.plan.TableNames())
 	}
 	return qr, nil
 }

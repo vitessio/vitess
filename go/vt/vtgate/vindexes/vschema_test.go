@@ -838,6 +838,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 		Keyspace: ks2,
 	}
 	want := &VSchema{
+		MirrorRules: map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{
 			"rt1": {
 				Error: errors.New("table rt1 has more than one target: [ks1.t1 ks2.t2]"),
@@ -852,10 +853,10 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("duplicate rule for entry dup"),
 			},
 			"badname": {
-				Error: errors.New("invalid table name: t1.t2.t3, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
+				Error: errors.New("invalid table name: 't1.t2.t3', it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"unqualified": {
-				Error: errors.New("invalid table name: t1, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
+				Error: errors.New("invalid table name: 't1', it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"badkeyspace": {
 				Error: errors.New("VT05003: unknown database 'ks3' in vschema"),
@@ -894,6 +895,282 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	}
 	gotb, _ := json.MarshalIndent(got, "", "  ")
 	wantb, _ := json.MarshalIndent(want, "", "  ")
+	assert.Equal(t, string(wantb), string(gotb), string(gotb))
+}
+
+func TestVSchemaMirrorRules(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		MirrorRules: &vschemapb.MirrorRules{
+			Rules: []*vschemapb.MirrorRule{
+				// Empty FromTable not allowed.
+				{
+					FromTable: "",
+					ToTable:   "ks2.ks2t1",
+				},
+				// Invalid FromTable, needs to be <keyspace>.<table>[@<tablet-type>].
+				{
+					FromTable: "ks1",
+					ToTable:   "ks2.ks2t1",
+				},
+				// Invalid ToTable, needs to be <keyspace>.<table>.
+				{
+					FromTable: "ks1.ks1t1",
+					ToTable:   "ks2",
+				},
+				// Invalid ToTable, needs to be <keyspace>.<table>.
+				{
+					FromTable: "ks1.ks1t2",
+					ToTable:   "ks2.ks2t2.c",
+				},
+				// OK, unsharded => unsharded.
+				{
+					FromTable: "ks1.ks1t3",
+					ToTable:   "ks2.ks2t3",
+					Percent:   50,
+				},
+				// Invalid ToTable, needs to be <keyspace>.<table>.
+				{
+					FromTable: "ks1.ks1t4",
+					ToTable:   "ks2.ks2t4@replica",
+				},
+				// OK, unsharded@tablet-type => unsharded.
+				{
+					FromTable: "ks1.ks1t5@replica",
+					ToTable:   "ks2.ks2t5",
+				},
+				// Invalid FromTable tablet type..
+				{
+					FromTable: "ks1.ks1t6@stone",
+					ToTable:   "ks2.ks2t6",
+				},
+				// OK, sharded => sharded.
+				{
+					FromTable: "ks3.ks3t1",
+					ToTable:   "ks4.ks4t1",
+					Percent:   50,
+				},
+				// OK, unsharded => sharded.
+				{
+					FromTable: "ks1.ks1t7",
+					ToTable:   "ks4.ks4t1",
+					Percent:   50,
+				},
+				// Destination sharded table must be defined in VSchema.
+				{
+					FromTable: "ks1.ks1t8",
+					ToTable:   "ks4.ks4t2",
+					Percent:   50,
+				},
+				// Source sharded table must be defined in VSchema.
+				{
+					FromTable: "ks3.ks3t2",
+					ToTable:   "ks4.ks4t1",
+					Percent:   50,
+				},
+				// Keyspaces that are the target of a rule may not be the
+				// source of another.
+				{
+					FromTable: "ks2.ks2t9",
+					ToTable:   "ks4.ks4t1",
+					Percent:   50,
+				},
+			},
+		},
+		RoutingRules: &vschemapb.RoutingRules{},
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": {
+				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+				Tables:         map[string]*vschemapb.Table{},
+			},
+			"ks2": {
+				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+				Tables:         map[string]*vschemapb.Table{},
+			},
+			"ks3": {
+				Sharded:        true,
+				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"ks3t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "id",
+								Name:   "stfu1",
+							},
+						},
+					},
+				},
+			},
+			"ks4": {
+				Sharded:        true,
+				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"ks4t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "id",
+								Name:   "stfu1",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	got := BuildVSchema(&input, sqlparser.NewTestParser())
+
+	ks1 := &Keyspace{
+		Name:    "ks1",
+		Sharded: false,
+	}
+	ks2 := &Keyspace{
+		Name:    "ks2",
+		Sharded: false,
+	}
+	ks3 := &Keyspace{
+		Name:    "ks3",
+		Sharded: true,
+	}
+	ks4 := &Keyspace{
+		Name:    "ks4",
+		Sharded: true,
+	}
+
+	vindex1 := &stFU{
+		name: "stfu1",
+	}
+
+	ks3t1 := &Table{
+		Name:     sqlparser.NewIdentifierCS("ks3t1"),
+		Keyspace: ks3,
+		ColumnVindexes: []*ColumnVindex{{
+			Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("id")},
+			Type:     "stfu",
+			Name:     "stfu1",
+			Vindex:   vindex1,
+			isUnique: vindex1.IsUnique(),
+			cost:     vindex1.Cost(),
+		}},
+	}
+	ks3t1.Ordered = []*ColumnVindex{
+		ks3t1.ColumnVindexes[0],
+	}
+
+	ks4t1 := &Table{
+		Name:     sqlparser.NewIdentifierCS("ks4t1"),
+		Keyspace: ks4,
+		ColumnVindexes: []*ColumnVindex{{
+			Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("id")},
+			Type:     "stfu",
+			Name:     "stfu1",
+			Vindex:   vindex1,
+			isUnique: vindex1.IsUnique(),
+			cost:     vindex1.Cost(),
+		}},
+	}
+	ks4t1.Ordered = []*ColumnVindex{
+		ks4t1.ColumnVindexes[0],
+	}
+
+	want := &VSchema{
+		MirrorRules: map[string]*MirrorRule{
+			"": {
+				Error: errors.New("from table: invalid table name: '', it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
+			},
+			"ks1": {
+				Error: errors.New("from table: invalid table name: 'ks1', it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
+			},
+			"ks1.ks1t1": {
+				Error: errors.New("to table: invalid table name: 'ks2', it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
+			},
+			"ks1.ks1t2": {
+				Error: errors.New("to table: invalid table name: 'ks2.ks2t2.c', it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
+			},
+			"ks1.ks1t3": {
+				Table: &Table{
+					Name: sqlparser.NewIdentifierCS("ks2t3"),
+				},
+				Percent: 50,
+			},
+			"ks1.ks1t4": {
+				Error: errors.New("to table: tablet type may not be specified: 'ks2.ks2t4@replica'"),
+			},
+			"ks1.ks1t5@replica": {
+				Table: &Table{
+					Name: sqlparser.NewIdentifierCS("ks2t5"),
+				},
+			},
+			"ks1.ks1t6@stone": {
+				Error: errors.New("from table: invalid tablet type: 'ks1.ks1t6@stone'"),
+			},
+			"ks3.ks3t1": {
+				Table:   ks4t1,
+				Percent: 50,
+			},
+			"ks1.ks1t7": {
+				Table:   ks4t1,
+				Percent: 50,
+			},
+			"ks1.ks1t8": {
+				Error: errors.New("to table: table ks4t2 not found"),
+			},
+			"ks3.ks3t2": {
+				Error: errors.New("from table: table ks3t2 not found"),
+			},
+			"ks2.ks2t9": {
+				Error: errors.New("mirror chaining is not allowed"),
+			},
+		},
+		RoutingRules: map[string]*RoutingRule{},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"ks1": {
+				Keyspace:       ks1,
+				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+				Tables:         map[string]*Table{},
+				Vindexes:       map[string]Vindex{},
+			},
+			"ks2": {
+				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+				Keyspace:       ks2,
+				Tables:         map[string]*Table{},
+				Vindexes:       map[string]Vindex{},
+			},
+			"ks3": {
+				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+				Keyspace:       ks3,
+				Tables: map[string]*Table{
+					"ks3t1": ks3t1,
+				},
+				Vindexes: map[string]Vindex{
+					"stfu1": vindex1,
+				},
+			},
+			"ks4": {
+				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+				Keyspace:       ks4,
+				Tables: map[string]*Table{
+					"ks4t1": ks4t1,
+				},
+				Vindexes: map[string]Vindex{
+					"stfu1": vindex1,
+				},
+			},
+		},
+	}
+
+	gotb, err := json.MarshalIndent(got, "", "  ")
+	assert.NoError(t, err)
+	wantb, err := json.MarshalIndent(want, "", "  ")
+	assert.NoError(t, err)
 	assert.Equal(t, string(wantb), string(gotb), string(gotb))
 }
 
@@ -1247,6 +1524,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	want := &VSchema{
+		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": t1,
@@ -1323,6 +1601,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		t1.ColumnVindexes[1],
 		t1.ColumnVindexes[0]}
 	want := &VSchema{
+		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": t1,
@@ -1430,6 +1709,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Keyspace: ksb,
 		Type:     "sequence"}
 	want := &VSchema{
+		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": nil,
@@ -1491,6 +1771,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Keyspace: ksb,
 	}
 	want := &VSchema{
+		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": nil,
@@ -1620,6 +1901,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		t2.ColumnVindexes[0],
 	}
 	want := &VSchema{
+		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": nil,
@@ -2206,6 +2488,7 @@ func TestSequence(t *testing.T) {
 		t2.ColumnVindexes[0],
 	}
 	want := &VSchema{
+		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"seq": seq,

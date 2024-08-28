@@ -1603,11 +1603,15 @@ type infoSchemaWithColumns struct {
 	infoSchemaData map[string][]vindexes.Column
 }
 
+var _ SchemaInformation = (*infoSchemaWithColumns)(nil)
+
 // MySQLVersion implements SchemaInformation.
 
 // We cache this information, since these are maps that are not changed
-var infoSchema57 = getInfoSchema57()
-var infoSchema80 = getInfoSchema80()
+var (
+	infoSchema57 = getInfoSchema57()
+	infoSchema80 = getInfoSchema80()
+)
 
 // newSchemaInfo returns a SchemaInformation that has the column information for all info_schema tables
 func newSchemaInfo(inner SchemaInformation) SchemaInformation {
@@ -1664,4 +1668,9 @@ func (i *infoSchemaWithColumns) KeyspaceError(keyspace string) error {
 
 func (i *infoSchemaWithColumns) GetAggregateUDFs() []string {
 	return i.inner.GetAggregateUDFs()
+}
+
+// FindMirrorRule implements SchemaInformation.
+func (i *infoSchemaWithColumns) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	return i.inner.FindMirrorRule(tablename)
 }
