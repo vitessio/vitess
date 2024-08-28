@@ -753,7 +753,7 @@ func TestDescribeVindex(t *testing.T) {
 	mysqlErr := err.(*sqlerror.SQLError)
 	assert.Equal(t, sqlerror.ERNoSuchTable, mysqlErr.Num)
 	assert.Equal(t, "42S02", mysqlErr.State)
-	assert.Contains(t, mysqlErr.Message, "NotFound desc")
+	assert.ErrorContains(t, mysqlErr, "NotFound desc")
 }
 
 func TestEmptyQuery(t *testing.T) {

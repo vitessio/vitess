@@ -57,8 +57,8 @@ func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 	ctx = callerid.NewContext(ctx, callerid.NewEffectiveCallerID("user_no_access", "", ""), nil)
 	_, err = session.Execute(ctx, query, nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Select command denied to user")
-	assert.Contains(t, err.Error(), "for table 'test_table' (ACL check error)")
+	assert.ErrorContains(t, err, "Select command denied to user")
+	assert.ErrorContains(t, err, "for table 'test_table' (ACL check error)")
 }
 
 // TestAuthenticatedUserWithAccess verifies that an authenticated gRPC static user with ACL access can execute queries
@@ -89,8 +89,8 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 	query := "SELECT id FROM test_table"
 	_, err = session.Execute(ctx, query, nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Select command denied to user")
-	assert.Contains(t, err.Error(), "for table 'test_table' (ACL check error)")
+	assert.ErrorContains(t, err, "Select command denied to user")
+	assert.ErrorContains(t, err, "for table 'test_table' (ACL check error)")
 }
 
 // TestUnauthenticatedUser verifies that an unauthenticated gRPC user cannot execute queries
@@ -106,5 +106,5 @@ func TestUnauthenticatedUser(t *testing.T) {
 	query := "SELECT id FROM test_table"
 	_, err = session.Execute(ctx, query, nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid credentials")
+	assert.ErrorContains(t, err, "invalid credentials")
 }
