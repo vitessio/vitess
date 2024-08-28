@@ -73,34 +73,59 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 	return sqc.getRootOperator(op, nil)
 }
 
-func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
+func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, in sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
 	outerID := TableID(op)
-	for _, expr := range sqlparser.SplitAndExpression(nil, expr) {
+	for _, expr := range sqlparser.SplitAndExpression(nil, in) {
 		sqlparser.RemoveKeyspaceInCol(expr)
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
 		}
-		b := constantPredicate(ctx, expr)
-		if b != nil {
-			if *b {
+		constant, simplified := simplifyPredicate(ctx, expr)
+		if constant != nil {
+			if *constant {
 				// If the predicate is true, we can ignore it.
 				continue
 			}
 
 			// If the predicate is false, we push down a false predicate to influence routing
-			expr = sqlparser.NewIntLiteral("0")
+			simplified = sqlparser.NewIntLiteral("0")
 		}
 
-		op = op.AddPredicate(ctx, expr)
-		addColumnEquality(ctx, expr)
+		op = op.AddPredicate(ctx, simplified)
+		addColumnEquality(ctx, simplified)
 	}
 	return op
 }
 
-// constantPredicate evaluates the given expression and returns the result if it is a constant,
+func simplifyPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (*bool, sqlparser.Expr) {
+	switch expr := expr.(type) {
+	case *sqlparser.OrExpr:
+		if lhs := isConstantValue(ctx, expr.Left); lhs != nil {
+			if *lhs {
+				// if the LHS of an OR is true, we can ignore the RHS
+				return lhs, expr.Left
+			}
+			// if the LHS of an OR is false, we can simplify the OR to just the RHS
+			return simplifyPredicate(ctx, expr.Right)
+		}
+		if rhs := isConstantValue(ctx, expr.Right); rhs != nil {
+			if *rhs {
+				// if the LHS of an OR is true, we can ignore the LHS
+				return rhs, expr.Right
+			}
+			// if the LHS of an OR is false, we can simplify the OR to just the RHS
+			return simplifyPredicate(ctx, expr.Left)
+		}
+		return nil, expr
+	default:
+		return isConstantValue(ctx, expr), expr
+	}
+}
+
+// isConstantValue evaluates the given expression and returns the result if it is a constant,
 // in other words - can it be evaluated without any table data.
-func constantPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *bool {
+func isConstantValue(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *bool {
 	env := ctx.VSchema.Environment()
 	coll := env.CollationEnv().DefaultConnectionCharset()
 	evalEnginePred, err := evalengine.Translate(expr, &evalengine.Config{
