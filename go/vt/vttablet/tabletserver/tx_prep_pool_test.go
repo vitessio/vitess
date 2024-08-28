@@ -112,7 +112,7 @@ func TestPrepFetchAll(t *testing.T) {
 // createAndOpenPreparedPool creates a new transaction prepared pool and opens it.
 // Used as a helper function for testing.
 func createAndOpenPreparedPool(capacity int) *TxPreparedPool {
-	pp := NewTxPreparedPool(capacity)
+	pp := NewTxPreparedPool(capacity, true)
 	pp.Open()
 	return pp
 }
