@@ -506,6 +506,15 @@ func (client *gRPCVtctldClient) GetTopologyPath(ctx context.Context, in *vtctlda
 	return client.c.GetTopologyPath(ctx, in, opts...)
 }
 
+// GetUnresolvedTransactions is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetUnresolvedTransactions(ctx context.Context, in *vtctldatapb.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetUnresolvedTransactions(ctx, in, opts...)
+}
+
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
 	if client.c == nil {

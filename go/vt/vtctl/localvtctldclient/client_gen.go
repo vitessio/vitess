@@ -386,6 +386,11 @@ func (client *localVtctldClient) GetTopologyPath(ctx context.Context, in *vtctld
 	return client.s.GetTopologyPath(ctx, in)
 }
 
+// GetUnresolvedTransactions is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetUnresolvedTransactions(ctx context.Context, in *vtctldatapb.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	return client.s.GetUnresolvedTransactions(ctx, in)
+}
+
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
 	return client.s.GetVSchema(ctx, in)

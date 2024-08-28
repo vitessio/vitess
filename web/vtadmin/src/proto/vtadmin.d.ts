@@ -59891,6 +59891,200 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a GetUnresolvedTransactionsRequest. */
+    interface IGetUnresolvedTransactionsRequest {
+
+        /** GetUnresolvedTransactionsRequest keyspace */
+        keyspace?: (string|null);
+    }
+
+    /** Represents a GetUnresolvedTransactionsRequest. */
+    class GetUnresolvedTransactionsRequest implements IGetUnresolvedTransactionsRequest {
+
+        /**
+         * Constructs a new GetUnresolvedTransactionsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetUnresolvedTransactionsRequest);
+
+        /** GetUnresolvedTransactionsRequest keyspace. */
+        public keyspace: string;
+
+        /**
+         * Creates a new GetUnresolvedTransactionsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetUnresolvedTransactionsRequest instance
+         */
+        public static create(properties?: vtctldata.IGetUnresolvedTransactionsRequest): vtctldata.GetUnresolvedTransactionsRequest;
+
+        /**
+         * Encodes the specified GetUnresolvedTransactionsRequest message. Does not implicitly {@link vtctldata.GetUnresolvedTransactionsRequest.verify|verify} messages.
+         * @param message GetUnresolvedTransactionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetUnresolvedTransactionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetUnresolvedTransactionsRequest message, length delimited. Does not implicitly {@link vtctldata.GetUnresolvedTransactionsRequest.verify|verify} messages.
+         * @param message GetUnresolvedTransactionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetUnresolvedTransactionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetUnresolvedTransactionsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetUnresolvedTransactionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetUnresolvedTransactionsRequest;
+
+        /**
+         * Decodes a GetUnresolvedTransactionsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetUnresolvedTransactionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetUnresolvedTransactionsRequest;
+
+        /**
+         * Verifies a GetUnresolvedTransactionsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetUnresolvedTransactionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetUnresolvedTransactionsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetUnresolvedTransactionsRequest;
+
+        /**
+         * Creates a plain object from a GetUnresolvedTransactionsRequest message. Also converts values to other types if specified.
+         * @param message GetUnresolvedTransactionsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetUnresolvedTransactionsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetUnresolvedTransactionsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetUnresolvedTransactionsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetUnresolvedTransactionsResponse. */
+    interface IGetUnresolvedTransactionsResponse {
+
+        /** GetUnresolvedTransactionsResponse transactions */
+        transactions?: (query.ITransactionMetadata[]|null);
+    }
+
+    /** Represents a GetUnresolvedTransactionsResponse. */
+    class GetUnresolvedTransactionsResponse implements IGetUnresolvedTransactionsResponse {
+
+        /**
+         * Constructs a new GetUnresolvedTransactionsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetUnresolvedTransactionsResponse);
+
+        /** GetUnresolvedTransactionsResponse transactions. */
+        public transactions: query.ITransactionMetadata[];
+
+        /**
+         * Creates a new GetUnresolvedTransactionsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetUnresolvedTransactionsResponse instance
+         */
+        public static create(properties?: vtctldata.IGetUnresolvedTransactionsResponse): vtctldata.GetUnresolvedTransactionsResponse;
+
+        /**
+         * Encodes the specified GetUnresolvedTransactionsResponse message. Does not implicitly {@link vtctldata.GetUnresolvedTransactionsResponse.verify|verify} messages.
+         * @param message GetUnresolvedTransactionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetUnresolvedTransactionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetUnresolvedTransactionsResponse message, length delimited. Does not implicitly {@link vtctldata.GetUnresolvedTransactionsResponse.verify|verify} messages.
+         * @param message GetUnresolvedTransactionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetUnresolvedTransactionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetUnresolvedTransactionsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetUnresolvedTransactionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetUnresolvedTransactionsResponse;
+
+        /**
+         * Decodes a GetUnresolvedTransactionsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetUnresolvedTransactionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetUnresolvedTransactionsResponse;
+
+        /**
+         * Verifies a GetUnresolvedTransactionsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetUnresolvedTransactionsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetUnresolvedTransactionsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetUnresolvedTransactionsResponse;
+
+        /**
+         * Creates a plain object from a GetUnresolvedTransactionsResponse message. Also converts values to other types if specified.
+         * @param message GetUnresolvedTransactionsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetUnresolvedTransactionsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetUnresolvedTransactionsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetUnresolvedTransactionsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a GetVSchemaRequest. */
     interface IGetVSchemaRequest {
 
