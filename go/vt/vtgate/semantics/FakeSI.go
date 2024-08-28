@@ -85,3 +85,8 @@ func (s *FakeSI) KeyspaceError(keyspace string) error {
 func (s *FakeSI) GetAggregateUDFs() []string {
 	return s.UDFs
 }
+
+// FindMirrorRule implements SchemaInformation.
+func (s *FakeSI) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	return nil, nil
+}

@@ -234,6 +234,7 @@ func TestVSchemaUpdate(t *testing.T) {
 			},
 		},
 		expected: &vindexes.VSchema{
+			MirrorRules:  map[string]*vindexes.MirrorRule{},
 			RoutingRules: map[string]*vindexes.RoutingRule{},
 			Keyspaces: map[string]*vindexes.KeyspaceSchema{
 				"ks": {
@@ -499,6 +500,7 @@ func TestVSchemaUDFsUpdate(t *testing.T) {
 	}, nil)
 
 	utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, &vindexes.VSchema{
+		MirrorRules:  map[string]*vindexes.MirrorRule{},
 		RoutingRules: map[string]*vindexes.RoutingRule{},
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			"ks": {
@@ -821,6 +823,7 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 	}, nil)
 
 	utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, &vindexes.VSchema{
+		MirrorRules:  map[string]*vindexes.MirrorRule{},
 		RoutingRules: map[string]*vindexes.RoutingRule{},
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			"ks": {
@@ -870,6 +873,7 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *
 
 func makeTestEmptyVSchema() *vindexes.VSchema {
 	return &vindexes.VSchema{
+		MirrorRules:  map[string]*vindexes.MirrorRule{},
 		RoutingRules: map[string]*vindexes.RoutingRule{},
 		Keyspaces:    map[string]*vindexes.KeyspaceSchema{},
 	}
