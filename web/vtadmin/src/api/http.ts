@@ -448,6 +448,28 @@ export const fetchWorkflowStatus = async (params: { clusterID: string; keyspace:
     return vtctldata.WorkflowStatusResponse.create(result);
 };
 
+export interface WorkflowActionParams {
+    clusterID: string;
+    keyspace: string;
+    name: string;
+}
+
+export const startWorkflow = async ({ clusterID, keyspace, name }: WorkflowActionParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/start`);
+    const err = vtctldata.WorkflowUpdateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowUpdateResponse.create(result);
+};
+
+export const stopWorkflow = async ({ clusterID, keyspace, name }: WorkflowActionParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/stop`);
+    const err = vtctldata.WorkflowUpdateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowUpdateResponse.create(result);
+};
+
 export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {
     // As an easy enhancement for later, we can also validate the request parameters on the front-end
     // instead of defaulting to '', to save a round trip.

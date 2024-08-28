@@ -79,6 +79,8 @@ import {
     GetFullStatusParams,
     validateVersionShard,
     ValidateVersionShardParams,
+    startWorkflow,
+    stopWorkflow,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -458,6 +460,30 @@ export const useWorkflowStatus = (
     options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
 ) => {
     return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params));
+};
+
+/**
+ * useStartWorkflow is a mutate hook that starts a workflow.
+ */
+export const useStartWorkflow = (
+    params: Parameters<typeof startWorkflow>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof startWorkflow>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof startWorkflow>>, Error>(() => {
+        return startWorkflow(params);
+    }, options);
+};
+
+/**
+ * useStopWorkflow is a mutate hook that stops a workflow.
+ */
+export const useStopWorkflow = (
+    params: Parameters<typeof stopWorkflow>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof stopWorkflow>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof stopWorkflow>>, Error>(() => {
+        return stopWorkflow(params);
+    }, options);
 };
 
 /**

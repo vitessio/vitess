@@ -35,8 +35,12 @@ import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { UseQueryResult } from 'react-query';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import WorkflowActions from './workflows/WorkflowActions';
 
 export const ThrottleThresholdSeconds = 60;
+
+const COLUMNS = ['Workflow', 'Source', 'Target', 'Streams', 'Last Updated', 'Actions'];
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -180,6 +184,16 @@ export const Workflows = () => {
                         <div className="font-sans whitespace-nowrap">{formatDateTime(row.timeUpdated)}</div>
                         <div className="font-sans text-sm text-secondary">{formatRelativeTime(row.timeUpdated)}</div>
                     </DataCell>
+
+                    <ReadOnlyGate>
+                        <DataCell>
+                            <WorkflowActions
+                                keyspace={row.keyspace as string}
+                                clusterID={row.clusterID as string}
+                                name={row.name as string}
+                            />
+                        </DataCell>
+                    </ReadOnlyGate>
                 </tr>
             );
         });
@@ -198,11 +212,7 @@ export const Workflows = () => {
                     value={filter || ''}
                 />
 
-                <DataTable
-                    columns={['Workflow', 'Source', 'Target', 'Streams', 'Last Updated']}
-                    data={sortedData}
-                    renderRows={renderRows}
-                />
+                <DataTable columns={COLUMNS} data={sortedData} renderRows={renderRows} />
 
                 <QueryLoadingPlaceholder query={workflowsQuery as UseQueryResult} />
             </ContentContainer>
