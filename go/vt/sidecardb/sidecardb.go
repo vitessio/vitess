@@ -396,6 +396,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 // or an ALTER if the table exists but has a different schema.
 func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (string, error) {
 	hints := &schemadiff.DiffHints{
+		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreEmpty,
 		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
 	}
 	env := schemadiff.NewEnv(si.env, si.coll)

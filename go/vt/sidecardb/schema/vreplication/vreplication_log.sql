@@ -26,4 +26,4 @@ CREATE TABLE IF NOT EXISTS vreplication_log
     `count`      bigint         NOT NULL DEFAULT '1',
     PRIMARY KEY (`id`),
     KEY `vrepl_id_idx` (`vrepl_id`)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

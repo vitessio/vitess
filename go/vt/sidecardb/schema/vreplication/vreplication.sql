@@ -47,4 +47,4 @@ CREATE TABLE IF NOT EXISTS vreplication
     `options`               json             NOT NULL,
     PRIMARY KEY (`id`),
     KEY `workflow_idx` (`workflow`(64))
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

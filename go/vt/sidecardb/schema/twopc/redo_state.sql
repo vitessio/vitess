@@ -19,4 +19,4 @@ CREATE TABLE IF NOT EXISTS redo_state(
   state bigint NOT NULL,
   time_created bigint NOT NULL,
   primary key(dtid)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

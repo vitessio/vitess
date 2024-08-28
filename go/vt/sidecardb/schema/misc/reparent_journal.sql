@@ -22,4 +22,4 @@ CREATE TABLE IF NOT EXISTS reparent_journal
     `replication_position` varbinary(64000) DEFAULT NULL,
 
     PRIMARY KEY (`time_created_ns`)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

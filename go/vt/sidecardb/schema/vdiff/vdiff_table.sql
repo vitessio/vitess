@@ -27,4 +27,4 @@ CREATE TABLE IF NOT EXISTS vdiff_table
     `created_at`    timestamp      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`    timestamp      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`vdiff_id`, `table_name`)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

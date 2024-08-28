@@ -21,4 +21,4 @@ CREATE TABLE IF NOT EXISTS post_copy_action(
   action JSON NOT NULL,
   UNIQUE KEY (vrepl_id, table_name),
   PRIMARY KEY(id)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

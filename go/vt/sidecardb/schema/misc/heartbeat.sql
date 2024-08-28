@@ -20,4 +20,4 @@ CREATE TABLE IF NOT EXISTS heartbeat
     tabletUid     INT UNSIGNED    NOT NULL,
     ts            BIGINT UNSIGNED NOT NULL,
     PRIMARY KEY (`keyspaceShard`)
-) engine = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4
