@@ -83,6 +83,42 @@ func (tfe *TestFieldEvent) String() string {
 	return s
 }
 
+// TestVStreamMissingFieldsInLastPK tests that we error out if the lastpk for a table is missing the fields spec.
+func TestVStreamMissingFieldsInLastPK(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
+	newEngine(t, ctx, "noblob")
+	defer func() {
+		engine = oldEngine
+		env = oldEnv
+	}()
+	execStatements(t, []string{
+		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	var tablePKs []*binlogdatapb.TableLastPK
+	tablePKs = append(tablePKs, getTablePK("t1", 1))
+	for _, tpk := range tablePKs {
+		tpk.Lastpk.Fields = nil
+	}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	ch := make(chan []*binlogdatapb.VEvent)
+	err := vstream(ctx, t, "", tablePKs, filter, ch)
+	require.ErrorContains(t, err, "lastpk for table t1 has no fields defined")
+}
+
 // TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It confirms that
 // the VEvents created are correct: that they don't contain the missing columns and that the DataColumns bitmap is sent
 func TestNoBlob(t *testing.T) {
