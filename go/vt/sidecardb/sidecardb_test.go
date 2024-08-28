@@ -250,3 +250,77 @@ func TestAlterTableAlgorithm(t *testing.T) {
 		})
 	}
 }
+
+// TestTableSchemaDiff ensures that the diff produced by schemaInit.findTableSchemaDiff
+// is resulting in the expected alter table statements in a variety of scenarios.
+func TestTableSchemaDiff(t *testing.T) {
+	si := &schemaInit{
+		env: vtenv.NewTestEnv(),
+	}
+
+	type testCase struct {
+		name          string
+		table         string
+		oldSchema     string
+		newSchema     string
+		expectedAlter string
+	}
+	testCases := []testCase{
+		{
+			name:          "modify table charset",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(i int) charset=utf8mb4",
+			newSchema:     "create table if not exists _vt.t(i int) charset=utf8mb3",
+			expectedAlter: "alter table _vt.t1 charset utf8mb3, algorithm = copy",
+		},
+		{
+			name:          "modify table engine",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(i int) engine=myisam",
+			newSchema:     "create table if not exists _vt.t(i int) engine=innodb",
+			expectedAlter: "alter table _vt.t1 engine innodb, algorithm = copy",
+		},
+		{
+			name:          "add, modify, transfer PK",
+			table:         "t1",
+			oldSchema:     "create table _vt.t1 (i int primary key, i1 varchar(10)) charset utf8mb4",
+			newSchema:     "create table _vt.t1 (i int, i1 varchar(20) character set utf8mb3 collate utf8mb3_bin, i2 int, primary key (i2)) charset utf8mb4",
+			expectedAlter: "alter table _vt.t1 drop primary key, modify column i1 varchar(20) character set utf8mb3 collate utf8mb3_bin, add column i2 int, add primary key (i2), algorithm = copy",
+		},
+		{
+			name:          "modify visibility and add comment",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(c1 int, c2 int, c3 varchar(100)) charset utf8mb4",
+			newSchema:     "create table if not exists _vt.t1(c1 int, c2 int, c3 varchar(100) invisible comment 'hoping to drop') charset utf8mb4",
+			expectedAlter: "alter table _vt.t1 modify column c3 varchar(100) comment 'hoping to drop' invisible, algorithm = copy",
+		},
+		{
+			name:          "add PK and remove index",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(c1 int, c2 int, c3 varchar(100), key (c2)) charset utf8mb4",
+			newSchema:     "create table if not exists _vt.t1(c1 int primary key, c2 int, c3 varchar(100)) charset utf8mb4",
+			expectedAlter: "alter table _vt.t1 drop key c2, add primary key (c1), algorithm = copy",
+		},
+		{
+			name:          "add generated col",
+			table:         "t1",
+			oldSchema:     "create table if not exists _vt.t1(c1 int primary key) charset utf8mb4",
+			newSchema:     "create table if not exists _vt.t1(c1 int primary key, c2 varchar(10) generated always as ('hello')) charset utf8mb4",
+			expectedAlter: "alter table _vt.t1 add column c2 varchar(10) as ('hello') virtual, algorithm = copy",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			diff, err := si.findTableSchemaDiff(tc.table, tc.oldSchema, tc.newSchema)
+			require.NoError(t, err)
+			stmt, err := si.env.Parser().Parse(diff)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+			require.NotNil(t, alterTable)
+			t.Logf("alter table: %s", sqlparser.String(alterTable))
+			require.Equal(t, strings.ToLower(tc.expectedAlter), strings.ToLower(sqlparser.String(alterTable)))
+		})
+	}
+}
