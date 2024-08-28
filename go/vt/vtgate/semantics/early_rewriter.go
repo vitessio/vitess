@@ -50,8 +50,6 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		return r.handleSelectExprs(cursor, node)
 	case *sqlparser.OrExpr:
 		rewriteOrExpr(r.env, cursor, node)
-	case *sqlparser.AndExpr:
-		rewriteAndExpr(r.env, cursor, node)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
 	case *sqlparser.ComparisonExpr:
@@ -860,49 +858,6 @@ func rewriteOrExpr(env *vtenv.Environment, cursor *sqlparser.Cursor, node *sqlpa
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
-}
-
-// rewriteAndExpr rewrites AND expressions when either side is TRUE.
-func rewriteAndExpr(env *vtenv.Environment, cursor *sqlparser.Cursor, node *sqlparser.AndExpr) {
-	newNode := rewriteAndTrue(env, *node)
-	if newNode != nil {
-		cursor.ReplaceAndRevisit(newNode)
-	}
-}
-
-func rewriteAndTrue(env *vtenv.Environment, andExpr sqlparser.AndExpr) sqlparser.Expr {
-	// we are looking for the pattern `WHERE c = 1 AND 1 = 1`
-	isTrue := func(subExpr sqlparser.Expr) bool {
-		coll := env.CollationEnv().DefaultConnectionCharset()
-		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
-			Environment: env,
-			Collation:   coll,
-		})
-		if err != nil {
-			return false
-		}
-
-		env := evalengine.EmptyExpressionEnv(env)
-		res, err := env.Evaluate(evalEnginePred)
-		if err != nil {
-			return false
-		}
-
-		boolValue, err := res.Value(coll).ToBool()
-		if err != nil {
-			return false
-		}
-
-		return boolValue
-	}
-
-	if isTrue(andExpr.Left) {
-		return andExpr.Right
-	} else if isTrue(andExpr.Right) {
-		return andExpr.Left
-	}
-
-	return nil
 }
 
 // handleComparisonExpr processes Comparison expressions, specifically for tuples with equal length and EqualOp operator.

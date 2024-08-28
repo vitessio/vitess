@@ -65,9 +65,7 @@ func translateQueryToOpWithMirroring(ctx *plancontext.PlanningContext, stmt sqlp
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {
 	op := crossJoin(ctx, sel.From)
 
-	if sel.Where != nil {
-		op = addWherePredicates(ctx, sel.Where.Expr, op)
-	}
+	op = addWherePredicates(ctx, sel.GetWherePredicate(), op)
 
 	if sel.Comments != nil || sel.Lock != sqlparser.NoLock {
 		op = &LockAndComment{
@@ -90,13 +88,23 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 
 func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
 	outerID := TableID(op)
-	exprs := sqlparser.SplitAndExpression(nil, expr)
-	for _, expr := range exprs {
+	for _, expr := range sqlparser.SplitAndExpression(nil, expr) {
 		sqlparser.RemoveKeyspaceInCol(expr)
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
 		}
+		boolean := ctx.IsConstantBool(expr)
+		if boolean != nil {
+			if *boolean {
+				// If the predicate is true, we can ignore it.
+				continue
+			}
+
+			// If the predicate is false, we push down a false predicate to influence routing
+			expr = sqlparser.NewIntLiteral("0")
+		}
+
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
