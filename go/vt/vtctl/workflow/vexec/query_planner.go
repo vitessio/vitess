@@ -181,7 +181,7 @@ func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*Fix
 		)
 	}
 
-	del.Where = addDefaultWheres(planner, del.Where)
+	addDefaultWheres(planner, del)
 
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", del)
@@ -194,7 +194,7 @@ func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*Fix
 }
 
 func (planner *VReplicationQueryPlanner) planSelect(sel *sqlparser.Select) (*FixedQueryPlan, error) {
-	sel.Where = addDefaultWheres(planner, sel.Where)
+	addDefaultWheres(planner, sel)
 
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", sel)
@@ -230,7 +230,7 @@ func (planner *VReplicationQueryPlanner) planUpdate(upd *sqlparser.Update) (*Fix
 		}
 	}
 
-	upd.Where = addDefaultWheres(planner, upd.Where)
+	addDefaultWheres(planner, upd)
 
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", upd)
@@ -289,8 +289,7 @@ func (planner *VReplicationLogQueryPlanner) QueryParams() QueryParams {
 }
 
 func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (QueryPlan, error) {
-	where := sel.Where
-	cols := extractWhereComparisonColumns(where)
+	cols := extractWhereComparisonColumns(sel.GetWherePredicate())
 	hasVReplIDCol := false
 
 	for _, col := range cols {
@@ -313,10 +312,6 @@ func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (Q
 	// streamIDs.
 	queriesByTarget := make(map[string]*sqlparser.ParsedQuery, len(planner.tabletStreamIDs))
 	for target, streamIDs := range planner.tabletStreamIDs {
-		targetWhere := &sqlparser.Where{
-			Type: sqlparser.WhereClause,
-		}
-
 		var expr sqlparser.Expr
 		switch len(streamIDs) {
 		case 0: // WHERE vreplication_log.vrepl_id IN () => WHERE 1 != 1
@@ -349,15 +344,7 @@ func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (Q
 				Right: tuple,
 			}
 		}
-
-		switch where {
-		case nil:
-			targetWhere.Expr = expr
-		default:
-			targetWhere.Expr = sqlparser.CreateAndExpr(expr, where.Expr)
-		}
-
-		sel.Where = targetWhere
+		sel.AddWhere(expr)
 
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("%v", sel)
@@ -371,8 +358,8 @@ func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (Q
 	}, nil
 }
 
-func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.Where {
-	cols := extractWhereComparisonColumns(where)
+func addDefaultWheres(planner QueryPlanner, stmt sqlparser.WhereAble) {
+	cols := extractWhereComparisonColumns(stmt.GetWherePredicate())
 
 	params := planner.QueryParams()
 	hasDBNameCol := false
@@ -387,8 +374,6 @@ func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.W
 		}
 	}
 
-	newWhere := where
-
 	if !hasDBNameCol {
 		expr := &sqlparser.ComparisonExpr{
 			Left: &sqlparser.ColName{
@@ -398,15 +383,7 @@ func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.W
 			Right:    sqlparser.NewStrLiteral(params.DBName),
 		}
 
-		switch newWhere {
-		case nil:
-			newWhere = &sqlparser.Where{
-				Type: sqlparser.WhereClause,
-				Expr: expr,
-			}
-		default:
-			newWhere.Expr = sqlparser.CreateAndExpr(newWhere.Expr, expr)
-		}
+		stmt.AddWhere(expr)
 	}
 
 	if !hasWorkflowCol && params.Workflow != "" {
@@ -417,23 +394,20 @@ func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.W
 			Operator: sqlparser.EqualOp,
 			Right:    sqlparser.NewStrLiteral(params.Workflow),
 		}
-
-		newWhere.Expr = sqlparser.CreateAndExpr(newWhere.Expr, expr)
+		stmt.AddWhere(expr)
 	}
-
-	return newWhere
 }
 
 // extractWhereComparisonColumns extracts the column names used in AND-ed
 // comparison expressions in a where clause, given the following assumptions:
 // - (1) The column name is always the left-hand side of the comparison.
 // - (2) There are no compound expressions within the where clause involving OR.
-func extractWhereComparisonColumns(where *sqlparser.Where) []string {
+func extractWhereComparisonColumns(where sqlparser.Expr) []string {
 	if where == nil {
 		return nil
 	}
 
-	exprs := sqlparser.SplitAndExpression(nil, where.Expr)
+	exprs := sqlparser.SplitAndExpression(nil, where)
 	cols := make([]string, 0, len(exprs))
 
 	for _, expr := range exprs {

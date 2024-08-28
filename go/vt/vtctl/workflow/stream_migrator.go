@@ -1130,7 +1130,7 @@ func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb
 	case rule.Filter == vreplication.ExcludeStr:
 		return StreamTypeUnknown, fmt.Errorf("unexpected rule in vreplication: %v", rule)
 	default:
-		if err := sm.templatizeKeyRange(ctx, rule); err != nil {
+		if err := sm.templatizeKeyRange(rule); err != nil {
 			return StreamTypeUnknown, err
 		}
 
@@ -1138,7 +1138,7 @@ func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb
 	}
 }
 
-func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogdatapb.Rule) error {
+func (sm *StreamMigrator) templatizeKeyRange(rule *binlogdatapb.Rule) error {
 	statement, err := sm.parser.Parse(rule.Filter)
 	if err != nil {
 		return err
@@ -1149,12 +1149,7 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 		return fmt.Errorf("unexpected query: %v", rule.Filter)
 	}
 
-	var expr sqlparser.Expr
-	if sel.Where != nil {
-		expr = sel.Where.Expr
-	}
-
-	exprs := sqlparser.SplitAndExpression(nil, expr)
+	exprs := sqlparser.SplitAndExpression(nil, sel.GetWherePredicate())
 	for _, subexpr := range exprs {
 		funcExpr, ok := subexpr.(*sqlparser.FuncExpr)
 		if !ok || !funcExpr.Name.EqualString("in_keyrange") {

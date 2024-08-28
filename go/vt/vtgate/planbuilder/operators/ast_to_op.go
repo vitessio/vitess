@@ -50,8 +50,8 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {
 	op := crossJoin(ctx, sel.From)
 
-	if sel.Where != nil {
-		op = addWherePredicates(ctx, sel.Where.Expr, op)
+	if expr := sel.GetWherePredicate(); expr != nil {
+		op = addWherePredicates(ctx, expr, op)
 	}
 
 	if sel.Comments != nil || sel.Lock != sqlparser.NoLock {

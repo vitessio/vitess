@@ -193,7 +193,7 @@ func createDMLWithInput(ctx *plancontext.PlanningContext, op, src Operator, in *
 
 	if in.OwnedVindexQuery != nil {
 		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
-		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
+		in.OwnedVindexQuery.AddWhere(compExpr)
 		in.OwnedVindexQuery.OrderBy = nil
 		in.OwnedVindexQuery.Limit = nil
 	}
