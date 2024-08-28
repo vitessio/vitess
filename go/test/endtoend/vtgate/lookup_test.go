@@ -131,7 +131,7 @@ func TestConsistentLookup(t *testing.T) {
 	mysqlErr := err.(*sqlerror.SQLError)
 	assert.Equal(t, sqlerror.ERDupEntry, mysqlErr.Num)
 	assert.Equal(t, "23000", mysqlErr.State)
-	assert.Contains(t, mysqlErr.Message, "reverted partial DML execution")
+	assert.ErrorContains(t, mysqlErr, "reverted partial DML execution")
 
 	// Simple delete.
 	utils.Exec(t, conn, "begin")
