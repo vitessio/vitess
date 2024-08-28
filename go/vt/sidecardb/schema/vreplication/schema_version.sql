@@ -22,4 +22,4 @@ CREATE TABLE IF NOT EXISTS schema_version
     ddl          BLOB DEFAULT NULL,
     schemax      LONGBLOB         NOT NULL,
     PRIMARY KEY (id)
-) ENGINE = InnoDB, CHARSET utf8mb4
+) ENGINE = InnoDB

@@ -316,11 +316,11 @@ func TestTableSchemaDiff(t *testing.T) {
 			require.NoError(t, err)
 			stmt, err := si.env.Parser().Parse(diff)
 			require.NoError(t, err)
-			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			alter, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
-			require.NotNil(t, alterTable)
-			t.Logf("alter table: %s", sqlparser.String(alterTable))
-			require.Equal(t, strings.ToLower(tc.expectedAlter), strings.ToLower(sqlparser.String(alterTable)))
+			require.NotNil(t, alter)
+			t.Logf("alter: %s", sqlparser.String(alter))
+			require.Equal(t, strings.ToLower(tc.expectedAlter), strings.ToLower(sqlparser.String(alter)))
 		})
 	}
 }
