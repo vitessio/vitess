@@ -255,6 +255,7 @@ type testTMClient struct {
 	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
 	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
 	primaryPositions                   map[uint32]string
+	vdiffRequests                      map[uint32]*vdiffRequestResponse
 
 	// Stack of ReadVReplicationWorkflowsResponse to return, in order, for each shard
 	readVReplicationWorkflowsResponses map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
@@ -262,6 +263,10 @@ type testTMClient struct {
 	env     *testEnv    // For access to the env config from tmc methods.
 	reverse atomic.Bool // Are we reversing traffic?
 	frozen  atomic.Bool // Are the workflows frozen?
+
+	// Can be set to return an error if an unexpected request is made or
+	// an expected request is NOT made.
+	strict bool
 }
 
 func newTestTMClient(env *testEnv) *testTMClient {
@@ -451,7 +456,38 @@ func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tab
 	return nil, nil
 }
 
+type vdiffRequestResponse struct {
+	req *tabletmanagerdatapb.VDiffRequest
+	res *tabletmanagerdatapb.VDiffResponse
+	err error
+}
+
+func (tmc *testTMClient) expectVDiffRequest(tablet *topodatapb.Tablet, vrr *vdiffRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.vdiffRequests == nil {
+		tmc.vdiffRequests = make(map[uint32]*vdiffRequestResponse)
+	}
+	tmc.vdiffRequests[tablet.Alias.Uid] = vrr
+}
+
 func (tmc *testTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if vrr, ok := tmc.vdiffRequests[tablet.Alias.Uid]; ok {
+		if !proto.Equal(vrr.req, req) {
+			return nil, fmt.Errorf("unexpected VDiff request on tablet: %+v; got %+v, want %+v",
+				tablet, req, vrr.req)
+		}
+		delete(tmc.vdiffRequests, tablet.Alias.Uid)
+		return vrr.res, vrr.err
+	}
+	if tmc.strict {
+		return nil, fmt.Errorf("unexpected VDiff request on tablet %+v: %+v", tablet, req)
+	}
+
 	return &tabletmanagerdatapb.VDiffResponse{
 		Id:        1,
 		VdiffUuid: req.VdiffUuid,
@@ -459,6 +495,13 @@ func (tmc *testTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 			RowsAffected: 1,
 		},
 	}, nil
+}
+
+func (tmc *testTMClient) confirmVDiffRequests(t *testing.T) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	require.Len(t, tmc.vdiffRequests, 0, "expected VDiff requests not made: %v", tmc.vdiffRequests)
 }
 
 func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {

@@ -378,6 +378,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			UpdateTableStats:      true,
 			TimeoutSeconds:        60,
 			MaxDiffSeconds:        333,
+			DoNotStart:            true,
 		},
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			SourceCell:  "zone1,zone2,zone3,zonefoosource",
@@ -406,6 +407,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			fmt.Sprintf("--auto-retry=%t", expectedOptions.CoreOptions.AutoRetry),
 			fmt.Sprintf("--only-pks=%t", expectedOptions.ReportOptions.OnlyPks),
 			fmt.Sprintf("--row-diff-column-truncate-at=%d", expectedOptions.ReportOptions.RowDiffColumnTruncateAt),
+			fmt.Sprintf("--do-not-start=%t", expectedOptions.CoreOptions.DoNotStart),
 			"--tablet-types-in-preference-order=false", // So tablet_types should not start with "in_order:", which is the default
 			"--format=json") // So we can easily grab the UUID
 		require.NoError(t, err, "vdiff command failed: %s", res)

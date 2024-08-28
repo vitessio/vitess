@@ -46,6 +46,7 @@ func TestPerformVDiffAction(t *testing.T) {
 		query  string
 		result *sqltypes.Result // Optional if you need a non-empty result
 	}
+
 	tests := []struct {
 		name          string
 		vde           *Engine
@@ -94,6 +95,27 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 		},
 		{
+			name: "create without starting",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(CreateAction),
+				VdiffUuid: uuid,
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
+					CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
+						DoNotStart: true,
+					},
+				},
+			},
+			expectQueries: []queryAndResult{
+				{
+					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+				},
+				{
+					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'stopped', '{"picker_options":{"source_cell":"cell1","target_cell":"cell1"},"core_options":{"do_not_start":true}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
+				},
+			},
+		},
+		{
 			name: "create with cell alias",
 			req: &tabletmanagerdatapb.VDiffRequest{
 				Action:    string(CreateAction),
@@ -128,6 +150,77 @@ func TestPerformVDiffAction(t *testing.T) {
 					return err
 				}
 				return tstenv.TopoServ.DeleteCellsAlias(ctx, "all")
+			},
+		},
+		{
+			name: "resume never started vdiff",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(ResumeAction),
+				VdiffUuid: uuid,
+				Keyspace:  keyspace,
+				Workflow:  workflow,
+			},
+			expectQueries: []queryAndResult{
+				{
+					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+					result: sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(
+							"id",
+							"int64",
+						),
+						"1",
+					),
+				},
+				{
+					query: fmt.Sprintf(`update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
+					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
+					and vdt.state in ('completed', 'stopped')`, encodeString(uuid)),
+					result: &sqltypes.Result{
+						RowsAffected: 0, // No _vt.vdiff_table records
+					},
+				},
+				{
+					query: fmt.Sprintf(`update _vt.vdiff as vd set vd.state = 'pending' where vd.vdiff_uuid = %s and vd.state = 'stopped' and
+					vd.started_at is NULL and vd.completed_at is NULL`, encodeString(uuid)),
+					result: &sqltypes.Result{
+						RowsAffected: 1,
+					},
+				},
+				{
+					query: "select * from _vt.vdiff where id = 1",
+				},
+			},
+		},
+		{
+			name: "resume completed vdiff",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(ResumeAction),
+				VdiffUuid: uuid,
+				Keyspace:  keyspace,
+				Workflow:  workflow,
+			},
+			expectQueries: []queryAndResult{
+				{
+					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+					result: sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(
+							"id",
+							"int64",
+						),
+						"1",
+					),
+				},
+				{
+					query: fmt.Sprintf(`update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
+					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
+					and vdt.state in ('completed', 'stopped')`, encodeString(uuid)),
+					result: &sqltypes.Result{
+						RowsAffected: 1,
+					},
+				},
+				{
+					query: "select * from _vt.vdiff where id = 1",
+				},
 			},
 		},
 		{
@@ -213,6 +306,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 		},
 	}
+
 	errCount := int64(0)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
