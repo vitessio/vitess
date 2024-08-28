@@ -1,0 +1,4 @@
+# file with tests that only use the dual table
+
+# Dual query that is using tilda operator in a complex expression
+SELECT 1 WHERE (~ (1||0)) IS NULL;
