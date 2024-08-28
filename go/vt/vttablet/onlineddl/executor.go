@@ -178,6 +178,7 @@ type Executor struct {
 	ts                    *topo.Server
 	lagThrottler          *throttle.Throttler
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool)
+	isPreparedPoolEmpty   func(tableName string) bool
 	requestGCChecksFunc   func()
 	tabletAlias           *topodatapb.TabletAlias
 
@@ -238,6 +239,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 	tabletTypeFunc func() topodatapb.TabletType,
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool),
 	requestGCChecksFunc func(),
+	isPreparedPoolEmpty func(tableName string) bool,
 ) *Executor {
 	// sanitize flags
 	if maxConcurrentOnlineDDLs < 1 {
@@ -255,6 +257,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		ts:                    ts,
 		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
+		isPreparedPoolEmpty:   isPreparedPoolEmpty,
 		requestGCChecksFunc:   requestGCChecksFunc,
 		ticks:                 timer.NewTimer(migrationCheckInterval),
 		// Gracefully return an error if any caller tries to execute
@@ -870,7 +873,10 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 				threadId := row.AsInt64("trx_mysql_thread_id", 0)
 				log.Infof("killTableLockHoldersAndAccessors: killing connection %v with transaction on table", threadId)
 				killConnection := fmt.Sprintf("KILL %d", threadId)
-				_, _ = conn.Conn.ExecuteFetch(killConnection, 1, false)
+				_, err = conn.Conn.ExecuteFetch(killConnection, 1, false)
+				if err != nil {
+					log.Errorf("Unable to kill the connection %d: %v", threadId, err)
+				}
 			}
 		}
 	}
@@ -1102,6 +1108,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	time.Sleep(100 * time.Millisecond)
 
 	if shouldForceCutOver {
+		// We should only proceed with forceful cut over if there is no pending atomic transaction for the table.
+		// This will help in keeping the atomicity guarantee of a prepared transaction.
+		if err := e.checkOnPreparedPool(ctx, onlineDDL.Table, 100*time.Millisecond); err != nil {
+			return err
+		}
 		if err := e.killTableLockHoldersAndAccessors(ctx, onlineDDL.Table); err != nil {
 			return err
 		}
@@ -5343,4 +5354,21 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
 	}
 
 	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct, etaSeconds, rowsCopied, hint)
+}
+
+func (e *Executor) checkOnPreparedPool(ctx context.Context, table string, waitTime time.Duration) error {
+	if e.isPreparedPoolEmpty(table) {
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+		// Return context error if context is done
+		return ctx.Err()
+	case <-time.After(waitTime):
+		if e.isPreparedPoolEmpty(table) {
+			return nil
+		}
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot force cut-over on non-empty prepared pool for table: %s", table)
+	}
 }
