@@ -1543,6 +1543,8 @@ message ReshardCreateRequest {
   bool defer_secondary_keys = 11;
   // Start the workflow after creating it.
   bool auto_start = 12;
+  WorkflowOptions workflow_options = 20;
+
 }
 
 message RestoreFromBackupRequest {

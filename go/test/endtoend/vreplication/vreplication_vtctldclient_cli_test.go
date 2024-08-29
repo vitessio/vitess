@@ -250,13 +250,11 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 		needError bool
 		clears    bool
 	}
-	//require.EqualValues(t, "6000", config["vreplication_net_read_timeout"])
-	//require.EqualValues(t, "10000", config["relay_log_max_items"])
-	//require.EqualValues(t, "10", config["vreplication-parallel-insert-workers"])
 	testCases := []testCase{
 		{
-			name:   "reset flags",
-			config: map[string]string{"vreplication_net_read_timeout": "", "relay_log_max_items": "", "vreplication-parallel-insert-workers": ""},
+			name: "reset flags",
+			config: map[string]string{"vreplication_net_read_timeout": "", "relay_log_max_items": "", "vreplication-parallel-insert-workers": "",
+				"vreplication_copy_phase_duration": "", "vreplication_experimental_flags": ""},
 			clears: true,
 		},
 		{
@@ -334,6 +332,7 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--format=json",
+		"--config-overrides", "vreplication_copy_phase_duration=10h,vreplication_experimental_flags=7,vreplication-parallel-insert-workers=4",
 	}
 	rs := newReshard(vc, &reshardWorkflow{
 		workflowInfo: &workflowInfo{
@@ -349,6 +348,13 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflowName)
 	rs.Create()
 	validateReshardResponse(rs)
+	for _, tab := range targetTabs {
+		config := GetVReplicationConfig(t, tab)
+		require.EqualValues(t, "10h0m0s", config["vreplication_copy_phase_duration"])
+		require.EqualValues(t, "7", config["vreplication_experimental_flags"])
+		require.EqualValues(t, "4", config["vreplication-parallel-insert-workers"])
+
+	}
 	workflowResponse := getWorkflow(keyspace, workflowName)
 	reshardShowResponse := getReshardShowResponse(&rs)
 	require.EqualValues(t, reshardShowResponse, workflowResponse)

@@ -1739,8 +1739,7 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 		s.Logger().Errorf("%v", err2)
 		return nil, err
 	}
-	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
-	rs, err := s.buildResharder(ctx, keyspace, req.Workflow, req.SourceShards, req.TargetShards, strings.Join(cells, ","), tabletTypesStr)
+	rs, err := s.buildResharder(ctx, req)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "buildResharder")
 	}

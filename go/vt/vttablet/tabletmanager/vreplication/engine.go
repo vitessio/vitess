@@ -690,7 +690,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
 		ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Running, vre.dbName)
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
-			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys)
+			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys, "")
 		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)

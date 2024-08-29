@@ -66941,6 +66941,9 @@ export namespace vtctldata {
 
         /** ReshardCreateRequest auto_start */
         auto_start?: (boolean|null);
+
+        /** ReshardCreateRequest workflow_options */
+        workflow_options?: (vtctldata.IWorkflowOptions|null);
     }
 
     /** Represents a ReshardCreateRequest. */
@@ -66987,6 +66990,9 @@ export namespace vtctldata {
 
         /** ReshardCreateRequest auto_start. */
         public auto_start: boolean;
+
+        /** ReshardCreateRequest workflow_options. */
+        public workflow_options?: (vtctldata.IWorkflowOptions|null);
 
         /**
          * Creates a new ReshardCreateRequest instance using the specified properties.
