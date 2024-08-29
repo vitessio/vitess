@@ -85,6 +85,11 @@ func (tc testCase) createPredicate(lvl int) sqlparser.Expr {
 }
 
 func TestOneRewriting(t *testing.T) {
+	// This test is a simple test that takes a single expression and simplifies it.
+	// While simplifying, it also collects all the steps that were taken to simplify the expression,
+	// and then runs both the original and simplified expressions with all possible values for the columns.
+	// If the two expressions do not return the same value, this is considered a test failure.
+	// This test is useful for debugging and understanding how the simplification works.
 	venv := vtenv.NewTestEnv()
 	sqlparser.DebugRewrite = true
 

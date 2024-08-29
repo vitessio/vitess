@@ -21,6 +21,7 @@ import (
 )
 
 var DebugRewrite = false
+var prefix = " >> "
 
 // RewritePredicate walks the input AST and rewrites any boolean logic into a simpler form
 // This simpler form is CNF plus logic for extracting predicates from OR, plus logic for turning ORs into IN
@@ -87,13 +88,11 @@ func simplifyNot(expr *NotExpr) (Expr, bool) {
 	case *NotExpr:
 		return child.Expr, true
 	case *OrExpr:
-		// not(or(a,b)) => and(not(a),not(b))
 		if DebugRewrite {
-			fmt.Println(" >> not (a or b) => not a and not b")
+			fmt.Println(prefix, "not (a or b) => not a and not b")
 		}
 		return AndExpressions(&NotExpr{Expr: child.Left}, &NotExpr{Expr: child.Right}), true
 	case *AndExpr:
-		// not(and(a,b)) => or(not(a), not(b))
 		var curr Expr
 		for i, p := range child.Predicates {
 			if i == 0 {
@@ -103,7 +102,7 @@ func simplifyNot(expr *NotExpr) (Expr, bool) {
 			}
 		}
 		if DebugRewrite {
-			fmt.Println(" >> not (a and b) => not a or not b")
+			fmt.Println(prefix, "not (a and b) => not a or not b")
 		}
 		return curr, true
 	}
@@ -118,7 +117,6 @@ func createOrs(exprs ...Expr) Expr {
 }
 
 func simplifyOredAnds(or *OrExpr, lhs, rhs *AndExpr) (Expr, bool) {
-	// (A AND B AND D) OR (A AND C AND D) => (A AND D) AND (B OR C)
 	var commonPredicates []Expr
 	var leftRemainder, rightRemainder []Expr
 
@@ -149,7 +147,7 @@ func simplifyOredAnds(or *OrExpr, lhs, rhs *AndExpr) (Expr, bool) {
 	commonPred := AndExpressions(commonPredicates...)
 	if len(leftRemainder) == 0 && len(rightRemainder) == 0 {
 		if DebugRewrite {
-			fmt.Println(" >> remove duplicate predicates across ANDs")
+			fmt.Println(prefix, "remove duplicate predicates across ANDs")
 		}
 		return commonPred, true
 	}
@@ -157,12 +155,12 @@ func simplifyOredAnds(or *OrExpr, lhs, rhs *AndExpr) (Expr, bool) {
 	switch {
 	case len(rightRemainder) == 0 || len(leftRemainder) == 0:
 		if DebugRewrite {
-			fmt.Println(" >> (A and B and A and D) or (A and D) => A and D")
+			fmt.Println(prefix, "(A and B and A and D) or (A and D) => A and D")
 		}
 		return commonPred, true
 	default:
 		if DebugRewrite {
-			fmt.Println(" >> (A and B and D) or (A and D and C) => (A and D) and (B or C)")
+			fmt.Println(prefix, "(A and B and C) or (A and B and D) => (A and B) and (C or D)")
 		}
 
 		return AndExpressions(commonPred, createOrs(AndExpressions(rightRemainder...), AndExpressions(leftRemainder...))), true
@@ -177,7 +175,7 @@ func simplifyOrWithAnAND(and *AndExpr, other Expr, left bool) (Expr, bool) {
 			// because if A is true, the OR is true, not matter what B is,
 			// and if A is false, the AND is false, and again we don't care about B
 			if DebugRewrite {
-				fmt.Println(" >> (A AND B) OR A => A")
+				fmt.Println(prefix, "(A AND B) OR A => A")
 			}
 			return other, true
 		}
@@ -195,7 +193,7 @@ func simplifyOrWithAnAND(and *AndExpr, other Expr, left bool) (Expr, bool) {
 		distributedPredicates = append(distributedPredicates, or)
 	}
 	if DebugRewrite {
-		fmt.Println(" >> (A and B) or C => (A or C) and (B or C)")
+		fmt.Println(prefix, "(A and B) or C => (A or C) and (B or C)")
 	}
 	return AndExpressions(distributedPredicates...), true
 }
@@ -204,7 +202,7 @@ func simplifyOr(or *OrExpr) (Expr, bool) {
 	res, rewritten := distinctOr(or)
 	if rewritten {
 		if DebugRewrite {
-			fmt.Println(" >> distinct or elements")
+			fmt.Println(prefix, "distinct or elements")
 		}
 
 		return res, true
@@ -241,7 +239,7 @@ func simplifyOrToIn(or *OrExpr) (Expr, bool) {
 		newExpr, rewritten := tryTurningOrIntoIn(lftCmp, rgtCmp)
 		if rewritten {
 			if DebugRewrite {
-				fmt.Println(" >> turning OR into IN")
+				fmt.Println(prefix, "turning OR into IN")
 			}
 			return newExpr, true
 		}
@@ -252,7 +250,7 @@ func simplifyOrToIn(or *OrExpr) (Expr, bool) {
 
 func simplifyXor(xor *XorExpr) (Expr, bool) {
 	if DebugRewrite {
-		fmt.Println(" >> a xor b => (a or b) and not(a and b)")
+		fmt.Println(prefix, "a xor b => (a or b) and not(a and b)")
 	}
 	return AndExpressions(
 		&OrExpr{Left: xor.Left, Right: xor.Right},
@@ -263,7 +261,7 @@ func simplifyXor(xor *XorExpr) (Expr, bool) {
 func simplifyAnd(expr *AndExpr) (Expr, bool) {
 	if len(expr.Predicates) == 1 {
 		if DebugRewrite {
-			fmt.Println(" >> single predicate in AND")
+			fmt.Println(prefix, "single predicate in AND")
 		}
 		return expr.Predicates[0], true
 	}
@@ -271,7 +269,7 @@ func simplifyAnd(expr *AndExpr) (Expr, bool) {
 	res, rewritten := distinctAnd(expr)
 	if rewritten {
 		if DebugRewrite {
-			fmt.Println(" >> distinct and elements")
+			fmt.Println(prefix, "distinct and elements")
 		}
 
 		return res, true
@@ -306,7 +304,7 @@ outer:
 
 	if simplified {
 		if DebugRewrite {
-			fmt.Println(" >> (a or b) and a => a")
+			fmt.Println(prefix, "(a or b) and a => a")
 		}
 
 		// Return a new AndExpr with the simplified predicates
