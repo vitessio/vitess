@@ -107,6 +107,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells",
+		"--config-overrides", "vreplication_net_read_timeout=6000,relay_log_max_items=10000,vreplication-parallel-insert-workers=10",
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 	switchFlags := []string{}
@@ -123,6 +124,13 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	validateMoveTablesWorkflow(t, workflowResponse.Workflows)
 	// Since we used --no-routing-rules, there should be no routing rules.
 	confirmNoRoutingRules(t)
+	for _, tab := range targetTabs {
+		config := GetVReplicationConfig(t, tab)
+		require.EqualValues(t, "6000", config["vreplication_net_read_timeout"])
+		require.EqualValues(t, "10000", config["relay_log_max_items"])
+		require.EqualValues(t, "10", config["vreplication-parallel-insert-workers"])
+	}
+
 }
 
 func getMoveTablesShowResponse(mt *iMoveTables) *vtctldatapb.GetWorkflowsResponse {
@@ -230,19 +238,6 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 		_, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKeyspace, "update", "--workflow", workflow, "--config-overrides", c)
 		return err
 	}
-	getConfig := func(t *testing.T, tab *cluster.VttabletProcess) map[string]string {
-		configJson, err := getDebugVar(t, tab.Port, []string{"VReplicationConfig"})
-		require.NoError(t, err)
-		var config map[string]string
-		err = json2.Unmarshal([]byte(configJson), &config)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(config))
-		configJson = config[maps.Keys(config)[0]]
-		config = nil
-		err = json2.Unmarshal([]byte(configJson), &config)
-		require.NoError(t, err)
-		return config
-	}
 	var tab *cluster.VttabletProcess
 	for _, tab = range targetTabs {
 		break
@@ -255,7 +250,15 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 		needError bool
 		clears    bool
 	}
+	//require.EqualValues(t, "6000", config["vreplication_net_read_timeout"])
+	//require.EqualValues(t, "10000", config["relay_log_max_items"])
+	//require.EqualValues(t, "10", config["vreplication-parallel-insert-workers"])
 	testCases := []testCase{
+		{
+			name:   "reset flags",
+			config: map[string]string{"vreplication_net_read_timeout": "", "relay_log_max_items": "", "vreplication-parallel-insert-workers": ""},
+			clears: true,
+		},
 		{
 			name:   "no change",
 			config: nil,
@@ -297,7 +300,7 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 				expectedConfig, err = vttablet.NewVReplicationConfig(tc.config)
 				require.NoError(t, err)
 			}
-			config := getConfig(t, tab)
+			config := GetVReplicationConfig(t, tab)
 			if tc.clears {
 				expectedConfig, err = vttablet.NewVReplicationConfig(nil)
 				require.NoError(t, err)

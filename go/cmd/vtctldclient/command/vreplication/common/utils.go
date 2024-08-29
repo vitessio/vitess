@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -67,6 +69,7 @@ var (
 		MySQLServerVersion           string
 		TruncateUILen                int
 		TruncateErrLen               int
+		ConfigOverrides              []string
 	}{}
 )
 
@@ -145,6 +148,28 @@ func validateOnDDL(cmd *cobra.Command) error {
 		return fmt.Errorf("invalid on-ddl value: %s", CreateOptions.OnDDL)
 	}
 	return nil
+}
+
+func ParseConfigOverrides(overrides []string) (map[string]string, error) {
+	configOverrides := make(map[string]string)
+	for _, kv := range overrides {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("Invalid config override: %s\n", kv)
+		}
+		key := parts[0]
+		value := parts[1]
+
+		defaultConfig, err := vttablet.NewVReplicationConfig(nil)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := defaultConfig.Map()[key]; !ok {
+			return nil, fmt.Errorf("Unknown vreplication config flag: %s\n", key)
+		}
+		configOverrides[key] = value
+	}
+	return configOverrides, nil
 }
 
 // ValidateShards checks if the provided shard names are valid key ranges.
@@ -232,6 +257,7 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&CreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied.")
 	cmd.Flags().BoolVar(&CreateOptions.AutoStart, "auto-start", true, "Start the workflow after creating it.")
 	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
+	cmd.Flags().StringSliceVar(&CreateOptions.ConfigOverrides, "config-overrides", []string{}, "Specify one or more VReplication config flags to override as a comma-separated list of key=value pairs.")
 }
 
 var MirrorTrafficOptions = struct {

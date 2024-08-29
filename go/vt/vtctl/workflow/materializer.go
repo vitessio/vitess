@@ -127,7 +127,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 	req.WorkflowSubType = workflowSubType
-	optionsJSON, err := mz.getOptionsJSON()
+	optionsJSON, err := getOptionsJSON(mz.ms.GetWorkflowOptions())
 	if err != nil {
 		return err
 	}

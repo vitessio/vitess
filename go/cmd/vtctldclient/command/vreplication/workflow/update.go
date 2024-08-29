@@ -21,8 +21,6 @@ import (
 	"sort"
 	"strings"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -86,28 +84,6 @@ var (
 	}
 )
 
-func parseConfigOverrides(overrides []string) (map[string]string, error) {
-	configOverrides := make(map[string]string)
-	for _, kv := range overrides {
-		parts := strings.SplitN(kv, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("Invalid config override: %s\n", kv)
-		}
-		key := parts[0]
-		value := parts[1]
-
-		defaultConfig, err := vttablet.NewVReplicationConfig(nil)
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := defaultConfig.Map()[key]; !ok {
-			return nil, fmt.Errorf("Unknown vreplication config flag: %s\n", key)
-		}
-		configOverrides[key] = value
-	}
-	return configOverrides, nil
-}
-
 func commandUpdate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
@@ -120,7 +96,7 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	configOverrides, err := parseConfigOverrides(updateOptions.ConfigOverrides)
+	configOverrides, err := common.ParseConfigOverrides(updateOptions.ConfigOverrides)
 	if err != nil {
 		return err
 	}

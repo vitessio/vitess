@@ -35,6 +35,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1021,4 +1023,18 @@ func confirmKeyspacesRoutedTo(t *testing.T, keyspace string, routedKeyspace, tab
 		plan := vexplain(t, database, fmt.Sprintf("select * from %s.%s", keyspace, table))
 		require.Equalf(t, routedKeyspace, plan.Keyspace.Name, "for database %s, keyspace %v, tabletType %s", database, keyspace, tt)
 	}
+}
+
+func GetVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[string]string {
+	configJson, err := getDebugVar(t, tab.Port, []string{"VReplicationConfig"})
+	require.NoError(t, err)
+	var config map[string]string
+	err = json2.Unmarshal([]byte(configJson), &config)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(config))
+	configJson = config[maps.Keys(config)[0]]
+	config = nil
+	err = json2.Unmarshal([]byte(configJson), &config)
+	require.NoError(t, err)
+	return config
 }

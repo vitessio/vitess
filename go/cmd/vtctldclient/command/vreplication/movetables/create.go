@@ -101,6 +101,12 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 	tsp := common.GetTabletSelectionPreference(cmd)
 	cli.FinishedParsing(cmd)
 
+	configOverrides, err := common.ParseConfigOverrides(common.CreateOptions.ConfigOverrides)
+	if err != nil {
+		return err
+	}
+	createOptions.WorkflowOptions.Config = configOverrides
+
 	req := &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:                  common.BaseOptions.Workflow,
 		TargetKeyspace:            common.BaseOptions.TargetKeyspace,

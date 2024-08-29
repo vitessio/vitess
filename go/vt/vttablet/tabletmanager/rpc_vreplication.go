@@ -535,9 +535,10 @@ func getOptionSetString(config map[string]string) (string, error) {
 		sort.Strings(deletedKeys)
 		clause := "options"
 		if len(deletedKeys) > 0 {
-			clause = fmt.Sprintf("json_remove(options, '$.config.%s'", deletedKeys[0])
+			// We need to quote the key in the json functions because flag names can contain hyphens.
+			clause = fmt.Sprintf("json_remove(options, '$.config.\"%s\"'", deletedKeys[0])
 			for _, k := range deletedKeys[1:] {
-				clause += fmt.Sprintf(", '$.config.%s'", k)
+				clause += fmt.Sprintf(", '$.config.\"%s\"'", k)
 			}
 			clause += ")"
 		}
@@ -547,7 +548,7 @@ func getOptionSetString(config map[string]string) (string, error) {
 				if i > 0 {
 					clause += ", "
 				}
-				clause += fmt.Sprintf("'$.config.%s', '%s'", k, strings.TrimSpace(config[k]))
+				clause += fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k]))
 			}
 			clause += ")"
 		}
