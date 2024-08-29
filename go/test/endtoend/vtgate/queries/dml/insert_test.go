@@ -470,3 +470,50 @@ func TestMixedCases(t *testing.T) {
 	// final check count on the lookup vindex table.
 	utils.AssertMatches(t, mcmp.VtConn, "select count(*) from lkp_mixed_idx", "[[INT64(12)]]")
 }
+<<<<<<< HEAD
+=======
+
+// TestInsertAlias test the alias feature in insert statement.
+func TestInsertAlias(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial record
+	mcmp.Exec("insert into user_tbl(id, region_id, name) values (1, 1,'foo'),(2, 2,'bar'),(3, 3,'baz'),(4, 4,'buzz')")
+
+	qr := mcmp.Exec("insert into user_tbl(id, region_id, name) values (2, 2, 'foo') as new on duplicate key update name = new.name")
+	assert.EqualValues(t, 2, qr.RowsAffected)
+
+	// this validates the record.
+	mcmp.Exec("select id, region_id, name from user_tbl order by id")
+
+	qr = mcmp.Exec("insert into user_tbl(id, region_id, name) values (3, 3, 'foo') as new(m, n, p) on duplicate key update name = p")
+	assert.EqualValues(t, 2, qr.RowsAffected)
+
+	// this validates the record.
+	mcmp.Exec("select id, region_id, name from user_tbl order by id")
+}
+
+// TestInsertJson tests that selected json values are encoded correctly.
+func TestInsertJson(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) values (1, '{}'), (2, '{"a": 1, "b": 2}')`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) select 3, json_object("k", "a")`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) select 4,JSON_OBJECT(
+        'date', CAST(1629849600 AS UNSIGNED),
+        'keywordSourceId', CAST(930701976723823 AS UNSIGNED),
+        'keywordSourceVersionId', CAST(210825230433 AS UNSIGNED)
+    )`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
+	utils.Exec(t, mcmp.VtConn, `insert into uks.j_utbl(id, jdoc) select * from sks.j_tbl`)
+	utils.AssertMatches(t, mcmp.VtConn, `select * from uks.j_utbl order by id`,
+		`[[INT64(1) JSON("{}")] [INT64(2) JSON("{\"a\": 1, \"b\": 2}")] [INT64(3) JSON("{\"k\": \"a\"}")] [INT64(4) JSON("{\"date\": 1629849600, \"keywordSourceId\": 930701976723823, \"keywordSourceVersionId\": 210825230433}")]]`)
+}
+>>>>>>> e89f684b09 (JSON Encoding: Use Type_RAW for marshalling json (#16637))
