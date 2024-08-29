@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
@@ -86,7 +88,7 @@ func TestGenerateQuery(t *testing.T) {
 				"v1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(querypb.Type_JSON, []byte(`{"key": "value"}`))),
 				"v2": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(querypb.Type_RAW, []byte(`json_object("k", "v")`))),
 			},
-			output: `insert into t values ('{"key": "value"}', json_object("k", "v"))`,
+			output: `insert into t values ('{\"key\": \"value\"}', json_object("k", "v"))`,
 		}, {
 			desc:  "list bind vars 0 arguments",
 			query: "select * from a where id in ::vals",
@@ -144,24 +146,8 @@ func TestGenerateQuery(t *testing.T) {
 	}
 
 	for _, tcase := range tcases {
-<<<<<<< HEAD
-		tree, err := Parse(tcase.query)
-		if err != nil {
-			t.Errorf("parse failed for %s: %v", tcase.desc, err)
-			continue
-		}
-		buf := NewTrackedBuffer(nil)
-		buf.Myprintf("%v", tree)
-		pq := buf.ParsedQuery()
-		bytes, err := pq.GenerateQuery(tcase.bindVars, tcase.extras)
-		if err != nil {
-			assert.Equal(t, tcase.output, err.Error())
-		} else {
-			assert.Equal(t, tcase.output, string(bytes))
-		}
-=======
 		t.Run(tcase.query, func(t *testing.T) {
-			tree, err := parser.Parse(tcase.query)
+			tree, err := Parse(tcase.query)
 			require.NoError(t, err)
 			buf := NewTrackedBuffer(nil)
 			buf.Myprintf("%v", tree)
@@ -173,7 +159,6 @@ func TestGenerateQuery(t *testing.T) {
 				assert.Equal(t, tcase.output, bytes)
 			}
 		})
->>>>>>> e89f684b09 (JSON Encoding: Use Type_RAW for marshalling json (#16637))
 	}
 }
 
