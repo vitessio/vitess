@@ -968,10 +968,11 @@ func defaultErrorHandler(logger logutil.Logger, message string, err error) (*[]s
 	return nil, werr
 }
 
-// applyTargetShards applies the targetShards, coming from a command, to the trafficSwitcher.
-// It will return an error if the targetShards list contains a shard that does not exist in
-// the target keyspace.
-// It will then remove any target shards from the trafficSwitcher that are not in the
+// applyTargetShards applies the targetShards, coming from a command, to the trafficSwitcher's
+// migration targets.
+// It will return an error if the targetShards list contains a shard that is not a valid shard
+// for the workflow.
+// It will then remove any migration targets from the trafficSwitcher that are not in the
 // targetShards list.
 func applyTargetShards(ts *trafficSwitcher, targetShards []string) error {
 	if ts == nil {

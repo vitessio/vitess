@@ -264,7 +264,7 @@ type testTMClient struct {
 	reverse atomic.Bool // Are we reversing traffic?
 	frozen  atomic.Bool // Are the workflows frozen?
 
-	// Can be set to return an error if an unexpected request is made or
+	// Can be used to return an error if an unexpected request is made or
 	// an expected request is NOT made.
 	strict bool
 }
