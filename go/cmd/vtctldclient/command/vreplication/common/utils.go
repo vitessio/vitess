@@ -151,7 +151,7 @@ func validateOnDDL(cmd *cobra.Command) error {
 func ValidateShards(shards []string) error {
 	for _, shard := range shards {
 		if !key.IsValidKeyRange(shard) {
-			return fmt.Errorf("invalid target shard provided: %q", shard)
+			return fmt.Errorf("invalid shard: %q", shard)
 		}
 	}
 	return nil

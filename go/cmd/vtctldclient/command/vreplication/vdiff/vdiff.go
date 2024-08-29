@@ -705,6 +705,9 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 				// Table summary information that must be accounted for across all shards.
 				{
 					table := row.AsString("table_name", "")
+					if table == "" { // This occurs when a the table has yet to be diffed on 1 or more shards
+						continue
+					}
 					// Create the global VDiff table summary object if it doesn't exist.
 					if _, ok := tableSummaryMap[table]; !ok {
 						tableSummaryMap[table] = tableSummary{
