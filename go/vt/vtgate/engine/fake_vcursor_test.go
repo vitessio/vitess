@@ -46,11 +46,15 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-var testMaxMemoryRows = 100
-var testIgnoreMaxMemoryRows = false
+var (
+	testMaxMemoryRows       = 100
+	testIgnoreMaxMemoryRows = false
+)
 
-var _ VCursor = (*noopVCursor)(nil)
-var _ SessionActions = (*noopVCursor)(nil)
+var (
+	_ VCursor        = (*noopVCursor)(nil)
+	_ SessionActions = (*noopVCursor)(nil)
+)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
@@ -109,6 +113,18 @@ func (t *noopVCursor) GetWarmingReadsChannel() chan bool {
 }
 
 func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
+	panic("implement me")
+}
+
+func (t *noopVCursor) CloneForMirroring(ctx context.Context) VCursor {
+	panic("implement me")
+}
+
+func (t *noopVCursor) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error) {
 	panic("implement me")
 }
 
@@ -338,7 +354,7 @@ func (t *noopVCursor) ExceedsMaxMemoryRows(numRows int) bool {
 }
 
 func (t *noopVCursor) GetKeyspace() string {
-	return ""
+	return "test_ks"
 }
 
 func (t *noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
@@ -380,8 +396,10 @@ func (t *noopVCursor) GetDBDDLPluginName() string {
 	panic("unimplemented")
 }
 
-var _ VCursor = (*loggingVCursor)(nil)
-var _ SessionActions = (*loggingVCursor)(nil)
+var (
+	_ VCursor        = (*loggingVCursor)(nil)
+	_ SessionActions = (*loggingVCursor)(nil)
+)
 
 // loggingVCursor logs requests and allows you to verify
 // that the correct requests were made.
@@ -397,7 +415,8 @@ type loggingVCursor struct {
 	curResult int
 	resultErr error
 
-	warnings []*querypb.QueryWarning
+	warnings                []*querypb.QueryWarning
+	transactionStatusOutput []*querypb.TransactionMetadata
 
 	// Optional errors that can be returned from nextResult() alongside the results for
 	// multi-shard queries
@@ -421,6 +440,10 @@ type loggingVCursor struct {
 	shardSession []*srvtopo.ResolvedShard
 
 	parser *sqlparser.Parser
+
+	handleMirrorClonesFn   func(context.Context) VCursor
+	onExecuteMultiShardFn  func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
+	onStreamExecuteMultiFn func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
 }
 
 func (f *loggingVCursor) HasCreatedTempTable() {
@@ -536,6 +559,13 @@ func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	return f
 }
 
+func (f *loggingVCursor) CloneForMirroring(ctx context.Context) VCursor {
+	if f.handleMirrorClonesFn != nil {
+		return f.handleMirrorClonesFn(ctx)
+	}
+	panic("no mirror clones available")
+}
+
 func (f *loggingVCursor) Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	name := "Unknown"
 	switch co {
@@ -553,7 +583,12 @@ func (f *loggingVCursor) Execute(ctx context.Context, method string, query strin
 }
 
 func (f *loggingVCursor) ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), rollbackOnError, canAutocommit))
+	if f.onExecuteMultiShardFn != nil {
+		f.onExecuteMultiShardFn(ctx, primitive, rss, queries, rollbackOnError, canAutocommit)
+	}
 	res, err := f.nextResult()
 	if err != nil {
 		return nil, []error{err}
@@ -574,6 +609,9 @@ func (f *loggingVCursor) ExecuteStandalone(ctx context.Context, primitive Primit
 func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	f.mu.Lock()
 	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
+	if f.onStreamExecuteMultiFn != nil {
+		f.onStreamExecuteMultiFn(ctx, primitive, query, rss, bindVars, rollbackOnError, autocommit, callback)
+	}
 	r, err := f.nextResult()
 	f.mu.Unlock()
 	if err != nil {
@@ -725,6 +763,8 @@ func (f *loggingVCursor) ResolveDestinationsMultiCol(ctx context.Context, keyspa
 
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if len(f.log) == 0 && len(want) == 0 {
 		return
 	}
@@ -742,6 +782,8 @@ func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarni
 }
 
 func (f *loggingVCursor) Rewind() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.curShardForKsid = 0
 	f.curResult = 0
 	f.log = nil
@@ -814,6 +856,24 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 	return useSetVar
 }
 
+func (f *loggingVCursor) ReadTransaction(_ context.Context, _ string) (*querypb.TransactionMetadata, error) {
+	if f.resultErr != nil {
+		return nil, f.resultErr
+	}
+	var out *querypb.TransactionMetadata
+	if len(f.transactionStatusOutput) > 0 {
+		out = f.transactionStatusOutput[0]
+	}
+	return out, nil
+}
+
+func (f *loggingVCursor) UnresolvedTransactions(_ context.Context, _ string) ([]*querypb.TransactionMetadata, error) {
+	if f.resultErr != nil {
+		return nil, f.resultErr
+	}
+	return f.transactionStatusOutput, nil
+}
+
 // SQLParser implements VCursor
 func (t *loggingVCursor) SQLParser() *sqlparser.Parser {
 	if t.parser == nil {
@@ -827,6 +887,7 @@ func (t *noopVCursor) DisableLogging()  {}
 func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
 	return nil
 }
+
 func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 	return nil, nil
 }

@@ -460,6 +460,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfShowThrottledApps(n, parent)
 	case *ShowThrottlerStatus:
 		return c.copyOnRewriteRefOfShowThrottlerStatus(n, parent)
+	case *ShowTransactionStatus:
+		return c.copyOnRewriteRefOfShowTransactionStatus(n, parent)
 	case *StarExpr:
 		return c.copyOnRewriteRefOfStarExpr(n, parent)
 	case *Std:
@@ -1520,12 +1522,12 @@ func (c *cow) copyOnRewriteRefOfCommonTableExpr(n *CommonTableExpr, parent SQLNo
 	if c.pre == nil || c.pre(n, parent) {
 		_ID, changedID := c.copyOnRewriteIdentifierCS(n.ID, n)
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
-		_Subquery, changedSubquery := c.copyOnRewriteRefOfSubquery(n.Subquery, n)
+		_Subquery, changedSubquery := c.copyOnRewriteSelectStatement(n.Subquery, n)
 		if changedID || changedColumns || changedSubquery {
 			res := *n
 			res.ID, _ = _ID.(IdentifierCS)
 			res.Columns, _ = _Columns.(Columns)
-			res.Subquery, _ = _Subquery.(*Subquery)
+			res.Subquery, _ = _Subquery.(SelectStatement)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5525,6 +5527,18 @@ func (c *cow) copyOnRewriteRefOfShowThrottlerStatus(n *ShowThrottlerStatus, pare
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfShowTransactionStatus(n *ShowTransactionStatus, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfStarExpr(n *StarExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7396,6 +7410,8 @@ func (c *cow) copyOnRewriteShowInternal(n ShowInternal, parent SQLNode) (out SQL
 		return c.copyOnRewriteRefOfShowCreate(n, parent)
 	case *ShowOther:
 		return c.copyOnRewriteRefOfShowOther(n, parent)
+	case *ShowTransactionStatus:
+		return c.copyOnRewriteRefOfShowTransactionStatus(n, parent)
 	default:
 		// this should never happen
 		return nil, false

@@ -24,6 +24,7 @@ import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { KeyspaceLink } from '../../links/KeyspaceLink';
 import { WorkflowStreams } from './WorkflowStreams';
+import { WorkflowDetails } from './WorkflowDetails';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { TabContainer } from '../../tabs/TabContainer';
 import { Tab } from '../../tabs/Tab';
@@ -53,28 +54,38 @@ export const Workflow = () => {
                 </NavCrumbs>
 
                 <WorkspaceTitle className="font-mono">{name}</WorkspaceTitle>
-                <div className={style.headingMeta}>
-                    <span>
-                        Cluster: <code>{clusterID}</code>
-                    </span>
-                    <span>
-                        Target keyspace:{' '}
-                        <KeyspaceLink clusterID={clusterID} name={keyspace}>
-                            <code>{keyspace}</code>
-                        </KeyspaceLink>
-                    </span>
+                <div className={style.headingMetaContainer}>
+                    <div className={style.headingMeta} style={{ float: 'left' }}>
+                        <span>
+                            Cluster: <code>{clusterID}</code>
+                        </span>
+                        <span>
+                            Target keyspace:{' '}
+                            <KeyspaceLink clusterID={clusterID} name={keyspace}>
+                                <code>{keyspace}</code>
+                            </KeyspaceLink>
+                        </span>
+                    </div>
+                    <div style={{ float: 'right' }}>
+                        <a href={`#workflowStreams`}>Scroll To Streams</a>
+                    </div>
                 </div>
             </WorkspaceHeader>
 
             <ContentContainer>
                 <TabContainer>
                     <Tab text="Streams" to={`${url}/streams`} count={streams.length} />
+                    <Tab text="Details" to={`${url}/details`} />
                     <Tab text="JSON" to={`${url}/json`} />
                 </TabContainer>
 
                 <Switch>
                     <Route path={`${path}/streams`}>
                         <WorkflowStreams clusterID={clusterID} keyspace={keyspace} name={name} />
+                    </Route>
+
+                    <Route path={`${path}/details`}>
+                        <WorkflowDetails clusterID={clusterID} keyspace={keyspace} name={name} />
                     </Route>
 
                     <Route path={`${path}/json`}>

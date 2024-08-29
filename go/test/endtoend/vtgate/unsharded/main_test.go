@@ -343,7 +343,7 @@ func TestCallProcedure(t *testing.T) {
 
 	_, err = conn.ExecuteFetch(`CALL out_parameter(@foo)`, 100, true)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "OUT and INOUT parameters are not supported")
+	require.ErrorContains(t, err, "OUT and INOUT parameters are not supported")
 }
 
 func TestTempTable(t *testing.T) {

@@ -200,7 +200,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", keyspaceName, keyspaceName, "a")
 	_, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
+	require.ErrorContains(t, err, "specifying two different database in the query is not supported")
 
 	if utils.BinaryIsAtLeastAtVersion(20, "vtgate") {
 		_, _ = mcmp.ExecNoCompare("select * from information_schema.columns where table_schema = '' limit 1")
@@ -225,8 +225,6 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 }
 
 func TestInfoschemaTypes(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
-
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, "ks", "t1", clusterInstance.VtgateProcess.ReadVSchema))
 
@@ -245,9 +243,7 @@ func TestInfoschemaTypes(t *testing.T) {
 }
 
 func TestTypeORMQuery(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	// This test checks that we can run queries similar to the ones that the TypeORM framework uses
-
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, "ks", "t1", clusterInstance.VtgateProcess.ReadVSchema))
 
@@ -294,7 +290,6 @@ WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't2';
 }
 
 func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	// This test checks that we can run queries like this, where the RHS is a single shard query
 	mcmp, closer := start(t)
 	defer closer()

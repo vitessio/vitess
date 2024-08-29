@@ -176,7 +176,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		timeLastSaved:    time.Now(),
 		tablePlans:       make(map[string]*TablePlan),
 		phase:            phase,
-		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
+		throttlerAppName: throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
 		query:            queryFunc,
 		commit:           commitFunc,
 		batchMode:        batchMode,
@@ -273,9 +273,10 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
-			return relay.Send(events)
-		})
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil,
+			vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+				return relay.Send(events)
+			}, nil)
 	}()
 
 	applyErr := make(chan error, 1)
@@ -414,7 +415,7 @@ func (vp *vplayer) recordHeartbeat() error {
 		return nil
 	}
 	if err := vp.vr.updateHeartbeatTime(tm); err != nil {
-		return vterrors.Wrapf(errVPlayerStalled, fmt.Sprintf("%s: %v", failedToRecordHeartbeatMsg, err))
+		return vterrors.Wrapf(errVPlayerStalled, "%s: %v", failedToRecordHeartbeatMsg, err)
 	}
 	// Only reset the pending heartbeat count if the update was successful.
 	// Otherwise the vplayer may not actually be making progress and nobody
@@ -476,19 +477,26 @@ func (vp *vplayer) recordHeartbeat() error {
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.dbClient.Rollback()
 
+	estimateLag := func() {
+		behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
+		vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
+		vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
+	}
+
 	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
 	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
-	var sbm int64 = -1
+	var lagSecs int64
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		// Check throttler.
-		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)) {
-			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName)
+		if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
+			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
+			estimateLag()
 			continue
 		}
 
@@ -496,13 +504,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if err != nil {
 			return err
 		}
-		// No events were received. This likely means that there's a network partition.
-		// So, we should assume we're falling behind.
-		if len(items) == 0 {
-			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-			vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
-			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
-		}
+
 		// Empty transactions are saved at most once every idleTimeout.
 		// This covers two situations:
 		// 1. Fetch was idle for idleTimeout.
@@ -520,12 +522,20 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
+		lagSecs = -1
 		for i, events := range items {
 			for j, event := range events {
 				if event.Timestamp != 0 {
-					vp.lastTimestampNs = event.Timestamp * 1e9
-					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
-					sbm = event.CurrentTime/1e9 - event.Timestamp
+					// If the event is a heartbeat sent while throttled then do not update
+					// the lag based on it.
+					// If the batch consists only of throttled heartbeat events then we cannot
+					// determine the actual lag, as the vstreamer is fully throttled, and we
+					// will estimate it after processing the batch.
+					if !(event.Type == binlogdatapb.VEventType_HEARTBEAT && event.Throttled) {
+						vp.lastTimestampNs = event.Timestamp * 1e9
+						vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
+						lagSecs = event.CurrentTime/1e9 - event.Timestamp
+					}
 				}
 				mustSave := false
 				switch event.Type {
@@ -549,7 +559,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
 					if err != io.EOF {
 						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
-						var table, tableLogMsg string
+						var table, tableLogMsg, gtidLogMsg string
 						switch {
 						case event.GetFieldEvent() != nil:
 							table = event.GetFieldEvent().TableName
@@ -559,18 +569,24 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 						if table != "" {
 							tableLogMsg = fmt.Sprintf(" for table %s", table)
 						}
-						log.Errorf("Error applying event%s: %s", tableLogMsg, err.Error())
+						pos := getNextPosition(items, i, j+1)
+						if pos != "" {
+							gtidLogMsg = fmt.Sprintf(" while processing position %s", pos)
+						}
+						log.Errorf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error())
+						err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
 					}
 					return err
 				}
 			}
 		}
 
-		if sbm >= 0 {
-			vp.vr.stats.ReplicationLagSeconds.Store(sbm)
-			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
+		if lagSecs >= 0 {
+			vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
+			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(lagSecs)*time.Second)
+		} else { // We couldn't determine the lag, so we need to estimate it
+			estimateLag()
 		}
-
 	}
 }
 
@@ -590,6 +606,34 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 		i++
 	}
 	return false
+}
+
+// getNextPosition returns the GTID set/position we would be at if the current
+// transaction was committed. This is useful for error handling as we can then
+// determine which GTID we're failing to process from the source and examine the
+// binlog events for that GTID directly on the source to debug the issue.
+// This is needed as it's not as simple as the user incrementing the current
+// position in the stream by 1 as we may be skipping N intermediate GTIDs in the
+// stream due to filtering. For GTIDs that we filter out we still replicate the
+// GTID event itself, just without any internal events and a COMMIT event (see
+// the unsavedEvent handling).
+func getNextPosition(items [][]*binlogdatapb.VEvent, i, j int) string {
+	for i < len(items) {
+		for j < len(items[i]) {
+			switch items[i][j].Type {
+			case binlogdatapb.VEventType_GTID:
+				pos, err := binlogplayer.DecodePosition(items[i][j].Gtid)
+				if err != nil {
+					return ""
+				}
+				return pos.String()
+			}
+			j++
+		}
+		j = 0
+		i++
+	}
+	return ""
 }
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
@@ -794,7 +838,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if event.Throttled {
-			if err := vp.vr.updateTimeThrottled(throttlerapp.VStreamerName); err != nil {
+			if err := vp.vr.updateTimeThrottled(throttlerapp.VStreamerName, event.ThrottledReason); err != nil {
 				return err
 			}
 		}

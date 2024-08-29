@@ -115,10 +115,11 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer dbClient.Close()
 
 	targetKeyspace := td.wd.ct.vde.thisTablet.Keyspace
-	log.Infof("Locking target keyspace %s", targetKeyspace)
-	ctx, unlock, lockErr := td.wd.ct.ts.LockKeyspace(ctx, targetKeyspace, "vdiff")
+	lockName := fmt.Sprintf("%s/%s", targetKeyspace, td.wd.ct.workflow)
+	log.Infof("Locking workflow %s", lockName)
+	ctx, unlock, lockErr := td.wd.ct.ts.LockName(ctx, lockName, "vdiff")
 	if lockErr != nil {
-		log.Errorf("LockKeyspace failed: %v", lockErr)
+		log.Errorf("Locking workfkow %s failed: %v", lockName, lockErr)
 		return lockErr
 	}
 
@@ -126,7 +127,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, err)
+			log.Errorf("Unlocking workflow %s failed: %v", lockName, err)
 		}
 	}()
 
@@ -485,7 +486,7 @@ func (td *tableDiffer) setupRowSorters() {
 	}
 }
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64, stop <-chan time.Time) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.VDiffCoreOptions, reportOpts *tabletmanagerdatapb.VDiffReportOptions, stop <-chan time.Time) (*DiffReport, error) {
 	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, diffingTable), time.Now())
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
@@ -538,6 +539,10 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		globalStats.RowsDiffedCount.Add(dr.ProcessedRows)
 	}()
 
+	rowsToCompare := coreOpts.GetMaxRows()
+	maxExtraRowsToCompare := coreOpts.GetMaxExtraRowsToCompare()
+	maxReportSampleRows := reportOpts.GetMaxSampleRows()
+
 	for {
 		lastProcessedRow = sourceRow
 
@@ -559,6 +564,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 				return nil, err
 			}
 		}
+
 		rowsToCompare--
 		if rowsToCompare < 0 {
 			log.Infof("Stopping vdiff, specified row limit reached")
@@ -586,7 +592,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		advanceSource = true
 		advanceTarget = true
 		if sourceRow == nil {
-			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, targetRow, debug, onlyPks)
+			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, targetRow, reportOpts)
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
 			}
@@ -604,7 +610,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		if targetRow == nil {
 			// No more rows from the target but we know we have more rows from
 			// source, so drain them and update the counts.
-			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, debug, onlyPks)
+			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, reportOpts)
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
 			}
@@ -627,7 +633,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			return nil, err
 		case c < 0:
 			if dr.ExtraRowsSource < maxExtraRowsToCompare {
-				diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, debug, onlyPks)
+				diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, reportOpts)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
@@ -638,7 +644,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			continue
 		case c > 0:
 			if dr.ExtraRowsTarget < maxExtraRowsToCompare {
-				diffRow, err := td.genRowDiff(td.tablePlan.targetQuery, targetRow, debug, onlyPks)
+				diffRow, err := td.genRowDiff(td.tablePlan.targetQuery, targetRow, reportOpts)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
@@ -658,11 +664,11 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case c != 0:
 			// We don't do a second pass to compare mismatched rows so we can cap the slice here.
 			if maxReportSampleRows == 0 || dr.MismatchedRows < maxReportSampleRows {
-				sourceDiffRow, err := td.genRowDiff(td.tablePlan.targetQuery, sourceRow, debug, onlyPks)
+				sourceDiffRow, err := td.genRowDiff(td.tablePlan.targetQuery, sourceRow, reportOpts)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
-				targetDiffRow, err := td.genRowDiff(td.tablePlan.targetQuery, targetRow, debug, onlyPks)
+				targetDiffRow, err := td.genRowDiff(td.tablePlan.targetQuery, targetRow, reportOpts)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}

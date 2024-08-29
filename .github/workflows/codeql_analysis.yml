@@ -27,12 +27,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
-          go-version: 1.22.5
+          go-version: 1.23.0
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
@@ -59,7 +59,7 @@ jobs:
           sudo rm -rf /etc/mysql
           # Install mysql80
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
+          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.32-1_all.deb
           echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
           sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
           sudo apt-get update

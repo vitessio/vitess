@@ -18,61 +18,87 @@ package operators
 
 import (
 	"fmt"
-	"reflect"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m *joinMerger) *Route {
+func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr) *Route {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil
 	}
 
 	switch {
+	// We clone the right hand side and try and push all the join predicates that are solved entirely by that side.
+	// If a dual is on the left side, and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single sharded routing.
 	case a == dual:
-		// We clone the right hand side and try and push all the join predicates that are solved entirely by that side.
-		// If a dual is on the left side and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single sharded routing.
 		rhsClone := Clone(rhs).(*Route)
 		for _, predicate := range joinPredicates {
 			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(TableID(rhsClone)) {
 				rhsClone.AddPredicate(ctx, predicate)
 			}
 		}
-		if !m.joinType.IsInner() && !rhsClone.Routing.OpCode().IsSingleShard() {
+		if !jm.joinType.IsInner() && !rhsClone.Routing.OpCode().IsSingleShard() {
 			return nil
 		}
-		return m.merge(ctx, lhsRoute, rhsClone, rhsClone.Routing)
+		return jm.merge(ctx, lhsRoute, rhsClone, rhsClone.Routing)
+
+	// If a dual is on the right side.
 	case b == dual:
-		// If a dual is on the right side.
-		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
+
+	// As both are reference route. We need to merge the alternates as well.
+	case a == anyShard && b == anyShard && sameKeyspace:
+		newrouting := mergeAnyShardRoutings(ctx, routingA.(*AnyShardRouting), routingB.(*AnyShardRouting), joinPredicates, jm.joinType)
+		return jm.merge(ctx, lhsRoute, rhsRoute, newrouting)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
-		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
-		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
 
 	// None routing can always be merged, as long as we are aiming for the same keyspace
 	case a == none && sameKeyspace:
-		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
 	case b == none && sameKeyspace:
-		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
 
 	// infoSchema routing is complex, so we handle it in a separate method
 	case a == infoSchema && b == infoSchema:
-		return tryMergeInfoSchemaRoutings(ctx, routingA, routingB, m, lhsRoute, rhsRoute)
+		return tryMergeInfoSchemaRoutings(ctx, routingA, routingB, jm, lhsRoute, rhsRoute)
 
 	// sharded routing is complex, so we handle it in a separate method
 	case a == sharded && b == sharded:
-		return tryMergeJoinShardedRouting(ctx, lhsRoute, rhsRoute, m, joinPredicates)
+		return tryMergeShardedRouting(ctx, lhsRoute, rhsRoute, jm, joinPredicates)
 
 	default:
 		return nil
+	}
+}
+
+func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a, b *AnyShardRouting, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) *AnyShardRouting {
+	alternates := make(map[*vindexes.Keyspace]*Route)
+	for ak, av := range a.Alternates {
+		for bk, bv := range b.Alternates {
+			// only same keyspace alternates can be merged.
+			if ak != bk {
+				continue
+			}
+			op, _ := mergeOrJoin(ctx, av, bv, joinPredicates, joinType)
+			if r, ok := op.(*Route); ok {
+				alternates[ak] = r
+			}
+		}
+	}
+	return &AnyShardRouting{
+		keyspace:   a.keyspace,
+		Alternates: alternates,
 	}
 }
 
@@ -85,7 +111,6 @@ func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Ro
 	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
 
 	a, b := getRoutingType(routingA), getRoutingType(routingB)
-
 	return lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace
 }
 
@@ -159,10 +184,6 @@ func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, 
 	}
 
 	return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
-}
-
-func getTypeName(myvar interface{}) string {
-	return reflect.TypeOf(myvar).String()
 }
 
 func getRoutingType(r Routing) routingType {

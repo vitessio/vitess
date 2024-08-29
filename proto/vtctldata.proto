@@ -506,39 +506,9 @@ message CheckThrottlerRequest {
 }
 
 message CheckThrottlerResponse {
-  // StatusCode is HTTP compliant response code (e.g. 200 for OK)
-  int32 status_code = 1;
-  // Value is the metric value collected by the tablet
-  double value = 2;
-  // Threshold is the throttling threshold the table was comparing the value with
-  double threshold = 3;
-  // Error indicates an error retrieving the value
-  string error = 4;
-  // Message
-  string message = 5;
-  // RecentlyChecked indicates that the tablet has been hit with a user-facing check, which can then imply
-  // that heartbeats lease should be renwed.
-  bool recently_checked = 6;
+  topodata.TabletAlias tablet_alias = 1;
 
-  message Metric {
-    // Name of the metric
-    string name = 1;
-    // StatusCode is HTTP compliant response code (e.g. 200 for OK)
-    int32 status_code = 2;
-    // Value is the metric value collected by the tablet
-    double value = 3;
-    // Threshold is the throttling threshold the table was comparing the value with
-    double threshold = 4;
-    // Error indicates an error retrieving the value
-    string error = 5;
-    // Message
-    string message = 6;
-    // Scope used in this check
-    string scope = 7;
-  }
-  // Metrics is a map (metric name -> metric value/error) so that the client has as much
-  // information as possible about all the checked metrics.
-  map<string, Metric> metrics = 7;
+  tabletmanagerdata.CheckThrottlerResponse Check = 2;
 }
 
 message CleanupSchemaMigrationRequest {
@@ -1108,61 +1078,7 @@ message GetThrottlerStatusRequest {
 }
 
 message GetThrottlerStatusResponse {
-  // TabletAlias is the alias of probed tablet
-  string tablet_alias = 1;
-  string keyspace = 2;
-  string shard = 3;
-
-  // IsLeader indicates if the tablet is the leader of the shard, ie. the primary
-  bool is_leader = 4;
-  // IsOpen per stateManager
-  bool is_open = 5;
-  // IsEnabled per throttler configuration
-  bool is_enabled = 6;
-  // IsDormant: whether the throttler is dormant, ie has not received any checks in a while
-  // and goes into low-frequency probing mode.
-  bool is_dormant = 7;
-
-  // LagMetricQuery is the query used to check the lag metric, a constant used by the throttler.
-  string lag_metric_query = 8;
-  // CustomMetricQuery is the query used to check the custom metric, supplied by the user.
-  string custom_metric_query = 9;
-  // DefaultThreshold is the threshold used by the throttler for the default metric (lag or custom in single-metric throttlers)
-  double default_threshold = 10;
-  // MetricNameUsedAsDefault is the name of the metric used as the default metric: "lag" or "custom", for backwards compatibility
-  // with single-metric throttlers
-  string metric_name_used_as_default = 11;
-
-  message MetricResult {
-    double value = 1;
-    string error = 2;
-  }
-
-  // AggregatedMetrics is a map of metric names to their values/errors
-  // Names are, for example, "self", "self/lag", "shard/lag", "shard/loadavg", etc.
-  map<string, MetricResult> aggregated_metrics = 12;
-  // MetricThresholds is a map of metric names to their thresholds.
-  map<string, double> metric_thresholds = 13;
-
-  message MetricHealth {
-    vttime.Time last_healthy_at = 1;
-    int64 seconds_since_last_healthy = 2;
-  }
-  // MetricsHealth is a map of metric names to their health status.
-  map<string, MetricHealth> metrics_health = 14;
-  // ThrottledApps is a map of app names to their throttling rules
-  map<string, topodata.ThrottledAppRule> throttled_apps = 15;
-  // AppCheckedMetrics is a map of app names to their assigned metrics
-  map<string, string> app_checked_metrics = 16;
-
-  bool recently_checked = 17;
-
-  message RecentApp {
-    vttime.Time checked_at = 1;
-    int32 status_code = 2;
-  }
-  // RecentApps is a map of app names to their recent check status
-  map<string, RecentApp> recent_apps = 18;
+  tabletmanagerdata.GetThrottlerStatusResponse status = 1;
 }
 
 message GetTopologyPathRequest {
@@ -1441,6 +1357,8 @@ message PlannedReparentShardRequest {
   // acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.
   // A value of 0 indicates that Vitess shouldn't consider the replication lag at all.
   vttime.Duration tolerable_replication_lag = 6;
+  // AllowCrossCellPromotion allows cross cell promotion,
+  bool allow_cross_cell_promotion = 7;
 }
 
 message PlannedReparentShardResponse {
@@ -1944,6 +1862,7 @@ message VDiffCreateRequest {
   bool verbose = 18;
   int64 max_report_sample_rows = 19;
   vttime.Duration max_diff_duration = 20;
+  int64 row_diff_column_truncate_at = 21;
 }
 
 message VDiffCreateResponse {

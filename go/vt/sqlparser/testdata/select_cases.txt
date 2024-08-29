@@ -1501,8 +1501,8 @@ END
 INPUT
 select sql_big_result distinct t1.a from t1,t2;
 END
-ERROR
-syntax error at position 31 near 'distinct'
+OUTPUT
+select distinct sql_big_result t1.a from t1, t2
 END
 INPUT
 select * from t1 where a = 'b' and a = 'b';
@@ -1921,8 +1921,8 @@ END
 INPUT
 select sql_small_result t2.id, avg(rating+0.0e0) from t2 group by t2.id;
 END
-ERROR
-syntax error at position 28
+OUTPUT
+select sql_small_result t2.id, avg(rating + 0.0e0) from t2 group by t2.id
 END
 INPUT
 select 12 % null as 'NULL';
@@ -2317,8 +2317,8 @@ END
 INPUT
 select sql_big_result trim(t),count(t) from t1 group by t order by t limit 10;
 END
-ERROR
-syntax error at position 28
+OUTPUT
+select sql_big_result trim(t), count(t) from t1 group by t order by t asc limit 10
 END
 INPUT
 select cast(rtrim(' 20.06 ') as decimal(19,2));
@@ -3080,7 +3080,7 @@ INPUT
 select sql_big_result score,count(*) from t1 group by score order by score desc;
 END
 OUTPUT
-select `sql_big_result` as score, count(*) from t1 group by score order by score desc
+select sql_big_result score, count(*) from t1 group by score order by score desc
 END
 INPUT
 select * from information_schema.TABLE_CONSTRAINTS where TABLE_SCHEMA= "test" order by constraint_name;
@@ -4022,7 +4022,7 @@ INPUT
 select SQL_BIG_RESULT distinct from t1, t2 order by 1, 2, 3, 4;
 END
 ERROR
-syntax error at position 31 near 'distinct'
+syntax error at position 36 near 'from'
 END
 INPUT
 select benchmark(100, (select avg(func_26093_b(a, rand())) from table_26093));
@@ -4831,8 +4831,8 @@ END
 INPUT
 select sql_big_result trim(v),count(t) from t1 group by v order by v limit 10;
 END
-ERROR
-syntax error at position 28
+OUTPUT
+select sql_big_result trim(v), count(t) from t1 group by v order by v asc limit 10
 END
 INPUT
 select count(distinct x.id_aams) into not_installed from (select * from (select t1.id_aams, t2.* from t1 left join t2 on t2.code_id = vlt_code_id and t1.id_aams = t2.id_game where t1.id_aams = 1715000360 order by t2.id desc ) as g group by g.id_aams having g.id is null ) as x;
@@ -5348,7 +5348,7 @@ INPUT
 select sql_big_result spid,sum(userid) from t1 group by spid order by spid desc;
 END
 OUTPUT
-select `sql_big_result` as spid, sum(userid) from t1 group by spid order by spid desc
+select sql_big_result spid, sum(userid) from t1 group by spid order by spid desc
 END
 INPUT
 select * from t1 where f1='test' and (f2= md5("test") or f2= md5("TEST"));
@@ -6643,8 +6643,8 @@ END
 INPUT
 select SQL_BIG_RESULT t1.b from t1, t2 group by t1.b order by 1;
 END
-ERROR
-syntax error at position 26
+OUTPUT
+select sql_big_result t1.b from t1, t2 group by t1.b order by 1 asc
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_spanish_ci;
@@ -7585,8 +7585,8 @@ END
 INPUT
 select sql_buffer_result max(f1) is null from t1;
 END
-ERROR
-syntax error at position 30
+OUTPUT
+select sql_buffer_result max(f1) is null from t1
 END
 INPUT
 select substring('hello', -1, -1);
@@ -10640,7 +10640,7 @@ INPUT
 select sql_big_result c,count(t) from t1 group by c order by c limit 10;
 END
 OUTPUT
-select `sql_big_result` as c, count(t) from t1 group by c order by c asc limit 10
+select sql_big_result c, count(t) from t1 group by c order by c asc limit 10
 END
 INPUT
 select * from t3 where b in (select a from t1);
@@ -12007,8 +12007,8 @@ END
 INPUT
 select sql_small_result t2.id, avg(rating) from t2 group by t2.id;
 END
-ERROR
-syntax error at position 28
+OUTPUT
+select sql_small_result t2.id, avg(rating) from t2 group by t2.id
 END
 INPUT
 select mid('hello',1,null),mid('hello',null,1),mid(null,1,1);
@@ -15391,8 +15391,8 @@ END
 INPUT
 select SQL_BIG_RESULT distinct t1.a from t1, t2 group by t1.b order by 1;
 END
-ERROR
-syntax error at position 31 near 'distinct'
+OUTPUT
+select distinct sql_big_result t1.a from t1, t2 group by t1.b order by 1 asc
 END
 INPUT
 select t1.time+0,t1.date+0,t1.timestamp+0,concat(date," ",time), t1.quarter+t1.week, t1.year+timestampadd, timestampdiff from t1;
@@ -16831,8 +16831,8 @@ END
 INPUT
 select SQL_BUFFER_RESULT from t1 order by 1, 2;
 END
-OUTPUT
-select SQL_BUFFER_RESULT from t1 order by 1 asc, 2 asc
+ERROR
+syntax error at position 30 near 'from'
 END
 INPUT
 select collation(convert('a',char(2) ascii)), collation(convert('a',char(2) ascii binary));
@@ -19129,8 +19129,8 @@ END
 INPUT
 select sql_big_result trim(v),count(c) from t1 group by v order by v limit 10;
 END
-ERROR
-syntax error at position 28
+OUTPUT
+select sql_big_result trim(v), count(c) from t1 group by v order by v asc limit 10
 END
 INPUT
 select 1, min(a) from t1m where a=99;
@@ -19171,8 +19171,8 @@ END
 INPUT
 select SQL_BIG_RESULT bit_and(col), bit_or(col) from t1 group by col;
 END
-ERROR
-syntax error at position 31
+OUTPUT
+select sql_big_result bit_and(col), bit_or(col) from t1 group by col
 END
 INPUT
 select 3;
@@ -19681,8 +19681,8 @@ END
 INPUT
 select sql_big_result t2.id, avg(rating+0.0e0) from t2 group by t2.id;
 END
-ERROR
-syntax error at position 26
+OUTPUT
+select sql_big_result t2.id, avg(rating + 0.0e0) from t2 group by t2.id
 END
 INPUT
 select cast(NULL as signed);
@@ -19705,8 +19705,8 @@ END
 INPUT
 select sql_big_result distinct t1.a from t1,t2 order by t2.a;
 END
-ERROR
-syntax error at position 31 near 'distinct'
+OUTPUT
+select distinct sql_big_result t1.a from t1, t2 order by t2.a asc
 END
 INPUT
 select reverse('abc'),reverse('abcd');
@@ -20000,7 +20000,7 @@ INPUT
 select SQL_BIG_RESULT a,count(b), sum(b), avg(b), std(b), min(b), max(b), bit_and(b), bit_or(b), bit_xor(b) from t1 group by a;
 END
 OUTPUT
-select `SQL_BIG_RESULT` as a, count(b), sum(b), avg(b), std(b), min(b), max(b), bit_and(b), bit_or(b), bit_xor(b) from t1 group by a
+select sql_big_result a, count(b), sum(b), avg(b), std(b), min(b), max(b), bit_and(b), bit_or(b), bit_xor(b) from t1 group by a
 END
 INPUT
 select * from (t2 join t4 on b + 1 = y) join t1 on t1.c = t4.c;
@@ -20371,8 +20371,8 @@ END
 INPUT
 select sql_big_result t2.id, avg(rating) from t2 group by t2.id;
 END
-ERROR
-syntax error at position 26
+OUTPUT
+select sql_big_result t2.id, avg(rating) from t2 group by t2.id
 END
 INPUT
 select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '-0'),Point('-0', '0'), Point('0', '0')))))) as result;
@@ -20852,7 +20852,7 @@ INPUT
 select SQL_BIG_RESULT a,count(b), sum(b), avg(b), std(b), min(b), max(b), bit_and(b), bit_or(b) from t1 group by a;
 END
 OUTPUT
-select `SQL_BIG_RESULT` as a, count(b), sum(b), avg(b), std(b), min(b), max(b), bit_and(b), bit_or(b) from t1 group by a
+select sql_big_result a, count(b), sum(b), avg(b), std(b), min(b), max(b), bit_and(b), bit_or(b) from t1 group by a
 END
 INPUT
 select lpad('hello', 18446744073709551617, '1');
@@ -20911,8 +20911,8 @@ END
 INPUT
 select sql_buffer_result max(f1)+1 from t1;
 END
-ERROR
-syntax error at position 30
+OUTPUT
+select sql_buffer_result max(f1) + 1 from t1
 END
 INPUT
 select t1Aa.col1 from t1aA,t2Aa where t1Aa.col1 = t2aA.col1;
@@ -21721,8 +21721,8 @@ END
 INPUT
 select SQL_BUFFER_RESULT from t1 WHERE (SEQ = 1);
 END
-OUTPUT
-select SQL_BUFFER_RESULT from t1 where SEQ = 1
+ERROR
+syntax error at position 30 near 'from'
 END
 INPUT
 select i, count(*), std(s1/s2) from bug22555 group by i order by i;

@@ -92,6 +92,12 @@ type Controller interface {
 
 	// CheckThrottler
 	CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult
+	GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus
+
+	RedoPreparedTransactions()
+
+	// SetTwoPCAllowed sets whether TwoPC is allowed or not.
+	SetTwoPCAllowed(bool)
 }
 
 // Ensure TabletServer satisfies Controller interface.

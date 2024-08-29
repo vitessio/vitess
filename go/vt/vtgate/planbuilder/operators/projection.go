@@ -87,7 +87,7 @@ type (
 
 	ProjExpr struct {
 		Original *sqlparser.AliasedExpr // this is the expression the user asked for. should only be used to decide on the column alias
-		EvalExpr sqlparser.Expr         // EvalExpr is the expression that will be evaluated at runtime
+		EvalExpr sqlparser.Expr         // EvalExpr represents the expression evaluated at runtime or used when the ProjExpr is pushed under a route
 		ColExpr  sqlparser.Expr         // ColExpr is used during planning to figure out which column this ProjExpr is representing
 		Info     ExprInfo               // Here we store information about evalengine, offsets or subqueries
 	}
@@ -308,15 +308,6 @@ func (p *Projection) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 	return p.addColumn(ctx, true, false, expr, false)
 }
 
-func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) []int {
-	offsets := make([]int, len(exprs))
-	for idx, expr := range exprs {
-		offset := p.addColumn(ctx, reuse, false, expr, false)
-		offsets[idx] = offset
-	}
-	return offsets
-}
-
 func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	cols, aliased := p.Columns.(AliasedProjections)
 	if !aliased {
@@ -392,8 +383,18 @@ func (p *Projection) addColumn(
 		return p.addProjExpr(pe)
 	}
 
-	// we need to push down this column to our input
-	inputOffset := p.Source.AddColumn(ctx, true, addToGroupBy, ae)
+	var inputOffset int
+	if nothingNeedsFetching(ctx, expr) {
+		// if we don't need to fetch anything, we could just evaluate it in the projection
+		// we still check if it's there - if it is, we can, we should use it
+		inputOffset = p.Source.FindCol(ctx, expr, false)
+		if inputOffset < 0 {
+			return p.addProjExpr(pe)
+		}
+	} else {
+		// we need to push down this column to our input
+		inputOffset = p.Source.AddColumn(ctx, true, addToGroupBy, ae)
+	}
 
 	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
 	return p.addProjExpr(pe)

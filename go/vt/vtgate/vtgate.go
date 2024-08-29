@@ -30,8 +30,6 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/vtenv"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -51,9 +49,11 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
+	"vitess.io/vitess/go/vt/vtgate/txresolver"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
@@ -284,6 +284,8 @@ func Init(
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw)
+	// TxResolver depends on TxConn to complete distributed transaction.
+	tr := txresolver.NewTxResolver(gw.hc.Subscribe(), tc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
@@ -360,6 +362,7 @@ func Init(
 		if st != nil && enableSchemaChangeSignal {
 			st.Start()
 		}
+		tr.Start()
 		srv := initMySQLProtocol(vtgateInst)
 		if srv != nil {
 			servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
@@ -370,6 +373,7 @@ func Init(
 		if st != nil && enableSchemaChangeSignal {
 			st.Stop()
 		}
+		tr.Stop()
 	})
 	vtgateInst.registerDebugHealthHandler()
 	vtgateInst.registerDebugEnvHandler()
@@ -557,11 +561,6 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 // statistics.
 func (vtg *VTGate) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
 	return vtg.executor.CloseSession(ctx, NewSafeSession(session))
-}
-
-// ResolveTransaction resolves the specified 2PC transaction.
-func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
-	return formatError(vtg.txConn.Resolve(ctx, dtid))
 }
 
 // Prepare supports non-streaming prepare statement query with multi shards

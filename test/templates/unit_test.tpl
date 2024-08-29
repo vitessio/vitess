@@ -43,11 +43,11 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v4
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: dorny/paths-filter@v3.0.1
+      uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
         token: ''
@@ -67,13 +67,13 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
-        go-version: 1.22.5
+        go-version: 1.23.0
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -98,12 +98,11 @@ jobs:
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
-        {{if (eq .Platform "mysql57")}}
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.32-1_all.deb
 
-        # mysql57
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
+        {{if (eq .Platform "mysql57")}}
         # Bionic packages are still compatible for Jammy since there's no MySQL 5.7
         # packages for Jammy.
         echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
@@ -111,20 +110,20 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses5
-
         {{end}}
 
         {{if (eq .Platform "mysql80")}}
-        # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-
-        # mysql80
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-server mysql-client
+        {{end}}
 
+        {{if (eq .Platform "mysql84")}}
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        sudo apt-get -qq update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-server mysql-client
         {{end}}
 
         sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
@@ -187,7 +186,7 @@ jobs:
 
     - name: Test Summary
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
-      uses: test-summary/action@v2
+      uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report.xml"
         show: "fail, skip"

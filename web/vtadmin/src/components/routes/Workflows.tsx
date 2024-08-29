@@ -36,6 +36,8 @@ import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { UseQueryResult } from 'react-query';
 
+export const ThrottleThresholdSeconds = 60;
+
 export const Workflows = () => {
     useDocumentTitle('Workflows');
     const workflowsQuery = useWorkflows();
@@ -67,7 +69,6 @@ export const Workflows = () => {
                 row.clusterID && row.keyspace && row.name
                     ? `/workflow/${row.clusterID}/${row.keyspace}/${row.name}`
                     : null;
-
             return (
                 <tr key={idx}>
                     <DataCell>
@@ -112,13 +113,52 @@ export const Workflows = () => {
                             {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
                             {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
                                 if (streamState in row.streams) {
+                                    var numThrottled = 0;
+                                    var throttledApp: string | undefined = '';
                                     const streamCount = row.streams[streamState].length;
+                                    var streamDescription: string;
+                                    switch (streamState) {
+                                        case 'Error':
+                                            streamDescription = 'failed';
+                                            break;
+                                        case 'Running':
+                                        case 'Copying':
+                                            const streams = row.streams[streamState];
+                                            if (streams !== undefined && streams !== null) {
+                                                for (const stream of streams) {
+                                                    if (
+                                                        stream?.throttler_status?.time_throttled !== null &&
+                                                        stream?.throttler_status?.time_throttled !== undefined &&
+                                                        // If the stream has been throttled recently, treat it as throttled.
+                                                        Number(stream?.throttler_status?.time_throttled?.seconds) >
+                                                            Date.now() / 1000 - ThrottleThresholdSeconds
+                                                    ) {
+                                                        numThrottled++;
+                                                        // In case of multiple streams, show the first throttled app and time.
+                                                        // The detail page will show each stream separately.
+                                                        if (numThrottled === 1) {
+                                                            throttledApp =
+                                                                stream?.throttler_status?.component_throttled?.toString();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            streamDescription = streamState.toLocaleLowerCase();
+                                            if (numThrottled > 0) {
+                                                streamState = 'Throttled';
+                                            }
+                                            break;
+                                        default:
+                                            streamDescription = streamState.toLocaleLowerCase();
+                                    }
                                     const tooltip = [
                                         streamCount,
-                                        streamState === 'Error' ? 'failed' : streamState.toLocaleLowerCase(),
+                                        streamDescription,
                                         streamCount === 1 ? 'stream' : 'streams',
+                                        numThrottled > 0
+                                            ? '(' + numThrottled + ' throttled in ' + throttledApp + ')'
+                                            : '',
                                     ].join(' ');
-
                                     return (
                                         <Tooltip key={streamState} text={tooltip}>
                                             <span className={style.stream}>

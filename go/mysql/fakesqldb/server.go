@@ -432,7 +432,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 				userCallback(query)
 			}
 			if pat.err != "" {
-				return fmt.Errorf(pat.err)
+				return errors.New(pat.err)
 			}
 			return callback(pat.result)
 		}
@@ -590,6 +590,13 @@ func (db *DB) AddQueryPattern(queryPattern string, expectedResult *sqltypes.Resu
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.patternData[queryPattern] = exprResult{queryPattern: queryPattern, expr: expr, result: &result}
+}
+
+// RemoveQueryPattern removes a query pattern that was previously added.
+func (db *DB) RemoveQueryPattern(queryPattern string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	delete(db.patternData, queryPattern)
 }
 
 // RejectQueryPattern allows a query pattern to be rejected with an error
@@ -853,7 +860,7 @@ func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, b
 			userCallback, ok := db.queryPatternUserCallback[pat.expr]
 			if ok {
 				if pat.err != "" {
-					return userCallback, ExpectedResult{pat.result, nil}, true, fmt.Errorf(pat.err)
+					return userCallback, ExpectedResult{pat.result, nil}, true, errors.New(pat.err)
 				}
 				return userCallback, ExpectedResult{pat.result, nil}, true, nil
 			}

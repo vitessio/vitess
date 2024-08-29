@@ -103,7 +103,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&mysqlKeepAlivePeriod, "mysql-server-keepalive-period", mysqlKeepAlivePeriod, "TCP period between keep-alives")
 	fs.DurationVar(&mysqlServerFlushDelay, "mysql_server_flush_delay", mysqlServerFlushDelay, "Delay after which buffered response will be flushed to the client.")
 	fs.StringVar(&mysqlDefaultWorkloadName, "mysql_default_workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
-	fs.BoolVar(&mysqlDrainOnTerm, "mysql_server_drain_onterm", mysqlDrainOnTerm, "If set, the server waits for --onterm_timeout for connected clients to drain")
+	fs.BoolVar(&mysqlDrainOnTerm, "mysql-server-drain-onterm", mysqlDrainOnTerm, "If set, the server waits for --onterm_timeout for already connected clients to complete their in flight work")
 }
 
 // vtgateHandler implements the Listener interface.
@@ -399,7 +399,7 @@ func (vh *vtgateHandler) KillConnection(ctx context.Context, connectionID uint32
 
 	c, exists := vh.connections[connectionID]
 	if !exists {
-		return sqlerror.NewSQLError(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
+		return sqlerror.NewSQLErrorf(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
 	}
 
 	// First, we mark the connection for close, so that even when the context is cancelled, while returning the response back to client,
@@ -417,7 +417,7 @@ func (vh *vtgateHandler) KillQuery(connectionID uint32) error {
 	defer vh.mu.Unlock()
 	c, exists := vh.connections[connectionID]
 	if !exists {
-		return sqlerror.NewSQLError(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
+		return sqlerror.NewSQLErrorf(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
 	}
 	c.CancelCtx()
 	return nil

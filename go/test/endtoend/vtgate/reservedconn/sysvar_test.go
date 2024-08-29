@@ -461,3 +461,35 @@ func TestSysVarTxIsolation(t *testing.T) {
 	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
 	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
 }
+
+// TestSysVarInnodbWaitTimeout tests the innodb_lock_wait_timeout system variable
+func TestSysVarInnodbWaitTimeout(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// default from mysql
+	utils.AssertMatches(t, conn, "select @@innodb_lock_wait_timeout", `[[UINT64(20)]]`)
+	utils.AssertMatches(t, conn, "select @@global.innodb_lock_wait_timeout", `[[UINT64(20)]]`)
+	// ensuring it goes to mysql
+	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout", `UINT64(20)`)
+	utils.AssertContains(t, conn, "select @@global.innodb_lock_wait_timeout", `UINT64(20)`)
+
+	// setting to different value.
+	utils.Exec(t, conn, "set @@innodb_lock_wait_timeout = 120")
+	utils.AssertMatches(t, conn, "select @@innodb_lock_wait_timeout", `[[INT64(120)]]`)
+	// ensuring it goes to mysql
+	utils.AssertContains(t, conn, "select @@global.innodb_lock_wait_timeout, connection_id()", `UINT64(20)`)
+	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout, connection_id()", `INT64(120)`)
+	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
+	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout, connection_id()", `INT64(120)`)
+
+	// changing setting to different value.
+	utils.Exec(t, conn, "set @@innodb_lock_wait_timeout = 240")
+	utils.AssertMatches(t, conn, "select @@innodb_lock_wait_timeout", `[[INT64(240)]]`)
+	// ensuring it goes to mysql
+	utils.AssertContains(t, conn, "select @@global.innodb_lock_wait_timeout, connection_id()", `UINT64(20)`)
+	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout, connection_id()", `INT64(240)`)
+	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
+	utils.AssertContains(t, conn, "select @@innodb_lock_wait_timeout, connection_id()", `INT64(240)`)
+}

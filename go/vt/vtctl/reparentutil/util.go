@@ -49,6 +49,10 @@ var (
 	successResult          = "success"
 )
 
+const (
+	lostTopologyLockMsg = "lost topology lock, aborting"
+)
+
 // ElectNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
@@ -64,11 +68,8 @@ func ElectNewPrimary(
 	tmc tmclient.TabletManagerClient,
 	shardInfo *topo.ShardInfo,
 	tabletMap map[string]*topo.TabletInfo,
-	newPrimaryAlias *topodatapb.TabletAlias,
-	avoidPrimaryAlias *topodatapb.TabletAlias,
-	waitReplicasTimeout time.Duration,
-	tolerableReplLag time.Duration,
-	durability Durabler,
+	innodbBufferPoolData map[string]int,
+	opts *PlannedReparentOptions,
 	// (TODO:@ajm188) it's a little gross we need to pass this, maybe embed in the context?
 	logger logutil.Logger,
 ) (*topodatapb.TabletAlias, error) {
@@ -84,6 +85,7 @@ func ElectNewPrimary(
 		// tablets that are possible candidates to be the new primary and their positions
 		validTablets         []*topodatapb.Tablet
 		tabletPositions      []replication.Position
+		innodbBufferPool     []int
 		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
@@ -92,16 +94,16 @@ func ElectNewPrimary(
 	reasonsToInvalidate := strings.Builder{}
 	for _, tablet := range tabletMap {
 		switch {
-		case newPrimaryAlias != nil:
+		case opts.NewPrimaryAlias != nil:
 			// If newPrimaryAlias is provided, then that is the only valid tablet, even if it is not of type replica or in a different cell.
-			if !topoproto.TabletAliasEqual(tablet.Alias, newPrimaryAlias) {
+			if !topoproto.TabletAliasEqual(tablet.Alias, opts.NewPrimaryAlias) {
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v does not match the new primary alias provided", topoproto.TabletAliasString(tablet.Alias)))
 				continue
 			}
-		case primaryCell != "" && tablet.Alias.Cell != primaryCell:
+		case !opts.AllowCrossCellPromotion && primaryCell != "" && tablet.Alias.Cell != primaryCell:
 			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not in the same cell as the previous primary", topoproto.TabletAliasString(tablet.Alias)))
 			continue
-		case avoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, avoidPrimaryAlias):
+		case opts.AvoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, opts.AvoidPrimaryAlias):
 			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v matches the primary alias to avoid", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		case tablet.Tablet.Type != topodatapb.TabletType_REPLICA:
@@ -116,7 +118,7 @@ func ElectNewPrimary(
 	// then we don't need to find the position of the said tablet for sorting.
 	// We can just return the tablet quickly.
 	// This check isn't required, but it saves us an RPC call that is otherwise unnecessary.
-	if len(candidates) == 1 && tolerableReplLag == 0 {
+	if len(candidates) == 1 && opts.TolerableReplLag == 0 {
 		return candidates[0].Alias, nil
 	}
 
@@ -124,12 +126,13 @@ func ElectNewPrimary(
 		tb := tablet
 		errorGroup.Go(func() error {
 			// find and store the positions for the tablet
-			pos, replLag, err := findPositionAndLagForTablet(groupCtx, tb, logger, tmc, waitReplicasTimeout)
+			pos, replLag, err := findPositionAndLagForTablet(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
-			if err == nil && (tolerableReplLag == 0 || tolerableReplLag >= replLag) {
+			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
 				validTablets = append(validTablets, tb)
 				tabletPositions = append(tabletPositions, pos)
+				innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
 			} else {
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
 			}
@@ -148,7 +151,7 @@ func ElectNewPrimary(
 	}
 
 	// sort the tablets for finding the best primary
-	err = sortTabletsForReparent(validTablets, tabletPositions, durability)
+	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, opts.durability)
 	if err != nil {
 		return nil, err
 	}

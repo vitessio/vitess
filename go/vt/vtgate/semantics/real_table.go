@@ -20,9 +20,11 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/slice"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -31,26 +33,41 @@ type RealTable struct {
 	dbName, tableName string
 	ASTNode           *sqlparser.AliasedTableExpr
 	Table             *vindexes.Table
+	CTE               *CTE
 	VindexHint        *sqlparser.IndexHint
+	MirrorRule        *vindexes.MirrorRule
 	isInfSchema       bool
 	collationEnv      *collations.Environment
+	cache             map[string]dependencies
 }
 
 var _ TableInfo = (*RealTable)(nil)
 
 // dependencies implements the TableInfo interface
-func (r *RealTable) dependencies(colName string, org originable) (dependencies, error) {
-	ts := org.tableSetFor(r.ASTNode)
-	for _, info := range r.getColumns(false /* ignoreInvisbleCol */) {
-		if strings.EqualFold(info.Name, colName) {
-			return createCertain(ts, ts, info.Type), nil
+func (r *RealTable) dependencies(colName string, org originable) (deps dependencies, err error) {
+	var myID *TableSet
+	if r.cache == nil {
+		r.cache = make(map[string]dependencies)
+		ts := org.tableSetFor(r.ASTNode)
+		myID = &ts
+		for _, info := range r.getColumns(false /* ignoreInvisbleCol */) {
+			r.cache[strings.ToLower(info.Name)] = createCertain(ts, ts, info.Type)
 		}
+	}
+
+	if deps, ok := r.cache[strings.ToLower(colName)]; ok {
+		return deps, nil
 	}
 
 	if r.authoritative() {
 		return &nothing{}, nil
 	}
-	return createUncertain(ts, ts), nil
+
+	if myID == nil {
+		ts := org.tableSetFor(r.ASTNode)
+		myID = &ts
+	}
+	return createUncertain(*myID, *myID), nil
 }
 
 // GetTables implements the TableInfo interface
@@ -70,9 +87,17 @@ func (r *RealTable) IsInfSchema() bool {
 
 // GetColumns implements the TableInfo interface
 func (r *RealTable) getColumns(ignoreInvisbleCol bool) []ColumnInfo {
-	if r.Table == nil {
+	switch {
+	case r.CTE != nil:
+		return r.getCTEColumns()
+	case r.Table == nil:
 		return nil
+	default:
+		return r.getVindexTableColumns(ignoreInvisbleCol)
 	}
+}
+
+func (r *RealTable) getVindexTableColumns(ignoreInvisbleCol bool) []ColumnInfo {
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(r.Table.Columns))
 	for _, col := range r.Table.Columns {
@@ -103,6 +128,57 @@ func (r *RealTable) getColumns(ignoreInvisbleCol bool) []ColumnInfo {
 		}
 	}
 	return cols
+}
+
+func (r *RealTable) getCTEColumns() []ColumnInfo {
+	selectExprs := r.CTE.Query.GetColumns()
+	ci := extractColumnsFromCTE(r.CTE.Columns, selectExprs)
+	if ci != nil {
+		return ci
+	}
+	return extractSelectExprsFromCTE(selectExprs)
+}
+
+// Authoritative implements the TableInfo interface
+func (r *RealTable) authoritative() bool {
+	switch {
+	case r.Table != nil:
+		return r.Table.ColumnListAuthoritative
+	case r.CTE != nil:
+		return r.CTE.isAuthoritative
+	default:
+		return false
+	}
+}
+
+func extractSelectExprsFromCTE(selectExprs sqlparser.SelectExprs) []ColumnInfo {
+	var ci []ColumnInfo
+	for _, expr := range selectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil
+		}
+		ci = append(ci, ColumnInfo{
+			Name: ae.ColumnName(),
+			Type: evalengine.NewUnknownType(), // TODO: set the proper type
+		})
+	}
+	return ci
+}
+
+func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs sqlparser.SelectExprs) []ColumnInfo {
+	if len(columns) == 0 {
+		return nil
+	}
+	if len(selectExprs) != len(columns) {
+		panic("mismatch of columns")
+	}
+	return slice.Map(columns, func(from sqlparser.IdentifierCI) ColumnInfo {
+		return ColumnInfo{
+			Name: from.String(),
+			Type: evalengine.NewUnknownType(),
+		}
+	})
 }
 
 // GetExpr implements the TableInfo interface
@@ -145,12 +221,12 @@ func (r *RealTable) Name() (sqlparser.TableName, error) {
 	return r.ASTNode.TableName()
 }
 
-// Authoritative implements the TableInfo interface
-func (r *RealTable) authoritative() bool {
-	return r.Table != nil && r.Table.ColumnListAuthoritative
-}
-
 // Matches implements the TableInfo interface
 func (r *RealTable) matches(name sqlparser.TableName) bool {
 	return (name.Qualifier.IsEmpty() || name.Qualifier.String() == r.dbName) && r.tableName == name.Name.String()
+}
+
+// GetMirrorRule implements TableInfo.
+func (r *RealTable) GetMirrorRule() *vindexes.MirrorRule {
+	return r.MirrorRule
 }

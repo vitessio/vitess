@@ -598,3 +598,7 @@ func (dbc *Conn) applySameSetting(ctx context.Context) error {
 	_, err := dbc.execOnce(ctx, dbc.setting.ApplyQuery(), 1, false, false)
 	return err
 }
+
+func (dbc *Conn) IsUnixSocket() bool {
+	return dbc.conn.IsClientUnixSocket()
+}

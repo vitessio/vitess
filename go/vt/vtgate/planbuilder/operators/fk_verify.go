@@ -52,9 +52,6 @@ func (fkv *FkVerify) Inputs() []Operator {
 // SetInputs implements the Operator interface
 func (fkv *FkVerify) SetInputs(operators []Operator) {
 	fkv.Input = operators[0]
-	if len(fkv.Verify) != len(operators)-1 {
-		panic("mismatched number of verify inputs")
-	}
 	for i := 1; i < len(operators); i++ {
 		fkv.Verify[i-1].Op = operators[i]
 	}

@@ -131,6 +131,15 @@ type (
 
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
 		CloneForReplicaWarming(ctx context.Context) VCursor
+
+		// CloneForMirroring clones the VCursor for re-use in mirroring queries to other keyspaces
+		CloneForMirroring(ctx context.Context) VCursor
+		//
+		// ReadTransaction reads the state of the given transaction from the metadata manager
+		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
+
+		// UnresolvedTransactions reads the state of all the unresolved atomic transactions in the given keyspace.
+		UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error)
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

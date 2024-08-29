@@ -54,7 +54,8 @@ type (
 		// Inputs returns the inputs for this operator
 		Inputs() []Operator
 
-		// SetInputs changes the inputs for this op
+		// SetInputs changes the inputs for this op.
+		// We don't need to check the size of the inputs, as the planner will ensure that the inputs are correct
 		SetInputs([]Operator)
 
 		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.

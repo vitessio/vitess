@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -51,10 +52,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("show variables like '%s'", variable))
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	if qr.Rows != nil && len(qr.Rows) == 1 {
-		return true
-	}
-	return false
+	return len(qr.Rows) == 1
 }
 
 // TestPlayerNoBlob sets up a new environment with mysql running with
@@ -398,6 +396,98 @@ func TestMissingTables(t *testing.T) {
 	runCases(t, filter, testcases, startPos, nil)
 }
 
+// TestSidecarDBTables tests streaming of sidecar db tables.
+func TestSidecarDBTables(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id11 int, id12 int, primary key(id11))",
+			"create table _vt.internal1(id int, primary key(id))",
+			"create table _vt.internal2(id int, primary key(id))",
+		},
+	}
+	ts.Init()
+	defer func() {
+		execStatements(t, []string{
+			"drop table _vt.internal1",
+			"drop table _vt.internal2",
+		})
+	}()
+	defer ts.Close()
+	position := primaryPosition(t)
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	execStatements(t, []string{
+		"insert into t1 values (1, 1)",
+		"insert into t1 values (2, 2)",
+		"insert into _vt.internal1 values (1)",
+		"insert into _vt.internal2 values (1)",
+		"insert into _vt.internal2 values (2)",
+	})
+	options := &binlogdatapb.VStreamOptions{
+		InternalTables: []string{"internal1", "internal2"},
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	defer cancel()
+	wantRowEvents := map[string]int{
+		"t1":        2,
+		"internal1": 1,
+		"internal2": 2,
+	}
+	gotRowEvents := make(map[string]int)
+	gotFieldEvents := make(map[string]int)
+	err := engine.Stream(ctx, position, nil, filter, "", func(events []*binlogdatapb.VEvent) error {
+		for _, ev := range events {
+			if ev.Type == binlogdatapb.VEventType_ROW {
+				gotRowEvents[ev.RowEvent.TableName]++
+				require.Equal(t, slices.Contains(options.InternalTables, ev.RowEvent.TableName), ev.RowEvent.IsInternalTable)
+			}
+			if ev.Type == binlogdatapb.VEventType_FIELD {
+				require.Equal(t, slices.Contains(options.InternalTables, ev.FieldEvent.TableName), ev.FieldEvent.IsInternalTable)
+				gotFieldEvents[ev.FieldEvent.TableName]++
+			}
+		}
+		return nil
+	}, options)
+	require.NoError(t, err)
+	require.EqualValues(t, wantRowEvents, gotRowEvents)
+	for k, v := range gotFieldEvents {
+		require.Equal(t, 1, v, "gotFieldEvents[%s] = %d", k, v)
+	}
+}
+
+// TestVStreamMissingFieldsInLastPK tests that we error out if the lastpk for a table is missing the fields spec.
+func TestVStreamMissingFieldsInLastPK(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id11 int, id12 int, primary key(id11))",
+		},
+	}
+	ts.Init()
+	defer ts.Close()
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	var tablePKs []*binlogdatapb.TableLastPK
+	tablePKs = append(tablePKs, getTablePK("t1", 1))
+	for _, tpk := range tablePKs {
+		tpk.Lastpk.Fields = nil
+	}
+	ctx := context.Background()
+	ch := make(chan []*binlogdatapb.VEvent)
+	err := vstream(ctx, t, "", tablePKs, filter, ch)
+	require.ErrorContains(t, err, "lastpk for table t1 has no fields defined")
+}
+
 func TestVStreamCopySimpleFlow(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
@@ -408,7 +498,6 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 	ts.Init()
 	defer ts.Close()
-
 	log.Infof("Pos before bulk insert: %s", primaryPosition(t))
 	insertSomeRows(t, 10)
 	log.Infof("Pos after bulk insert: %s", primaryPosition(t))
@@ -636,11 +725,11 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 				return io.EOF
 			}
 			return nil
-		})
+		}, nil)
 	}()
 	wg.Wait()
 	if errGoroutine != nil {
-		t.Fatalf(errGoroutine.Error())
+		t.Fatal(errGoroutine.Error())
 	}
 }
 
@@ -1460,7 +1549,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 
 // todo: migrate to new framework
 // test that vstreamer ignores tables created by OnlineDDL
-func TestInternalTables(t *testing.T) {
+func TestOnlineDDLTables(t *testing.T) {
 	if version.GoOS == "darwin" {
 		t.Skip("internal online ddl table matching doesn't work on Mac because it is case insensitive")
 	}
@@ -1736,7 +1825,7 @@ func TestMinimalMode(t *testing.T) {
 		engine = oldEngine
 		env = oldEnv
 	}()
-	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil })
+	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -80,7 +81,7 @@ func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 	if r == nil {
 		return nil, f.sendErr
 	}
-	return r, nil
+	return r.Copy(), nil
 }
 
 func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
@@ -111,7 +112,7 @@ func (f *fakePrimitive) syncCall(wantfields bool, callback func(*sqltypes.Result
 		}
 		result := &sqltypes.Result{}
 		for i := 0; i < len(r.Rows); i++ {
-			result.Rows = append(result.Rows, r.Rows[i])
+			result.Rows = append(result.Rows, sqltypes.CopyRow(r.Rows[i]))
 			// Send only two rows at a time.
 			if i%2 == 1 {
 				if err := callback(result); err != nil {
@@ -188,6 +189,15 @@ func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*que
 		if result == nil {
 			result = r
 		} else {
+			if r.Fields != nil {
+				for i, field := range r.Fields {
+					aField := field
+					bField := result.Fields[i]
+					if !proto.Equal(aField, bField) {
+						return fmt.Errorf("fields differ: %s <> %s", aField.String(), bField.String())
+					}
+				}
+			}
 			result.Rows = append(result.Rows, r.Rows...)
 		}
 		return nil

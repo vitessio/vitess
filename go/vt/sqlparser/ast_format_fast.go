@@ -41,8 +41,20 @@ func (node *Select) FormatFast(buf *TrackedBuffer) {
 			buf.WriteString(SQLNoCacheStr)
 		}
 	}
+	if node.HighPriority {
+		buf.WriteString(HighPriorityStr)
+	}
 	if node.StraightJoinHint {
 		buf.WriteString(StraightJoinHint)
+	}
+	if node.SQLSmallResult {
+		buf.WriteString(SQLSmallResultStr)
+	}
+	if node.SQLBigResult {
+		buf.WriteString(SQLBigResultStr)
+	}
+	if node.SQLBufferResult {
+		buf.WriteString(SQLBufferResultStr)
 	}
 	if node.SQLCalcFoundRows {
 		buf.WriteString(SQLCalcFoundRowsStr)
@@ -231,9 +243,9 @@ func (node *With) FormatFast(buf *TrackedBuffer) {
 func (node *CommonTableExpr) FormatFast(buf *TrackedBuffer) {
 	node.ID.FormatFast(buf)
 	node.Columns.FormatFast(buf)
-	buf.WriteString(" as ")
+	buf.WriteString(" as (")
 	node.Subquery.FormatFast(buf)
-	buf.WriteByte(' ')
+	buf.WriteString(") ")
 }
 
 // FormatFast formats the node.
@@ -410,6 +422,8 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case CleanupAllMigrationType:
+		alterType = "cleanup all"
 	case LaunchMigrationType:
 		alterType = "launch"
 	case LaunchAllMigrationType:
@@ -2815,6 +2829,20 @@ func (node *ShowBasic) FormatFast(buf *TrackedBuffer) {
 		node.DbName.FormatFast(buf)
 	}
 	node.Filter.FormatFast(buf)
+}
+
+func (node *ShowTransactionStatus) FormatFast(buf *TrackedBuffer) {
+	if node.TransactionID == "" {
+		buf.WriteString("show unresolved transactions")
+		if node.Keyspace != "" {
+			buf.WriteString(" for ")
+			buf.WriteString(node.Keyspace)
+		}
+		return
+	}
+	buf.WriteString("show transaction status for '")
+	buf.WriteString(node.TransactionID)
+	buf.WriteByte('\'')
 }
 
 // FormatFast formats the node.

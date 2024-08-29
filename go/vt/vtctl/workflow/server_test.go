@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -208,20 +209,303 @@ func TestVDiffCreate(t *testing.T) {
 	}
 }
 
+func TestMoveTablesComplete(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	table1Name := "t1"
+	table2Name := "t1_2"
+	table3Name := "t1_3"
+	tableTemplate := "CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+	tabletTypes := []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
+	lockName := fmt.Sprintf("%s/%s", targetKeyspaceName, workflowName)
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		table1Name: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   table1Name,
+					Schema: fmt.Sprintf(tableTemplate, table1Name),
+				},
+			},
+		},
+		table2Name: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   table2Name,
+					Schema: fmt.Sprintf(tableTemplate, table2Name),
+				},
+			},
+		},
+		table3Name: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   table3Name,
+					Schema: fmt.Sprintf(tableTemplate, table3Name),
+				},
+			},
+		},
+	}
+
+	testcases := []struct {
+		name                           string
+		sourceKeyspace, targetKeyspace *testKeyspace
+		preFunc                        func(t *testing.T, env *testEnv)
+		req                            *vtctldatapb.MoveTablesCompleteRequest
+		expectedSourceQueries          []*queryResult
+		expectedTargetQueries          []*queryResult
+		want                           *vtctldatapb.MoveTablesCompleteResponse
+		wantErr                        string
+		postFunc                       func(t *testing.T, env *testEnv)
+	}{
+		{
+			name: "basic",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.MoveTablesCompleteRequest{
+				TargetKeyspace: targetKeyspaceName,
+				Workflow:       workflowName,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table1Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table2Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table3Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						targetKeyspaceName, workflowName),
+					result: &querypb.QueryResult{},
+				},
+			},
+			want: &vtctldatapb.MoveTablesCompleteResponse{
+				Summary: fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+			},
+		},
+		{
+			name: "keep routing rules and data",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.MoveTablesCompleteRequest{
+				TargetKeyspace:   targetKeyspaceName,
+				Workflow:         workflowName,
+				KeepRoutingRules: true,
+				KeepData:         true,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						targetKeyspaceName, workflowName),
+					result: &querypb.QueryResult{},
+				},
+			},
+			postFunc: func(t *testing.T, env *testEnv) {
+				env.confirmRoutingAllTablesToTarget(t)
+			},
+			want: &vtctldatapb.MoveTablesCompleteResponse{
+				Summary: fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+			},
+		},
+		{
+			name: "rename tables",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.MoveTablesCompleteRequest{
+				TargetKeyspace: targetKeyspaceName,
+				Workflow:       workflowName,
+				RenameTables:   true,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table1Name, sourceKeyspaceName, table1Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table2Name, sourceKeyspaceName, table2Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table3Name, sourceKeyspaceName, table3Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						targetKeyspaceName, workflowName),
+					result: &querypb.QueryResult{},
+				},
+			},
+			want: &vtctldatapb.MoveTablesCompleteResponse{
+				Summary: fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+			},
+		},
+		{
+			name: "named lock held",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.MoveTablesCompleteRequest{
+				TargetKeyspace:   targetKeyspaceName,
+				Workflow:         workflowName,
+				KeepRoutingRules: true,
+			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				_, _, err := env.ts.LockName(ctx, lockName, "test")
+				require.NoError(t, err)
+				topo.LockTimeout = 500 * time.Millisecond
+			},
+			postFunc: func(t *testing.T, env *testEnv) {
+				topo.LockTimeout = 45 * time.Second // reset it to the default
+			},
+			wantErr: fmt.Sprintf("failed to lock the %s workflow: deadline exceeded: internal/named_locks/%s", lockName, lockName),
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NotNil(t, tc.sourceKeyspace)
+			require.NotNil(t, tc.targetKeyspace)
+			require.NotNil(t, tc.req)
+			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
+			defer env.close()
+			env.tmc.schema = schema
+			env.tmc.frozen.Store(true)
+			if tc.expectedSourceQueries != nil {
+				require.NotNil(t, env.tablets[tc.sourceKeyspace.KeyspaceName])
+				for _, eq := range tc.expectedSourceQueries {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, eq)
+				}
+			}
+			if tc.expectedTargetQueries != nil {
+				require.NotNil(t, env.tablets[tc.targetKeyspace.KeyspaceName])
+				for _, eq := range tc.expectedTargetQueries {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, eq)
+				}
+			}
+			if tc.preFunc != nil {
+				tc.preFunc(t, env)
+			}
+			// Setup the routing rules as they would be after having previously done SwitchTraffic.
+			env.addTableRoutingRules(t, ctx, tabletTypes, []string{table1Name, table2Name, table3Name})
+			got, err := env.ws.MoveTablesComplete(ctx, tc.req)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.EqualValues(t, got, tc.want, "Server.MoveTablesComplete() = %v, want %v", got, tc.want)
+			}
+			if tc.postFunc != nil {
+				tc.postFunc(t, env)
+			} else { // Default post checks
+				// Confirm that we have no routing rules.
+				rr, err := env.ts.GetRoutingRules(ctx)
+				require.NoError(t, err)
+				require.Zero(t, rr.Rules)
+
+				// Confirm that we have no shard tablet controls, which is where
+				// DeniedTables live.
+				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
+					for _, shardName := range keyspace.ShardNames {
+						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestWorkflowDelete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
-	tableName := "t1"
+	table1Name := "t1"
+	table2Name := "t1_2"
+	table3Name := "t1_3"
+	tableTemplate := "CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))"
 	sourceKeyspaceName := "sourceks"
 	targetKeyspaceName := "targetks"
+	lockName := fmt.Sprintf("%s/%s", targetKeyspaceName, workflowName)
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
-		"t1": {
+		table1Name: {
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 				{
-					Name:   tableName,
-					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+					Name:   table1Name,
+					Schema: fmt.Sprintf(tableTemplate, table1Name),
+				},
+			},
+		},
+		table2Name: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   table2Name,
+					Schema: fmt.Sprintf(tableTemplate, table2Name),
+				},
+			},
+		},
+		table3Name: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   table3Name,
+					Schema: fmt.Sprintf(tableTemplate, table3Name),
 				},
 			},
 		},
@@ -235,11 +519,12 @@ func TestWorkflowDelete(t *testing.T) {
 		expectedSourceQueries          []*queryResult
 		expectedTargetQueries          []*queryResult
 		want                           *vtctldatapb.WorkflowDeleteResponse
-		wantErr                        bool
+		wantErr                        string
 		postFunc                       func(t *testing.T, env *testEnv)
+		expectedLogs                   []string
 	}{
 		{
-			name: "basic",
+			name: "missing table",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
 				ShardNames:   []string{"0"},
@@ -261,9 +546,26 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 			expectedTargetQueries: []*queryResult{
 				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, tableName),
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},
 				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table2Name),
+					result: &querypb.QueryResult{},
+					// We don't care that the cell and tablet info is off in the error message, only that
+					// it contains the expected SQL error we'd encounter when attempting to drop a table
+					// that doesn't exist. That will then cause this error to be non-fatal and the workflow
+					// delete work will continue.
+					err: fmt.Errorf("rpc error: code = Unknown desc = TabletManager.ExecuteFetchAsDba on cell-01: rpc error: code = Unknown desc = Unknown table 'vt_%s.%s' (errno 1051) (sqlstate 42S02) during query: drop table `vt_%s`.`%s`",
+						targetKeyspaceName, table2Name, targetKeyspaceName, table2Name),
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table3Name),
+					result: &querypb.QueryResult{},
+				},
+			},
+			expectedLogs: []string{ // Confirm that the custom logger is working as expected
+				fmt.Sprintf("Table `%s` did not exist when attempting to remove it", table2Name),
 			},
 			want: &vtctldatapb.WorkflowDeleteResponse{
 				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
@@ -281,7 +583,7 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 		},
 		{
-			name: "basic with existing denied table entries",
+			name: "missing denied table entries",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
 				ShardNames:   []string{"0"},
@@ -298,7 +600,9 @@ func TestWorkflowDelete(t *testing.T) {
 				defer targetUnlock(&err)
 				for _, shard := range env.targetKeyspace.ShardNames {
 					_, err := env.ts.UpdateShardFields(lockCtx, targetKeyspaceName, shard, func(si *topo.ShardInfo) error {
-						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{tableName, "t2", "t3"})
+						// So t1_2 and t1_3 do not exist in the denied table list when we go
+						// to remove t1, t1_2, and t1_3.
+						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{table1Name, "t2", "t3"})
 						return err
 					})
 					require.NoError(t, err)
@@ -317,7 +621,15 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 			expectedTargetQueries: []*queryResult{
 				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, tableName),
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table1Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table2Name),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
 			},
@@ -346,6 +658,30 @@ func TestWorkflowDelete(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "named lock held",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				_, _, err := env.ts.LockName(ctx, lockName, "test")
+				require.NoError(t, err)
+				topo.LockTimeout = 500 * time.Millisecond
+			},
+			postFunc: func(t *testing.T, env *testEnv) {
+				topo.LockTimeout = 45 * time.Second // reset it to the default
+			},
+			wantErr: fmt.Sprintf("failed to lock the %s workflow: deadline exceeded: internal/named_locks/%s", lockName, lockName),
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -354,6 +690,9 @@ func TestWorkflowDelete(t *testing.T) {
 			require.NotNil(t, tc.req)
 			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
 			defer env.close()
+			memlogger := logutil.NewMemoryLogger()
+			defer memlogger.Clear()
+			env.ws.options.logger = memlogger
 			env.tmc.schema = schema
 			if tc.expectedSourceQueries != nil {
 				require.NotNil(t, env.tablets[tc.sourceKeyspace.KeyspaceName])
@@ -371,11 +710,12 @@ func TestWorkflowDelete(t *testing.T) {
 				tc.preFunc(t, env)
 			}
 			got, err := env.ws.WorkflowDelete(ctx, tc.req)
-			if (err != nil) != tc.wantErr {
-				require.Fail(t, "unexpected error value", "Server.WorkflowDelete() error = %v, wantErr %v", err, tc.wantErr)
-				return
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.EqualValues(t, got, tc.want, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
 			}
-			require.EqualValues(t, got, tc.want, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
 			if tc.postFunc != nil {
 				tc.postFunc(t, env)
 			} else { // Default post checks
@@ -388,11 +728,19 @@ func TestWorkflowDelete(t *testing.T) {
 				// DeniedTables live.
 				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
 					for _, shardName := range keyspace.ShardNames {
-						si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
-						require.NoError(t, err)
-						require.Zero(t, si.Shard.TabletControls)
+						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil)
 					}
 				}
+			}
+			logs := memlogger.String()
+			// Confirm that the custom logger was passed on to the trafficSwitcher
+			// if we didn't expect/want an error as otherwise we may not have made
+			// it into the trafficSwitcher.
+			if tc.wantErr == "" {
+				require.Contains(t, logs, "traffic_switcher.go")
+			}
+			for _, expectedLog := range tc.expectedLogs {
+				require.Contains(t, logs, expectedLog)
 			}
 		})
 	}
@@ -689,14 +1037,14 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				DryRun:      true,
 			},
 			want: []string{
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
 					sourceKeyspaceName, tablesStr, sourceKeyspaceName, position, sourceKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
@@ -730,14 +1078,14 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				DryRun:      true,
 			},
 			want: []string{
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", targetKeyspaceName),
-				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
 					targetKeyspaceName, tablesStr, targetKeyspaceName, position, targetKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",

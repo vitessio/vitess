@@ -63,6 +63,7 @@ const (
 // VSchema represents the denormalized version of SrvVSchema,
 // used for building routing plans.
 type VSchema struct {
+	MirrorRules  map[string]*MirrorRule  `json:"mirror_rules"`
 	RoutingRules map[string]*RoutingRule `json:"routing_rules"`
 
 	// globalTables contains the name of all tables in all keyspaces. If the
@@ -79,13 +80,34 @@ type VSchema struct {
 	created time.Time
 }
 
+// MirrorRule represents one mirror rule.
+type MirrorRule struct {
+	Error   error
+	Percent float32 `json:"percent,omitempty"`
+	Table   *Table  `json:"table,omitempty"`
+}
+
+// MarshalJSON returns a JSON representation of MirrorRule.
+func (mr *MirrorRule) MarshalJSON() ([]byte, error) {
+	if mr.Error != nil {
+		return json.Marshal(mr.Error.Error())
+	}
+	return json.Marshal(struct {
+		Percent float32
+		Table   *Table
+	}{
+		Percent: mr.Percent,
+		Table:   mr.Table,
+	})
+}
+
 // RoutingRule represents one routing rule.
 type RoutingRule struct {
 	Tables []*Table
 	Error  error
 }
 
-// MarshalJSON returns a JSON representation of Column.
+// MarshalJSON returns a JSON representation of RoutingRule.
 func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
 	if rr.Error != nil {
 		return json.Marshal(rr.Error.Error())
@@ -324,6 +346,7 @@ func (source *Source) String() string {
 // BuildVSchema builds a VSchema from a SrvVSchema.
 func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vschema *VSchema) {
 	vschema = &VSchema{
+		MirrorRules:    make(map[string]*MirrorRule),
 		RoutingRules:   make(map[string]*RoutingRule),
 		globalTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
@@ -338,6 +361,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
 	buildKeyspaceRoutingRule(source, vschema)
+	buildMirrorRule(source, vschema, parser)
 	// Resolve auto-increments after routing rules are built since sequence tables also obey routing rules.
 	resolveAutoIncrement(source, vschema, parser)
 	return vschema
@@ -895,7 +919,7 @@ func escapeQualifiedTable(qualifiedTableName string) (string, error) {
 }
 
 func extractTableParts(tableName string, allowUnqualified bool) (string, string, error) {
-	errMsgFormat := "invalid table name: %s, it must be of the "
+	errMsgFormat := "invalid table name: '%s', it must be of the "
 	if allowUnqualified {
 		errMsgFormat = errMsgFormat + "unqualified form <table_name> or the "
 	}
@@ -914,7 +938,6 @@ func extractTableParts(tableName string, allowUnqualified bool) (string, string,
 	}
 	// Using fmt.Errorf instead of vterrors here because this error is always wrapped in vterrors.
 	return "", "", fmt.Errorf(errMsgFormat, tableName)
-
 }
 
 func parseTable(tableName string) (sqlparser.TableName, error) {
@@ -963,7 +986,7 @@ outer:
 			toTable, err = escapeQualifiedTable(toTable)
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-					Error: vterrors.Errorf(
+					Error: vterrors.New(
 						vtrpcpb.Code_INVALID_ARGUMENT,
 						err.Error(),
 					),
@@ -972,7 +995,6 @@ outer:
 			}
 
 			toKeyspace, toTableName, err := parser.ParseTable(toTable)
-
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: err,
@@ -1023,6 +1045,216 @@ func buildKeyspaceRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 		rulesMap[rr.FromKeyspace] = rr.ToKeyspace
 	}
 	vschema.KeyspaceRoutingRules = rulesMap
+}
+
+func buildMirrorRule(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
+	if source.MirrorRules == nil {
+		return
+	}
+
+	// Used to validate no mirror chains exist.
+	fromTableKeyspaces := make(map[string]string)
+	toKeyspaces := make(map[string]struct{})
+
+	for _, rule := range source.MirrorRules.Rules {
+		toTable := rule.ToTable
+
+		//
+		// Forbid duplicate FromTables expressions.
+		//
+
+		if _, ok := vschema.MirrorRules[rule.FromTable]; ok {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_ALREADY_EXISTS,
+					"from table: duplicate rule for entry '%s'",
+					rule.FromTable,
+				),
+			}
+			continue
+		}
+
+		//
+		// Parse and validate FromTable.
+		//
+
+		// Separate tablet-type from rest of FromTable.
+		fromTableParts := strings.Split(rule.FromTable, "@")
+		if len(fromTableParts) == 0 {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_INVALID_ARGUMENT,
+					"from table: invalid table name: '%s'",
+					rule.FromTable,
+				),
+			}
+		}
+
+		// Escape and parse the FromTable, without table-type specifier.
+		fromTable, err := escapeQualifiedTable(fromTableParts[0])
+		if err != nil {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_INVALID_ARGUMENT,
+					"from table: %s",
+					err.Error(),
+				),
+			}
+			continue
+		}
+		fromKeyspace, fromTableName, err := parser.ParseTable(fromTable)
+		if err != nil {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_INVALID_ARGUMENT,
+					"from table: invalid table name: '%s'",
+					err.Error(),
+				),
+			}
+			continue
+		}
+
+		// Find the from table.
+		_, err = vschema.FindTable(fromKeyspace, fromTableName)
+		if err != nil {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_INVALID_ARGUMENT,
+					"from table: %s",
+					err.Error(),
+				),
+			}
+			continue
+		}
+
+		// Validate the table-type, if specified.
+		if len(fromTableParts) > 1 {
+			fromTabletTypeSuffix := "@" + strings.Join(fromTableParts[1:], "")
+			var ok bool
+			for _, tabletTypeSuffix := range TabletTypeSuffix {
+				if tabletTypeSuffix == fromTabletTypeSuffix {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+					Error: vterrors.Errorf(
+						vtrpcpb.Code_INVALID_ARGUMENT,
+						"from table: invalid tablet type: '%s'",
+						rule.FromTable,
+					),
+				}
+				continue
+			}
+		}
+
+		//
+		// Parse and validate ToTable.
+		//
+
+		// Forbid tablet-type specifier.
+		toTableParts := strings.Split(toTable, "@")
+		if len(toTableParts) != 1 || toTableParts[0] == "@" {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_INVALID_ARGUMENT,
+					"to table: tablet type may not be specified: '%s'",
+					rule.ToTable,
+				),
+			}
+			continue
+		}
+
+		// Escape and parse the table.
+		toTable, err = escapeQualifiedTable(toTable)
+		if err != nil {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_INVALID_ARGUMENT,
+					"to table: %s",
+					err.Error(),
+				),
+			}
+			continue
+		}
+		toKeyspace, toTableName, err := parser.ParseTable(toTable)
+		if err != nil {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_INVALID_ARGUMENT,
+					"to table: invalid table name: '%s'",
+					rule.ToTable,
+				),
+			}
+			continue
+		}
+
+		// Forbid self-mirroring.
+		if fromKeyspace == toKeyspace {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_INVALID_ARGUMENT,
+					"to table: cannot reside in same keyspace as from table",
+				),
+			}
+			continue
+		}
+
+		//
+		// Find table in VSchema.
+		//
+
+		t, err := vschema.FindTable(toKeyspace, toTableName)
+		if err != nil {
+			vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+				Error: vterrors.Errorf(
+					vtrpcpb.Code_INVALID_ARGUMENT,
+					"to table: %s",
+					err.Error(),
+				),
+			}
+			continue
+		}
+
+		//
+		// Return non-error mirror rule.
+		//
+
+		vschema.MirrorRules[rule.FromTable] = &MirrorRule{
+			Table:   t,
+			Percent: rule.Percent,
+		}
+
+		//
+		// Save some info for validating no mirror chains exist
+		//
+
+		fromTableKeyspaces[rule.FromTable] = fromKeyspace
+		toKeyspaces[toKeyspace] = struct{}{}
+	}
+
+	// Forbid mirror chains. Keyspaces which are the target of a mirror rule
+	// may not be the source of another.
+	for fromTable, rule := range vschema.MirrorRules {
+		if rule.Error != nil {
+			continue
+		}
+		fromKeyspace, ok := fromTableKeyspaces[fromTable]
+		if !ok {
+			rule.Error = vterrors.Errorf(
+				vtrpcpb.Code_INTERNAL,
+				"[BUG] from table: failed to determine keyspace",
+			)
+			continue
+		}
+		if _, ok := toKeyspaces[fromKeyspace]; ok {
+			rule.Error = vterrors.Errorf(
+				vtrpcpb.Code_INVALID_ARGUMENT,
+				"mirror chaining is not allowed",
+			)
+		}
+	}
 }
 
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables
@@ -1325,6 +1557,28 @@ func (vschema *VSchema) GetAggregateUDFs() (udfs []string) {
 	return
 }
 
+// FindMirrorRule finds a mirror rule from the keyspace, table name and
+// tablet type.
+func (vschema *VSchema) FindMirrorRule(keyspace, tablename string, tabletType topodatapb.TabletType) (*MirrorRule, error) {
+	qualified := tablename
+	if keyspace != "" {
+		qualified = keyspace + "." + tablename
+	}
+	fqtn := qualified + TabletTypeSuffix[tabletType]
+	// First look for a fully qualified table name: keyspace.table@tablet_type.
+	// Then look for one without tablet type: keyspace.table.
+	for _, name := range []string{fqtn, qualified} {
+		mr, ok := vschema.MirrorRules[name]
+		if ok {
+			if mr.Error != nil {
+				return nil, mr.Error
+			}
+			return mr, nil
+		}
+	}
+	return nil, nil
+}
+
 // ByCost provides the interface needed for ColumnVindexes to
 // be sorted by cost order.
 type ByCost []*ColumnVindex
@@ -1392,7 +1646,7 @@ func ChooseVindexForType(typ querypb.Type) (string, error) {
 
 // FindBestColVindex finds the best ColumnVindex for VReplication.
 func FindBestColVindex(table *Table) (*ColumnVindex, error) {
-	if table.ColumnVindexes == nil || len(table.ColumnVindexes) == 0 {
+	if len(table.ColumnVindexes) == 0 {
 		return nil, vterrors.Errorf(
 			vtrpcpb.Code_INVALID_ARGUMENT,
 			"table %s has no vindex",

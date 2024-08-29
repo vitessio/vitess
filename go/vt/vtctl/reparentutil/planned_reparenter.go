@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -44,6 +45,7 @@ var (
 	prsCounter = stats.NewCountersWithMultiLabels("PlannedReparentCounts", "Number of times Planned Reparent Shard has been run",
 		[]string{"Keyspace", "Shard", "Result"},
 	)
+	InnodbBufferPoolsDataVar = "Innodb_buffer_pool_pages_data"
 )
 
 // PlannedReparenter performs PlannedReparentShard operations.
@@ -57,10 +59,11 @@ type PlannedReparenter struct {
 // operations. Options are passed by value, so it is safe for callers to mutate
 // resue options structs for multiple calls.
 type PlannedReparentOptions struct {
-	NewPrimaryAlias     *topodatapb.TabletAlias
-	AvoidPrimaryAlias   *topodatapb.TabletAlias
-	WaitReplicasTimeout time.Duration
-	TolerableReplLag    time.Duration
+	NewPrimaryAlias         *topodatapb.TabletAlias
+	AvoidPrimaryAlias       *topodatapb.TabletAlias
+	WaitReplicasTimeout     time.Duration
+	TolerableReplLag        time.Duration
+	AllowCrossCellPromotion bool
 
 	// Private options managed internally. We use value-passing semantics to
 	// set these options inside a PlannedReparent without leaking these details
@@ -157,9 +160,8 @@ func (pr *PlannedReparenter) getLockAction(opts PlannedReparentOptions) string {
 func (pr *PlannedReparenter) preflightChecks(
 	ctx context.Context,
 	ev *events.Reparent,
-	keyspace string,
-	shard string,
 	tabletMap map[string]*topo.TabletInfo,
+	innodbBufferPoolData map[string]int,
 	opts *PlannedReparentOptions, // we take a pointer here to set NewPrimaryAlias
 ) (isNoop bool, err error) {
 	// We don't want to fail when both NewPrimaryAlias and AvoidPrimaryAlias are nil.
@@ -180,7 +182,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	}
 
 	event.DispatchUpdate(ev, "electing a primary candidate")
-	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, innodbBufferPoolData, opts, pr.logger)
 	if err != nil {
 		return true, err
 	}
@@ -220,7 +222,6 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	shard string,
 	currentPrimary *topo.TabletInfo,
 	primaryElect *topodatapb.Tablet,
-	tabletMap map[string]*topo.TabletInfo,
 	opts PlannedReparentOptions,
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
@@ -260,7 +261,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 
 	// Verify we still have the topology lock before doing the demotion.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrap(err, "lost topology lock; aborting")
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	// Next up, demote the current primary and get its replication position.
@@ -375,7 +376,6 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	shard string,
 	primaryElect *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
-	opts PlannedReparentOptions,
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
@@ -490,7 +490,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 
 	// Check that we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrap(err, "lost topology lock; aborting")
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 	return nil
 }
@@ -527,16 +527,21 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
-	err = pr.verifyAllTabletsReachable(ctx, tabletMap)
+	innodbBufferPoolData, err := pr.verifyAllTabletsReachable(ctx, tabletMap)
 	if err != nil {
 		return err
 	}
 
 	// Check invariants that PlannedReparentShard depends on.
-	if isNoop, err := pr.preflightChecks(ctx, ev, keyspace, shard, tabletMap, &opts); err != nil {
+	if isNoop, err := pr.preflightChecks(ctx, ev, tabletMap, innodbBufferPoolData, &opts); err != nil {
 		return err
 	} else if isNoop {
 		return nil
+	}
+
+	// Before we run any RPCs that change the cluster configuration, we should ensure we still hold the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	currentPrimary := FindCurrentPrimary(tabletMap, pr.logger)
@@ -594,7 +599,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
-		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, opts)
+		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
@@ -604,7 +609,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	default:
 		// Case (4): desired primary and current primary differ. Do a graceful
 		// demotion-then-promotion.
-		err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewPrimary, tabletMap, opts)
+		err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewPrimary, opts)
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true
 	}
@@ -614,7 +619,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	}
 
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrap(err, "lost topology lock, aborting")
+		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	if err := pr.reparentTablets(ctx, ev, reparentJournalPos, promoteReplicaRequired, tabletMap, opts); err != nil {
@@ -729,18 +734,30 @@ func (pr *PlannedReparenter) reparentTablets(
 }
 
 // verifyAllTabletsReachable verifies that all the tablets are reachable when running PRS.
-func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) error {
+func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) (map[string]int, error) {
 	// Create a cancellable context for the entire set of RPCs to verify reachability.
 	verifyCtx, verifyCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer verifyCancel()
 
+	innodbBufferPoolsData := make(map[string]int)
+	var mu sync.Mutex
 	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
-	for _, info := range tabletMap {
+	for tblStr, info := range tabletMap {
 		tablet := info.Tablet
 		errorGroup.Go(func() error {
-			_, err := pr.tmc.PrimaryStatus(groupCtx, tablet)
-			return err
+			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{InnodbBufferPoolsDataVar})
+			if err != nil {
+				return err
+			}
+			// We are ignoring the error in conversion because some MySQL variants might not have this
+			// status variable like MariaDB.
+			val, _ := strconv.Atoi(statusValues[InnodbBufferPoolsDataVar])
+			mu.Lock()
+			defer mu.Unlock()
+			innodbBufferPoolsData[tblStr] = val
+			return nil
 		})
 	}
-	return errorGroup.Wait()
+	err := errorGroup.Wait()
+	return innodbBufferPoolsData, err
 }

@@ -799,7 +799,7 @@
 		},
 		"vtgate_transaction": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/transaction"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
@@ -808,7 +808,7 @@
 		},
 		"vtgate_transaction_restart": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/restart"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/transaction/restart"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
@@ -817,7 +817,7 @@
 		},
 		"vtgate_transaction_rollback": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/rollback"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/transaction/rollback"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
@@ -826,7 +826,7 @@
 		},
 		"vtgate_transaction_single": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/single"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/transaction/single"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
@@ -835,7 +835,16 @@
 		},
 		"vtgate_transaction_twopc": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/twopc"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/transaction/twopc"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_transaction",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_transaction_twopc_stress": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/transaction/twopc/stress"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",

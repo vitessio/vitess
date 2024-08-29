@@ -146,7 +146,7 @@ func (dt *DerivedTable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 }
 
 func (dt *DerivedTable) canShortCut() shortCut {
-	panic(vterrors.VT12001("should not be called"))
+	return canShortCut
 }
 
 // GetVindexTable implements the TableInfo interface
@@ -193,5 +193,10 @@ func (dt *DerivedTable) checkForDuplicates() error {
 			}
 		}
 	}
+	return nil
+}
+
+// GetMirrorRule implements TableInfo.
+func (dt *DerivedTable) GetMirrorRule() *vindexes.MirrorRule {
 	return nil
 }

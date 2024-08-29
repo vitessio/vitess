@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -29,6 +31,7 @@ type (
 		empty() bool
 		get(col *sqlparser.ColName) (dependency, error)
 		merge(other dependencies, allowMulti bool) dependencies
+		debugString() string
 	}
 	dependency struct {
 		certain   bool
@@ -100,6 +103,10 @@ func (u *uncertain) merge(d dependencies, _ bool) dependencies {
 	}
 }
 
+func (u *uncertain) debugString() string {
+	return fmt.Sprintf("uncertain: %v %v %s", u.direct, u.recursive, u.typ.Type().String())
+}
+
 func (c *certain) empty() bool {
 	return false
 }
@@ -117,26 +124,34 @@ func (c *certain) merge(d dependencies, allowMulti bool) dependencies {
 		if d.recursive == c.recursive {
 			return c
 		}
-		c.direct = c.direct.Merge(d.direct)
-		c.recursive = c.recursive.Merge(d.recursive)
+
+		res := createCertain(c.direct.Merge(d.direct), c.recursive.Merge(d.recursive), c.typ)
 		if !allowMulti {
-			c.err = true
+			res.err = true
 		}
 
-		return c
+		return res
 	}
 
 	return c
 }
 
-func (n *nothing) empty() bool {
+func (c *certain) debugString() string {
+	return fmt.Sprintf("certain: %v %v %s", c.direct, c.recursive, c.typ.Type().String())
+}
+
+func (*nothing) empty() bool {
 	return true
 }
 
-func (n *nothing) get(*sqlparser.ColName) (dependency, error) {
+func (*nothing) get(*sqlparser.ColName) (dependency, error) {
 	return dependency{certain: true}, nil
 }
 
-func (n *nothing) merge(d dependencies, _ bool) dependencies {
+func (*nothing) merge(d dependencies, _ bool) dependencies {
 	return d
+}
+
+func (*nothing) debugString() string {
+	return "nothing"
 }

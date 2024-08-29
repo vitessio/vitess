@@ -84,8 +84,8 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	// the query usually takes more than 5ms to return. So this should fail.
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context deadline exceeded")
-	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
+	assert.ErrorContains(t, err, "context deadline exceeded")
+	assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
 
 	// sharded
 	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into ks_misc.t1(id1, id2) values (1,2),(2,4),(3,6),(4,8),(5,10)")
@@ -94,14 +94,12 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context deadline exceeded")
-	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
+	assert.ErrorContains(t, err, "context deadline exceeded")
+	assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
 }
 
 // TestQueryTimeoutWithShardTargeting tests the query timeout with shard targeting.
 func TestQueryTimeoutWithShardTargeting(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
-
 	mcmp, closer := start(t)
 	defer closer()
 

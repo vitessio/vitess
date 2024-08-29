@@ -26,8 +26,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const foreignKeyConstraintValues = "fkc_vals"
-const foreignKeyUpdateExpr = "fkc_upd"
+const (
+	foreignKeyConstraintValues = "fkc_vals"
+	foreignKeyUpdateExpr       = "fkc_upd"
+)
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) Operator {
@@ -45,6 +47,19 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 	default:
 		panic(vterrors.VT12001(fmt.Sprintf("operator: %T", selStmt)))
 	}
+}
+
+func translateQueryToOpWithMirroring(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) Operator {
+	op := translateQueryToOp(ctx, stmt)
+
+	if selStmt, ok := stmt.(sqlparser.SelectStatement); ok {
+		if mi := ctx.SemTable.GetMirrorInfo(); mi.Percent > 0 {
+			mirrorOp := translateQueryToOp(ctx.UseMirror(), selStmt)
+			op = NewPercentBasedMirror(mi.Percent, op, mirrorOp)
+		}
+	}
+
+	return op
 }
 
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {
@@ -148,14 +163,22 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	if isRHSUnion {
 		panic(vterrors.VT12001("nesting of UNIONs on the right-hand side"))
 	}
-	opLHS := translateQueryToOp(ctx, node.Left)
-	opRHS := translateQueryToOp(ctx, node.Right)
+	opLHS := translateQueryToOpForUnion(ctx, node.Left)
+	opRHS := translateQueryToOpForUnion(ctx, node.Right)
 	lexprs := ctx.SemTable.SelectExprs(node.Left)
 	rexprs := ctx.SemTable.SelectExprs(node.Right)
 
 	unionCols := ctx.SemTable.SelectExprs(node)
 	union := newUnion([]Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
 	return newHorizon(union, node)
+}
+
+func translateQueryToOpForUnion(ctx *plancontext.PlanningContext, node sqlparser.SelectStatement) Operator {
+	op := translateQueryToOp(ctx, node)
+	if hz, ok := op.(*Horizon); ok {
+		hz.Truncate = true
+	}
+	return op
 }
 
 // createOpFromStmt creates an operator from the given statement. It takes in two additional arguments—
@@ -246,24 +269,47 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			panic(err)
 		}
 
-		if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
-			solves := tableID
+		switch tableInfo := tableInfo.(type) {
+		case *semantics.VindexTable:
 			return &Vindex{
 				Table: VindexTable{
 					TableID: tableID,
 					Alias:   tableExpr,
 					Table:   tbl,
-					VTable:  vt.Table.GetVindexTable(),
+					VTable:  tableInfo.Table.GetVindexTable(),
 				},
-				Vindex: vt.Vindex,
-				Solved: solves,
+				Vindex: tableInfo.Vindex,
+				Solved: tableID,
 			}
+		case *semantics.CTETable:
+			return createDualCTETable(ctx, tableID, tableInfo)
+		case *semantics.RealTable:
+			if tableInfo.CTE != nil {
+				return createRecursiveCTE(ctx, tableInfo.CTE, tableID)
+			}
+
+			qg := newQueryGraph()
+			isInfSchema := tableInfo.IsInfSchema()
+			if ctx.IsMirrored() {
+				if mr := tableInfo.GetMirrorRule(); mr != nil {
+					newTbl := sqlparser.Clone(tbl)
+					newTbl.Qualifier = sqlparser.NewIdentifierCS(mr.Table.Keyspace.Name)
+					newTbl.Name = mr.Table.Name
+					if newTbl.Name.String() != tbl.Name.String() {
+						tableExpr = sqlparser.Clone(tableExpr)
+						tableExpr.As = tbl.Name
+					}
+					tbl = newTbl
+				} else {
+					panic(vterrors.VT13001(fmt.Sprintf("unable to find mirror rule for table: %T", tbl)))
+				}
+			}
+			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
+			qg.Tables = append(qg.Tables, qt)
+			return qg
+		default:
+			panic(vterrors.VT13001(fmt.Sprintf("unknown table type %T", tableInfo)))
 		}
-		qg := newQueryGraph()
-		isInfSchema := tableInfo.IsInfSchema()
-		qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
-		qg.Tables = append(qg.Tables, qt)
-		return qg
 	case *sqlparser.DerivedTable:
 		if onlyTable && tbl.Select.GetLimit() == nil {
 			tbl.Select.SetOrderBy(nil)
@@ -282,6 +328,56 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl)))
 	}
+}
+
+func createDualCTETable(ctx *plancontext.PlanningContext, tableID semantics.TableSet, tableInfo *semantics.CTETable) Operator {
+	vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(sqlparser.NewTableName("dual"))
+	if err != nil {
+		panic(err)
+	}
+	qtbl := &QueryTable{
+		ID:    tableID,
+		Alias: tableInfo.ASTNode,
+		Table: sqlparser.NewTableName("dual"),
+	}
+	return createRouteFromVSchemaTable(ctx, qtbl, vschemaTable, false, nil)
+}
+
+func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE, outerID semantics.TableSet) Operator {
+	union, ok := def.Query.(*sqlparser.Union)
+	if !ok {
+		panic(vterrors.VT13001("expected UNION in recursive CTE"))
+	}
+
+	seed := translateQueryToOp(ctx, union.Left)
+
+	// Push the CTE definition to the stack so that it can be used in the recursive part of the query
+	ctx.PushCTE(def, *def.IDForRecurse)
+
+	term := translateQueryToOp(ctx, union.Right)
+	horizon, ok := term.(*Horizon)
+	if !ok {
+		panic(vterrors.VT09027(def.Name))
+	}
+	term = horizon.Source
+	horizon.Source = nil // not sure about this
+	activeCTE, err := ctx.PopCTE()
+	if err != nil {
+		panic(err)
+	}
+
+	return newRecurse(ctx, def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def), outerID, union.Distinct)
+}
+
+func idForRecursiveTable(ctx *plancontext.PlanningContext, def *semantics.CTE) semantics.TableSet {
+	for i, table := range ctx.SemTable.Tables {
+		tbl, ok := table.(*semantics.CTETable)
+		if !ok || tbl.CTE.Name != def.Name {
+			continue
+		}
+		return semantics.SingleTableSet(i)
+	}
+	panic(vterrors.VT13001("recursive table not found"))
 }
 
 func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) Operator {

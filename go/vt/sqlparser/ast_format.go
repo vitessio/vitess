@@ -37,8 +37,20 @@ func (node *Select) Format(buf *TrackedBuffer) {
 			buf.literal(SQLNoCacheStr)
 		}
 	}
+	if node.HighPriority {
+		buf.literal(HighPriorityStr)
+	}
 	if node.StraightJoinHint {
 		buf.literal(StraightJoinHint)
+	}
+	if node.SQLSmallResult {
+		buf.literal(SQLSmallResultStr)
+	}
+	if node.SQLBigResult {
+		buf.literal(SQLBigResultStr)
+	}
+	if node.SQLBufferResult {
+		buf.literal(SQLBufferResultStr)
 	}
 	if node.SQLCalcFoundRows {
 		buf.literal(SQLCalcFoundRowsStr)
@@ -155,7 +167,7 @@ func (node *With) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CommonTableExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v%v as %v ", node.ID, node.Columns, node.Subquery)
+	buf.astPrintf(node, "%v%v as (%v) ", node.ID, node.Columns, node.Subquery)
 }
 
 // Format formats the node.
@@ -284,6 +296,8 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case CleanupAllMigrationType:
+		alterType = "cleanup all"
 	case LaunchMigrationType:
 		alterType = "launch"
 	case LaunchAllMigrationType:
@@ -2135,6 +2149,17 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+}
+
+func (node *ShowTransactionStatus) Format(buf *TrackedBuffer) {
+	if node.TransactionID == "" {
+		buf.astPrintf(node, "show unresolved transactions")
+		if node.Keyspace != "" {
+			buf.astPrintf(node, " for %#s", node.Keyspace)
+		}
+		return
+	}
+	buf.astPrintf(node, "show transaction status for '%#s'", node.TransactionID)
 }
 
 // Format formats the node.

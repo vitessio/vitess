@@ -64,6 +64,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -678,6 +679,64 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		AfterTablet:  changedTablet,
 		WasDryRun:    false,
 	}, nil
+}
+
+// CheckThrottler is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.CheckThrottlerRequest) (resp *vtctldatapb.CheckThrottlerResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.CheckThrottler")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("app_name", req.AppName)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	tmReq := &tabletmanagerdatapb.CheckThrottlerRequest{
+		AppName:               req.AppName,
+		Scope:                 req.Scope,
+		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
+		OkIfNotExists:         req.OkIfNotExists,
+		MultiMetricsEnabled:   true,
+	}
+	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, tmReq)
+	if err != nil {
+		return nil, err
+	}
+
+	resp = &vtctldatapb.CheckThrottlerResponse{
+		TabletAlias: req.TabletAlias,
+		Check:       r,
+	}
+	return resp, nil
+}
+
+// GetThrottlerStatus is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.GetThrottlerStatusRequest) (resp *vtctldatapb.GetThrottlerStatusResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetThrottlerStatus")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := s.tmc.GetThrottlerStatus(ctx, ti.Tablet, &tabletmanagerdatapb.GetThrottlerStatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	resp = &vtctldatapb.GetThrottlerStatusResponse{
+		Status: r,
+	}
+	return resp, nil
 }
 
 // CleanupSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
@@ -1929,6 +1988,24 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
+	if req.MetricName != "" && !base.KnownMetricNames.Contains(base.MetricName(req.MetricName)) {
+		return nil, fmt.Errorf("unknown metric name: %s", req.MetricName)
+	}
+
+	if len(req.AppCheckedMetrics) > 0 {
+		specifiedMetrics := map[base.MetricName]bool{}
+		for _, metricName := range req.AppCheckedMetrics {
+			_, knownMetric, err := base.DisaggregateMetricName(metricName)
+			if err != nil {
+				return nil, fmt.Errorf("invalid metric name: %s", metricName)
+			}
+			if _, ok := specifiedMetrics[knownMetric]; ok {
+				return nil, fmt.Errorf("duplicate metric name: %s", knownMetric)
+			}
+			specifiedMetrics[knownMetric] = true
+		}
+	}
+
 	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.ThrottlerConfig{}
@@ -1936,14 +2013,37 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		if throttlerConfig.ThrottledApps == nil {
 			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
 		}
-		if req.CustomQuerySet {
-			// custom query provided
-			throttlerConfig.CustomQuery = req.CustomQuery
-			throttlerConfig.Threshold = req.Threshold // allowed to be zero/negative because who knows what kind of custom query this is
-		} else {
-			// no custom query, throttler works by querying replication lag. We only allow positive values
-			if req.Threshold > 0 {
+		if throttlerConfig.AppCheckedMetrics == nil {
+			throttlerConfig.AppCheckedMetrics = make(map[string]*topodatapb.ThrottlerConfig_MetricNames)
+		}
+		if throttlerConfig.MetricThresholds == nil {
+			throttlerConfig.MetricThresholds = make(map[string]float64)
+		}
+		if req.MetricName == "" {
+			// v20 behavior
+			if req.CustomQuerySet {
+				// custom query provided
+				throttlerConfig.CustomQuery = req.CustomQuery
+				throttlerConfig.Threshold = req.Threshold // allowed to be zero/negative because who knows what kind of custom query this is
+			} else if req.Threshold > 0 {
+				// no custom query, throttler works by querying replication lag. We only allow positive values
 				throttlerConfig.Threshold = req.Threshold
+			}
+		} else {
+			// --metric-name specified. We apply the threshold to the metric
+			if req.Threshold > 0 {
+				throttlerConfig.MetricThresholds[req.MetricName] = req.Threshold
+			} else {
+				delete(throttlerConfig.MetricThresholds, req.MetricName)
+			}
+		}
+		if req.AppName != "" {
+			if len(req.AppCheckedMetrics) > 0 {
+				throttlerConfig.AppCheckedMetrics[req.AppName] = &topodatapb.ThrottlerConfig_MetricNames{
+					Names: req.AppCheckedMetrics,
+				}
+			} else {
+				delete(throttlerConfig.AppCheckedMetrics, req.AppName)
 			}
 		}
 		if req.Enable {
@@ -1959,7 +2059,14 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 			throttlerConfig.CheckAsCheckSelf = false
 		}
 		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			// TODO(shlomi) in v22: replace the following line with the commented out block
 			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// 	timeNow := time.Now()
+			// if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+			// 	throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// } else {
+			// 	delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			// }
 		}
 		return throttlerConfig
 	}
@@ -2869,10 +2976,11 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		req.Keyspace,
 		req.Shard,
 		reparentutil.PlannedReparentOptions{
-			AvoidPrimaryAlias:   req.AvoidPrimary,
-			NewPrimaryAlias:     req.NewPrimary,
-			WaitReplicasTimeout: waitReplicasTimeout,
-			TolerableReplLag:    tolerableReplLag,
+			AvoidPrimaryAlias:       req.AvoidPrimary,
+			NewPrimaryAlias:         req.NewPrimary,
+			WaitReplicasTimeout:     waitReplicasTimeout,
+			TolerableReplLag:        tolerableReplLag,
+			AllowCrossCellPromotion: req.AllowCrossCellPromotion,
 		},
 	)
 

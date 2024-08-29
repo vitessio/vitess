@@ -22,11 +22,10 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
-
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -348,6 +347,15 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	if err != nil {
+		return "", err
+	}
+
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
+
 	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false); err != nil {
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
@@ -365,11 +373,6 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
 	}
@@ -544,9 +547,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
+			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// setting read_only OFF will also set super_read_only OFF if it was set
-			if err := tm.MysqlDaemon.SetReadOnly(ctx, false); err != nil {
-				log.Warningf("SetReadOnly(false) failed during revert: %v", err)
+			if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+				log.Warningf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err)
 			}
 		}
 	}()
@@ -594,13 +598,17 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		return err
 	}
 
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
+
 	// If using semi-sync, we need to enable source-side.
 	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return err
 	}
 
-	// Now, set the server read-only false.
-	if err := tm.MysqlDaemon.SetReadOnly(ctx, false); err != nil {
+	// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
+	if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 		return err
 	}
 
@@ -910,12 +918,16 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	}
 	defer tm.unlock()
 
-	pos, err := tm.MysqlDaemon.Promote(ctx, tm.hookExtraEnv())
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
 	}
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
+
+	pos, err := tm.MysqlDaemon.Promote(ctx, tm.hookExtraEnv())
 	if err != nil {
 		return "", err
 	}

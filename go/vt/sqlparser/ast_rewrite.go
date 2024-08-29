@@ -460,6 +460,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *ShowThrottlerStatus:
 		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
+	case *ShowTransactionStatus:
+		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Std:
@@ -1962,8 +1964,8 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
-		parent.(*CommonTableExpr).Subquery = newNode.(*Subquery)
+	if !a.rewriteSelectStatement(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).Subquery = newNode.(SelectStatement)
 	}) {
 		return false
 	}
@@ -7934,6 +7936,30 @@ func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *Show
 	}
 	return true
 }
+func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *ShowTransactionStatus, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10373,6 +10399,8 @@ func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, rep
 		return a.rewriteRefOfShowCreate(parent, node, replacer)
 	case *ShowOther:
 		return a.rewriteRefOfShowOther(parent, node, replacer)
+	case *ShowTransactionStatus:
+		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
 	default:
 		// this should never happen
 		return true

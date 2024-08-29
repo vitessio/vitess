@@ -2275,10 +2275,11 @@ func (m *VDiffReportOptions) CloneVT() *VDiffReportOptions {
 		return (*VDiffReportOptions)(nil)
 	}
 	r := &VDiffReportOptions{
-		OnlyPks:       m.OnlyPks,
-		DebugQuery:    m.DebugQuery,
-		Format:        m.Format,
-		MaxSampleRows: m.MaxSampleRows,
+		OnlyPks:                 m.OnlyPks,
+		DebugQuery:              m.DebugQuery,
+		Format:                  m.Format,
+		MaxSampleRows:           m.MaxSampleRows,
+		RowDiffColumnTruncateAt: m.RowDiffColumnTruncateAt,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2499,13 +2500,14 @@ func (m *CheckThrottlerResponse_Metric) CloneVT() *CheckThrottlerResponse_Metric
 		return (*CheckThrottlerResponse_Metric)(nil)
 	}
 	r := &CheckThrottlerResponse_Metric{
-		Name:       m.Name,
-		StatusCode: m.StatusCode,
-		Value:      m.Value,
-		Threshold:  m.Threshold,
-		Error:      m.Error,
-		Message:    m.Message,
-		Scope:      m.Scope,
+		Name:         m.Name,
+		StatusCode:   m.StatusCode,
+		Value:        m.Value,
+		Threshold:    m.Threshold,
+		Error:        m.Error,
+		Message:      m.Message,
+		Scope:        m.Scope,
+		ResponseCode: m.ResponseCode,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2529,6 +2531,9 @@ func (m *CheckThrottlerResponse) CloneVT() *CheckThrottlerResponse {
 		Error:           m.Error,
 		Message:         m.Message,
 		RecentlyChecked: m.RecentlyChecked,
+		AppName:         m.AppName,
+		Summary:         m.Summary,
+		ResponseCode:    m.ResponseCode,
 	}
 	if rhs := m.Metrics; rhs != nil {
 		tmpContainer := make(map[string]*CheckThrottlerResponse_Metric, len(rhs))
@@ -2607,8 +2612,9 @@ func (m *GetThrottlerStatusResponse_RecentApp) CloneVT() *GetThrottlerStatusResp
 		return (*GetThrottlerStatusResponse_RecentApp)(nil)
 	}
 	r := &GetThrottlerStatusResponse_RecentApp{
-		CheckedAt:  m.CheckedAt.CloneVT(),
-		StatusCode: m.StatusCode,
+		CheckedAt:    m.CheckedAt.CloneVT(),
+		StatusCode:   m.StatusCode,
+		ResponseCode: m.ResponseCode,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -8129,6 +8135,11 @@ func (m *VDiffReportOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.RowDiffColumnTruncateAt != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.RowDiffColumnTruncateAt))
+		i--
+		dAtA[i] = 0x28
+	}
 	if m.MaxSampleRows != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.MaxSampleRows))
 		i--
@@ -8755,6 +8766,11 @@ func (m *CheckThrottlerResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.ResponseCode != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.ResponseCode))
+		i--
+		dAtA[i] = 0x40
+	}
 	if len(m.Scope) > 0 {
 		i -= len(m.Scope)
 		copy(dAtA[i:], m.Scope)
@@ -8832,6 +8848,25 @@ func (m *CheckThrottlerResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ResponseCode != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.ResponseCode))
+		i--
+		dAtA[i] = 0x50
+	}
+	if len(m.Summary) > 0 {
+		i -= len(m.Summary)
+		copy(dAtA[i:], m.Summary)
+		i = encodeVarint(dAtA, i, uint64(len(m.Summary)))
+		i--
+		dAtA[i] = 0x4a
+	}
+	if len(m.AppName) > 0 {
+		i -= len(m.AppName)
+		copy(dAtA[i:], m.AppName)
+		i = encodeVarint(dAtA, i, uint64(len(m.AppName)))
+		i--
+		dAtA[i] = 0x42
 	}
 	if len(m.Metrics) > 0 {
 		for k := range m.Metrics {
@@ -9055,6 +9090,11 @@ func (m *GetThrottlerStatusResponse_RecentApp) MarshalToSizedBufferVT(dAtA []byt
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ResponseCode != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.ResponseCode))
+		i--
+		dAtA[i] = 0x18
 	}
 	if m.StatusCode != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.StatusCode))
@@ -11275,6 +11315,9 @@ func (m *VDiffReportOptions) SizeVT() (n int) {
 	if m.MaxSampleRows != 0 {
 		n += 1 + sov(uint64(m.MaxSampleRows))
 	}
+	if m.RowDiffColumnTruncateAt != 0 {
+		n += 1 + sov(uint64(m.RowDiffColumnTruncateAt))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -11523,6 +11566,9 @@ func (m *CheckThrottlerResponse_Metric) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.ResponseCode != 0 {
+		n += 1 + sov(uint64(m.ResponseCode))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -11565,6 +11611,17 @@ func (m *CheckThrottlerResponse) SizeVT() (n int) {
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + l
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
+	}
+	l = len(m.AppName)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.Summary)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.ResponseCode != 0 {
+		n += 1 + sov(uint64(m.ResponseCode))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -11626,6 +11683,9 @@ func (m *GetThrottlerStatusResponse_RecentApp) SizeVT() (n int) {
 	}
 	if m.StatusCode != 0 {
 		n += 1 + sov(uint64(m.StatusCode))
+	}
+	if m.ResponseCode != 0 {
+		n += 1 + sov(uint64(m.ResponseCode))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -23730,6 +23790,25 @@ func (m *VDiffReportOptions) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RowDiffColumnTruncateAt", wireType)
+			}
+			m.RowDiffColumnTruncateAt = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RowDiffColumnTruncateAt |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -25289,6 +25368,25 @@ func (m *CheckThrottlerResponse_Metric) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Scope = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ResponseCode", wireType)
+			}
+			m.ResponseCode = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ResponseCode |= CheckThrottlerResponseCode(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -25594,6 +25692,89 @@ func (m *CheckThrottlerResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Metrics[mapkey] = mapvalue
 			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AppName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AppName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Summary", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Summary = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ResponseCode", wireType)
+			}
+			m.ResponseCode = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ResponseCode |= CheckThrottlerResponseCode(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -25947,6 +26128,25 @@ func (m *GetThrottlerStatusResponse_RecentApp) UnmarshalVT(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.StatusCode |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ResponseCode", wireType)
+			}
+			m.ResponseCode = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ResponseCode |= CheckThrottlerResponseCode(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

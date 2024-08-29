@@ -30,19 +30,18 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"vitess.io/vitess/go/mysql"
-
-	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vttablet"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -88,6 +87,9 @@ type ClusterConfig struct {
 	vtorcPort            int
 
 	vreplicationCompressGTID bool
+	// Set overrideHeartbeatOptions to true to override the default heartbeat options:
+	// which are set to only on demand (5s) and 250ms interval.
+	overrideHeartbeatOptions bool
 }
 
 // enableGTIDCompression enables GTID compression for the cluster and returns a function
@@ -472,12 +474,12 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		SidecarDBName: sidecarDBName,
 	}
 
-	if err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName); err != nil {
-		t.Fatalf(err.Error())
-	}
+	err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
+	require.NoError(t, err)
 
 	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, throttlerConfig.Threshold, throttlerConfig.Query, nil)
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: throttlerConfig.Threshold, CustomQuery: throttlerConfig.Query}
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, req, nil, nil)
 	require.NoError(t, err, res)
 
 	cellsToWatch := ""
@@ -497,15 +499,13 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 
 	require.NoError(t, vc.AddShards(t, cells, keyspace, shards, numReplicas, numRdonly, tabletIDBase, opts))
 	if schema != "" {
-		if err := vc.VtctlClient.ApplySchema(ksName, schema); err != nil {
-			t.Fatalf(err.Error())
-		}
+		err := vc.VtctlClient.ApplySchema(ksName, schema)
+		require.NoError(t, err)
 	}
 	keyspace.Schema = schema
 	if vschema != "" {
-		if err := vc.VtctlClient.ApplyVSchema(ksName, vschema); err != nil {
-			t.Fatalf(err.Error())
-		}
+		err := vc.VtctlClient.ApplyVSchema(ksName, vschema)
+		require.NoError(t, err)
 	}
 	keyspace.VSchema = vschema
 
@@ -517,11 +517,15 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 // AddTablet creates new tablet with specified attributes
 func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *exec.Cmd, error) {
 	tablet := &Tablet{}
-
-	options := []string{
+	var options []string
+	defaultHeartbeatOptions := []string{
 		"--heartbeat_on_demand_duration", "5s",
 		"--heartbeat_interval", "250ms",
 	}
+	if !mainClusterConfig.overrideHeartbeatOptions {
+		options = append(options, defaultHeartbeatOptions...)
+	}
+
 	options = append(options, extraVTTabletArgs...)
 
 	if mainClusterConfig.vreplicationCompressGTID {
@@ -681,9 +685,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			}
 			for ind, tablet := range tablets {
 				log.Infof("Running Setup() for vttablet %s", tablets[ind].Name)
-				if err := tablet.Vttablet.Setup(); err != nil {
-					t.Fatalf(err.Error())
-				}
+				err := tablet.Vttablet.Setup()
+				require.NoError(t, err)
 				// Set time_zone to UTC for all tablets. Without this it fails locally on some MacOS setups.
 				query := "SET GLOBAL time_zone = '+00:00';"
 				qr, err := tablet.Vttablet.QueryTablet(query, tablet.Vttablet.Keyspace, false)
@@ -743,7 +746,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				HTTPPort: tablet.Vttablet.Port,
 			}
 			log.Infof("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType)
-			throttler.WaitForThrottlerStatusEnabled(t, clusterTablet, true, nil, time.Minute)
+			throttler.WaitForThrottlerStatusEnabled(t, vc.VtctldClient, clusterTablet, true, nil, time.Minute)
 		}
 	}
 	log.Infof("Throttler config applied on all shards")
@@ -781,9 +784,8 @@ func (vc *VitessCluster) StartVtgate(t testing.TB, cell *Cell, cellsToWatch stri
 		extraVTGateArgs,
 		vc.ClusterConfig.vtgatePlannerVersion)
 	require.NotNil(t, vtgate)
-	if err := vtgate.Setup(); err != nil {
-		t.Fatalf(err.Error())
-	}
+	err := vtgate.Setup()
+	require.NoError(t, err)
 	cell.Vtgates = append(cell.Vtgates, vtgate)
 }
 

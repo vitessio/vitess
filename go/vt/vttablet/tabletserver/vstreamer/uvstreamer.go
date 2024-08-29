@@ -88,7 +88,8 @@ type uvstreamer struct {
 
 	config *uvstreamerConfig
 
-	vs *vstreamer //last vstreamer created in uvstreamer
+	vs      *vstreamer // last vstreamer created in uvstreamer
+	options *binlogdatapb.VStreamOptions
 }
 
 type uvstreamerConfig struct {
@@ -96,7 +97,10 @@ type uvstreamerConfig struct {
 	CatchupRetryTime  time.Duration
 }
 
-func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
+func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string,
+	tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema,
+	throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) *uvstreamer {
+
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -123,6 +127,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		config:       config,
 		inTablePKs:   tablePKs,
 		throttlerApp: throttlerApp,
+		options:      options,
 	}
 
 	return uvs
@@ -138,6 +143,9 @@ func (uvs *uvstreamer) buildTablePlan() error {
 	uvs.plans = make(map[string]*tablePlan)
 	tableLastPKs := make(map[string]*binlogdatapb.TableLastPK)
 	for _, tablePK := range uvs.inTablePKs {
+		if tablePK != nil && tablePK.Lastpk != nil && len(tablePK.Lastpk.Fields) == 0 {
+			return fmt.Errorf("lastpk for table %s has no fields defined", tablePK.TableName)
+		}
 		tableLastPKs[tablePK.TableName] = tablePK
 	}
 	tables := uvs.se.GetSchema()
@@ -313,7 +321,6 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	behind := time.Now().UnixNano() - uvs.lastTimestampNs
 	uvs.setReplicationLagSeconds(behind / 1e9)
-	//log.Infof("sbm set to %d", uvs.ReplicationLagSeconds)
 	var evs2 []*binlogdatapb.VEvent
 	if len(uvs.plans) > 0 {
 		evs2 = uvs.filterEvents(evs)
@@ -425,7 +432,7 @@ func (uvs *uvstreamer) Stream() error {
 		}
 	}
 	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, replication.EncodePosition(uvs.pos), replication.EncodePosition(uvs.stopPos),
-		uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send, "replicate", uvs.vse)
+		uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send, "replicate", uvs.vse, uvs.options)
 
 	uvs.setVs(vs)
 	return vs.Stream()

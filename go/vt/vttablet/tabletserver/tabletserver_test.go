@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/test/utils"
@@ -154,9 +155,10 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t, ctx)
 	// This is required because the test is verifying that we rollback transactions on changing serving type,
-	// but that only happens immediately if the shut down grace period is not specified.
-	tsv.te.shutdownGracePeriod = 0
-	tsv.sm.shutdownGracePeriod = 0
+	// but that only happens when we have a shutdown grace period, otherwise we wait for transactions to be resolved
+	// indefinitely.
+	tsv.te.shutdownGracePeriod = 1
+	tsv.sm.shutdownGracePeriod = 1
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -200,14 +202,20 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t, ctx)
 	defer tsv.StopService()
 	defer db.Close()
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
+	// This is required because the test is verifying that we rollback transactions on changing serving type,
+	// but that only happens when we have a shutdown grace period, otherwise we wait for transactions to be resolved
+	// indefinitely.
+	tsv.te.shutdownGracePeriod = 1
+	tsv.sm.shutdownGracePeriod = 1
+	tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, false, "")
 
 	turnOnTxEngine := func() {
 		tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, true, "")
-		tsv.TwoPCEngineWait()
 	}
 	turnOffTxEngine := func() {
-		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
+		// We can use a transition to PRIMARY non-serving or REPLICA serving to turn off the transaction engine.
+		// With primary serving, the shutdown of prepared transactions is synchronous, but for the latter its asynchronous.
+		tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, false, "")
 	}
 
 	tpc := tsv.te.twoPC
@@ -234,7 +242,9 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOnTxEngine()
 	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
 	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
-	want := []string{"update test_table set `name` = 2 where pk = 1 limit 10001"}
+	want := []tx.Query{{
+		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
+		Tables: []string{"test_table"}}}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	turnOffTxEngine()
 	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
@@ -268,7 +278,9 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOnTxEngine()
 	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
 	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
-	want = []string{"update test_table set `name` = 2 where pk = 1 limit 10001"}
+	want = []tx.Query{{
+		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
+		Tables: []string{"test_table"}}}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	wantFailed := map[string]error{"a:b:20": errPrepFailed}
 	utils.MustMatch(t, tsv.te.preparedPool.reserved, wantFailed, fmt.Sprintf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed))
@@ -2745,10 +2757,10 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 				Type: sqltypes.Int64,
 			}},
 		},
-		"begin":    {},
-		"commit":   {},
-		"rollback": {},
-		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
+		"begin":                                {},
+		"commit":                               {},
+		"rollback":                             {},
+		fmt.Sprintf(readAllRedo, "_vt", "_vt"): {},
 	}
 	parser := sqlparser.NewTestParser()
 	sidecardb.AddSchemaInitQueries(db, true, parser)

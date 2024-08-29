@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -84,8 +83,9 @@ type vstreamer struct {
 	pos     replication.Position
 	stopPos string
 
-	phase string
-	vse   *Engine
+	phase   string
+	vse     *Engine
+	options *binlogdatapb.VStreamOptions
 }
 
 // streamerPlan extends the original plan to also include
@@ -118,7 +118,9 @@ type streamerPlan struct {
 //
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string,
+	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
+	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:          ctx,
@@ -135,6 +137,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		plans:        make(map[uint64]*streamerPlan),
 		phase:        phase,
 		vse:          vse,
+		options:      options,
 	}
 }
 
@@ -287,41 +290,40 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	hbTimer := time.NewTimer(HeartbeatTime)
 	defer hbTimer.Stop()
 
-	injectHeartbeat := func(throttled bool) error {
-		now := time.Now().UnixNano()
+	injectHeartbeat := func(throttled bool, throttledReason string) error {
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
+			now := time.Now().UnixNano()
 			err := bufferAndTransmit(&binlogdatapb.VEvent{
-				Type:        binlogdatapb.VEventType_HEARTBEAT,
-				Timestamp:   now / 1e9,
-				CurrentTime: now,
-				Throttled:   throttled,
+				Type:            binlogdatapb.VEventType_HEARTBEAT,
+				Timestamp:       now / 1e9,
+				CurrentTime:     now,
+				Throttled:       throttled,
+				ThrottledReason: throttledReason,
 			})
 			return err
 		}
 	}
 
 	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
+	wfNameLog := ""
+	if vs.filter != nil && vs.filter.WorkflowName != "" {
+		wfNameLog = fmt.Sprintf(" in workflow %s", vs.filter.WorkflowName)
+	}
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
-		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
-		defer throttledHeartbeatsRateLimiter.Stop()
 		for {
-			// check throttler.
-			if !vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp) {
-				// make sure to leave if context is cancelled
+			// Check throttler.
+			if checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp); !ok {
+				// Make sure to leave if context is cancelled.
 				select {
 				case <-ctx.Done():
 					return
 				default:
-					// do nothing special
+					// Do nothing special.
 				}
-				throttledHeartbeatsRateLimiter.Do(func() error {
-					return injectHeartbeat(true)
-				})
-				// we won't process events, until we're no longer throttling
-				logger.Infof("throttled.")
+				logger.Infof("vstreamer throttled%s: %s.", wfNameLog, checkResult.Summary())
 				continue
 			}
 			select {
@@ -393,7 +395,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:
-			if err := injectHeartbeat(false); err != nil {
+			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOK(ctx, vs.throttlerApp)
+			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
 				if err == io.EOF {
 					return nil
 				}
@@ -566,26 +569,28 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
-
 		if plan, ok := vs.plans[id]; ok {
 			// When the underlying mysql server restarts the table map can change.
 			// Usually the vstreamer will also error out when this happens, and vstreamer re-initializes its table map.
 			// But if the vstreamer is not aware of the restart, we could get an id that matches one in the cache, but
 			// is for a different table. We then invalidate and recompute the plan for this id.
-			if plan == nil || plan.Table.Name == tm.Name {
+			isInternal := tm.Database == sidecar.GetName()
+			if plan == nil ||
+				(plan.Table.Name == tm.Name && isInternal == plan.IsInternal) {
 				return nil, nil
 			}
 			vs.plans[id] = nil
 			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
 		}
 
-		if tm.Database == sidecar.GetName() && tm.Name == "resharding_journal" {
-			// A journal is a special case that generates a JOURNAL event.
-			return nil, vs.buildJournalPlan(id, tm)
-		} else if tm.Database == sidecar.GetName() && tm.Name == "schema_version" && !vs.se.SkipMetaCheck {
-			// Generates a Version event when it detects that a schema is stored in the schema_version table.
-			return nil, vs.buildVersionPlan(id, tm)
+		// The database connector `vs.cp` points to the keyspace's database.
+		// If this is also setup as the sidecar database name, as is the case in the distributed transaction unit tests,
+		// for example, we stream all tables as usual.
+		// If not, we only stream the schema_version and journal tables and those specified in the internal_tables list.
+		if tm.Database == sidecar.GetName() && vs.cp.DBName() != sidecar.GetName() {
+			return vs.buildSidecarTablePlan(id, tm)
 		}
+
 		if tm.Database != "" && tm.Database != vs.cp.DBName() {
 			vs.plans[id] = nil
 			return nil, nil
@@ -642,15 +647,23 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
 				vs.vse.env.Config().DB.Flavor)
 		}
-		tpevents, err := ev.TransactionPayload(vs.format)
+		tp, err := ev.TransactionPayload(vs.format)
 		if err != nil {
 			return nil, err
 		}
+		defer tp.Close()
 		// Events inside the payload don't have their own checksum.
 		ogca := vs.format.ChecksumAlgorithm
 		defer func() { vs.format.ChecksumAlgorithm = ogca }()
 		vs.format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
-		for _, tpevent := range tpevents {
+		for {
+			tpevent, err := tp.GetNextEvent()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, err
+			}
 			tpvevents, err := vs.parseEvent(tpevent)
 			if err != nil {
 				return nil, vterrors.Wrap(err, "failed to parse transaction payload's internal event")
@@ -666,72 +679,84 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	return vevents, nil
 }
 
-func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
-	conn, err := vs.cp.Connect(vs.ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	qr, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("select * from %s.resharding_journal where 1 != 1",
-		sidecar.GetIdentifier()).Query, 1, true)
-	if err != nil {
-		return err
-	}
-	fields := qr.Fields
-	if len(fields) < len(tm.Types) {
-		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
-	}
-	table := &Table{
-		Name:   fmt.Sprintf("%s.resharding_journal", sidecar.GetIdentifier()),
-		Fields: fields[:len(tm.Types)],
-	}
-	// Build a normal table plan, which means, return all rows
-	// and columns as is. Special handling is done when we actually
-	// receive the row event. We'll build a JOURNAL event instead.
-	plan, err := buildREPlan(vs.se.Environment(), table, nil, "")
-	if err != nil {
-		return err
-	}
-	vs.plans[id] = &streamerPlan{
-		Plan:     plan,
-		TableMap: tm,
-	}
-	vs.journalTableID = id
-	return nil
-}
+func (vs *vstreamer) buildSidecarTablePlan(id uint64, tm *mysql.TableMap) ([]*binlogdatapb.VEvent, error) {
+	tableName := tm.Name
+	switch tableName {
+	case "resharding_journal":
+		// A journal is a special case that generates a JOURNAL event.
+	case "schema_version":
+		// Generates a Version event when it detects that a schema is stored in the schema_version table.
 
-func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
+		// SkipMetaCheck is set during PITR restore: some table metadata is not fetched in that case.
+		if vs.se.SkipMetaCheck {
+			return nil, nil
+		}
+	default:
+		if vs.options == nil {
+			return nil, nil
+		}
+		found := false
+		for _, table := range vs.options.InternalTables {
+			if table == tableName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, nil
+		}
+	}
+
 	conn, err := vs.cp.Connect(vs.ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer conn.Close()
-	qr, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("select * from %s.schema_version where 1 != 1",
-		sidecar.GetIdentifier()).Query, 1, true)
+	qr, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("select * from %s.%s where 1 != 1",
+		sidecar.GetIdentifier(), tableName).Query, 1, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	fields := qr.Fields
 	if len(fields) < len(tm.Types) {
-		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
+		return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
-		Name:   fmt.Sprintf("%s.schema_version", sidecar.GetIdentifier()),
+		Name:   tableName,
 		Fields: fields[:len(tm.Types)],
 	}
+
 	// Build a normal table plan, which means, return all rows
-	// and columns as is. Special handling is done when we actually
-	// receive the row event. We'll build a JOURNAL event instead.
+	// and columns as is. Special handling may be done when we actually
+	// receive the row event, example: we'll build a JOURNAL or VERSION event instead.
 	plan, err := buildREPlan(vs.se.Environment(), table, nil, "")
 	if err != nil {
-		return err
+		return nil, err
 	}
+	plan.IsInternal = true
 	vs.plans[id] = &streamerPlan{
 		Plan:     plan,
 		TableMap: tm,
 	}
-	vs.versionTableID = id
-	return nil
+
+	var vevents []*binlogdatapb.VEvent
+	switch tm.Name {
+	case "resharding_journal":
+		vs.journalTableID = id
+	case "schema_version":
+		vs.versionTableID = id
+	default:
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_FIELD,
+			FieldEvent: &binlogdatapb.FieldEvent{
+				TableName:       tableName,
+				Fields:          plan.fields(),
+				Keyspace:        vs.vse.keyspace,
+				Shard:           vs.vse.shard,
+				IsInternalTable: plan.IsInternal,
+			}})
+	}
+	return vevents, nil
 }
 
 func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatapb.VEvent, error) {
@@ -986,11 +1011,12 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_ROW,
 			RowEvent: &binlogdatapb.RowEvent{
-				TableName:  plan.Table.Name,
-				RowChanges: rowChanges,
-				Keyspace:   vs.vse.keyspace,
-				Shard:      vs.vse.shard,
-				Flags:      uint32(rows.Flags),
+				TableName:       plan.Table.Name,
+				RowChanges:      rowChanges,
+				Keyspace:        vs.vse.keyspace,
+				Shard:           vs.vse.shard,
+				Flags:           uint32(rows.Flags),
+				IsInternalTable: plan.IsInternal,
 			},
 		})
 	}

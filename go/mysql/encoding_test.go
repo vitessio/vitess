@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -72,7 +73,6 @@ func TestEncLenInt(t *testing.T) {
 		// Check failed decoding.
 		_, _, ok = readLenEncInt(test.encoded[:len(test.encoded)-1], 0)
 		assert.False(t, ok, "readLenEncInt returned ok=true for shorter value %x", test.value)
-
 	}
 }
 
@@ -355,6 +355,27 @@ func TestWriteZeroes(t *testing.T) {
 	})
 }
 
+func TestEncGtidData(t *testing.T) {
+	tests := []struct {
+		data   string
+		header []byte
+	}{
+		{"", []byte{0x04, 0x03, 0x02, 0x00, 0x00}},
+		{"xxx", []byte{0x07, 0x03, 0x05, 0x00, 0x03}},
+		{strings.Repeat("x", 256), []byte{
+			/* 264 */ 0xfc, 0x08, 0x01,
+			/* constant */ 0x03,
+			/* 260 */ 0xfc, 0x04, 0x01,
+			/* constant */ 0x00,
+			/* 256 */ 0xfc, 0x00, 0x01,
+		}},
+	}
+	for _, test := range tests {
+		got := encGtidData(test.data)
+		assert.Equal(t, append(test.header, test.data...), got)
+	}
+}
+
 func BenchmarkEncWriteInt(b *testing.B) {
 	buf := make([]byte, 16)
 
@@ -450,4 +471,11 @@ func BenchmarkEncReadInt(b *testing.B) {
 			_, _, _ = readLenEncInt(data, 0)
 		}
 	})
+}
+
+func BenchmarkEncGtidData(b *testing.B) {
+	b.ReportAllocs()
+	for range b.N {
+		_ = encGtidData("xxx")
+	}
 }

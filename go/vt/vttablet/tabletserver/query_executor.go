@@ -203,7 +203,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	case p.PlanRevertMigration:
 		return qre.execRevertMigration()
 	case p.PlanShowMigrations:
-		return qre.execShowMigrations()
+		return qre.execShowMigrations(nil)
 	case p.PlanShowMigrationLogs:
 		return qre.execShowMigrationLogs()
 	case p.PlanShowThrottledApps:
@@ -308,6 +308,8 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execLoad(conn)
 	case p.PlanCallProc:
 		return qre.execProc(conn)
+	case p.PlanShowMigrations:
+		return qre.execShowMigrations(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -668,7 +670,6 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				newLast += cache
 			}
 			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(tableName), newLast)
-			conn.TxProperties().RecordQuery(query)
 			_, err = qre.execStatefulConn(conn, query, false)
 			if err != nil {
 				return nil, err
@@ -805,7 +806,7 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 	}
 	// Only record successful queries.
 	if record {
-		conn.TxProperties().RecordQuery(sql)
+		conn.TxProperties().RecordQueryDetail(sql, qre.plan.TableNames())
 	}
 	return qr, nil
 }
@@ -923,6 +924,8 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.RetryMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CleanupMigrationType:
 		return qre.tsv.onlineDDLExecutor.CleanupMigration(qre.ctx, alterMigration.UUID)
+	case sqlparser.CleanupAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.CleanupAllMigrations(qre.ctx)
 	case sqlparser.LaunchMigrationType:
 		return qre.tsv.onlineDDLExecutor.LaunchMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
 	case sqlparser.LaunchAllMigrationType:
@@ -958,7 +961,7 @@ func (qre *QueryExecutor) execRevertMigration() (*sqltypes.Result, error) {
 	return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
 }
 
-func (qre *QueryExecutor) execShowMigrations() (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execShowMigrations(conn *StatefulConnection) (*sqltypes.Result, error) {
 	if showStmt, ok := qre.plan.FullStmt.(*sqlparser.Show); ok {
 		return qre.tsv.onlineDDLExecutor.ShowMigrations(qre.ctx, showStmt)
 	}

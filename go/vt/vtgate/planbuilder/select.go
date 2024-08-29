@@ -205,7 +205,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	if ks, _ := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
+	if ks, ok := ctx.SemTable.CanTakeSelectUnshardedShortcut(); ok {
 		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
 			return nil, nil, err
@@ -214,7 +214,6 @@ func newBuildSelectPlan(
 		return plan, tablesUsed, err
 	}
 
-	// From this point on, we know it is not an unsharded query and return the NotUnshardedErr if there is any
 	if ctx.SemTable.NotUnshardedErr != nil {
 		return nil, nil, ctx.SemTable.NotUnshardedErr
 	}
@@ -242,9 +241,26 @@ func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.Se
 }
 
 func isOnlyDual(sel *sqlparser.Select) bool {
-	if sel.Where != nil || sel.GroupBy != nil || sel.Having != nil || sel.Limit != nil || sel.OrderBy != nil {
+	if sel.Where != nil || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil {
 		// we can only deal with queries without any other subclauses - just SELECT and FROM, nothing else is allowed
 		return false
+	}
+
+	if sel.Limit != nil {
+		if sel.Limit.Offset != nil {
+			return false
+		}
+		limit := sel.Limit.Rowcount
+		switch limit := limit.(type) {
+		case nil:
+		case *sqlparser.Literal:
+			if limit.Val == "0" {
+				// A limit with any value other than zero can still return a row
+				return false
+			}
+		default:
+			return false
+		}
 	}
 
 	if len(sel.From) > 1 {

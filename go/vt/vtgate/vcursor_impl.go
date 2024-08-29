@@ -58,10 +58,12 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
-var _ engine.VCursor = (*vcursorImpl)(nil)
-var _ plancontext.VSchema = (*vcursorImpl)(nil)
-var _ iExecute = (*Executor)(nil)
-var _ vindexes.VCursor = (*vcursorImpl)(nil)
+var (
+	_ engine.VCursor      = (*vcursorImpl)(nil)
+	_ plancontext.VSchema = (*vcursorImpl)(nil)
+	_ iExecute            = (*Executor)(nil)
+	_ vindexes.VCursor    = (*vcursorImpl)(nil)
+)
 
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
@@ -86,6 +88,8 @@ type iExecute interface {
 	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
 
 	environment() *vtenv.Environment
+	ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
+	UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error)
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -248,6 +252,27 @@ func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
 // IsShardRoutingEnabled implements the VCursor interface.
 func (vc *vcursorImpl) IsShardRoutingEnabled() bool {
 	return enableShardRouting
+}
+
+func (vc *vcursorImpl) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	return vc.executor.ReadTransaction(ctx, transactionID)
+}
+
+// UnresolvedTransactions gets the unresolved transactions for the given keyspace. If the keyspace is not given,
+// then we use the default keyspace.
+func (vc *vcursorImpl) UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error) {
+	if keyspace == "" {
+		keyspace = vc.GetKeyspace()
+	}
+	rss, _, err := vc.ResolveDestinations(ctx, keyspace, nil, []key.Destination{key.DestinationAllShards{}})
+	if err != nil {
+		return nil, err
+	}
+	var targets []*querypb.Target
+	for _, rs := range rss {
+		targets = append(targets, rs.Target)
+	}
+	return vc.executor.UnresolvedTransactions(ctx, targets)
 }
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
@@ -814,7 +839,7 @@ func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sq
 
 // TargetDestination implements the ContextVSchema interface
 func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
-	keyspaceName := vc.keyspace
+	keyspaceName := vc.getActualKeyspace()
 	if vc.destination == nil && qualifier != "" {
 		keyspaceName = qualifier
 	}
@@ -899,7 +924,6 @@ func (vc *vcursorImpl) SetPriority(priority string) {
 	} else if vc.safeSession.Options != nil && vc.safeSession.Options.Priority != "" {
 		vc.safeSession.Options.Priority = ""
 	}
-
 }
 
 // SetConsolidator implements the SessionActions interface
@@ -1079,6 +1103,23 @@ func (vc *vcursorImpl) GetAggregateUDFs() []string {
 	return vc.vschema.GetAggregateUDFs()
 }
 
+// FindMirrorRule finds the mirror rule for the requested table name and
+// VSchema tablet type.
+func (vc *vcursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	destKeyspace, destTabletType, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	if destKeyspace == "" {
+		destKeyspace = vc.keyspace
+	}
+	mirrorRule, err := vc.vschema.FindMirrorRule(destKeyspace, name.Name.String(), destTabletType)
+	if err != nil {
+		return nil, err
+	}
+	return mirrorRule, err
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
@@ -1139,7 +1180,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	allowed := vschemaacl.Authorized(user)
 	if !allowed {
 		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform vschema operations", user.GetUsername())
-
 	}
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
@@ -1156,7 +1196,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 
 	ks := srvVschema.Keyspaces[ksName]
 	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, vschemaDDL)
-
 	if err != nil {
 		return err
 	}
@@ -1164,7 +1203,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	srvVschema.Keyspaces[ksName] = ks
 
 	return vc.vm.UpdateVSchema(ctx, ksName, srvVschema)
-
 }
 
 func (vc *vcursorImpl) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
@@ -1225,7 +1263,16 @@ func (vc *vcursorImpl) ThrottleApp(ctx context.Context, throttledAppRule *topoda
 		if throttlerConfig.ThrottledApps == nil {
 			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
 		}
-		throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			// TODO(shlomi) in v22: replace the following line with the commented out block
+			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// timeNow := time.Now()
+			// if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+			// 	throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// } else {
+			// 	delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			// }
+		}
 		return throttlerConfig
 	}
 
@@ -1288,6 +1335,7 @@ func (vc *vcursorImpl) VExplainLogging() {
 func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
 }
+
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
 }
@@ -1352,6 +1400,37 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
+
+	return v
+}
+
+func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
+	callerId := callerid.EffectiveCallerIDFromContext(ctx)
+	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
+
+	clonedCtx := callerid.NewContext(ctx, callerId, immediateCallerId)
+
+	v := &vcursorImpl{
+		safeSession:         NewAutocommitSession(vc.safeSession.Session),
+		keyspace:            vc.keyspace,
+		tabletType:          vc.tabletType,
+		destination:         vc.destination,
+		marginComments:      vc.marginComments,
+		executor:            vc.executor,
+		resolver:            vc.resolver,
+		topoServer:          vc.topoServer,
+		logStats:            &logstats.LogStats{Ctx: clonedCtx},
+		collation:           vc.collation,
+		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
+		vschema:             vc.vschema,
+		vm:                  vc.vm,
+		semTable:            vc.semTable,
+		warnShardedOnly:     vc.warnShardedOnly,
+		warnings:            vc.warnings,
+		pv:                  vc.pv,
+	}
+
+	v.marginComments.Trailing += "/* mirror query */"
 
 	return v
 }

@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -138,7 +139,7 @@ type Status struct {
 // NewTableGC creates a table collector
 func NewTableGC(env tabletenv.Env, ts *topo.Server, lagThrottler *throttle.Throttler) *TableGC {
 	collector := &TableGC{
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.TableGCName, throttle.ThrottleCheckPrimaryWrite),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.TableGCName, base.UndefinedScope),
 		isOpen:          0,
 
 		env: env,
@@ -550,7 +551,7 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 			// cancelled
 			return tableName, err
 		}
-		if !collector.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+		if _, ok := collector.throttlerClient.ThrottleCheckOKOrWait(ctx); !ok {
 			continue
 		}
 		// OK, we're clear to go!

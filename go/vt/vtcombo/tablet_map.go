@@ -254,7 +254,11 @@ func DeleteKs(
 			tablet.tm.Stop()
 			tablet.tm.Close()
 			tablet.qsc.SchemaEngine().Close()
-			err := ts.DeleteTablet(ctx, tablet.alias)
+			err := tablet.qsc.QueryService().Close(ctx)
+			if err != nil {
+				return err
+			}
+			err = ts.DeleteTablet(ctx, tablet.alias)
 			if err != nil {
 				return err
 			}
@@ -320,6 +324,11 @@ func CreateKs(
 	// create a regular keyspace
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
 		return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+	}
+
+	// make sure a valid vschema has been loaded
+	if err := ts.EnsureVSchema(ctx, keyspace); err != nil {
+		return 0, fmt.Errorf("EnsureVSchema(%v) failed: %v", keyspace, err)
 	}
 
 	// iterate through the shards
@@ -551,6 +560,12 @@ func (itc *internalTabletConn) ConcludeTransaction(ctx context.Context, target *
 func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	metadata, err = itc.tablet.qsc.QueryService().ReadTransaction(ctx, target, dtid)
 	return metadata, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
+// UnresolvedTransactions is part of queryservice.QueryService
+func (itc *internalTabletConn) UnresolvedTransactions(ctx context.Context, target *querypb.Target) (transactions []*querypb.TransactionMetadata, err error) {
+	transactions, err = itc.tablet.qsc.QueryService().UnresolvedTransactions(ctx, target)
+	return transactions, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // BeginExecute is part of queryservice.QueryService
@@ -972,6 +987,10 @@ func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *top
 }
 
 func (itmc *internalTabletManagerClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) GetThrottlerStatus(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

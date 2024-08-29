@@ -76,7 +76,7 @@ Flags:
       --db_appdebug_password string                                      db appdebug password
       --db_appdebug_use_ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db_appdebug_user string                                          db appdebug user userKey (default "vt_appdebug")
-      --db_charset string                                                Character set used for this tablet. (default "utf8mb4")
+      --db_charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
       --db_conn_query_info                                               enable parsing and processing of QUERY_OK info fields
       --db_connect_timeout_ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
       --db_dba_password string                                           db dba password
@@ -223,6 +223,7 @@ Flags:
       --mycnf_slow_log_path string                                       mysql slow query log path
       --mycnf_socket_file string                                         mysql socket file
       --mycnf_tmp_dir string                                             mysql tmp directory
+      --mysql-server-drain-onterm                                        If set, the server waits for --onterm_timeout for already connected clients to complete their in flight work
       --mysql-server-keepalive-period duration                           TCP period between keep-alives
       --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
       --mysql-shutdown-timeout duration                                  timeout to use when MySQL is being shut down. (default 5m0s)
@@ -231,7 +232,6 @@ Flags:
       --mysql_default_workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
       --mysql_port int                                                   mysql port (default 3306)
       --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
-      --mysql_server_drain_onterm                                        If set, the server waits for --onterm_timeout for connected clients to drain
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
       --mysql_server_query_timeout duration                              mysql query timeout
@@ -389,7 +389,6 @@ Flags:
       --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
       --twopc_abandon_age float                                          time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.
-      --twopc_coordinator_address string                                 address of the (VTGate) process(es) that will be used to notify of abandoned transactions.
       --twopc_enable                                                     if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.
       --tx-throttler-config string                                       Synonym to -tx_throttler_config (default "target_replication_lag_sec:2 max_replication_lag_sec:10 initial_rate:100 max_increase:1 emergency_decrease:0.5 min_duration_between_increases_sec:40 max_duration_between_increases_sec:62 min_duration_between_decreases_sec:20 spread_backlog_across_sec:20 age_bad_rate_after_sec:180 bad_rate_increase:0.1 max_rate_approach_threshold:0.9")
       --tx-throttler-default-priority int                                Default priority assigned to queries that lack priority information (default 100)

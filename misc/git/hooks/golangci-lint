@@ -13,18 +13,58 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-GOLANGCI_LINT=$(command -v golangci-lint >/dev/null 2>&1)
-if [ $? -eq 1 ]; then
-  echo "Downloading golangci-lint..."
-  go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.56.2
+# Required version of golangci-lint
+REQUIRED_VERSION="v1.60.2"
+
+# Function to compare versions in pure Bash
+version_greater_or_equal() {
+  local IFS=.
+  local i
+  local ver1=($1)
+  local ver2=($2)
+
+  # Fill empty fields in ver1 with zeros
+  for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+    ver1[i]=0
+  done
+  # Fill empty fields in ver2 with zeros
+  for ((i=${#ver2[@]}; i<${#ver1[@]}; i++)); do
+    ver2[i]=0
+  done
+
+  for ((i=0; i<${#ver1[@]}; i++)); do
+    if ((10#${ver1[i]} > 10#${ver2[i]})); then
+      return 0
+    elif ((10#${ver1[i]} < 10#${ver2[i]})); then
+      return 1
+    fi
+  done
+  return 0
+}
+
+# Check if golangci-lint is installed and capture the version
+if ! command -v golangci-lint >/dev/null 2>&1; then
+  echo "golangci-lint not found. Installing version $REQUIRED_VERSION..."
+  go install github.com/golangci/golangci-lint/cmd/golangci-lint@$REQUIRED_VERSION
+else
+  VERSION_OUTPUT=$(golangci-lint --version)
+  INSTALLED_VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/^golangci-lint has version v\([0-9.]*\).*/\1/p')
+  if ! version_greater_or_equal "$INSTALLED_VERSION" "${REQUIRED_VERSION#v}"; then
+    echo "golangci-lint version $INSTALLED_VERSION found, but $REQUIRED_VERSION or newer is required."
+    echo "Installing version $REQUIRED_VERSION..."
+    go install github.com/golangci/golangci-lint/cmd/golangci-lint@$REQUIRED_VERSION
+  fi
 fi
 
+# Get list of Go files to lint
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
 if [ -z "$gofiles" ]; then
   exit 0
 fi
 
+# Get unique directories of the Go files
 gopackages=$(echo "$gofiles" | xargs -n1 dirname | sort -u | paste -sd ' ' -)
 
+# Lint the Go packages
 echo "Linting $gopackages"
 golangci-lint run $gopackages

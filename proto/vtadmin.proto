@@ -126,6 +126,12 @@ service VTAdmin {
     rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
     // GetWorkflows returns the Workflows for all specified clusters.
     rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {};
+    // GetWorkflowStatus returns the status for a specific workflow.
+    rpc GetWorkflowStatus(GetWorkflowStatusRequest) returns (vtctldata.WorkflowStatusResponse) {};
+    // StartWorkflow starts a vreplication workflow.
+    rpc StartWorkflow(StartWorkflowRequest) returns (vtctldata.WorkflowUpdateResponse) {};
+    // StopWorkflow stops a vreplication workflow.
+    rpc StopWorkflow(StopWorkflowRequest) returns (vtctldata.WorkflowUpdateResponse) {};
     // LaunchSchemaMigration launches one or all migrations in the given
     // cluster executed with --postpone-launch.
     rpc LaunchSchemaMigration(LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
@@ -639,6 +645,24 @@ message GetWorkflowRequest {
     string keyspace = 2;
     string name = 3;
     bool active_only = 4;
+}
+
+message GetWorkflowStatusRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    string name = 3;
+}
+
+message StartWorkflowRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    string workflow = 3;
+}
+
+message StopWorkflowRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    string workflow = 3;
 }
 
 message GetWorkflowsRequest {

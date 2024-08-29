@@ -102,9 +102,19 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushDelete(in)
 		case *Update:
 			return tryPushUpdate(in)
+		case *RecurseCTE:
+			return tryMergeRecurse(ctx, in)
+
 		default:
 			return in, NoRewrite
 		}
+	}
+
+	if pbm, ok := root.(*PercentBasedMirror); ok {
+		pbm.SetInputs([]Operator{
+			runRewriters(ctx, pbm.Operator),
+			runRewriters(ctx.UseMirror(), pbm.Target),
+		})
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
@@ -733,7 +743,6 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 		}
 	}
 	return Swap(filter, projection, "push filter under projection")
-
 }
 
 func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {

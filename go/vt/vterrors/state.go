@@ -62,6 +62,11 @@ const (
 	NoReferencedRow2
 	UnknownStmtHandler
 	KeyDoesNotExist
+	CTERecursiveRequiresSingleReference
+	CTERecursiveRequiresUnion
+	CTERecursiveForbidsAggregation
+	CTERecursiveForbiddenJoinOrder
+	CTEMaxRecursionDepth
 
 	// not found
 	BadDb
@@ -119,6 +124,8 @@ const (
 
 	CharacterSetMismatch
 	WrongParametersToNativeFct
+
+	VectorConversion
 
 	// No state should be added below NumOfStates
 	NumOfStates

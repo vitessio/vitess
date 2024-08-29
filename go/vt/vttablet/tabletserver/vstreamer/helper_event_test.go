@@ -158,10 +158,10 @@ func (s *TestRowEventSpec) String() string {
 		TableName: s.table,
 	}
 	var rowChanges []*binlogdatapb.RowChange
-	if s.changes != nil && len(s.changes) > 0 {
+	if len(s.changes) > 0 {
 		for _, c := range s.changes {
 			rowChange := binlogdatapb.RowChange{}
-			if c.before != nil && len(c.before) > 0 {
+			if len(c.before) > 0 {
 				rowChange.Before = &query.Row{}
 				for _, val := range c.before {
 					if val == sqltypes.NullStr {
@@ -171,7 +171,7 @@ func (s *TestRowEventSpec) String() string {
 					rowChange.Before.Values = append(rowChange.Before.Values, []byte(val)...)
 				}
 			}
-			if c.after != nil && len(c.after) > 0 {
+			if len(c.after) > 0 {
 				rowChange.After = &query.Row{}
 				for i, val := range c.after {
 					if val == sqltypes.NullStr {
@@ -318,7 +318,7 @@ func (ts *TestSpec) Init() {
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
 func (ts *TestSpec) Close() {
-	dropStatement := fmt.Sprintf("drop tables %s", strings.Join(ts.schema.TableNames(), ", "))
+	dropStatement := fmt.Sprintf("drop table if exists %s", strings.Join(ts.schema.TableNames(), ", "))
 	execStatement(ts.t, dropStatement)
 }
 
@@ -780,6 +780,8 @@ func getQueryType(strType string) query.Type {
 		return query.Type_SET
 	case "JSON":
 		return query.Type_JSON
+	case "VECTOR":
+		return query.Type_VECTOR
 	default:
 		panic("unknown type " + strType)
 	}

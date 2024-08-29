@@ -68,7 +68,7 @@ type (
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
 		Original *sqlparser.AliasedExpr // The original SQL expression for the aggregation
-		Func     sqlparser.AggrFunc     // The aggregation function (e.g., COUNT, SUM). If nil, it means AggregateAnyValue is used
+		Func     sqlparser.AggrFunc     // The aggregation function (e.g., COUNT, SUM). If nil, it means AggregateAnyValue or AggregateUDF is used
 		OpCode   opcode.AggregateOpcode // The opcode representing the type of aggregation being performed
 
 		// OriginalOpCode will contain opcode.AggregateUnassigned unless we are changing the opcode while pushing them down
@@ -662,6 +662,24 @@ func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningCont
 	}
 	qp.groupByExprs = append(qp.groupByExprs, gbs...)
 	return true
+}
+
+// addColumn adds a column to the QueryProjection if it is not already present.
+// It will use a column name that is available on the outside of the derived table
+func (qp *QueryProjection) addDerivedColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+	for _, selectExpr := range qp.SelectExprs {
+		getExpr, err := selectExpr.GetExpr()
+		if err != nil {
+			continue
+		}
+		if ctx.SemTable.EqualsExprWithDeps(getExpr, expr) {
+			return
+		}
+	}
+	qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
+		Col:  aeWrap(expr),
+		Aggr: ctx.ContainsAggr(expr),
+	})
 }
 
 func checkForInvalidGroupingExpressions(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {

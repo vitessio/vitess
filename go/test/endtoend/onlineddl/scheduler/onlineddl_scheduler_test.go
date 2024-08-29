@@ -71,6 +71,7 @@ type testRevertMigrationParams struct {
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	primaryTablet   *cluster.Vttablet
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
 
@@ -208,20 +209,32 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+
+	var lastMessage string
 	for {
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
-			message := row.AsString("message", "")
-			if strings.Contains(message, messageSubstring) {
+			lastMessage = row.AsString("message", "")
+			if strings.Contains(lastMessage, messageSubstring) {
 				return
 			}
 		}
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
+			{
+				resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.TestingName, nil)
+				assert.NoError(t, err)
+				fmt.Println("Throttler check response: ", resp)
+
+				output, err := throttler.GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, primaryTablet)
+				assert.NoError(t, err)
+				fmt.Println("Throttler status response: ", output)
+			}
+			require.Failf(t, "timeout waiting for message", "expected: %s. Last seen: %s", messageSubstring, lastMessage)
+			return
 		}
-		require.NoError(t, ctx.Err())
 	}
 }
 
@@ -278,6 +291,7 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+		primaryTablet = clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 
 		return m.Run(), nil
 	}()
@@ -292,7 +306,7 @@ func TestMain(m *testing.M) {
 
 func TestSchemaChange(t *testing.T) {
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("scheduler", testScheduler)
 	t.Run("singleton", testSingleton)
@@ -334,7 +348,7 @@ func testScheduler(t *testing.T) {
 		}
 	}
 
-	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	mysqlVersion := onlineddl.GetMySQLVersion(t, primaryTablet)
 	require.NotEmpty(t, mysqlVersion)
 	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
@@ -440,6 +454,19 @@ func testScheduler(t *testing.T) {
 			}
 		})
 	}
+
+	var originalLockWaitTimeout int64
+	t.Run("set low lock_wait_timeout", func(t *testing.T) {
+		rs, err := primaryTablet.VttabletProcess.QueryTablet("select @@lock_wait_timeout as lock_wait_timeout", keyspaceName, false)
+		require.NoError(t, err)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		originalLockWaitTimeout = row.AsInt64("lock_wait_timeout", 0)
+		require.NotZero(t, originalLockWaitTimeout)
+
+		_, err = primaryTablet.VttabletProcess.QueryTablet("set global lock_wait_timeout=1", keyspaceName, false)
+		require.NoError(t, err)
+	})
 
 	// CREATE
 	t.Run("CREATE TABLEs t1, t2", func(t *testing.T) {
@@ -558,12 +585,27 @@ func testScheduler(t *testing.T) {
 			}
 		})
 	})
+	t.Run("show vitess_migrations in transaction", func(t *testing.T) {
+		// The function validates there is no error
+		rs := onlineddl.VtgateExecQueryInTransaction(t, &vtParams, "show vitess_migrations", "")
+		assert.NotEmpty(t, rs.Rows)
+	})
+
+	t.Run("low @@lock_wait_timeout", func(t *testing.T) {
+		defer primaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf("set global lock_wait_timeout=%d", originalLockWaitTimeout), keyspaceName, false)
+
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", false)) // wait
+		t.Run("trivial t1 migration", func(t *testing.T) {
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, t1Name, true)
+		})
+	})
 
 	forceCutoverCapable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability) // 8.0
 	require.NoError(t, err)
 	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*2)
+			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
@@ -586,7 +628,21 @@ func testScheduler(t *testing.T) {
 			commitTransactionChan := make(chan any)
 			transactionErrorChan := make(chan error)
 			t.Run("locking table rows", func(t *testing.T) {
-				go runInTransaction(t, ctx, shards[0].Vttablets[0], "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+				go runInTransaction(t, ctx, primaryTablet, "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+			})
+			t.Run("injecting heartbeats asynchronously", func(t *testing.T) {
+				go func() {
+					ticker := time.NewTicker(time.Second)
+					defer ticker.Stop()
+					for {
+						throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil)
+						select {
+						case <-ticker.C:
+						case <-ctx.Done():
+							return
+						}
+					}
+				}()
 			})
 			t.Run("check no force_cutover", func(t *testing.T) {
 				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
@@ -1035,6 +1091,22 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
+	readCleanupsTimetamps := func(t *testing.T, migrationsLike string) (rows int64, cleanedUp int64, needCleanup int64, artifacts []string) {
+		rs := onlineddl.ReadMigrations(t, &vtParams, migrationsLike)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			rows++
+			if row["cleanup_timestamp"].IsNull() {
+				needCleanup++
+			} else {
+				cleanedUp++
+			}
+			migrationArtifacts := textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+			artifacts = append(artifacts, migrationArtifacts...)
+		}
+		return
+	}
+
 	t.Run("Cleanup artifacts", func(t *testing.T) {
 		// Create a migration with a low --retain-artifacts value.
 		// We will cancel the migration and expect the artifact to be cleaned.
@@ -1071,14 +1143,14 @@ func testScheduler(t *testing.T) {
 			defer cancel()
 
 			for {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-				require.NotNil(t, rs)
-				row := rs.Named().Row()
-				require.NotNil(t, row)
-				if !row["cleanup_timestamp"].IsNull() {
+				rows, cleanedUp, needCleanup, _ := readCleanupsTimetamps(t, t1uuid)
+				assert.EqualValues(t, 1, rows)
+				if cleanedUp == 1 {
 					// This is what we've been waiting for
 					break
 				}
+				assert.EqualValues(t, 0, cleanedUp)
+				assert.EqualValues(t, 1, needCleanup)
 				select {
 				case <-ctx.Done():
 					assert.Fail(t, "timeout waiting for cleanup")
@@ -1087,6 +1159,108 @@ func testScheduler(t *testing.T) {
 				}
 			}
 		})
+		t.Run("validate artifact does not exist", func(t *testing.T) {
+			checkTable(t, artifacts[0], false)
+		})
+	})
+
+	t.Run("cleanup artifacts with CLEANUP ALL", func(t *testing.T) {
+		// First, cleanup any existing migrations. We don't have an exact track of how many we've had so far.
+		t.Run("initial cleanup all", func(t *testing.T) {
+			t.Run("validate migrations exist that need cleanup", func(t *testing.T) {
+				_, _, needCleanup, _ := readCleanupsTimetamps(t, "%")
+				assert.Greater(t, needCleanup, int64(1))
+			})
+			t.Run("issue cleanup all", func(t *testing.T) {
+				cleanedUp := onlineddl.CheckCleanupAllMigrations(t, &vtParams, -1)
+				t.Logf("marked %d migrations for cleanup", cleanedUp)
+			})
+			t.Run("wait for all migrations cleanup", func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime)
+				defer cancel()
+
+				for {
+					rows, cleanedUp, needCleanup, artifacts := readCleanupsTimetamps(t, "%")
+					if needCleanup == 0 {
+						// This is what we've been waiting for
+						assert.NotZero(t, rows)
+						assert.Equal(t, rows, cleanedUp)
+						assert.Empty(t, artifacts)
+						t.Logf("rows needing cleanup: %v", needCleanup)
+						return
+					}
+					select {
+					case <-ctx.Done():
+						assert.Fail(t, "timeout waiting for cleanup", "rows needing cleanup: %v. artifacts: %v", needCleanup, artifacts)
+						return
+					case <-time.After(time.Second):
+					}
+					t.Logf("rows needing cleanup: %v. artifacts: %v", needCleanup, artifacts)
+				}
+			})
+		})
+		// Create a migration with a low --retain-artifacts value.
+		// We will cancel the migration and expect the artifact to be cleaned.
+		t.Run("start migration", func(t *testing.T) {
+			// Intentionally set `--retain-artifacts=1h` which is a long time. Then we will issue
+			// `ALTER VITESS_MIGRATION CLEANUP ALL` and expect the artifact to be cleaned.
+			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion --retain-artifacts=1h", "vtctl", "", "", true)) // skip wait
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("wait for ready_to_complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+		})
+		var artifacts []string
+		t.Run("validate artifact exists", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			row := rs.Named().Row()
+			require.NotNil(t, row)
+
+			artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+			require.Len(t, artifacts, 1)
+			checkTable(t, artifacts[0], true)
+
+			retainArtifactsSeconds := row.AsInt64("retain_artifacts_seconds", 0)
+			assert.EqualValues(t, 3600, retainArtifactsSeconds) // due to --retain-artifacts=1h
+		})
+		t.Run("check needs cleanup", func(t *testing.T) {
+			_, _, needCleanup, _ := readCleanupsTimetamps(t, "%")
+			assert.EqualValues(t, 1, needCleanup)
+		})
+		t.Run("complete migration", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("cleanup all", func(t *testing.T) {
+			onlineddl.CheckCleanupAllMigrations(t, &vtParams, 1)
+		})
+		t.Run("wait for migration cleanup", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime)
+			defer cancel()
+
+			for {
+				rows, cleanedUp, needCleanup, artifacts := readCleanupsTimetamps(t, "%")
+				if needCleanup == 0 {
+					// This is what we've been waiting for
+					assert.NotZero(t, rows)
+					assert.Equal(t, rows, cleanedUp)
+					assert.Empty(t, artifacts)
+					t.Logf("rows needing cleanup: %v", needCleanup)
+					return
+				}
+				select {
+				case <-ctx.Done():
+					assert.Fail(t, "timeout waiting for cleanup", "rows needing cleanup: %v. artifacts: %v", needCleanup, artifacts)
+					return
+				case <-time.After(time.Second):
+				}
+				t.Logf("rows needing cleanup: %v. artifacts: %v", needCleanup, artifacts)
+			}
+		})
+
 		t.Run("validate artifact does not exist", func(t *testing.T) {
 			checkTable(t, artifacts[0], false)
 		})
@@ -1105,7 +1279,7 @@ func testScheduler(t *testing.T) {
 				// name it `with_constraint_chk_1`. But we expect Online DDL to explicitly
 				// modify the constraint name, specifically to get rid of the <table-name> prefix,
 				// so that we don't get into https://bugs.mysql.com/bug.php?id=107772 situation.
-				createStatement := getCreateTableStatement(t, shards[0].Vttablets[0], "with_constraint")
+				createStatement := getCreateTableStatement(t, primaryTablet, "with_constraint")
 				assert.NotContains(t, createStatement, "with_constraint_chk")
 			})
 		})
@@ -1146,6 +1320,7 @@ func testScheduler(t *testing.T) {
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
 			require.Contains(t, message, "errno 1146")
+			require.False(t, row["message_timestamp"].IsNull())
 		}
 	})
 
@@ -1289,6 +1464,7 @@ func testScheduler(t *testing.T) {
 				for _, row := range rs.Named().Rows {
 					message := row["message"].ToString()
 					require.Contains(t, message, vuuids[2]) // Indicating this migration failed due to vuuids[2] failure
+					require.False(t, row["message_timestamp"].IsNull())
 				}
 			}
 		})
@@ -1463,6 +1639,7 @@ DROP TABLE IF EXISTS stress_test
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert CREATE TABLE", func(t *testing.T) {
+		require.NotEmpty(t, uuids)
 		// The table existed, so it will now be dropped (renamed)
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vtgate", "", "", false))
 		uuids = append(uuids, uuid)
@@ -2433,7 +2610,7 @@ func testForeignKeys(t *testing.T) {
 		//
 		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
 		// query for this variable, and manipulate it, when starting the migration and when cutting over.
-		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		rs, err := primaryTablet.VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
 		require.NoError(t, err)
 		fkOnlineDDLPossible = len(rs.Rows) > 0
 		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)

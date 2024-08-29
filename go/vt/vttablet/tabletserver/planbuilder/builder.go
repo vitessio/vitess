@@ -33,7 +33,7 @@ func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[str
 		PlanID:    PlanSelect,
 		FullQuery: GenerateLimitQuery(sel),
 	}
-	plan.Table, plan.AllTables = lookupTables(sel.From, tables)
+	plan.Table = lookupTables(sel.From, tables)
 
 	if sel.Where != nil {
 		comp, ok := sel.Where.Expr.(*sqlparser.ComparisonExpr)
@@ -72,7 +72,7 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	plan = &Plan{
 		PlanID: PlanUpdate,
 	}
-	plan.Table, plan.AllTables = lookupTables(upd.TableExprs, tables)
+	plan.Table = lookupTables(upd.TableExprs, tables)
 
 	// Store the WHERE clause as string for the hot row protection (txserializer).
 	if upd.Where != nil {
@@ -102,7 +102,7 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	plan = &Plan{
 		PlanID: PlanDelete,
 	}
-	plan.Table, plan.AllTables = lookupTables(del.TableExprs, tables)
+	plan.Table = lookupTables(del.TableExprs, tables)
 
 	if del.Where != nil {
 		buf := sqlparser.NewTrackedBuffer(nil)
@@ -127,11 +127,7 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(ins),
 	}
 
-	tableName, err := ins.Table.TableName()
-	if err != nil {
-		return nil, err
-	}
-	plan.Table = tables[sqlparser.GetTableName(tableName).String()]
+	plan.Table = lookupTables(sqlparser.TableExprs{ins.Table}, tables)
 	return plan, nil
 }
 
@@ -188,16 +184,26 @@ func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 	}
 }
 
-func lookupTables(tableExprs sqlparser.TableExprs, tables map[string]*schema.Table) (singleTable *schema.Table, allTables []*schema.Table) {
+func lookupTables(tableExprs sqlparser.TableExprs, tables map[string]*schema.Table) (singleTable *schema.Table) {
 	for _, tableExpr := range tableExprs {
 		if t := lookupSingleTable(tableExpr, tables); t != nil {
+			if singleTable != nil {
+				return nil
+			}
+			singleTable = t
+		}
+	}
+	return singleTable
+}
+
+func lookupAllTables(stmt sqlparser.Statement, tables map[string]*schema.Table) (allTables []*schema.Table) {
+	tablesUsed := sqlparser.ExtractAllTables(stmt)
+	for _, tbl := range tablesUsed {
+		if t := tables[tbl]; t != nil {
 			allTables = append(allTables, t)
 		}
 	}
-	if len(allTables) == 1 {
-		singleTable = allTables[0]
-	}
-	return singleTable, allTables
+	return allTables
 }
 
 func lookupSingleTable(tableExpr sqlparser.TableExpr, tables map[string]*schema.Table) *schema.Table {
@@ -229,11 +235,13 @@ func analyzeFlush(stmt *sqlparser.Flush, tables map[string]*schema.Table) (*Plan
 
 	for _, tbl := range stmt.TableNames {
 		if schemaTbl, ok := tables[tbl.Name.String()]; ok {
-			plan.AllTables = append(plan.AllTables, schemaTbl)
+			if plan.Table != nil {
+				// If there are multiple tables, we empty out the table field.
+				plan.Table = nil
+				break
+			}
+			plan.Table = schemaTbl
 		}
-	}
-	if len(plan.AllTables) == 1 {
-		plan.Table = plan.AllTables[0]
 	}
 
 	if stmt.WithLock {

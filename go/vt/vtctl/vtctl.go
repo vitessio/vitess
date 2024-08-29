@@ -2242,24 +2242,24 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			}
 
 			if *atomicCopy {
-				var errors []string
+				var errs []string
 				if !*allTables {
-					errors = append(errors, "atomic copy requires --all.")
+					errs = append(errs, "atomic copy requires --all.")
 				}
 				if *tables != "" {
-					errors = append(errors, "atomic copy does not support specifying tables.")
+					errs = append(errs, "atomic copy does not support specifying tables.")
 				}
 				if *excludes != "" {
-					errors = append(errors, "atomic copy does not support specifying excludes.")
+					errs = append(errs, "atomic copy does not support specifying excludes.")
 				}
-				if len(errors) > 0 {
-					errors = append(errors, "Found options incompatible with atomic copy:")
-					return fmt.Errorf(strings.Join(errors, " "))
+				if len(errs) > 0 {
+					errs = append(errs, "Found options incompatible with atomic copy:")
+					return errors.New(strings.Join(errs, " "))
 				}
 			}
 
 			if !*allTables && *tables == "" {
-				return fmt.Errorf("no tables specified to move")
+				return errors.New("no tables specified to move")
 			}
 			vrwp.SourceKeyspace = *sourceKeyspace
 			vrwp.Tables = *tables
@@ -3656,7 +3656,7 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 		req.ThrottledApp = &topodatapb.ThrottledAppRule{
 			Name:      *unthrottledApp,
 			Ratio:     0,
-			ExpiresAt: protoutil.TimeToProto(time.Now()),
+			ExpiresAt: &vttime.Time{}, // zero
 		}
 	}
 	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, req)
@@ -3740,7 +3740,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf(usage)
+		return errors.New(usage)
 	}
 	if len(*shards) > 0 {
 		log.Infof("Subset of shards specified: %d, %v", len(*shards), strings.Join(*shards, ","))
@@ -3775,7 +3775,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		}
 	} else {
 		if subFlags.NArg() != 2 {
-			return fmt.Errorf(usage)
+			return errors.New(usage)
 		}
 		var rpcReq any = nil
 		if action == "update" {
@@ -3817,7 +3817,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				onddl = ival
 			}
 			if !changes {
-				return fmt.Errorf(errWorkflowUpdateWithoutChanges)
+				return errors.New(errWorkflowUpdateWithoutChanges)
 			}
 			tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
 			if inorder {

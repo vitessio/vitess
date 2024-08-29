@@ -96,8 +96,15 @@ var (
 	VT09022 = errorWithoutState("VT09022", vtrpcpb.Code_FAILED_PRECONDITION, "Destination does not have exactly one shard: %v", "Cannot send query to multiple shards.")
 	VT09023 = errorWithoutState("VT09023", vtrpcpb.Code_FAILED_PRECONDITION, "could not map %v to a keyspace id", "Unable to determine the shard for the given row.")
 	VT09024 = errorWithoutState("VT09024", vtrpcpb.Code_FAILED_PRECONDITION, "could not map %v to a unique keyspace id: %v", "Unable to determine the shard for the given row.")
+	VT09025 = errorWithoutState("VT09025", vtrpcpb.Code_FAILED_PRECONDITION, "atomic transaction error: %v", "Error in atomic transactions")
+	VT09026 = errorWithState("VT09026", vtrpcpb.Code_FAILED_PRECONDITION, CTERecursiveRequiresUnion, "Recursive Common Table Expression '%s' should contain a UNION", "")
+	VT09027 = errorWithState("VT09027", vtrpcpb.Code_FAILED_PRECONDITION, CTERecursiveForbidsAggregation, "Recursive Common Table Expression '%s' can contain neither aggregation nor window functions in recursive query block", "")
+	VT09028 = errorWithState("VT09028", vtrpcpb.Code_FAILED_PRECONDITION, CTERecursiveForbiddenJoinOrder, "In recursive query block of Recursive Common Table Expression '%s', the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints", "")
+	VT09029 = errorWithState("VT09029", vtrpcpb.Code_FAILED_PRECONDITION, CTERecursiveRequiresSingleReference, "In recursive query block of Recursive Common Table Expression %s, the recursive table must be referenced only once, and not in any subquery", "")
+	VT09030 = errorWithState("VT09030", vtrpcpb.Code_FAILED_PRECONDITION, CTEMaxRecursionDepth, "Recursive query aborted after 1000 iterations.", "")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
+	VT10002 = errorWithoutState("VT10002", vtrpcpb.Code_ABORTED, "atomic distributed transaction not allowed: %s", "The distributed transaction cannot be committed. A rollback decision is taken.")
 
 	VT12001 = errorWithoutState("VT12001", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", "This statement is unsupported by Vitess. Please rewrite your query to use supported syntax.")
 	VT12002 = errorWithoutState("VT12002", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard foreign keys", "Vitess does not support cross shard foreign keys.")
@@ -181,7 +188,12 @@ var (
 		VT09022,
 		VT09023,
 		VT09024,
+		VT09026,
+		VT09027,
+		VT09028,
+		VT09029,
 		VT10001,
+		VT10002,
 		VT12001,
 		VT12002,
 		VT13001,

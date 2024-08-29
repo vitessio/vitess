@@ -66,6 +66,16 @@ type PlanningContext struct {
 	// OuterTables contains the tables that are outer to the current query
 	// Used to set the nullable flag on the columns
 	OuterTables semantics.TableSet
+
+	// This is a stack of CTEs being built. It's used when we have CTEs inside CTEs,
+	// to remember which is the CTE currently being assembled
+	CurrentCTE []*ContextCTE
+
+	// mirror contains a mirrored clone of this planning context.
+	mirror *PlanningContext
+
+	// isMirrored indicates that mirrored tables should be used.
+	isMirrored bool
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -375,4 +385,75 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 		return true, nil
 	}, e)
 	return
+}
+
+func (ctx *PlanningContext) IsMirrored() bool {
+	return ctx.isMirrored
+}
+
+type ContextCTE struct {
+	*semantics.CTE
+	Id         semantics.TableSet
+	Predicates []*RecurseExpression
+}
+
+type RecurseExpression struct {
+	Original  sqlparser.Expr
+	RightExpr sqlparser.Expr
+	LeftExprs []BindVarExpr
+}
+
+type BindVarExpr struct {
+	Name string
+	Expr *sqlparser.ColName
+}
+
+func (ctx *PlanningContext) PushCTE(def *semantics.CTE, id semantics.TableSet) {
+	ctx.CurrentCTE = append(ctx.CurrentCTE, &ContextCTE{
+		CTE: def,
+		Id:  id,
+	})
+}
+
+func (ctx *PlanningContext) PopCTE() (*ContextCTE, error) {
+	if len(ctx.CurrentCTE) == 0 {
+		return nil, vterrors.VT13001("no CTE to pop")
+	}
+	activeCTE := ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
+	ctx.CurrentCTE = ctx.CurrentCTE[:len(ctx.CurrentCTE)-1]
+	return activeCTE, nil
+}
+
+func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
+	if len(ctx.CurrentCTE) == 0 {
+		return nil
+	}
+	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
+}
+
+func (ctx *PlanningContext) UseMirror() *PlanningContext {
+	if ctx.isMirrored {
+		panic(vterrors.VT13001("cannot mirror already mirrored planning context"))
+	}
+	if ctx.mirror != nil {
+		return ctx.mirror
+	}
+	ctx.mirror = &PlanningContext{
+		ctx.ReservedVars,
+		ctx.SemTable,
+		ctx.VSchema,
+		map[sqlparser.Expr][]sqlparser.Expr{},
+		map[sqlparser.Expr]any{},
+		ctx.PlannerVersion,
+		map[sqlparser.Expr]string{},
+		ctx.VerifyAllFKs,
+		ctx.MergedSubqueries,
+		ctx.CurrentPhase,
+		ctx.Statement,
+		ctx.OuterTables,
+		ctx.CurrentCTE,
+		nil,
+		true,
+	}
+	return ctx.mirror
 }

@@ -161,7 +161,7 @@ type (
 	CommonTableExpr struct {
 		ID       IdentifierCS
 		Columns  Columns
-		Subquery *Subquery
+		Subquery SelectStatement
 	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
@@ -262,7 +262,11 @@ type (
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
 		Distinct         bool
+		HighPriority     bool
 		StraightJoinHint bool
+		SQLSmallResult   bool
+		SQLBigResult     bool
+		SQLBufferResult  bool
 		SQLCalcFoundRows bool
 		// The With field needs to come before the FROM clause, so any CTEs have been handled before we analyze it
 		With        *With
@@ -1667,6 +1671,12 @@ type (
 		Filter  *ShowFilter
 	}
 
+	// ShowTransactionStatus is used to see the status of a distributed transaction in progress.
+	ShowTransactionStatus struct {
+		Keyspace      string
+		TransactionID string
+	}
+
 	// ShowCreate is of ShowInternal type, holds SHOW CREATE queries.
 	ShowCreate struct {
 		Command ShowCommandType
@@ -1679,9 +1689,10 @@ type (
 	}
 )
 
-func (*ShowBasic) isShowInternal()  {}
-func (*ShowCreate) isShowInternal() {}
-func (*ShowOther) isShowInternal()  {}
+func (*ShowBasic) isShowInternal()             {}
+func (*ShowCreate) isShowInternal()            {}
+func (*ShowOther) isShowInternal()             {}
+func (*ShowTransactionStatus) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {

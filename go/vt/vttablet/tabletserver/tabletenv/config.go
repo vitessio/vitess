@@ -157,7 +157,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
 	fs.Int64Var(&currentConfig.SchemaVersionMaxAgeSeconds, "schema-version-max-age-seconds", 0, "max age of schema version records to kept in memory by the vreplication historian")
 	fs.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
-	fs.StringVar(&currentConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", defaultConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
 	SecondsVar(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
 	// Tx throttler config
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
@@ -332,13 +331,12 @@ type TabletConfig struct {
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
-	SanitizeLogMessages     bool    `json:"-"`
-	StrictTableACL          bool    `json:"-"`
-	EnableTableACLDryRun    bool    `json:"-"`
-	TableACLExemptACL       string  `json:"-"`
-	TwoPCEnable             bool    `json:"-"`
-	TwoPCCoordinatorAddress string  `json:"-"`
-	TwoPCAbandonAge         Seconds `json:"-"`
+	SanitizeLogMessages  bool    `json:"-"`
+	StrictTableACL       bool    `json:"-"`
+	EnableTableACLDryRun bool    `json:"-"`
+	TableACLExemptACL    string  `json:"-"`
+	TwoPCEnable          bool    `json:"-"`
+	TwoPCAbandonAge      Seconds `json:"-"`
 
 	EnableTxThrottler              bool                          `json:"-"`
 	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
@@ -406,8 +404,6 @@ func (cfg *TabletConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.SchemaReloadInterval = 0
 	}
 
 	if tmp.SchemaChangeReloadTimeout != "" {
@@ -415,8 +411,6 @@ func (cfg *TabletConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.SchemaChangeReloadTimeout = 0
 	}
 
 	return nil

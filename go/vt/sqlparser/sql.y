@@ -242,6 +242,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // predicates as column modifiers, shifting on a '(' conflicts with reducing the keywords to a non_reserved_keyword. Since we want shifting to
 // take precedence, we add this precedence to the reduction rules.
 %nonassoc <str> ANY_SOME
+// SELECT_OPTIONS is used to resolve shift-reduce conflicts occurring due to select options that are non-reserved keywords.
+// When parsing select_options_opt if we encounter a select option like `SQL_BUFFER_RESULT`, we can either reduce select_options_opt and use it as a table name
+// or we can shift and use it as a select option. Since we want the latter option, we want to prioritize shifting over reducing.
+// Adding no precedence also works, since shifting is the default, but it reports some conflicts
+// We need to add a lower precedence to reducing the select_options_opt rule than shifting.
+%nonassoc <str> SELECT_OPTIONS
 
 %token LEX_ERROR
 %left <str> UNION
@@ -253,12 +259,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
 %token <str> VALUES LAST_INSERT_ID
 %token <str> NEXT VALUE SHARE MODE
-%token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
+%token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS SQL_SMALL_RESULT SQL_BIG_RESULT HIGH_PRIORITY
 %left <str> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <str> ON USING INPLACE COPY INSTANT ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
-%nonassoc <str> STRING
+%nonassoc <str> STRING SQL_BUFFER_RESULT
 %token <str> ID AT_ID AT_AT_ID HEX NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
 %token <str> VALUE_ARG LIST_ARG OFFSET_ARG
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
@@ -330,6 +336,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
 %token <str> CONSISTENT SNAPSHOT
+%token <str> UNRESOLVED TRANSACTIONS
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -340,6 +347,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON JSON_SCHEMA_VALID JSON_SCHEMA_VALIDATION_REPORT ENUM
 %token <str> GEOMETRY POINT LINESTRING POLYGON GEOMCOLLECTION GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 %token <str> ASCII UNICODE // used in CONVERT/CAST types
+
+%nonassoc <str> VECTOR
 
 // Type Modifiers
 %token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
@@ -545,7 +554,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
-%type <empty> to_opt
+%type <empty> to_opt for_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
@@ -746,7 +755,7 @@ with_list:
 common_table_expr:
   table_id column_list_opt AS subquery
   {
-    $$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4}
+    $$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4.Select}
   }
 
 query_expression_parens:
@@ -2172,6 +2181,10 @@ char_type:
   {
     $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
+| VECTOR length_opt
+  {
+    $$ = &ColumnType{Type: string($1), Length: $2}
+  }
 // need set_values / SetValues ?
 | SET '(' enum_values ')' charset_opt
   {
@@ -3302,6 +3315,12 @@ alter_statement:
       UUID: string($4),
     }
   }
+| ALTER comment_opt VITESS_MIGRATION CLEANUP ALL
+  {
+    $$ = &AlterMigration{
+      Type: CleanupAllMigrationType,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING LAUNCH
   {
     $$ = &AlterMigration{
@@ -4218,6 +4237,23 @@ show_statement:
   {
     $$ = &Show{&ShowOther{Command: string($2)}}
   }
+| SHOW TRANSACTION STATUS for_opt STRING
+  {
+    $$ = &Show{&ShowTransactionStatus{TransactionID: string($5)}}
+  }
+| SHOW UNRESOLVED TRANSACTIONS
+  {
+    $$ = &Show{&ShowTransactionStatus{}}
+  }
+| SHOW UNRESOLVED TRANSACTIONS FOR table_id
+  {
+    $$ = &Show{&ShowTransactionStatus{Keyspace: $5.String()}}
+  }
+
+for_opt:
+  {}
+| FOR
+  {}
 
 extended_opt:
   /* empty */
@@ -4795,10 +4831,10 @@ deallocate_statement:
   }
 
 select_options_opt:
-  {
+  %prec SELECT_OPTIONS {
     $$ = nil
   }
-| select_options
+| select_options %prec SELECT_OPTIONS
   {
     $$ = $1
   }
@@ -4830,9 +4866,25 @@ select_option:
   {
     $$ = DistinctStr
   }
+| HIGH_PRIORITY
+  {
+    $$ = HighPriorityStr
+  }
 | STRAIGHT_JOIN
   {
     $$ = StraightJoinHint
+  }
+| SQL_BUFFER_RESULT
+  {
+    $$ = SQLBufferResultStr
+  }
+| SQL_SMALL_RESULT
+  {
+    $$ = SQLSmallResultStr
+  }
+| SQL_BIG_RESULT
+  {
+    $$ = SQLBigResultStr
   }
 | SQL_CALC_FOUND_ROWS
   {
@@ -8083,6 +8135,7 @@ reserved_keyword:
 | GROUPING
 | GROUPS
 | HAVING
+| HIGH_PRIORITY
 | IF
 | IGNORE
 | IN
@@ -8151,6 +8204,8 @@ reserved_keyword:
 | SET
 | SHOW
 | SPATIAL
+| SQL_BIG_RESULT
+| SQL_SMALL_RESULT
 | STORED
 | STRAIGHT_JOIN
 | SYSDATE
@@ -8497,6 +8552,7 @@ non_reserved_keyword:
 | SNAPSHOT
 | SOME %prec ANY_SOME
 | SQL
+| SQL_BUFFER_RESULT
 | SQL_TSI_DAY
 | SQL_TSI_HOUR
 | SQL_TSI_MINUTE
@@ -8587,6 +8643,7 @@ non_reserved_keyword:
 | TINYTEXT
 | TRADITIONAL
 | TRANSACTION
+| TRANSACTIONS
 | TREE
 | TRIGGER
 | TRIGGERS
@@ -8597,6 +8654,7 @@ non_reserved_keyword:
 | UNDEFINED
 | UNICODE
 | UNKNOWN
+| UNRESOLVED
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED
@@ -8612,6 +8670,7 @@ non_reserved_keyword:
 | VARIABLES
 | VARIANCE %prec FUNCTION_CALL_NON_KEYWORD
 | VCPU
+| VECTOR
 | VEXPLAIN
 | VGTID_EXECUTED
 | VIEW

@@ -657,6 +657,7 @@ message VDiffReportOptions {
   bool debug_query = 2;
   string format = 3;
   int64 max_sample_rows = 4;
+  int64 row_diff_column_truncate_at = 5;
 }
 
 message VDiffCoreOptions {
@@ -736,6 +737,14 @@ message CheckThrottlerRequest {
   bool multi_metrics_enabled = 5;
 }
 
+enum CheckThrottlerResponseCode {
+  UNDEFINED = 0;
+  OK = 1;
+  THRESHOLD_EXCEEDED = 2;
+  APP_DENIED = 3;
+  UNKNOWN_METRIC = 4;
+  INTERNAL_ERROR = 5;
+}
 
 message CheckThrottlerResponse {
   // StatusCode is HTTP compliant response code (e.g. 200 for OK)
@@ -767,10 +776,21 @@ message CheckThrottlerResponse {
     string message = 6;
     // Scope used in this check
     string scope = 7;
+    // ResponseCode is the enum representation of the response
+    CheckThrottlerResponseCode response_code = 8;
   }
   // Metrics is a map (metric name -> metric value/error) so that the client has as much
   // information as possible about all the checked metrics.
   map<string, Metric> metrics = 7;
+
+  // AppName is the name of app that was matched by the throttler
+  string app_name = 8;
+
+  // Summary is a human readable analysis of the result
+  string summary = 9;
+
+  // ResponseCode is the enum representation of the response
+  CheckThrottlerResponseCode response_code = 10;
 }
 
 message GetThrottlerStatusRequest {
@@ -829,6 +849,8 @@ message GetThrottlerStatusResponse {
   message RecentApp {
     vttime.Time checked_at = 1;
     int32 status_code = 2;
+    // ResponseCode is the enum representation of the response
+    CheckThrottlerResponseCode response_code = 3;
   }
   // RecentApps is a map of app names to their recent check status
   map<string, RecentApp> recent_apps = 18;

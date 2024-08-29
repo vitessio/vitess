@@ -208,7 +208,7 @@ func NewExecutor(
 			return e.plans.Metrics.Hits()
 		})
 		stats.NewCounterFunc("QueryPlanCacheMisses", "Query plan cache misses", func() int64 {
-			return e.plans.Metrics.Hits()
+			return e.plans.Metrics.Misses()
 		})
 		servenv.HTTPHandle(pathQueryPlans, e)
 		servenv.HTTPHandle(pathScatterStats, e)
@@ -1617,6 +1617,14 @@ func (e *Executor) Close() {
 
 func (e *Executor) environment() *vtenv.Environment {
 	return e.env
+}
+
+func (e *Executor) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	return e.txConn.ReadTransaction(ctx, transactionID)
+}
+
+func (e *Executor) UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	return e.txConn.UnresolvedTransactions(ctx, targets)
 }
 
 type (

@@ -721,6 +721,117 @@
     }
   },
   {
+    "comment": "Complex query that has hash left join underneath a memory sort and ordered aggregation",
+    "query": "select 1 from user join user_extra on user.id = user_extra.user_id join music on music.intcol = user_extra.col left join (select user_metadata.col, count(*) as count from user_metadata group by user_metadata.col) um on um.col = user_extra.col where user.id IN (103) group by user_extra.col, music.intcol",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user join user_extra on user.id = user_extra.user_id join music on music.intcol = user_extra.col left join (select user_metadata.col, count(*) as count from user_metadata group by user_metadata.col) um on um.col = user_extra.col where user.id IN (103) group by user_extra.col, music.intcol",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "any_value(0) AS 1",
+        "GroupBy": "1, 4",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 ASC, 4 ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "HashLeftJoin",
+                "Collation": "binary",
+                "ComparisonType": "FLOAT64",
+                "JoinColumnIndexes": "-1,-2,1,-2,-4,-1",
+                "Predicate": "user_extra.col = um.col",
+                "TableName": "music_`user`, user_extra_user_metadata",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0,R:0,L:1",
+                    "JoinVars": {
+                      "music_intcol": 1
+                    },
+                    "TableName": "music_`user`, user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1, music.intcol from music where 1 != 1 group by music.intcol",
+                        "Query": "select 1, music.intcol from music group by music.intcol",
+                        "Table": "music"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select user_extra.col, user_extra.col from `user`, user_extra where 1 != 1 group by user_extra.col",
+                        "Query": "select user_extra.col, user_extra.col from `user`, user_extra where `user`.id in (103) and user_extra.col = :music_intcol /* INT16 */ and `user`.id = user_extra.user_id group by user_extra.col",
+                        "Table": "`user`, user_extra",
+                        "Values": [
+                          "103"
+                        ],
+                        "Vindex": "user_index"
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "GroupBy": "(0|1)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "SimpleProjection",
+                        "Columns": "0,2",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Aggregate",
+                            "Variant": "Ordered",
+                            "Aggregates": "sum_count_star(1) AS count",
+                            "GroupBy": "(0|2)",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select user_metadata.col, count(*) as `count`, weight_string(user_metadata.col) from user_metadata where 1 != 1 group by user_metadata.col, weight_string(user_metadata.col)",
+                                "OrderBy": "(0|2) ASC",
+                                "Query": "select user_metadata.col, count(*) as `count`, weight_string(user_metadata.col) from user_metadata group by user_metadata.col, weight_string(user_metadata.col) order by user_metadata.col asc",
+                                "Table": "user_metadata"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra",
+        "user.user_metadata"
+      ]
+    }
+  },
+  {
     "comment": "Straight-join (ignores the straight_join hint)",
     "query": "select m1.col from unsharded as m1 straight_join unsharded as m2",
     "plan": {
@@ -781,6 +892,59 @@
       "TablesUsed": [
         "main.unsharded",
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Outer join with join predicates that only depend on the inner side",
+    "query": "select 1 from user left join user_extra on user.foo = 42 and user.bar = user_extra.bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user left join user_extra on user.foo = 42 and user.bar = user_extra.bar",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "1 as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinVars": {
+              "user_bar": 1,
+              "user_foo": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.foo, `user`.bar from `user` where 1 != 1",
+                "Query": "select `user`.foo, `user`.bar from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_extra.bar = :user_bar and :user_foo = 42",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
       ]
     }
   },
@@ -1743,6 +1907,47 @@
     }
   },
   {
+    "comment": "Unneeded ORDER BY inside derived table removed",
+    "query": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt1.id from (select id from `user` where 1 != 1) as dt1 where 1 != 1",
+            "Query": "select dt1.id from (select id from `user`) as dt1",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt2.id from (select id from `user` where 1 != 1) as dt2 where 1 != 1",
+            "Query": "select dt2.id from (select id from `user`) as dt2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "join of information_schema with normal table",
     "query": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
     "plan": {
@@ -1780,6 +1985,30 @@
       },
       "TablesUsed": [
         "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "three table join with join predicate touching all tables",
+    "query": "select 42 from user u join user_extra ue on u.id = ue.user_id join music m on m.user_id = u.id where u.foo or m.foo or ue.foo",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 42 from user u join user_extra ue on u.id = ue.user_id join music m on m.user_id = u.id where u.foo or m.foo or ue.foo",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 42 from `user` as u, user_extra as ue, music as m where 1 != 1",
+        "Query": "select 42 from `user` as u, user_extra as ue, music as m where u.id = ue.user_id and m.user_id = u.id and (u.foo or m.foo or ue.foo)",
+        "Table": "`user`, music, user_extra"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
       ]
     }
   },
@@ -4363,20 +4592,21 @@
         "Aggregates": "count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": "1",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Distinct",
                 "Collations": [
-                  "(0:2)",
-                  "1"
+                  "(0:1)"
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:0,L:1,R:1",
+                    "JoinColumnIndexes": "R:0,R:1",
                     "JoinVars": {
                       "m_id": 0
                     },
@@ -4389,8 +4619,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select subquery_for_count.`m.id`, 1 from (select m.id as `m.id` from music as m where 1 != 1) as subquery_for_count where 1 != 1",
-                        "Query": "select distinct subquery_for_count.`m.id`, 1 from (select m.id as `m.id` from music as m) as subquery_for_count",
+                        "FieldQuery": "select subquery_for_count.`m.id` from (select m.id as `m.id` from music as m where 1 != 1) as subquery_for_count where 1 != 1",
+                        "Query": "select distinct subquery_for_count.`m.id` from (select m.id as `m.id` from music as m) as subquery_for_count",
                         "Table": "music"
                       },
                       {
@@ -4498,6 +4728,55 @@
       "TablesUsed": [
         "user.music",
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Cross keyspace join",
+    "query": "select 1 from user join t1 on user.id = t1.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user join t1 on user.id = t1.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "t1_id": 1
+        },
+        "TableName": "t1_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "zlookup_unique",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1, t1.id from t1 where 1 != 1",
+            "Query": "select 1, t1.id from t1",
+            "Table": "t1"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where `user`.id = :t1_id",
+            "Table": "`user`",
+            "Values": [
+              ":t1_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "zlookup_unique.t1"
       ]
     }
   },

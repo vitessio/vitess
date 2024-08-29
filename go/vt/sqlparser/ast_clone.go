@@ -461,6 +461,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowThrottledApps(in)
 	case *ShowThrottlerStatus:
 		return CloneRefOfShowThrottlerStatus(in)
+	case *ShowTransactionStatus:
+		return CloneRefOfShowTransactionStatus(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Std:
@@ -1020,7 +1022,7 @@ func CloneRefOfCommonTableExpr(n *CommonTableExpr) *CommonTableExpr {
 	out := *n
 	out.ID = CloneIdentifierCS(n.ID)
 	out.Columns = CloneColumns(n.Columns)
-	out.Subquery = CloneRefOfSubquery(n.Subquery)
+	out.Subquery = CloneSelectStatement(n.Subquery)
 	return &out
 }
 
@@ -2909,6 +2911,15 @@ func CloneRefOfShowThrottlerStatus(n *ShowThrottlerStatus) *ShowThrottlerStatus 
 	return &out
 }
 
+// CloneRefOfShowTransactionStatus creates a deep clone of the input.
+func CloneRefOfShowTransactionStatus(n *ShowTransactionStatus) *ShowTransactionStatus {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneRefOfStarExpr creates a deep clone of the input.
 func CloneRefOfStarExpr(n *StarExpr) *StarExpr {
 	if n == nil {
@@ -4147,6 +4158,8 @@ func CloneShowInternal(in ShowInternal) ShowInternal {
 		return CloneRefOfShowCreate(in)
 	case *ShowOther:
 		return CloneRefOfShowOther(in)
+	case *ShowTransactionStatus:
+		return CloneRefOfShowTransactionStatus(in)
 	default:
 		// this should never happen
 		return nil

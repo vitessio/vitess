@@ -42,7 +42,7 @@ type AggregateParams struct {
 	WCol   int
 	Type   evalengine.Type
 
-	Alias    string `json:",omitempty"`
+	Alias    string
 	Func     sqlparser.AggrFunc
 	Original *sqlparser.AliasedExpr
 
@@ -347,7 +347,8 @@ func isComparable(typ sqltypes.Type) bool {
 		sqltypes.Enum,
 		sqltypes.Set,
 		sqltypes.TypeJSON,
-		sqltypes.Bit:
+		sqltypes.Bit,
+		sqltypes.Vector:
 		return true
 	}
 	return false

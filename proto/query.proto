@@ -215,6 +215,9 @@ enum Type {
   // BITNUM specifies a base 2 binary type (unquoted varbinary).
   // Properties: 34, IsText.
   BITNUM = 4130;
+  // VECTOR specifies a VECTOR type
+  // Properties: 35, IsQuoted.
+  VECTOR = 2083;
 }
 
 // Value represents a typed value.
@@ -638,6 +641,18 @@ message ReadTransactionResponse {
   TransactionMetadata metadata = 1;
 }
 
+// UnresolvedTransactionsRequest is the payload to UnresolvedTransactions
+message UnresolvedTransactionsRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+}
+
+// UnresolvedTransactionsResponse is the returned value from UnresolvedTransactions
+message UnresolvedTransactionsResponse {
+  repeated TransactionMetadata transactions = 1;
+}
+
 // BeginExecuteRequest is the payload to BeginExecute
 message BeginExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -886,6 +901,8 @@ message RealtimeStats {
 
   // udfs_changed is used to signal that the UDFs have changed on the tablet.
   bool udfs_changed = 9;
+
+  bool tx_unresolved = 10;
 }
 
 // AggregateStats contains information about the health of a group of
@@ -974,8 +991,8 @@ message StreamHealthResponse {
 enum TransactionState {
   UNKNOWN = 0;
   PREPARE = 1;
-  COMMIT = 2;
-  ROLLBACK = 3;
+  ROLLBACK = 2;
+  COMMIT = 3;
 }
 
 // TransactionMetadata contains the metadata for a distributed transaction.

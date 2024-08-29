@@ -77,7 +77,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql80", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "34", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "35", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	retryMax         = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -98,6 +98,7 @@ var (
 	dryRun       = flag.Bool("dry-run", false, "For each test to be run, it will output the test attributes, but NOT run the tests. Useful while debugging changes to test.go (this file)")
 	remoteStats  = flag.String("remote-stats", "", "url to send remote stats")
 	buildVTAdmin = flag.Bool("build-vtadmin", false, "Enable or disable VTAdmin build during 'make build'")
+	buildTag     = flag.String("build-tag", "", "Build tag to create a custom debug build")
 )
 
 var (
@@ -111,7 +112,7 @@ const (
 	configFileName = "test/config.json"
 
 	// List of flavors for which a bootstrap Docker image is available.
-	flavors = "mysql57,mysql80,percona,percona57,percona80"
+	flavors = "mysql80,percona80"
 )
 
 // Config is the overall object serialized in test/config.json.
@@ -432,6 +433,9 @@ func main() {
 		command := exec.Command("make", "build")
 		if !*buildVTAdmin {
 			command.Env = append(os.Environ(), "NOVTADMINBUILD=1")
+		}
+		if *buildTag != "" {
+			command.Env = append(command.Env, fmt.Sprintf(`EXTRA_BUILD_TAGS=%s`, *buildTag))
 		}
 		if out, err := command.CombinedOutput(); err != nil {
 			log.Fatalf("make build failed; exit code: %d, error: %v\n%s",
