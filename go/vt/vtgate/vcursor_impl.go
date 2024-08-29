@@ -1433,7 +1433,7 @@ func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
-		resultsObserver:     vc.resultsObserver,
+		resultsObserver:     nullResultsObserver{},
 	}
 
 	v.marginComments.Trailing += "/* mirror query */"
