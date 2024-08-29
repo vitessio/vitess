@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -404,6 +405,16 @@ func tmRPCTestGetGlobalStatusVarsPanic(ctx context.Context, t *testing.T, client
 	expectHandleRPCPanic(t, "GetGlobalStatusVars", false /*verbose*/, err)
 }
 
+func tmRPCTestGetUnresolvedTransactions(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.GetUnresolvedTransactions(ctx, tablet)
+	require.NoError(t, err)
+}
+
+func tmRPCTestGetUnresolvedTransactionsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.GetUnresolvedTransactions(ctx, tablet)
+	expectHandleRPCPanic(t, "GetUnresolvedTransactions", false /*verbose*/, err)
+}
+
 //
 // Various read-write methods
 //
@@ -727,7 +738,10 @@ func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerd
 }
 
 func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error) {
-	panic("implement me")
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return nil, nil
 }
 
 func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -1428,6 +1442,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestGetSchema(ctx, t, client, tablet)
 	tmRPCTestGetPermissions(ctx, t, client, tablet)
 	tmRPCTestGetGlobalStatusVars(ctx, t, client, tablet)
+	tmRPCTestGetUnresolvedTransactions(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnly(ctx, t, client, tablet)
@@ -1489,6 +1504,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestGetSchemaPanic(ctx, t, client, tablet)
 	tmRPCTestGetPermissionsPanic(ctx, t, client, tablet)
 	tmRPCTestGetGlobalStatusVarsPanic(ctx, t, client, tablet)
+	tmRPCTestGetUnresolvedTransactionsPanic(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnlyPanic(ctx, t, client, tablet)
