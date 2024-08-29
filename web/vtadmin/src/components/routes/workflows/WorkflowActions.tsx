@@ -6,12 +6,13 @@ import WorkflowAction from './WorkflowAction';
 import { useStartWorkflow, useStopWorkflow } from '../../../hooks/api';
 
 interface WorkflowActionsProps {
+    refetchWorkflows: Function;
     keyspace: string;
     clusterID: string;
     name: string;
 }
 
-const WorkflowActions: React.FC<WorkflowActionsProps> = ({ keyspace, clusterID, name }) => {
+const WorkflowActions: React.FC<WorkflowActionsProps> = ({ refetchWorkflows, keyspace, clusterID, name }) => {
     const [currentDialog, setCurrentDialog] = useState<string>('');
     const closeDialog = () => setCurrentDialog('');
 
@@ -27,14 +28,14 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({ keyspace, clusterID, 
             </Dropdown>
             <WorkflowAction
                 title="Start Workflow"
-                description={`Starts a VReplication Workflow`}
                 confirmText="Start"
                 loadingText="Starting"
                 mutation={startWorkflowMutation}
                 successText="Started workflow"
-                errorText="Error starting workflow"
+                errorText={`Error occured while starting workflow ${name}`}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Start Workflow'}
+                refetchWorkflows={refetchWorkflows}
                 successBody={
                     <div className="text-sm">
                         {startWorkflowMutation.data && startWorkflowMutation.data.summary && (
@@ -42,22 +43,32 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({ keyspace, clusterID, 
                         )}
                     </div>
                 }
+                body={
+                    <div className="text-sm mt-3">
+                        Starts the <span className="font-mono bg-gray-300">{name}</span> workflow.
+                    </div>
+                }
             />
             <WorkflowAction
                 title="Stop Workflow"
-                description={`Stops a VReplication Workflow`}
                 confirmText="Stop"
-                loadingText="Stoping"
+                loadingText="Stopping"
                 mutation={stopWorkflowMutation}
-                successText="Stoped workflow"
-                errorText="Error stoping workflow"
+                successText="Stopped workflow"
+                errorText={`Error occured while stopping workflow ${name}`}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Stop Workflow'}
+                refetchWorkflows={refetchWorkflows}
                 successBody={
                     <div className="text-sm">
                         {stopWorkflowMutation.data && stopWorkflowMutation.data.summary && (
                             <div className="text-sm">{stopWorkflowMutation.data.summary}</div>
                         )}
+                    </div>
+                }
+                body={
+                    <div className="text-sm mt-3">
+                        Stops the <span className="font-mono bg-gray-300">{name}</span> workflow.
                     </div>
                 }
             />

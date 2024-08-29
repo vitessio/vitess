@@ -37,10 +37,12 @@ import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder
 import { UseQueryResult } from 'react-query';
 import { ReadOnlyGate } from '../ReadOnlyGate';
 import WorkflowActions from './workflows/WorkflowActions';
+import { isReadOnlyMode } from '../../util/env';
 
 export const ThrottleThresholdSeconds = 60;
 
 const COLUMNS = ['Workflow', 'Source', 'Target', 'Streams', 'Last Updated', 'Actions'];
+const READ_ONLY_COLUMNS = ['Workflow', 'Source', 'Target', 'Streams', 'Last Updated'];
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -188,6 +190,7 @@ export const Workflows = () => {
                     <ReadOnlyGate>
                         <DataCell>
                             <WorkflowActions
+                                refetchWorkflows={workflowsQuery.refetch}
                                 keyspace={row.keyspace as string}
                                 clusterID={row.clusterID as string}
                                 name={row.name as string}
@@ -212,7 +215,11 @@ export const Workflows = () => {
                     value={filter || ''}
                 />
 
-                <DataTable columns={COLUMNS} data={sortedData} renderRows={renderRows} />
+                <DataTable
+                    columns={isReadOnlyMode() ? READ_ONLY_COLUMNS : COLUMNS}
+                    data={sortedData}
+                    renderRows={renderRows}
+                />
 
                 <QueryLoadingPlaceholder query={workflowsQuery as UseQueryResult} />
             </ContentContainer>

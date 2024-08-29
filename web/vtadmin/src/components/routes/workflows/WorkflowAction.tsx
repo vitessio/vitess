@@ -14,6 +14,7 @@ interface WorkflowActionProps {
     description?: string;
     body?: JSX.Element;
     successBody?: JSX.Element;
+    refetchWorkflows: Function;
     closeDialog: () => void;
 }
 
@@ -28,6 +29,7 @@ const WorkflowAction: React.FC<WorkflowActionProps> = ({
     successBody,
     loadingText,
     errorText,
+    refetchWorkflows,
     body,
 }) => {
     const onCloseDialog = () => {
@@ -36,12 +38,22 @@ const WorkflowAction: React.FC<WorkflowActionProps> = ({
     };
 
     const hasRun = mutation.data || mutation.error;
+    const onConfirm = () => {
+        mutation.mutate(
+            {},
+            {
+                onSuccess: () => {
+                    refetchWorkflows();
+                },
+            }
+        );
+    };
     return (
         <Dialog
             isOpen={isOpen}
             confirmText={hasRun ? 'Close' : confirmText}
             cancelText="Cancel"
-            onConfirm={hasRun ? onCloseDialog : mutation.mutate}
+            onConfirm={hasRun ? onCloseDialog : onConfirm}
             loadingText={loadingText}
             loading={mutation.isLoading}
             onCancel={onCloseDialog}
