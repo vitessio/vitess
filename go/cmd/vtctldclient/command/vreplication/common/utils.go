@@ -157,8 +157,8 @@ func ParseConfigOverrides(overrides []string) (map[string]string, error) {
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("Invalid config override: %s\n", kv)
 		}
-		key := parts[0]
-		value := parts[1]
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
 
 		defaultConfig, err := vttablet.NewVReplicationConfig(nil)
 		if err != nil {

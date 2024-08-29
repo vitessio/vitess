@@ -134,7 +134,12 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 	batchMode := false
 	if vr.WorkflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
+		// temp log to debug dynamic flags, to be removed in v22
+		log.Infof("Dynamic Config Debug: VReplicationExperimentalFlagVPlayerBatching is set, enabling batch mode for vplayer")
 		batchMode = true
+	} else {
+		// temp log to debug dynamic flags, to be removed in v22
+		log.Infof("Dynamic Config Debug: VReplicationExperimentalFlagVPlayerBatching is not set, disabling batch mode for vplayer")
 	}
 	if batchMode {
 		// relayLogMaxSize is effectively the limit used when not batching.

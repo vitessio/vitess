@@ -332,7 +332,7 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--format=json",
-		"--config-overrides", "vreplication_copy_phase_duration=10h,vreplication_experimental_flags=7,vreplication-parallel-insert-workers=4",
+		"--config-overrides", "vreplication_copy_phase_duration=10h,vreplication_experimental_flags=7,vreplication-parallel-insert-workers=4, vreplication_net_read_timeout=6000, relay_log_max_items=10000",
 	}
 	rs := newReshard(vc, &reshardWorkflow{
 		workflowInfo: &workflowInfo{

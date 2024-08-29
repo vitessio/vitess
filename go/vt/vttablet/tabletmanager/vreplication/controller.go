@@ -219,6 +219,8 @@ func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttable
 	if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
 		return err
 	}
+	// temp log to debug dynamic flags, to be removed in v22
+	log.Infof("Dynamic Config Debug: Net read timeout: %v, Net write timeout: %v", workflowConfig.NetReadTimeout, workflowConfig.NetWriteTimeout)
 	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", workflowConfig.NetReadTimeout), 10000); err != nil {
 		return err
 	}
