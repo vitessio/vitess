@@ -141,21 +141,27 @@ const (
 	SubsequentDiffStrategyReject
 )
 
+const (
+	NonDeterministicDefaultAllow int = iota
+	NonDeterministicDefaultReject
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
-	StrictIndexOrdering         bool
-	AutoIncrementStrategy       int
-	RangeRotationStrategy       int
-	ConstraintNamesStrategy     int
-	ColumnRenameStrategy        int
-	TableRenameStrategy         int
-	FullTextKeyStrategy         int
-	TableCharsetCollateStrategy int
-	TableQualifierHint          int
-	AlterTableAlgorithmStrategy int
-	EnumReorderStrategy         int
-	ForeignKeyCheckStrategy     int
-	SubsequentDiffStrategy      int
+	StrictIndexOrdering             bool
+	AutoIncrementStrategy           int
+	RangeRotationStrategy           int
+	ConstraintNamesStrategy         int
+	ColumnRenameStrategy            int
+	TableRenameStrategy             int
+	FullTextKeyStrategy             int
+	TableCharsetCollateStrategy     int
+	TableQualifierHint              int
+	AlterTableAlgorithmStrategy     int
+	EnumReorderStrategy             int
+	ForeignKeyCheckStrategy         int
+	SubsequentDiffStrategy          int
+	NonDeterministicDefaultStrategy int
 }
 
 func EmptyDiffHints() *DiffHints {

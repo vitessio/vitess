@@ -1731,6 +1731,40 @@ func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.Colu
 	return minimalColumnReordering
 }
 
+// This function looks for a non-deterministic function call in the given expression.
+// If recurses into all function arguments.
+// The known non-deterministic function we handle are:
+// - UUID()
+// - RAND()
+// - SYSDATE()
+func findNoNondeterministicFunction(expr sqlparser.Expr) (foundFunction string) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.CurTimeFuncExpr:
+			switch node.Name.Lowered() {
+			case "sysdate":
+				foundFunction = node.Name.String()
+				return false, nil
+			}
+		case *sqlparser.FuncExpr:
+			switch node.Name.Lowered() {
+			case "uuid", "rand":
+				foundFunction = node.Name.String()
+				return false, nil
+			default:
+				// recurse into function argument expressions
+				for _, exprArg := range node.Exprs {
+					if foundFunction = findNoNondeterministicFunction(exprArg); foundFunction != "" {
+						return false, nil
+					}
+				}
+			}
+		}
+		return true, nil
+	}, expr)
+	return foundFunction
+}
+
 // Diff compares this table statement with another table statement, and sees what it takes to
 // change this table to look like the other table.
 // It returns an AlterTable statement if changes are found, or nil if not.
@@ -1851,6 +1885,17 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			// column exists in t2 but not in t1, hence it is added
 			addColumn := &sqlparser.AddColumns{
 				Columns: []*sqlparser.ColumnDefinition{t2Col},
+			}
+			if hints.NonDeterministicDefaultStrategy == NonDeterministicDefaultReject {
+				if t2Col.Type.Options.Default != nil && !t2Col.Type.Options.DefaultLiteral {
+					if function := findNoNondeterministicFunction(t2Col.Type.Options.Default); function != "" {
+						return &NonDeterministicDefaultError{
+							Table:    c.Name(),
+							Column:   t2Col.Name.String(),
+							Function: function,
+						}
+					}
+				}
 			}
 			if t2ColIndex < expectAppendIndex {
 				// This column is added somewhere in between existing columns, not appended at end of column list

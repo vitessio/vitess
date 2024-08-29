@@ -487,3 +487,13 @@ type PartitionSpecNonExclusiveError struct {
 func (e *PartitionSpecNonExclusiveError) Error() string {
 	return fmt.Sprintf("ALTER TABLE on %s, may only have a single partition spec change, and other changes are not allowed. Found spec: %s; and change: %s", sqlescape.EscapeID(e.Table), sqlparser.CanonicalString(e.PartitionSpec), e.ConflictingStatement)
 }
+
+type NonDeterministicDefaultError struct {
+	Table    string
+	Column   string
+	Function string
+}
+
+func (e *NonDeterministicDefaultError) Error() string {
+	return fmt.Sprintf("column %s.%s default value uses non-deterministic function: %v", sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column), e.Function)
+}
