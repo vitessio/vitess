@@ -215,6 +215,14 @@ enum Type {
   // BITNUM specifies a base 2 binary type (unquoted varbinary).
   // Properties: 34, IsText.
   BITNUM = 4130;
+<<<<<<< HEAD
+=======
+  // VECTOR specifies a VECTOR type
+  // Properties: 35, IsQuoted.
+  VECTOR = 2083;
+  // RAW specifies a type which won't be quoted but the value used as-is while encoding.
+  RAW = 2084;
+>>>>>>> e89f684b09 (JSON Encoding: Use Type_RAW for marshalling json (#16637))
 }
 
 // Value represents a typed value.
