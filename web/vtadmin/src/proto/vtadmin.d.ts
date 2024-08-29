@@ -33002,7 +33002,13 @@ export namespace query {
         EXPRESSION = 31,
         HEXNUM = 4128,
         HEXVAL = 4129,
+<<<<<<< HEAD
         BITNUM = 4130
+=======
+        BITNUM = 4130,
+        VECTOR = 2083,
+        RAW = 2084
+>>>>>>> e89f684b09 (JSON Encoding: Use Type_RAW for marshalling json (#16637))
     }
 
     /** Properties of a Value. */

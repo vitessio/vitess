@@ -173,9 +173,14 @@ func MarshalSQLValue(buf []byte) (*sqltypes.Value, error) {
 	if err != nil {
 		return nil, err
 	}
+<<<<<<< HEAD
 	newVal := sqltypes.MakeTrusted(querypb.Type_JSON, jsonVal.MarshalSQLTo(nil))
 	if err != nil {
 		return nil, err
 	}
+=======
+
+	newVal := sqltypes.MakeTrusted(querypb.Type_RAW, jsonVal.MarshalSQLTo(nil))
+>>>>>>> e89f684b09 (JSON Encoding: Use Type_RAW for marshalling json (#16637))
 	return &newVal, nil
 }
