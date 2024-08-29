@@ -77,6 +77,11 @@ func TestDisruptions(t *testing.T) {
 			disruption:      onlineDDL,
 		},
 		{
+			disruptionName:  "MoveTables",
+			commitDelayTime: "20",
+			disruption:      moveTables,
+		},
+		{
 			disruptionName:  "EmergencyReparentShard",
 			commitDelayTime: "5",
 			disruption:      ersShard3,
@@ -239,6 +244,29 @@ func mysqlRestartShard3(t *testing.T) error {
 	return syscallutil.Kill(pid, syscall.SIGKILL)
 }
 
+// moveTables runs a move tables command.
+func moveTables(t *testing.T) error {
+	workflow := "TestDisruptions"
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1")
+	// Initiate MoveTables for twopc_t1.
+	_, err := mtw.Create()
+	require.NoError(t, err)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup()
+	// SwitchTraffic
+	_, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err)
+	// Wait for a couple of seconds and then switch the traffic back
+	time.Sleep(2 * time.Second)
+	_, err = mtw.ReverseReadsAndWrites()
+	require.NoError(t, err)
+	// Wait another couple of seconds and then cancel the workflow
+	time.Sleep(2 * time.Second)
+	_, err = mtw.Cancel()
+	require.NoError(t, err)
+	return nil
+}
+
 var orderedDDL = []string{
 	"alter table twopc_t1 add column extra_col1 varchar(20)",
 	"alter table twopc_t1 add column extra_col2 varchar(20)",
@@ -256,13 +284,13 @@ func onlineDDL(t *testing.T) error {
 	require.NoError(t, err)
 	count++
 	fmt.Println("uuid: ", output)
-	status := WaitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	status := waitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 	onlineddl.CheckMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), status)
 	require.Equal(t, schema.OnlineDDLStatusComplete, status)
 	return nil
 }
 
-func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
 	shardNames := map[string]bool{}
 	for _, shard := range shards {
 		shardNames[shard.Name] = true

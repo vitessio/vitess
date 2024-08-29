@@ -443,7 +443,7 @@ func onlineDDLFuzzer(t *testing.T) {
 		return
 	}
 	fmt.Println("Running online DDL with uuid: ", output)
-	WaitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	waitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 }
 
 func mysqlRestarts(t *testing.T) {
