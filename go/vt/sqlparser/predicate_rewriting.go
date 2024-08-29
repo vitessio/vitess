@@ -163,7 +163,7 @@ func simplifyOredAnds(or *OrExpr, lhs, rhs *AndExpr) (Expr, bool) {
 			fmt.Println(prefix, "(A and B and C) or (A and B and D) => (A and B) and (C or D)")
 		}
 
-		return AndExpressions(commonPred, createOrs(AndExpressions(rightRemainder...), AndExpressions(leftRemainder...))), true
+		return AndExpressions(commonPred, createOrs(AndExpressions(leftRemainder...), AndExpressions(rightRemainder...))), true
 	}
 }
 
@@ -211,25 +211,28 @@ func simplifyOr(or *OrExpr) (Expr, bool) {
 	land, lok := or.Left.(*AndExpr)
 	rand, rok := or.Right.(*AndExpr)
 
-	switch {
-	case lok && rok:
-		return simplifyOredAnds(or, land, rand)
-	case !lok && !rok:
-		return simplifyOrToIn(or)
-	default:
-		// if we get here, one side is an AND
-		var and *AndExpr
-		var other Expr
-		if lok {
-			and = land
-			other = or.Right
-		} else {
-			and = rand
-			other = or.Left
+	if lok && rok {
+		res, success := simplifyOredAnds(or, land, rand)
+		if success {
+			return res, true
 		}
-
-		return simplifyOrWithAnAND(and, other, lok)
 	}
+
+	if !lok && !rok {
+		return simplifyOrToIn(or)
+	}
+
+	var and *AndExpr
+	var other Expr
+	if lok {
+		and = land
+		other = or.Right
+	} else {
+		and = rand
+		other = or.Left
+	}
+
+	return simplifyOrWithAnAND(and, other, lok)
 }
 
 func simplifyOrToIn(or *OrExpr) (Expr, bool) {
