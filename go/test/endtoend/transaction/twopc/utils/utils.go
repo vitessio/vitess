@@ -61,9 +61,9 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 			return
 		}
 		_, err = conn.ExecuteFetch(fmt.Sprintf("DELETE FROM %v LIMIT 10000", tableName), 10000, false)
+		conn.Close()
 		if err != nil {
 			fmt.Printf("Error in cleanup deletion - %v\n", err)
-			conn.Close()
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}

@@ -26,8 +26,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const foreignKeyConstraintValues = "fkc_vals"
-const foreignKeyUpdateExpr = "fkc_upd"
+const (
+	foreignKeyConstraintValues = "fkc_vals"
+	foreignKeyUpdateExpr       = "fkc_upd"
+)
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) Operator {
@@ -45,6 +47,19 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 	default:
 		panic(vterrors.VT12001(fmt.Sprintf("operator: %T", selStmt)))
 	}
+}
+
+func translateQueryToOpWithMirroring(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) Operator {
+	op := translateQueryToOp(ctx, stmt)
+
+	if selStmt, ok := stmt.(sqlparser.SelectStatement); ok {
+		if mi := ctx.SemTable.GetMirrorInfo(); mi.Percent > 0 {
+			mirrorOp := translateQueryToOp(ctx.UseMirror(), selStmt)
+			op = NewPercentBasedMirror(mi.Percent, op, mirrorOp)
+		}
+	}
+
+	return op
 }
 
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {
@@ -275,6 +290,20 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 
 			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
+			if ctx.IsMirrored() {
+				if mr := tableInfo.GetMirrorRule(); mr != nil {
+					newTbl := sqlparser.Clone(tbl)
+					newTbl.Qualifier = sqlparser.NewIdentifierCS(mr.Table.Keyspace.Name)
+					newTbl.Name = mr.Table.Name
+					if newTbl.Name.String() != tbl.Name.String() {
+						tableExpr = sqlparser.Clone(tableExpr)
+						tableExpr.As = tbl.Name
+					}
+					tbl = newTbl
+				} else {
+					panic(vterrors.VT13001(fmt.Sprintf("unable to find mirror rule for table: %T", tbl)))
+				}
+			}
 			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
 			qg.Tables = append(qg.Tables, qt)
 			return qg

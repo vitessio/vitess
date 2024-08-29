@@ -29,6 +29,22 @@
           "name": "xxhash"
         }
       ]
+    },
+    "mirror_tbl1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "mirror_tbl2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
     }
   }
 }

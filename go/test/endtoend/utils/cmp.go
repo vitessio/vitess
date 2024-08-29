@@ -138,7 +138,7 @@ func (mcmp *MySQLCompare) AssertContainsError(query, expected string) {
 	mcmp.t.Helper()
 	_, err := mcmp.ExecAllowAndCompareError(query, CompareOptions{})
 	require.Error(mcmp.t, err)
-	assert.Contains(mcmp.t, err.Error(), expected, "actual error: %s", err.Error())
+	assert.ErrorContains(mcmp.t, err, expected, "actual error: %s", err.Error())
 }
 
 // AssertMatchesNoOrder executes the given query against both Vitess and MySQL.

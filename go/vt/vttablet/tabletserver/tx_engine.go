@@ -122,7 +122,7 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	// perform metadata state change operations. Without this,
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
-	te.preparedPool = NewTxPreparedPool(config.TxPool.Size - 2)
+	te.preparedPool = NewTxPreparedPool(config.TxPool.Size-2, te.twopcEnabled)
 	readPool := connpool.NewPool(env, "TxReadPool", tabletenv.ConnPoolConfig{
 		Size:        3,
 		IdleTimeout: env.Config().TxPool.IdleTimeout,
@@ -434,7 +434,7 @@ outer:
 			continue
 		}
 		for _, stmt := range preparedTx.Queries {
-			conn.TxProperties().RecordQuery(stmt)
+			conn.TxProperties().RecordQuery(stmt, te.env.Environment().Parser())
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))

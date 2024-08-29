@@ -35,3 +35,10 @@ insert into auto_seq(id, next_id, cache)
 values (0, 666, 1000);
 insert into mixed_seq(id, next_id, cache)
 values (0, 1, 1000);
+
+create table j_utbl
+(
+    id  bigint,
+    jdoc json,
+    primary key (id)
+) Engine = InnoDB;
