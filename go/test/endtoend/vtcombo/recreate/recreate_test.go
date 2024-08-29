@@ -120,8 +120,9 @@ func TestDropAndRecreateWithSameShards(t *testing.T) {
 	require.Nil(t, err)
 
 	// Assert that we're not leaking mysql connections, but allow for some wiggle room due to transient connections
-	assert.InDelta(t, mysqlConnCountBefore, mysqlConnCountAfter, 5,
-		"not within allowable delta: mysqlConnCountBefore=%d, mysqlConnCountAfter=%d", mysqlConnCountBefore, mysqlConnCountAfter)
+	delta := mysqlConnCountAfter - mysqlConnCountBefore
+	assert.LessOrEqual(t, delta, 5,
+		"mysqlConnCountBefore=%d, mysqlConnCountAfter=%d, delta=%d", mysqlConnCountBefore, mysqlConnCountAfter, delta)
 }
 
 func getMySQLConnectionCount(ctx context.Context, session *vtgateconn.VTGateSession) (int, error) {
