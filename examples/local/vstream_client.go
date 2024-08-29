@@ -23,13 +23,13 @@ import (
 	"log"
 	"time"
 
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 /*
@@ -73,15 +73,18 @@ func main() {
 	}
 	defer conn.Close()
 	flags := &vtgatepb.VStreamFlags{
-		//MinimizeSkew:      false,
-		//HeartbeatInterval: 60, //seconds
+		// MinimizeSkew:      false,
+		// HeartbeatInterval: 60, //seconds
+		// StopOnReshard: true,
 	}
 	reader, err := conn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+	if err != nil {
+		log.Fatal(err)
+	}
 	for {
 		e, err := reader.Recv()
 		switch err {
 		case nil:
-			_ = e
 			fmt.Printf("%v\n", e)
 		case io.EOF:
 			fmt.Printf("stream ended\n")
