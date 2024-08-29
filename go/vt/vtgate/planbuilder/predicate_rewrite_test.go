@@ -86,15 +86,21 @@ func (tc testCase) createPredicate(lvl int) sqlparser.Expr {
 
 func TestOneRewriting(t *testing.T) {
 	venv := vtenv.NewTestEnv()
+	sqlparser.DebugRewrite = true
 
 	// Modify these
 	const numberOfColumns = 2
-	const expr = "n1 and n0 or n1 xor n1"
+	const expr = "not (n1 xor n0 or n1)"
 
 	predicate, err := sqlparser.NewTestParser().ParseExpr(expr)
 	require.NoError(t, err)
 
-	simplified := sqlparser.RewritePredicate(predicate)
+	var steps []sqlparser.SQLNode
+
+	simplified := sqlparser.RewritePredicateInternal(predicate, func(n sqlparser.SQLNode) {
+		steps = append(steps, n)
+	})
+	fmt.Println(sqlparser.String(simplified))
 
 	cfg := &evalengine.Config{
 		Environment:   venv,
@@ -103,16 +109,23 @@ func TestOneRewriting(t *testing.T) {
 	}
 	original, err := evalengine.Translate(predicate, cfg)
 	require.NoError(t, err)
-	simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), cfg)
-	require.NoError(t, err)
 
-	env := evalengine.EmptyExpressionEnv(venv)
-	env.Row = make([]sqltypes.Value, numberOfColumns)
-	for i := range env.Row {
-		env.Row[i] = sqltypes.NULL
+	for _, step := range steps {
+		name := sqlparser.String(step)
+		t.Run(name, func(t *testing.T) {
+			simpler, err := evalengine.Translate(step.(sqlparser.Expr), cfg)
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = make([]sqltypes.Value, numberOfColumns)
+			for i := range env.Row {
+				env.Row[i] = sqltypes.NULL
+			}
+
+			testValues(t, env, 0, original, simpler)
+		})
 	}
 
-	testValues(t, env, 0, original, simpler)
 }
 
 func TestFuzzRewriting(t *testing.T) {
@@ -125,7 +138,7 @@ func TestFuzzRewriting(t *testing.T) {
 	start := time.Now()
 	for time.Since(start) < 1*time.Second {
 		tc := testCase{
-			nodes: 2,
+			nodes: rand.IntN(4) + 1,
 			depth: rand.IntN(4) + 1,
 		}
 
