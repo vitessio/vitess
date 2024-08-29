@@ -322,7 +322,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	}
 	if tc.testCLIFlagHandling {
 		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
-		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
+		// This creates and then deletes the vdiff so we don't increment the count.
 	}
 
 	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
@@ -432,6 +432,11 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		err = protojson.Unmarshal(bytes, storedOptions)
 		require.NoError(t, err, "failed to unmarshal result %s to a %T: %v", string(bytes), storedOptions, err)
 		require.True(t, proto.Equal(expectedOptions, storedOptions), "stored options %v != expected options %v", storedOptions, expectedOptions)
+
+		// Delete this vdiff as we used --do-not-start and thus it never starts and
+		// does not provide the normally expected show --verbose --format=json output.
+		_, output := performVDiff2Action(t, false, fmt.Sprintf("%s.%s", targetKs, workflowName), "", "delete", vduuid.String(), false)
+		require.Equal(t, "completed", gjson.Get(output, "Status").String())
 	})
 }
 
