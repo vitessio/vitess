@@ -118,6 +118,13 @@ type keyspaceState struct {
 	moveTablesState *MoveTablesState
 }
 
+// isConsistent returns whether the keyspace is currently consistent or not.
+func (kss *keyspaceState) isConsistent() bool {
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	return kss.consistent
+}
+
 // Format prints the internal state for this keyspace for debug purposes.
 func (kss *keyspaceState) Format(f fmt.State, verb rune) {
 	kss.mu.Lock()
@@ -752,7 +759,7 @@ func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context,
 			kss := kew.getKeyspaceStatus(ctx, ks)
 			// If kss is nil, then it must be deleted. In that case too it is fine for us to consider
 			// it consistent since the keyspace has been deleted.
-			if kss == nil || kss.consistent {
+			if kss == nil || kss.isConsistent() {
 				keyspaces[i] = ""
 			} else {
 				allConsistent = false
