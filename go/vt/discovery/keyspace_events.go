@@ -706,7 +706,7 @@ func (kew *KeyspaceEventWatcher) ShouldStartBufferingForTarget(ctx context.Conte
 		// As described in the function comment, we only want to start buffering when all the following conditions are met -
 		// 1. The shard must have a primary. We check this by checking the currentPrimary and externallyReparented fields being non-empty.
 		//    They are set the first time the shard registers an update from a serving primary and are never cleared out after that.
-		//    If the user has configred vtgates to wait for the primary tablet healthchecks before starting query service, this condition
+		//    If the user has configured vtgates to wait for the primary tablet healthchecks before starting query service, this condition
 		//    will always be true.
 		// 2. The primary must be non-serving. We check this by checking the serving field in the shard state.
 		// 	  When a primary becomes non-serving, it also marks the keyspace inconsistent. So the next check is only added
