@@ -83,6 +83,8 @@ type RPCTM interface {
 
 	ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error)
 
+	GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error)
+
 	// Replication related methods
 	PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 

@@ -233,6 +233,11 @@ func (tqsc *Controller) RedoPreparedTransactions() {}
 func (tqsc *Controller) SetTwoPCAllowed(bool) {
 }
 
+// UnresolvedTransactions is part of the tabletserver.Controller interface
+func (tqsc *Controller) UnresolvedTransactions(context.Context, *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	return nil, nil
+}
+
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
 	tqsc.mu.Lock()
