@@ -207,8 +207,7 @@ func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error
 		}
 	}
 	if len(errors) > 0 {
-
-		return c, fmt.Errorf(strings.Join(errors, ", "))
+		return c, fmt.Errorf("%s", strings.Join(errors, ", "))
 	}
 	return c, nil
 }

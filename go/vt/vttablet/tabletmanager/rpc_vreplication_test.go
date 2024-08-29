@@ -827,7 +827,7 @@ func TestGetOptionSetString(t *testing.T) {
 				"password": "secret",
 				"user":     "admin",
 			},
-			want: ", options = json_set(options, '$.config', json_object(), '$.config.password', 'secret', '$.config.user', 'admin')",
+			want: ", options = json_set(options, '$.config', json_object(), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
 		},
 		{
 			name: "valid params, deleting two",
@@ -837,7 +837,7 @@ func TestGetOptionSetString(t *testing.T) {
 				"port":     "",
 				"host":     "",
 			},
-			want: ", options = json_set(json_remove(options, '$.config.host', '$.config.port'), '$.config', json_object(), '$.config.password', 'secret', '$.config.user', 'admin')",
+			want: ", options = json_set(json_remove(options, '$.config.\"host\"', '$.config.\"port\"'), '$.config', json_object(), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
 		},
 		// Additional tests for handling escaping errors or complex scenarios can be added here
 	}
@@ -1002,7 +1002,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 					"password": "secret",
 				},
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '', options = json_set(options, '$.config', json_object(), '$.config.password', 'secret', '$.config.user', 'admin') where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '', options = json_set(options, '$.config', json_object(), '$.config."password"', 'secret', '$.config."user"', 'admin') where id in (%d)`,
 				keyspace, shard, "zone2", vreplID),
 		},
 	}
