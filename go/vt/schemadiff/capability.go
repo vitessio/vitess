@@ -185,6 +185,9 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
 	case *sqlparser.ChangeColumn:
+		if opt.First || opt.After != nil {
+			return false, nil
+		}
 		// We do not support INSTANT for renaming a column (ALTER TABLE ...CHANGE) because:
 		// 1. We discourage column rename
 		// 2. We do not produce CHANGE statements in declarative diff
@@ -198,6 +201,9 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		return false, nil
 	case *sqlparser.ModifyColumn:
+		if opt.First || opt.After != nil {
+			return false, nil
+		}
 		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
 			return changeModifyColumnCapableOfInstantDDL(col, opt.NewColDefinition)
 		}

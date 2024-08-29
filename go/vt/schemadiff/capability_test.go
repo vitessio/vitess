@@ -225,10 +225,22 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			expectCapableOfInstantDDL: false,
 		},
 		{
-			name:                      "set column dfault value to null",
+			name:                      "set column default value to null",
 			create:                    "create table t(id int, i1 int, primary key(id))",
 			alter:                     "alter table t modify column i1 int default null",
 			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "rearrange column after",
+			create:                    "create table t(id int, i1 int, i2 int, primary key(id))",
+			alter:                     "alter table t modify column i1 int after i2",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "rearrange column first",
+			create:                    "create table t(id int, i1 int, i2 int, primary key(id))",
+			alter:                     "alter table t modify column i1 int first",
+			expectCapableOfInstantDDL: false,
 		},
 		// enum/set:
 		{
@@ -289,6 +301,18 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			name:                      "make a column visible with rename",
 			create:                    "create table t1 (id int, i1 int)",
 			alter:                     "alter table t1 change column i1 i2 int visible",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "change column, first",
+			create:                    "create table t1 (id int, i1 int, i2 int)",
+			alter:                     "alter table t1 change column i1 i1 int first",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "change column, after",
+			create:                    "create table t1 (id int, i1 int, i2 int)",
+			alter:                     "alter table t1 change column i1 i1 int after i2",
 			expectCapableOfInstantDDL: false,
 		},
 		{
