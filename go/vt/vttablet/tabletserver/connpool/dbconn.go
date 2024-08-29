@@ -235,7 +235,7 @@ func (dbc *Conn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*
 	// Check if the context is already past its deadline before
 	// trying to fetch the next result.
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("%v before reading next result set", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s, before reading next result set", dbc.getErrorMessageFromContextError(ctx))
 	}
 	res, _, _, err := dbc.conn.ReadQueryResult(maxrows, wantfields)
 	if err != nil {
