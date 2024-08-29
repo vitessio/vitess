@@ -42901,6 +42901,9 @@ export namespace query {
 
         /** StreamHealthResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** StreamHealthResponse timestamp */
+        timestamp?: (vttime.ITime|null);
     }
 
     /** Represents a StreamHealthResponse. */
@@ -42926,6 +42929,9 @@ export namespace query {
 
         /** StreamHealthResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** StreamHealthResponse timestamp. */
+        public timestamp?: (vttime.ITime|null);
 
         /**
          * Creates a new StreamHealthResponse instance using the specified properties.

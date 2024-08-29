@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -98,6 +99,8 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias, &schema.Engine{})
+	now := time.Now()
+	hs.nowTimeFunc = func() time.Time { return now }
 	hs.Open()
 	defer hs.Close()
 
@@ -125,11 +128,11 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			FilteredReplicationLagSeconds: 1,
 			BinlogPlayersCount:            2,
 		},
+		Timestamp: protoutil.TimeToProto(now),
 	}
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test primary and timestamp.
-	now := time.Now()
 	hs.ChangeState(topodatapb.TabletType_PRIMARY, now, 0, nil, true)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
@@ -143,6 +146,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			FilteredReplicationLagSeconds: 1,
 			BinlogPlayersCount:            2,
 		},
+		Timestamp: protoutil.TimeToProto(now),
 	}
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
@@ -159,6 +163,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			FilteredReplicationLagSeconds: 1,
 			BinlogPlayersCount:            2,
 		},
+		Timestamp: protoutil.TimeToProto(now),
 	}
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
@@ -175,6 +180,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			FilteredReplicationLagSeconds: 1,
 			BinlogPlayersCount:            2,
 		},
+		Timestamp: protoutil.TimeToProto(now),
 	}
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 }

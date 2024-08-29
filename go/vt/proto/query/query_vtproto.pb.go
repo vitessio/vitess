@@ -15,6 +15,7 @@ import (
 	sync "sync"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
+	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -1457,6 +1458,7 @@ func (m *StreamHealthResponse) CloneVT() *StreamHealthResponse {
 		PrimaryTermStartTimestamp: m.PrimaryTermStartTimestamp,
 		RealtimeStats:             m.RealtimeStats.CloneVT(),
 		TabletAlias:               m.TabletAlias.CloneVT(),
+		Timestamp:                 m.Timestamp.CloneVT(),
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -5682,6 +5684,16 @@ func (m *StreamHealthResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Timestamp != nil {
+		size, err := m.Timestamp.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x3a
+	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -7589,6 +7601,10 @@ func (m *StreamHealthResponse) SizeVT() (n int) {
 	}
 	if m.TabletAlias != nil {
 		l = m.TabletAlias.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.Timestamp != nil {
+		l = m.Timestamp.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -18467,6 +18483,42 @@ func (m *StreamHealthResponse) UnmarshalVT(dAtA []byte) error {
 				m.TabletAlias = &topodata.TabletAlias{}
 			}
 			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Timestamp", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Timestamp == nil {
+				m.Timestamp = &vttime.Time{}
+			}
+			if err := m.Timestamp.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

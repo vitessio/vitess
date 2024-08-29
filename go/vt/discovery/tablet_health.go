@@ -20,14 +20,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"strings"
-
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 // TabletHealth represents simple tablet health data that is returned to users of healthcheck.
@@ -40,6 +42,7 @@ type TabletHealth struct {
 	PrimaryTermStartTime int64
 	LastError            error
 	Serving              bool
+	Timestamp            *vttime.Time
 }
 
 func (th *TabletHealth) MarshalJSON() ([]byte, error) {
@@ -50,6 +53,7 @@ func (th *TabletHealth) MarshalJSON() ([]byte, error) {
 		PrimaryTermStartTime int64
 		Stats                *query.RealtimeStats
 		LastError            error
+		Timestamp            time.Time
 	}{
 		Tablet:               th.Tablet,
 		Target:               th.Target,
@@ -57,6 +61,7 @@ func (th *TabletHealth) MarshalJSON() ([]byte, error) {
 		PrimaryTermStartTime: th.PrimaryTermStartTime,
 		Stats:                th.Stats,
 		LastError:            th.LastError,
+		Timestamp:            protoutil.TimeFromProto(th.Timestamp),
 	})
 }
 
@@ -69,7 +74,8 @@ func (th *TabletHealth) DeepEqual(other *TabletHealth) bool {
 		th.PrimaryTermStartTime == other.PrimaryTermStartTime &&
 		proto.Equal(th.Stats, other.Stats) &&
 		((th.LastError == nil && other.LastError == nil) ||
-			(th.LastError != nil && other.LastError != nil && th.LastError.Error() == other.LastError.Error()))
+			(th.LastError != nil && other.LastError != nil && th.LastError.Error() == other.LastError.Error())) &&
+		proto.Equal(th.Timestamp, other.Timestamp)
 }
 
 // GetTabletHostPort formats a tablet host port address.

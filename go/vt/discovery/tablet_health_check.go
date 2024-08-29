@@ -25,20 +25,20 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // withDialerContextOnce ensures grpc.WithDialContext() is added once to the options.
@@ -73,6 +73,8 @@ type tabletHealthCheck struct {
 	// LastError is the error we last saw when trying to get the
 	// tablet's healthcheck.
 	LastError error
+	// Timestamp represents the time the healthcheck data was produced.
+	Timestamp *vttime.Time
 	// possibly delete both these
 	loggedServingState    bool
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
@@ -217,6 +219,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	thc.PrimaryTermStartTime = shr.PrimaryTermStartTimestamp
 	thc.Stats = shr.RealtimeStats
 	thc.LastError = healthErr
+	thc.Timestamp = shr.Timestamp
 	reason := "healthCheck update"
 	if healthErr != nil {
 		reason = "healthCheck update error: " + healthErr.Error()

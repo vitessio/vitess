@@ -26,6 +26,7 @@ option java_package = "io.vitess.proto";
 
 import "topodata.proto";
 import "vtrpc.proto";
+import "vttime.proto";
 
 // Target describes what the client expects the tablet is.
 // If the tablet does not match, an error is returned.
@@ -985,6 +986,9 @@ message StreamHealthResponse {
   // hasn't changed in the meantime e.g. due to tablet restarts where ports or
   // ips have been reused but assigned differently.
   topodata.TabletAlias tablet_alias = 5;
+
+  // timestamp represents the time the response was generated.
+  vttime.Time timestamp = 7;
 }
 
 // TransactionState represents the state of a distributed transaction.
