@@ -17,9 +17,8 @@ limitations under the License.
 package srvtopo
 
 import (
-	"sync"
-
 	"context"
+	"sync"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -29,15 +28,16 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// FindAllTargets goes through all serving shards in the topology for the provided keyspaces
+// FindAllTargetsAndKeyspaces goes through all serving shards in the topology for the provided keyspaces
 // and tablet types. If no keyspaces are provided all available keyspaces in the topo are
 // fetched. It returns one Target object per keyspace/shard/matching TabletType.
-func FindAllTargets(ctx context.Context, ts Server, cell string, keyspaces []string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
+// It also returns all the keyspaces that it found.
+func FindAllTargetsAndKeyspaces(ctx context.Context, ts Server, cell string, keyspaces []string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, []string, error) {
 	var err error
 	if len(keyspaces) == 0 {
 		keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell, true)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -95,8 +95,8 @@ func FindAllTargets(ctx context.Context, ts Server, cell string, keyspaces []str
 	}
 	wg.Wait()
 	if errRecorder.HasErrors() {
-		return nil, errRecorder.Error()
+		return nil, nil, errRecorder.Error()
 	}
 
-	return targets, nil
+	return targets, keyspaces, nil
 }
