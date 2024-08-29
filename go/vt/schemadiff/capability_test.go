@@ -134,6 +134,24 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			expectCapableOfInstantDDL: true,
 		},
 		{
+			name:                      "add nullable datetime column",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column dt datetime(3)",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "add default null datetime column",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column dt datetime(3) default null",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "add datetime column without default",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column dt datetime(3) not null",
+			expectCapableOfInstantDDL: false,
+		},
+		{
 			name:                      "add stored column",
 			create:                    "create table t(id int, i1 int not null, primary key(id))",
 			alter:                     "alter table t add column i2 int generated always as (i1 + 1) stored",

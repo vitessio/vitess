@@ -151,6 +151,13 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 				// Expression default values are not supported
 				return false, nil
 			}
+			if strings.EqualFold(column.Type.Type, "datetime") {
+				e := &ColumnDefinitionEntity{ColumnDefinition: column}
+				if !e.IsNullable() && !e.HasDefault() {
+					// DATETIME columns must have a default value
+					return false, nil
+				}
+			}
 		}
 		if opt.First || opt.After != nil {
 			// not a "last" column. Only supported as of 8.0.29
