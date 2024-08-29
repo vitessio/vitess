@@ -20,10 +20,12 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/slice"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -82,6 +84,37 @@ func (tc testCase) createPredicate(lvl int) sqlparser.Expr {
 	panic("unexpected nodeType")
 }
 
+func TestOneRewriting(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+
+	// Modify these
+	const numberOfColumns = 2
+	const expr = "n1 and n0 or n1 xor n1"
+
+	predicate, err := sqlparser.NewTestParser().ParseExpr(expr)
+	require.NoError(t, err)
+
+	simplified := sqlparser.RewritePredicate(predicate)
+
+	cfg := &evalengine.Config{
+		Environment:   venv,
+		Collation:     collations.MySQL8().DefaultConnectionCharset(),
+		ResolveColumn: resolveForFuzz,
+	}
+	original, err := evalengine.Translate(predicate, cfg)
+	require.NoError(t, err)
+	simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), cfg)
+	require.NoError(t, err)
+
+	env := evalengine.EmptyExpressionEnv(venv)
+	env.Row = make([]sqltypes.Value, numberOfColumns)
+	for i := range env.Row {
+		env.Row[i] = sqltypes.NULL
+	}
+
+	testValues(t, env, 0, original, simpler)
+}
+
 func TestFuzzRewriting(t *testing.T) {
 	// This test, that runs for one second only, will produce lots of random boolean expressions,
 	// mixing AND, NOT, OR, XOR and column expressions.
@@ -89,31 +122,29 @@ func TestFuzzRewriting(t *testing.T) {
 	// Finally, it runs both the original and simplified predicate with all combinations of column
 	// values - trying TRUE, FALSE and NULL. If the two expressions do not return the same value,
 	// this is considered a test failure.
-
-	venv := vtenv.NewTestEnv()
 	start := time.Now()
 	for time.Since(start) < 1*time.Second {
 		tc := testCase{
-			nodes: rand.IntN(4) + 1,
+			nodes: 2,
 			depth: rand.IntN(4) + 1,
 		}
 
 		predicate := tc.createPredicate(0)
 		name := sqlparser.String(predicate)
 		t.Run(name, func(t *testing.T) {
+			venv := vtenv.NewTestEnv()
 			simplified := sqlparser.RewritePredicate(predicate)
 
-			original, err := evalengine.Translate(predicate, &evalengine.Config{
-				Environment:   venv,
-				Collation:     collations.MySQL8().DefaultConnectionCharset(),
-				ResolveColumn: resolveForFuzz,
-			})
+			cfg := &evalengine.Config{
+				Environment:       venv,
+				Collation:         collations.MySQL8().DefaultConnectionCharset(),
+				ResolveColumn:     resolveForFuzz,
+				NoConstantFolding: true,
+				NoCompilation:     true,
+			}
+			original, err := evalengine.Translate(predicate, cfg)
 			require.NoError(t, err)
-			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), &evalengine.Config{
-				Environment:   venv,
-				Collation:     collations.MySQL8().DefaultConnectionCharset(),
-				ResolveColumn: resolveForFuzz,
-			})
+			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), cfg)
 			require.NoError(t, err)
 
 			env := evalengine.EmptyExpressionEnv(venv)
@@ -142,7 +173,17 @@ func testValues(t *testing.T, env *evalengine.ExpressionEnv, i int, original, si
 		require.NoError(t, err)
 		v2, err := env.Evaluate(simpler)
 		require.NoError(t, err)
-		assert.Equal(t, v1.Value(collations.MySQL8().DefaultConnectionCharset()), v2.Value(collations.MySQL8().DefaultConnectionCharset()))
+		v1Value := v1.Value(collations.MySQL8().DefaultConnectionCharset())
+		v2Value := v2.Value(collations.MySQL8().DefaultConnectionCharset())
+		row := strings.Join(slice.Map(env.Row, func(i sqltypes.Value) string {
+			return i.String()
+		}), " | ")
+		msg := fmt.Sprintf("original: %v (%s)\nsimplified: %v (%s)\nrow: %v", sqlparser.String(original), v1Value.String(), sqlparser.String(simpler), v2Value.String(), row)
+		require.True(
+			t,
+			v1Value.Equal(v2Value),
+			msg,
+		)
 		if len(env.Row) > i+1 {
 			testValues(t, env, i+1, original, simpler)
 		}

@@ -2391,6 +2391,9 @@ func AndExpressions(exprs ...Expr) Expr {
 				uniqueAdd(expr)
 			}
 		}
+		if len(unique) == 1 {
+			return unique[0]
+		}
 		return &AndExpr{Predicates: unique}
 	}
 }

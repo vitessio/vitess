@@ -90,6 +90,13 @@ func simplifyNot(expr *NotExpr) (Expr, bool) {
 	return expr, false
 }
 
+func createOrs(exprs ...Expr) Expr {
+	if len(exprs) == 1 {
+		return exprs[0]
+	}
+	return &OrExpr{Left: exprs[0], Right: createOrs(exprs[1:]...)}
+}
+
 func simplifyOr(or *OrExpr) (Expr, bool) {
 	res, rewritten := distinctOr(or)
 	if rewritten {
@@ -100,7 +107,7 @@ func simplifyOr(or *OrExpr) (Expr, bool) {
 	rand, rok := or.Right.(*AndExpr)
 
 	if lok && rok {
-		// (A AND B) OR (A AND C) => A OR (B AND C)
+		// (A AND B AND D) OR (A AND C AND D) => (A AND D) AND (B OR C)
 		var commonPredicates []Expr
 		var leftRemainder, rightRemainder []Expr
 
@@ -125,23 +132,14 @@ func simplifyOr(or *OrExpr) (Expr, bool) {
 
 		if len(commonPredicates) > 0 {
 			// Build the final AndExpr with common predicates and the OrExpr of remainders
-			var notCommon Expr
-			switch {
-			case len(leftRemainder) == 0 && len(rightRemainder) == 0:
-				// all expressions were common
-				return AndExpressions(commonPredicates...), true
-			case len(leftRemainder) == 0:
-				notCommon = AndExpressions(rightRemainder...)
-			case len(rightRemainder) == 0:
-				notCommon = AndExpressions(leftRemainder...)
-			default:
-				notCommon = &OrExpr{
-					Left:  AndExpressions(leftRemainder...),
-					Right: AndExpressions(rightRemainder...),
-				}
+			nonCommonPredicates := append(leftRemainder, rightRemainder...)
+			commonPred := AndExpressions(commonPredicates...)
+			if len(nonCommonPredicates) == 0 {
+				return commonPred, true
 			}
-			return AndExpressions(append(commonPredicates, notCommon)...), true
+			return AndExpressions(commonPred, createOrs(nonCommonPredicates...)), true
 		}
+		return or, false
 	}
 	if !lok && !rok {
 		lftCmp, lok := or.Left.(*ComparisonExpr)
@@ -201,6 +199,10 @@ func simplifyXor(xor *XorExpr) (Expr, bool) {
 }
 
 func simplifyAnd(expr *AndExpr) (Expr, bool) {
+	if len(expr.Predicates) == 1 {
+		return expr.Predicates[0], true
+	}
+
 	res, rewritten := distinctAnd(expr)
 	if rewritten {
 		return res, true
@@ -210,6 +212,7 @@ func simplifyAnd(expr *AndExpr) (Expr, bool) {
 	simplified := false
 
 	// Loop over all predicates in the AndExpr
+outer:
 	for i, andPred := range expr.Predicates {
 		if or, ok := andPred.(*OrExpr); ok {
 			// Check if we can simplify by matching with another predicate in the AndExpr
@@ -223,13 +226,13 @@ func simplifyAnd(expr *AndExpr) (Expr, bool) {
 					// Found a match, keep the simpler expression (otherPred)
 					simplifiedPredicates = append(simplifiedPredicates, otherPred)
 					simplified = true
-					break
+					continue outer
 				}
 			}
-		} else {
-			// No simplification possible, keep the original predicate
-			simplifiedPredicates = append(simplifiedPredicates, andPred)
 		}
+
+		// No simplification possible, keep the original predicate
+		simplifiedPredicates = append(simplifiedPredicates, andPred)
 	}
 
 	if simplified {
