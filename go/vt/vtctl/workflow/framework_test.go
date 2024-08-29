@@ -501,7 +501,15 @@ func (tmc *testTMClient) confirmVDiffRequests(t *testing.T) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
-	require.Len(t, tmc.vdiffRequests, 0, "expected VDiff requests not made: %v", tmc.vdiffRequests)
+	reqString := func([]*vdiffRequestResponse) string {
+		str := strings.Builder{}
+		for _, vrr := range tmc.vdiffRequests {
+			str.WriteString(fmt.Sprintf("\n%+v", vrr.req))
+		}
+		return str.String()
+	}
+
+	require.Len(t, tmc.vdiffRequests, 0, "expected VDiff requests not made: %s", reqString(maps.Values(tmc.vdiffRequests)))
 }
 
 func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
