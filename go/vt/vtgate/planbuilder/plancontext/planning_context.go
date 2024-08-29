@@ -70,6 +70,12 @@ type PlanningContext struct {
 	// This is a stack of CTEs being built. It's used when we have CTEs inside CTEs,
 	// to remember which is the CTE currently being assembled
 	CurrentCTE []*ContextCTE
+
+	// mirror contains a mirrored clone of this planning context.
+	mirror *PlanningContext
+
+	// isMirrored indicates that mirrored tables should be used.
+	isMirrored bool
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -381,6 +387,10 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 	return
 }
 
+func (ctx *PlanningContext) IsMirrored() bool {
+	return ctx.isMirrored
+}
+
 type ContextCTE struct {
 	*semantics.CTE
 	Id         semantics.TableSet
@@ -419,4 +429,31 @@ func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
 		return nil
 	}
 	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
+}
+
+func (ctx *PlanningContext) UseMirror() *PlanningContext {
+	if ctx.isMirrored {
+		panic(vterrors.VT13001("cannot mirror already mirrored planning context"))
+	}
+	if ctx.mirror != nil {
+		return ctx.mirror
+	}
+	ctx.mirror = &PlanningContext{
+		ctx.ReservedVars,
+		ctx.SemTable,
+		ctx.VSchema,
+		map[sqlparser.Expr][]sqlparser.Expr{},
+		map[sqlparser.Expr]any{},
+		ctx.PlannerVersion,
+		map[sqlparser.Expr]string{},
+		ctx.VerifyAllFKs,
+		ctx.MergedSubqueries,
+		ctx.CurrentPhase,
+		ctx.Statement,
+		ctx.OuterTables,
+		ctx.CurrentCTE,
+		nil,
+		true,
+	}
+	return ctx.mirror
 }

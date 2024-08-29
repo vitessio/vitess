@@ -60,7 +60,7 @@ type (
 func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result Operator, err error) {
 	defer PanicHandler(&err)
 
-	op := translateQueryToOp(ctx, stmt)
+	op := translateQueryToOpWithMirroring(ctx, stmt)
 
 	if DebugOperatorTree {
 		fmt.Println("Initial tree:")
