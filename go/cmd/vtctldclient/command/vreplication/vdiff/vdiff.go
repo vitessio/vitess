@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
@@ -196,13 +195,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 			}
 			resumeOptions.UUID = uuid
 
-			for _, shard := range resumeOptions.TargetShards {
-				if !key.IsValidKeyRange(shard) {
-					return fmt.Errorf("invalid target shard provided: %q", shard)
-				}
-			}
-
-			return nil
+			return common.ValidateShards(resumeOptions.TargetShards)
 		},
 		RunE: commandResume,
 	}
@@ -248,13 +241,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 			}
 			stopOptions.UUID = uuid
 
-			for _, shard := range stopOptions.TargetShards {
-				if !key.IsValidKeyRange(shard) {
-					return fmt.Errorf("invalid target shard provided: %q", shard)
-				}
-			}
-
-			return nil
+			return common.ValidateShards(stopOptions.TargetShards)
 		},
 		RunE: commandStop,
 	}

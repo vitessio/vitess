@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -142,6 +143,16 @@ func ParseTabletTypes(cmd *cobra.Command) error {
 func validateOnDDL(cmd *cobra.Command) error {
 	if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(CreateOptions.OnDDL)]; !ok {
 		return fmt.Errorf("invalid on-ddl value: %s", CreateOptions.OnDDL)
+	}
+	return nil
+}
+
+// ValidateShards checks if the provided shard names are valid key ranges.
+func ValidateShards(shards []string) error {
+	for _, shard := range shards {
+		if !key.IsValidKeyRange(shard) {
+			return fmt.Errorf("invalid target shard provided: %q", shard)
+		}
 	}
 	return nil
 }
