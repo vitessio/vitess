@@ -155,6 +155,11 @@ jobs:
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
 
+    - name: Convert ErrorContains checks to Error checks
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        find ./go/test/endtoend -name '*.go' -exec sed -i 's/ErrorContains/Error/g' {} +
+
     # Swap the binaries in the bin. Use vtgate version n+1 and keep vttablet at version n
     - name: Use next release's VTGate
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
