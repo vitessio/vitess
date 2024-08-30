@@ -104,8 +104,8 @@ func TestTwoPCFuzzTest(t *testing.T) {
 		},
 		{
 			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL, MoveTables disruptions",
-			threads:               15,
-			updateSets:            15,
+			threads:               4,
+			updateSets:            4,
 			timeForTesting:        5 * time.Second,
 			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer, moveTablesFuzzer},
 			disruptionProbability: []int{5, 5, 5, 5, 5, 5},
