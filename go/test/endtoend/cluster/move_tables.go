@@ -81,14 +81,14 @@ func (mtw *MoveTablesWorkflow) Show() (string, error) {
 	return mtw.exec("Show")
 }
 
-func (mtw *MoveTablesWorkflow) WaitForVreplCatchup() {
+func (mtw *MoveTablesWorkflow) WaitForVreplCatchup(timeToWait time.Duration) {
 	for _, ks := range mtw.clusterInstance.Keyspaces {
 		if ks.Name != mtw.targetKs {
 			continue
 		}
 		for _, shard := range ks.Shards {
 			vttablet := shard.PrimaryTablet().VttabletProcess
-			vttablet.WaitForVReplicationToCatchup(mtw.t, mtw.workflowName, fmt.Sprintf("vt_%s", vttablet.Keyspace), "", 10*time.Second)
+			vttablet.WaitForVReplicationToCatchup(mtw.t, mtw.workflowName, fmt.Sprintf("vt_%s", vttablet.Keyspace), "", timeToWait)
 		}
 	}
 }

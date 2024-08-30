@@ -48,6 +48,7 @@ func TestDisruptions(t *testing.T) {
 		disruptionName  string
 		commitDelayTime string
 		disruption      func(t *testing.T) error
+		resetFunc       func(t *testing.T)
 	}{
 		{
 			disruptionName:  "No Disruption",
@@ -77,9 +78,15 @@ func TestDisruptions(t *testing.T) {
 			disruption:      onlineDDL,
 		},
 		{
-			disruptionName:  "MoveTables",
-			commitDelayTime: "20",
-			disruption:      moveTables,
+			disruptionName:  "MoveTables - Complete",
+			commitDelayTime: "10",
+			disruption:      moveTablesComplete,
+			resetFunc:       moveTablesReset,
+		},
+		{
+			disruptionName:  "MoveTables - Cancel",
+			commitDelayTime: "10",
+			disruption:      moveTablesCancel,
 		},
 		{
 			disruptionName:  "EmergencyReparentShard",
@@ -141,6 +148,10 @@ func TestDisruptions(t *testing.T) {
 			waitForResults(t, "select id, col from twopc_t1 where col = 4 order by id", `[[INT64(4) INT64(4)] [INT64(6) INT64(4)] [INT64(9) INT64(4)]]`, 30*time.Second)
 			writeCancel()
 			writerWg.Wait()
+
+			if tt.resetFunc != nil {
+				tt.resetFunc(t)
+			}
 		})
 	}
 }
@@ -244,27 +255,59 @@ func mysqlRestartShard3(t *testing.T) error {
 	return syscallutil.Kill(pid, syscall.SIGKILL)
 }
 
-// moveTables runs a move tables command.
-func moveTables(t *testing.T) error {
+// moveTablesCancel runs a move tables command that we cancel in the end.
+func moveTablesCancel(t *testing.T) error {
 	workflow := "TestDisruptions"
 	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1")
 	// Initiate MoveTables for twopc_t1.
-	_, err := mtw.Create()
-	require.NoError(t, err)
+	output, err := mtw.Create()
+	require.NoError(t, err, output)
 	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
-	mtw.WaitForVreplCatchup()
+	mtw.WaitForVreplCatchup(10 * time.Second)
 	// SwitchTraffic
-	_, err = mtw.SwitchReadsAndWrites()
-	require.NoError(t, err)
-	// Wait for a couple of seconds and then switch the traffic back
-	time.Sleep(2 * time.Second)
-	_, err = mtw.ReverseReadsAndWrites()
-	require.NoError(t, err)
-	// Wait another couple of seconds and then cancel the workflow
-	time.Sleep(2 * time.Second)
-	_, err = mtw.Cancel()
-	require.NoError(t, err)
+	output, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.ReverseReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.Cancel()
+	require.NoError(t, err, output)
 	return nil
+}
+
+// moveTablesComplete runs a move tables command that we complete in the end.
+func moveTablesComplete(t *testing.T) error {
+	workflow := "TestDisruptions"
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1")
+	// Initiate MoveTables for twopc_t1.
+	output, err := mtw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.Complete()
+	require.NoError(t, err, output)
+	return nil
+}
+
+// moveTablesReset moves the table back from the unsharded keyspace to sharded
+func moveTablesReset(t *testing.T) {
+	// We apply the vschema again because previous move tables would have removed the entry for `twopc_t1`.
+	err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
+	require.NoError(t, err)
+	workflow := "TestDisruptions"
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, keyspaceName, unshardedKeyspaceName, "twopc_t1")
+	// Initiate MoveTables for twopc_t1.
+	output, err := mtw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.Complete()
+	require.NoError(t, err, output)
 }
 
 var orderedDDL = []string{
