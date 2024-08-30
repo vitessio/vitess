@@ -19,6 +19,7 @@ package vttablet
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +47,8 @@ type VReplicationConfig struct {
 	VStreamDynamicPacketSizeOverride       bool
 	VStreamBinlogRotationThreshold         int64
 	VStreamBinlogRotationThresholdOverride bool
+
+	Overrides map[string]string
 }
 
 var configMutex sync.Mutex
@@ -78,18 +81,21 @@ func InitVReplicationConfigDefaults() *VReplicationConfig {
 		VStreamDynamicPacketSize:               VStreamerUseDynamicPacketSize,
 		VStreamBinlogRotationThresholdOverride: false,
 		VStreamBinlogRotationThreshold:         VStreamerBinlogRotationThreshold,
+
+		Overrides: make(map[string]string),
 	}
 	return DefaultVReplicationConfig
 }
 
-func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error) {
+func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, error) {
 	InitVReplicationConfigDefaults()
 	configMutex.Lock()
 	defer configMutex.Unlock()
 	c := &VReplicationConfig{}
 	*c = *DefaultVReplicationConfig
+	c.Overrides = maps.Clone(overrides)
 	var errors []string
-	for k, v := range config {
+	for k, v := range overrides {
 		if v == "" {
 			continue
 		}

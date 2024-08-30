@@ -419,6 +419,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	// Use this for task sequencing.
 	var prevCh <-chan *vcopierCopyTaskResult
 
+	vstreamOptions := &binlogdatapb.VStreamOptions{
+		ConfigOverrides: vc.vr.WorkflowConfig.Overrides,
+	}
 	serr := vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
@@ -592,7 +595,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		}
 
 		return nil
-	})
+	}, vstreamOptions)
 
 	// Close the work queue. This will prevent new tasks from being enqueued,
 	// and will wait until all workers are returned to the worker pool.

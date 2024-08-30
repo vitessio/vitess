@@ -347,7 +347,7 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 			vstreamRowsSendHook(ctx)
 		}
 		return send(rows)
-	})
+	}, nil)
 }
 
 // --------------------------------------

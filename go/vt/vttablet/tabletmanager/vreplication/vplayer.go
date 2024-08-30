@@ -278,10 +278,13 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
+		vstreamOptions := &binlogdatapb.VStreamOptions{
+			ConfigOverrides: vp.vr.WorkflowConfig.Overrides,
+		}
 		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil,
 			vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 				return relay.Send(events)
-			}, nil)
+			}, vstreamOptions)
 	}()
 
 	applyErr := make(chan error, 1)

@@ -35032,6 +35032,9 @@ export namespace binlogdata {
 
         /** VStreamOptions internal_tables */
         internal_tables?: (string[]|null);
+
+        /** VStreamOptions config_overrides */
+        config_overrides?: ({ [k: string]: string }|null);
     }
 
     /** Represents a VStreamOptions. */
@@ -35045,6 +35048,9 @@ export namespace binlogdata {
 
         /** VStreamOptions internal_tables. */
         public internal_tables: string[];
+
+        /** VStreamOptions config_overrides. */
+        public config_overrides: { [k: string]: string };
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.
@@ -35371,6 +35377,9 @@ export namespace binlogdata {
 
         /** VStreamRowsRequest lastpk */
         lastpk?: (query.IQueryResult|null);
+
+        /** VStreamRowsRequest options */
+        options?: (binlogdata.IVStreamOptions|null);
     }
 
     /** Represents a VStreamRowsRequest. */
@@ -35396,6 +35405,9 @@ export namespace binlogdata {
 
         /** VStreamRowsRequest lastpk. */
         public lastpk?: (query.IQueryResult|null);
+
+        /** VStreamRowsRequest options. */
+        public options?: (binlogdata.IVStreamOptions|null);
 
         /**
          * Creates a new VStreamRowsRequest instance using the specified properties.
@@ -35625,6 +35637,9 @@ export namespace binlogdata {
 
         /** VStreamTablesRequest target */
         target?: (query.ITarget|null);
+
+        /** VStreamTablesRequest options */
+        options?: (binlogdata.IVStreamOptions|null);
     }
 
     /** Represents a VStreamTablesRequest. */
@@ -35644,6 +35659,9 @@ export namespace binlogdata {
 
         /** VStreamTablesRequest target. */
         public target?: (query.ITarget|null);
+
+        /** VStreamTablesRequest options. */
+        public options?: (binlogdata.IVStreamOptions|null);
 
         /**
          * Creates a new VStreamTablesRequest instance using the specified properties.

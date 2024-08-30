@@ -79,7 +79,7 @@ func TestRowStreamerQuery(t *testing.T) {
 			})
 		}
 		return nil
-	})
+	}, nil)
 	require.NoError(t, err)
 }
 
@@ -285,7 +285,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 			t.Errorf("rows.Rows[0].Values: %s, want %s", got, want)
 		}
 		return nil
-	})
+	}, nil)
 	require.NoError(t, err)
 }
 
@@ -426,7 +426,7 @@ func TestStreamRowsCancel(t *testing.T) {
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		cancel()
 		return nil
-	})
+	}, nil)
 	if got, want := err.Error(), "stream ended: context canceled"; got != want {
 		t.Errorf("err: %v, want %s", err, want)
 	}
@@ -469,7 +469,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 			}
 			i++
 			return nil
-		})
+		}, nil)
 		if err != nil {
 			ch <- err
 		}
@@ -486,7 +486,7 @@ func expectStreamError(t *testing.T, query string, want string) {
 		defer close(ch)
 		err := engine.StreamRows(context.Background(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			return nil
-		})
+		}, nil)
 		require.EqualError(t, err, want, "Got incorrect error")
 	}()
 }
