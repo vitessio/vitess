@@ -898,7 +898,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().BoolVar(&createOptions.Wait, "wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting.")
 	create.Flags().DurationVar(&createOptions.WaitUpdateInterval, "wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often.")
 	create.Flags().BoolVar(&createOptions.AutoRetry, "auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors.")
-	create.Flags().BoolVar(&createOptions.UpdateTableStats, "update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the VDiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
+	create.Flags().BoolVar(&createOptions.UpdateTableStats, "update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the vdiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
 	create.Flags().DurationVar(&createOptions.MaxDiffDuration, "max-diff-duration", 0, "How long should an individual table diff run before being stopped and restarted in order to lessen the impact on tablets due to holding open database snapshots for long periods of time (0 is the default and means no time limit).")
 	create.Flags().Int64Var(&createOptions.RowDiffColumnTruncateAt, "row-diff-column-truncate-at", 128, "When showing row differences, truncate the non Primary Key column values to this length. A value less than 1 means do not truncate.")
 	create.Flags().BoolVar(&createOptions.DoNotStart, "do-not-start", false, "Don't start the vdiff upon creation. When specified, the vdiff will be created but will not run until resumed.")
@@ -906,13 +906,13 @@ func registerCommands(root *cobra.Command) {
 
 	base.AddCommand(delete)
 
-	resume.Flags().StringSliceVar(&resumeOptions.TargetShards, "target-shards", nil, "The target shards to resume the VDiff on; default is all shards.")
+	resume.Flags().StringSliceVar(&resumeOptions.TargetShards, "target-shards", nil, "The target shards to resume the vdiff on; default is all shards.")
 	base.AddCommand(resume)
 
 	show.Flags().BoolVar(&showOptions.Verbose, "verbose", false, "Show verbose output in summaries")
 	base.AddCommand(show)
 
-	stop.Flags().StringSliceVar(&stopOptions.TargetShards, "target-shards", nil, "The target shards to stop the VDiff on; default is all shards.")
+	stop.Flags().StringSliceVar(&stopOptions.TargetShards, "target-shards", nil, "The target shards to stop the vdiff on; default is all shards.")
 	base.AddCommand(stop)
 }
 
