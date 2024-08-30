@@ -58,7 +58,7 @@ var (
 	// GetUnresolvedTransactions makes an GetUnresolvedTransactions gRPC call to a vtctld.
 	GetUnresolvedTransactions = &cobra.Command{
 		Use:   "GetUnresolvedTransactions <keyspace>",
-		Short: "Retrieved unresolved transactions for the given keyspace.",
+		Short: "Retrieves unresolved transactions for the given keyspace.",
 		Args:  cobra.ExactArgs(1),
 		RunE:  commandGetUnresolvedTransactions,
 	}

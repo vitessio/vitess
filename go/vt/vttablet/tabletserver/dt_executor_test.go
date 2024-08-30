@@ -655,7 +655,7 @@ func TestNoTwopc(t *testing.T) {
 			return err
 		},
 	}, {
-		desc: "ReadUnresolvedTransactions",
+		desc: "UnresolvedTransactions",
 		fun: func() error {
 			_, err := txe.UnresolvedTransactions()
 			return err
