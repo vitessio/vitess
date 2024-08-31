@@ -47,11 +47,11 @@ type PacketSizer interface {
 
 // DefaultPacketSizer creates a new PacketSizer using the default settings.
 // If dynamic packet sizing is enabled, this will return a dynamicPacketSizer.
-func DefaultPacketSizer() PacketSizer {
-	if vttablet.VStreamerUseDynamicPacketSize {
-		return newDynamicPacketSizer(vttablet.VStreamerDefaultPacketSize)
+func DefaultPacketSizer(useDynamicPacketSize bool, packetSize int) PacketSizer {
+	if useDynamicPacketSize {
+		return newDynamicPacketSizer(packetSize)
 	}
-	return newFixedPacketSize(vttablet.VStreamerDefaultPacketSize)
+	return newFixedPacketSize(packetSize)
 }
 
 // AdjustPacketSize temporarily adjusts the default packet sizes to the given value.

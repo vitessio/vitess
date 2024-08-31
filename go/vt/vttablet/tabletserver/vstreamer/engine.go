@@ -299,7 +299,8 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 
-		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse, RowStreamerModeSingleTable, nil)
+		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema,
+			send, vse, RowStreamerModeSingleTable, nil, options)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++
@@ -342,7 +343,7 @@ func (vse *Engine) StreamTables(ctx context.Context,
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 
-		tableStreamer := newTableStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, vse.lvschema, send, vse)
+		tableStreamer := newTableStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, vse.lvschema, send, vse, options)
 		idx := vse.streamIdx
 		vse.tableStreamers[idx] = tableStreamer
 		vse.streamIdx++

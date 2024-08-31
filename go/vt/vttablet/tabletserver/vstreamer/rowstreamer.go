@@ -79,14 +79,21 @@ type rowStreamer struct {
 	vse           *Engine
 	pktsize       PacketSizer
 
-	mode RowStreamerMode
-	conn *snapshotConn
+	mode    RowStreamerMode
+	conn    *snapshotConn
+	options *binlogdatapb.VStreamOptions
+	config  *vttablet.VReplicationConfig
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
 	lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
-	mode RowStreamerMode, conn *snapshotConn) *rowStreamer {
+	mode RowStreamerMode, conn *snapshotConn, options *binlogdatapb.VStreamOptions) *rowStreamer {
 
+	config, err := vttablet.NewVReplicationConfig(options.ConfigOverrides)
+	if err != nil {
+		log.Errorf("Error parsing VReplicationConfig: %v", err)
+		return nil
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	vttablet.InitVReplicationConfigDefaults()
 	return &rowStreamer{
@@ -99,9 +106,11 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		send:    send,
 		vschema: vschema,
 		vse:     vse,
-		pktsize: DefaultPacketSizer(),
+		pktsize: DefaultPacketSizer(config.VStreamDynamicPacketSize, config.VStreamPacketSize),
 		mode:    mode,
 		conn:    conn,
+		options: options,
+		config:  config,
 	}
 }
 

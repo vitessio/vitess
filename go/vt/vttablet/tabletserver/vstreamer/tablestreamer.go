@@ -60,10 +60,12 @@ type tableStreamer struct {
 	snapshotConn *snapshotConn
 	tables       []string
 	gtid         string
+	options      *binlogdatapb.VStreamOptions
+	config       *vttablet.VReplicationConfig
 }
 
 func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
-	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine) *tableStreamer {
+	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions) *tableStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	vttablet.InitVReplicationConfigDefaults()
 	return &tableStreamer{
@@ -151,7 +153,7 @@ func (ts *tableStreamer) newRowStreamer(ctx context.Context, query string, lastp
 	defer vse.mu.Unlock()
 
 	rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema,
-		send, vse, RowStreamerModeAllTables, ts.snapshotConn)
+		send, vse, RowStreamerModeAllTables, ts.snapshotConn, ts.options)
 
 	idx := vse.streamIdx
 	vse.rowStreamers[idx] = rowStreamer
