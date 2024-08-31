@@ -73849,6 +73849,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest shards */
         shards?: (string[]|null);
+
+        /** WorkflowSwitchTrafficRequest force */
+        force?: (boolean|null);
     }
 
     /** Represents a WorkflowSwitchTrafficRequest. */
@@ -73892,6 +73895,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest shards. */
         public shards: string[];
+
+        /** WorkflowSwitchTrafficRequest force. */
+        public force: boolean;
 
         /**
          * Creates a new WorkflowSwitchTrafficRequest instance using the specified properties.
