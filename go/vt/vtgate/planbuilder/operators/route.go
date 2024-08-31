@@ -119,7 +119,7 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 	nr := &NoneRouting{keyspace: ks}
 
-	if isConstantFalse(ctx, expr) {
+	if b := ctx.IsConstantBool(expr); b != nil && !*b {
 		return nr
 	}
 
@@ -159,39 +159,6 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 
 	return exit()
-}
-
-// isConstantFalse checks whether this predicate can be evaluated at plan-time. If it returns `false` or `null`,
-// we know that the query will not return anything, and this can be used to produce better plans
-func isConstantFalse(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
-	if !ctx.SemTable.RecursiveDeps(expr).IsEmpty() {
-		// we have column dependencies, so we can be pretty sure
-		// we won't be able to use the evalengine to check if this is constant false
-		return false
-	}
-	env := ctx.VSchema.Environment()
-	collation := ctx.VSchema.ConnCollation()
-	eenv := evalengine.EmptyExpressionEnv(env)
-	eexpr, err := evalengine.Translate(expr, &evalengine.Config{
-		Collation:     collation,
-		Environment:   env,
-		NoCompilation: true,
-	})
-	if err != nil {
-		return false
-	}
-	eres, err := eenv.Evaluate(eexpr)
-	if err != nil {
-		return false
-	}
-	if eres.Value(collation).IsNull() {
-		return false
-	}
-	b, err := eres.ToBooleanStrict()
-	if err != nil {
-		return false
-	}
-	return !b
 }
 
 // Cost implements the Operator interface
