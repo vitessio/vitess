@@ -424,6 +424,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/status", httpAPI.Adapt(vtadminhttp.GetWorkflowStatus)).Name("API.GetWorkflowStatus")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow")
+	router.HandleFunc("/workflow/{cluster_id}/move_tables", httpAPI.Adapt(vtadminhttp.MoveTablesCreate)).Name("API.MoveTablesCreate").Methods("POST")
 
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
@@ -1828,6 +1829,25 @@ func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.Launch
 	}
 
 	return c.LaunchSchemaMigration(ctx, req.Request)
+}
+
+// MoveTablesCreate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) MoveTablesCreate(ctx context.Context, req *vtadminpb.MoveTablesCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.MoveTablesCreate")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.MoveTablesCreate(ctx, req.Request)
 }
 
 // PingTablet is part of the vtadminpb.VTAdminServer interface.

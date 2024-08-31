@@ -18,8 +18,12 @@ package http
 
 import (
 	"context"
+	"encoding/json"
+
+	"vitess.io/vitess/go/vt/vtadmin/errors"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // GetWorkflow implements the http wrapper for the VTAdminServer.GetWorkflow
@@ -113,6 +117,30 @@ func StopWorkflow(ctx context.Context, r Request, api *API) *JSONResponse {
 		ClusterId: vars["cluster_id"],
 		Keyspace:  vars["keyspace"],
 		Workflow:  vars["name"],
+	})
+
+	return NewJSONResponse(res, err)
+}
+
+// MoveTablesCreate implements the http wrapper for the VTAdminServer.MoveTablesCreate
+// method.
+//
+// Its route is /workflow/{cluster_id}/move_tables
+func MoveTablesCreate(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var req vtctldatapb.MoveTablesCreateRequest
+	if err := decoder.Decode(&req); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.MoveTablesCreate(ctx, &vtadminpb.MoveTablesCreateRequest{
+		ClusterId: vars["cluster_id"],
+		Request:   &req,
 	})
 
 	return NewJSONResponse(res, err)
