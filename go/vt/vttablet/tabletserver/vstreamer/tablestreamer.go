@@ -66,8 +66,13 @@ type tableStreamer struct {
 
 func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
 	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions) *tableStreamer {
+
+	config, err := vttablet.NewVReplicationConfig(options.ConfigOverrides)
+	if err != nil {
+		log.Errorf("Error parsing VReplicationConfig: %v", err)
+		return nil
+	}
 	ctx, cancel := context.WithCancel(ctx)
-	vttablet.InitVReplicationConfigDefaults()
 	return &tableStreamer{
 		ctx:     ctx,
 		cancel:  cancel,
@@ -76,6 +81,8 @@ func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.En
 		send:    send,
 		vschema: vschema,
 		vse:     vse,
+		options: options,
+		config:  config,
 	}
 }
 
@@ -106,11 +113,12 @@ func (ts *tableStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
 		return err
 	}
-	// FIXME (Rohit): change these to accept options passed into the API
-	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.GetVReplicationNetReadTimeout()), 1, false); err != nil {
+	// temp log to debug dynamic flags, to be removed in v22
+	log.Infof("Dynamic Config Debug: Net read timeout: %v, Net write timeout: %v", ts.config.NetReadTimeout, ts.config.NetWriteTimeout)
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", ts.config.NetReadTimeout), 1, false); err != nil {
 		return err
 	}
-	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.GetVReplicationNetWriteTimeout()), 1, false); err != nil {
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", ts.config.NetWriteTimeout), 1, false); err != nil {
 		return err
 	}
 

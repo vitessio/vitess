@@ -95,7 +95,6 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		return nil
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	vttablet.InitVReplicationConfigDefaults()
 	return &rowStreamer{
 		ctx:     ctx,
 		cancel:  cancel,
@@ -138,11 +137,12 @@ func (rs *rowStreamer) Stream() error {
 		if _, err := rs.conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
 			return err
 		}
-		// FIXME (Rohit): change these to accept options passed into the API
-		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.GetVReplicationNetReadTimeout()), 1, false); err != nil {
+		// temp log to debug dynamic flags, to be removed in v22
+		log.Infof("Dynamic Config Debug: Net read timeout: %v, Net write timeout: %v", rs.config.NetReadTimeout, rs.config.NetWriteTimeout)
+		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", rs.config.NetReadTimeout), 1, false); err != nil {
 			return err
 		}
-		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.GetVReplicationNetWriteTimeout()), 1, false); err != nil {
+		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", rs.config.NetReadTimeout), 1, false); err != nil {
 			return err
 		}
 	}
@@ -251,7 +251,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
-	buf.Myprintf("select %s", GetVReplicationMaxExecutionTimeQueryHint())
+	buf.Myprintf("select %s", GetVReplicationMaxExecutionTimeQueryHint(rs.config.CopyPhaseDuration))
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
@@ -466,7 +466,6 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	return nil
 }
 
-func GetVReplicationMaxExecutionTimeQueryHint() string {
-	// FIXME (Rohit): Use from API Options
-	return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", vttablet.GetVReplicationCopyPhaseDuration().Milliseconds())
+func GetVReplicationMaxExecutionTimeQueryHint(copyPhaseDuration time.Duration) string {
+	return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", copyPhaseDuration.Milliseconds())
 }
