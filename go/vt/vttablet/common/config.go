@@ -54,10 +54,10 @@ type VReplicationConfig struct {
 var configMutex sync.Mutex
 var DefaultVReplicationConfig *VReplicationConfig
 
-func InitVReplicationConfigDefaults() *VReplicationConfig {
+func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 	configMutex.Lock()
 	defer configMutex.Unlock()
-	if DefaultVReplicationConfig != nil {
+	if useCached && DefaultVReplicationConfig != nil {
 		return DefaultVReplicationConfig
 	}
 	DefaultVReplicationConfig = &VReplicationConfig{
@@ -85,6 +85,10 @@ func InitVReplicationConfigDefaults() *VReplicationConfig {
 		Overrides: make(map[string]string),
 	}
 	return DefaultVReplicationConfig
+}
+
+func InitVReplicationConfigDefaults() *VReplicationConfig {
+	return GetVReplicationConfigDefaults(true)
 }
 
 func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, error) {
