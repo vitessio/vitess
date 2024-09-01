@@ -77,13 +77,13 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, vc.vr.WorkflowConfig.CopyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, vc.vr.workflowConfig.CopyPhaseDuration)
 	defer cancel()
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
 
-	parallelism := int(math.Max(1, float64(vc.vr.WorkflowConfig.ParallelInsertWorkers)))
+	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	var copyWorkQueue *vcopierCopyWorkQueue
 
@@ -101,7 +101,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	var gtid string
 
 	vstreamOptions := &binlogdatapb.VStreamOptions{
-		ConfigOverrides: vc.vr.WorkflowConfig.Overrides,
+		ConfigOverrides: vc.vr.workflowConfig.Overrides,
 	}
 	serr := vc.vr.sourceVStreamer.VStreamTables(ctx, func(resp *binlogdatapb.VStreamTablesResponse) error {
 		defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())

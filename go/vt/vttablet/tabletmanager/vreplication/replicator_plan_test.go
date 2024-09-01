@@ -742,9 +742,9 @@ func TestBuildPlayerPlan(t *testing.T) {
 	vttablet.InitVReplicationConfigDefaults()
 	for _, tcase := range testcases {
 		vr := &vreplicator{
-			WorkflowConfig: vttablet.DefaultVReplicationConfig,
+			workflowConfig: vttablet.DefaultVReplicationConfig,
 		}
-		log.Infof("WorkflowConfig is %v", vr.WorkflowConfig)
+		log.Infof("WorkflowConfig is %v", vr.workflowConfig)
 		plan, err := vr.buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 		gotErr := ""
 		if err != nil {
@@ -783,7 +783,7 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 		}},
 	}
 	vr := &vreplicator{
-		WorkflowConfig: vttablet.DefaultVReplicationConfig,
+		workflowConfig: vttablet.DefaultVReplicationConfig,
 	}
 	_, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	want := "more than one target for source table t"
@@ -807,7 +807,7 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 		}},
 	}
 	vr := &vreplicator{
-		WorkflowConfig: vttablet.DefaultVReplicationConfig,
+		workflowConfig: vttablet.DefaultVReplicationConfig,
 	}
 	plan, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	assert.NoError(t, err)

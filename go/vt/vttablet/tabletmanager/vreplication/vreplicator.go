@@ -115,7 +115,7 @@ type vreplicator struct {
 	WorkflowName    string
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
-	WorkflowConfig             *vttablet.VReplicationConfig
+	workflowConfig             *vttablet.VReplicationConfig
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -155,7 +155,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats, workflowConfig.RelayLogMaxItems),
 		mysqld:          mysqld,
-		WorkflowConfig:  workflowConfig,
+		workflowConfig:  workflowConfig,
 	}
 	vr.setExistingRowsCopied()
 	return vr
@@ -1111,7 +1111,7 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 	if err := dbc.Connect(); err != nil {
 		return nil, vterrors.Wrap(err, "can't connect to database")
 	}
-	dbClient := newVDBClient(dbc, vr.stats, vr.WorkflowConfig.RelayLogMaxItems)
+	dbClient := newVDBClient(dbc, vr.stats, vr.workflowConfig.RelayLogMaxItems)
 	if _, err := vr.setSQLMode(ctx, dbClient); err != nil {
 		return nil, vterrors.Wrap(err, "failed to set sql_mode")
 	}

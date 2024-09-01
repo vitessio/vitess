@@ -142,7 +142,7 @@ func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, co
 		stats:          stats,
 		Source:         source,
 		collationEnv:   collationEnv,
-		workflowConfig: vr.WorkflowConfig,
+		workflowConfig: vr.workflowConfig,
 	}
 	for tableName := range colInfoMap {
 		lastpk, ok := copyState[tableName]
@@ -161,7 +161,7 @@ func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, co
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser, vr.WorkflowConfig)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser, vr.workflowConfig)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to build table replication plan for %s table", tableName)
 		}
