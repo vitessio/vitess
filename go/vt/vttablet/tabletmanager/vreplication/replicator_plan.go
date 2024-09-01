@@ -61,7 +61,7 @@ type ReplicatorPlan struct {
 	stats          *binlogplayer.Stats
 	Source         *binlogdatapb.BinlogSource
 	collationEnv   *collations.Environment
-	WorkflowConfig *vttablet.VReplicationConfig
+	workflowConfig *vttablet.VReplicationConfig
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -107,7 +107,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		stats:          rp.stats,
 		source:         rp.Source,
 		collationEnv:   rp.collationEnv,
-		WorkflowConfig: rp.WorkflowConfig,
+		workflowConfig: rp.workflowConfig,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewIdentifierCI(field.Name)

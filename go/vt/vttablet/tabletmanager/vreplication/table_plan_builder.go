@@ -29,11 +29,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 // This file contains just the builders for ReplicatorPlan and TablePlan.
@@ -62,7 +62,7 @@ type tablePlanBuilder struct {
 	pkIndices         []bool
 
 	collationEnv   *collations.Environment
-	WorkflowConfig *vttablet.VReplicationConfig
+	workflowConfig *vttablet.VReplicationConfig
 }
 
 // colExpr describes the processing to be performed to
@@ -142,7 +142,7 @@ func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, co
 		stats:          stats,
 		Source:         source,
 		collationEnv:   collationEnv,
-		WorkflowConfig: vr.WorkflowConfig,
+		workflowConfig: vr.WorkflowConfig,
 	}
 	for tableName := range colInfoMap {
 		lastpk, ok := copyState[tableName]
@@ -268,7 +268,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		stats:          stats,
 		source:         source,
 		collationEnv:   collationEnv,
-		WorkflowConfig: workflowConfig,
+		workflowConfig: workflowConfig,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -382,7 +382,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
 		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
 		CollationEnv:            tpb.collationEnv,
-		WorkflowConfig:          tpb.WorkflowConfig,
+		WorkflowConfig:          tpb.workflowConfig,
 	}
 }
 
@@ -885,7 +885,7 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 }
 
 func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
-	if tpb.WorkflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
+	if tpb.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
 		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
 		return nil
 	}
