@@ -89,9 +89,8 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 	lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
 	mode RowStreamerMode, conn *snapshotConn, options *binlogdatapb.VStreamOptions) *rowStreamer {
 
-	config, err := vttablet.NewVReplicationConfig(options.ConfigOverrides)
+	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		log.Errorf("Error parsing VReplicationConfig: %v", err)
 		return nil
 	}
 	ctx, cancel := context.WithCancel(ctx)

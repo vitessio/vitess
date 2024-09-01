@@ -280,7 +280,7 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 			vstreamRowsSendHook(ctx)
 		}
 		return send(rows)
-	})
+	}, nil)
 }
 
 func (ftc *fakeTabletConn) Close(ctx context.Context) error {

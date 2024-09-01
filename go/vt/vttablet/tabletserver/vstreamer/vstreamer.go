@@ -123,9 +123,8 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
 	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions) *vstreamer {
 
-	config, err := vttablet.NewVReplicationConfig(options.ConfigOverrides)
+	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		log.Errorf("Error parsing VReplicationConfig: %v", err)
 		return nil
 	}
 	ctx, cancel := context.WithCancel(ctx)

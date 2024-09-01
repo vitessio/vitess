@@ -20,7 +20,10 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"testing"
+
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	"github.com/stretchr/testify/require"
 
@@ -423,10 +426,14 @@ func TestStreamRowsCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	var options binlogdatapb.VStreamOptions
+	options.ConfigOverrides = make(map[string]string)
+	options.ConfigOverrides["vstream_dynamic_packet_size"] = "false"
+	options.ConfigOverrides["vstream_packet_size"] = "10"
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		cancel()
 		return nil
-	}, nil)
+	}, &options)
 	if got, want := err.Error(), "stream ended: context canceled"; got != want {
 		t.Errorf("err: %v, want %s", err, want)
 	}
@@ -442,6 +449,10 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 	go func() {
 		first := true
 		defer close(ch)
+		var options binlogdatapb.VStreamOptions
+		options.ConfigOverrides = make(map[string]string)
+		options.ConfigOverrides["vstream_dynamic_packet_size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
+		options.ConfigOverrides["vstream_packet_size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
 		err := engine.StreamRows(context.Background(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			if first {
 				if rows.Gtid == "" {
@@ -469,7 +480,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 			}
 			i++
 			return nil
-		}, nil)
+		}, &options)
 		if err != nil {
 			ch <- err
 		}

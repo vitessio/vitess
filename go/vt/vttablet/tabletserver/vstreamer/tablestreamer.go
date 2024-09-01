@@ -67,9 +67,8 @@ type tableStreamer struct {
 func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
 	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions) *tableStreamer {
 
-	config, err := vttablet.NewVReplicationConfig(options.ConfigOverrides)
+	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		log.Errorf("Error parsing VReplicationConfig: %v", err)
 		return nil
 	}
 	ctx, cancel := context.WithCancel(ctx)
