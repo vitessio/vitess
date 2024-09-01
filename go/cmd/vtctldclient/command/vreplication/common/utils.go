@@ -23,8 +23,6 @@ import (
 	"strings"
 	"time"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -38,6 +36,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 var (
@@ -150,22 +149,24 @@ func validateOnDDL(cmd *cobra.Command) error {
 	return nil
 }
 
+// ParseConfigOverrides converts a slice of key=value strings into a map of config overrides. The slice is passed
+// as a flag to the command, and the key=value pairs are used to override the default vreplication config values.
 func ParseConfigOverrides(overrides []string) (map[string]string, error) {
 	configOverrides := make(map[string]string)
+	defaultConfig, err := vttablet.NewVReplicationConfig(nil)
+	if err != nil {
+		return nil, err
+	}
 	for _, kv := range overrides {
 		parts := strings.SplitN(kv, "=", 2)
 		if len(parts) != 2 {
-			return nil, fmt.Errorf("Invalid config override: %s\n", kv)
+			return nil, fmt.Errorf("Invalid config override: %s", kv)
 		}
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		defaultConfig, err := vttablet.NewVReplicationConfig(nil)
-		if err != nil {
-			return nil, err
-		}
 		if _, ok := defaultConfig.Map()[key]; !ok {
-			return nil, fmt.Errorf("Unknown vreplication config flag: %s\n", key)
+			return nil, fmt.Errorf("Unknown vreplication config flag: %s", key)
 		}
 		configOverrides[key] = value
 	}

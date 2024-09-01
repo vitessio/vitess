@@ -1025,16 +1025,41 @@ func confirmKeyspacesRoutedTo(t *testing.T, keyspace string, routedKeyspace, tab
 	}
 }
 
-func GetVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[string]string {
+// getVReplicationConfig returns the vreplication config for one random workflow for a given tablet. Currently, this is
+// used when there is only one workflow, so we are using this simple method to get the config.
+func getVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[string]string {
 	configJson, err := getDebugVar(t, tab.Port, []string{"VReplicationConfig"})
 	require.NoError(t, err)
+
 	var config map[string]string
 	err = json2.Unmarshal([]byte(configJson), &config)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(config))
+
 	configJson = config[maps.Keys(config)[0]]
 	config = nil
 	err = json2.Unmarshal([]byte(configJson), &config)
 	require.NoError(t, err)
+
 	return config
+}
+
+func mapToCSV(m map[string]string) string {
+	csv := ""
+	for k, v := range m {
+		csv += fmt.Sprintf("%s=%s,", k, v)
+	}
+	if len(csv) == 0 {
+		return csv
+	}
+	return csv[:len(csv)-1]
+}
+
+func validateOverrides(t *testing.T, tabs map[string]*cluster.VttabletProcess, want map[string]string) {
+	for _, tab := range tabs {
+		config := getVReplicationConfig(t, tab)
+		for k, v := range want {
+			require.EqualValues(t, v, config[k])
+		}
+	}
 }

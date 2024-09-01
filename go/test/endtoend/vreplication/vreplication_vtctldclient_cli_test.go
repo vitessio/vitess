@@ -103,11 +103,16 @@ func TestVtctldclientCLI(t *testing.T) {
 // Tests several create flags and some complete flags and validates that some of them are set correctly for the workflow.
 func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
 	tables := "customer,customer2"
+	overrides := map[string]string{
+		"vreplication_net_read_timeout":        "6000",
+		"relay_log_max_items":                  "10000",
+		"vreplication-parallel-insert-workers": "10",
+	}
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells",
-		"--config-overrides", "vreplication_net_read_timeout=6000,relay_log_max_items=10000,vreplication-parallel-insert-workers=10",
+		"--config-overrides", mapToCSV(overrides),
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 	switchFlags := []string{}
@@ -124,13 +129,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	validateMoveTablesWorkflow(t, workflowResponse.Workflows)
 	// Since we used --no-routing-rules, there should be no routing rules.
 	confirmNoRoutingRules(t)
-	for _, tab := range targetTabs {
-		config := GetVReplicationConfig(t, tab)
-		require.EqualValues(t, "6000", config["vreplication_net_read_timeout"])
-		require.EqualValues(t, "10000", config["relay_log_max_items"])
-		require.EqualValues(t, "10", config["vreplication-parallel-insert-workers"])
-	}
-
+	validateOverrides(t, targetTabs, overrides)
 }
 
 func getMoveTablesShowResponse(mt *iMoveTables) *vtctldatapb.GetWorkflowsResponse {
@@ -227,15 +226,10 @@ func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
 }
 
 func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[string]*cluster.VttabletProcess, targetKeyspace, workflow string) {
-	updateConfig := func(t *testing.T, config map[string]string) error {
-		c := ""
-		for k, v := range config {
-			if len(c) > 0 {
-				c += ","
-			}
-			c += fmt.Sprintf("%s=%s", k, v)
-		}
-		_, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKeyspace, "update", "--workflow", workflow, "--config-overrides", c)
+	updateConfig := func(t *testing.T, overrides map[string]string) error {
+		overridesCSV := mapToCSV(overrides)
+		_, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKeyspace, "update",
+			"--workflow", workflow, "--config-overrides", overridesCSV)
 		return err
 	}
 	var tab *cluster.VttabletProcess
@@ -243,7 +237,7 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 		break
 	}
 	require.NotNil(t, tab)
-
+	defaultConfig := vttablet.InitVReplicationConfigDefaults()
 	type testCase struct {
 		name      string
 		config    map[string]string
@@ -252,9 +246,8 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 	}
 	testCases := []testCase{
 		{
-			name: "reset flags",
-			config: map[string]string{"vreplication_net_read_timeout": "", "relay_log_max_items": "", "vreplication-parallel-insert-workers": "",
-				"vreplication_copy_phase_duration": "", "vreplication_experimental_flags": ""},
+			name:   "reset flags",
+			config: defaultConfig.Map(),
 			clears: true,
 		},
 		{
@@ -262,26 +255,41 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 			config: nil,
 		},
 		{
-			name:   "one value",
-			config: map[string]string{"vreplication_heartbeat_update_interval": "10"},
+			name: "one value",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "10",
+			},
 		},
 		{
-			name:   "two values",
-			config: map[string]string{"vreplication_heartbeat_update_interval": "100", "vreplication_store_compressed_gtid": "true"},
+			name: "two values",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "100",
+				"vreplication_store_compressed_gtid":     "true",
+			},
 		},
 		{
-			name:      "invalid value",
-			config:    map[string]string{"vreplication_heartbeat_update_interval": "12s", "vreplication_store_compressed_gtid": "true"},
+			name: "invalid value",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "12s",
+				"vreplication_store_compressed_gtid":     "true",
+			},
 			needError: true,
 		},
 		{
-			name:      "unknown flag",
-			config:    map[string]string{"vreplication_heartbeat_update_interval": "1", "vreplication_store_compressed_gtid": "true", "unknown": "value"},
+			name: "unknown flag",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "1",
+				"vreplication_store_compressed_gtid":     "true",
+				"unknown":                                "value",
+			},
 			needError: true,
 		},
 		{
-			name:   "clear flags",
-			config: map[string]string{"vreplication_heartbeat_update_interval": "", "vreplication_store_compressed_gtid": ""},
+			name: "clear flags",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "",
+				"vreplication_store_compressed_gtid":     "",
+			},
 			clears: true,
 		},
 	}
@@ -298,7 +306,7 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 				expectedConfig, err = vttablet.NewVReplicationConfig(tc.config)
 				require.NoError(t, err)
 			}
-			config := GetVReplicationConfig(t, tab)
+			config := getVReplicationConfig(t, tab)
 			if tc.clears {
 				expectedConfig, err = vttablet.NewVReplicationConfig(nil)
 				require.NoError(t, err)
@@ -329,10 +337,17 @@ func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName
 // reshard helpers
 
 func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess) {
+	overrides := map[string]string{
+		"vreplication_copy_phase_duration":     "10h11m12s",
+		"vreplication_experimental_flags":      "7",
+		"vreplication-parallel-insert-workers": "4",
+		"vreplication_net_read_timeout":        "6000",
+		"relay_log_max_items":                  "10000",
+	}
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--format=json",
-		"--config-overrides", "vreplication_copy_phase_duration=10h,vreplication_experimental_flags=7,vreplication-parallel-insert-workers=4, vreplication_net_read_timeout=6000, relay_log_max_items=10000",
+		"--config-overrides", mapToCSV(overrides),
 	}
 	rs := newReshard(vc, &reshardWorkflow{
 		workflowInfo: &workflowInfo{
@@ -348,13 +363,7 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflowName)
 	rs.Create()
 	validateReshardResponse(rs)
-	for _, tab := range targetTabs {
-		config := GetVReplicationConfig(t, tab)
-		require.EqualValues(t, "10h0m0s", config["vreplication_copy_phase_duration"])
-		require.EqualValues(t, "7", config["vreplication_experimental_flags"])
-		require.EqualValues(t, "4", config["vreplication-parallel-insert-workers"])
-
-	}
+	validateOverrides(t, targetTabs, overrides)
 	workflowResponse := getWorkflow(keyspace, workflowName)
 	reshardShowResponse := getReshardShowResponse(&rs)
 	require.EqualValues(t, reshardShowResponse, workflowResponse)
