@@ -265,7 +265,9 @@ export const deleteTablet = async ({ allowPrimary, clusterID, alias }: DeleteTab
         req.append('allow_primary', allowPrimary.toString());
     }
 
-    const { result } = await vtfetch(`/api/tablet/${alias}?${req}`, { method: 'delete' });
+    const { result } = await vtfetch(`/api/tablet/${alias}?${req}`, {
+        method: 'delete',
+    });
 
     const err = pb.DeleteTabletResponse.verify(result);
     if (err) throw Error(err);
@@ -437,6 +439,15 @@ export const fetchWorkflow = async (params: { clusterID: string; keyspace: strin
     return pb.Workflow.create(result);
 };
 
+export const fetchWorkflowStatus = async (params: { clusterID: string; keyspace: string; name: string }) => {
+    const { result } = await vtfetch(`/api/workflow/${params.clusterID}/${params.keyspace}/${params.name}/status`);
+
+    const err = vtctldata.WorkflowStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowStatusResponse.create(result);
+};
+
 export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {
     // As an easy enhancement for later, we can also validate the request parameters on the front-end
     // instead of defaulting to '', to save a round trip.
@@ -553,7 +564,9 @@ export const reloadSchema = async (params: ReloadSchemaParams) => {
         req.append('wait_position', params.waitPosition);
     }
 
-    const { result } = await vtfetch(`/api/schemas/reload?${req}`, { method: 'put' });
+    const { result } = await vtfetch(`/api/schemas/reload?${req}`, {
+        method: 'put',
+    });
 
     const err = pb.ReloadSchemasResponse.verify(result);
     if (err) throw Error(err);
@@ -574,7 +587,9 @@ export const deleteShard = async (params: DeleteShardParams) => {
     req.append('even_if_serving', String(params.evenIfServing));
     req.append('recursive', String(params.recursive));
 
-    const { result } = await vtfetch(`/api/shards/${params.clusterID}?${req}`, { method: 'delete' });
+    const { result } = await vtfetch(`/api/shards/${params.clusterID}?${req}`, {
+        method: 'delete',
+    });
 
     const err = vtctldata.DeleteShardsResponse.verify(result);
     if (err) throw Error(err);
@@ -701,7 +716,10 @@ export interface RebuildKeyspaceGraphParams {
 export const rebuildKeyspaceGraph = async (params: RebuildKeyspaceGraphParams) => {
     const { result } = await vtfetch(`/api/keyspace/${params.clusterID}/${params.keyspace}/rebuild_keyspace_graph`, {
         method: 'put',
-        body: JSON.stringify({ cells: params.cells, allow_partial: params.allowPartial }),
+        body: JSON.stringify({
+            cells: params.cells,
+            allow_partial: params.allowPartial,
+        }),
     });
     const err = pb.RebuildKeyspaceGraphRequest.verify(result);
     if (err) throw Error(err);
@@ -720,7 +738,11 @@ export interface RemoveKeyspaceCellParams {
 export const removeKeyspaceCell = async (params: RemoveKeyspaceCellParams) => {
     const { result } = await vtfetch(`/api/keyspace/${params.clusterID}/${params.keyspace}/remove_keyspace_cell`, {
         method: 'put',
-        body: JSON.stringify({ cell: params.cell, force: params.force, recursive: params.recursive }),
+        body: JSON.stringify({
+            cell: params.cell,
+            force: params.force,
+            recursive: params.recursive,
+        }),
     });
     const err = pb.RemoveKeyspaceCellRequest.verify(result);
     if (err) throw Error(err);

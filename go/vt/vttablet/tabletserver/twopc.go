@@ -169,7 +169,7 @@ func (tpc *TwoPC) Close() {
 }
 
 // SaveRedo saves the statements in the redo log using the supplied connection.
-func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []string) error {
+func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []tx.Query) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":         sqltypes.StringBindVariable(dtid),
 		"state":        sqltypes.Int64BindVariable(RedoStatePrepared),
@@ -185,7 +185,7 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 		rows[i] = []sqltypes.Value{
 			sqltypes.NewVarBinary(dtid),
 			sqltypes.NewInt64(int64(i + 1)),
-			sqltypes.NewVarBinary(query),
+			sqltypes.NewVarBinary(query.Sql),
 		}
 	}
 	extras := map[string]sqlparser.Encodable{
@@ -374,7 +374,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		return nil, vterrors.Wrapf(err, "error parsing state for dtid %s", dtid)
 	}
 	result.State = querypb.TransactionState(st)
-	if result.State < querypb.TransactionState_PREPARE || result.State > querypb.TransactionState_COMMIT {
+	if result.State < DTStatePrepare || result.State > DTStateCommit {
 		return nil, fmt.Errorf("unexpected state for dtid %s: %v", dtid, result.State)
 	}
 	// A failure in time parsing will show up as a very old time,
@@ -427,7 +427,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx,
 				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
 			}
 			protostate := querypb.TransactionState(st)
-			if protostate < querypb.TransactionState_PREPARE || protostate > querypb.TransactionState_COMMIT {
+			if protostate < DTStatePrepare || protostate > DTStateCommit {
 				log.Errorf("Unexpected state for dtid %s: %v.", dtid, protostate)
 			}
 			curTx = &tx.DistributedTx{

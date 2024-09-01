@@ -48,7 +48,8 @@ type VStreamerClient interface {
 	Close(context.Context) error
 
 	// VStream streams VReplication events based on the specified filter.
-	VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter,
+		send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error
 
 	// VStreamRows streams rows of a table from the specified starting point.
 	VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
@@ -110,7 +111,7 @@ func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
 	return c, nil
 }
 
-//-----------------------------------------------------------
+// -----------------------------------------------------------
 
 type mysqlConnector struct {
 	env       tabletenv.Env
@@ -131,8 +132,9 @@ func (c *mysqlConnector) Close(ctx context.Context) error {
 	return nil
 }
 
-func (c *mysqlConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return c.vstreamer.Stream(ctx, startPos, tablePKs, filter, throttlerapp.ExternalConnectorName, send)
+func (c *mysqlConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
+	filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+	return c.vstreamer.Stream(ctx, startPos, tablePKs, filter, throttlerapp.ExternalConnectorName, send, nil)
 }
 
 func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
@@ -151,7 +153,7 @@ func (c *mysqlConnector) VStreamTables(ctx context.Context, send func(response *
 	return c.vstreamer.StreamTables(ctx, send)
 }
 
-//-----------------------------------------------------------
+// -----------------------------------------------------------
 
 type tabletConnector struct {
 	tablet *topodatapb.Tablet
@@ -180,8 +182,9 @@ func (tc *tabletConnector) Close(ctx context.Context) error {
 	return tc.qs.Close(ctx)
 }
 
-func (tc *tabletConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	req := &binlogdatapb.VStreamRequest{Target: tc.target, Position: startPos, TableLastPKs: tablePKs, Filter: filter}
+func (tc *tabletConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
+	filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+	req := &binlogdatapb.VStreamRequest{Target: tc.target, Position: startPos, TableLastPKs: tablePKs, Filter: filter, Options: options}
 	return tc.qs.VStream(ctx, req, send)
 }
 

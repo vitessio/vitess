@@ -218,6 +218,8 @@ enum Type {
   // VECTOR specifies a VECTOR type
   // Properties: 35, IsQuoted.
   VECTOR = 2083;
+  // RAW specifies a type which won't be quoted but the value used as-is while encoding.
+  RAW = 2084;
 }
 
 // Value represents a typed value.

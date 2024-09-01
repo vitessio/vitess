@@ -243,9 +243,9 @@ func (node *With) FormatFast(buf *TrackedBuffer) {
 func (node *CommonTableExpr) FormatFast(buf *TrackedBuffer) {
 	node.ID.FormatFast(buf)
 	node.Columns.FormatFast(buf)
-	buf.WriteString(" as ")
+	buf.WriteString(" as (")
 	node.Subquery.FormatFast(buf)
-	buf.WriteByte(' ')
+	buf.WriteString(") ")
 }
 
 // FormatFast formats the node.

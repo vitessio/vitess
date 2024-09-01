@@ -755,7 +755,7 @@ with_list:
 common_table_expr:
   table_id column_list_opt AS subquery
   {
-    $$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4}
+    $$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4.Select}
   }
 
 query_expression_parens:

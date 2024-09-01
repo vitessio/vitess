@@ -14,8 +14,10 @@ if [ -z "${GO_MOD_VERSION}" ]; then
   exit 1
 fi
 
-# ci workflows
-TPL_GO_VERSIONS="$(awk '/go-version: /{print $(NF-0)}' .github/workflows/*.yml test/templates/*.tpl | sort -u)"
+# ci workflows excluding upgrade/downgrade tests
+TPL_GO_VERSIONS="$(find .github/workflows test/templates -type f \( -name '*.yml' -o -name '*.tpl' \) \
+  ! -name 'upgrade_downgrade_test*.yml' \
+  -exec awk '/go-version: /{print $(NF-0)}' {} + | sort -u)"
 TPL_GO_VERSIONS_COUNT=$(echo "$TPL_GO_VERSIONS" | wc -l | tr -d [:space:])
 if [ "${TPL_GO_VERSIONS_COUNT}" -gt 1 ]; then
   echo -e "expected a consistent 'go-version:' in CI workflow files/templates, found versions:\n${TPL_GO_VERSIONS}"

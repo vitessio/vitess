@@ -10591,7 +10591,7 @@ yydefault:
 		var yyLOCAL *CommonTableExpr
 //line sql.y:757
 		{
-			yyLOCAL = &CommonTableExpr{ID: yyDollar[1].identifierCS, Columns: yyDollar[2].columnsUnion(), Subquery: yyDollar[4].subqueryUnion()}
+			yyLOCAL = &CommonTableExpr{ID: yyDollar[1].identifierCS, Columns: yyDollar[2].columnsUnion(), Subquery: yyDollar[4].subqueryUnion().Select}
 		}
 		yyVAL.union = yyLOCAL
 	case 54:

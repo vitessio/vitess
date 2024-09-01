@@ -2275,10 +2275,11 @@ func (m *VDiffReportOptions) CloneVT() *VDiffReportOptions {
 		return (*VDiffReportOptions)(nil)
 	}
 	r := &VDiffReportOptions{
-		OnlyPks:       m.OnlyPks,
-		DebugQuery:    m.DebugQuery,
-		Format:        m.Format,
-		MaxSampleRows: m.MaxSampleRows,
+		OnlyPks:                 m.OnlyPks,
+		DebugQuery:              m.DebugQuery,
+		Format:                  m.Format,
+		MaxSampleRows:           m.MaxSampleRows,
+		RowDiffColumnTruncateAt: m.RowDiffColumnTruncateAt,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -8134,6 +8135,11 @@ func (m *VDiffReportOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.RowDiffColumnTruncateAt != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.RowDiffColumnTruncateAt))
+		i--
+		dAtA[i] = 0x28
+	}
 	if m.MaxSampleRows != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.MaxSampleRows))
 		i--
@@ -11308,6 +11314,9 @@ func (m *VDiffReportOptions) SizeVT() (n int) {
 	}
 	if m.MaxSampleRows != 0 {
 		n += 1 + sov(uint64(m.MaxSampleRows))
+	}
+	if m.RowDiffColumnTruncateAt != 0 {
+		n += 1 + sov(uint64(m.RowDiffColumnTruncateAt))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -23777,6 +23786,25 @@ func (m *VDiffReportOptions) UnmarshalVT(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.MaxSampleRows |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RowDiffColumnTruncateAt", wireType)
+			}
+			m.RowDiffColumnTruncateAt = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RowDiffColumnTruncateAt |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

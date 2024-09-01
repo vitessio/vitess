@@ -12,6 +12,8 @@
   - **[New VTGate Shutdown Behavior](#new-vtgate-shutdown-behavior)**
   - **[Tablet Throttler: Multi-Metric support](#tablet-throttler)**
   - **[Allow Cross Cell Promotion in PRS](#allow-cross-cell)**
+  - **[Support for recursive CTEs](#recursive-cte)**
+  - **[VTGate Tablet Balancer](#tablet-balancer)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -102,3 +104,13 @@ Metrics are assigned a default _scope_, which could be `self` (isolated to the t
 Up until now if the users wanted to promote a replica in a different cell than the current primary using `PlannedReparentShard`, they had to specify the new primary with the `--new-primary` flag.
 
 We have now added a new flag `--allow-cross-cell-promotion` that lets `PlannedReparentShard` choose a primary in a different cell even if no new primary is provided explicitly.
+
+### <a id="recursive-cte"/>Experimental support for recursive CTEs
+We have added experimental support for recursive CTEs in Vitess. We are marking it as experimental because it is not yet fully tested and may have some limitations. We are looking for feedback from the community to improve this feature.
+
+### <a id="tablet-balancer"/>VTGate Tablet Balancer
+When a VTGate routes a query and has multiple available tablets for a given shard / tablet type (e.g. REPLICA), the current default behavior routes the query with local cell affinity and round robin policy. The VTGate Tablet Balancer provides an alternate mechanism that routes queries to maintain an even distribution of query load to each tablet, while preferentially routing to tablets in the same cell as the VTGate.
+
+The tablet balancer is enabled by a new flag `--enable-balancer` and configured by `--balancer-vtgate-cells` and `--balancer-keyspaces`.
+
+See [RFC for details](https://github.com/vitessio/vitess/issues/12241).

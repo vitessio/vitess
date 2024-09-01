@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -37,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/balancer"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -54,6 +57,11 @@ var (
 	// retryCount is the number of times a query will be retried on error
 	retryCount = 2
 
+	// configuration flags for the tablet balancer
+	balancerEnabled     bool
+	balancerVtgateCells []string
+	balancerKeyspaces   []string
+
 	logCollations = logutil.NewThrottledLogger("CollationInconsistent", 1*time.Minute)
 )
 
@@ -62,6 +70,9 @@ func init() {
 		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
+		fs.BoolVar(&balancerEnabled, "enable-balancer", false, "Enable the tablet balancer to evenly spread query load for a given tablet type")
+		fs.StringSliceVar(&balancerVtgateCells, "balancer-vtgate-cells", []string{}, "When in balanced mode, a comma-separated list of cells that contain vtgates (required)")
+		fs.StringSliceVar(&balancerKeyspaces, "balancer-keyspaces", []string{}, "When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)")
 	})
 }
 
@@ -84,6 +95,9 @@ type TabletGateway struct {
 
 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
+
+	// balancer used for routing to tablets
+	balancer balancer.TabletBalancer
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
@@ -112,6 +126,9 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
+	if balancerEnabled {
+		gw.setupBalancer(ctx)
+	}
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
@@ -143,6 +160,13 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 			}
 		}
 	}(bufferCtx, ksChan, gw.buffer)
+}
+
+func (gw *TabletGateway) setupBalancer(ctx context.Context) {
+	if len(balancerVtgateCells) == 0 {
+		log.Exitf("balancer-vtgate-cells is required for balanced mode")
+	}
+	gw.balancer = balancer.NewTabletBalancer(gw.localCell, balancerVtgateCells)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -191,11 +215,24 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 	}
 
 	// Finds the targets to look for.
-	targets, err := srvtopo.FindAllTargets(ctx, gw.srvTopoServer, gw.localCell, discovery.KeyspacesToWatch, tabletTypesToWait)
+	targets, keyspaces, err := srvtopo.FindAllTargetsAndKeyspaces(ctx, gw.srvTopoServer, gw.localCell, discovery.KeyspacesToWatch, tabletTypesToWait)
 	if err != nil {
 		return err
 	}
-	return gw.hc.WaitForAllServingTablets(ctx, targets)
+	err = gw.hc.WaitForAllServingTablets(ctx, targets)
+	if err != nil {
+		return err
+	}
+	// After having waited for all serving tablets. We should also wait for the keyspace event watcher to have seen
+	// the updates and marked all the keyspaces as consistent (if we want to wait for primary tablets).
+	// Otherwise, we could be in a situation where even though the healthchecks have arrived, the keyspace event watcher hasn't finished processing them.
+	// So, if a primary tablet goes non-serving (because of a PRS or some other reason), we won't be able to start buffering.
+	// Waiting for the keyspaces to become consistent ensures that all the primary tablets for all the shards should be serving as seen by the keyspace event watcher
+	// and any disruption from now on, will make sure we start buffering properly.
+	if topoproto.IsTypeInList(topodatapb.TabletType_PRIMARY, tabletTypesToWait) && gw.kev != nil {
+		return gw.kev.WaitForConsistentKeyspaces(ctx, keyspaces)
+	}
+	return nil
 }
 
 // Close shuts down underlying connections.
@@ -218,6 +255,15 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 	gw.mu.Unlock()
 	sort.Sort(res)
 	return res
+}
+
+func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Request) {
+	if balancerEnabled {
+		gw.balancer.DebugHandler(w, r)
+	} else {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("not enabled"))
+	}
 }
 
 // withRetry gets available connections and executes the action. If there are retryable errors,
@@ -282,18 +328,21 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		if len(tablets) == 0 {
 			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
 			// or if a reparent operation is in progress.
-			if kev := gw.kev; kev != nil {
+			// We only check for whether reshard is ongoing or primary is serving or not, only if the target is primary. We don't want to buffer
+			// replica queries, so it doesn't make any sense to check for resharding or reparenting in that case.
+			if kev := gw.kev; kev != nil && target.TabletType == topodatapb.TabletType_PRIMARY {
 				if kev.TargetIsBeingResharded(ctx, target) {
 					log.V(2).Infof("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack())
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReshardingInProgress)
 					continue
 				}
-				primary, notServing := kev.PrimaryIsNotServing(ctx, target)
-				if notServing {
+				primary, shouldBuffer := kev.ShouldStartBufferingForTarget(ctx, target)
+				if shouldBuffer {
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReparentInProgress)
 					continue
 				}
-				// if primary is serving, but we initially found no tablet, we're in an inconsistent state
+				// if the keyspace event manager doesn't think we should buffer queries, and also sees a primary tablet,
+				// but we initially found no tablet, we're in an inconsistent state
 				// we then retry the entire loop
 				if primary != nil {
 					err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "inconsistent state detected, primary is serving but initially found no available tablet")
@@ -306,16 +355,35 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
-		gw.shuffleTablets(gw.localCell, tablets)
-
 		var th *discovery.TabletHealth
-		// skip tablets we tried before
-		for _, t := range tablets {
-			if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
-				th = t
-				break
+
+		useBalancer := balancerEnabled
+		if balancerEnabled && len(balancerKeyspaces) > 0 {
+			useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
+		}
+		if useBalancer {
+			// filter out the tablets that we've tried before (if any), then pick the best one
+			if len(invalidTablets) > 0 {
+				tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
+					_, isInvalid := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]
+					return isInvalid
+				})
+			}
+
+			th = gw.balancer.Pick(target, tablets)
+
+		} else {
+			gw.shuffleTablets(gw.localCell, tablets)
+
+			// skip tablets we tried before
+			for _, t := range tablets {
+				if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
+					th = t
+					break
+				}
 			}
 		}
+
 		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {

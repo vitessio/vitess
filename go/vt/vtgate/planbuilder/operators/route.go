@@ -19,12 +19,10 @@ package operators
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -121,7 +119,7 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 	nr := &NoneRouting{keyspace: ks}
 
-	if isConstantFalse(ctx.VSchema.Environment(), expr, ctx.VSchema.ConnCollation()) {
+	if isConstantFalse(ctx, expr) {
 		return nr
 	}
 
@@ -165,11 +163,19 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 
 // isConstantFalse checks whether this predicate can be evaluated at plan-time. If it returns `false` or `null`,
 // we know that the query will not return anything, and this can be used to produce better plans
-func isConstantFalse(env *vtenv.Environment, expr sqlparser.Expr, collation collations.ID) bool {
+func isConstantFalse(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+	if !ctx.SemTable.RecursiveDeps(expr).IsEmpty() {
+		// we have column dependencies, so we can be pretty sure
+		// we won't be able to use the evalengine to check if this is constant false
+		return false
+	}
+	env := ctx.VSchema.Environment()
+	collation := ctx.VSchema.ConnCollation()
 	eenv := evalengine.EmptyExpressionEnv(env)
 	eexpr, err := evalengine.Translate(expr, &evalengine.Config{
-		Collation:   collation,
-		Environment: env,
+		Collation:     collation,
+		Environment:   env,
+		NoCompilation: true,
 	})
 	if err != nil {
 		return false

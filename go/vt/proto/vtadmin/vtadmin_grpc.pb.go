@@ -116,6 +116,12 @@ type VTAdminClient interface {
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
+	// GetWorkflowStatus returns the status for a specific workflow.
+	GetWorkflowStatus(ctx context.Context, in *GetWorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	// StartWorkflow starts a vreplication workflow.
+	StartWorkflow(ctx context.Context, in *StartWorkflowRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
+	// StopWorkflow stops a vreplication workflow.
+	StopWorkflow(ctx context.Context, in *StopWorkflowRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
 	// LaunchSchemaMigration launches one or all migrations in the given
 	// cluster executed with --postpone-launch.
 	LaunchSchemaMigration(ctx context.Context, in *LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
@@ -515,6 +521,33 @@ func (c *vTAdminClient) GetWorkflows(ctx context.Context, in *GetWorkflowsReques
 	return out, nil
 }
 
+func (c *vTAdminClient) GetWorkflowStatus(ctx context.Context, in *GetWorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetWorkflowStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) StartWorkflow(ctx context.Context, in *StartWorkflowRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error) {
+	out := new(vtctldata.WorkflowUpdateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/StartWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) StopWorkflow(ctx context.Context, in *StopWorkflowRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error) {
+	out := new(vtctldata.WorkflowUpdateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/StopWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) LaunchSchemaMigration(ctx context.Context, in *LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error) {
 	out := new(vtctldata.LaunchSchemaMigrationResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/LaunchSchemaMigration", in, out, opts...)
@@ -819,6 +852,12 @@ type VTAdminServer interface {
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
+	// GetWorkflowStatus returns the status for a specific workflow.
+	GetWorkflowStatus(context.Context, *GetWorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error)
+	// StartWorkflow starts a vreplication workflow.
+	StartWorkflow(context.Context, *StartWorkflowRequest) (*vtctldata.WorkflowUpdateResponse, error)
+	// StopWorkflow stops a vreplication workflow.
+	StopWorkflow(context.Context, *StopWorkflowRequest) (*vtctldata.WorkflowUpdateResponse, error)
 	// LaunchSchemaMigration launches one or all migrations in the given
 	// cluster executed with --postpone-launch.
 	LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
@@ -1004,6 +1043,15 @@ func (UnimplementedVTAdminServer) GetWorkflow(context.Context, *GetWorkflowReque
 }
 func (UnimplementedVTAdminServer) GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflows not implemented")
+}
+func (UnimplementedVTAdminServer) GetWorkflowStatus(context.Context, *GetWorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflowStatus not implemented")
+}
+func (UnimplementedVTAdminServer) StartWorkflow(context.Context, *StartWorkflowRequest) (*vtctldata.WorkflowUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartWorkflow not implemented")
+}
+func (UnimplementedVTAdminServer) StopWorkflow(context.Context, *StopWorkflowRequest) (*vtctldata.WorkflowUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopWorkflow not implemented")
 }
 func (UnimplementedVTAdminServer) LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LaunchSchemaMigration not implemented")
@@ -1717,6 +1765,60 @@ func _VTAdmin_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetWorkflowStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWorkflowStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetWorkflowStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetWorkflowStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetWorkflowStatus(ctx, req.(*GetWorkflowStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_StartWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).StartWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/StartWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).StartWorkflow(ctx, req.(*StartWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_StopWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).StopWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/StopWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).StopWorkflow(ctx, req.(*StopWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_LaunchSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LaunchSchemaMigrationRequest)
 	if err := dec(in); err != nil {
@@ -2277,6 +2379,18 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetWorkflows",
 			Handler:    _VTAdmin_GetWorkflows_Handler,
+		},
+		{
+			MethodName: "GetWorkflowStatus",
+			Handler:    _VTAdmin_GetWorkflowStatus_Handler,
+		},
+		{
+			MethodName: "StartWorkflow",
+			Handler:    _VTAdmin_StartWorkflow_Handler,
+		},
+		{
+			MethodName: "StopWorkflow",
+			Handler:    _VTAdmin_StopWorkflow_Handler,
 		},
 		{
 			MethodName: "LaunchSchemaMigration",

@@ -399,7 +399,7 @@ func (vh *vtgateHandler) KillConnection(ctx context.Context, connectionID uint32
 
 	c, exists := vh.connections[connectionID]
 	if !exists {
-		return sqlerror.NewSQLError(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
+		return sqlerror.NewSQLErrorf(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
 	}
 
 	// First, we mark the connection for close, so that even when the context is cancelled, while returning the response back to client,
@@ -417,7 +417,7 @@ func (vh *vtgateHandler) KillQuery(connectionID uint32) error {
 	defer vh.mu.Unlock()
 	c, exists := vh.connections[connectionID]
 	if !exists {
-		return sqlerror.NewSQLError(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
+		return sqlerror.NewSQLErrorf(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
 	}
 	c.CancelCtx()
 	return nil

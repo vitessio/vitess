@@ -186,7 +186,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tsv.lagThrottler)
-	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks, tsv.te.preparedPool.IsEmpty)
 
 	tsv.sm = &stateManager{
 		statelessql: tsv.statelessql,
@@ -476,11 +476,6 @@ func (tsv *TabletServer) TableGC() *gc.TableGC {
 	return tsv.tableGC
 }
 
-// TwoPCEngineWait waits until the TwoPC engine has been opened, and the redo read
-func (tsv *TabletServer) TwoPCEngineWait() {
-	tsv.te.twoPCReady.Wait()
-}
-
 // SchemaEngine returns the SchemaEngine part of TabletServer.
 func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 	return tsv.se
@@ -646,7 +641,7 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 		"Prepare", "prepare", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
 			return txe.Prepare(transactionID, dtid)
 		},
 	)
@@ -659,7 +654,7 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 		"CommitPrepared", "commit_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
 			if DebugTwoPc {
 				commitPreparedDelayForTest(tsv)
 			}
@@ -675,7 +670,7 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 		"RollbackPrepared", "rollback_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
 			return txe.RollbackPrepared(dtid, originalID)
 		},
 	)
@@ -688,7 +683,7 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 		"CreateTransaction", "create_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
 			return txe.CreateTransaction(dtid, participants)
 		},
 	)
@@ -702,7 +697,7 @@ func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target
 		"StartCommit", "start_commit", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
 			return txe.StartCommit(transactionID, dtid)
 		},
 	)
@@ -716,7 +711,7 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 		"SetRollback", "set_rollback", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
 			return txe.SetRollback(dtid, transactionID)
 		},
 	)
@@ -730,7 +725,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 		"ConcludeTransaction", "conclude_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
 			return txe.ConcludeTransaction(dtid)
 		},
 	)
@@ -743,7 +738,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 		"ReadTransaction", "read_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
 			metadata, err = txe.ReadTransaction(dtid)
 			return err
 		},
@@ -758,7 +753,7 @@ func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *que
 		"UnresolvedTransactions", "unresolved_transaction", nil,
 		target, nil, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, logStats)
+			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
 			transactions, err = txe.UnresolvedTransactions()
 			return err
 		},
@@ -1171,7 +1166,7 @@ func (tsv *TabletServer) VStream(ctx context.Context, request *binlogdatapb.VStr
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
+	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, request.Options)
 }
 
 // VStreamRows streams rows from the specified starting point.
@@ -1692,6 +1687,16 @@ func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.Throt
 	return r
 }
 
+// RedoPreparedTransactions redoes the prepared transactions.
+func (tsv *TabletServer) RedoPreparedTransactions() {
+	tsv.te.RedoPreparedTransactions()
+}
+
+// SetTwoPCAllowed sets whether TwoPC is allowed or not.
+func (tsv *TabletServer) SetTwoPCAllowed(allowed bool) {
+	tsv.te.twopcAllowed = allowed
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
@@ -1771,7 +1776,7 @@ func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
 func (tsv *TabletServer) registerTwopczHandler() {
 	tsv.exporter.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
-		txe := NewDTExecutor(ctx, tsv.te, tabletenv.NewLogStats(ctx, "twopcz"))
+		txe := NewDTExecutor(ctx, tsv.te, tsv.qe, tabletenv.NewLogStats(ctx, "twopcz"))
 		twopczHandler(txe, w, r)
 	})
 }

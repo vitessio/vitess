@@ -398,8 +398,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		optionsJSON := wf.GetOptions()
 		if optionsJSON != "" {
 			if err := json.Unmarshal([]byte(optionsJSON), &options); err != nil {
-				log.Errorf("failed to unmarshal options: %v %s", err, optionsJSON)
-				return nil, err
+				return nil, vterrors.Wrapf(err, "failed to unmarshal options: %s", optionsJSON)
 			}
 		}
 
@@ -671,7 +670,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 
 	wg.Wait()
 	if allErrors.HasErrors() {
-		log.Errorf("%s", allErrors.Error())
+		ts.Logger().Errorf("%s", allErrors.Error())
 		return allErrors.Error()
 	}
 	return nil

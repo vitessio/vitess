@@ -204,7 +204,6 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	rhs := TableID(aj.RHS)
 	both := lhs.Merge(rhs)
 	deps := ctx.SemTable.RecursiveDeps(e)
-
 	switch {
 	case deps.IsSolvedBy(lhs):
 		col.LHSExprs = []BindVarExpr{{Expr: e}}

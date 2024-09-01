@@ -57,7 +57,9 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	case *sqlparser.ComparisonExpr:
 		return handleComparisonExpr(cursor, node)
 	case *sqlparser.With:
-		return r.handleWith(node)
+		if !node.Recursive {
+			return r.handleWith(node)
+		}
 	case *sqlparser.AliasedTableExpr:
 		return r.handleAliasedTable(node)
 	case *sqlparser.Delete:
@@ -144,7 +146,7 @@ func (r *earlyRewriter) handleAliasedTable(node *sqlparser.AliasedTableExpr) err
 		node.As = tbl.Name
 	}
 	node.Expr = &sqlparser.DerivedTable{
-		Select: cte.Subquery.Select,
+		Select: cte.Subquery,
 	}
 	if len(cte.Columns) > 0 {
 		node.Columns = cte.Columns

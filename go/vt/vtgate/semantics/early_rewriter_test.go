@@ -184,6 +184,9 @@ func TestExpandStar(t *testing.T) {
 		// if we are only star-expanding authoritative tables, we don't need to stop the expansion
 		sql:    "SELECT * FROM (SELECT t2.*, 12 AS foo FROM t3, t2) as results",
 		expSQL: "select c1, c2, foo from (select t2.c1, t2.c2, 12 as foo from t3, t2) as results",
+	}, {
+		sql:    "with recursive hierarchy as (select t1.a, t1.b from t1 where t1.a is null union select t1.a, t1.b from t1 join hierarchy on t1.a = hierarchy.b) select * from hierarchy",
+		expSQL: "with recursive hierarchy as (select t1.a, t1.b from t1 where t1.a is null union select t1.a, t1.b from t1 join hierarchy on t1.a = hierarchy.b) select a, b from hierarchy",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

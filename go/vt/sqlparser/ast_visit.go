@@ -1172,7 +1172,7 @@ func VisitRefOfCommonTableExpr(in *CommonTableExpr, f Visit) error {
 	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfSubquery(in.Subquery, f); err != nil {
+	if err := VisitSelectStatement(in.Subquery, f); err != nil {
 		return err
 	}
 	return nil

@@ -1964,8 +1964,8 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
-		parent.(*CommonTableExpr).Subquery = newNode.(*Subquery)
+	if !a.rewriteSelectStatement(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).Subquery = newNode.(SelectStatement)
 	}) {
 		return false
 	}
