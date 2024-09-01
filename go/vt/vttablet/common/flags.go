@@ -75,7 +75,6 @@ func GetVReplicationCopyPhaseDuration() time.Duration {
 func init() {
 	servenv.OnParseFor("vttablet", registerFlags)
 	servenv.OnParseFor("vtcombo", registerFlags)
-
 }
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -92,11 +91,12 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.DurationVar(&vreplicationReplicaLagTolerance, "vreplication_replica_lag_tolerance", vreplicationReplicaLagTolerance, "Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase")
 
-	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
-	// vstream is only sending heartbeats for this long. Keep this low if you expect high QPS and are monitoring this column to alert about potential
-	// outages. Keep this high if
-	// 		you have too many streams the extra write qps or cpu load due to these updates are unacceptable
-	//		you have too many streams and/or a large source field (lot of participating tables) which generates unacceptable increase in your binlog size
+	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no
+	// real events on the source and the source vstream is only sending heartbeats for this long. Keep this low if you
+	//expect high QPS and are monitoring this column to alert about potential outages. Keep this high if
+	// 		* you have too many streams the extra write qps or cpu load due to these updates are unacceptable
+	//		* you have too many streams and/or a large source field (lot of participating tables) which generates
+	//			unacceptable increase in your binlog size
 	fs.IntVar(&vreplicationHeartbeatUpdateInterval, "vreplication_heartbeat_update_interval", vreplicationHeartbeatUpdateInterval, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
 	fs.BoolVar(&vreplicationStoreCompressedGTID, "vreplication_store_compressed_gtid", vreplicationStoreCompressedGTID, "Store compressed gtids in the pos column of the sidecar database's vreplication table")
 

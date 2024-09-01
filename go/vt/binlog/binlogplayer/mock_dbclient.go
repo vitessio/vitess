@@ -209,10 +209,6 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	}
 
 	if dc.currentResult >= len(dc.expect) {
-		// for k := range dc.invariants {
-		// 	 dc.t.Logf("Invariant is %v", k)
-		// }
-
 		msg := "???????????? DBClientMock: query: %s, no more requests are expected"
 		if dc.Tag != "" {
 			msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)

@@ -24,8 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -39,6 +37,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 // TestVtctldclientCLI tests the vreplication vtctldclient CLI commands, primarily to check that non-standard flags
