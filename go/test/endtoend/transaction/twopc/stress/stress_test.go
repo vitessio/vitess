@@ -338,7 +338,7 @@ func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
 	}
-	query := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
+	query := fmt.Sprintf("show vitess_migrations from %s like '%s'", keyspaceName, uuid)
 
 	statusesMap := map[string]bool{}
 	for _, status := range expectStatuses {
