@@ -495,5 +495,5 @@ type NonDeterministicDefaultError struct {
 }
 
 func (e *NonDeterministicDefaultError) Error() string {
-	return fmt.Sprintf("column %s.%s default value uses non-deterministic function: %v", sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column), e.Function)
+	return fmt.Sprintf("column %s.%s default value uses non-deterministic function: %s", sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column), e.Function)
 }
