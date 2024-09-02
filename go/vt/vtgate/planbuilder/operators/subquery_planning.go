@@ -633,7 +633,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
 		return &Route{
-			Source:        outer.Source,
+			SingleSource:  SingleSource{Source: outer.Source},
 			MergedWith:    mergedWith(inner, outer),
 			Routing:       outer.Routing,
 			Ordering:      outer.Ordering,
@@ -651,7 +651,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		src = s.rewriteASTExpression(ctx, inner)
 	}
 	return &Route{
-		Source:        src,
+		SingleSource:  SingleSource{Source: src},
 		MergedWith:    mergedWith(inner, outer),
 		Routing:       r,
 		Ordering:      s.outer.Ordering,

@@ -26,8 +26,8 @@ import (
 
 type (
 	Distinct struct {
-		Source Operator
-		QP     *QueryProjection
+		SingleSource
+		QP *QueryProjection
 
 		// When we go from AST to operator, we place DISTINCT ops in the required places in the op tree
 		// These are marked as `Required`, because they are semantically important to the results of the query.
@@ -44,6 +44,14 @@ type (
 		ResultColumns int
 	}
 )
+
+func newDistinct(src Operator, qp *QueryProjection, required bool) *Distinct {
+	return &Distinct{
+		SingleSource: SingleSource{Source: src},
+		QP:           qp,
+		Required:     required,
+	}
+}
 
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	columns := d.GetColumns(ctx)
@@ -66,22 +74,10 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 }
 
 func (d *Distinct) Clone(inputs []Operator) Operator {
-	return &Distinct{
-		Required:          d.Required,
-		Source:            inputs[0],
-		Columns:           slices.Clone(d.Columns),
-		QP:                d.QP,
-		PushedPerformance: d.PushedPerformance,
-		ResultColumns:     d.ResultColumns,
-	}
-}
-
-func (d *Distinct) Inputs() []Operator {
-	return []Operator{d.Source}
-}
-
-func (d *Distinct) SetInputs(operators []Operator) {
-	d.Source = operators[0]
+	kopy := *d
+	kopy.Columns = slices.Clone(d.Columns)
+	kopy.Source = inputs[0]
+	return &kopy
 }
 
 func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {

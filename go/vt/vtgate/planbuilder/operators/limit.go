@@ -22,8 +22,8 @@ import (
 )
 
 type Limit struct {
-	Source Operator
-	AST    *sqlparser.Limit
+	SingleSource
+	AST *sqlparser.Limit
 
 	// Top is true if the limit is a top level limit. To optimise, we push LIMIT to the RHS of joins,
 	// but we need to still LIMIT the total result set to the top level limit.
@@ -33,21 +33,19 @@ type Limit struct {
 	Pushed bool
 }
 
-func (l *Limit) Clone(inputs []Operator) Operator {
+func newLimit(op Operator, ast *sqlparser.Limit, top bool) *Limit {
 	return &Limit{
-		Source: inputs[0],
-		AST:    sqlparser.Clone(l.AST),
-		Top:    l.Top,
-		Pushed: l.Pushed,
+		SingleSource: SingleSource{Source: op},
+		AST:          ast,
+		Top:          top,
 	}
 }
 
-func (l *Limit) Inputs() []Operator {
-	return []Operator{l.Source}
-}
-
-func (l *Limit) SetInputs(operators []Operator) {
-	l.Source = operators[0]
+func (l *Limit) Clone(inputs []Operator) Operator {
+	k := *l
+	k.Source = inputs[0]
+	k.AST = sqlparser.Clone(l.AST)
+	return &k
 }
 
 func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {

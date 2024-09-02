@@ -34,7 +34,7 @@ type (
 	// Both all aggregations and no grouping, and the inverse
 	// of all grouping and no aggregations are valid configurations of this operator
 	Aggregator struct {
-		Source  Operator
+		SingleSource
 		Columns []*sqlparser.AliasedExpr
 
 		WithRollup   bool
@@ -73,14 +73,6 @@ func (a *Aggregator) Clone(inputs []Operator) Operator {
 	kopy.Grouping = slices.Clone(a.Grouping)
 	kopy.Aggregations = slices.Clone(a.Aggregations)
 	return &kopy
-}
-
-func (a *Aggregator) Inputs() []Operator {
-	return []Operator{a.Source}
-}
-
-func (a *Aggregator) SetInputs(operators []Operator) {
-	a.Source = operators[0]
 }
 
 func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {

@@ -33,7 +33,7 @@ import (
 
 type (
 	Route struct {
-		Source Operator
+		SingleSource
 
 		// Routes that have been merged into this one.
 		MergedWith []*Route
@@ -172,16 +172,6 @@ func (r *Route) Clone(inputs []Operator) Operator {
 	cloneRoute.Source = inputs[0]
 	cloneRoute.Routing = r.Routing.Clone()
 	return &cloneRoute
-}
-
-// Inputs implements the Operator interface
-func (r *Route) Inputs() []Operator {
-	return []Operator{r.Source}
-}
-
-// SetInputs implements the Operator interface
-func (r *Route) SetInputs(ops []Operator) {
-	r.Source = ops[0]
 }
 
 func createOption(
@@ -432,10 +422,10 @@ func createRouteFromVSchemaTable(
 		}
 	}
 	plan := &Route{
-		Source: &Table{
+		SingleSource: SingleSource{Source: &Table{
 			QTable: queryTable,
 			VTable: vschemaTable,
-		},
+		}},
 	}
 
 	// We create the appropriate Routing struct here, depending on the type of table we are dealing with.
@@ -689,8 +679,8 @@ func wrapInDerivedProjection(
 		columns = append(columns, sqlparser.NewIdentifierCI(fmt.Sprintf("c%d", i)))
 	}
 	derivedProj := &Projection{
-		Source:  op,
-		Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
+		SingleSource: SingleSource{Source: op},
+		Columns:      AliasedProjections(slice.Map(unionColumns, newProjExpr)),
 		DT: &DerivedTable{
 			TableID: ctx.SemTable.NewTableId(),
 			Alias:   "dt",

@@ -189,8 +189,8 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) O
 		routing = UpdateRoutingLogic(ctx, pred, routing)
 	}
 	return &Route{
-		Source:  src,
-		Routing: routing,
+		SingleSource: SingleSource{Source: src},
+		Routing:      routing,
 	}
 }
 

@@ -68,11 +68,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	op = addWherePredicates(ctx, sel.GetWherePredicate(), op)
 
 	if sel.Comments != nil || sel.Lock != sqlparser.NoLock {
-		op = &LockAndComment{
-			Source:   op,
-			Comments: sel.Comments,
-			Lock:     sel.Lock,
-		}
+		op = newLockAndComment(op, sel.Comments, sel.Lock)
 	}
 
 	op = newHorizon(op, sel)

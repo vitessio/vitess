@@ -160,27 +160,15 @@ func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {
 		src.Lock = l.Lock.GetHighestOrderLock(src.Lock)
 		return src, Rewrote("put lock and comment into route")
 	case *SubQueryContainer:
-		src.Outer = &LockAndComment{
-			Source:   src.Outer,
-			Comments: l.Comments,
-			Lock:     l.Lock,
-		}
+		src.Outer = newLockAndComment(src.Outer, l.Comments, l.Lock)
 		for _, sq := range src.Inner {
-			sq.Subquery = &LockAndComment{
-				Source:   sq.Subquery,
-				Comments: l.Comments,
-				Lock:     l.Lock,
-			}
+			sq.Subquery = newLockAndComment(sq.Subquery, l.Comments, l.Lock)
 		}
 		return src, Rewrote("push lock and comment into subquery container")
 	default:
 		inputs := src.Inputs()
 		for i, op := range inputs {
-			inputs[i] = &LockAndComment{
-				Source:   op,
-				Comments: l.Comments,
-				Lock:     l.Lock,
-			}
+			inputs[i] = newLockAndComment(op, l.Comments, l.Lock)
 		}
 		src.SetInputs(inputs)
 		return src, Rewrote("pushed down lock and comments")
@@ -436,10 +424,7 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 		pushedLimit.Rowcount = getLimitExpression(ctx, plus)
 		pushedLimit.Offset = nil
 	}
-	return &Limit{
-		Source: src,
-		AST:    pushedLimit,
-	}
+	return newLimit(src, pushedLimit, false)
 }
 
 // getLimitExpression is a helper function to simplify an expression using the evalengine
@@ -506,11 +491,8 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 				return SkipChildren
 			}
 		case *Route:
-			newSrc := &Limit{
-				Source: op.Source,
-				AST:    &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)},
-			}
-			op.Source = newSrc
+			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
+			op.Source = newLimit(op.Source, ast, false)
 			result = result.Merge(Rewrote("push upper limit under route"))
 			return SkipChildren
 		}
@@ -762,7 +744,7 @@ func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 			return in, NoRewrite
 		}
 
-		src.Source = &Distinct{Source: src.Source}
+		src.Source = newDistinct(src.Source, nil, false)
 		in.PushedPerformance = true
 
 		return in, Rewrote("added distinct under route - kept original")
@@ -772,14 +754,14 @@ func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 		return src, Rewrote("remove double distinct")
 	case *Union:
 		for i := range src.Sources {
-			src.Sources[i] = &Distinct{Source: src.Sources[i]}
+			src.Sources[i] = newDistinct(src.Sources[i], nil, false)
 		}
 		in.PushedPerformance = true
 
 		return in, Rewrote("push down distinct under union")
 	case JoinOp:
-		src.SetLHS(&Distinct{Source: src.GetLHS()})
-		src.SetRHS(&Distinct{Source: src.GetRHS()})
+		src.SetLHS(newDistinct(src.GetLHS(), nil, false))
+		src.SetRHS(newDistinct(src.GetRHS(), nil, false))
 		in.PushedPerformance = true
 
 		if in.Required {
@@ -830,10 +812,7 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 			return result, Rewrote("push union under route")
 		}
 
-		return &Distinct{
-			Source:   result,
-			Required: true,
-		}, Rewrote("push union under route")
+		return newDistinct(result, nil, true), Rewrote("push union under route")
 	}
 
 	if len(sources) == len(op.Sources) {

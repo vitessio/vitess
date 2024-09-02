@@ -48,10 +48,7 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 	}
 
 	if union.Limit != nil {
-		op = &Limit{
-			Source: op,
-			AST:    union.Limit,
-		}
+		op = newLimit(op, union.Limit, false)
 	}
 
 	if horizon.TableId != nil {
@@ -91,11 +88,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if qp.NeedsDistinct() {
-		op = &Distinct{
-			Required: true,
-			Source:   op,
-			QP:       qp,
-		}
+		op = newDistinct(op, qp, true)
 		extracted = append(extracted, "Distinct")
 	}
 
@@ -110,11 +103,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if sel.Limit != nil {
-		op = &Limit{
-			Source: op,
-			AST:    sel.Limit,
-			Top:    true,
-		}
+		op = newLimit(op, sel.Limit, true)
 		extracted = append(extracted, "Limit")
 	}
 
@@ -211,7 +200,7 @@ func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProject
 	aggregations, complexAggr := qp.AggregationExpressions(ctx, true)
 	src := horizon.Source
 	aggrOp := &Aggregator{
-		Source:       src,
+		SingleSource: SingleSource{Source: src},
 		Original:     true,
 		QP:           qp,
 		Grouping:     qp.GetGrouping(),
@@ -363,7 +352,7 @@ func newStarProjection(src Operator, qp *QueryProjection) *Projection {
 	}
 
 	return &Projection{
-		Source:  src,
-		Columns: StarProjections(cols),
+		SingleSource: SingleSource{Source: src},
+		Columns:      StarProjections(cols),
 	}
 }

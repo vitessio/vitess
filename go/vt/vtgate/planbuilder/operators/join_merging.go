@@ -236,8 +236,8 @@ func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *R
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route {
 	return &Route{
-		Source:     jm.getApplyJoin(ctx, op1, op2),
-		MergedWith: []*Route{op2},
-		Routing:    r,
+		SingleSource: SingleSource{Source: jm.getApplyJoin(ctx, op1, op2)},
+		MergedWith:   []*Route{op2},
+		Routing:      r,
 	}
 }

@@ -75,10 +75,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	op, vTbl = createDeleteOperator(ctx, deleteStmt)
 
 	if deleteStmt.Comments != nil {
-		op = &LockAndComment{
-			Source:   op,
-			Comments: deleteStmt.Comments,
-		}
+		op = newLockAndComment(op, deleteStmt.Comments, sqlparser.NoLock)
 	}
 
 	var err error
@@ -151,10 +148,7 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 	}
 
 	if del.Comments != nil {
-		op = &LockAndComment{
-			Source:   op,
-			Comments: del.Comments,
-		}
+		op = newLockAndComment(op, del.Comments, sqlparser.NoLock)
 	}
 	return op
 }
@@ -261,10 +255,7 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 	}
 
 	if del.Limit != nil {
-		delOp.Source = &Limit{
-			Source: addOrdering(ctx, op, del.OrderBy),
-			AST:    del.Limit,
-		}
+		delOp.Source = newLimit(addOrdering(ctx, op, del.OrderBy), del.Limit, false)
 	} else {
 		delOp.Source = op
 	}
