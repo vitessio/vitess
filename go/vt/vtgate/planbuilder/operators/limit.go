@@ -22,7 +22,7 @@ import (
 )
 
 type Limit struct {
-	SingleSource
+	unaryOperator
 	AST *sqlparser.Limit
 
 	// Top is true if the limit is a top level limit. To optimise, we push LIMIT to the RHS of joins,
@@ -35,9 +35,9 @@ type Limit struct {
 
 func newLimit(op Operator, ast *sqlparser.Limit, top bool) *Limit {
 	return &Limit{
-		SingleSource: SingleSource{Source: op},
-		AST:          ast,
-		Top:          top,
+		unaryOperator: unaryOperator{Source: op},
+		AST:           ast,
+		Top:           top,
 	}
 }
 

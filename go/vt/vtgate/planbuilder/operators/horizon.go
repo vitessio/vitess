@@ -35,7 +35,7 @@ import (
 // Project/Aggregate/Sort/Limit operations, some which can be pushed down,
 // and some that have to be evaluated at the vtgate level.
 type Horizon struct {
-	SingleSource
+	unaryOperator
 
 	// If this is a derived table, the two following fields will contain the tableID and name of it
 	TableId       *semantics.TableSet
@@ -56,8 +56,8 @@ type Horizon struct {
 
 func newHorizon(src Operator, query sqlparser.SelectStatement) *Horizon {
 	return &Horizon{
-		SingleSource: SingleSource{Source: src},
-		Query:        query,
+		unaryOperator: unaryOperator{Source: src},
+		Query:         query,
 	}
 }
 

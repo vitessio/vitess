@@ -222,9 +222,9 @@ func createMergedUnion(
 	union := newUnion([]Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, cols, distinct)
 	selectExprs := unionSelects(lhsExprs)
 	return &Route{
-		SingleSource: SingleSource{Source: union},
-		MergedWith:   []*Route{rhsRoute},
-		Routing:      routing,
+		unaryOperator: unaryOperator{Source: union},
+		MergedWith:    []*Route{rhsRoute},
+		Routing:       routing,
 	}, selectExprs
 }
 

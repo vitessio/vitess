@@ -32,7 +32,7 @@ import (
 // Projection is used when we need to evaluate expressions on the vtgate
 // It uses the evalengine to accomplish its goal
 type Projection struct {
-	SingleSource
+	unaryOperator
 
 	// Columns contain the expressions as viewed from the outside of this operator
 	Columns ProjCols
@@ -127,8 +127,8 @@ func newProjExprWithInner(ae *sqlparser.AliasedExpr, in sqlparser.Expr) *ProjExp
 
 func newAliasedProjection(src Operator) *Projection {
 	return &Projection{
-		SingleSource: SingleSource{Source: src},
-		Columns:      AliasedProjections{},
+		unaryOperator: unaryOperator{Source: src},
+		Columns:       AliasedProjections{},
 	}
 }
 

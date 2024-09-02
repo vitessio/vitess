@@ -34,7 +34,7 @@ type (
 	// Both all aggregations and no grouping, and the inverse
 	// of all grouping and no aggregations are valid configurations of this operator
 	Aggregator struct {
-		SingleSource
+		unaryOperator
 		Columns []*sqlparser.AliasedExpr
 
 		WithRollup   bool

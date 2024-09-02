@@ -26,16 +26,16 @@ import (
 
 // LockAndComment contains any comments or locking directives we want on all queries down from this operator
 type LockAndComment struct {
-	SingleSource
+	unaryOperator
 	Comments *sqlparser.ParsedComments
 	Lock     sqlparser.Lock
 }
 
 func newLockAndComment(op Operator, comments *sqlparser.ParsedComments, lock sqlparser.Lock) Operator {
 	return &LockAndComment{
-		SingleSource: SingleSource{Source: op},
-		Comments:     comments,
-		Lock:         lock,
+		unaryOperator: unaryOperator{Source: op},
+		Comments:      comments,
+		Lock:          lock,
 	}
 }
 

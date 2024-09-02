@@ -248,9 +248,9 @@ func breakableTopDown(
 	var anythingChanged *ApplyResult
 
 	switch newOp := newOp.(type) {
-	case noInputs:
+	case nullaryOperator:
 		// no inputs, nothing to do
-	case *SingleSource:
+	case *unaryOperator:
 		newSource, identity, err := breakableTopDown(newOp.Source, rewriter)
 		if err != nil {
 			return nil, NoRewrite, err

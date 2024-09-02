@@ -50,7 +50,7 @@ type Insert struct {
 	// that will appear in the result set of the select query.
 	VindexValueOffset [][]int
 
-	noInputs
+	nullaryOperator
 	noColumns
 	noPredicates
 }
@@ -363,8 +363,8 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 		AST:    insStmt,
 	}
 	route := &Route{
-		SingleSource: SingleSource{Source: insOp},
-		Routing:      routing,
+		unaryOperator: unaryOperator{Source: insOp},
+		Routing:       routing,
 	}
 
 	// Table column list is nil then add all the columns

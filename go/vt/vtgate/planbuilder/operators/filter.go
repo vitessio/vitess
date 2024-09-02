@@ -29,7 +29,7 @@ import (
 )
 
 type Filter struct {
-	SingleSource
+	unaryOperator
 	Predicates []sqlparser.Expr
 
 	// PredicateWithOffsets is the evalengine expression that will finally be used.
@@ -45,8 +45,8 @@ func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
 
 func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 	return &Filter{
-		SingleSource: SingleSource{Source: op},
-		Predicates:   expr,
+		unaryOperator: unaryOperator{Source: op},
+		Predicates:    expr,
 	}
 }
 

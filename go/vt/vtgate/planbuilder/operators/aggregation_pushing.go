@@ -460,8 +460,8 @@ func createJoinPusher(rootAggr *Aggregator, operator Operator) *joinPusher {
 	return &joinPusher{
 		orig: rootAggr,
 		pushed: &Aggregator{
-			SingleSource: SingleSource{Source: operator},
-			QP:           rootAggr.QP,
+			unaryOperator: unaryOperator{Source: operator},
+			QP:            rootAggr.QP,
 		},
 		columns: initColReUse(len(rootAggr.Columns)),
 		tableID: TableID(operator),

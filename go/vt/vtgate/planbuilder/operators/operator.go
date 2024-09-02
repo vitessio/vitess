@@ -87,17 +87,17 @@ type (
 		SimplifiedExpr sqlparser.Expr
 	}
 
-	SingleSource struct {
+	unaryOperator struct {
 		Operator
 		Source Operator
 	}
 )
 
-func (s *SingleSource) Inputs() []Operator {
+func (s *unaryOperator) Inputs() []Operator {
 	return []Operator{s.Source}
 }
 
-func (s *SingleSource) SetInputs(operators []Operator) {
+func (s *unaryOperator) SetInputs(operators []Operator) {
 	s.Source = operators[0]
 }
 

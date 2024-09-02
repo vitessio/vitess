@@ -81,7 +81,7 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 	newTerm, _ := expandHorizon(ctx, hz)
 	return &Route{
 		Routing: r,
-		SingleSource: SingleSource{Source: &RecurseCTE{
+		unaryOperator: unaryOperator{Source: &RecurseCTE{
 			Predicates: in.Predicates,
 			Def:        in.Def,
 			Seed:       seed.Source,

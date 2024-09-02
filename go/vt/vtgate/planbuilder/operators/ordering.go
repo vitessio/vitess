@@ -26,7 +26,7 @@ import (
 )
 
 type Ordering struct {
-	SingleSource
+	unaryOperator
 	Offset  []int
 	WOffset []int
 
@@ -46,7 +46,7 @@ func (o *Ordering) Clone(inputs []Operator) Operator {
 
 func newOrdering(src Operator, order []OrderBy) Operator {
 	return &Ordering{
-		SingleSource: SingleSource{
+		unaryOperator: unaryOperator{
 			Source: src,
 		},
 		Order: order,

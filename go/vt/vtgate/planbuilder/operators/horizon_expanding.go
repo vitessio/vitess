@@ -200,13 +200,13 @@ func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProject
 	aggregations, complexAggr := qp.AggregationExpressions(ctx, true)
 	src := horizon.Source
 	aggrOp := &Aggregator{
-		SingleSource: SingleSource{Source: src},
-		Original:     true,
-		QP:           qp,
-		Grouping:     qp.GetGrouping(),
-		WithRollup:   qp.WithRollup,
-		Aggregations: aggregations,
-		DT:           dt,
+		unaryOperator: unaryOperator{Source: src},
+		Original:      true,
+		QP:            qp,
+		Grouping:      qp.GetGrouping(),
+		WithRollup:    qp.WithRollup,
+		Aggregations:  aggregations,
+		DT:            dt,
 	}
 
 	// Go through all aggregations and check for any subquery.
@@ -352,7 +352,7 @@ func newStarProjection(src Operator, qp *QueryProjection) *Projection {
 	}
 
 	return &Projection{
-		SingleSource: SingleSource{Source: src},
-		Columns:      StarProjections(cols),
+		unaryOperator: unaryOperator{Source: src},
+		Columns:       StarProjections(cols),
 	}
 }

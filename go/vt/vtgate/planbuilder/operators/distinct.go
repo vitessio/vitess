@@ -26,7 +26,7 @@ import (
 
 type (
 	Distinct struct {
-		SingleSource
+		unaryOperator
 		QP *QueryProjection
 
 		// When we go from AST to operator, we place DISTINCT ops in the required places in the op tree
@@ -47,9 +47,9 @@ type (
 
 func newDistinct(src Operator, qp *QueryProjection, required bool) *Distinct {
 	return &Distinct{
-		SingleSource: SingleSource{Source: src},
-		QP:           qp,
-		Required:     required,
+		unaryOperator: unaryOperator{Source: src},
+		QP:            qp,
+		Required:      required,
 	}
 }
 

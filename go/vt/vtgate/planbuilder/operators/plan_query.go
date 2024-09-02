@@ -47,7 +47,7 @@ import (
 
 type (
 	// helper type that implements Inputs() returning nil
-	noInputs struct {
+	nullaryOperator struct {
 		Operator
 	}
 
@@ -96,14 +96,14 @@ func PanicHandler(err *error) {
 }
 
 // Inputs implements the Operator interface
-func (noInputs) Inputs() []Operator {
+func (nullaryOperator) Inputs() []Operator {
 	return nil
 }
 
 // SetInputs implements the Operator interface
-func (noInputs) SetInputs(ops []Operator) {
+func (nullaryOperator) SetInputs(ops []Operator) {
 	if len(ops) > 0 {
-		panic("the noInputs operator does not have inputs")
+		panic("the nullaryOperator operator does not have inputs")
 	}
 }
 
