@@ -1879,14 +1879,13 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			addColumn := &sqlparser.AddColumns{
 				Columns: []*sqlparser.ColumnDefinition{t2Col},
 			}
-			if hints.NonDeterministicDefaultStrategy == NonDeterministicDefaultReject {
-				if t2Col.Type.Options.Default != nil && !t2Col.Type.Options.DefaultLiteral {
-					if function := findNoNondeterministicFunction(t2Col.Type.Options.Default); function != "" {
-						return &NonDeterministicDefaultError{
-							Table:    c.Name(),
-							Column:   t2Col.Name.String(),
-							Function: function,
-						}
+			// See whether this ADD COLUMN has a non-deterministic default value
+			if t2Col.Type.Options.Default != nil && !t2Col.Type.Options.DefaultLiteral {
+				if function := findNoNondeterministicFunction(t2Col.Type.Options.Default); function != "" {
+					return &NonDeterministicDefaultError{
+						Table:    c.Name(),
+						Column:   t2Col.Name.String(),
+						Function: function,
 					}
 				}
 			}

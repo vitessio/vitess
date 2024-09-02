@@ -39,16 +39,15 @@ func TestCreateTableDiff(t *testing.T) {
 		cdiffs   []string
 		errorMsg string
 		// hints:
-		autoinc          int
-		rotation         int
-		fulltext         int
-		colrename        int
-		constraint       int
-		charset          int
-		algorithm        int
-		enumreorder      int
-		subsequent       int
-		nondeterministic int
+		autoinc     int
+		rotation    int
+		fulltext    int
+		colrename   int
+		constraint  int
+		charset     int
+		algorithm   int
+		enumreorder int
+		subsequent  int
 		//
 		textdiffs   []string
 		atomicdiffs []string
@@ -453,64 +452,46 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
-			name:  "added column with non deterministic expression, allow",
-			from:  "create table t1 (id int primary key, a int)",
-			to:    "create table t2 (id int primary key, a int, v varchar(36) not null default (uuid()))",
-			diff:  "alter table t1 add column v varchar(36) not null default (uuid())",
-			cdiff: "ALTER TABLE `t1` ADD COLUMN `v` varchar(36) NOT NULL DEFAULT (uuid())",
-			textdiffs: []string{
-				"+	`v` varchar(36) NOT NULL DEFAULT (uuid()),",
-			},
-			nondeterministic: NonDeterministicDefaultAllow,
+			name:     "added column with non deterministic expression, uuid, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (uuid()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
 		},
 		{
-			name:             "added column with non deterministic expression, uuid, reject",
-			from:             "create table t1 (id int primary key, a int)",
-			to:               "create table t2 (id int primary key, a int, v varchar(36) not null default (uuid()))",
-			nondeterministic: NonDeterministicDefaultReject,
-			errorMsg:         (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
+			name:     "added column with non deterministic expression, UUID, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (UUID()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "UUID"}).Error(),
 		},
 		{
-			name:             "added column with non deterministic expression, UUID, reject",
-			from:             "create table t1 (id int primary key, a int)",
-			to:               "create table t2 (id int primary key, a int, v varchar(36) not null default (UUID()))",
-			nondeterministic: NonDeterministicDefaultReject,
-			errorMsg:         (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "UUID"}).Error(),
+			name:     "added column with non deterministic expression, uuid, spacing, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (uuid ()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
 		},
 		{
-			name:             "added column with non deterministic expression, uuid, spacing, reject",
-			from:             "create table t1 (id int primary key, a int)",
-			to:               "create table t2 (id int primary key, a int, v varchar(36) not null default (uuid ()))",
-			nondeterministic: NonDeterministicDefaultReject,
-			errorMsg:         (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
+			name:     "added column with non deterministic expression, uuid, inner, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (left(uuid(),10)))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
 		},
 		{
-			name:             "added column with non deterministic expression, uuid, inner, reject",
-			from:             "create table t1 (id int primary key, a int)",
-			to:               "create table t2 (id int primary key, a int, v varchar(36) not null default (left(uuid(),10)))",
-			nondeterministic: NonDeterministicDefaultReject,
-			errorMsg:         (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
+			name:     "added column with non deterministic expression, rand, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (2.0 + rand()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "rand"}).Error(),
 		},
 		{
-			name:             "added column with non deterministic expression, rand, reject",
-			from:             "create table t1 (id int primary key, a int)",
-			to:               "create table t2 (id int primary key, a int, v varchar(36) not null default (2.0 + rand()))",
-			nondeterministic: NonDeterministicDefaultReject,
-			errorMsg:         (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "rand"}).Error(),
+			name:     "added column with non deterministic expression, sysdate, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (sysdate()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "sysdate"}).Error(),
 		},
 		{
-			name:             "added column with non deterministic expression, sysdate, reject",
-			from:             "create table t1 (id int primary key, a int)",
-			to:               "create table t2 (id int primary key, a int, v varchar(36) not null default (sysdate()))",
-			nondeterministic: NonDeterministicDefaultReject,
-			errorMsg:         (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "sysdate"}).Error(),
-		},
-		{
-			name:             "added column with non deterministic expression, sysdate, reject",
-			from:             "create table t1 (id int primary key, a int)",
-			to:               "create table t2 (id int primary key, a int, v varchar(36) not null default (to_days(sysdate())))",
-			nondeterministic: NonDeterministicDefaultReject,
-			errorMsg:         (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "sysdate"}).Error(),
+			name:     "added column with non deterministic expression, sysdate, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (to_days(sysdate())))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "sysdate"}).Error(),
 		},
 		{
 			name:  "added column with deterministic expression, now, reject does not apply",
@@ -521,7 +502,6 @@ func TestCreateTableDiff(t *testing.T) {
 			textdiffs: []string{
 				"+	`v` varchar(36) NOT NULL DEFAULT (now()),",
 			},
-			nondeterministic: NonDeterministicDefaultReject,
 		},
 		{
 			name:  "added column with deterministic expression, curdate, reject does not apply",
@@ -532,7 +512,6 @@ func TestCreateTableDiff(t *testing.T) {
 			textdiffs: []string{
 				"+	`v` varchar(36) NOT NULL DEFAULT (to_days(curdate())),",
 			},
-			nondeterministic: NonDeterministicDefaultReject,
 		},
 		// enum
 		{
@@ -2175,7 +2154,6 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.AlterTableAlgorithmStrategy = ts.algorithm
 			hints.EnumReorderStrategy = ts.enumreorder
 			hints.SubsequentDiffStrategy = ts.subsequent
-			hints.NonDeterministicDefaultStrategy = ts.nondeterministic
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))
