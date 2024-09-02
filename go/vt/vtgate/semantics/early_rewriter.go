@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 type earlyRewriter struct {
@@ -48,8 +47,6 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case sqlparser.SelectExprs:
 		return r.handleSelectExprs(cursor, node)
-	case *sqlparser.OrExpr:
-		rewriteOrExpr(r.env, cursor, node)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
 	case *sqlparser.ComparisonExpr:
@@ -852,14 +849,6 @@ func (r *earlyRewriter) rewriteGroupByExpr(node *sqlparser.Literal) (sqlparser.E
 	return realCloneOfColNames(aliasedExpr.Expr, false), nil
 }
 
-// rewriteOrExpr rewrites OR expressions when the right side is FALSE.
-func rewriteOrExpr(env *vtenv.Environment, cursor *sqlparser.Cursor, node *sqlparser.OrExpr) {
-	newNode := rewriteOrFalse(env, *node)
-	if newNode != nil {
-		cursor.ReplaceAndRevisit(newNode)
-	}
-}
-
 // handleComparisonExpr processes Comparison expressions, specifically for tuples with equal length and EqualOp operator.
 func handleComparisonExpr(cursor *sqlparser.Cursor, node *sqlparser.ComparisonExpr) error {
 	lft, lftOK := node.Left.(sqlparser.ValTuple)
@@ -923,41 +912,6 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 		}
 		cursor.Replace(&newColName)
 	}, nil).(sqlparser.Expr)
-}
-
-func rewriteOrFalse(env *vtenv.Environment, orExpr sqlparser.OrExpr) sqlparser.Expr {
-	// we are looking for the pattern `WHERE c = 1 OR 1 = 0`
-	isFalse := func(subExpr sqlparser.Expr) bool {
-		coll := env.CollationEnv().DefaultConnectionCharset()
-		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
-			Environment: env,
-			Collation:   coll,
-		})
-		if err != nil {
-			return false
-		}
-
-		env := evalengine.EmptyExpressionEnv(env)
-		res, err := env.Evaluate(evalEnginePred)
-		if err != nil {
-			return false
-		}
-
-		boolValue, err := res.Value(coll).ToBool()
-		if err != nil {
-			return false
-		}
-
-		return !boolValue
-	}
-
-	if isFalse(orExpr.Left) {
-		return orExpr.Right
-	} else if isFalse(orExpr.Right) {
-		return orExpr.Left
-	}
-
-	return nil
 }
 
 // rewriteJoinUsing rewrites SQL JOINs that use the USING clause to their equivalent

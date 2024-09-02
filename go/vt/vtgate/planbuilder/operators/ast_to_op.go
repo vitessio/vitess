@@ -82,10 +82,11 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 	return sqc.getRootOperator(op, nil)
 }
 
-func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
+func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, in sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
 	outerID := TableID(op)
-	for _, expr := range sqlparser.SplitAndExpression(nil, expr) {
+	for _, expr := range sqlparser.SplitAndExpression(nil, in) {
 		sqlparser.RemoveKeyspaceInCol(expr)
+		expr = simplifyPredicates(ctx, expr)
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
