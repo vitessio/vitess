@@ -28,8 +28,6 @@ type (
 	PercentBasedMirror struct {
 		binaryOperator
 		Percent float32
-		// Operator Operator
-		// Target   Operator
 	}
 )
 

@@ -33,8 +33,6 @@ import (
 // RecurseCTE is used to represent a recursive CTE
 type RecurseCTE struct {
 	binaryOperator
-	// Seed, // used to describe the non-recursive part that initializes the result set
-	// Term Operator // the part that repeatedly applies the recursion, processing the result set
 
 	// Def is the CTE definition according to the semantics
 	Def *semantics.CTE
