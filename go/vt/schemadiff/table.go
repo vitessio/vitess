@@ -1751,13 +1751,6 @@ func findNoNondeterministicFunction(expr sqlparser.Expr) (foundFunction string) 
 			case "uuid", "rand":
 				foundFunction = node.Name.String()
 				return false, nil
-			default:
-				// recurse into function argument expressions
-				for _, exprArg := range node.Exprs {
-					if foundFunction = findNoNondeterministicFunction(exprArg); foundFunction != "" {
-						return false, nil
-					}
-				}
 			}
 		}
 		return true, nil
