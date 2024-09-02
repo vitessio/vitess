@@ -257,6 +257,19 @@ func breakableTopDown(
 		}
 		anythingChanged = anythingChanged.Merge(identity)
 		newOp.Source = newSource
+	case *binaryOperator:
+		newLHS, identity, err := breakableTopDown(newOp.LHS, rewriter)
+		if err != nil {
+			return nil, NoRewrite, err
+		}
+		anythingChanged = anythingChanged.Merge(identity)
+		newRHS, identity, err := breakableTopDown(newOp.RHS, rewriter)
+		if err != nil {
+			return nil, NoRewrite, err
+		}
+		anythingChanged = anythingChanged.Merge(identity)
+		newOp.LHS = newLHS
+		newOp.RHS = newRHS
 	default:
 		oldInputs := newOp.Inputs()
 		newInputs := make([]Operator, len(oldInputs))

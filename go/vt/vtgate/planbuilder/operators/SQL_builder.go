@@ -717,9 +717,9 @@ func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
 		return jc.Original
 	})
 	pred := sqlparser.AndExpressions(predicates...)
-	buildQuery(op.Seed, qb)
+	buildQuery(op.Seed(), qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
-	buildQuery(op.Term, qbR)
+	buildQuery(op.Term(), qbR)
 	qbR.addPredicate(pred)
 	infoFor, err := qb.ctx.SemTable.TableInfoFor(op.OuterID)
 	if err != nil {

@@ -417,8 +417,10 @@ func insertSelectPlan(
 
 	// output of the select plan will be used to insert rows into the table.
 	insertSelect := &InsertSelection{
-		Select: newLockAndComment(selOp, nil, sqlparser.ShareModeLock),
-		Insert: routeOp,
+		binaryOperator: binaryOperator{
+			LHS: newLockAndComment(selOp, nil, sqlparser.ShareModeLock),
+			RHS: routeOp,
+		},
 	}
 
 	// When the table you are streaming data from and table you are inserting from are same.

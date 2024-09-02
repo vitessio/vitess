@@ -112,8 +112,8 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 
 	if pbm, ok := root.(*PercentBasedMirror); ok {
 		pbm.SetInputs([]Operator{
-			runRewriters(ctx, pbm.Operator),
-			runRewriters(ctx.UseMirror(), pbm.Target),
+			runRewriters(ctx, pbm.Operator()),
+			runRewriters(ctx.UseMirror(), pbm.Target()),
 		})
 	}
 

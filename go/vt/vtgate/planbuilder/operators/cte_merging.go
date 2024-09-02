@@ -22,7 +22,7 @@ import (
 )
 
 func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator, *ApplyResult) {
-	op := tryMergeCTE(ctx, in.Seed, in.Term, in)
+	op := tryMergeCTE(ctx, in.Seed(), in.Term(), in)
 	if op == nil {
 		return in, NoRewrite
 	}
@@ -79,17 +79,21 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 	hz := in.Horizon
 	hz.Source = term.Source
 	newTerm, _ := expandHorizon(ctx, hz)
+	cte := &RecurseCTE{
+		binaryOperator: binaryOperator{
+			LHS: seed.Source,
+			RHS: newTerm,
+		},
+		Predicates: in.Predicates,
+		Def:        in.Def,
+		LeftID:     in.LeftID,
+		OuterID:    in.OuterID,
+		Distinct:   in.Distinct,
+	}
 	return &Route{
 		Routing: r,
-		unaryOperator: unaryOperator{Source: &RecurseCTE{
-			Predicates: in.Predicates,
-			Def:        in.Def,
-			Seed:       seed.Source,
-			Term:       newTerm,
-			LeftID:     in.LeftID,
-			OuterID:    in.OuterID,
-			Distinct:   in.Distinct,
-		}},
+		unaryOperator: unaryOperator{
+			Source: cte},
 		MergedWith: []*Route{term},
 	}
 }

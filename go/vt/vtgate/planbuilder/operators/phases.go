@@ -354,7 +354,7 @@ func planRecursiveCTEHorizons(ctx *plancontext.PlanningContext, root Operator) O
 			return in, NoRewrite
 		}
 		hz := rcte.Horizon
-		hz.Source = rcte.Term
+		hz.Source = rcte.Term()
 		newTerm, _ := expandHorizon(ctx, hz)
 		pr := findProjection(newTerm)
 		ap, err := pr.GetAliasedProjections()
@@ -369,7 +369,7 @@ func planRecursiveCTEHorizons(ctx *plancontext.PlanningContext, root Operator) O
 			return recurseExpression
 		})
 		rcte.Projections = projections
-		rcte.Term = newTerm
+		rcte.RHS = newTerm
 		return rcte, Rewrote("expanded horizon on term side of recursive CTE")
 	}, stopAtRoute)
 }

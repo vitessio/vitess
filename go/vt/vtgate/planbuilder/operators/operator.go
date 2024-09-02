@@ -91,6 +91,11 @@ type (
 		Operator
 		Source Operator
 	}
+
+	binaryOperator struct {
+		Operator
+		LHS, RHS Operator
+	}
 )
 
 func (s *unaryOperator) Inputs() []Operator {
@@ -99,6 +104,15 @@ func (s *unaryOperator) Inputs() []Operator {
 
 func (s *unaryOperator) SetInputs(operators []Operator) {
 	s.Source = operators[0]
+}
+
+func (b *binaryOperator) Inputs() []Operator {
+	return []Operator{b.LHS, b.RHS}
+}
+
+func (b *binaryOperator) SetInputs(operators []Operator) {
+	b.LHS = operators[0]
+	b.RHS = operators[1]
 }
 
 // Map takes in a mapping function and applies it to both the expression in OrderBy.

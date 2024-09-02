@@ -32,8 +32,9 @@ import (
 
 // RecurseCTE is used to represent a recursive CTE
 type RecurseCTE struct {
-	Seed, // used to describe the non-recursive part that initializes the result set
-	Term Operator // the part that repeatedly applies the recursion, processing the result set
+	binaryOperator
+	// Seed, // used to describe the non-recursive part that initializes the result set
+	// Term Operator // the part that repeatedly applies the recursion, processing the result set
 
 	// Def is the CTE definition according to the semantics
 	Def *semantics.CTE
@@ -77,9 +78,11 @@ func newRecurse(
 		ctx.AddJoinPredicates(pred.Original, pred.RightExpr)
 	}
 	return &RecurseCTE{
+		binaryOperator: binaryOperator{
+			LHS: seed,
+			RHS: term,
+		},
 		Def:        def,
-		Seed:       seed,
-		Term:       term,
 		Predicates: predicates,
 		Horizon:    horizon,
 		LeftID:     leftID,
@@ -90,21 +93,12 @@ func newRecurse(
 
 func (r *RecurseCTE) Clone(inputs []Operator) Operator {
 	klone := *r
-	klone.Seed = inputs[0]
-	klone.Term = inputs[1]
+	klone.LHS = inputs[0]
+	klone.RHS = inputs[1]
 	klone.Vars = maps.Clone(r.Vars)
 	klone.Predicates = slices.Clone(r.Predicates)
 	klone.Projections = slices.Clone(r.Projections)
 	return &klone
-}
-
-func (r *RecurseCTE) Inputs() []Operator {
-	return []Operator{r.Seed, r.Term}
-}
-
-func (r *RecurseCTE) SetInputs(operators []Operator) {
-	r.Seed = operators[0]
-	r.Term = operators[1]
 }
 
 func (r *RecurseCTE) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Expr) Operator {
@@ -114,7 +108,7 @@ func (r *RecurseCTE) AddPredicate(_ *plancontext.PlanningContext, e sqlparser.Ex
 func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, _, _ bool, expr *sqlparser.AliasedExpr) int {
 	r.makeSureWeHaveTableInfo(ctx)
 	e := semantics.RewriteDerivedTableExpression(expr.Expr, r.MyTableInfo)
-	offset := r.Seed.FindCol(ctx, e, false)
+	offset := r.Seed().FindCol(ctx, e, false)
 	if offset == -1 {
 		panic(vterrors.VT13001("CTE column not found"))
 	}
@@ -140,8 +134,8 @@ func (r *RecurseCTE) makeSureWeHaveTableInfo(ctx *plancontext.PlanningContext) {
 }
 
 func (r *RecurseCTE) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	seed := r.Seed.AddWSColumn(ctx, offset, underRoute)
-	term := r.Term.AddWSColumn(ctx, offset, underRoute)
+	seed := r.Seed().AddWSColumn(ctx, offset, underRoute)
+	term := r.Term().AddWSColumn(ctx, offset, underRoute)
 	if seed != term {
 		panic(vterrors.VT13001("CTE columns don't match"))
 	}
@@ -151,15 +145,15 @@ func (r *RecurseCTE) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 func (r *RecurseCTE) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	r.makeSureWeHaveTableInfo(ctx)
 	expr = semantics.RewriteDerivedTableExpression(expr, r.MyTableInfo)
-	return r.Seed.FindCol(ctx, expr, underRoute)
+	return r.Seed().FindCol(ctx, expr, underRoute)
 }
 
 func (r *RecurseCTE) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return r.Seed.GetColumns(ctx)
+	return r.Seed().GetColumns(ctx)
 }
 
 func (r *RecurseCTE) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return r.Seed.GetSelectExprs(ctx)
+	return r.Seed().GetSelectExprs(ctx)
 }
 
 func (r *RecurseCTE) ShortDescription() string {
@@ -187,7 +181,7 @@ func (r *RecurseCTE) expressions() []*plancontext.RecurseExpression {
 
 func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	r.Vars = make(map[string]int)
-	columns := r.Seed.GetColumns(ctx)
+	columns := r.Seed().GetColumns(ctx)
 	for _, expr := range r.expressions() {
 	outer:
 		for _, lhsExpr := range expr.LeftExprs {
@@ -211,4 +205,12 @@ func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
 
 func (r *RecurseCTE) introducesTableID() semantics.TableSet {
 	return r.OuterID
+}
+
+func (r *RecurseCTE) Seed() Operator {
+	return r.LHS
+}
+
+func (r *RecurseCTE) Term() Operator {
+	return r.RHS
 }

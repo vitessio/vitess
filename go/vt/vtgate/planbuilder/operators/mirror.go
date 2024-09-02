@@ -26,19 +26,30 @@ import (
 
 type (
 	PercentBasedMirror struct {
-		Percent  float32
-		Operator Operator
-		Target   Operator
+		binaryOperator
+		Percent float32
+		// Operator Operator
+		// Target   Operator
 	}
 )
 
 var _ Operator = (*PercentBasedMirror)(nil)
 
+func (m *PercentBasedMirror) Operator() Operator {
+	return m.LHS
+}
+
+func (m *PercentBasedMirror) Target() Operator {
+	return m.RHS
+}
+
 func NewPercentBasedMirror(percent float32, operator, target Operator) *PercentBasedMirror {
 	return &PercentBasedMirror{
-		percent,
-		operator,
-		target,
+		binaryOperator: binaryOperator{
+			LHS: operator,
+			RHS: target,
+		},
+		Percent: percent,
 	}
 }
 
@@ -49,45 +60,28 @@ func (m *PercentBasedMirror) Clone(inputs []Operator) Operator {
 	return &cloneMirror
 }
 
-// Inputs returns the inputs for this operator
-func (m *PercentBasedMirror) Inputs() []Operator {
-	return []Operator{
-		m.Operator,
-		m.Target,
-	}
-}
-
-// SetInputs changes the inputs for this op
-func (m *PercentBasedMirror) SetInputs(inputs []Operator) {
-	if len(inputs) < 2 {
-		panic(vterrors.VT13001("unexpected number of inputs for PercentBasedMirror operator"))
-	}
-	m.Operator = inputs[0]
-	m.Target = inputs[1]
-}
-
 // AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
 // If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 // where data is fetched from the LHS of the join to be used in the evaluation on the RHS
 // TODO: we should remove this and replace it with rewriters
-func (m *PercentBasedMirror) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+func (m *PercentBasedMirror) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) Operator {
 	panic(vterrors.VT13001("not supported"))
 }
 
-func (m *PercentBasedMirror) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
+func (m *PercentBasedMirror) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
 	panic(vterrors.VT13001("not supported"))
 }
 
 func (m *PercentBasedMirror) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
-	return m.Operator.FindCol(ctx, expr, underRoute)
+	return m.Operator().FindCol(ctx, expr, underRoute)
 }
 
 func (m *PercentBasedMirror) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return m.Operator.GetColumns(ctx)
+	return m.Operator().GetColumns(ctx)
 }
 
 func (m *PercentBasedMirror) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return m.Operator.GetSelectExprs(ctx)
+	return m.Operator().GetSelectExprs(ctx)
 }
 
 func (m *PercentBasedMirror) ShortDescription() string {
@@ -95,10 +89,10 @@ func (m *PercentBasedMirror) ShortDescription() string {
 }
 
 func (m *PercentBasedMirror) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
-	return m.Operator.GetOrdering(ctx)
+	return m.Operator().GetOrdering(ctx)
 }
 
 // AddWSColumn implements Operator.
-func (m *PercentBasedMirror) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+func (m *PercentBasedMirror) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
 	panic(vterrors.VT13001("not supported"))
 }
