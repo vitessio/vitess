@@ -247,17 +247,22 @@ func breakableTopDown(
 
 	var anythingChanged *ApplyResult
 
-	oldInputs := newOp.Inputs()
-	newInputs := make([]Operator, len(oldInputs))
-	for i, oldInput := range oldInputs {
-		newInputs[i], identity, err = breakableTopDown(oldInput, rewriter)
-		anythingChanged = anythingChanged.Merge(identity)
-		if err != nil {
-			return nil, NoRewrite, err
+	switch newOp := newOp.(type) {
+	case noInputs:
+		return newOp, anythingChanged, nil
+	default:
+		oldInputs := newOp.Inputs()
+		newInputs := make([]Operator, len(oldInputs))
+		for i, oldInput := range oldInputs {
+			newInputs[i], identity, err = breakableTopDown(oldInput, rewriter)
+			anythingChanged = anythingChanged.Merge(identity)
+			if err != nil {
+				return nil, NoRewrite, err
+			}
 		}
-	}
 
-	return newOp, anythingChanged, nil
+		return newOp, anythingChanged, nil
+	}
 }
 
 // topDown is a helper function that recursively traverses the operator tree from the

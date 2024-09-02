@@ -47,7 +47,9 @@ import (
 
 type (
 	// helper type that implements Inputs() returning nil
-	noInputs struct{}
+	noInputs struct {
+		Operator
+	}
 
 	// helper type that implements AddColumn() returning an error
 	noColumns struct{}
