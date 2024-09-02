@@ -249,10 +249,7 @@ func addOrderingFor(aggrOp *Aggregator) {
 			SimplifiedExpr: aggrOp.DistinctExpr,
 		})
 	}
-	aggrOp.Source = &Ordering{
-		Source: aggrOp.Source,
-		Order:  orderBys,
-	}
+	aggrOp.Source = newOrdering(aggrOp.Source, orderBys)
 }
 
 func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) bool {

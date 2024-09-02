@@ -316,7 +316,7 @@ func addOrdering(ctx *plancontext.PlanningContext, op Operator, orderBy sqlparse
 	if len(order) == 0 {
 		return op
 	}
-	return &Ordering{Source: op, Order: order}
+	return newOrdering(op, order)
 }
 
 func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator, tblID semantics.TableSet, vTbl *vindexes.Table) *vindexes.Table {

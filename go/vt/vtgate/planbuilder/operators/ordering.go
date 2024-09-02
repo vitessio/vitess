@@ -26,7 +26,7 @@ import (
 )
 
 type Ordering struct {
-	Source  Operator
+	SingleSource
 	Offset  []int
 	WOffset []int
 
@@ -35,21 +35,22 @@ type Ordering struct {
 }
 
 func (o *Ordering) Clone(inputs []Operator) Operator {
+	klone := *o
+	klone.Source = inputs[0]
+	klone.Offset = slices.Clone(o.Offset)
+	klone.WOffset = slices.Clone(o.WOffset)
+	klone.Order = slices.Clone(o.Order)
+
+	return &klone
+}
+
+func newOrdering(src Operator, order []OrderBy) Operator {
 	return &Ordering{
-		Source:        inputs[0],
-		Offset:        slices.Clone(o.Offset),
-		WOffset:       slices.Clone(o.WOffset),
-		Order:         slices.Clone(o.Order),
-		ResultColumns: o.ResultColumns,
+		SingleSource: SingleSource{
+			Source: src,
+		},
+		Order: order,
 	}
-}
-
-func (o *Ordering) Inputs() []Operator {
-	return []Operator{o.Source}
-}
-
-func (o *Ordering) SetInputs(operators []Operator) {
-	o.Source = operators[0]
 }
 
 func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {

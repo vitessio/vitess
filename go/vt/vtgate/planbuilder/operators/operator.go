@@ -86,7 +86,20 @@ type (
 		// See GroupBy#SimplifiedExpr for more details about this
 		SimplifiedExpr sqlparser.Expr
 	}
+
+	SingleSource struct {
+		Operator
+		Source Operator
+	}
 )
+
+func (s *SingleSource) Inputs() []Operator {
+	return []Operator{s.Source}
+}
+
+func (s *SingleSource) SetInputs(operators []Operator) {
+	s.Source = operators[0]
+}
 
 // Map takes in a mapping function and applies it to both the expression in OrderBy.
 func (ob OrderBy) Map(mappingFunc func(sqlparser.Expr) sqlparser.Expr) OrderBy {

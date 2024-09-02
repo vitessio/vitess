@@ -44,10 +44,7 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 	qp := horizon.getQP(ctx)
 
 	if len(qp.OrderExprs) > 0 {
-		op = &Ordering{
-			Source: op,
-			Order:  qp.OrderExprs,
-		}
+		op = newOrdering(op, qp.OrderExprs)
 	}
 
 	if union.Limit != nil {
@@ -144,10 +141,7 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 		// If the operator is not a projection, we cannot handle subqueries with aggregation if we are unable to push everything into a single route.
 		if !ok {
 			ctx.SemTable.NotSingleRouteErr = vterrors.VT12001("subquery with aggregation in order by")
-			return &Ordering{
-				Source: op,
-				Order:  qp.OrderExprs,
-			}
+			return newOrdering(op, qp.OrderExprs)
 		} else {
 			// Add the new subquery expression to the projection
 			proj.addSubqueryExpr(ctx, aeWrap(newExpr), newExpr, subqs...)
@@ -169,10 +163,7 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 	}
 
 	// Return the updated operator with the new order by expressions
-	return &Ordering{
-		Source: op,
-		Order:  newOrder,
-	}
+	return newOrdering(op, newOrder)
 }
 
 // exposeOrderingColumn will expose the ordering column to the outer query
