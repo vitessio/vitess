@@ -351,6 +351,11 @@ func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 
 	lastKnownStatus := ""
 	for {
+		select {
+		case <-ctx.Done():
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		case <-ticker.C:
+		}
 		countMatchedShards := 0
 		conn, err := mysql.Connect(ctx, vtParams)
 		if err != nil {
@@ -374,11 +379,6 @@ func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		}
 		if countMatchedShards == len(shards) {
 			return schema.OnlineDDLStatus(lastKnownStatus)
-		}
-		select {
-		case <-ctx.Done():
-			return schema.OnlineDDLStatus(lastKnownStatus)
-		case <-ticker.C:
 		}
 	}
 }
