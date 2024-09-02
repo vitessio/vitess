@@ -166,7 +166,7 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 	// Check if the context is already past its deadline before
 	// trying to execute the query.
 	if err := ctx.Err(); err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s, before execution started", dbc.getErrorMessageFromContextError(ctx))
+		return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s before execution started", dbc.getErrorMessageFromContextError(ctx))
 	}
 
 	now := time.Now()
@@ -235,7 +235,7 @@ func (dbc *Conn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*
 	// Check if the context is already past its deadline before
 	// trying to fetch the next result.
 	if err := ctx.Err(); err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s, before reading next result set", dbc.getErrorMessageFromContextError(ctx))
+		return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s before reading next result set", dbc.getErrorMessageFromContextError(ctx))
 	}
 	res, _, _, err := dbc.conn.ReadQueryResult(maxrows, wantfields)
 	if err != nil {

@@ -199,7 +199,7 @@ func TestDBConnDeadline(t *testing.T) {
 
 	_, err = dbConn.Exec(ctx, sql, 1, false)
 	require.Error(t, err)
-	require.ErrorContains(t, err, "(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded, before execution started")
+	require.ErrorContains(t, err, "(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded before execution started")
 
 	compareTimingCounts(t, "PoolTest.Exec", 0, startCounts, mysqlTimings.Counts())
 
@@ -455,7 +455,10 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	db.EnableConnFail()
 	err = dbConn.Kill("test kill", 0)
 	require.Error(t, err)
-	require.ErrorContains(t, err, "errno 2013")
+	var sqlErr *sqlerror.SQLError
+	isSqlErr := errors.As(sqlerror.NewSQLErrorFromError(err), &sqlErr)
+	require.True(t, isSqlErr)
+	require.EqualValues(t, sqlerror.CRServerLost, sqlErr.Number())
 	db.DisableConnFail()
 
 	// Kill succeed
