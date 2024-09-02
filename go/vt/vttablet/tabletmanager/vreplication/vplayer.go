@@ -134,11 +134,11 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 	batchMode := false
 	if vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
-		// temp log to debug dynamic flags, to be removed in v22
+		// temporary logging to debug dynamic flags, to be removed in a future PR
 		log.Infof("Dynamic Config Debug: VReplicationExperimentalFlagVPlayerBatching is set, enabling batch mode for vplayer")
 		batchMode = true
 	} else {
-		// temp log to debug dynamic flags, to be removed in v22
+		// temporary logging to debug dynamic flags, to be removed in a future PR
 		log.Infof("Dynamic Config Debug: VReplicationExperimentalFlagVPlayerBatching is not set, disabling batch mode for vplayer")
 	}
 	if batchMode {

@@ -136,7 +136,7 @@ func (rs *rowStreamer) Stream() error {
 		if _, err := rs.conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
 			return err
 		}
-		// temp log to debug dynamic flags, to be removed in v22
+		// temporary logging to debug dynamic flags, to be removed in a future PR
 		log.Infof("Dynamic Config Debug: Net read timeout: %v, Net write timeout: %v", rs.config.NetReadTimeout, rs.config.NetWriteTimeout)
 		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", rs.config.NetReadTimeout), 1, false); err != nil {
 			return err

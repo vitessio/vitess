@@ -25,8 +25,6 @@ import (
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -501,10 +499,8 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", options, ":id")
 		stmt, err = parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
-			log.Infof("error generating query: %v", err)
 			return nil, err
 		}
-		log.Infof("executing query: %v", stmt)
 		res, err = tm.VREngine.Exec(stmt)
 		if err != nil {
 			return nil, err
@@ -519,6 +515,9 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 	}, nil
 }
 
+// getOptionSetString takes the option keys passed in and creates a sql clause to update the existing options
+// field in the vreplication table. The clause is built using the json_set() for new and updated options
+// and json_remove() for deleted options, denoted by an empty value.
 func getOptionSetString(config map[string]string) (string, error) {
 	var options string
 	if len(config) > 0 {

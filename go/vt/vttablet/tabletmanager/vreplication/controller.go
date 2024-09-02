@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -75,11 +77,9 @@ type controller struct {
 }
 
 func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationConfig, error) {
-	vttablet.InitVReplicationConfigDefaults()
 	options, ok := params["options"]
 	if !ok {
 		options = "{}"
-		// return nil, fmt.Errorf("options column not found")
 	}
 	var workflowOptions vtctldata.WorkflowOptions
 	if err := json.Unmarshal([]byte(options), &workflowOptions); err != nil {
@@ -206,29 +206,34 @@ func (ct *controller) run(ctx context.Context) {
 
 func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttablet.VReplicationConfig) error {
 	if workflowConfig == nil {
-		log.Warningf("workflowConfig is nil. Skipping setting DB client settings.")
-		panic("workflowConfig is nil. Skipping setting DB client settings.") // FIXME: This should be an error.
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vreplication controller: workflowConfig is nil")
 	}
+	const maxRows = 10000
 	// Timestamp fields from binlogs are always sent as UTC.
 	// So, we should set the timezone to be UTC for those values to be correctly inserted.
-	if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
+	if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", maxRows); err != nil {
 		return err
 	}
 	// Tables may have varying character sets. To ship the bits without interpreting them
 	// we set the character set to be binary.
-	if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
+	if _, err := dbClient.ExecuteFetch("set names 'binary'", maxRows); err != nil {
 		return err
 	}
-	// temp log to debug dynamic flags, to be removed in v22
-	log.Infof("Dynamic Config Debug: Net read timeout: %v, Net write timeout: %v", workflowConfig.NetReadTimeout, workflowConfig.NetWriteTimeout)
-	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", workflowConfig.NetReadTimeout), 10000); err != nil {
+	// temporary logging to debug dynamic flags, to be removed in a future PR
+	log.Infof("Dynamic Config Debug: Net read timeout: %v, Net write timeout: %v",
+		workflowConfig.NetReadTimeout, workflowConfig.NetWriteTimeout)
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v",
+		workflowConfig.NetReadTimeout), maxRows); err != nil {
 		return err
 	}
-	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", workflowConfig.NetWriteTimeout), 10000); err != nil {
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v",
+		workflowConfig.NetWriteTimeout), maxRows); err != nil {
 		return err
 	}
-	// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is not recommended in AUTO_INCREMENT, and yet is valid.
-	if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')", 10000); err != nil {
+	// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is
+	// not recommended in AUTO_INCREMENT, and yet is valid.
+	if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')",
+		maxRows); err != nil {
 		return err
 	}
 	return nil

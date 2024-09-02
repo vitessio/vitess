@@ -345,7 +345,6 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 	vstreamOptions := &binlogdatapb.VStreamOptions{
 		ConfigOverrides: vttablet.GetVReplicationConfigDefaults(false).Map(),
 	}
-	log.Infof(">>>>>>>>>>>>>>>>>>> vstreamOptions %v", vstreamOptions)
 	return streamerEngine.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)

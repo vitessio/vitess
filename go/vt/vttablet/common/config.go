@@ -93,12 +93,17 @@ func InitVReplicationConfigDefaults() *VReplicationConfig {
 
 func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, error) {
 	InitVReplicationConfigDefaults()
+
 	configMutex.Lock()
-	defer configMutex.Unlock()
 	c := &VReplicationConfig{}
 	*c = *DefaultVReplicationConfig
+	configMutex.Unlock()
+
 	c.Overrides = maps.Clone(overrides)
 	var errors []string
+	getError := func(k, v string) string {
+		return fmt.Sprintf("invalid value for %s: %s", k, v)
+	}
 	for k, v := range overrides {
 		if v == "" {
 			continue
@@ -107,91 +112,91 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 		case "vreplication_experimental_flags":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication_experimental_flags")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.ExperimentalFlags = value
 			}
 		case "vreplication_net_read_timeout":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication_net_read_timeout")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.NetReadTimeout = int(value)
 			}
 		case "vreplication_net_write_timeout":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication_net_write_timeout")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.NetWriteTimeout = int(value)
 			}
 		case "vreplication_copy_phase_duration":
 			value, err := time.ParseDuration(v)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication_copy_phase_duration")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.CopyPhaseDuration = value
 			}
 		case "vreplication_retry_delay":
 			value, err := time.ParseDuration(v)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication_retry_delay")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.RetryDelay = value
 			}
 		case "vreplication_max_time_to_retry_on_error":
 			value, err := time.ParseDuration(v)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication_max_time_to_retry_on_error")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.MaxTimeToRetryError = value
 			}
 		case "relay_log_max_size":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				errors = append(errors, "invalid value for relay_log_max_size")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.RelayLogMaxSize = int(value)
 			}
 		case "relay_log_max_items":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				errors = append(errors, "invalid value for relay_log_max_items")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.RelayLogMaxItems = int(value)
 			}
 		case "vreplication_replica_lag_tolerance":
 			value, err := time.ParseDuration(v)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication_replica_lag_tolerance")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.ReplicaLagTolerance = value
 			}
 		case "vreplication_heartbeat_update_interval":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication_heartbeat_update_interval")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.HeartbeatUpdateInterval = int(value)
 			}
 		case "vreplication_store_compressed_gtid":
 			value, err := strconv.ParseBool(v)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication_store_compressed_gtid")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.StoreCompressedGTID = value
 			}
 		case "vreplication-parallel-insert-workers":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				errors = append(errors, "invalid value for vreplication-parallel-insert-workers")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.ParallelInsertWorkers = int(value)
 			}
 		case "vstream_packet_size":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				errors = append(errors, "invalid value for vstream_packet_size")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.VStreamPacketSizeOverride = true
 				c.VStreamPacketSize = int(value)
@@ -199,7 +204,7 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 		case "vstream_dynamic_packet_size":
 			value, err := strconv.ParseBool(v)
 			if err != nil {
-				errors = append(errors, "invalid value for vstream_dynamic_packet_size")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.VStreamDynamicPacketSizeOverride = true
 				c.VStreamDynamicPacketSize = value
@@ -207,7 +212,7 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 		case "vstream_binlog_rotation_threshold":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				errors = append(errors, "invalid value for vstream_binlog_rotation_threshold")
+				errors = append(errors, getError(k, v))
 			} else {
 				c.VStreamBinlogRotationThresholdOverride = true
 				c.VStreamBinlogRotationThreshold = value

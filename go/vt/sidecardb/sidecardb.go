@@ -409,11 +409,11 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 	if diff != nil {
 		ddl = diff.CanonicalStatementString()
 
-		if ddl == "" {
-			//log.Infof("No changes needed for table %s", tableName)
-		} else {
-			//log.Infof("Applying DDL for table %s:\n%s", tableName, ddl)
-		}
+		//if ddl == "" {
+		//	log.Infof("No changes needed for table %s", tableName)
+		//} else {
+		//	log.Infof("Applying DDL for table %s:\n%s", tableName, ddl)
+		//}
 	}
 
 	return ddl, nil
