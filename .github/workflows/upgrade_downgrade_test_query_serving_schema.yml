@@ -161,6 +161,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         find ./go/test/endtoend -name '*.go' -exec sed -i 's/ErrorContains/Error/g' {} +
+        find ./go/test/endtoend -name '*.go' -exec sed -i 's/EqualError/Error/g' {} +
 
     # Swap the binaries in the bin. Use vtgate version n-1 and keep vttablet at version n
     - name: Use last release's VTGate
