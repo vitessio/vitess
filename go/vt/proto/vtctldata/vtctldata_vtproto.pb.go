@@ -2634,9 +2634,8 @@ func (m *GetUnresolvedTransactionsRequest) CloneVT() *GetUnresolvedTransactionsR
 	if m == nil {
 		return (*GetUnresolvedTransactionsRequest)(nil)
 	}
-	r := &GetUnresolvedTransactionsRequest{
-		Keyspace: m.Keyspace,
-	}
+	r := new(GetUnresolvedTransactionsRequest)
+	r.Keyspace = m.Keyspace
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2652,7 +2651,7 @@ func (m *GetUnresolvedTransactionsResponse) CloneVT() *GetUnresolvedTransactions
 	if m == nil {
 		return (*GetUnresolvedTransactionsResponse)(nil)
 	}
-	r := &GetUnresolvedTransactionsResponse{}
+	r := new(GetUnresolvedTransactionsResponse)
 	if rhs := m.Transactions; rhs != nil {
 		tmpContainer := make([]*query.TransactionMetadata, len(rhs))
 		for k, v := range rhs {
@@ -12902,7 +12901,7 @@ func (m *GetUnresolvedTransactionsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 	if len(m.Keyspace) > 0 {
 		i -= len(m.Keyspace)
 		copy(dAtA[i:], m.Keyspace)
-		i = encodeVarint(dAtA, i, uint64(len(m.Keyspace)))
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Keyspace)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -12946,7 +12945,7 @@ func (m *GetUnresolvedTransactionsResponse) MarshalToSizedBufferVT(dAtA []byte) 
 				return 0, err
 			}
 			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -23581,7 +23580,7 @@ func (m *GetUnresolvedTransactionsRequest) SizeVT() (n int) {
 	_ = l
 	l = len(m.Keyspace)
 	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -23596,7 +23595,7 @@ func (m *GetUnresolvedTransactionsResponse) SizeVT() (n int) {
 	if len(m.Transactions) > 0 {
 		for _, e := range m.Transactions {
 			l = e.SizeVT()
-			n += 1 + l + sov(uint64(l))
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
 	n += len(m.unknownFields)
@@ -44521,7 +44520,7 @@ func (m *GetUnresolvedTransactionsRequest) UnmarshalVT(dAtA []byte) error {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
 			if shift >= 64 {
-				return ErrIntOverflow
+				return protohelpers.ErrIntOverflow
 			}
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
@@ -44549,7 +44548,7 @@ func (m *GetUnresolvedTransactionsRequest) UnmarshalVT(dAtA []byte) error {
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -44563,11 +44562,11 @@ func (m *GetUnresolvedTransactionsRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			intStringLen := int(stringLen)
 			if intStringLen < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			postIndex := iNdEx + intStringLen
 			if postIndex < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
@@ -44576,12 +44575,12 @@ func (m *GetUnresolvedTransactionsRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skip(dAtA[iNdEx:])
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
 			if (skippy < 0) || (iNdEx+skippy) < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
@@ -44604,7 +44603,7 @@ func (m *GetUnresolvedTransactionsResponse) UnmarshalVT(dAtA []byte) error {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
 			if shift >= 64 {
-				return ErrIntOverflow
+				return protohelpers.ErrIntOverflow
 			}
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
@@ -44632,7 +44631,7 @@ func (m *GetUnresolvedTransactionsResponse) UnmarshalVT(dAtA []byte) error {
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -44645,11 +44644,11 @@ func (m *GetUnresolvedTransactionsResponse) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			if msglen < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			postIndex := iNdEx + msglen
 			if postIndex < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
@@ -44661,12 +44660,12 @@ func (m *GetUnresolvedTransactionsResponse) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skip(dAtA[iNdEx:])
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
 			if (skippy < 0) || (iNdEx+skippy) < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
