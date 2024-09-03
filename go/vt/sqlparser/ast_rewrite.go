@@ -534,6 +534,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteValues(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
+	case *ValuesStatement:
+		return a.rewriteRefOfValuesStatement(parent, node, replacer)
 	case *VarPop:
 		return a.rewriteRefOfVarPop(parent, node, replacer)
 	case *VarSamp:
@@ -9264,6 +9266,43 @@ func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFun
 	}
 	return true
 }
+func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteValues(node, node.Rows, func(newNode, parent SQLNode) {
+		parent.(*ValuesStatement).Rows = newNode.(Values)
+	}) {
+		return false
+	}
+	if !a.rewriteOrderBy(node, node.Order, func(newNode, parent SQLNode) {
+		parent.(*ValuesStatement).Order = newNode.(OrderBy)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*ValuesStatement).Limit = newNode.(*Limit)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10528,6 +10567,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfVExplainStmt(parent, node, replacer)
 	case *VStream:
 		return a.rewriteRefOfVStream(parent, node, replacer)
+	case *ValuesStatement:
+		return a.rewriteRefOfValuesStatement(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
