@@ -2258,10 +2258,16 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					return &ApplyDuplicateKeyError{Table: c.Name(), Key: newKeyName}
 				}
 			}
+			found := false
 			for _, index := range c.TableSpec.Indexes {
 				if index.Info.Name.String() == opt.OldName.String() {
 					index.Info.Name = opt.NewName
+					found = true
+					break
 				}
+			}
+			if !found {
+				return &ApplyKeyNotFoundError{Table: c.Name(), Key: opt.OldName.String()}
 			}
 		case *sqlparser.AddIndexDefinition:
 			// validate no existing key by same name
