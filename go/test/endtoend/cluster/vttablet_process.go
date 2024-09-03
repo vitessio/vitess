@@ -611,6 +611,7 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
 func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
+	t.Helper()
 	if sidecarDBName == "" {
 		sidecarDBName = sidecar.DefaultName
 	}
