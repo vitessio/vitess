@@ -3579,11 +3579,14 @@ type Limit struct {
 // Values represents a VALUES clause.
 type Values []ValTuple
 
+// ValuesStatement represents a VALUES statement, as in VALUES ROW(1, 2), ROW(3, 4)
 type ValuesStatement struct {
+	// One but not both of these fields can be set.
 	Rows    Values
 	ListArg ListArg
-	Order   OrderBy
-	Limit   *Limit
+
+	Order OrderBy
+	Limit *Limit
 }
 
 // UpdateExprs represents a list of update expressions.
