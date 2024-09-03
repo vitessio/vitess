@@ -275,6 +275,17 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	return sqltypes.ResultToProto3(result), err
 }
 
+// GetUnresolvedTransactions returns the unresolved distributed transactions list for the Metadata manager.
+func (tm *TabletManager) GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error) {
+	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
+		return nil, err
+	}
+
+	tablet := tm.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+	return tm.QueryServiceControl.UnresolvedTransactions(ctx, target)
+}
+
 // ExecuteQuery submits a new online DDL request
 func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {

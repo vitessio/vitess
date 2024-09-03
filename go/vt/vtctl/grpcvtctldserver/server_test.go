@@ -5168,6 +5168,86 @@ func TestExecuteHook(t *testing.T) {
 	}
 }
 
+func TestGetUnresolvedTransactions(t *testing.T) {
+	ks := "testkeyspace"
+
+	tests := []struct {
+		name      string
+		tmc       *testutil.TabletManagerClient
+		keyspace  string
+		expected  []*querypb.TransactionMetadata
+		shouldErr bool
+	}{
+		{
+			name: "unresolved transaction on both shards",
+			tmc: &testutil.TabletManagerClient{
+				GetUnresolvedTransactionsResults: map[string][]*querypb.TransactionMetadata{
+					"-80": {{Dtid: "aa"}},
+					"80-": {{Dtid: "bb"}},
+				},
+			},
+			keyspace: "testkeyspace",
+			expected: []*querypb.TransactionMetadata{
+				{Dtid: "aa"}, {Dtid: "bb"},
+			},
+		}, {
+			name: "unresolved transaction on one sharda",
+			tmc: &testutil.TabletManagerClient{
+				GetUnresolvedTransactionsResults: map[string][]*querypb.TransactionMetadata{
+					"80-": {{Dtid: "bb"}},
+				},
+			},
+			keyspace: "testkeyspace",
+			expected: []*querypb.TransactionMetadata{
+				{Dtid: "bb"},
+			},
+		},
+		{
+			name:      "keyspace not found",
+			tmc:       &testutil.TabletManagerClient{},
+			keyspace:  "unknown",
+			shouldErr: true,
+		},
+	}
+
+	tablets := []*topodatapb.Tablet{{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: ks,
+		Shard:    "-80",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}, {
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Keyspace: ks,
+		Shard:    "80-",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}}
+	ts := memorytopo.NewServer(context.Background(), "zone1")
+	testutil.AddTablets(context.Background(), t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			req := &vtctldatapb.GetUnresolvedTransactionsRequest{Keyspace: tt.keyspace}
+			resp, err := vtctld.GetUnresolvedTransactions(ctx, req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			slices.SortFunc(resp.Transactions, func(a, b *querypb.TransactionMetadata) int {
+				return strings.Compare(a.Dtid, b.Dtid)
+			})
+			utils.MustMatch(t, tt.expected, resp.Transactions)
+		})
+	}
+}
+
 func TestFindAllShardsInKeyspace(t *testing.T) {
 	t.Parallel()
 
