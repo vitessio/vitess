@@ -2830,6 +2830,12 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key i_alternative (i), constraint f foreign key (i) references parent(id))",
 		},
 		{
+			name:  "allow drop key when also adding a different, longer, index for foreign key constraint",
+			from:  "create table t (id int primary key, i int, key i_idx (i), constraint f foreign key (i) references parent(id))",
+			alter: "alter table t drop key `i_idx`, add key i_alternative (i, id)",
+			to:    "create table t (id int primary key, i int, key i_alternative (i, id), constraint f foreign key (i) references parent(id))",
+		},
+		{
 			name:  "drop key with alternative key for foreign key constraint, 1",
 			from:  "create table t (id int primary key, i int, key i (i), key i2 (i, id), constraint f foreign key (i) references parent(id))",
 			alter: "alter table t drop key `i`",
