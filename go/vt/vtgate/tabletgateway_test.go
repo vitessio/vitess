@@ -34,6 +34,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
 func TestTabletGatewayExecute(t *testing.T) {
@@ -41,7 +42,10 @@ func TestTabletGatewayExecute(t *testing.T) {
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
 		_, err := tg.Execute(ctx, target, "query", nil, 0, 0, nil)
 		return err
-	})
+	},
+		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
+			assert.Equal(t, want, sc.ExecCount.Load())
+		})
 	testTabletGatewayTransact(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
 		_, err := tg.Execute(ctx, target, "query", nil, 1, 0, nil)
 		return err
@@ -55,7 +59,10 @@ func TestTabletGatewayExecuteStream(t *testing.T) {
 			return nil
 		})
 		return err
-	})
+	},
+		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
+			assert.Equal(t, want, sc.ExecCount.Load())
+		})
 }
 
 func TestTabletGatewayBegin(t *testing.T) {
@@ -63,7 +70,10 @@ func TestTabletGatewayBegin(t *testing.T) {
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
 		_, err := tg.Begin(ctx, target, nil)
 		return err
-	})
+	},
+		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
+			assert.Equal(t, want, sc.BeginCount.Load())
+		})
 }
 
 func TestTabletGatewayCommit(t *testing.T) {
@@ -87,7 +97,11 @@ func TestTabletGatewayBeginExecute(t *testing.T) {
 	testTabletGatewayGeneric(t, ctx, func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error {
 		_, _, err := tg.BeginExecute(ctx, target, nil, "query", nil, 0, nil)
 		return err
-	})
+	},
+		func(t *testing.T, sc *sandboxconn.SandboxConn, want int64) {
+			t.Helper()
+			assert.Equal(t, want, sc.BeginCount.Load())
+		})
 }
 
 func TestTabletGatewayShuffleTablets(t *testing.T) {
@@ -177,7 +191,20 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 	verifyContainsError(t, err, "query service can only be used for non-transactional queries on replicas", vtrpcpb.Code_INTERNAL)
 }
 
-func testTabletGatewayGeneric(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error) {
+func testTabletGatewayGeneric(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error, verifyExpectedCount func(t *testing.T, sc *sandboxconn.SandboxConn, want int64)) {
+	t.Helper()
+	testTabletGatewayGenericHelper(t, ctx, f, verifyExpectedCount)
+
+	// test again with the balancer enabled assuming vtgates in both cells where there
+	// are tablets, so that it will still route to the local cell always, but this way
+	// it will test both implementations of skipping invalid tablets for retry
+	balancerEnabled = true
+	balancerVtgateCells = []string{"cell", "cell2"}
+	testTabletGatewayGenericHelper(t, ctx, f, verifyExpectedCount)
+	balancerEnabled = false
+}
+
+func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error, verifyExpectedCount func(t *testing.T, sc *sandboxconn.SandboxConn, want int64)) {
 	t.Helper()
 	keyspace := "ks"
 	shard := "0"
@@ -193,7 +220,6 @@ func testTabletGatewayGeneric(t *testing.T, ctx context.Context, f func(ctx cont
 	ts := &fakeTopoServer{}
 	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
-
 	// no tablet
 	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
 	err := f(ctx, tg, target)
@@ -217,31 +243,50 @@ func testTabletGatewayGeneric(t *testing.T, ctx context.Context, f func(ctx cont
 	sc2 := hc.AddTestTablet("cell", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-
 	err = f(ctx, tg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
+	verifyExpectedCount(t, sc1, 1)
+	verifyExpectedCount(t, sc2, 1)
 
 	// fatal error
 	hc.Reset()
 	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
-	sc2 = hc.AddTestTablet("cell", host, port+1, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	err = f(ctx, tg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
+	verifyExpectedCount(t, sc1, 1)
+	verifyExpectedCount(t, sc2, 1)
 
 	// server error - no retry
 	hc.Reset()
 	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err = f(ctx, tg, target)
 	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	verifyExpectedCount(t, sc1, 1)
+	verifyExpectedCount(t, sc2, 0)
 
 	// no failure
 	hc.Reset()
-	hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port, keyspace, shard, tabletType, true, 10, nil)
 	err = f(ctx, tg, target)
 	assert.NoError(t, err)
+	verifyExpectedCount(t, sc1, 0)
+	verifyExpectedCount(t, sc2, 1)
+
+	// retry successful to other cell
+	hc.Reset()
+	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
+	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	err = f(ctx, tg, target)
+	assert.NoError(t, err)
+	verifyExpectedCount(t, sc1, 1)
+	verifyExpectedCount(t, sc2, 1)
 }
 
 func testTabletGatewayTransact(t *testing.T, ctx context.Context, f func(ctx context.Context, tg *TabletGateway, target *querypb.Target) error) {

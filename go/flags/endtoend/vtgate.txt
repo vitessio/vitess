@@ -28,6 +28,8 @@ Flags:
       --allow-kill-statement                                             Allows the execution of kill statement
       --allowed_tablet_types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
+      --balancer-keyspaces strings                                       When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)
+      --balancer-vtgate-cells strings                                    When in balanced mode, a comma-separated list of cells that contain vtgates (required)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --buffer_drain_concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer_keyspace_shards string                                    If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.
@@ -53,6 +55,7 @@ Flags:
       --discovery_high_replication_lag_minimum_serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
       --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
+      --enable-balancer                                                  Enable the tablet balancer to evenly spread query load for a given tablet type
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-views                                                     Enable views support in vtgate.
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.

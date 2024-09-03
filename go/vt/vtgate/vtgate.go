@@ -372,6 +372,7 @@ func Init(
 	})
 	vtgateInst.registerDebugHealthHandler()
 	vtgateInst.registerDebugEnvHandler()
+	vtgateInst.registerDebugBalancerHandler()
 
 	initAPI(gw.hc)
 	return vtgateInst
@@ -433,6 +434,12 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 			return
 		}
 		w.Write([]byte("ok"))
+	})
+}
+
+func (vtg *VTGate) registerDebugBalancerHandler() {
+	http.HandleFunc("/debug/balancer", func(w http.ResponseWriter, r *http.Request) {
+		vtg.Gateway().DebugBalancerHandler(w, r)
 	})
 }
 
