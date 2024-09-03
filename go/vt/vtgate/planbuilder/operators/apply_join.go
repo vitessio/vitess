@@ -32,7 +32,7 @@ type (
 	// ApplyJoin is a nested loop join - for each row on the LHS,
 	// we'll execute the plan on the RHS, feeding data from left to right
 	ApplyJoin struct {
-		LHS, RHS Operator
+		binaryOperator
 
 		// JoinType is permitted to store only 3 of the possible values
 		// NormalJoinType, StraightJoinType and LeftJoinType.
@@ -85,8 +85,7 @@ type (
 
 func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, predicate sqlparser.Expr, joinType sqlparser.JoinType) *ApplyJoin {
 	aj := &ApplyJoin{
-		LHS:            lhs,
-		RHS:            rhs,
+		binaryOperator: newBinaryOp(lhs, rhs),
 		Vars:           map[string]int{},
 		JoinType:       joinType,
 		JoinColumns:    &applyJoinColumns{},
@@ -111,16 +110,6 @@ func (aj *ApplyJoin) Clone(inputs []Operator) Operator {
 
 func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	return AddPredicate(ctx, aj, expr, false, newFilterSinglePredicate)
-}
-
-// Inputs implements the Operator interface
-func (aj *ApplyJoin) Inputs() []Operator {
-	return []Operator{aj.LHS, aj.RHS}
-}
-
-// SetInputs implements the Operator interface
-func (aj *ApplyJoin) SetInputs(inputs []Operator) {
-	aj.LHS, aj.RHS = inputs[0], inputs[1]
 }
 
 func (aj *ApplyJoin) GetLHS() Operator {

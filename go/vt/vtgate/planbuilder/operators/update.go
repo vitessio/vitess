@@ -110,11 +110,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	var targetTbl TargetTable
 	op, targetTbl, updClone = createUpdateOperator(ctx, updStmt)
 
-	op = &LockAndComment{
-		Source:   op,
-		Comments: updStmt.Comments,
-		Lock:     sqlparser.ShareModeLock,
-	}
+	op = newLockAndComment(op, updStmt.Comments, sqlparser.ShareModeLock)
 
 	parentFks = ctx.SemTable.GetParentForeignKeysForTableSet(targetTbl.ID)
 	childFks = ctx.SemTable.GetChildForeignKeysForTableSet(targetTbl.ID)
@@ -203,10 +199,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	}
 
 	if upd.Comments != nil {
-		op = &LockAndComment{
-			Source:   op,
-			Comments: upd.Comments,
-		}
+		op = newLockAndComment(op, upd.Comments, sqlparser.NoLock)
 	}
 	return op
 }
@@ -399,10 +392,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	if updStmt.Limit != nil {
-		updOp.Source = &Limit{
-			Source: updOp.Source,
-			AST:    updStmt.Limit,
-		}
+		updOp.Source = newLimit(updOp.Source, updStmt.Limit, false)
 	}
 
 	return sqc.getRootOperator(updOp, nil), targetTbl, updClone
