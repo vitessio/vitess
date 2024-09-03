@@ -199,22 +199,6 @@ func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 
 var _ JoinOp = (*Join)(nil)
 
-func (j *Join) GetLHS() Operator {
-	return j.LHS
-}
-
-func (j *Join) GetRHS() Operator {
-	return j.RHS
-}
-
-func (j *Join) SetLHS(operator Operator) {
-	j.LHS = operator
-}
-
-func (j *Join) SetRHS(operator Operator) {
-	j.RHS = operator
-}
-
 func (j *Join) MakeInner() {
 	if j.IsInner() {
 		return

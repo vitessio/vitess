@@ -74,6 +74,34 @@ func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
 func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch in := in.(type) {
+		case *ApplyJoin:
+			var r *Route
+			_ = Visit(in.RHS, func(op Operator) error {
+				switch op := op.(type) {
+				case *Route:
+					opcode := op.Routing.OpCode()
+					switch opcode {
+					case engine.EqualUnique, engine.Equal, engine.IN, engine.MultiEqual:
+						r = op
+					}
+					return io.EOF
+				case *unaryOperator:
+					return nil
+				default:
+					// If we encounter something else than a route or an unary operator
+					// we will not be able to determine the op code of the RHS, we abort.
+					return io.EOF
+				}
+			})
+			if r != nil {
+				var vj Operator = newValuesJoin(in.LHS, in.RHS, in.JoinType)
+				for _, column := range in.JoinPredicates.columns {
+					vj = vj.AddPredicate(ctx, column.Original)
+					// column.RHSExpr
+				}
+				return vj, Rewrote("ApplyJoin to ValuesJoin")
+			}
+			return in, NoRewrite
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
 		case *Join:
@@ -183,7 +211,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 		}
 	}
 
-	if !reachedPhase(ctx, initialPlanning) {
+	if !reachedPhase(ctx, horizonPlanning) {
 		return in, NoRewrite
 	}
 

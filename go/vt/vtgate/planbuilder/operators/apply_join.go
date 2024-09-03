@@ -112,22 +112,6 @@ func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return AddPredicate(ctx, aj, expr, false, newFilterSinglePredicate)
 }
 
-func (aj *ApplyJoin) GetLHS() Operator {
-	return aj.LHS
-}
-
-func (aj *ApplyJoin) GetRHS() Operator {
-	return aj.RHS
-}
-
-func (aj *ApplyJoin) SetLHS(operator Operator) {
-	aj.LHS = operator
-}
-
-func (aj *ApplyJoin) SetRHS(operator Operator) {
-	aj.RHS = operator
-}
-
 func (aj *ApplyJoin) MakeInner() {
 	if aj.IsInner() {
 		return

@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "select u.toto+ue.bar from user u join user_extra ue on u.foo = ue.user_id",
     "plan": {
     }
   }

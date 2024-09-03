@@ -126,6 +126,22 @@ func (b *binaryOperator) SetInputs(operators []Operator) {
 	b.RHS = operators[1]
 }
 
+func (b *binaryOperator) GetLHS() Operator {
+	return b.LHS
+}
+
+func (b *binaryOperator) GetRHS() Operator {
+	return b.RHS
+}
+
+func (b *binaryOperator) SetLHS(operator Operator) {
+	b.LHS = operator
+}
+
+func (b *binaryOperator) SetRHS(operator Operator) {
+	b.RHS = operator
+}
+
 // Map takes in a mapping function and applies it to both the expression in OrderBy.
 func (ob OrderBy) Map(mappingFunc func(sqlparser.Expr) sqlparser.Expr) OrderBy {
 	return OrderBy{
