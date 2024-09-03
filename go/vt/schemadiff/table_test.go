@@ -2777,6 +2777,12 @@ func TestValidate(t *testing.T) {
 			expectErr: &IndexNeededByForeignKeyError{Table: "t", Key: "i"},
 		},
 		{
+			name:  "allow drop key when also adding a different index for foreign key constraint",
+			from:  "create table t (id int primary key, i int, key i (i), constraint f foreign key (i) references parent(id))",
+			alter: "alter table t drop key `i`, add key i_alternative (i)",
+			to:    "create table t (id int primary key, i int, key i_alternative (i), constraint f foreign key (i) references parent(id))",
+		},
+		{
 			name:  "drop key with alternative key for foreign key constraint, 1",
 			from:  "create table t (id int primary key, i int, key i (i), key i2 (i, id), constraint f foreign key (i) references parent(id))",
 			alter: "alter table t drop key `i`",

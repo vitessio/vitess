@@ -2195,20 +2195,6 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				return &ApplyKeyNotFoundError{Table: c.Name(), Key: opt.Name.String()}
 			}
 
-			// Now, if this is a normal key being dropped, let's validate it does not leave any foreign key constraint uncovered
-			switch opt.Type {
-			case sqlparser.PrimaryKeyType, sqlparser.NormalKeyType:
-				for _, cs := range c.CreateTable.TableSpec.Constraints {
-					fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
-					if !ok {
-						continue
-					}
-					if !c.columnsCoveredByInOrderIndex(fk.Source) {
-						return &IndexNeededByForeignKeyError{Table: c.Name(), Key: opt.Name.String()}
-					}
-				}
-			}
-
 		case *sqlparser.AddIndexDefinition:
 			// validate no existing key by same name
 			keyName := opt.IndexDefinition.Info.Name.String()
@@ -2405,8 +2391,38 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		}
 		return nil
 	}
+	// applyAlterOption2ndIteration runs on all options, after applyAlterOption does.
+	// Some validations can only take place after all options have been applied.
+	applyAlterOption2ndIteration := func(opt sqlparser.AlterOption) error {
+		switch opt := opt.(type) {
+		case *sqlparser.DropKey:
+			// Now, if this is a normal key being dropped, let's validate it does not leave any foreign key constraint uncovered.
+			// We must have this in `applyAlterOption2ndIteration` as opposed to `applyAlterOption` because
+			// this DROP KEY may have been followed by an ADD KEY that covers the foreign key constraint, so it's wrong
+			// to error out before applying the ADD KEY.
+			switch opt.Type {
+			case sqlparser.PrimaryKeyType, sqlparser.NormalKeyType:
+				for _, cs := range c.CreateTable.TableSpec.Constraints {
+					fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+					if !ok {
+						continue
+					}
+					if !c.columnsCoveredByInOrderIndex(fk.Source) {
+						return &IndexNeededByForeignKeyError{Table: c.Name(), Key: opt.Name.String()}
+					}
+				}
+			}
+		}
+		return nil
+	}
+
 	for _, alterOption := range diff.alterTable.AlterOptions {
 		if err := applyAlterOption(alterOption); err != nil {
+			return err
+		}
+	}
+	for _, alterOption := range diff.alterTable.AlterOptions {
+		if err := applyAlterOption2ndIteration(alterOption); err != nil {
 			return err
 		}
 	}
