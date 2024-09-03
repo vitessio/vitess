@@ -9283,6 +9283,11 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 	}) {
 		return false
 	}
+	if !a.rewriteListArg(node, node.ListArg, func(newNode, parent SQLNode) {
+		parent.(*ValuesStatement).ListArg = newNode.(ListArg)
+	}) {
+		return false
+	}
 	if !a.rewriteOrderBy(node, node.Order, func(newNode, parent SQLNode) {
 		parent.(*ValuesStatement).Order = newNode.(OrderBy)
 	}) {
@@ -10397,6 +10402,8 @@ func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replace
 		return a.rewriteRefOfUnion(parent, node, replacer)
 	case Values:
 		return a.rewriteValues(parent, node, replacer)
+	case *ValuesStatement:
+		return a.rewriteRefOfValuesStatement(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -10427,6 +10434,8 @@ func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatemen
 		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Union:
 		return a.rewriteRefOfUnion(parent, node, replacer)
+	case *ValuesStatement:
+		return a.rewriteRefOfValuesStatement(parent, node, replacer)
 	default:
 		// this should never happen
 		return true

@@ -123,10 +123,14 @@ func (node *VStream) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ValuesStatement) Format(buf *TrackedBuffer) {
 	buf.WriteString("values ")
-	for i, row := range node.Rows {
-		buf.astPrintf(node, "row%v", row)
-		if i < len(node.Rows)-1 {
-			buf.WriteString(", ")
+	if node.ListArg != "" {
+		buf.astPrintf(node, "%v", node.ListArg)
+	} else {
+		for i, row := range node.Rows {
+			buf.astPrintf(node, "row%v", row)
+			if i < len(node.Rows)-1 {
+				buf.WriteString(", ")
+			}
 		}
 	}
 	buf.astPrintf(node, "%v%v",

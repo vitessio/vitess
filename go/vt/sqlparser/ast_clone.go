@@ -4121,6 +4121,8 @@ func CloneInsertRows(in InsertRows) InsertRows {
 		return CloneRefOfUnion(in)
 	case Values:
 		return CloneValues(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	default:
 		// this should never happen
 		return nil
@@ -4155,6 +4157,8 @@ func CloneSelectStatement(in SelectStatement) SelectStatement {
 		return CloneRefOfSelect(in)
 	case *Union:
 		return CloneRefOfUnion(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	default:
 		// this should never happen
 		return nil

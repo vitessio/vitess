@@ -59,6 +59,8 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]*querypb.BindVaria
 	return buf.String(), nil
 }
 
+// values row(::val)
+// values row(), row(), row()
 // Append appends the generated query to the provided buffer.
 func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*querypb.BindVariable, extras map[string]Encodable) error {
 	current := 0
@@ -101,6 +103,14 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 			sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
 		}
 		buf.WriteByte(')')
+	case querypb.Type_ROW_TUPLE:
+		for i, bv := range value.Values {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString("row")
+			sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
+		}
 	case querypb.Type_RAW:
 		v, _ := sqltypes.BindVariableToValue(value)
 		buf.Write(v.Raw())
@@ -123,7 +133,9 @@ func FetchBindVar(name string, bindVariables map[string]*querypb.BindVariable) (
 	}
 
 	if isList {
-		if supplied.Type != querypb.Type_TUPLE {
+		switch supplied.Type {
+		case querypb.Type_TUPLE, querypb.Type_ROW_TUPLE:
+		default:
 			return nil, false, fmt.Errorf("unexpected list arg type (%v) for key %s", supplied.Type, name)
 		}
 		if len(supplied.Values) == 0 {

@@ -434,7 +434,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <statement> prepare_statement execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
-%type <selStmt> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary
+%type <selStmt> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary values_statement
 %type <with> with_clause_opt with_clause
 %type <cte> common_table_expr
 %type <ctes> with_list
@@ -905,6 +905,12 @@ select_stmt_with_into:
     $$ = $1
   }
 
+values_statement:
+  VALUES LIST_ARG
+  {
+    $$ = &ValuesStatement{ListArg: ListArg($2[2:])}
+  }
+
 stream_statement:
   STREAM comment_opt select_expression FROM table_name
   {
@@ -927,6 +933,11 @@ query_primary:
 | SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), $7, NewWhere(HavingClause, $8), $9)
+  }
+|
+  values_statement
+  {
+    $$ = $1
   }
 
 insert_statement:
