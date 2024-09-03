@@ -2857,7 +2857,7 @@ func (node *ValuesStatement) SetInto(into *SelectInto) {
 }
 
 func (node *ValuesStatement) SetWith(with *With) {
-	panic("cannot set With on Values statement")
+	node.With = with
 }
 
 func (node *ValuesStatement) MakeDistinct() {

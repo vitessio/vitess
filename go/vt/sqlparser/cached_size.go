@@ -4496,6 +4496,8 @@ func (cached *ValuesStatement) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(80)
 	}
+	// field With *vitess.io/vitess/go/vt/sqlparser.With
+	size += cached.With.CachedSize(true)
 	// field Rows vitess.io/vitess/go/vt/sqlparser.Values
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Rows)) * int64(24))

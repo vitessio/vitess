@@ -6415,12 +6415,14 @@ func (c *cow) copyOnRewriteRefOfValuesStatement(n *ValuesStatement, parent SQLNo
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Rows, changedRows := c.copyOnRewriteValues(n.Rows, n)
 		_ListArg, changedListArg := c.copyOnRewriteListArg(n.ListArg, n)
 		_Order, changedOrder := c.copyOnRewriteOrderBy(n.Order, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
-		if changedRows || changedListArg || changedOrder || changedLimit {
+		if changedWith || changedRows || changedListArg || changedOrder || changedLimit {
 			res := *n
+			res.With, _ = _With.(*With)
 			res.Rows, _ = _Rows.(Values)
 			res.ListArg, _ = _ListArg.(ListArg)
 			res.Order, _ = _Order.(OrderBy)

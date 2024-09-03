@@ -3335,6 +3335,7 @@ func CloneRefOfValuesStatement(n *ValuesStatement) *ValuesStatement {
 		return nil
 	}
 	out := *n
+	out.With = CloneRefOfWith(n.With)
 	out.Rows = CloneValues(n.Rows)
 	out.Order = CloneOrderBy(n.Order)
 	out.Limit = CloneRefOfLimit(n.Limit)

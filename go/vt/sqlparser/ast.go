@@ -3579,6 +3579,7 @@ type Values []ValTuple
 
 // ValuesStatement represents a VALUES statement, as in VALUES ROW(1, 2), ROW(3, 4)
 type ValuesStatement struct {
+	With *With
 	// One but not both of these fields can be set.
 	Rows    Values
 	ListArg ListArg

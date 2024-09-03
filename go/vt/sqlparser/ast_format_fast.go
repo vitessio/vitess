@@ -143,6 +143,9 @@ func (node *VStream) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *ValuesStatement) FormatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.FormatFast(buf)
+	}
 	buf.WriteString("values ")
 	if node.ListArg != "" {
 		node.ListArg.FormatFast(buf)

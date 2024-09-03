@@ -4286,6 +4286,9 @@ func VisitRefOfValuesStatement(in *ValuesStatement, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
 	if err := VisitValues(in.Rows, f); err != nil {
 		return err
 	}

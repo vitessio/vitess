@@ -9273,6 +9273,11 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 			return true
 		}
 	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*ValuesStatement).With = newNode.(*With)
+	}) {
+		return false
+	}
 	if !a.rewriteValues(node, node.Rows, func(newNode, parent SQLNode) {
 		parent.(*ValuesStatement).Rows = newNode.(Values)
 	}) {
