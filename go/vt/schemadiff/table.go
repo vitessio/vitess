@@ -2391,13 +2391,13 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		}
 		return nil
 	}
-	// applyAlterOption2ndIteration runs on all options, after applyAlterOption does.
+	// postApplyOptionsIteration runs on all options, after applyAlterOption does.
 	// Some validations can only take place after all options have been applied.
-	applyAlterOption2ndIteration := func(opt sqlparser.AlterOption) error {
+	postApplyOptionsIteration := func(opt sqlparser.AlterOption) error {
 		switch opt := opt.(type) {
 		case *sqlparser.DropKey:
 			// Now, if this is a normal key being dropped, let's validate it does not leave any foreign key constraint uncovered.
-			// We must have this in `applyAlterOption2ndIteration` as opposed to `applyAlterOption` because
+			// We must have this in `postApplyOptionsIteration` as opposed to `applyAlterOption` because
 			// this DROP KEY may have been followed by an ADD KEY that covers the foreign key constraint, so it's wrong
 			// to error out before applying the ADD KEY.
 			switch opt.Type {
@@ -2422,7 +2422,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		}
 	}
 	for _, alterOption := range diff.alterTable.AlterOptions {
-		if err := applyAlterOption2ndIteration(alterOption); err != nil {
+		if err := postApplyOptionsIteration(alterOption); err != nil {
 			return err
 		}
 	}
