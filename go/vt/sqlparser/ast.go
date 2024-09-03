@@ -1705,9 +1705,10 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows() {}
-func (*Union) iInsertRows()  {}
-func (Values) iInsertRows()  {}
+func (*Select) iInsertRows()          {}
+func (*Union) iInsertRows()           {}
+func (Values) iInsertRows()           {}
+func (*ValuesStatement) iInsertRows() {}
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {
@@ -3579,17 +3580,10 @@ type Limit struct {
 type Values []ValTuple
 
 type ValuesStatement struct {
-	Rows  Values
-	Order OrderBy
-	Limit *Limit
-}
-
-func (s *ValuesStatement) AddOrder(order *Order) {
-	s.Order = append(s.Order, order)
-}
-
-func (s *ValuesStatement) SetLimit(limit *Limit) {
-	s.Limit = limit
+	Rows    Values
+	ListArg ListArg
+	Order   OrderBy
+	Limit   *Limit
 }
 
 // UpdateExprs represents a list of update expressions.

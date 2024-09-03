@@ -4492,6 +4492,41 @@ func (cached *ValuesFuncExpr) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(true)
 	return size
 }
+func (cached *ValuesStatement) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Rows vitess.io/vitess/go/vt/sqlparser.Values
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Rows)) * int64(24))
+		for _, elem := range cached.Rows {
+			{
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
+				for _, elem := range elem {
+					if cc, ok := elem.(cachedObject); ok {
+						size += cc.CachedSize(true)
+					}
+				}
+			}
+		}
+	}
+	// field ListArg vitess.io/vitess/go/vt/sqlparser.ListArg
+	size += hack.RuntimeAllocSize(int64(len(cached.ListArg)))
+	// field Order vitess.io/vitess/go/vt/sqlparser.OrderBy
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Order)) * int64(8))
+		for _, elem := range cached.Order {
+			size += elem.CachedSize(true)
+		}
+	}
+	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
+	size += cached.Limit.CachedSize(true)
+	return size
+}
 func (cached *VarPop) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
