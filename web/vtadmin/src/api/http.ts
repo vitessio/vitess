@@ -448,6 +448,23 @@ export const fetchWorkflowStatus = async (params: { clusterID: string; keyspace:
     return vtctldata.WorkflowStatusResponse.create(result);
 };
 
+export interface CreateMoveTablesParams {
+    clusterID: string;
+    request: vtctldata.IMoveTablesCreateRequest
+}
+
+export const createMoveTables = async ({clusterID, request}: CreateMoveTablesParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/move_tables`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtctldata.WorkflowStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowStatusResponse.create(result);
+};
+
 export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {
     // As an easy enhancement for later, we can also validate the request parameters on the front-end
     // instead of defaulting to '', to save a round trip.

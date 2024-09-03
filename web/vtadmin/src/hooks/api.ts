@@ -79,6 +79,7 @@ import {
     GetFullStatusParams,
     validateVersionShard,
     ValidateVersionShardParams,
+    createMoveTables,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -458,6 +459,18 @@ export const useWorkflowStatus = (
     options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
 ) => {
     return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params));
+};
+
+/**
+ * useCreateMoveTables is a mutation query hook that creates a move tables workflow.
+ */
+export const useCreateMoveTables = (
+    params: Parameters<typeof createMoveTables>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createMoveTables>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createMoveTables>>, Error>(() => {
+        return createMoveTables(params);
+    }, options);
 };
 
 /**

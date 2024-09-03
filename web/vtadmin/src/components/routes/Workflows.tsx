@@ -35,6 +35,7 @@ import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { UseQueryResult } from 'react-query';
+import { ReadOnlyGate } from '../ReadOnlyGate';
 
 export const ThrottleThresholdSeconds = 60;
 
@@ -188,6 +189,13 @@ export const Workflows = () => {
         <div>
             <WorkspaceHeader>
                 <WorkspaceTitle>Workflows</WorkspaceTitle>
+                    <ReadOnlyGate>
+                        <div>
+                            <Link className="btn btn-secondary btn-md" to="/workflows/move_tables/create">
+                                Create a Move Tables Workflow
+                            </Link>
+                        </div>
+                    </ReadOnlyGate>
             </WorkspaceHeader>
             <ContentContainer>
                 <DataFilter
