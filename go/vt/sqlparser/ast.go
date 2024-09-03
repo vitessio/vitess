@@ -725,58 +725,61 @@ type (
 var _ OrderAndLimit = (*Select)(nil)
 var _ OrderAndLimit = (*Update)(nil)
 var _ OrderAndLimit = (*Delete)(nil)
+var _ OrderAndLimit = (*ValuesStatement)(nil)
 
-func (*Union) iStatement()               {}
-func (*Select) iStatement()              {}
-func (*Stream) iStatement()              {}
-func (*VStream) iStatement()             {}
-func (*Insert) iStatement()              {}
-func (*Update) iStatement()              {}
-func (*Delete) iStatement()              {}
-func (*Set) iStatement()                 {}
-func (*DropDatabase) iStatement()        {}
-func (*Flush) iStatement()               {}
-func (*Show) iStatement()                {}
-func (*Use) iStatement()                 {}
-func (*Begin) iStatement()               {}
-func (*Commit) iStatement()              {}
-func (*Rollback) iStatement()            {}
-func (*SRollback) iStatement()           {}
-func (*Savepoint) iStatement()           {}
-func (*Release) iStatement()             {}
-func (*Analyze) iStatement()             {}
-func (*OtherAdmin) iStatement()          {}
-func (*CommentOnly) iStatement()         {}
-func (*Select) iSelectStatement()        {}
-func (*Union) iSelectStatement()         {}
-func (*Load) iStatement()                {}
-func (*CreateDatabase) iStatement()      {}
-func (*AlterDatabase) iStatement()       {}
-func (*CreateTable) iStatement()         {}
-func (*CreateView) iStatement()          {}
-func (*AlterView) iStatement()           {}
-func (*LockTables) iStatement()          {}
-func (*UnlockTables) iStatement()        {}
-func (*AlterTable) iStatement()          {}
-func (*AlterVschema) iStatement()        {}
-func (*AlterMigration) iStatement()      {}
-func (*RevertMigration) iStatement()     {}
-func (*ShowMigrationLogs) iStatement()   {}
-func (*ShowThrottledApps) iStatement()   {}
-func (*ShowThrottlerStatus) iStatement() {}
-func (*DropTable) iStatement()           {}
-func (*DropView) iStatement()            {}
-func (*TruncateTable) iStatement()       {}
-func (*RenameTable) iStatement()         {}
-func (*CallProc) iStatement()            {}
-func (*ExplainStmt) iStatement()         {}
-func (*VExplainStmt) iStatement()        {}
-func (*ExplainTab) iStatement()          {}
-func (*PrepareStmt) iStatement()         {}
-func (*ExecuteStmt) iStatement()         {}
-func (*DeallocateStmt) iStatement()      {}
-func (*PurgeBinaryLogs) iStatement()     {}
-func (*Kill) iStatement()                {}
+func (*Union) iStatement()                 {}
+func (*Select) iStatement()                {}
+func (*ValuesStatement) iStatement()       {}
+func (*Stream) iStatement()                {}
+func (*VStream) iStatement()               {}
+func (*Insert) iStatement()                {}
+func (*Update) iStatement()                {}
+func (*Delete) iStatement()                {}
+func (*Set) iStatement()                   {}
+func (*DropDatabase) iStatement()          {}
+func (*Flush) iStatement()                 {}
+func (*Show) iStatement()                  {}
+func (*Use) iStatement()                   {}
+func (*Begin) iStatement()                 {}
+func (*Commit) iStatement()                {}
+func (*Rollback) iStatement()              {}
+func (*SRollback) iStatement()             {}
+func (*Savepoint) iStatement()             {}
+func (*Release) iStatement()               {}
+func (*Analyze) iStatement()               {}
+func (*OtherAdmin) iStatement()            {}
+func (*CommentOnly) iStatement()           {}
+func (*Select) iSelectStatement()          {}
+func (*ValuesStatement) iSelectStatement() {}
+func (*Union) iSelectStatement()           {}
+func (*Load) iStatement()                  {}
+func (*CreateDatabase) iStatement()        {}
+func (*AlterDatabase) iStatement()         {}
+func (*CreateTable) iStatement()           {}
+func (*CreateView) iStatement()            {}
+func (*AlterView) iStatement()             {}
+func (*LockTables) iStatement()            {}
+func (*UnlockTables) iStatement()          {}
+func (*AlterTable) iStatement()            {}
+func (*AlterVschema) iStatement()          {}
+func (*AlterMigration) iStatement()        {}
+func (*RevertMigration) iStatement()       {}
+func (*ShowMigrationLogs) iStatement()     {}
+func (*ShowThrottledApps) iStatement()     {}
+func (*ShowThrottlerStatus) iStatement()   {}
+func (*DropTable) iStatement()             {}
+func (*DropView) iStatement()              {}
+func (*TruncateTable) iStatement()         {}
+func (*RenameTable) iStatement()           {}
+func (*CallProc) iStatement()              {}
+func (*ExplainStmt) iStatement()           {}
+func (*VExplainStmt) iStatement()          {}
+func (*ExplainTab) iStatement()            {}
+func (*PrepareStmt) iStatement()           {}
+func (*ExecuteStmt) iStatement()           {}
+func (*DeallocateStmt) iStatement()        {}
+func (*PurgeBinaryLogs) iStatement()       {}
+func (*Kill) iStatement()                  {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -3572,6 +3575,20 @@ type Limit struct {
 
 // Values represents a VALUES clause.
 type Values []ValTuple
+
+type ValuesStatement struct {
+	Rows  Values
+	Order OrderBy
+	Limit *Limit
+}
+
+func (s *ValuesStatement) AddOrder(order *Order) {
+	s.Order = append(s.Order, order)
+}
+
+func (s *ValuesStatement) SetLimit(limit *Limit) {
+	s.Limit = limit
+}
 
 // UpdateExprs represents a list of update expressions.
 type UpdateExprs []*UpdateExpr

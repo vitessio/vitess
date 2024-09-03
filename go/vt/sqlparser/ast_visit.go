@@ -534,6 +534,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitValues(in, f)
 	case *ValuesFuncExpr:
 		return VisitRefOfValuesFuncExpr(in, f)
+	case *ValuesStatement:
+		return VisitRefOfValuesStatement(in, f)
 	case *VarPop:
 		return VisitRefOfVarPop(in, f)
 	case *VarSamp:
@@ -4277,6 +4279,24 @@ func VisitRefOfValuesFuncExpr(in *ValuesFuncExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfValuesStatement(in *ValuesStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitValues(in.Rows, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.Order, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfVarPop(in *VarPop, f Visit) error {
 	if in == nil {
 		return nil
@@ -5265,6 +5285,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfVExplainStmt(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
+	case *ValuesStatement:
+		return VisitRefOfValuesStatement(in, f)
 	default:
 		// this should never happen
 		return nil

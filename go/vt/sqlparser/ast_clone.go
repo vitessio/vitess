@@ -535,6 +535,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneValues(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	case *VarPop:
 		return CloneRefOfVarPop(in)
 	case *VarSamp:
@@ -3327,6 +3329,18 @@ func CloneRefOfValuesFuncExpr(n *ValuesFuncExpr) *ValuesFuncExpr {
 	return &out
 }
 
+// CloneRefOfValuesStatement creates a deep clone of the input.
+func CloneRefOfValuesStatement(n *ValuesStatement) *ValuesStatement {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Rows = CloneValues(n.Rows)
+	out.Order = CloneOrderBy(n.Order)
+	out.Limit = CloneRefOfLimit(n.Limit)
+	return &out
+}
+
 // CloneRefOfVarPop creates a deep clone of the input.
 func CloneRefOfVarPop(n *VarPop) *VarPop {
 	if n == nil {
@@ -4286,6 +4300,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfVExplainStmt(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	default:
 		// this should never happen
 		return nil

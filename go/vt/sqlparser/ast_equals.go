@@ -1562,6 +1562,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfValuesFuncExpr(a, b)
+	case *ValuesStatement:
+		b, ok := inB.(*ValuesStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfValuesStatement(a, b)
 	case *VarPop:
 		b, ok := inB.(*VarPop)
 		if !ok {
@@ -4845,6 +4851,19 @@ func (cmp *Comparator) RefOfValuesFuncExpr(a, b *ValuesFuncExpr) bool {
 	return cmp.RefOfColName(a.Name, b.Name)
 }
 
+// RefOfValuesStatement does deep equals between the two objects.
+func (cmp *Comparator) RefOfValuesStatement(a, b *ValuesStatement) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Values(a.Rows, b.Rows) &&
+		cmp.OrderBy(a.Order, b.Order) &&
+		cmp.RefOfLimit(a.Limit, b.Limit)
+}
+
 // RefOfVarPop does deep equals between the two objects.
 func (cmp *Comparator) RefOfVarPop(a, b *VarPop) bool {
 	if a == b {
@@ -7138,6 +7157,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfVStream(a, b)
+	case *ValuesStatement:
+		b, ok := inB.(*ValuesStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfValuesStatement(a, b)
 	default:
 		// this should never happen
 		return false
