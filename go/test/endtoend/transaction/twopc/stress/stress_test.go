@@ -48,6 +48,7 @@ func TestDisruptions(t *testing.T) {
 		disruptionName  string
 		commitDelayTime string
 		disruption      func(t *testing.T) error
+		resetFunc       func(t *testing.T)
 	}{
 		{
 			disruptionName:  "No Disruption",
@@ -75,6 +76,17 @@ func TestDisruptions(t *testing.T) {
 			disruptionName:  "OnlineDDL",
 			commitDelayTime: "20",
 			disruption:      onlineDDL,
+		},
+		{
+			disruptionName:  "MoveTables - Complete",
+			commitDelayTime: "10",
+			disruption:      moveTablesComplete,
+			resetFunc:       moveTablesReset,
+		},
+		{
+			disruptionName:  "MoveTables - Cancel",
+			commitDelayTime: "10",
+			disruption:      moveTablesCancel,
 		},
 		{
 			disruptionName:  "EmergencyReparentShard",
@@ -136,6 +148,10 @@ func TestDisruptions(t *testing.T) {
 			waitForResults(t, "select id, col from twopc_t1 where col = 4 order by id", `[[INT64(4) INT64(4)] [INT64(6) INT64(4)] [INT64(9) INT64(4)]]`, 30*time.Second)
 			writeCancel()
 			writerWg.Wait()
+
+			if tt.resetFunc != nil {
+				tt.resetFunc(t)
+			}
 		})
 	}
 }
@@ -239,6 +255,61 @@ func mysqlRestartShard3(t *testing.T) error {
 	return syscallutil.Kill(pid, syscall.SIGKILL)
 }
 
+// moveTablesCancel runs a move tables command that we cancel in the end.
+func moveTablesCancel(t *testing.T) error {
+	workflow := "TestDisruptions"
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1")
+	// Initiate MoveTables for twopc_t1.
+	output, err := mtw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.ReverseReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.Cancel()
+	require.NoError(t, err, output)
+	return nil
+}
+
+// moveTablesComplete runs a move tables command that we complete in the end.
+func moveTablesComplete(t *testing.T) error {
+	workflow := "TestDisruptions"
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1")
+	// Initiate MoveTables for twopc_t1.
+	output, err := mtw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.Complete()
+	require.NoError(t, err, output)
+	return nil
+}
+
+// moveTablesReset moves the table back from the unsharded keyspace to sharded
+func moveTablesReset(t *testing.T) {
+	// We apply the vschema again because previous move tables would have removed the entry for `twopc_t1`.
+	err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
+	require.NoError(t, err)
+	workflow := "TestDisruptions"
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, keyspaceName, unshardedKeyspaceName, "twopc_t1")
+	// Initiate MoveTables for twopc_t1.
+	output, err := mtw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.Complete()
+	require.NoError(t, err, output)
+}
+
 var orderedDDL = []string{
 	"alter table twopc_t1 add column extra_col1 varchar(20)",
 	"alter table twopc_t1 add column extra_col2 varchar(20)",
@@ -256,18 +327,18 @@ func onlineDDL(t *testing.T) error {
 	require.NoError(t, err)
 	count++
 	fmt.Println("uuid: ", output)
-	status := WaitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	status := waitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 	onlineddl.CheckMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), status)
 	require.Equal(t, schema.OnlineDDLStatusComplete, status)
 	return nil
 }
 
-func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
 	shardNames := map[string]bool{}
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
 	}
-	query := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
+	query := fmt.Sprintf("show vitess_migrations from %s like '%s'", keyspaceName, uuid)
 
 	statusesMap := map[string]bool{}
 	for _, status := range expectStatuses {
@@ -280,6 +351,11 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 
 	lastKnownStatus := ""
 	for {
+		select {
+		case <-ctx.Done():
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		case <-ticker.C:
+		}
 		countMatchedShards := 0
 		conn, err := mysql.Connect(ctx, vtParams)
 		if err != nil {
@@ -303,11 +379,6 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		}
 		if countMatchedShards == len(shards) {
 			return schema.OnlineDDLStatus(lastKnownStatus)
-		}
-		select {
-		case <-ctx.Done():
-			return schema.OnlineDDLStatus(lastKnownStatus)
-		case <-ticker.C:
 		}
 	}
 }

@@ -1101,6 +1101,14 @@ message TopologyCell {
   int64 version = 5;
 }
 
+message GetUnresolvedTransactionsRequest {
+  string keyspace = 1;
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
 message GetVSchemaRequest {
   string keyspace = 1;
 }

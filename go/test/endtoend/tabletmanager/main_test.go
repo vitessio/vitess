@@ -105,6 +105,8 @@ func TestMain(m *testing.M) {
 			"--heartbeat_enable",
 			"--health_check_interval", tabletHealthcheckRefreshInterval.String(),
 			"--unhealthy_threshold", tabletUnhealthyThreshold.String(),
+			"--twopc_enable",
+			"--twopc_abandon_age", "200",
 		}
 
 		// Start keyspace

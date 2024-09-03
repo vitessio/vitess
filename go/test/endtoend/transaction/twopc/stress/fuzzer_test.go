@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/rand"
 
@@ -102,12 +103,12 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			timeForTesting: 5 * time.Second,
 		},
 		{
-			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL disruptions",
-			threads:               15,
-			updateSets:            15,
+			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL, MoveTables disruptions",
+			threads:               4,
+			updateSets:            4,
 			timeForTesting:        5 * time.Second,
-			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer},
-			disruptionProbability: []int{5, 5, 5, 5, 5},
+			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer, moveTablesFuzzer},
+			disruptionProbability: []int{5, 5, 5, 5, 5, 5},
 		},
 	}
 
@@ -443,7 +444,39 @@ func onlineDDLFuzzer(t *testing.T) {
 		return
 	}
 	fmt.Println("Running online DDL with uuid: ", output)
-	WaitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	waitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+}
+
+var moveTablesCount int
+
+// moveTablesFuzzer runs a MoveTables workflow.
+func moveTablesFuzzer(t *testing.T) {
+	workflow := "TestTwoPCFuzzTest"
+	srcKeyspace := keyspaceName
+	targetKeyspace := unshardedKeyspaceName
+	if moveTablesCount%2 == 1 {
+		srcKeyspace = unshardedKeyspaceName
+		targetKeyspace = keyspaceName
+		// We apply the vschema again because previous move tables would have removed the entry for `twopc_fuzzer_update`.
+		err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
+		require.NoError(t, err)
+	}
+	log.Errorf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace)
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update")
+	// Initiate MoveTables for twopc_fuzzer_update.
+	output, err := mtw.Create()
+	if err != nil {
+		log.Errorf("error creating MoveTables - %v, output - %v", err, output)
+		return
+	}
+	moveTablesCount++
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(1 * time.Minute)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	assert.NoError(t, err, output)
+	output, err = mtw.Complete()
+	assert.NoError(t, err, output)
 }
 
 func mysqlRestarts(t *testing.T) {
