@@ -275,6 +275,18 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerda
 	return response, nil
 }
 
+func (s *server) GetUnresolvedTransactions(ctx context.Context, request *tabletmanagerdatapb.GetUnresolvedTransactionsRequest) (response *tabletmanagerdatapb.GetUnresolvedTransactionsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetUnresolvedTransactions", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+
+	transactions, err := s.tm.GetUnresolvedTransactions(ctx)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+
+	return &tabletmanagerdatapb.GetUnresolvedTransactionsResponse{Transactions: transactions}, nil
+}
+
 //
 // Replication related methods
 //

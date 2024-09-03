@@ -1786,7 +1786,9 @@ func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.Colu
 // If recurses into all function arguments.
 // The known non-deterministic function we handle are:
 // - UUID()
+// - UUID_SHORT()
 // - RAND()
+// - RANDOM_BYTES()
 // - SYSDATE()
 func findNoNondeterministicFunction(expr sqlparser.Expr) (foundFunction string) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -1799,7 +1801,7 @@ func findNoNondeterministicFunction(expr sqlparser.Expr) (foundFunction string) 
 			}
 		case *sqlparser.FuncExpr:
 			switch node.Name.Lowered() {
-			case "uuid", "rand":
+			case "uuid", "uuid_short", "rand", "random_bytes":
 				foundFunction = node.Name.String()
 				return false, nil
 			}

@@ -458,6 +458,12 @@ func TestCreateTableDiff(t *testing.T) {
 			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
 		},
 		{
+			name:     "added column with non deterministic expression, uuid, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (uuid_short()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid_short"}).Error(),
+		},
+		{
 			name:     "added column with non deterministic expression, UUID, reject",
 			from:     "create table t1 (id int primary key, a int)",
 			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (UUID()))",
@@ -480,6 +486,12 @@ func TestCreateTableDiff(t *testing.T) {
 			from:     "create table t1 (id int primary key, a int)",
 			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (2.0 + rand()))",
 			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "rand"}).Error(),
+		},
+		{
+			name:     "added column with non deterministic expression, random_bytes, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (random_bytes(3)))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "random_bytes"}).Error(),
 		},
 		{
 			name:     "added column with non deterministic expression, sysdate, reject",

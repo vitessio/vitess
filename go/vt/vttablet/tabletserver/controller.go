@@ -98,6 +98,8 @@ type Controller interface {
 
 	// SetTwoPCAllowed sets whether TwoPC is allowed or not.
 	SetTwoPCAllowed(bool)
+
+	UnresolvedTransactions(ctx context.Context, target *querypb.Target) ([]*querypb.TransactionMetadata, error)
 }
 
 // Ensure TabletServer satisfies Controller interface.

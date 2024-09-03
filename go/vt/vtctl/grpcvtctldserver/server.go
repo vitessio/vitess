@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 
@@ -2390,6 +2391,50 @@ func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.Get
 
 	return &vtctldatapb.GetTopologyPathResponse{
 		Cell: cell,
+	}, nil
+}
+
+// GetUnresolvedTransactions is part of the vtctlservicepb.VtctldServer interface.
+// It returns the unresolved distributed transactions list for the provided keyspace.
+func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctldatapb.GetUnresolvedTransactionsRequest) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetUnresolvedTransactions")
+	defer span.Finish()
+
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	var mu sync.Mutex
+	var transactions []*querypb.TransactionMetadata
+
+	eg, newCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, shard := range shards {
+		eg.Go(func() error {
+			si, err := s.ts.GetShard(newCtx, req.Keyspace, shard)
+			if err != nil {
+				return err
+			}
+			primary, err := s.ts.GetTablet(newCtx, si.PrimaryAlias)
+			if err != nil {
+				return err
+			}
+			shardTrnxs, err := s.tmc.GetUnresolvedTransactions(newCtx, primary.Tablet)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			transactions = append(transactions, shardTrnxs...)
+			return nil
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetUnresolvedTransactionsResponse{
+		Transactions: transactions,
 	}, nil
 }
 
