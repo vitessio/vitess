@@ -359,5 +359,8 @@ func (dte *DTExecutor) inTransaction(f func(*StatefulConnection) error) error {
 
 // UnresolvedTransactions returns the list of unresolved distributed transactions.
 func (dte *DTExecutor) UnresolvedTransactions() ([]*querypb.TransactionMetadata, error) {
+	if !dte.te.twopcEnabled {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
+	}
 	return dte.te.twoPC.UnresolvedTransactions(dte.ctx, time.Now().Add(-dte.te.abandonAge))
 }
