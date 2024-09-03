@@ -916,10 +916,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: `create table parent (id int primary key); create table t (id int primary key, i int, key i_idx (i), constraint f foreign key (i) references parent(id))`,
 			to:   `create table parent (id int primary key); create table t (id int primary key, i int, key i_alternative (i), constraint f foreign key (i) references parent(id))`,
 			diffs: []string{
-				"alter table t drop key i_idx, add key i_alternative (i)",
+				"alter table t rename index i_idx to i_alternative",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t` DROP KEY `i_idx`, ADD KEY `i_alternative` (`i`)",
+				"ALTER TABLE `t` RENAME INDEX `i_idx` TO `i_alternative`",
 			},
 		},
 		// Views
