@@ -47,7 +47,7 @@ type (
 
 func newDistinct(src Operator, qp *QueryProjection, required bool) *Distinct {
 	return &Distinct{
-		unaryOperator: unaryOperator{Source: src},
+		unaryOperator: newUnaryOp(src),
 		QP:            qp,
 		Required:      required,
 	}

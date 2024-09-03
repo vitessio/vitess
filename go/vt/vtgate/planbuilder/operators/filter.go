@@ -45,7 +45,7 @@ func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
 
 func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 	return &Filter{
-		unaryOperator: unaryOperator{Source: op},
+		unaryOperator: newUnaryOp(op),
 		Predicates:    expr,
 	}
 }

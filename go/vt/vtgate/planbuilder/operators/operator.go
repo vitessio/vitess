@@ -98,6 +98,17 @@ type (
 	}
 )
 
+func newUnaryOp(source Operator) unaryOperator {
+	return unaryOperator{Source: source}
+}
+
+func newBinaryOp(l, r Operator) binaryOperator {
+	return binaryOperator{
+		LHS: l,
+		RHS: r,
+	}
+}
+
 func (s *unaryOperator) Inputs() []Operator {
 	return []Operator{s.Source}
 }

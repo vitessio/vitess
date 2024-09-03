@@ -85,10 +85,7 @@ type (
 
 func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, predicate sqlparser.Expr, joinType sqlparser.JoinType) *ApplyJoin {
 	aj := &ApplyJoin{
-		binaryOperator: binaryOperator{
-			LHS: lhs,
-			RHS: rhs,
-		},
+		binaryOperator: newBinaryOp(lhs, rhs),
 		Vars:           map[string]int{},
 		JoinType:       joinType,
 		JoinColumns:    &applyJoinColumns{},

@@ -189,7 +189,7 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) O
 		routing = UpdateRoutingLogic(ctx, pred, routing)
 	}
 	return &Route{
-		unaryOperator: unaryOperator{Source: src},
+		unaryOperator: newUnaryOp(src),
 		Routing:       routing,
 	}
 }

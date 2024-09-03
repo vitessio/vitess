@@ -363,7 +363,7 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 		AST:    insStmt,
 	}
 	route := &Route{
-		unaryOperator: unaryOperator{Source: insOp},
+		unaryOperator: newUnaryOp(insOp),
 		Routing:       routing,
 	}
 
@@ -417,10 +417,7 @@ func insertSelectPlan(
 
 	// output of the select plan will be used to insert rows into the table.
 	insertSelect := &InsertSelection{
-		binaryOperator: binaryOperator{
-			LHS: newLockAndComment(selOp, nil, sqlparser.ShareModeLock),
-			RHS: routeOp,
-		},
+		binaryOperator: newBinaryOp(newLockAndComment(selOp, nil, sqlparser.ShareModeLock), routeOp),
 	}
 
 	// When the table you are streaming data from and table you are inserting from are same.

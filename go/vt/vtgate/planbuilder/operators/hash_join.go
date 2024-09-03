@@ -79,12 +79,9 @@ var _ JoinOp = (*HashJoin)(nil)
 
 func NewHashJoin(lhs, rhs Operator, outerJoin bool) *HashJoin {
 	hj := &HashJoin{
-		binaryOperator: binaryOperator{
-			LHS: lhs,
-			RHS: rhs,
-		},
-		LeftJoin: outerJoin,
-		columns:  &hashJoinColumns{},
+		binaryOperator: newBinaryOp(lhs, rhs),
+		LeftJoin:       outerJoin,
+		columns:        &hashJoinColumns{},
 	}
 	return hj
 }

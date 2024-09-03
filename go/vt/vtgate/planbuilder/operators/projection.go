@@ -127,7 +127,7 @@ func newProjExprWithInner(ae *sqlparser.AliasedExpr, in sqlparser.Expr) *ProjExp
 
 func newAliasedProjection(src Operator) *Projection {
 	return &Projection{
-		unaryOperator: unaryOperator{Source: src},
+		unaryOperator: newUnaryOp(src),
 		Columns:       AliasedProjections{},
 	}
 }

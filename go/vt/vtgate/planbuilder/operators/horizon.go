@@ -56,7 +56,7 @@ type Horizon struct {
 
 func newHorizon(src Operator, query sqlparser.SelectStatement) *Horizon {
 	return &Horizon{
-		unaryOperator: unaryOperator{Source: src},
+		unaryOperator: newUnaryOp(src),
 		Query:         query,
 	}
 }

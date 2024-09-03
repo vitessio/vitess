@@ -80,20 +80,16 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 	hz.Source = term.Source
 	newTerm, _ := expandHorizon(ctx, hz)
 	cte := &RecurseCTE{
-		binaryOperator: binaryOperator{
-			LHS: seed.Source,
-			RHS: newTerm,
-		},
-		Predicates: in.Predicates,
-		Def:        in.Def,
-		LeftID:     in.LeftID,
-		OuterID:    in.OuterID,
-		Distinct:   in.Distinct,
+		binaryOperator: newBinaryOp(seed.Source, newTerm),
+		Predicates:     in.Predicates,
+		Def:            in.Def,
+		LeftID:         in.LeftID,
+		OuterID:        in.OuterID,
+		Distinct:       in.Distinct,
 	}
 	return &Route{
-		Routing: r,
-		unaryOperator: unaryOperator{
-			Source: cte},
-		MergedWith: []*Route{term},
+		Routing:       r,
+		unaryOperator: newUnaryOp(cte),
+		MergedWith:    []*Route{term},
 	}
 }

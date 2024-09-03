@@ -43,11 +43,8 @@ func (m *PercentBasedMirror) Target() Operator {
 
 func NewPercentBasedMirror(percent float32, operator, target Operator) *PercentBasedMirror {
 	return &PercentBasedMirror{
-		binaryOperator: binaryOperator{
-			LHS: operator,
-			RHS: target,
-		},
-		Percent: percent,
+		binaryOperator: newBinaryOp(operator, target),
+		Percent:        percent,
 	}
 }
 

@@ -33,7 +33,7 @@ type LockAndComment struct {
 
 func newLockAndComment(op Operator, comments *sqlparser.ParsedComments, lock sqlparser.Lock) Operator {
 	return &LockAndComment{
-		unaryOperator: unaryOperator{Source: op},
+		unaryOperator: newUnaryOp(op),
 		Comments:      comments,
 		Lock:          lock,
 	}

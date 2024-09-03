@@ -76,16 +76,13 @@ func newRecurse(
 		ctx.AddJoinPredicates(pred.Original, pred.RightExpr)
 	}
 	return &RecurseCTE{
-		binaryOperator: binaryOperator{
-			LHS: seed,
-			RHS: term,
-		},
-		Def:        def,
-		Predicates: predicates,
-		Horizon:    horizon,
-		LeftID:     leftID,
-		OuterID:    outerID,
-		Distinct:   distinct,
+		binaryOperator: newBinaryOp(seed, term),
+		Def:            def,
+		Predicates:     predicates,
+		Horizon:        horizon,
+		LeftID:         leftID,
+		OuterID:        outerID,
+		Distinct:       distinct,
 	}
 }
 

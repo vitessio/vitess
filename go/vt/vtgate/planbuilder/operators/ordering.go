@@ -46,10 +46,8 @@ func (o *Ordering) Clone(inputs []Operator) Operator {
 
 func newOrdering(src Operator, order []OrderBy) Operator {
 	return &Ordering{
-		unaryOperator: unaryOperator{
-			Source: src,
-		},
-		Order: order,
+		unaryOperator: newUnaryOp(src),
+		Order:         order,
 	}
 }
 

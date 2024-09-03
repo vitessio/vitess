@@ -75,11 +75,8 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult
 func createStraightJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	// for inner joins we can treat the predicates as filters on top of the join
 	joinOp := &Join{
-		binaryOperator: binaryOperator{
-			LHS: lhs,
-			RHS: rhs,
-		},
-		JoinType: join.Join,
+		binaryOperator: newBinaryOp(lhs, rhs),
+		JoinType:       join.Join,
 	}
 
 	return addJoinPredicates(ctx, join.Condition.On, joinOp)
@@ -97,11 +94,8 @@ func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinT
 	}
 
 	joinOp := &Join{
-		binaryOperator: binaryOperator{
-			LHS: lhs,
-			RHS: rhs,
-		},
-		JoinType: join.Join,
+		binaryOperator: newBinaryOp(lhs, rhs),
+		JoinType:       join.Join,
 	}
 
 	// mark the RHS as outer tables so we know which columns are nullable
@@ -195,10 +189,7 @@ func createJoin(ctx *plancontext.PlanningContext, LHS, RHS Operator) Operator {
 		return op
 	}
 	return &Join{
-		binaryOperator: binaryOperator{
-			LHS: LHS,
-			RHS: RHS,
-		},
+		binaryOperator: newBinaryOp(LHS, RHS),
 	}
 }
 

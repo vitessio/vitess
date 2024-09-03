@@ -35,7 +35,7 @@ type Limit struct {
 
 func newLimit(op Operator, ast *sqlparser.Limit, top bool) *Limit {
 	return &Limit{
-		unaryOperator: unaryOperator{Source: op},
+		unaryOperator: newUnaryOp(op),
 		AST:           ast,
 		Top:           top,
 	}

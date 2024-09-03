@@ -422,10 +422,10 @@ func createRouteFromVSchemaTable(
 		}
 	}
 	plan := &Route{
-		unaryOperator: unaryOperator{Source: &Table{
+		unaryOperator: newUnaryOp(&Table{
 			QTable: queryTable,
 			VTable: vschemaTable,
-		}},
+		}),
 	}
 
 	// We create the appropriate Routing struct here, depending on the type of table we are dealing with.
@@ -679,7 +679,7 @@ func wrapInDerivedProjection(
 		columns = append(columns, sqlparser.NewIdentifierCI(fmt.Sprintf("c%d", i)))
 	}
 	derivedProj := &Projection{
-		unaryOperator: unaryOperator{Source: op},
+		unaryOperator: newUnaryOp(op),
 		Columns:       AliasedProjections(slice.Map(unionColumns, newProjExpr)),
 		DT: &DerivedTable{
 			TableID: ctx.SemTable.NewTableId(),

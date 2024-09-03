@@ -200,7 +200,7 @@ func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProject
 	aggregations, complexAggr := qp.AggregationExpressions(ctx, true)
 	src := horizon.Source
 	aggrOp := &Aggregator{
-		unaryOperator: unaryOperator{Source: src},
+		unaryOperator: newUnaryOp(src),
 		Original:      true,
 		QP:            qp,
 		Grouping:      qp.GetGrouping(),
@@ -352,7 +352,7 @@ func newStarProjection(src Operator, qp *QueryProjection) *Projection {
 	}
 
 	return &Projection{
-		unaryOperator: unaryOperator{Source: src},
+		unaryOperator: newUnaryOp(src),
 		Columns:       StarProjections(cols),
 	}
 }
