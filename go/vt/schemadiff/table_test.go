@@ -2778,8 +2778,8 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name:  "allow drop key when also adding a different index for foreign key constraint",
-			from:  "create table t (id int primary key, i int, key i (i), constraint f foreign key (i) references parent(id))",
-			alter: "alter table t drop key `i`, add key i_alternative (i)",
+			from:  "create table t (id int primary key, i int, key i_idx (i), constraint f foreign key (i) references parent(id))",
+			alter: "alter table t drop key `i_idx`, add key i_alternative (i)",
 			to:    "create table t (id int primary key, i int, key i_alternative (i), constraint f foreign key (i) references parent(id))",
 		},
 		{
