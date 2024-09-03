@@ -4289,6 +4289,9 @@ func VisitRefOfValuesStatement(in *ValuesStatement, f Visit) error {
 	if err := VisitValues(in.Rows, f); err != nil {
 		return err
 	}
+	if err := VisitListArg(in.ListArg, f); err != nil {
+		return err
+	}
 	if err := VisitOrderBy(in.Order, f); err != nil {
 		return err
 	}
@@ -5115,6 +5118,8 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 		return VisitRefOfUnion(in, f)
 	case Values:
 		return VisitValues(in, f)
+	case *ValuesStatement:
+		return VisitRefOfValuesStatement(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5145,6 +5150,8 @@ func VisitSelectStatement(in SelectStatement, f Visit) error {
 		return VisitRefOfSelect(in, f)
 	case *Union:
 		return VisitRefOfUnion(in, f)
+	case *ValuesStatement:
+		return VisitRefOfValuesStatement(in, f)
 	default:
 		// this should never happen
 		return nil

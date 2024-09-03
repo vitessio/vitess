@@ -104,6 +104,13 @@ func TestGenerateQuery(t *testing.T) {
 			},
 			output: "unexpected list arg type (INT64) for key vals",
 		}, {
+			desc:  "row tuple",
+			query: "select 1 from (values ::a) dt",
+			bindVars: map[string]*querypb.BindVariable{
+				"a": createRowTupleBV(),
+			},
+			output: "select 1 from (values row('a', 1), row('b', 2)) as dt",
+		}, {
 			desc:  "list bind var for non-list",
 			query: "select * from a where id = :vals",
 			bindVars: map[string]*querypb.BindVariable{
@@ -300,5 +307,14 @@ func TestCastBindVars(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, testcase.out, out)
 		})
+	}
+}
+
+func createRowTupleBV() *querypb.BindVariable {
+	v1 := sqltypes.TestTuple(sqltypes.NewVarChar("a"), sqltypes.NewInt64(1))
+	v2 := sqltypes.TestTuple(sqltypes.NewVarChar("b"), sqltypes.NewInt64(2))
+	return &querypb.BindVariable{
+		Type:   querypb.Type_ROW_TUPLE,
+		Values: append([]*querypb.Value{sqltypes.ValueToProto(v1)}, sqltypes.ValueToProto(v2)),
 	}
 }

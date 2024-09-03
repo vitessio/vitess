@@ -599,6 +599,30 @@ func (cached *Join) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JoinValues) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Left.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Right vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Right.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field WhenLeftEmpty vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.WhenLeftEmpty.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field RowConstructorArg string
+	size += hack.RuntimeAllocSize(int64(len(cached.RowConstructorArg)))
+	return size
+}
 func (cached *Limit) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

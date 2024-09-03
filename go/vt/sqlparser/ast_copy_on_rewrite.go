@@ -6416,11 +6416,13 @@ func (c *cow) copyOnRewriteRefOfValuesStatement(n *ValuesStatement, parent SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Rows, changedRows := c.copyOnRewriteValues(n.Rows, n)
+		_ListArg, changedListArg := c.copyOnRewriteListArg(n.ListArg, n)
 		_Order, changedOrder := c.copyOnRewriteOrderBy(n.Order, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
-		if changedRows || changedOrder || changedLimit {
+		if changedRows || changedListArg || changedOrder || changedLimit {
 			res := *n
 			res.Rows, _ = _Rows.(Values)
+			res.ListArg, _ = _ListArg.(ListArg)
 			res.Order, _ = _Order.(OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			out = &res
@@ -7392,6 +7394,8 @@ func (c *cow) copyOnRewriteInsertRows(n InsertRows, parent SQLNode) (out SQLNode
 		return c.copyOnRewriteRefOfUnion(n, parent)
 	case Values:
 		return c.copyOnRewriteValues(n, parent)
+	case *ValuesStatement:
+		return c.copyOnRewriteRefOfValuesStatement(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7422,6 +7426,8 @@ func (c *cow) copyOnRewriteSelectStatement(n SelectStatement, parent SQLNode) (o
 		return c.copyOnRewriteRefOfSelect(n, parent)
 	case *Union:
 		return c.copyOnRewriteRefOfUnion(n, parent)
+	case *ValuesStatement:
+		return c.copyOnRewriteRefOfValuesStatement(n, parent)
 	default:
 		// this should never happen
 		return nil, false

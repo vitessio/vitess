@@ -4860,6 +4860,7 @@ func (cmp *Comparator) RefOfValuesStatement(a, b *ValuesStatement) bool {
 		return false
 	}
 	return cmp.Values(a.Rows, b.Rows) &&
+		a.ListArg == b.ListArg &&
 		cmp.OrderBy(a.Order, b.Order) &&
 		cmp.RefOfLimit(a.Limit, b.Limit)
 }
@@ -6722,6 +6723,12 @@ func (cmp *Comparator) InsertRows(inA, inB InsertRows) bool {
 			return false
 		}
 		return cmp.Values(a, b)
+	case *ValuesStatement:
+		b, ok := inB.(*ValuesStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfValuesStatement(a, b)
 	default:
 		// this should never happen
 		return false
@@ -6782,6 +6789,12 @@ func (cmp *Comparator) SelectStatement(inA, inB SelectStatement) bool {
 			return false
 		}
 		return cmp.RefOfUnion(a, b)
+	case *ValuesStatement:
+		b, ok := inB.(*ValuesStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfValuesStatement(a, b)
 	default:
 		// this should never happen
 		return false

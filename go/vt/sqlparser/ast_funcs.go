@@ -2839,3 +2839,67 @@ func ExtractAllTables(stmt Statement) []string {
 	}, stmt)
 	return tables
 }
+
+var _ SelectStatement = (*ValuesStatement)(nil)
+
+func (node *ValuesStatement) GetLock() Lock {
+	return NoLock
+}
+
+func (node *ValuesStatement) SetLock(lock Lock) {
+	if lock != NoLock {
+		panic("cannot set lock on Values statement")
+	}
+}
+
+func (node *ValuesStatement) SetInto(into *SelectInto) {
+	panic("cannot set Into on Values statement")
+}
+
+func (node *ValuesStatement) SetWith(with *With) {
+	panic("cannot set With on Values statement")
+}
+
+func (node *ValuesStatement) MakeDistinct() {
+	panic("cannot set Distinct on Values statement")
+}
+
+func (node *ValuesStatement) GetColumnCount() int {
+	panic("cannot call Column count on Values statement")
+}
+
+func (node *ValuesStatement) GetColumns() SelectExprs {
+	panic("cannot call Columns on Values statement")
+}
+
+func (node *ValuesStatement) SetComments(comments Comments) {
+	panic("cannot set Comments on Values statement")
+}
+
+func (node *ValuesStatement) GetParsedComments() *ParsedComments {
+	panic("cannot call Parsed comments on Values statement")
+}
+
+func (node *ValuesStatement) IsDistinct() bool {
+	return false
+}
+
+func (node *ValuesStatement) GetOrderBy() OrderBy {
+	return node.Order
+}
+
+func (node *ValuesStatement) SetOrderBy(by OrderBy) {
+	node.Order = by
+}
+
+func (node *ValuesStatement) GetLimit() *Limit {
+	return node.Limit
+}
+
+func (node *ValuesStatement) AddOrder(order *Order) {
+	node.Order = append(node.Order, order)
+}
+
+func (node *ValuesStatement) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
