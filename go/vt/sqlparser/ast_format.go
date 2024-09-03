@@ -122,6 +122,9 @@ func (node *VStream) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ValuesStatement) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
 	buf.WriteString("values ")
 	if node.ListArg != "" {
 		buf.astPrintf(node, "%v", node.ListArg)

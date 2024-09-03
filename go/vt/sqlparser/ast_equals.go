@@ -4861,7 +4861,8 @@ func (cmp *Comparator) RefOfValuesStatement(a, b *ValuesStatement) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Values(a.Rows, b.Rows) &&
+	return cmp.RefOfWith(a.With, b.With) &&
+		cmp.Values(a.Rows, b.Rows) &&
 		a.ListArg == b.ListArg &&
 		cmp.OrderBy(a.Order, b.Order) &&
 		cmp.RefOfLimit(a.Limit, b.Limit)
