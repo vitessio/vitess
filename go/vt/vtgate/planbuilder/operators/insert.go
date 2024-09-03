@@ -50,7 +50,7 @@ type Insert struct {
 	// that will appear in the result set of the select query.
 	VindexValueOffset [][]int
 
-	noInputs
+	nullaryOperator
 	noColumns
 	noPredicates
 }
@@ -363,8 +363,8 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 		AST:    insStmt,
 	}
 	route := &Route{
-		Source:  insOp,
-		Routing: routing,
+		unaryOperator: newUnaryOp(insOp),
+		Routing:       routing,
 	}
 
 	// Table column list is nil then add all the columns
@@ -394,10 +394,7 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 		op = insertSelectPlan(ctx, insOp, route, insStmt, rows)
 	}
 	if insStmt.Comments != nil {
-		op = &LockAndComment{
-			Source:   op,
-			Comments: insStmt.Comments,
-		}
+		op = newLockAndComment(op, insStmt.Comments, sqlparser.NoLock)
 	}
 	return op
 }
@@ -420,11 +417,7 @@ func insertSelectPlan(
 
 	// output of the select plan will be used to insert rows into the table.
 	insertSelect := &InsertSelection{
-		Select: &LockAndComment{
-			Source: selOp,
-			Lock:   sqlparser.ShareModeLock,
-		},
-		Insert: routeOp,
+		binaryOperator: newBinaryOp(newLockAndComment(selOp, nil, sqlparser.ShareModeLock), routeOp),
 	}
 
 	// When the table you are streaming data from and table you are inserting from are same.

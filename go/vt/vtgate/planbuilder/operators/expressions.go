@@ -71,3 +71,53 @@ func nothingNeedsFetching(ctx *plancontext.PlanningContext, expr sqlparser.Expr)
 	}, expr)
 	return
 }
+
+func simplifyPredicates(ctx *plancontext.PlanningContext, in sqlparser.Expr) sqlparser.Expr {
+	var replace sqlparser.Expr
+
+	// if expr is constant true, replace with trueReplacement, if constant false, replace with falseReplacement
+	handleExpr := func(expr, trueReplacement, falseReplacement sqlparser.Expr) bool {
+		b := ctx.IsConstantBool(expr)
+		if b != nil {
+			if *b {
+				replace = trueReplacement
+			} else {
+				replace = falseReplacement
+			}
+			return true
+		}
+		return false
+	}
+
+	pre := func(node, _ sqlparser.SQLNode) bool {
+		switch node := node.(type) {
+		case *sqlparser.OrExpr:
+			if handleExpr(node.Left, sqlparser.NewIntLiteral("1"), node.Right) {
+				return false
+			}
+			if handleExpr(node.Right, sqlparser.NewIntLiteral("1"), node.Left) {
+				return false
+			}
+		case *sqlparser.AndExpr:
+			if handleExpr(node.Left, node.Right, sqlparser.NewIntLiteral("0")) {
+				return false
+			}
+			if handleExpr(node.Right, node.Left, sqlparser.NewIntLiteral("0")) {
+				return false
+			}
+		}
+		return true
+	}
+	post := func(cursor *sqlparser.CopyOnWriteCursor) {
+		if replace != nil {
+			cursor.Replace(replace)
+			replace = nil
+		}
+	}
+	output := sqlparser.CopyOnRewrite(in, pre, post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+	if in != output {
+		// we need to do this, since one simplification might lead to another
+		return simplifyPredicates(ctx, output)
+	}
+	return output
+}
