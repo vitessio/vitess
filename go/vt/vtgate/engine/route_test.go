@@ -1728,8 +1728,8 @@ func TestSelectTupleMultiCol(t *testing.T) {
 		&evalengine.TupleBindVariable{Key: "vals", Index: 1},
 	}
 
-	v1 := sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.NewVarChar("a"))
-	v2 := sqltypes.TestTuple(sqltypes.NewInt64(4), sqltypes.NewVarChar("b"))
+	v1 := sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.NewVarChar("a"), sqltypes.NewVarChar("x"))
+	v2 := sqltypes.TestTuple(sqltypes.NewInt64(4), sqltypes.NewVarChar("b"), sqltypes.NewVarChar("y"))
 	tupleBV := &querypb.BindVariable{
 		Type:   querypb.Type_TUPLE,
 		Values: append([]*querypb.Value{sqltypes.ValueToProto(v1)}, sqltypes.ValueToProto(v2)),
@@ -1741,13 +1741,13 @@ func TestSelectTupleMultiCol(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol user [[INT64(1) VARCHAR("a")] [INT64(4) VARCHAR("b")]] Destinations:DestinationKeyspaceID(166b40b461),DestinationKeyspaceID(d2fd886762)`,
-		`ExecuteMultiShard user.-20: select 1 from multicol_tbl where (colb, colx, cola) in ::vals {vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x014\x950\x01b"}} false false`,
+		`ExecuteMultiShard user.-20: select 1 from multicol_tbl where (colb, colx, cola) in ::vals {vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a\x950\x01x"} values:{type:TUPLE value:"\x89\x02\x014\x950\x01b\x950\x01y"}} false false`,
 	})
 
 	vc.Rewind()
 	_, _ = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{"vals": tupleBV}, false)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol user [[INT64(1) VARCHAR("a")] [INT64(4) VARCHAR("b")]] Destinations:DestinationKeyspaceID(166b40b461),DestinationKeyspaceID(d2fd886762)`,
-		`StreamExecuteMulti select 1 from multicol_tbl where (colb, colx, cola) in ::vals user.-20: {vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x014\x950\x01b"}} `,
+		`StreamExecuteMulti select 1 from multicol_tbl where (colb, colx, cola) in ::vals user.-20: {vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a\x950\x01x"} values:{type:TUPLE value:"\x89\x02\x014\x950\x01b\x950\x01y"}} `,
 	})
 }

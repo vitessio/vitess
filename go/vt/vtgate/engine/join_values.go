@@ -33,7 +33,7 @@ type JoinValues struct {
 	// When Left is empty, the WhenLeftEmpty primitive will be executed.
 	Left, Right, WhenLeftEmpty Primitive
 
-	RowConstructorArgs []string
+	RowConstructorArg string
 }
 
 // TryExecute performs a non-streaming exec.
@@ -45,17 +45,13 @@ func (jv *JoinValues) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	if len(lresult.Rows) == 0 && wantfields {
 		return jv.WhenLeftEmpty.GetFields(ctx, vcursor, bindVars)
 	}
-	bvs := make([]*querypb.BindVariable, len(jv.RowConstructorArgs))
-	for idx, arg := range jv.RowConstructorArgs {
-		bvs[idx] = &querypb.BindVariable{Type: querypb.Type_TUPLE}
-		bindVars[arg] = bvs[idx]
+	bv := &querypb.BindVariable{
+		Type: querypb.Type_TUPLE,
 	}
 	for _, row := range lresult.Rows {
-
-		for idx, col := range row {
-			bvs[idx].Values = append(bvs[idx].Values, sqltypes.ValueToProto(col))
-		}
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(row))
 	}
+	bindVars[jv.RowConstructorArg] = bv
 	return vcursor.ExecutePrimitive(ctx, jv.Right, bindVars, wantfields)
 }
 
@@ -102,7 +98,7 @@ func (jv *JoinValues) description() PrimitiveDescription {
 		OperatorType: "Join",
 		Variant:      "Values",
 		Other: map[string]any{
-			"ValuesArgs": jv.RowConstructorArgs,
+			"ValuesArg": jv.RowConstructorArg,
 		},
 	}
 }
