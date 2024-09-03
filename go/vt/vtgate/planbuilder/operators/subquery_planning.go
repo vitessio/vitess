@@ -449,7 +449,7 @@ func rewriteColNameToArgument(
 }
 
 func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (Operator, *ApplyResult) {
-	if !reachedPhase(ctx, initialPlanning) {
+	if !reachedPhase(ctx, horizonPlanning) {
 		return in, NoRewrite
 	}
 

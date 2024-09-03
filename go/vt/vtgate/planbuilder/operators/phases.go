@@ -33,7 +33,7 @@ type (
 
 const (
 	physicalTransform Phase = iota
-	initialPlanning
+	horizonPlanning
 	pullDistinctFromUnion
 	delegateAggregation
 	recursiveCTEHorizons
@@ -48,7 +48,7 @@ func (p Phase) String() string {
 	switch p {
 	case physicalTransform:
 		return "physicalTransform"
-	case initialPlanning:
+	case horizonPlanning:
 		return "initial horizon planning optimization"
 	case pullDistinctFromUnion:
 		return "pull distinct from UNION"
