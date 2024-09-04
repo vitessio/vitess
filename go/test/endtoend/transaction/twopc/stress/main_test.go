@@ -32,13 +32,13 @@ import (
 )
 
 var (
-	clusterInstance   *cluster.LocalProcessCluster
-	vtParams          mysql.ConnParams
-	vtgateGrpcAddress string
-	keyspaceName      = "ks"
-	cell              = "zone1"
-	hostname          = "localhost"
-	sidecarDBName     = "vt_ks"
+	clusterInstance       *cluster.LocalProcessCluster
+	vtParams              mysql.ConnParams
+	vtgateGrpcAddress     string
+	keyspaceName          = "ks"
+	unshardedKeyspaceName = "uks"
+	cell                  = "zone1"
+	hostname              = "localhost"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -79,10 +79,20 @@ func TestMain(m *testing.M) {
 			Name:             keyspaceName,
 			SchemaSQL:        SchemaSQL,
 			VSchema:          VSchema,
-			SidecarDBName:    sidecarDBName,
 			DurabilityPolicy: "semi_sync",
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
+			return 1
+		}
+
+		// Start an unsharded keyspace
+		unshardedKeyspace := &cluster.Keyspace{
+			Name:             unshardedKeyspaceName,
+			SchemaSQL:        "",
+			VSchema:          "{}",
+			DurabilityPolicy: "semi_sync",
+		}
+		if err := clusterInstance.StartUnshardedKeyspace(*unshardedKeyspace, 2, false); err != nil {
 			return 1
 		}
 
@@ -90,7 +100,7 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		vtParams = clusterInstance.GetVTParams("")
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
 		return m.Run()

@@ -130,10 +130,7 @@ func isolateDistinctFromUnion(_ *plancontext.PlanningContext, root Operator) Ope
 
 		union.distinct = false
 
-		distinct := &Distinct{
-			Required: true,
-			Source:   union,
-		}
+		distinct := newDistinct(union, nil, true)
 		return distinct, Rewrote("pulled out DISTINCT from union")
 	}
 

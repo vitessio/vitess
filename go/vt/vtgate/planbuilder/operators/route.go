@@ -33,7 +33,7 @@ import (
 
 type (
 	Route struct {
-		Source Operator
+		unaryOperator
 
 		// Routes that have been merged into this one.
 		MergedWith []*Route
@@ -119,7 +119,7 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 	nr := &NoneRouting{keyspace: ks}
 
-	if isConstantFalse(ctx, expr) {
+	if b := ctx.IsConstantBool(expr); b != nil && !*b {
 		return nr
 	}
 
@@ -161,39 +161,6 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	return exit()
 }
 
-// isConstantFalse checks whether this predicate can be evaluated at plan-time. If it returns `false` or `null`,
-// we know that the query will not return anything, and this can be used to produce better plans
-func isConstantFalse(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
-	if !ctx.SemTable.RecursiveDeps(expr).IsEmpty() {
-		// we have column dependencies, so we can be pretty sure
-		// we won't be able to use the evalengine to check if this is constant false
-		return false
-	}
-	env := ctx.VSchema.Environment()
-	collation := ctx.VSchema.ConnCollation()
-	eenv := evalengine.EmptyExpressionEnv(env)
-	eexpr, err := evalengine.Translate(expr, &evalengine.Config{
-		Collation:     collation,
-		Environment:   env,
-		NoCompilation: true,
-	})
-	if err != nil {
-		return false
-	}
-	eres, err := eenv.Evaluate(eexpr)
-	if err != nil {
-		return false
-	}
-	if eres.Value(collation).IsNull() {
-		return false
-	}
-	b, err := eres.ToBooleanStrict()
-	if err != nil {
-		return false
-	}
-	return !b
-}
-
 // Cost implements the Operator interface
 func (r *Route) Cost() int {
 	return r.Routing.Cost()
@@ -205,16 +172,6 @@ func (r *Route) Clone(inputs []Operator) Operator {
 	cloneRoute.Source = inputs[0]
 	cloneRoute.Routing = r.Routing.Clone()
 	return &cloneRoute
-}
-
-// Inputs implements the Operator interface
-func (r *Route) Inputs() []Operator {
-	return []Operator{r.Source}
-}
-
-// SetInputs implements the Operator interface
-func (r *Route) SetInputs(ops []Operator) {
-	r.Source = ops[0]
 }
 
 func createOption(
@@ -465,10 +422,10 @@ func createRouteFromVSchemaTable(
 		}
 	}
 	plan := &Route{
-		Source: &Table{
+		unaryOperator: newUnaryOp(&Table{
 			QTable: queryTable,
 			VTable: vschemaTable,
-		},
+		}),
 	}
 
 	// We create the appropriate Routing struct here, depending on the type of table we are dealing with.
@@ -722,8 +679,8 @@ func wrapInDerivedProjection(
 		columns = append(columns, sqlparser.NewIdentifierCI(fmt.Sprintf("c%d", i)))
 	}
 	derivedProj := &Projection{
-		Source:  op,
-		Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
+		unaryOperator: newUnaryOp(op),
+		Columns:       AliasedProjections(slice.Map(unionColumns, newProjExpr)),
 		DT: &DerivedTable{
 			TableID: ctx.SemTable.NewTableId(),
 			Alias:   "dt",

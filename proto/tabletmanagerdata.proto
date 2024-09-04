@@ -309,6 +309,13 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
+message GetUnresolvedTransactionsRequest {
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
 message ReplicationStatusRequest {
 }
 
