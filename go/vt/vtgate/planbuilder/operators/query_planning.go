@@ -21,6 +21,8 @@ import (
 	"io"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/capabilities"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -123,6 +125,14 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 }
 
 func tryConvertApplyToValuesJoin(ctx *plancontext.PlanningContext, in *ApplyJoin) (Operator, *ApplyResult) {
+	ok, err := capabilities.MySQLVersionHasCapability(ctx.VSchema.Environment().MySQLVersion(), capabilities.ValuesRow)
+	if err != nil {
+		panic(err)
+	}
+	if !ok {
+		return in, NoRewrite
+	}
+
 	var r *Route
 	_ = Visit(in.RHS, func(op Operator) error {
 		switch op := op.(type) {
