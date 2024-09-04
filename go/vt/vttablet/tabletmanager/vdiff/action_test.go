@@ -181,7 +181,9 @@ func TestPerformVDiffAction(t *testing.T) {
 				},
 				{
 					query: fmt.Sprintf(`update _vt.vdiff as vd set vd.state = 'pending' where vd.vdiff_uuid = %s and vd.state = 'stopped' and
-					vd.started_at is NULL and vd.completed_at is NULL`, encodeString(uuid)),
+					vd.started_at is NULL and vd.completed_at is NULL and
+					(select count(*) as cnt from _vt.vdiff_table as vdt where vd.id = vdt.vdiff_id) = 0`,
+						encodeString(uuid)),
 					result: &sqltypes.Result{
 						RowsAffected: 1,
 					},
