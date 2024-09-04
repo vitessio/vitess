@@ -33,6 +33,8 @@ type JoinValues struct {
 	// When Left is empty, the WhenLeftEmpty primitive will be executed.
 	Left, Right, WhenLeftEmpty Primitive
 
+	Vars              map[string]int
+	Columns           []string
 	RowConstructorArg string
 }
 
@@ -99,6 +101,7 @@ func (jv *JoinValues) description() PrimitiveDescription {
 		Variant:      "Values",
 		Other: map[string]any{
 			"ValuesArg": jv.RowConstructorArg,
+			"Vars":      jv.Vars,
 		},
 	}
 }

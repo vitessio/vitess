@@ -75,7 +75,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch in := in.(type) {
 		case *ApplyJoin:
-			return tryConvertApplyToValuesJoin(in, ctx)
+			return tryConvertApplyToValuesJoin(ctx, in)
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
 		case *Join:
@@ -122,7 +122,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func tryConvertApplyToValuesJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {
+func tryConvertApplyToValuesJoin(ctx *plancontext.PlanningContext, in *ApplyJoin) (Operator, *ApplyResult) {
 	var r *Route
 	_ = Visit(in.RHS, func(op Operator) error {
 		switch op := op.(type) {
@@ -141,15 +141,36 @@ func tryConvertApplyToValuesJoin(in *ApplyJoin, ctx *plancontext.PlanningContext
 			return io.EOF
 		}
 	})
-	if r != nil {
-		var vj Operator = newValuesJoin(in.LHS, in.RHS, in.JoinType)
-		for _, column := range in.JoinPredicates.columns {
-			vj = vj.AddPredicate(ctx, column.Original)
-			// column.RHSExpr
-		}
-		return vj, Rewrote("ApplyJoin to ValuesJoin")
+	if r == nil {
+		return in, NoRewrite
 	}
-	return in, NoRewrite
+
+	valuesTable := "values"
+	rhsID := TableID(in.LHS)
+	if rhsID.NumberOfTables() == 1 {
+		tbl, err := ctx.SemTable.TableInfoFor(rhsID)
+		if err != nil {
+			return in, NoRewrite
+		}
+		name, err := tbl.Name()
+		if err == nil {
+			valuesTable = sqlparser.String(name)
+		}
+	}
+	valuesTable = ctx.GetReservedArgumentForString(valuesTable)
+
+	newRouteSrc := &ValuesTable{
+		unaryOperator: newUnaryOp(r.Source),
+		ListArgName:   valuesTable,
+	}
+	r.Source = newRouteSrc
+	var vj Operator = newValuesJoin(in.LHS, in.RHS, in.JoinType, valuesTable)
+	for _, column := range in.JoinPredicates.columns {
+		vj = vj.AddPredicate(ctx, column.Original)
+	}
+	routing := r.Routing.(*ShardedRouting)
+	routing.RouteOpCode = engine.IN
+	return vj, Rewrote("ApplyJoin to ValuesJoin")
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {

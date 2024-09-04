@@ -91,6 +91,8 @@ func tryPushProjection(
 			return p, NoRewrite
 		}
 		return pushProjectionThroughHashJoin(ctx, p, src)
+	case *ValuesJoin:
+		return pushProjectionUnderValueJoin(ctx, p, src)
 	case *Vindex:
 		if !p.canPush(ctx) {
 			return p, NoRewrite
@@ -106,6 +108,19 @@ func tryPushProjection(
 	default:
 		return p, NoRewrite
 	}
+}
+
+func pushProjectionUnderValueJoin(ctx *plancontext.PlanningContext, p *Projection, join *ValuesJoin) (Operator, *ApplyResult) {
+	// We need to push all the columns needed from the LHS
+	exprs := p.GetColumns(ctx)
+	for _, expr := range exprs {
+		col := breakExpressionInLHSandRHS(ctx, expr.Expr, TableID(join.LHS))
+		join.addLHSExprs(col.LHSExprs)
+	}
+
+	// We can now push the projection under the values join
+	p.Source, join.RHS = join.RHS, p
+	return join, Rewrote("push projection under valuesJoin")
 }
 
 // pushProjectionThroughHashJoin optimizes projection operations within a hash join
