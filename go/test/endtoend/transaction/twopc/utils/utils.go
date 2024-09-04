@@ -37,11 +37,19 @@ const (
 // ClearOutTable deletes everything from a table. Sometimes the table might have more rows than allowed in a single delete query,
 // so we have to do the deletions iteratively.
 func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout out waiting for table to be cleared - %v", tableName)
+			return
+		default:
+		}
 		conn, err := mysql.Connect(ctx, &vtParams)
 		if err != nil {
 			fmt.Printf("Error in connection - %v\n", err)
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
