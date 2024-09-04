@@ -459,6 +459,8 @@ func buildQuery(op Operator, qb *queryBuilder) {
 		buildDML(op, qb)
 	case *RecurseCTE:
 		buildRecursiveCTE(op, qb)
+	case *ValuesTable:
+		buildValuesTable(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
 	}
@@ -727,6 +729,34 @@ func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
 	}
 
 	qb.recursiveCteWith(qbR, op.Def.Name, infoFor.GetAliasedTableExpr().As.String(), op.Distinct, op.Def.Columns)
+}
+
+func buildValuesTable(vt *ValuesTable, qb *queryBuilder) {
+	buildQuery(vt.Source, qb)
+	sel, ok := qb.stmt.(*sqlparser.Select)
+	if !ok {
+		panic(vterrors.VT13001("expected SELECT statement"))
+	}
+	cols, found := qb.ctx.Columns[vt.ListArgName]
+	if !found {
+		panic(vterrors.VT13001(fmt.Sprintf("could not find columns for list arg: %s", vt.ListArgName)))
+	}
+
+	tbl := &sqlparser.AliasedTableExpr{
+		Expr: &sqlparser.DerivedTable{
+			Lateral: false,
+			Select: &sqlparser.ValuesStatement{
+				ListArg: sqlparser.ListArg(vt.ListArgName),
+			},
+		},
+
+		As:    sqlparser.NewIdentifierCS(vt.ListArgName),
+		Hints: nil,
+		Columns: slice.Map(cols, func(s string) sqlparser.IdentifierCI {
+			return sqlparser.NewIdentifierCI(s)
+		}),
+	}
+	sel.From = append(sel.From, tbl)
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {

@@ -97,8 +97,10 @@ func transformValuesJoin(ctx *plancontext.PlanningContext, op *operators.ValuesJ
 	}
 
 	return &engine.JoinValues{
-		Left:  lhs,
-		Right: rhs,
+		Left:    lhs,
+		Right:   rhs,
+		Vars:    op.Vars,
+		Columns: op.Columns,
 
 		WhenLeftEmpty: lhs, // wip florent
 	}, nil

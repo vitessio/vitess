@@ -17,7 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/maps"
+	"maps"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -27,18 +27,23 @@ type ValuesJoin struct {
 	binaryOperator
 
 	JoinType sqlparser.JoinType
-
 	LHSExprs sqlparser.Exprs
+	ListArg  string // the bindvar name for the list of values
 
-	// Done at offset planning time
+	// 👇Done at offset planning time 👇
+
 	// Vars are the arguments that need to be copied from the LHS to the RHS
 	Vars map[string]int
+
+	// Columns is the order of the columns in the output
+	Columns []string
 }
 
-func newValuesJoin(lhs, rhs Operator, joinType sqlparser.JoinType) *ValuesJoin {
+func newValuesJoin(lhs, rhs Operator, joinType sqlparser.JoinType, listArg string) *ValuesJoin {
 	return &ValuesJoin{
 		binaryOperator: newBinaryOp(lhs, rhs),
 		JoinType:       joinType,
+		ListArg:        listArg,
 	}
 }
 
@@ -59,10 +64,7 @@ func (vj *ValuesJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpar
 
 func (vj *ValuesJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
 	col := breakExpressionInLHSandRHS(ctx, expr.Expr, TableID(vj.LHS))
-
-	for _, exp := range col.LHSExprs {
-		vj.LHSExprs = append(vj.LHSExprs, exp.Expr)
-	}
+	vj.addLHSExprs(col.LHSExprs)
 	return vj.RHS.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
 }
 
@@ -112,14 +114,36 @@ func (vj *ValuesJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sq
 		if col.IsPureLeft() {
 			vj.LHS = vj.LHS.AddPredicate(ctx, pred)
 		} else {
-			for _, exp := range col.LHSExprs {
-				vj.LHSExprs = append(vj.LHSExprs, exp.Expr)
-			}
+			vj.addLHSExprs(col.LHSExprs)
 			err := ctx.SkipJoinPredicates(pred)
 			if err != nil {
 				panic(err)
 			}
 			vj.RHS = vj.RHS.AddPredicate(ctx, pred)
 		}
+	}
+}
+
+func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	vj.Vars = make(map[string]int)
+	for _, expr := range vj.LHSExprs {
+		argName := ctx.GetReservedArgumentFor(expr)
+		_, ok := vj.Vars[argName]
+		if ok {
+			// already have this expression
+			continue
+		}
+		ae := aeWrap(expr)
+		vj.Columns = append(vj.Columns, ae.ColumnName())
+		offset := vj.LHS.AddColumn(ctx, true, false, ae)
+		vj.Vars[argName] = offset
+	}
+	ctx.Columns[vj.ListArg] = vj.Columns
+	return vj
+}
+
+func (vj *ValuesJoin) addLHSExprs(exprs []BindVarExpr) {
+	for _, exp := range exprs {
+		vj.LHSExprs = append(vj.LHSExprs, exp.Expr)
 	}
 }
