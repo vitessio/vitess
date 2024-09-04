@@ -174,6 +174,45 @@ func TestBuildPermissions(t *testing.T) {
 		}, {
 			TableName: "t1", // derived table in update or delete needs reader permission as they cannot be modified.
 		}},
+	}, {
+		input: "with t as (select count(*) as a from user) select a from t",
+		output: []Permission{{
+			TableName: "user",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "with d as (select id, count(*) as a from user) select d.a from music join d on music.user_id = d.id group by 1",
+		output: []Permission{{
+			TableName: "music",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "user",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "WITH t1 AS ( SELECT id FROM t2 ) SELECT * FROM t1 JOIN ks.t1 AS t3",
+		output: []Permission{{
+			TableName: "t1",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t2",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "WITH RECURSIVE t1 (n) AS ( SELECT id from t2 UNION ALL SELECT n + 1 FROM t1 WHERE n < 5 ) SELECT * FROM t1 JOIN t1 AS t3",
+		output: []Permission{{
+			TableName: "t2",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input: "(with t1 as (select count(*) as a from user) select a from t1) union  select * from t1",
+		output: []Permission{{
+			TableName: "user",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "t1",
+			Role:      tableacl.READER,
+		}},
 	}}
 
 	for _, tcase := range tcases {
