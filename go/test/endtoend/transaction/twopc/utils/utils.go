@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 )
 
 const (
@@ -48,14 +49,14 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 		}
 		conn, err := mysql.Connect(ctx, &vtParams)
 		if err != nil {
-			fmt.Printf("Error in connection - %v\n", err)
+			log.Errorf("Error in connection - %v\n", err)
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
 		res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT count(*) FROM %v", tableName), 1, false)
 		if err != nil {
-			fmt.Printf("Error in selecting - %v\n", err)
+			log.Errorf("Error in selecting - %v\n", err)
 			conn.Close()
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -71,7 +72,7 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 		_, err = conn.ExecuteFetch(fmt.Sprintf("DELETE FROM %v LIMIT 10000", tableName), 10000, false)
 		conn.Close()
 		if err != nil {
-			fmt.Printf("Error in cleanup deletion - %v\n", err)
+			log.Errorf("Error in cleanup deletion - %v\n", err)
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}

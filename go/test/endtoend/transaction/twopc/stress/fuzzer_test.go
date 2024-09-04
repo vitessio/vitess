@@ -462,7 +462,7 @@ func moveTablesFuzzer(t *testing.T) {
 		require.NoError(t, err)
 	}
 	log.Errorf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace)
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update")
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update", []string{"REPLICA"})
 	// Initiate MoveTables for twopc_fuzzer_update.
 	output, err := mtw.Create()
 	if err != nil {
