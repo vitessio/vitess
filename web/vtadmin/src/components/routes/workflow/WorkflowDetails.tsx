@@ -19,11 +19,12 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useWorkflow, useWorkflowStatus, useWorkflows } from '../../../hooks/api';
-import { formatDateTime } from '../../../util/time';
+import { formatDateTimeShort } from '../../../util/time';
 import {
     TableCopyState,
     formatStreamKey,
     getReverseWorkflow,
+    getStreamSource,
     getStreams,
     getTableCopyStates,
 } from '../../../util/workflows';
@@ -32,6 +33,7 @@ import { vtctldata } from '../../../proto/vtadmin';
 import { DataCell } from '../../dataTable/DataCell';
 import { StreamStatePip } from '../../pips/StreamStatePip';
 import { ThrottleThresholdSeconds } from '../Workflows';
+import { ShardLink } from '../../links/ShardLink';
 
 interface Props {
     clusterID: string;
@@ -112,15 +114,20 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
     const renderSummaryRows = (rows: (typeof workflowSummary)[]) => {
         return rows.map((row) => {
             const reverseWorkflow = row.reverseWorkflow;
+            let maxVReplicationLag = '-';
+            if (row.workflowData && row.workflowData.workflow?.max_v_replication_lag) {
+                maxVReplicationLag = `${row.workflowData.workflow?.max_v_replication_lag}`;
+                if (maxVReplicationLag === '1') {
+                    maxVReplicationLag += ' second';
+                } else {
+                    maxVReplicationLag += ' seconds';
+                }
+            }
             return (
                 <tr key={reverseWorkflow?.workflow?.name}>
                     <DataCell>{row.streamSummary ? row.streamSummary : '-'}</DataCell>
                     <DataCell>{row.workflowStatus ? row.workflowStatus.traffic_state : '-'}</DataCell>
-                    <DataCell>
-                        {row.workflowData && row.workflowData.workflow?.max_v_replication_lag
-                            ? `${row.workflowData.workflow?.max_v_replication_lag}`
-                            : '-'}
-                    </DataCell>
+                    <DataCell>{maxVReplicationLag}</DataCell>
                     <DataCell>
                         {reverseWorkflow ? (
                             <Link
@@ -140,6 +147,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
 
     const renderStreamRows = (rows: typeof streams) => {
         return rows.map((row) => {
+            const source = getStreamSource(row);
             const href =
                 row.tablet && row.id
                     ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
@@ -155,8 +163,20 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                         <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
+                        {source && (
+                            <div className="text-sm text-secondary">
+                                Source Shard{' '}
+                                <ShardLink
+                                    clusterID={clusterID}
+                                    keyspace={row.binlog_source?.keyspace}
+                                    shard={row.binlog_source?.shard}
+                                >
+                                    {source}
+                                </ShardLink>
+                            </div>
+                        )}
                         <div className="text-sm text-secondary">
-                            Updated {formatDateTime(row.time_updated?.seconds)}
+                            Updated {formatDateTimeShort(row.time_updated?.seconds)}
                         </div>
                         {isThrottled ? (
                             <div className="text-sm text-secondary">
@@ -169,7 +189,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                     <DataCell>{row.message ? row.message : '-'}</DataCell>
                     <DataCell>
                         {row.transaction_timestamp && row.transaction_timestamp.seconds
-                            ? formatDateTime(row.transaction_timestamp.seconds)
+                            ? `${formatDateTimeShort(row.transaction_timestamp.seconds)}`
                             : '-'}
                     </DataCell>
                     <DataCell>{row.db_name}</DataCell>
@@ -189,7 +209,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                 <tr key={`${row.id}`}>
                     <DataCell>{`${row.type}`}</DataCell>
                     <DataCell>{`${row.state}`}</DataCell>
-                    <DataCell>{`${formatDateTime(parseInt(`${row.updated_at?.seconds}`, 10))}`}</DataCell>
+                    <DataCell>{`${formatDateTimeShort(parseInt(`${row.updated_at?.seconds}`, 10))}`}</DataCell>
                     <DataCell>{message}</DataCell>
                     <DataCell>{`${row.count}`}</DataCell>
                 </tr>
@@ -243,18 +263,22 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                     title="Table Copy State"
                 />
             )}
-            <h3 className="mt-8 mb-4">Recent Logs</h3>
-            {streams.map((stream) => (
-                <div className="mt-2" key={stream.key}>
-                    <DataTable
-                        columns={LOG_COLUMNS}
-                        data={orderBy(stream.logs, 'id', 'desc')}
-                        renderRows={renderLogRows}
-                        pageSize={10}
-                        title={stream.key!}
-                    />
-                </div>
-            ))}
+            {streams.length <= 8 && (
+                <>
+                    <h3 className="mt-8 mb-4">Recent Logs</h3>
+                    {streams.map((stream) => (
+                        <div className="mt-2" key={stream.key}>
+                            <DataTable
+                                columns={LOG_COLUMNS}
+                                data={orderBy(stream.logs, 'id', 'desc')}
+                                renderRows={renderLogRows}
+                                pageSize={10}
+                                title={stream.key!}
+                            />
+                        </div>
+                    ))}
+                </>
+            )}
         </div>
     );
 };

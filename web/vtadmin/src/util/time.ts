@@ -40,3 +40,7 @@ export const formatRelativeTime = (timestamp: number | Long | null | undefined):
     const u = parse(timestamp);
     return u ? u.fromNow() : null;
 };
+
+export const formatDateTimeShort = (timestamp: number | Long | null | undefined): string | null => {
+    return format(timestamp, 'MM/DD/YY HH:mm:ss Z');
+};

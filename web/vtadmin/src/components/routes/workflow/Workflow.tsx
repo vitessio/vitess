@@ -60,7 +60,7 @@ export const Workflow = () => {
                             Cluster: <code>{clusterID}</code>
                         </span>
                         <span>
-                            Target keyspace:{' '}
+                            Target Keyspace:{' '}
                             <KeyspaceLink clusterID={clusterID} name={keyspace}>
                                 <code>{keyspace}</code>
                             </KeyspaceLink>
