@@ -304,7 +304,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
+func TestSchedulerSchemaChanges(t *testing.T) {
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 

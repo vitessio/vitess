@@ -200,7 +200,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
+func TestOnlineDDLFlow(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
