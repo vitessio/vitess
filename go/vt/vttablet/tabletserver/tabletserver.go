@@ -822,6 +822,10 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
+			if plan.PlanID == planbuilder.PlanDDL {
+				// DDLs (especially ALTER TABLE, OPTIMIZE TABLE) can run for a very long time, so we don't want to enforce a specific timeout.
+				ctx = context.WithoutCancel(ctx)
+			}
 			qre := &QueryExecutor{
 				query:            query,
 				marginComments:   comments,
