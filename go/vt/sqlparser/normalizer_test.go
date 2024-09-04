@@ -210,6 +210,23 @@ func TestNormalize(t *testing.T) {
 			"v1": sqltypes.BitNumBindVariable([]byte("0b11")),
 		},
 	}, {
+		// json value in insert
+		in:      "insert into t values ('{\"k\", \"v\"}')",
+		outstmt: "insert into t values (:bv1 /* VARCHAR */)",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.StringBindVariable("{\"k\", \"v\"}"),
+		},
+	}, {
+		// json function in insert
+		in:      "insert into t values (JSON_OBJECT('_id', 27, 'name', 'carrot'))",
+		outstmt: "insert into t values (json_object(:bv1 /* VARCHAR */, :bv2 /* INT64 */, :bv3 /* VARCHAR */, :bv4 /* VARCHAR */))",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.StringBindVariable("_id"),
+			"bv2": sqltypes.Int64BindVariable(27),
+			"bv3": sqltypes.StringBindVariable("name"),
+			"bv4": sqltypes.StringBindVariable("carrot"),
+		},
+	}, {
 		// ORDER BY column_position
 		in:      "select a, b from t order by 1 asc",
 		outstmt: "select a, b from t order by 1 asc",
