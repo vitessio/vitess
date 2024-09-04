@@ -215,6 +215,8 @@ enum Type {
   // BITNUM specifies a base 2 binary type (unquoted varbinary).
   // Properties: 34, IsText.
   BITNUM = 4130;
+  // RAW specifies a type which won't be quoted but the value used as-is while encoding.
+  RAW = 2084;
 }
 
 // Value represents a typed value.
