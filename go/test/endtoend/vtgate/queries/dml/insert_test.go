@@ -473,6 +473,9 @@ func TestMixedCases(t *testing.T) {
 
 // TestInsertJson tests that selected json values are encoded correctly.
 func TestInsertJson(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
+
 	mcmp, closer := start(t)
 	defer closer()
 
