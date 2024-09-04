@@ -2468,7 +2468,7 @@ func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb
 		return nil, err
 	}
 
-	if err = s.tmc.ConcludeTransaction(newCtx, primary.Tablet, req.Dtid, true); err != nil {
+	if err = s.tmc.ConcludeTransaction(ctx, primary.Tablet, req.Dtid, true); err != nil {
 		return nil, err
 	}
 

@@ -81,8 +81,14 @@ func TestTabletCommands(t *testing.T) {
 		require.NoError(t, err)
 	})
 	t.Run("ConcludeTransaction", func(t *testing.T) {
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ConcludeTransaction", "ks:-80:1234", "ks/80-")
-		require.NoError(t, err)
+		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ConcludeTransaction", "ks:0:1234")
+		assert.NoError(t, err)
+		assert.Contains(t, output, "Successfully concluded the distributed transaction")
+	})
+	t.Run("ConcludeTransaction with participants", func(t *testing.T) {
+		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ConcludeTransaction", "ks:0:1234", "ks/0")
+		assert.NoError(t, err)
+		assert.Contains(t, output, "Successfully concluded the distributed transaction")
 	})
 	// check Ping / RefreshState / RefreshStateByShard
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", primaryTablet.Alias)
