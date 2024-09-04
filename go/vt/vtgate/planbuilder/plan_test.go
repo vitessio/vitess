@@ -459,11 +459,7 @@ func benchmarkWorkload(b *testing.B, name string) {
 
 	testCases := readJSONTests(name + "_cases.json")
 	b.ResetTimer()
-	for _, version := range plannerVersions {
-		b.Run(version.String(), func(b *testing.B) {
-			benchmarkPlanner(b, version, testCases, vschemaWrapper)
-		})
-	}
+	benchmarkPlanner(b, Gen4, testCases, vschemaWrapper)
 }
 
 func (s *planTestSuite) TestBypassPlanningShardTargetFromFile() {
@@ -796,9 +792,6 @@ func BenchmarkPlanner(b *testing.B) {
 		testCases := readJSONTests(filename)
 		b.Run(filename+"-gen4", func(b *testing.B) {
 			benchmarkPlanner(b, Gen4, testCases, vschema)
-		})
-		b.Run(filename+"-gen4left2right", func(b *testing.B) {
-			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
 		})
 	}
 }

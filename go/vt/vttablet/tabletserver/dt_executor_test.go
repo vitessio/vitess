@@ -654,6 +654,12 @@ func TestNoTwopc(t *testing.T) {
 			_, _, _, err := txe.ReadTwopcInflight()
 			return err
 		},
+	}, {
+		desc: "UnresolvedTransactions",
+		fun: func() error {
+			_, err := txe.UnresolvedTransactions()
+			return err
+		},
 	}}
 
 	want := "2pc is not enabled"

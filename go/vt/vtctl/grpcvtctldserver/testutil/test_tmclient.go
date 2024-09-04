@@ -255,6 +255,7 @@ type TabletManagerClient struct {
 		Statuses map[string]string
 		Error    error
 	}
+	GetUnresolvedTransactionsResults map[string][]*querypb.TransactionMetadata
 	// keyed by tablet alias.
 	InitPrimaryDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -647,6 +648,15 @@ func (fake *TabletManagerClient) ExecuteQuery(ctx context.Context, tablet *topod
 	}
 
 	return nil, fmt.Errorf("%w: no ExecuteQuery result set for tablet %s", assert.AnError, key)
+}
+
+// GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+	if len(fake.GetUnresolvedTransactionsResults) == 0 {
+		return nil, fmt.Errorf("%w: no GetUnresolvedTransactions results on fake TabletManagerClient", assert.AnError)
+	}
+
+	return fake.GetUnresolvedTransactionsResults[tablet.Shard], nil
 }
 
 // FullStatus is part of the tmclient.TabletManagerClient interface.

@@ -49,3 +49,13 @@ In the Prepare code, we check the query rules before adding the transaction to t
 Any transaction that went past the first check will fail the second check if the cutover proceeds.
 
 The check on both sides prevents either the cutover from proceeding or the transaction from being prepared.
+
+## MoveTables
+
+The only step of a `MoveTables` workflow that needs to synchronize with atomic transactions is `SwitchTraffic` for writes. As part of this step, we want to disallow writes to only the tables involved. We use `DeniedTables` in `ShardInfo` to accomplish this. After we update the topo server with the new `DeniedTables`, we make all the vttablets refresh their topo to ensure that they've registered the change.
+
+On vttablet, the `DeniedTables` are used to add query rules very similar to the ones in Online DDL. The only difference is that in Online DDL, we buffer the queries, but for `SwitchTraffic` we fail them altogether. Addition of these query rules, prevents any new atomic transactions from being prepared.
+
+Next, we try locking the tables to ensure no existing write is pending. This step blocks until all open prepared transactions have succeeded.
+
+After this step, `SwitchTraffic` can proceed without any issues, since we are guaranteed to reject any new atomic transactions until the `DeniedTables` has been reset, and having acquired the table lock, we know no write is currently in progress.
