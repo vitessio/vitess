@@ -86,3 +86,10 @@ create table lkp_mixed_idx
     keyspace_id varbinary(20),
     primary key (lkp_key)
 ) Engine = InnoDB;
+
+create table j_tbl
+(
+    id  bigint,
+    jdoc json,
+    primary key (id)
+) Engine = InnoDB;

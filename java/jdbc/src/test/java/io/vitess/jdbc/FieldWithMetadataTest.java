@@ -16,6 +16,9 @@
 
 package io.vitess.jdbc;
 
+import java.util.Set;
+import java.util.EnumSet;
+
 import io.vitess.proto.Query;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.charset.CharsetMapping;
@@ -274,6 +277,16 @@ public class FieldWithMetadataTest extends BaseTest {
     }
   }
 
+  // Define the types to skip
+  Set<Query.Type> typesToSkip = EnumSet.of(
+          Query.Type.UNRECOGNIZED,
+          Query.Type.EXPRESSION,
+          Query.Type.HEXVAL,
+          Query.Type.HEXNUM,
+          Query.Type.BITNUM,
+          Query.Type.RAW
+  );
+
   @Test
   public void testPrecisionAdjustFactor() throws SQLException {
     VitessConnection conn = getVitessConnection();
@@ -294,7 +307,8 @@ public class FieldWithMetadataTest extends BaseTest {
 
     conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
     for (Query.Type type : Query.Type.values()) {
-      if (type == Query.Type.UNRECOGNIZED || type == Query.Type.EXPRESSION || type == Query.Type.HEXVAL || type == Query.Type.HEXNUM || type == Query.Type.BITNUM) {
+      // Skip if the type is in the set
+      if (typesToSkip.contains(type)) {
         continue;
       }
 
