@@ -379,11 +379,11 @@ func (be *MySQLShellBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.
 
 func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 	if mysqlShellBackupLocation == "" {
-		return fmt.Errorf("%w: no backup location set via --mysql_shell_location", MySQLShellPreCheckError)
+		return fmt.Errorf("%w: no backup location set via --mysql-shell-backup-location", MySQLShellPreCheckError)
 	}
 
 	if mysqlShellFlags == "" || !strings.Contains(mysqlShellFlags, "--js") {
-		return fmt.Errorf("%w: at least the --js flag is required", MySQLShellPreCheckError)
+		return fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", MySQLShellPreCheckError)
 	}
 
 	// make sure the targe directory exists if the target location for the backup is not an object store
@@ -408,7 +408,7 @@ func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 
 func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params RestoreParams) error {
 	if mysqlShellFlags == "" {
-		return fmt.Errorf("%w: at least the --js flag is required", MySQLShellPreCheckError)
+		return fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", MySQLShellPreCheckError)
 	}
 
 	loadFlags := map[string]interface{}{}
