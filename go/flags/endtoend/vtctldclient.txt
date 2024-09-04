@@ -20,6 +20,7 @@ Available Commands:
   BackupShard                 Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
   ChangeTabletType            Changes the db type for the specified tablet, if possible.
   CheckThrottler              Issue a throttler check on the given tablet.
+  ConcludeTransaction         Concludes the unresolved transaction by rolling back any prepared transaction and deleting the transaction metadata record.
   CreateKeyspace              Creates the specified keyspace in the topology.
   CreateShard                 Creates the specified shard in the topology.
   DeleteCellInfo              Deletes the CellInfo for the provided cell.

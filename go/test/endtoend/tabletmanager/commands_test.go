@@ -80,6 +80,10 @@ func TestTabletCommands(t *testing.T) {
 		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetUnresolvedTransactions", keyspaceName)
 		require.NoError(t, err)
 	})
+	t.Run("ConcludeTransaction", func(t *testing.T) {
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ConcludeTransaction", "ks:-80:1234", "ks/80-")
+		require.NoError(t, err)
+	})
 	// check Ping / RefreshState / RefreshStateByShard
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")

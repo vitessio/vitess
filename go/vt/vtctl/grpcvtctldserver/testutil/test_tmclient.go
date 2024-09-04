@@ -174,6 +174,10 @@ func init() {
 // with mock delays and response values, for use in unit tests.
 type TabletManagerClient struct {
 	tmclient.TabletManagerClient
+
+	// If true, the call will return an error.
+	CallError bool
+
 	// TopoServer is used for certain TabletManagerClient rpcs that update topo
 	// information, e.g. ChangeType. To force an error result for those rpcs in
 	// a test, set tmc.TopoServer = nil.
@@ -661,6 +665,9 @@ func (fake *TabletManagerClient) GetUnresolvedTransactions(ctx context.Context, 
 
 // ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	if fake.CallError {
+		return fmt.Errorf("%w: blocked call for ConcludeTransaction on fake TabletManagerClient", assert.AnError)
+	}
 	return nil
 }
 
