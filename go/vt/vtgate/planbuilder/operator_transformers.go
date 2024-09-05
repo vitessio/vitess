@@ -98,7 +98,7 @@ func transformValuesJoin(ctx *plancontext.PlanningContext, op *operators.ValuesJ
 		return nil, err
 	}
 
-	return &engine.JoinValues{
+	return &engine.ValuesJoin{
 		Left:    lhs,
 		Right:   rhs,
 		Vars:    op.Vars,

@@ -23,11 +23,12 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var _ Primitive = (*JoinValues)(nil)
+var _ Primitive = (*ValuesJoin)(nil)
 
-// JoinValues is a primitive that joins two primitives by constructing a table from the rows of the LHS primitive.
+// ValuesJoin is a primitive that joins two primitives by constructing a table from the rows of the LHS primitive.
 // The table is passed in as a bind variable to the RHS primitive.
-type JoinValues struct {
+// It's called ValuesJoin because the LHS of the join is sent to the RHS as a VALUES clause.
+type ValuesJoin struct {
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.
 	Left, Right Primitive
@@ -38,7 +39,7 @@ type JoinValues struct {
 }
 
 // TryExecute performs a non-streaming exec.
-func (jv *JoinValues) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	lresult, err := vcursor.ExecutePrimitive(ctx, jv.Left, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -69,27 +70,27 @@ func (jv *JoinValues) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 }
 
 // TryStreamExecute performs a streaming exec.
-func (jv *JoinValues) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (jv *ValuesJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	panic("implement me")
 }
 
 // GetFields fetches the field info.
-func (jv *JoinValues) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (jv *ValuesJoin) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return jv.Right.GetFields(ctx, vcursor, bindVars)
 }
 
 // Inputs returns the input primitives for this join
-func (jv *JoinValues) Inputs() ([]Primitive, []map[string]any) {
+func (jv *ValuesJoin) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{jv.Left, jv.Right}, nil
 }
 
 // RouteType returns a description of the query routing type used by the primitive
-func (jv *JoinValues) RouteType() string {
-	return "JoinValues"
+func (jv *ValuesJoin) RouteType() string {
+	return "ValuesJoin"
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (jv *JoinValues) GetKeyspaceName() string {
+func (jv *ValuesJoin) GetKeyspaceName() string {
 	if jv.Left.GetKeyspaceName() == jv.Right.GetKeyspaceName() {
 		return jv.Left.GetKeyspaceName()
 	}
@@ -97,16 +98,16 @@ func (jv *JoinValues) GetKeyspaceName() string {
 }
 
 // GetTableName specifies the table that this primitive routes to.
-func (jv *JoinValues) GetTableName() string {
+func (jv *ValuesJoin) GetTableName() string {
 	return jv.Left.GetTableName() + "_" + jv.Right.GetTableName()
 }
 
 // NeedsTransaction implements the Primitive interface
-func (jv *JoinValues) NeedsTransaction() bool {
+func (jv *ValuesJoin) NeedsTransaction() bool {
 	return jv.Right.NeedsTransaction() || jv.Left.NeedsTransaction()
 }
 
-func (jv *JoinValues) description() PrimitiveDescription {
+func (jv *ValuesJoin) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "Join",
 		Variant:      "Values",
