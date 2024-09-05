@@ -103,8 +103,6 @@ func transformValuesJoin(ctx *plancontext.PlanningContext, op *operators.ValuesJ
 		Right:   rhs,
 		Vars:    op.Vars,
 		Columns: op.Columns,
-
-		WhenLeftEmpty: lhs, // wip florent
 	}, nil
 }
 

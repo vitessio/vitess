@@ -30,8 +30,7 @@ var _ Primitive = (*JoinValues)(nil)
 type JoinValues struct {
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.
-	// When Left is empty, the WhenLeftEmpty primitive will be executed.
-	Left, Right, WhenLeftEmpty Primitive
+	Left, Right Primitive
 
 	Vars              map[string]int
 	Columns           []string
@@ -44,12 +43,24 @@ func (jv *JoinValues) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	if err != nil {
 		return nil, err
 	}
-	if len(lresult.Rows) == 0 && wantfields {
-		return jv.WhenLeftEmpty.GetFields(ctx, vcursor, bindVars)
-	}
 	bv := &querypb.BindVariable{
 		Type: querypb.Type_TUPLE,
 	}
+	if len(lresult.Rows) == 0 && wantfields {
+		// If there are no rows, we still need to construct a single row
+		// to send down to RHS for Values Table to execute correctly.
+		// It will be used to execute the field query to provide the output fields.
+		var vals []sqltypes.Value
+		for _, field := range lresult.Fields {
+			val, _ := sqltypes.NewValue(field.Type, nil)
+			vals = append(vals, val)
+		}
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(vals))
+
+		bindVars[jv.RowConstructorArg] = bv
+		return jv.Right.GetFields(ctx, vcursor, bindVars)
+	}
+
 	for _, row := range lresult.Rows {
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(row))
 	}
@@ -64,12 +75,12 @@ func (jv *JoinValues) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 
 // GetFields fetches the field info.
 func (jv *JoinValues) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return jv.WhenLeftEmpty.GetFields(ctx, vcursor, bindVars)
+	return jv.Right.GetFields(ctx, vcursor, bindVars)
 }
 
 // Inputs returns the input primitives for this join
 func (jv *JoinValues) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{jv.Left, jv.Right, jv.WhenLeftEmpty}, nil
+	return []Primitive{jv.Left, jv.Right}, nil
 }
 
 // RouteType returns a description of the query routing type used by the primitive

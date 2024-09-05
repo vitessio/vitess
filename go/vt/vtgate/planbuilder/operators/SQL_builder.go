@@ -750,7 +750,7 @@ func buildValuesTable(vt *ValuesTable, qb *queryBuilder) {
 			},
 		},
 
-		As:    sqlparser.NewIdentifierCS(vt.ListArgName),
+		As:    sqlparser.NewIdentifierCS(vt.TableName),
 		Hints: nil,
 		Columns: slice.Map(cols, func(s string) sqlparser.IdentifierCI {
 			return sqlparser.NewIdentifierCI(s)
