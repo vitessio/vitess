@@ -122,29 +122,6 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                     <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />
                 </>
             )}
-
-            <h3 className="mt-24 mb-8" id="workflowStreams">
-                Streams
-            </h3>
-            {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
-            {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
-                if (!Array.isArray(streamsByState[streamState])) {
-                    return null;
-                }
-
-                return (
-                    <div className="my-12" key={streamState}>
-                        <DataTable
-                            columns={COLUMNS}
-                            data={streamsByState[streamState]}
-                            // TODO(doeg): make pagination optional in DataTable https://github.com/vitessio/vitess/projects/12#card-60810231
-                            pageSize={1000}
-                            renderRows={renderRows}
-                            title={streamState}
-                        />
-                    </div>
-                );
-            })}
         </div>
     );
 };

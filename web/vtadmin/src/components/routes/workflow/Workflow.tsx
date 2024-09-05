@@ -30,6 +30,7 @@ import { TabContainer } from '../../tabs/TabContainer';
 import { Tab } from '../../tabs/Tab';
 import { getStreams } from '../../../util/workflows';
 import { Code } from '../../Code';
+import { ShardLink } from '../../links/ShardLink';
 
 interface RouteParams {
     clusterID: string;
@@ -46,6 +47,11 @@ export const Workflow = () => {
     const { data } = useWorkflow({ clusterID, keyspace, name });
     const streams = getStreams(data);
 
+    let isReshard = false;
+    if (data && data.workflow) {
+        isReshard = data.workflow.workflow_type === 'Reshard';
+    }
+
     return (
         <div>
             <WorkspaceHeader>
@@ -54,6 +60,32 @@ export const Workflow = () => {
                 </NavCrumbs>
 
                 <WorkspaceTitle className="font-mono">{name}</WorkspaceTitle>
+                {isReshard && (
+                    <div className={style.headingMetaContainer}>
+                        <div className={style.headingMeta}>
+                            <span>
+                                {data?.workflow?.source?.shards?.length! > 1 ? 'Source Shards: ' : 'Source Shard: '}
+                                {data?.workflow?.source?.shards?.map((shard) => (
+                                    <code key={`${keyspace}/${shard}`}>
+                                        <ShardLink clusterID={clusterID} keyspace={keyspace} shard={shard}>
+                                            {`${keyspace}/${shard} `}
+                                        </ShardLink>
+                                    </code>
+                                ))}
+                            </span>
+                            <span>
+                                {data?.workflow?.target?.shards?.length! > 1 ? 'Target Shards: ' : 'Target Shard: '}
+                                {data?.workflow?.target?.shards?.map((shard) => (
+                                    <code key={`${keyspace}/${shard}`}>
+                                        <ShardLink clusterID={clusterID} keyspace={keyspace} shard={shard}>
+                                            {`${keyspace}/${shard} `}
+                                        </ShardLink>
+                                    </code>
+                                ))}
+                            </span>
+                        </div>
+                    </div>
+                )}
                 <div className={style.headingMetaContainer}>
                     <div className={style.headingMeta} style={{ float: 'left' }}>
                         <span>

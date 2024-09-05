@@ -25,6 +25,7 @@ import {
     formatStreamKey,
     getReverseWorkflow,
     getStreamSource,
+    getStreamTarget,
     getStreams,
     getTableCopyStates,
 } from '../../../util/workflows';
@@ -34,6 +35,9 @@ import { DataCell } from '../../dataTable/DataCell';
 import { StreamStatePip } from '../../pips/StreamStatePip';
 import { ThrottleThresholdSeconds } from '../Workflows';
 import { ShardLink } from '../../links/ShardLink';
+import { Tooltip } from '../../tooltip/Tooltip';
+import { TabletLink } from '../../links/TabletLink';
+import { formatAlias } from '../../../util/tablets';
 
 interface Props {
     clusterID: string;
@@ -47,7 +51,7 @@ const LOG_COLUMNS = ['Type', 'State', 'Updated At', 'Message', 'Count'];
 
 const TABLE_COPY_STATE_COLUMNS = ['Table Name', 'Total Bytes', 'Bytes Copied', 'Total Rows', 'Rows Copied'];
 
-const STREAM_COLUMNS = ['Stream', 'State', 'Message', 'Transaction Timestamp', 'Database Name'];
+const STREAM_COLUMNS = ['Stream', 'Source Shard', 'Target Shard', 'Message', 'Transaction Timestamp', 'Database Name'];
 
 export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
     const { data: workflowData } = useWorkflow({ clusterID, keyspace, name });
@@ -148,6 +152,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
     const renderStreamRows = (rows: typeof streams) => {
         return rows.map((row) => {
             const source = getStreamSource(row);
+            const target = getStreamTarget(row, keyspace);
             const href =
                 row.tablet && row.id
                     ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
@@ -159,22 +164,20 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
             return (
                 <tr key={row.key}>
                     <DataCell>
-                        <StreamStatePip state={rowState} />{' '}
+                        <Tooltip text={rowState!}>
+                            <span>
+                                <StreamStatePip state={rowState} />{' '}
+                            </span>
+                        </Tooltip>
                         <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
-                        {source && (
-                            <div className="text-sm text-secondary">
-                                Source Shard{' '}
-                                <ShardLink
-                                    clusterID={clusterID}
-                                    keyspace={row.binlog_source?.keyspace}
-                                    shard={row.binlog_source?.shard}
-                                >
-                                    {source}
-                                </ShardLink>
-                            </div>
-                        )}
+                        <div className="text-sm text-secondary">
+                            Tablet{' '}
+                            <TabletLink alias={formatAlias(row.tablet)} clusterID={clusterID}>
+                                {formatAlias(row.tablet)}
+                            </TabletLink>
+                        </div>
                         <div className="text-sm text-secondary">
                             Updated {formatDateTimeShort(row.time_updated?.seconds)}
                         </div>
@@ -185,7 +188,28 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                             </div>
                         ) : null}
                     </DataCell>
-                    <DataCell>{rowState}</DataCell>
+                    <DataCell>
+                        {source ? (
+                            <ShardLink
+                                clusterID={clusterID}
+                                keyspace={row.binlog_source?.keyspace}
+                                shard={row.binlog_source?.shard}
+                            >
+                                {source}
+                            </ShardLink>
+                        ) : (
+                            '-'
+                        )}
+                    </DataCell>
+                    <DataCell>
+                        {target ? (
+                            <ShardLink clusterID={clusterID} keyspace={keyspace} shard={row.shard}>
+                                {target}
+                            </ShardLink>
+                        ) : (
+                            '-'
+                        )}
+                    </DataCell>
                     <DataCell>{row.message ? row.message : '-'}</DataCell>
                     <DataCell>
                         {row.transaction_timestamp && row.transaction_timestamp.seconds
@@ -239,7 +263,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
     };
 
     return (
-        <div className="mt-12 mb-16">
+        <div className="mt-8 mb-16">
             <DataTable
                 columns={SUMMARY_COLUMNS}
                 data={[workflowSummary]}
@@ -247,6 +271,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                 pageSize={1}
                 title="Summary"
             />
+            <span id="workflowStreams"></span>
             <DataTable
                 columns={STREAM_COLUMNS}
                 data={streams}
