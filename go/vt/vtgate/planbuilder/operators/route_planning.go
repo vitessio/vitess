@@ -291,8 +291,9 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) (requ
 
 // Will create a join valid for the current mysql version
 func createJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType, joinPredicates []sqlparser.Expr) (join JoinOp) {
+	sigOk := ctx.SemTable.QuerySignature.EmptySet()
 	ok, _ := capabilities.MySQLVersionHasCapability(ctx.VSchema.Environment().MySQLVersion(), capabilities.ValuesRow)
-	if ok {
+	if sigOk && ok {
 		join = newValuesJoin(ctx, lhs, rhs, joinType)
 	} else {
 		// if we can't determine the MySQL version, we'll just assume we can't use the VALUES row
@@ -319,7 +320,6 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			for _, pred := range joinPredicates {
 				join.AddJoinPredicate(ctx, pred)
 			}
-			ctx.SemTable.QuerySignature.HashJoin = true
 			return join, Rewrote("use a hash join because we have LIMIT on the LHS")
 		}
 

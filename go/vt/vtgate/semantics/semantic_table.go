@@ -83,7 +83,6 @@ type (
 		Aggregation  bool
 		DML          bool
 		Distinct     bool
-		HashJoin     bool
 		SubQueries   bool
 		Union        bool
 		RecursiveCTE bool
@@ -177,6 +176,10 @@ type (
 
 	shortCut = int
 )
+
+func (s QuerySignature) EmptySet() bool {
+	return !(s.SubQueries || s.DML || s.Aggregation || s.Distinct || s.Union || s.RecursiveCTE)
+}
 
 const (
 	canShortCut shortCut = iota
