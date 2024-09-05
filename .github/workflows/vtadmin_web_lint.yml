@@ -16,7 +16,7 @@ permissions: read-all
 
 jobs:
   lint:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Skip CI
         run: |
