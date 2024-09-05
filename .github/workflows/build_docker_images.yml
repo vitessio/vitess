@@ -16,7 +16,7 @@ permissions: read-all
 jobs:
   push:
     name: Set push variable
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     if: github.repository == 'vitessio/vitess'
     outputs:
       push: ${{ steps.push.outputs.push }}
