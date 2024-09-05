@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 )
 
@@ -462,7 +463,7 @@ func moveTablesFuzzer(t *testing.T) {
 		require.NoError(t, err)
 	}
 	log.Errorf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace)
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update")
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update", []string{topodatapb.TabletType_REPLICA.String()})
 	// Initiate MoveTables for twopc_fuzzer_update.
 	output, err := mtw.Create()
 	if err != nil {
