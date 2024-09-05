@@ -54,7 +54,7 @@ func pushDerived(ctx *plancontext.PlanningContext, op *Horizon) (Operator, *Appl
 	return Swap(op, op.Source, "push derived under route")
 }
 
-func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, *ApplyResult) {
+func optimizeJoin(ctx *plancontext.PlanningContext, op *LogicalJoin) (Operator, *ApplyResult) {
 	return mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), op.JoinType)
 }
 
@@ -290,13 +290,13 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) (requ
 }
 
 // Will create a join valid for the current mysql version
-func createVersionJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType, joinPredicates []sqlparser.Expr) (join JoinOp) {
-	ok, err := capabilities.MySQLVersionHasCapability(ctx.VSchema.Environment().MySQLVersion(), capabilities.ValuesRow)
-	if !ok || err != nil {
+func createJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType, joinPredicates []sqlparser.Expr) (join JoinOp) {
+	ok, _ := capabilities.MySQLVersionHasCapability(ctx.VSchema.Environment().MySQLVersion(), capabilities.ValuesRow)
+	if ok {
+		join = newValuesJoin(ctx, lhs, rhs, joinType)
+	} else {
 		// if we can't determine the MySQL version, we'll just assume we can't use the VALUES row
 		join = NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, joinType)
-	} else {
-		join = newValuesJoin(ctx, lhs, rhs, joinType)
 	}
 
 	for _, pred := range joinPredicates {
@@ -323,11 +323,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			return join, Rewrote("use a hash join because we have LIMIT on the LHS")
 		}
 
-		join := createVersionJoin(ctx, Clone(rhs), Clone(lhs), joinType, joinPredicates)
+		join := createJoin(ctx, Clone(rhs), Clone(lhs), joinType, joinPredicates)
 		return join, Rewrote("logical join to applyJoin, switching side because LIMIT")
 	}
 
-	join := createVersionJoin(ctx, Clone(lhs), Clone(rhs), joinType, joinPredicates)
+	join := createJoin(ctx, Clone(lhs), Clone(rhs), joinType, joinPredicates)
 
 	return join, Rewrote("logical join to applyJoin ")
 }

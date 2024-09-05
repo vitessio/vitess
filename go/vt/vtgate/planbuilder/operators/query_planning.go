@@ -76,7 +76,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		switch in := in.(type) {
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
-		case *Join:
+		case *LogicalJoin:
 			return optimizeJoin(ctx, in)
 		case *Projection:
 			return tryPushProjection(ctx, in)
@@ -104,7 +104,8 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushUpdate(in)
 		case *RecurseCTE:
 			return tryMergeRecurse(ctx, in)
-
+		case *ValuesTable:
+			return tryPushValuesTable(in)
 		default:
 			return in, NoRewrite
 		}
@@ -118,6 +119,14 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func tryPushValuesTable(in *ValuesTable) (Operator, *ApplyResult) {
+	r, ok := in.Source.(*Route)
+	if ok {
+		return Swap(in, r, "push values table under route")
+	}
+	return in, NoRewrite
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
@@ -482,7 +491,7 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	var result *ApplyResult
 	shouldVisit := func(op Operator) VisitRule {
 		switch op := op.(type) {
-		case *Join, *ApplyJoin, *SubQueryContainer, *SubQuery:
+		case *LogicalJoin, *ApplyJoin, *SubQueryContainer, *SubQuery:
 			// we can't push limits down on either side
 			return SkipChildren
 		case *Aggregator:

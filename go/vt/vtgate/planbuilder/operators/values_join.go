@@ -49,11 +49,16 @@ func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType
 		if err == nil {
 			name, err := tbl.Name()
 			if err == nil {
-				tblName = sqlparser.String(name)
+				tblName = name.Name.String()
 			}
 		}
 	}
 	listArg := ctx.GetReservedArgumentForString(tblName)
+	rhs = &ValuesTable{
+		unaryOperator: newUnaryOp(rhs),
+		ListArgName:   listArg,
+		TableName:     tblName,
+	}
 	return &ValuesJoin{
 		binaryOperator: newBinaryOp(lhs, rhs),
 		JoinType:       joinType,
