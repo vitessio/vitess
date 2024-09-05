@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
+import { Link, Redirect, Route, Switch, useLocation, useParams, useRouteMatch } from 'react-router-dom';
 
 import style from './Workflow.module.scss';
 
@@ -41,11 +41,15 @@ interface RouteParams {
 export const Workflow = () => {
     const { clusterID, keyspace, name } = useParams<RouteParams>();
     const { path, url } = useRouteMatch();
+    const location = useLocation();
 
     useDocumentTitle(`${name} (${keyspace})`);
 
     const { data } = useWorkflow({ clusterID, keyspace, name });
     const streams = getStreams(data);
+
+    const detailsURL = `${url}/details`;
+    const detailsTab = location.pathname === detailsURL;
 
     let isReshard = false;
     if (data && data.workflow) {
@@ -98,16 +102,18 @@ export const Workflow = () => {
                             </KeyspaceLink>
                         </span>
                     </div>
-                    <div style={{ float: 'right' }}>
-                        <a href={`#workflowStreams`}>Scroll To Streams</a>
-                    </div>
+                    {detailsTab && (
+                        <div style={{ float: 'right' }}>
+                            <a href={`#workflowStreams`}>Scroll To Streams</a>
+                        </div>
+                    )}
                 </div>
             </WorkspaceHeader>
 
             <ContentContainer>
                 <TabContainer>
                     <Tab text="Streams" to={`${url}/streams`} count={streams.length} />
-                    <Tab text="Details" to={`${url}/details`} />
+                    <Tab text="Details" to={detailsURL} />
                     <Tab text="JSON" to={`${url}/json`} />
                 </TabContainer>
 

@@ -14,22 +14,11 @@
  * limitations under the License.
  */
 
-import { groupBy, orderBy } from 'lodash-es';
-import React, { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import React from 'react';
 
 import { useWorkflow } from '../../../hooks/api';
-import { formatAlias } from '../../../util/tablets';
-import { formatDateTime } from '../../../util/time';
-import { formatStreamKey, getStreams, getStreamSource, getStreamTarget } from '../../../util/workflows';
-import { DataCell } from '../../dataTable/DataCell';
-import { DataTable } from '../../dataTable/DataTable';
-import { TabletLink } from '../../links/TabletLink';
-import { StreamStatePip } from '../../pips/StreamStatePip';
 import { WorkflowStreamsLagChart } from '../../charts/WorkflowStreamsLagChart';
-import { ShardLink } from '../../links/ShardLink';
 import { env } from '../../../util/env';
-import { ThrottleThresholdSeconds } from '../Workflows';
 
 interface Props {
     clusterID: string;
@@ -37,83 +26,7 @@ interface Props {
     name: string;
 }
 
-const COLUMNS = ['Stream', 'Source', 'Target', 'Tablet'];
-
 export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
-    const { data } = useWorkflow({ clusterID, keyspace, name });
-
-    const streams = useMemo(() => {
-        const rows = getStreams(data).map((stream) => ({
-            key: formatStreamKey(stream),
-            ...stream,
-        }));
-
-        return orderBy(rows, 'streamKey');
-    }, [data]);
-
-    const streamsByState = groupBy(streams, 'state');
-
-    const renderRows = (rows: typeof streams) => {
-        return rows.map((row) => {
-            const href =
-                row.tablet && row.id
-                    ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
-                    : null;
-
-            const source = getStreamSource(row);
-            const target = getStreamTarget(row, keyspace);
-            var isThrottled =
-                Number(row?.throttler_status?.time_throttled?.seconds) > Date.now() / 1000 - ThrottleThresholdSeconds;
-            const rowState = isThrottled ? 'Throttled' : row.state;
-            return (
-                <tr key={row.key}>
-                    <DataCell>
-                        <StreamStatePip state={rowState} />{' '}
-                        <Link className="font-bold" to={href}>
-                            {row.key}
-                        </Link>
-                        <div className="text-sm text-secondary">
-                            Updated {formatDateTime(row.time_updated?.seconds)}
-                        </div>
-                        {isThrottled ? (
-                            <div className="text-sm text-secondary">
-                                <span className="font-bold text-danger">Throttled: </span>
-                                in {row.throttler_status?.component_throttled}
-                            </div>
-                        ) : null}
-                    </DataCell>
-                    <DataCell>
-                        {source ? (
-                            <ShardLink
-                                clusterID={clusterID}
-                                keyspace={row.binlog_source?.keyspace}
-                                shard={row.binlog_source?.shard}
-                            >
-                                {source}
-                            </ShardLink>
-                        ) : (
-                            <span className="text-secondary">N/A</span>
-                        )}
-                    </DataCell>
-                    <DataCell>
-                        {target ? (
-                            <ShardLink clusterID={clusterID} keyspace={keyspace} shard={row.shard}>
-                                {target}
-                            </ShardLink>
-                        ) : (
-                            <span className="text-secondary">N/A</span>
-                        )}
-                    </DataCell>
-                    <DataCell>
-                        <TabletLink alias={formatAlias(row.tablet)} clusterID={clusterID}>
-                            {formatAlias(row.tablet)}
-                        </TabletLink>
-                    </DataCell>
-                </tr>
-            );
-        });
-    };
-
     return (
         <div className="mt-12 mb-16">
             {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
