@@ -798,6 +798,18 @@ func TestRowCountExceed(t *testing.T) {
 	utils.AssertContainsError(t, conn, "select id1 from t1 where id1 < 1000", `Row count exceeded 100`)
 }
 
+func TestDDLTargeted(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "use `ks/-80`")
+	utils.Exec(t, conn, `begin`)
+	utils.Exec(t, conn, `create table ddl_targeted (id bigint primary key)`)
+	utils.Exec(t, conn, `commit`)
+}
+
 func TestLookupErrorMetric(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
