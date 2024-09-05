@@ -18,6 +18,7 @@ package plancontext
 
 import (
 	"io"
+	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -28,10 +29,14 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+const columnPrefix = "_vtcol"
+
 type PlanningContext struct {
 	ReservedVars *sqlparser.ReservedVars
 	SemTable     *semantics.SemTable
 	VSchema      VSchema
+
+	reservedColCount int
 
 	// joinPredicates maps each original join predicate (key) to a slice of
 	// variations of the RHS predicates (value). This map is used to handle
@@ -117,6 +122,12 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		Statement:         stmt,
 		Columns:           map[string][]string{},
 	}, nil
+}
+
+// GetUniqueColumnName generates a unique column name for the current planning context.
+func (ctx *PlanningContext) GetUniqueColumnName() string {
+	ctx.reservedColCount++
+	return columnPrefix + strconv.Itoa(ctx.reservedColCount)
 }
 
 // GetReservedArgumentFor retrieves a reserved argument name for a given expression.

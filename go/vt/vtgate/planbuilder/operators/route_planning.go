@@ -289,6 +289,9 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) (requ
 	return
 }
 
+// select 1 from user u join user_extra ue on ue.id = u.id
+// ue.id = ::u_id
+
 // Will create a join valid for the current mysql version
 func createJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType, joinPredicates []sqlparser.Expr) (join JoinOp) {
 	sigOk := ctx.SemTable.QuerySignature.EmptySet()

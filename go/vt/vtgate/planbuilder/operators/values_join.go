@@ -27,7 +27,7 @@ type ValuesJoin struct {
 	binaryOperator
 
 	JoinType  sqlparser.JoinType
-	LHSExprs  sqlparser.Exprs
+	LHSExprs  []*sqlparser.AliasedExpr
 	ListArg   string // the bindvar name for the list of values
 	TableName string // the name of the derived table that will be created
 
@@ -83,8 +83,9 @@ func (vj *ValuesJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpar
 }
 
 func (vj *ValuesJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
-	col := breakExpressionInLHSandRHS(ctx, expr.Expr, TableID(vj.LHS))
-	vj.addLHSExprs(col.LHSExprs)
+	lhsExprs, rhsExpr := valuesJoinExpressionSplit(ctx, expr.Expr, TableID(vj.LHS), vj.TableName)
+	vj.LHSExprs = append(vj.LHSExprs, lhsExprs...)
+	expr.Expr = rhsExpr
 	return vj.RHS.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
 }
 
@@ -129,39 +130,33 @@ func (vj *ValuesJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sq
 	}
 	predicates := sqlparser.SplitAndExpression(nil, expr)
 	for _, pred := range predicates {
-		col := breakExpressionInLHSandRHS(ctx, pred, TableID(vj.LHS))
-
-		if col.IsPureLeft() && vj.JoinType.IsInner() {
+		lhsID := TableID(vj.LHS)
+		deps := ctx.SemTable.RecursiveDeps(pred)
+		if deps.IsSolvedBy(lhsID) {
 			// If the predicate doesn't reference the RHS, we can add it to the LHS
 			// This is only valid for inner joins
 			vj.LHS = vj.LHS.AddPredicate(ctx, pred)
-		} else {
-			vj.addLHSExprs(col.LHSExprs)
-			vj.RHS = vj.RHS.AddPredicate(ctx, pred)
+			continue
 		}
+		lhsExprs, rhsExpr := valuesJoinExpressionSplit(ctx, pred, lhsID, vj.TableName)
+		vj.LHSExprs = append(vj.LHSExprs, lhsExprs...)
+		vj.RHS = vj.RHS.AddPredicate(ctx, rhsExpr)
 	}
 }
 
 func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	vj.Vars = make(map[string]int)
 	for _, expr := range vj.LHSExprs {
-		argName := ctx.GetReservedArgumentFor(expr)
+		argName := ctx.GetReservedArgumentFor(expr.Expr)
 		_, ok := vj.Vars[argName]
 		if ok {
 			// already have this expression
 			continue
 		}
-		ae := aeWrap(expr)
-		vj.Columns = append(vj.Columns, ae.ColumnName())
-		offset := vj.LHS.AddColumn(ctx, true, false, ae)
+		vj.Columns = append(vj.Columns, expr.ColumnName())
+		offset := vj.LHS.AddColumn(ctx, true, false, expr)
 		vj.Vars[argName] = offset
 	}
 	ctx.Columns[vj.ListArg] = vj.Columns
 	return vj
-}
-
-func (vj *ValuesJoin) addLHSExprs(exprs []BindVarExpr) {
-	for _, exp := range exprs {
-		vj.LHSExprs = append(vj.LHSExprs, exp.Expr)
-	}
 }
