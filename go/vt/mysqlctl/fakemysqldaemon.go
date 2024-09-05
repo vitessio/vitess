@@ -139,6 +139,10 @@ type FakeMysqlDaemon struct {
 	// function returns an error.
 	WaitPrimaryPositions []replication.Position
 
+	// WaitDuration is used by the Wait() and WaitForDBAGrants() calls to
+	//  simulate and arbitrary amount of time it would take waiting for mysql
+	WaitDuration time.Duration
+
 	// PromoteResult is returned by Promote.
 	PromoteResult replication.Position
 
@@ -271,11 +275,21 @@ func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context, cnf *Mycnf) error
 
 // Wait is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *Mycnf) error {
-	return nil
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(fmd.WaitDuration):
+		return nil
+	}
 }
 
 func (fmd *FakeMysqlDaemon) WaitForDBAGrants(ctx context.Context, waitTime time.Duration) (err error) {
-	return nil
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(fmd.WaitDuration):
+		return nil
+	}
 }
 
 // GetMysqlPort is part of the MysqlDaemon interface.

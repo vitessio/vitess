@@ -237,29 +237,6 @@ func ParseBackupName(dir string, name string) (backupTime *time.Time, alias *top
 	return backupTime, alias, nil
 }
 
-// checkNoDB makes sure there is no user data already there.
-// Used by Restore, as we do not want to destroy an existing DB.
-// The user's database name must be given since we ignore all others.
-// Returns (true, nil) if the specified DB doesn't exist.
-// Returns (false, nil) if the check succeeds but the condition is not
-// satisfied (there is a DB).
-// Returns (false, non-nil error) if one occurs while trying to perform the check.
-func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, error) {
-	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW DATABASES")
-	if err != nil {
-		return false, vterrors.Wrap(err, "checkNoDB failed")
-	}
-
-	for _, row := range qr.Rows {
-		if row[0].ToString() == dbName {
-			// found active db
-			log.Warningf("checkNoDB failed, found active db %v", dbName)
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 // removeExistingFiles will delete existing files in the data dir to prevent
 // conflicts with the restored archive. In particular, binlogs can be created
 // even during initial bootstrap, and these can interfere with configuring
@@ -312,10 +289,9 @@ func removeExistingFiles(cnf *Mycnf) error {
 // ShouldRestore checks whether a database with tables already exists
 // and returns whether a restore action should be performed
 func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
-	if params.DeleteBeforeRestore || RestoreWasInterrupted(params.Cnf) {
+	if RestoreWasInterrupted(params.Cnf) {
 		return true, nil
 	}
-	params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
 	// Wait for mysqld to be ready, in case it was launched in parallel with us.
 	// If this doesn't succeed, we should not attempt a restore
 	if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
@@ -325,7 +301,7 @@ func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 		params.Logger.Errorf("error waiting for the grants: %v", err)
 		return false, err
 	}
-	return checkNoDB(ctx, params.Mysqld, params.DbName)
+	return true, nil
 }
 
 // ensureRestoredGTIDPurgedMatchesManifest sees the following: when you restore a full backup, you want the MySQL server to have

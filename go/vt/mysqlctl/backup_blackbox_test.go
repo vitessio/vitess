@@ -512,7 +512,6 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 		Mysqld:               mysqld,
 		Concurrency:          2,
 		HookExtraEnv:         map[string]string{},
-		DeleteBeforeRestore:  false,
 		DbName:               "test",
 		Keyspace:             "test",
 		Shard:                "-",
