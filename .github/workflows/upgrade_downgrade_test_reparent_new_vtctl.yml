@@ -16,7 +16,7 @@ jobs:
 
   upgrade_downgrade_test:
     name: Run Upgrade Downgrade Test - Reparent New Vtctl
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: equinix-4cpu-16gb
 
     steps:
     - name: Skip CI
