@@ -174,7 +174,7 @@ func (vde *Engine) getDefaultCell() (string, error) {
 
 func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
 	var qr *sqltypes.Result
-	options := req.Options
+	options := req.GetOptions()
 
 	query, err := sqlparser.ParseAndBind(sqlGetVDiffID, sqltypes.StringBindVariable(req.VdiffUuid))
 	if err != nil {
@@ -200,7 +200,7 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 			return err
 		}
 		state := PendingState
-		if options.GetCoreOptions().GetDoNotStart() {
+		if options.CoreOptions != nil && options.CoreOptions.AutoStart != nil && !options.CoreOptions.GetAutoStart() {
 			state = StoppedState
 		}
 		query, err := sqlparser.ParseAndBind(sqlNewVDiff,

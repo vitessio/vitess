@@ -1871,7 +1871,7 @@ message VDiffCreateRequest {
   int64 max_report_sample_rows = 19;
   vttime.Duration max_diff_duration = 20;
   int64 row_diff_column_truncate_at = 21;
-  bool do_not_start = 22;
+  optional bool auto_start = 22;
 }
 
 message VDiffCreateResponse {

@@ -5003,7 +5003,6 @@ func (m *VDiffCreateRequest) CloneVT() *VDiffCreateRequest {
 	r.MaxReportSampleRows = m.MaxReportSampleRows
 	r.MaxDiffDuration = m.MaxDiffDuration.CloneVT()
 	r.RowDiffColumnTruncateAt = m.RowDiffColumnTruncateAt
-	r.DoNotStart = m.DoNotStart
 	if rhs := m.SourceCells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -5023,6 +5022,10 @@ func (m *VDiffCreateRequest) CloneVT() *VDiffCreateRequest {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
 		r.Tables = tmpContainer
+	}
+	if rhs := m.AutoStart; rhs != nil {
+		tmpVal := *rhs
+		r.AutoStart = &tmpVal
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -19177,9 +19180,9 @@ func (m *VDiffCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.DoNotStart {
+	if m.AutoStart != nil {
 		i--
-		if m.DoNotStart {
+		if *m.AutoStart {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -26033,7 +26036,7 @@ func (m *VDiffCreateRequest) SizeVT() (n int) {
 	if m.RowDiffColumnTruncateAt != 0 {
 		n += 2 + protohelpers.SizeOfVarint(uint64(m.RowDiffColumnTruncateAt))
 	}
-	if m.DoNotStart {
+	if m.AutoStart != nil {
 		n += 3
 	}
 	n += len(m.unknownFields)
@@ -60142,7 +60145,7 @@ func (m *VDiffCreateRequest) UnmarshalVT(dAtA []byte) error {
 			}
 		case 22:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DoNotStart", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field AutoStart", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -60159,7 +60162,8 @@ func (m *VDiffCreateRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.DoNotStart = bool(v != 0)
+			b := bool(v != 0)
+			m.AutoStart = &b
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

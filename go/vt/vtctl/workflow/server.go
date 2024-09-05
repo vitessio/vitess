@@ -1785,7 +1785,9 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	span.Annotate("tables", req.Tables)
 	span.Annotate("auto_retry", req.AutoRetry)
 	span.Annotate("max_diff_duration", req.MaxDiffDuration)
-	span.Annotate("do_not_start", req.GetDoNotStart())
+	if req.AutoStart != nil {
+		span.Annotate("auto_start", req.GetAutoStart())
+	}
 
 	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
 
@@ -1804,6 +1806,11 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 		req.WaitUpdateInterval = &vttimepb.Duration{}
 	}
 
+	autoStart := true
+	if req.AutoStart != nil {
+		autoStart = req.GetAutoStart()
+	}
+
 	options := &tabletmanagerdatapb.VDiffOptions{
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			TabletTypes: tabletTypesStr,
@@ -1818,7 +1825,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			MaxExtraRowsToCompare: req.MaxExtraRowsToCompare,
 			UpdateTableStats:      req.UpdateTableStats,
 			MaxDiffSeconds:        req.MaxDiffDuration.Seconds,
-			DoNotStart:            req.GetDoNotStart(),
+			AutoStart:             &autoStart,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
 			OnlyPks:                 req.OnlyPKs,

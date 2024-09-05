@@ -30233,8 +30233,8 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions max_diff_seconds */
         max_diff_seconds?: (number|Long|null);
 
-        /** VDiffCoreOptions do_not_start */
-        do_not_start?: (boolean|null);
+        /** VDiffCoreOptions auto_start */
+        auto_start?: (boolean|null);
     }
 
     /** Represents a VDiffCoreOptions. */
@@ -30273,8 +30273,11 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions max_diff_seconds. */
         public max_diff_seconds: (number|Long);
 
-        /** VDiffCoreOptions do_not_start. */
-        public do_not_start: boolean;
+        /** VDiffCoreOptions auto_start. */
+        public auto_start?: (boolean|null);
+
+        /** VDiffCoreOptions _auto_start. */
+        public _auto_start?: "auto_start";
 
         /**
          * Creates a new VDiffCoreOptions instance using the specified properties.
@@ -72246,8 +72249,8 @@ export namespace vtctldata {
         /** VDiffCreateRequest row_diff_column_truncate_at */
         row_diff_column_truncate_at?: (number|Long|null);
 
-        /** VDiffCreateRequest do_not_start */
-        do_not_start?: (boolean|null);
+        /** VDiffCreateRequest auto_start */
+        auto_start?: (boolean|null);
     }
 
     /** Represents a VDiffCreateRequest. */
@@ -72322,8 +72325,11 @@ export namespace vtctldata {
         /** VDiffCreateRequest row_diff_column_truncate_at. */
         public row_diff_column_truncate_at: (number|Long);
 
-        /** VDiffCreateRequest do_not_start. */
-        public do_not_start: boolean;
+        /** VDiffCreateRequest auto_start. */
+        public auto_start?: (boolean|null);
+
+        /** VDiffCreateRequest _auto_start. */
+        public _auto_start?: "auto_start";
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.

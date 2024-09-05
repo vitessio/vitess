@@ -46,6 +46,7 @@ func TestPerformVDiffAction(t *testing.T) {
 		query  string
 		result *sqltypes.Result // Optional if you need a non-empty result
 	}
+	false := false
 
 	tests := []struct {
 		name          string
@@ -102,7 +103,7 @@ func TestPerformVDiffAction(t *testing.T) {
 				Options: &tabletmanagerdatapb.VDiffOptions{
 					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
 					CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
-						DoNotStart: true,
+						AutoStart: &false,
 					},
 				},
 			},
@@ -111,7 +112,7 @@ func TestPerformVDiffAction(t *testing.T) {
 					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
 				},
 				{
-					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'stopped', '{"picker_options":{"source_cell":"cell1","target_cell":"cell1"},"core_options":{"do_not_start":true}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
+					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'stopped', '{"picker_options":{"source_cell":"cell1","target_cell":"cell1"},"core_options":{"auto_start":false}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
 				},
 			},
 		},

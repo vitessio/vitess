@@ -321,8 +321,8 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
 	if tc.testCLIFlagHandling {
-		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
 		// This creates and then deletes the vdiff so we don't increment the count.
+		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
 	}
 
 	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
@@ -370,6 +370,7 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 // testCLIFlagHandling tests that the vtctldclient CLI flags are handled correctly
 // from vtctldclient->vtctld->vttablet->mysqld.
 func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell) {
+	false := false
 	expectedOptions := &tabletmanagerdatapb.VDiffOptions{
 		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
 			MaxRows:               999,
@@ -378,7 +379,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			UpdateTableStats:      true,
 			TimeoutSeconds:        60,
 			MaxDiffSeconds:        333,
-			DoNotStart:            true,
+			AutoStart:             &false,
 		},
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			SourceCell:  "zone1,zone2,zone3,zonefoosource",
@@ -407,7 +408,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			fmt.Sprintf("--auto-retry=%t", expectedOptions.CoreOptions.AutoRetry),
 			fmt.Sprintf("--only-pks=%t", expectedOptions.ReportOptions.OnlyPks),
 			fmt.Sprintf("--row-diff-column-truncate-at=%d", expectedOptions.ReportOptions.RowDiffColumnTruncateAt),
-			fmt.Sprintf("--do-not-start=%t", expectedOptions.CoreOptions.DoNotStart),
+			fmt.Sprintf("--auto-start=%t", *expectedOptions.CoreOptions.AutoStart),
 			"--tablet-types-in-preference-order=false", // So tablet_types should not start with "in_order:", which is the default
 			"--format=json") // So we can easily grab the UUID
 		require.NoError(t, err, "vdiff command failed: %s", res)

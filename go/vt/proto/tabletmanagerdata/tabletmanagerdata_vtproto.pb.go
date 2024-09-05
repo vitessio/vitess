@@ -2278,7 +2278,10 @@ func (m *VDiffCoreOptions) CloneVT() *VDiffCoreOptions {
 	r.MaxExtraRowsToCompare = m.MaxExtraRowsToCompare
 	r.UpdateTableStats = m.UpdateTableStats
 	r.MaxDiffSeconds = m.MaxDiffSeconds
-	r.DoNotStart = m.DoNotStart
+	if rhs := m.AutoStart; rhs != nil {
+		tmpVal := *rhs
+		r.AutoStart = &tmpVal
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -8243,9 +8246,9 @@ func (m *VDiffCoreOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.DoNotStart {
+	if m.AutoStart != nil {
 		i--
-		if m.DoNotStart {
+		if *m.AutoStart {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -11419,7 +11422,7 @@ func (m *VDiffCoreOptions) SizeVT() (n int) {
 	if m.MaxDiffSeconds != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.MaxDiffSeconds))
 	}
-	if m.DoNotStart {
+	if m.AutoStart != nil {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -24245,7 +24248,7 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 			}
 		case 10:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DoNotStart", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field AutoStart", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -24262,7 +24265,8 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.DoNotStart = bool(v != 0)
+			b := bool(v != 0)
+			m.AutoStart = &b
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
