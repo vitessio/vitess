@@ -26,9 +26,10 @@ import (
 type ValuesJoin struct {
 	binaryOperator
 
-	JoinType sqlparser.JoinType
-	LHSExprs sqlparser.Exprs
-	ListArg  string // the bindvar name for the list of values
+	JoinType  sqlparser.JoinType
+	LHSExprs  sqlparser.Exprs
+	ListArg   string // the bindvar name for the list of values
+	TableName string // the name of the derived table that will be created
 
 	// 👇Done at offset planning time 👇
 
@@ -39,10 +40,24 @@ type ValuesJoin struct {
 	Columns []string
 }
 
-func newValuesJoin(lhs, rhs Operator, joinType sqlparser.JoinType, listArg string) *ValuesJoin {
+func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) *ValuesJoin {
+	// If the RHS is a single table, we'll use its name as the derived table name, otherwise we'll use "v"
+	tblName := "v"
+	rhsID := TableID(lhs)
+	if rhsID.NumberOfTables() == 1 {
+		tbl, err := ctx.SemTable.TableInfoFor(rhsID)
+		if err == nil {
+			name, err := tbl.Name()
+			if err == nil {
+				tblName = sqlparser.String(name)
+			}
+		}
+	}
+	listArg := ctx.GetReservedArgumentForString(tblName)
 	return &ValuesJoin{
 		binaryOperator: newBinaryOp(lhs, rhs),
 		JoinType:       joinType,
+		TableName:      tblName,
 		ListArg:        listArg,
 	}
 }
@@ -85,7 +100,7 @@ func (vj *ValuesJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser
 }
 
 func (vj *ValuesJoin) ShortDescription() string {
-	return ""
+	return vj.TableName
 }
 
 func (vj *ValuesJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
@@ -111,14 +126,12 @@ func (vj *ValuesJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sq
 	for _, pred := range predicates {
 		col := breakExpressionInLHSandRHS(ctx, pred, TableID(vj.LHS))
 
-		if col.IsPureLeft() {
+		if col.IsPureLeft() && vj.JoinType.IsInner() {
+			// If the predicate doesn't reference the RHS, we can add it to the LHS
+			// This is only valid for inner joins
 			vj.LHS = vj.LHS.AddPredicate(ctx, pred)
 		} else {
 			vj.addLHSExprs(col.LHSExprs)
-			err := ctx.SkipJoinPredicates(pred)
-			if err != nil {
-				panic(err)
-			}
 			vj.RHS = vj.RHS.AddPredicate(ctx, pred)
 		}
 	}

@@ -28,6 +28,7 @@ type ValuesTable struct {
 	unaryOperator
 
 	ListArgName string
+	TableName   string
 }
 
 func (v *ValuesTable) Clone(inputs []Operator) Operator {

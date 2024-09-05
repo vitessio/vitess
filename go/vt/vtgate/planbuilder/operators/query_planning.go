@@ -21,8 +21,6 @@ import (
 	"io"
 	"strconv"
 
-	"vitess.io/vitess/go/mysql/capabilities"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -76,8 +74,6 @@ func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
 func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch in := in.(type) {
-		case *ApplyJoin:
-			return tryConvertApplyToValuesJoin(ctx, in)
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
 		case *Join:
@@ -122,65 +118,6 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
-}
-
-func tryConvertApplyToValuesJoin(ctx *plancontext.PlanningContext, in *ApplyJoin) (Operator, *ApplyResult) {
-	ok, err := capabilities.MySQLVersionHasCapability(ctx.VSchema.Environment().MySQLVersion(), capabilities.ValuesRow)
-	if err != nil {
-		panic(err)
-	}
-	if !ok {
-		return in, NoRewrite
-	}
-
-	var r *Route
-	_ = Visit(in.RHS, func(op Operator) error {
-		switch op := op.(type) {
-		case *Route:
-			opcode := op.Routing.OpCode()
-			switch opcode {
-			case engine.EqualUnique, engine.Equal, engine.IN, engine.MultiEqual:
-				r = op
-			}
-			return io.EOF
-		case *unaryOperator:
-			return nil
-		default:
-			// If we encounter something else than a route or an unary operator
-			// we will not be able to determine the op code of the RHS, we abort.
-			return io.EOF
-		}
-	})
-	if r == nil {
-		return in, NoRewrite
-	}
-
-	valuesTable := "values"
-	rhsID := TableID(in.LHS)
-	if rhsID.NumberOfTables() == 1 {
-		tbl, err := ctx.SemTable.TableInfoFor(rhsID)
-		if err != nil {
-			return in, NoRewrite
-		}
-		name, err := tbl.Name()
-		if err == nil {
-			valuesTable = sqlparser.String(name)
-		}
-	}
-	valuesTable = ctx.GetReservedArgumentForString(valuesTable)
-
-	newRouteSrc := &ValuesTable{
-		unaryOperator: newUnaryOp(r.Source),
-		ListArgName:   valuesTable,
-	}
-	r.Source = newRouteSrc
-	var vj Operator = newValuesJoin(in.LHS, in.RHS, in.JoinType, valuesTable)
-	for _, column := range in.JoinPredicates.columns {
-		vj = vj.AddPredicate(ctx, column.Original)
-	}
-	routing := r.Routing.(*ShardedRouting)
-	routing.RouteOpCode = engine.IN
-	return vj, Rewrote("ApplyJoin to ValuesJoin")
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
