@@ -14,7 +14,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: gh-hosted-runners-4cores-1
+    runs-on: ubuntu-latest
 
     steps:
     - name: Skip CI

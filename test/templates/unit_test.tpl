@@ -14,7 +14,7 @@ env:
 jobs:
   test:
     name: {{.Name}}
-    runs-on: gh-hosted-runners-4cores-1
+    runs-on: ubuntu-latest
 
     steps:
     - name: Skip CI
