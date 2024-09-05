@@ -153,7 +153,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 
 			lastpk = nil
 			// pkfields are only used for logging, so that we can monitor progress.
-			pkfields = make([]*querypb.Field, len(resp.Pkfields))
+			pkfields = make([]*querypb.Field, 0, len(resp.Pkfields))
 			for _, f := range resp.Pkfields {
 				pkfields = append(pkfields, f.CloneVT())
 			}

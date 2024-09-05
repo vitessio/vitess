@@ -659,7 +659,7 @@ func (ts *Server) GetSrvKeyspaceAllCells(ctx context.Context, keyspace string) (
 		return nil, err
 	}
 
-	srvKeyspaces := make([]*topodatapb.SrvKeyspace, len(cells))
+	srvKeyspaces := make([]*topodatapb.SrvKeyspace, 0, len(cells))
 	for _, cell := range cells {
 		srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 		switch {
