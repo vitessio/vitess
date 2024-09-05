@@ -96,7 +96,7 @@ func (vj *ValuesJoin) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.
 }
 
 func (vj *ValuesJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return append(vj.LHS.GetSelectExprs(ctx), vj.RHS.GetSelectExprs(ctx)...)
+	return vj.RHS.GetSelectExprs(ctx)
 }
 
 func (vj *ValuesJoin) ShortDescription() string {
