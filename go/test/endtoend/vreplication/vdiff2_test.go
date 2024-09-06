@@ -434,7 +434,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		require.NoError(t, err, "failed to unmarshal result %s to a %T: %v", string(bytes), storedOptions, err)
 		require.True(t, proto.Equal(expectedOptions, storedOptions), "stored options %v != expected options %v", storedOptions, expectedOptions)
 
-		// Delete this vdiff as we used --do-not-start and thus it never starts and
+		// Delete this vdiff as we used --auto-start=false and thus it never starts and
 		// does not provide the normally expected show --verbose --format=json output.
 		_, output := performVDiff2Action(t, false, fmt.Sprintf("%s.%s", targetKs, workflowName), "", "delete", vduuid.String(), false)
 		require.Equal(t, "completed", gjson.Get(output, "Status").String())
