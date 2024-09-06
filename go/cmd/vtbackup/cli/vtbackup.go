@@ -230,8 +230,10 @@ func run(cc *cobra.Command, args []string) error {
 	})
 
 	defer func() {
-		servenv.ExitChan <- syscall.SIGTERM
-		<-ctx.Done()
+		if servenv.ExitChan != nil {
+			servenv.ExitChan <- syscall.SIGTERM
+			<-ctx.Done()
+		}
 	}()
 
 	go servenv.RunDefault()
