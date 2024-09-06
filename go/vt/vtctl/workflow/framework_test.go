@@ -261,7 +261,7 @@ type testTMClient struct {
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
-	readVReplicationWorkflowRequests   map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
+	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
 	primaryPositions                   map[uint32]string
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
 
@@ -282,7 +282,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
-		readVReplicationWorkflowRequests:   make(map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
+		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
 		env:                                env,
@@ -309,8 +309,7 @@ func (tmc *testTMClient) GetWorkflowKey(keyspace, shard string) string {
 func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
-	key := fmt.Sprintf("%d/%s", tablet.Alias.Uid, req.Workflow)
-	if expect := tmc.readVReplicationWorkflowRequests[key]; expect != nil {
+	if expect := tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if !proto.Equal(expect, req) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request: got %+v, want %+v", req, expect)
 		}

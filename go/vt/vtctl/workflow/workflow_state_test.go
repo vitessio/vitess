@@ -52,16 +52,10 @@ func setupMoveTables(t *testing.T) (context.Context, *testEnv) {
 	}
 	te := newTestEnv(t, ctx, "zone1", sourceKeyspace, targetKeyspace)
 	te.tmc.schema = schema
-	for k := range te.tablets {
-		for k2 := range te.tablets[k] {
-			fmt.Println(k, k2)
-		}
-	}
 	var wfs tabletmanagerdata.ReadVReplicationWorkflowsResponse
-	wfName := "wf1"
 	id := int32(1)
 	wfs.Workflows = append(wfs.Workflows, &tabletmanagerdata.ReadVReplicationWorkflowResponse{
-		Workflow:     wfName,
+		Workflow:     "wf1",
 		WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
 	}, &tabletmanagerdata.ReadVReplicationWorkflowResponse{
 		Workflow:     "wf2",
@@ -82,21 +76,6 @@ func setupMoveTables(t *testing.T) (context.Context, *testEnv) {
 		Pos:   position,
 		State: binlogdatapb.VReplicationWorkflowState_Running,
 	})
-	wfs.Workflows[1].Streams = append(wfs.Workflows[1].Streams, &tabletmanagerdata.ReadVReplicationWorkflowResponse_Stream{
-		Id: 2,
-		Bls: &binlogdatapb.BinlogSource{
-			Keyspace: "source2",
-			Shard:    "0",
-			Filter: &binlogdatapb.Filter{
-				Rules: []*binlogdatapb.Rule{
-					{Match: "t1", Filter: "select * from t1"},
-				},
-			},
-			Tables: []string{"t1"},
-		},
-		Pos:   position,
-		State: binlogdatapb.VReplicationWorkflowState_Running,
-	})
 
 	workflowKey := te.tmc.GetWorkflowKey("target", "wf1")
 	workflowResponses := []*tabletmanagerdata.ReadVReplicationWorkflowsResponse{
@@ -106,16 +85,11 @@ func setupMoveTables(t *testing.T) (context.Context, *testEnv) {
 	for _, resp := range workflowResponses {
 		te.tmc.AddVReplicationWorkflowsResponse(workflowKey, resp)
 	}
-	te.tmc.readVReplicationWorkflowRequests["200/wf2"] = &tabletmanagerdata.ReadVReplicationWorkflowRequest{
-		Workflow: "wf2",
-	}
-	te.tmc.readVReplicationWorkflowRequests["200/wf1"] = &tabletmanagerdata.ReadVReplicationWorkflowRequest{
-		Workflow: wfName,
+	te.tmc.readVReplicationWorkflowRequests[200] = &tabletmanagerdata.ReadVReplicationWorkflowRequest{
+		Workflow: "wf1",
 	}
 	te.updateTableRoutingRules(t, ctx, nil, []string{"t1"},
 		"source", te.targetKeyspace.KeyspaceName, "source")
-	te.updateTableRoutingRules(t, ctx, nil, []string{"t1"},
-		"source2", "target2", "source2")
 	return ctx, te
 }
 
@@ -128,6 +102,8 @@ func TestWorkflowStateMoveTables(t *testing.T) {
 		name                   string
 		wf1SwitchedTabletTypes []topodatapb.TabletType
 		wf1ExpectedState       string
+		// Simulate a second workflow to validate that the logic used to determine the state of the first workflow
+		// from the routing rules is not affected by the presence of other workflows in different states.
 		wf2SwitchedTabletTypes []topodatapb.TabletType
 	}
 	testCases := []testCase{
@@ -172,6 +148,13 @@ func TestWorkflowStateMoveTables(t *testing.T) {
 	}
 	require.Equal(t, "Reads Not Switched. Writes Not Switched", getStateString("target", "wf1"))
 
+	resetRoutingRules := func() {
+		te.updateTableRoutingRules(t, ctx, nil, tables,
+			"source", te.targetKeyspace.KeyspaceName, "source")
+		te.updateTableRoutingRules(t, ctx, nil, tables,
+			"source2", "target2", "source2")
+	}
+	resetRoutingRules()
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			te.updateTableRoutingRules(t, ctx, tc.wf1SwitchedTabletTypes, tables,
@@ -180,10 +163,7 @@ func TestWorkflowStateMoveTables(t *testing.T) {
 				"source2", "target2", "target2")
 			require.Equal(t, tc.wf1ExpectedState, getStateString("target", "wf1"))
 			// reset to initial state
-			te.updateTableRoutingRules(t, ctx, nil, tables,
-				"source", te.targetKeyspace.KeyspaceName, "source")
-			te.updateTableRoutingRules(t, ctx, nil, tables,
-				"source2", "target2", "source2")
+			resetRoutingRules()
 		})
 	}
 }
