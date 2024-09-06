@@ -105,6 +105,16 @@ func TestFindErrantGTIDs(t *testing.T) {
 		otherRepStatuses: []*ReplicationStatus{{SourceUUID: sid1, RelayLogPosition: Position{GTIDSet: set1}}},
 		// servers with the same GTID sets should not be diagnosed with errant GTIDs
 		want: nil,
+	}, {
+		mainRepStatus:    &ReplicationStatus{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set2}},
+		otherRepStatuses: []*ReplicationStatus{{SourceUUID: sid1, RelayLogPosition: Position{GTIDSet: set3}}},
+		// set2 is a strict subset of set3
+		want: nil,
+	}, {
+		mainRepStatus:    &ReplicationStatus{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set3}},
+		otherRepStatuses: []*ReplicationStatus{{SourceUUID: sid1, RelayLogPosition: Position{GTIDSet: set2}}},
+		// set3 is a strict superset of set2
+		want: nil,
 	}}
 
 	for _, testcase := range testcases {
