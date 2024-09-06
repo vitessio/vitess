@@ -942,7 +942,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 					require.Equal(t, to, tt)
 				}
 			}
-			// Confirm that we have the expected denied tables entires.
+			// Confirm that we have the expected denied tables entries.
 			for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
 				for _, shardName := range keyspace.ShardNames {
 					si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)

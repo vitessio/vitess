@@ -141,7 +141,7 @@ func initSrvKeyspace(t *testing.T, topo *topo.Server, keyspace string, sources, 
 		for _, shard := range shards {
 			keyRange, err := key.ParseShardingSpec(shard)
 			require.NoError(t, err)
-			require.Equal(t, 1, len(keyRange))
+			require.Len(t, keyRange, 1)
 			partition.ShardReferences = append(partition.ShardReferences, &topodatapb.ShardReference{
 				Name:     shard,
 				KeyRange: keyRange[0],

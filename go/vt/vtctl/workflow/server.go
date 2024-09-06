@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
@@ -3078,6 +3079,13 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, err
 	}
 
+	if req.GetForce() {
+		if ts.options == nil {
+			ts.options = &vtctldatapb.WorkflowOptions{}
+		}
+		ts.options.WarnOnPartialTabletRefresh = true
+	}
+
 	if startState.WorkflowType == TypeMigrate {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
 	}
@@ -3644,10 +3652,15 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 		defer wg.Done()
 		for _, si := range shards {
 			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
-				m.Lock()
-				refreshErrors.WriteString(fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
-					si.Keyspace(), si.ShardName(), stype, err, partialDetails))
-				m.Unlock()
+				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
+					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
+				if partial && force {
+					log.Warning(msg)
+				} else {
+					m.Lock()
+					refreshErrors.WriteString(msg)
+					m.Unlock()
+				}
 			}
 		}
 	}
@@ -3656,7 +3669,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 	wg.Add(1)
 	go refreshTablets(ts.TargetShards(), "target")
 	wg.Wait()
-	if refreshErrors.Len() > 0 && !force {
+	if refreshErrors.Len() > 0 {
 		return fmt.Sprintf(cannotSwitchFailedTabletRefresh, refreshErrors.String()), nil
 	}
 	return "", nil
