@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -61,6 +63,9 @@ func setupMoveTables(t *testing.T) (context.Context, *testEnv) {
 	wfs.Workflows = append(wfs.Workflows, &tabletmanagerdata.ReadVReplicationWorkflowResponse{
 		Workflow:     wfName,
 		WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+	}, &tabletmanagerdata.ReadVReplicationWorkflowResponse{
+		Workflow:     "wf2",
+		WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
 	})
 	wfs.Workflows[0].Streams = append(wfs.Workflows[0].Streams, &tabletmanagerdata.ReadVReplicationWorkflowResponse_Stream{
 		Id: id,
@@ -77,73 +82,108 @@ func setupMoveTables(t *testing.T) (context.Context, *testEnv) {
 		Pos:   position,
 		State: binlogdatapb.VReplicationWorkflowState_Running,
 	})
+	wfs.Workflows[1].Streams = append(wfs.Workflows[1].Streams, &tabletmanagerdata.ReadVReplicationWorkflowResponse_Stream{
+		Id: 2,
+		Bls: &binlogdatapb.BinlogSource{
+			Keyspace: "source2",
+			Shard:    "0",
+			Filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{
+					{Match: "t1", Filter: "select * from t1"},
+				},
+			},
+			Tables: []string{"t1"},
+		},
+		Pos:   position,
+		State: binlogdatapb.VReplicationWorkflowState_Running,
+	})
+
 	workflowKey := te.tmc.GetWorkflowKey("target", "wf1")
 	workflowResponses := []*tabletmanagerdata.ReadVReplicationWorkflowsResponse{
-		nil,              // this is the response for getting stopped workflows
-		&wfs, &wfs, &wfs, // return the full list for subsequent GetWorkflows calls
+		nil,                                // this is the response for getting stopped workflows
+		&wfs, &wfs, &wfs, &wfs, &wfs, &wfs, // return the full list for subsequent GetWorkflows calls
 	}
 	for _, resp := range workflowResponses {
 		te.tmc.AddVReplicationWorkflowsResponse(workflowKey, resp)
 	}
-	te.tmc.readVReplicationWorkflowRequests[200] = &tabletmanagerdata.ReadVReplicationWorkflowRequest{
+	te.tmc.readVReplicationWorkflowRequests["200/wf2"] = &tabletmanagerdata.ReadVReplicationWorkflowRequest{
+		Workflow: "wf2",
+	}
+	te.tmc.readVReplicationWorkflowRequests["200/wf1"] = &tabletmanagerdata.ReadVReplicationWorkflowRequest{
 		Workflow: wfName,
 	}
-	te.updateTableRoutingRules(t, ctx, nil, []string{"t1"}, te.sourceKeyspace.KeyspaceName)
+	te.updateTableRoutingRules(t, ctx, nil, []string{"t1"},
+		"source", te.targetKeyspace.KeyspaceName, "source")
+	te.updateTableRoutingRules(t, ctx, nil, []string{"t1"},
+		"source2", "target2", "source2")
 	return ctx, te
 }
 
 func TestWorkflowStateMoveTables(t *testing.T) {
 	ctx, te := setupMoveTables(t)
 	require.NotNil(t, te)
+	rules, _ := te.ts.GetRoutingRules(ctx)
+	log.Infof("rules: %v", rules)
 	type testCase struct {
-		name        string
-		tabletTypes []topodatapb.TabletType
-		wantState   string
+		name                   string
+		wf1SwitchedTabletTypes []topodatapb.TabletType
+		wf1ExpectedState       string
+		wf2SwitchedTabletTypes []topodatapb.TabletType
 	}
 	testCases := []testCase{
 		{
-			name:        "switch reads",
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY},
-			wantState:   "All Reads Switched. Writes Not Switched",
+			name:                   "switch reads",
+			wf1SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY},
+			wf1ExpectedState:       "All Reads Switched. Writes Not Switched",
+			wf2SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 		},
 		{
-			name:        "switch writes",
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-			wantState:   "Reads Not Switched. Writes Switched",
+			name:                   "switch writes",
+			wf1SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+			wf1ExpectedState:       "Reads Not Switched. Writes Switched",
+			wf2SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY},
 		},
 		{
-			name:        "switch reads and writes",
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY},
-			wantState:   "All Reads Switched. Writes Switched",
+			name:                   "switch reads and writes",
+			wf1SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY},
+			wf1ExpectedState:       "All Reads Switched. Writes Switched",
 		},
 		{
-			name:        "switch rdonly only",
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
-			wantState:   "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Not Switched",
+			name:                   "switch rdonly only",
+			wf1SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+			wf1ExpectedState:       "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Not Switched",
+			wf2SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 		},
 		{
-			name:        "switch replica only",
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
-			wantState:   "Reads partially switched. All Replica Reads Switched. Rdonly not switched. Writes Not Switched",
+			name:                   "switch replica only",
+			wf1SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
+			wf1ExpectedState:       "Reads partially switched. All Replica Reads Switched. Rdonly not switched. Writes Not Switched",
+			wf2SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY},
 		},
 	}
 	tables := []string{"t1"}
 
-	getStateString := func() string {
-		tsw, state, err := te.ws.getWorkflowState(ctx, te.targetKeyspace.KeyspaceName, "wf1")
+	getStateString := func(targetKeyspace, wfName string) string {
+		tsw, state, err := te.ws.getWorkflowState(ctx, targetKeyspace, wfName)
 		require.NoError(t, err)
 		require.NotNil(t, tsw)
 		require.NotNil(t, state)
 		return state.String()
 	}
-	initState := getStateString()
-	require.Equal(t, "Reads Not Switched. Writes Not Switched", initState)
+	require.Equal(t, "Reads Not Switched. Writes Not Switched", getStateString("target", "wf1"))
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			te.updateTableRoutingRules(t, ctx, tc.tabletTypes, tables, te.targetKeyspace.KeyspaceName)
-			require.Equal(t, tc.wantState, getStateString())
+			te.updateTableRoutingRules(t, ctx, tc.wf1SwitchedTabletTypes, tables,
+				"source", te.targetKeyspace.KeyspaceName, te.targetKeyspace.KeyspaceName)
+			te.updateTableRoutingRules(t, ctx, tc.wf2SwitchedTabletTypes, tables,
+				"source2", "target2", "target2")
+			require.Equal(t, tc.wf1ExpectedState, getStateString("target", "wf1"))
 			// reset to initial state
-			te.updateTableRoutingRules(t, ctx, tc.tabletTypes, tables, te.sourceKeyspace.KeyspaceName)
+			te.updateTableRoutingRules(t, ctx, nil, tables,
+				"source", te.targetKeyspace.KeyspaceName, "source")
+			te.updateTableRoutingRules(t, ctx, nil, tables,
+				"source2", "target2", "source2")
 		})
 	}
 }

@@ -206,24 +206,26 @@ func (env *testEnv) saveRoutingRules(t *testing.T, rules map[string][]string) {
 }
 
 func (env *testEnv) updateTableRoutingRules(t *testing.T, ctx context.Context,
-	tabletTypes []topodatapb.TabletType, tables []string, toKeyspace string) {
+	tabletTypes []topodatapb.TabletType, tables []string, sourceKeyspace, targetKeyspace, toKeyspace string) {
 
 	if len(tabletTypes) == 0 {
 		tabletTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	}
-	rules := make(map[string][]string, len(tables)*(len(tabletTypes)*3))
+	rr, err := env.ts.GetRoutingRules(ctx)
+	require.NoError(t, err)
+	rules := topotools.GetRoutingRulesMap(rr)
 	for _, tabletType := range tabletTypes {
 		for _, tableName := range tables {
 			toTarget := []string{toKeyspace + "." + tableName}
 			tt := strings.ToLower(tabletType.String())
 			if tabletType == topodatapb.TabletType_PRIMARY {
 				rules[tableName] = toTarget
-				rules[env.targetKeyspace.KeyspaceName+"."+tableName] = toTarget
-				rules[env.sourceKeyspace.KeyspaceName+"."+tableName] = toTarget
+				rules[targetKeyspace+"."+tableName] = toTarget
+				rules[sourceKeyspace+"."+tableName] = toTarget
 			} else {
 				rules[tableName+"@"+tt] = toTarget
-				rules[env.targetKeyspace.KeyspaceName+"."+tableName+"@"+tt] = toTarget
-				rules[env.sourceKeyspace.KeyspaceName+"."+tableName+"@"+tt] = toTarget
+				rules[targetKeyspace+"."+tableName+"@"+tt] = toTarget
+				rules[sourceKeyspace+"."+tableName+"@"+tt] = toTarget
 			}
 		}
 	}
@@ -259,7 +261,7 @@ type testTMClient struct {
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
-	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
+	readVReplicationWorkflowRequests   map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
 	primaryPositions                   map[uint32]string
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
 
@@ -280,7 +282,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
-		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
+		readVReplicationWorkflowRequests:   make(map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
 		env:                                env,
@@ -307,8 +309,8 @@ func (tmc *testTMClient) GetWorkflowKey(keyspace, shard string) string {
 func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
-
-	if expect := tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
+	key := fmt.Sprintf("%d/%s", tablet.Alias.Uid, req.Workflow)
+	if expect := tmc.readVReplicationWorkflowRequests[key]; expect != nil {
 		if !proto.Equal(expect, req) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request: got %+v, want %+v", req, expect)
 		}
