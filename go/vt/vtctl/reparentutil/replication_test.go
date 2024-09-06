@@ -176,12 +176,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 					},
 				},
 			},
-			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
-				"p1": {
-					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-				},
-			},
-			expected:  []string{"r1", "r2", "p1"},
+			expected:  []string{"r1", "r2"},
 			shouldErr: false,
 		},
 		{
@@ -200,12 +195,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 					},
 				},
 			},
-			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
-				"p1": {
-					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-				},
-			},
-			expected:  []string{"p1"},
+			expected:  []string{},
 			shouldErr: false,
 		},
 		{
