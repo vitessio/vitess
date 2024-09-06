@@ -201,6 +201,14 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 		otherSets = append(otherSets, otherSet)
 	}
 
+	if len(otherSets) == 1 {
+		// If there is only one replica to compare against, and one is a subset of the other, then we consider them not to be errant.
+		// It simply means that one replica might be behind on replication.
+		if relayLogSet.Contains(otherSets[0]) || otherSets[0].Contains(relayLogSet) {
+			return nil, nil
+		}
+	}
+
 	// Copy set for final diffSet so we don't mutate receiver.
 	diffSet := make(Mysql56GTIDSet, len(relayLogSet))
 	for sid, intervals := range relayLogSet {
