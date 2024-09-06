@@ -494,6 +494,8 @@ func TestInsertAlias(t *testing.T) {
 
 // TestInsertJson tests that selected json values are encoded correctly.
 func TestInsertJson(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
