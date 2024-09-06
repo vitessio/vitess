@@ -416,11 +416,6 @@ func TestMoveTablesComplete(t *testing.T) {
 	tableTemplate := "CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))"
 	sourceKeyspaceName := "sourceks"
 	targetKeyspaceName := "targetks"
-	tabletTypes := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
-	}
 	lockName := fmt.Sprintf("%s/%s", targetKeyspaceName, workflowName)
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
 		table1Name: {
@@ -640,7 +635,7 @@ func TestMoveTablesComplete(t *testing.T) {
 				tc.preFunc(t, env)
 			}
 			// Setup the routing rules as they would be after having previously done SwitchTraffic.
-			env.addTableRoutingRules(t, ctx, tabletTypes, []string{table1Name, table2Name, table3Name})
+			env.updateTableRoutingRules(t, ctx, nil, []string{table1Name, table2Name, table3Name}, tc.targetKeyspace.KeyspaceName)
 			got, err := env.ws.MoveTablesComplete(ctx, tc.req)
 			if tc.wantErr != "" {
 				require.EqualError(t, err, tc.wantErr)
@@ -1103,7 +1098,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.addTableRoutingRules(t, ctx, tabletTypes, []string{tableName})
+				env.updateTableRoutingRules(t, ctx, tabletTypes, []string{tableName}, tc.targetKeyspace.KeyspaceName)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
@@ -1317,7 +1312,7 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.addTableRoutingRules(t, ctx, tabletTypes, tables)
+				env.updateTableRoutingRules(t, ctx, tabletTypes, tables, tc.targetKeyspace.KeyspaceName)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)

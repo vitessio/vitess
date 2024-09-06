@@ -198,30 +198,36 @@ func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspac
 	return tablet
 }
 
-// addTableRoutingRules adds routing rules from the test env's source keyspace to
-// its target keyspace for the given tablet types and tables.
-func (env *testEnv) addTableRoutingRules(t *testing.T, ctx context.Context, tabletTypes []topodatapb.TabletType, tables []string) {
-	ks := env.targetKeyspace.KeyspaceName
+func (env *testEnv) saveRoutingRules(t *testing.T, rules map[string][]string) {
+	err := topotools.SaveRoutingRules(context.Background(), env.ts, rules)
+	require.NoError(t, err)
+	err = env.ts.RebuildSrvVSchema(context.Background(), nil)
+	require.NoError(t, err)
+}
+
+func (env *testEnv) updateTableRoutingRules(t *testing.T, ctx context.Context,
+	tabletTypes []topodatapb.TabletType, tables []string, toKeyspace string) {
+
+	if len(tabletTypes) == 0 {
+		tabletTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+	}
 	rules := make(map[string][]string, len(tables)*(len(tabletTypes)*3))
 	for _, tabletType := range tabletTypes {
 		for _, tableName := range tables {
-			toTarget := []string{ks + "." + tableName}
+			toTarget := []string{toKeyspace + "." + tableName}
 			tt := strings.ToLower(tabletType.String())
 			if tabletType == topodatapb.TabletType_PRIMARY {
 				rules[tableName] = toTarget
-				rules[ks+"."+tableName] = toTarget
+				rules[env.targetKeyspace.KeyspaceName+"."+tableName] = toTarget
 				rules[env.sourceKeyspace.KeyspaceName+"."+tableName] = toTarget
 			} else {
 				rules[tableName+"@"+tt] = toTarget
-				rules[ks+"."+tableName+"@"+tt] = toTarget
+				rules[env.targetKeyspace.KeyspaceName+"."+tableName+"@"+tt] = toTarget
 				rules[env.sourceKeyspace.KeyspaceName+"."+tableName+"@"+tt] = toTarget
 			}
 		}
 	}
-	err := topotools.SaveRoutingRules(ctx, env.ts, rules)
-	require.NoError(t, err)
-	err = env.ts.RebuildSrvVSchema(ctx, nil)
-	require.NoError(t, err)
+	env.saveRoutingRules(t, rules)
 }
 
 func (env *testEnv) deleteTablet(tablet *topodatapb.Tablet) {
