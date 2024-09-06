@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -31,10 +32,11 @@ type MoveTablesWorkflow struct {
 	targetKs        string
 	srcKs           string
 	tables          string
+	tabletTypes     []string
 }
 
 // NewMoveTables creates a new MoveTablesWorkflow.
-func NewMoveTables(t *testing.T, clusterInstance *LocalProcessCluster, workflowName, targetKs, srcKs, tables string) *MoveTablesWorkflow {
+func NewMoveTables(t *testing.T, clusterInstance *LocalProcessCluster, workflowName, targetKs, srcKs, tables string, tabletTypes []string) *MoveTablesWorkflow {
 	return &MoveTablesWorkflow{
 		t:               t,
 		clusterInstance: clusterInstance,
@@ -42,6 +44,7 @@ func NewMoveTables(t *testing.T, clusterInstance *LocalProcessCluster, workflowN
 		tables:          tables,
 		targetKs:        targetKs,
 		srcKs:           srcKs,
+		tabletTypes:     tabletTypes,
 	}
 }
 
@@ -51,6 +54,10 @@ func (mtw *MoveTablesWorkflow) Create() (string, error) {
 		args = append(args, "--tables="+mtw.tables)
 	} else {
 		args = append(args, "--all-tables")
+	}
+	if len(mtw.tabletTypes) != 0 {
+		args = append(args, "--tablet-types")
+		args = append(args, strings.Join(mtw.tabletTypes, ","))
 	}
 	return mtw.exec(args...)
 }

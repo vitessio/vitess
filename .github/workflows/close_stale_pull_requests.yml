@@ -9,7 +9,7 @@ permissions: read-all
 
 jobs:
   close_stale_pull_requests:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       pull-requests: write
 
