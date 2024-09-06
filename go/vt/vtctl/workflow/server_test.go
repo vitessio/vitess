@@ -1354,6 +1354,15 @@ func TestMirrorTraffic(t *testing.T) {
 		topodatapb.TabletType_RDONLY,
 	}
 
+	initialRoutingRules := map[string][]string{
+		fmt.Sprintf("%s.%s", sourceKs, table1):         {fmt.Sprintf("%s.%s", sourceKs, table1)},
+		fmt.Sprintf("%s.%s", sourceKs, table2):         {fmt.Sprintf("%s.%s", sourceKs, table2)},
+		fmt.Sprintf("%s.%s@replica", sourceKs, table1): {fmt.Sprintf("%s.%s@replica", sourceKs, table1)},
+		fmt.Sprintf("%s.%s@replica", sourceKs, table2): {fmt.Sprintf("%s.%s@replica", sourceKs, table2)},
+		fmt.Sprintf("%s.%s@rdonly", sourceKs, table1):  {fmt.Sprintf("%s.%s@rdonly", sourceKs, table1)},
+		fmt.Sprintf("%s.%s@rdonly", sourceKs, table2):  {fmt.Sprintf("%s.%s@rdonly", sourceKs, table2)},
+	}
+
 	tests := []struct {
 		name string
 
@@ -1441,8 +1450,8 @@ func TestMirrorTraffic(t *testing.T) {
 				Percent:     50.0,
 			},
 			routingRules: map[string][]string{
-				fmt.Sprintf("%s.%s@rdonly", targetKs, table1): {fmt.Sprintf("%s.%s@rdonly", targetKs, table1)},
-				fmt.Sprintf("%s.%s@rdonly", targetKs, table2): {fmt.Sprintf("%s.%s@rdonly", targetKs, table2)},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {fmt.Sprintf("%s.%s@rdonly", targetKs, table1)},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {fmt.Sprintf("%s.%s@rdonly", targetKs, table2)},
 			},
 			wantErr:         "cannot mirror [rdonly] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
@@ -1456,8 +1465,8 @@ func TestMirrorTraffic(t *testing.T) {
 				Percent:     50.0,
 			},
 			routingRules: map[string][]string{
-				fmt.Sprintf("%s.%s@replica", targetKs, table1): {fmt.Sprintf("%s.%s@replica", targetKs, table1)},
-				fmt.Sprintf("%s.%s@replica", targetKs, table2): {fmt.Sprintf("%s.%s@replica", targetKs, table2)},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table1): {fmt.Sprintf("%s.%s@replica", targetKs, table1)},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table2): {fmt.Sprintf("%s.%s@replica", targetKs, table2)},
 			},
 			wantErr:         "cannot mirror [replica] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
@@ -1471,8 +1480,8 @@ func TestMirrorTraffic(t *testing.T) {
 				Percent:     50.0,
 			},
 			routingRules: map[string][]string{
-				table1: {fmt.Sprintf("%s.%s", targetKs, table1)},
-				table2: {fmt.Sprintf("%s.%s", targetKs, table2)},
+				fmt.Sprintf("%s.%s", sourceKs, table1): {fmt.Sprintf("%s.%s", targetKs, table1)},
+				fmt.Sprintf("%s.%s", sourceKs, table2): {fmt.Sprintf("%s.%s", targetKs, table2)},
 			},
 			wantErr:         "cannot mirror [primary] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
@@ -1553,6 +1562,7 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
+			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {
 					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
@@ -1587,6 +1597,7 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
+			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {
 					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
@@ -1624,6 +1635,7 @@ func TestMirrorTraffic(t *testing.T) {
 					fmt.Sprintf("%s.%s", targetKs, table1): 25.0,
 				},
 			},
+			routingRules: initialRoutingRules,
 			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
 				Keyspace:    targetKs,
 				Workflow:    workflow,
