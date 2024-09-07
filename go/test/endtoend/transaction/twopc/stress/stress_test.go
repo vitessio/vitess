@@ -39,6 +39,7 @@ import (
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 )
 
@@ -258,7 +259,7 @@ func mysqlRestartShard3(t *testing.T) error {
 // moveTablesCancel runs a move tables command that we cancel in the end.
 func moveTablesCancel(t *testing.T) error {
 	workflow := "TestDisruptions"
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1")
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1", []string{topodatapb.TabletType_REPLICA.String()})
 	// Initiate MoveTables for twopc_t1.
 	output, err := mtw.Create()
 	require.NoError(t, err, output)
@@ -277,7 +278,7 @@ func moveTablesCancel(t *testing.T) error {
 // moveTablesComplete runs a move tables command that we complete in the end.
 func moveTablesComplete(t *testing.T) error {
 	workflow := "TestDisruptions"
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1")
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1", []string{topodatapb.TabletType_REPLICA.String()})
 	// Initiate MoveTables for twopc_t1.
 	output, err := mtw.Create()
 	require.NoError(t, err, output)
@@ -297,7 +298,7 @@ func moveTablesReset(t *testing.T) {
 	err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
 	require.NoError(t, err)
 	workflow := "TestDisruptions"
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, keyspaceName, unshardedKeyspaceName, "twopc_t1")
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, keyspaceName, unshardedKeyspaceName, "twopc_t1", []string{topodatapb.TabletType_REPLICA.String()})
 	// Initiate MoveTables for twopc_t1.
 	output, err := mtw.Create()
 	require.NoError(t, err, output)

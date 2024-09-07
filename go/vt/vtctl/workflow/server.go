@@ -1786,6 +1786,9 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	span.Annotate("tables", req.Tables)
 	span.Annotate("auto_retry", req.AutoRetry)
 	span.Annotate("max_diff_duration", req.MaxDiffDuration)
+	if req.AutoStart != nil {
+		span.Annotate("auto_start", req.GetAutoStart())
+	}
 
 	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
 
@@ -1804,6 +1807,11 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 		req.WaitUpdateInterval = &vttimepb.Duration{}
 	}
 
+	autoStart := true
+	if req.AutoStart != nil {
+		autoStart = req.GetAutoStart()
+	}
+
 	options := &tabletmanagerdatapb.VDiffOptions{
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			TabletTypes: tabletTypesStr,
@@ -1818,6 +1826,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			MaxExtraRowsToCompare: req.MaxExtraRowsToCompare,
 			UpdateTableStats:      req.UpdateTableStats,
 			MaxDiffSeconds:        req.MaxDiffDuration.Seconds,
+			AutoStart:             &autoStart,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
 			OnlyPks:                 req.OnlyPKs,
@@ -1906,9 +1915,12 @@ func (s *Server) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRe
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffResume")
 	defer span.Finish()
 
+	targetShards := req.GetTargetShards()
+
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("target_shards", targetShards)
 
 	tabletreq := &tabletmanagerdatapb.VDiffRequest{
 		Keyspace:  req.TargetKeyspace,
@@ -1920,6 +1932,12 @@ func (s *Server) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRe
 	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(targetShards) > 0 {
+		if err := applyTargetShards(ts, targetShards); err != nil {
+			return nil, err
+		}
 	}
 
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
@@ -1980,9 +1998,12 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffStop")
 	defer span.Finish()
 
+	targetShards := req.GetTargetShards()
+
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("target_shards", targetShards)
 
 	tabletreq := &tabletmanagerdatapb.VDiffRequest{
 		Keyspace:  req.TargetKeyspace,
@@ -1994,6 +2015,12 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(targetShards) > 0 {
+		if err := applyTargetShards(ts, targetShards); err != nil {
+			return nil, err
+		}
 	}
 
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
