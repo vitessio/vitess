@@ -1237,7 +1237,7 @@ func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
 func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration ||
-			(ts.IsMultiTenantMigration() && len(ts.options.GetShards()) > 0) {
+			(ts.IsMultiTenantMigration() && ts.options != nil && len(ts.options.GetShards()) > 0) {
 			return nil
 		}
 		sourceTopo := ts.ws.ts
