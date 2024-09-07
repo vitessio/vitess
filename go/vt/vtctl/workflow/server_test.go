@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -205,6 +207,200 @@ func TestVDiffCreate(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, got)
 			require.NotEmpty(t, got.UUID)
+		})
+	}
+}
+
+func TestVDiffResume(t *testing.T) {
+	ctx := context.Background()
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	workflow := "testwf"
+	uuid := uuid.New().String()
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+
+	env.tmc.strict = true
+	action := string(vdiff.ResumeAction)
+
+	tests := []struct {
+		name                  string
+		req                   *vtctldatapb.VDiffResumeRequest              // vtctld requests
+		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse // tablet requests
+		wantErr               string
+	}{
+		{
+			name: "basic resume", // Both target shards
+			req: &vtctldatapb.VDiffResumeRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+			},
+		},
+		{
+			name: "resume on first shard",
+			req: &vtctldatapb.VDiffResumeRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				TargetShards:   targetKeyspace.ShardNames[:1],
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+			},
+		},
+		{
+			name: "resume on invalid shard",
+			req: &vtctldatapb.VDiffResumeRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				TargetShards:   []string{"0"},
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			wantErr: fmt.Sprintf("specified target shard 0 not a valid target for workflow %s", workflow),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for tab, vdr := range tt.expectedVDiffRequests {
+				env.tmc.expectVDiffRequest(tab, vdr)
+			}
+			got, err := env.ws.VDiffResume(ctx, tt.req)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, got)
+			}
+			env.tmc.confirmVDiffRequests(t)
+		})
+	}
+}
+
+func TestVDiffStop(t *testing.T) {
+	ctx := context.Background()
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	workflow := "testwf"
+	uuid := uuid.New().String()
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+
+	env.tmc.strict = true
+	action := string(vdiff.StopAction)
+
+	tests := []struct {
+		name                  string
+		req                   *vtctldatapb.VDiffStopRequest                // vtctld requests
+		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse // tablet requests
+		wantErr               string
+	}{
+		{
+			name: "basic stop", // Both target shards
+			req: &vtctldatapb.VDiffStopRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+			},
+		},
+		{
+			name: "stop on first shard",
+			req: &vtctldatapb.VDiffStopRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				TargetShards:   targetKeyspace.ShardNames[:1],
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+			},
+		},
+		{
+			name: "stop on invalid shard",
+			req: &vtctldatapb.VDiffStopRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				TargetShards:   []string{"0"},
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			wantErr: fmt.Sprintf("specified target shard 0 not a valid target for workflow %s", workflow),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for tab, vdr := range tt.expectedVDiffRequests {
+				env.tmc.expectVDiffRequest(tab, vdr)
+			}
+			got, err := env.ws.VDiffStop(ctx, tt.req)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, got)
+			}
+			env.tmc.confirmVDiffRequests(t)
 		})
 	}
 }
