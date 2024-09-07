@@ -3244,11 +3244,14 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return nil, err
 		}
 
-		slices.Sort(req.GetCells())
-		slices.Sort(allCells)
-		if !slices.Equal(req.GetCells(), allCells) {
-			return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"requesting read traffic for multi-tenant migrations must include all cells"))
+		if len(req.GetCells()) > 0 {
+			slices.Sort(req.GetCells())
+			slices.Sort(allCells)
+			if !slices.Equal(req.GetCells(), allCells) {
+				return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"requesting switch of read traffic for multi-tenant migrations must include all cells; all cells: %v, requested cells: %v",
+					strings.Join(allCells, ","), strings.Join(req.GetCells(), ",")))
+			}
 		}
 	}
 
