@@ -5155,6 +5155,9 @@ func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.Work
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keep_data", req.KeepData)
+	span.Annotate("keep_routing_rules", req.KeepRoutingRules)
+	span.Annotate("shards", req.Shards)
 
 	resp, err = s.ws.WorkflowDelete(ctx, req)
 	return resp, err
@@ -5186,6 +5189,7 @@ func (s *VtctldServer) WorkflowSwitchTraffic(ctx context.Context, req *vtctldata
 	span.Annotate("tablet-types", req.TabletTypes)
 	span.Annotate("direction", req.Direction)
 	span.Annotate("enable-reverse-replication", req.EnableReverseReplication)
+	span.Annotate("force", req.Force)
 
 	resp, err = s.ws.WorkflowSwitchTraffic(ctx, req)
 	return resp, err

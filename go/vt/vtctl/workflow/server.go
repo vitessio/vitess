@@ -3055,6 +3055,16 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 
 // WorkflowSwitchTraffic switches traffic in the direction passed for specified tablet types.
 func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.WorkflowSwitchTraffic")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("tablet-types", req.TabletTypes)
+	span.Annotate("direction", req.Direction)
+	span.Annotate("enable-reverse-replication", req.EnableReverseReplication)
+	span.Annotate("force", req.Force)
+
 	var (
 		dryRunResults                     []string
 		rdDryRunResults, wrDryRunResults  *[]string
