@@ -209,7 +209,7 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	}
 
 	if dc.currentResult >= len(dc.expect) {
-		msg := "???????????? DBClientMock: query: %s, no more requests are expected"
+		msg := "DBClientMock: query: %s, no more requests are expected"
 		if dc.Tag != "" {
 			msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
 		}
@@ -218,7 +218,7 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	result := dc.expect[dc.currentResult]
 	if result.re == nil {
 		if query != result.query {
-			msg := "!!!!!!!!!!!! DBClientMock: query: \n%s, want \n%s"
+			msg := "DBClientMock: query: \n%s, want \n%s"
 			if dc.Tag != "" {
 				msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
 			}
@@ -226,7 +226,7 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		}
 	} else {
 		if !result.re.MatchString(query) {
-			msg := "**************** DBClientMock: query: %s, must match %s"
+			msg := "DBClientMock: query: %s, must match %s"
 			if dc.Tag != "" {
 				msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
 			}

@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -50,8 +48,6 @@ type relayLog struct {
 }
 
 func newRelayLog(ctx context.Context, maxItems, maxSize int) *relayLog {
-	// temporary logging to debug dynamic flags, to be removed in a future PR
-	log.Infof("Dynamic Config Debug: Relay log config params: maxItems: %d, maxSize: %d", maxItems, maxSize)
 	rl := &relayLog{
 		ctx:      ctx,
 		maxItems: maxItems,
