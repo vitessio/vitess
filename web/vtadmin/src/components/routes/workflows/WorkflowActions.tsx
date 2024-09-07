@@ -45,7 +45,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({ refetchWorkflows, key
                 }
                 body={
                     <div className="text-sm mt-3">
-                        Starts the <span className="font-mono bg-gray-300">{name}</span> workflow.
+                        Start the <span className="font-mono bg-gray-300">{name}</span> workflow.
                     </div>
                 }
             />
@@ -68,7 +68,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({ refetchWorkflows, key
                 }
                 body={
                     <div className="text-sm mt-3">
-                        Stops the <span className="font-mono bg-gray-300">{name}</span> workflow.
+                        Stop the <span className="font-mono bg-gray-300">{name}</span> workflow.
                     </div>
                 }
             />
