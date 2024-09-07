@@ -727,7 +727,7 @@ func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace stri
 	if err := ts.TopoServer().UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, nil, access == disallowWrites /* disable */); err != nil {
 		return err
 	}
-	return ts.ws.refreshPrimaryTablets(ctx, shards)
+	return ts.ws.refreshPrimaryTablets(ctx, shards, ts.options != nil && ts.options.WarnOnPartialTabletRefresh)
 }
 
 func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {

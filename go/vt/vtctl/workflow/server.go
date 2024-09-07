@@ -2983,7 +2983,7 @@ func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards
 }
 
 // refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
-func (s *Server) refreshPrimaryTablets(ctx context.Context, shards []*topo.ShardInfo) error {
+func (s *Server) refreshPrimaryTablets(ctx context.Context, shards []*topo.ShardInfo, force bool) error {
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	for _, si := range shards {
@@ -2997,9 +2997,11 @@ func (s *Server) refreshPrimaryTablets(ctx context.Context, shards []*topo.Shard
 			}
 
 			if err := s.tmc.RefreshState(ctx, ti.Tablet); err != nil {
-				rec.RecordError(err)
-			} else {
-				s.Logger().Infof("%v responded", topoproto.TabletAliasString(si.PrimaryAlias))
+				if !force {
+					rec.RecordError(err)
+					return
+				}
+				s.Logger().Warningf("%v encountered error on tablet refresh: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 			}
 		}(si)
 	}
@@ -3089,13 +3091,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, err
 	}
 
-	if req.GetForce() {
-		if ts.options == nil {
-			ts.options = &vtctldatapb.WorkflowOptions{}
-		}
-		ts.options.WarnOnPartialTabletRefresh = true
-	}
-
 	if startState.WorkflowType == TypeMigrate {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
 	}
@@ -3121,6 +3116,14 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse traffic for multi-tenant migrations")
 		}
 	}
+
+	if req.GetForce() {
+		if ts.options == nil {
+			ts.options = &vtctldatapb.WorkflowOptions{}
+		}
+		ts.options.WarnOnPartialTabletRefresh = true
+	}
+
 	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.GetShards(), req.GetForce())
 	if err != nil {
 		return nil, err
@@ -3275,7 +3278,6 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 	}
 
-	// If journals exist notify user and fail.
 	journalsExist, _, err := ts.checkJournals(ctx)
 	if err != nil && !req.GetForce() {
 		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to read journal in the %s keyspace", ts.SourceKeyspaceName()), err)
@@ -3283,6 +3285,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	if journalsExist {
 		s.Logger().Infof("Found a previous journal entry for %d", ts.id)
 	}
+
 	var sw iswitcher
 	if req.DryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
