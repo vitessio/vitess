@@ -177,7 +177,7 @@ func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspac
 		Shard:    shard,
 		KeyRange: &topodatapb.KeyRange{},
 		Type:     tabletType,
-		Hostname: "localhost", // Without a hostname the RefreshState call is skipped.
+		Hostname: "localhost", // Without a hostname the RefreshState call is skipped
 		PortMap: map[string]int32{
 			"test": int32(id),
 		},
@@ -279,6 +279,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
+		vdiffRequests:                      make(map[uint32]*vdiffRequestResponse),
 		refreshStateErrors:                 make(map[uint32]error),
 		env:                                env,
 	}
@@ -610,6 +611,7 @@ func (tmc *testTMClient) VReplicationWaitForPos(ctx context.Context, tablet *top
 func (tmc *testTMClient) SetRefreshStateError(tablet *topodatapb.Tablet, err error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
+
 	if tmc.refreshStateErrors == nil {
 		tmc.refreshStateErrors = make(map[uint32]error)
 	}
@@ -619,6 +621,7 @@ func (tmc *testTMClient) SetRefreshStateError(tablet *topodatapb.Tablet, err err
 func (tmc *testTMClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
+
 	if tmc.refreshStateErrors == nil {
 		tmc.refreshStateErrors = make(map[uint32]error)
 	}
