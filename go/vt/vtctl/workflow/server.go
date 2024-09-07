@@ -945,6 +945,10 @@ ORDER BY
 	}, nil
 }
 
+func (s *Server) GetWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *State, error) {
+	return s.getWorkflowState(ctx, targetKeyspace, workflowName)
+}
+
 func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *State, error) {
 	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 	if err != nil {
