@@ -177,6 +177,7 @@ func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspac
 		Shard:    shard,
 		KeyRange: &topodatapb.KeyRange{},
 		Type:     tabletType,
+		Hostname: "localhost", // Without a hostname the RefreshState call is skipped.
 		PortMap: map[string]int32{
 			"test": int32(id),
 		},
@@ -255,6 +256,7 @@ type testTMClient struct {
 	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
 	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
 	primaryPositions                   map[uint32]string
+	refreshStateErrors                 map[uint32]error
 
 	// Stack of ReadVReplicationWorkflowsResponse to return, in order, for each shard
 	readVReplicationWorkflowsResponses map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
@@ -272,6 +274,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
+		refreshStateErrors:                 make(map[uint32]error),
 		env:                                env,
 	}
 }
@@ -551,6 +554,24 @@ func (tmc *testTMClient) WaitForPosition(ctx context.Context, tablet *topodatapb
 
 func (tmc *testTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	return nil
+}
+
+func (tmc *testTMClient) SetRefreshStateError(tablet *topodatapb.Tablet, err error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if tmc.refreshStateErrors == nil {
+		tmc.refreshStateErrors = make(map[uint32]error)
+	}
+	tmc.refreshStateErrors[tablet.Alias.Uid] = err
+}
+
+func (tmc *testTMClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if tmc.refreshStateErrors == nil {
+		tmc.refreshStateErrors = make(map[uint32]error)
+	}
+	return tmc.refreshStateErrors[tablet.Alias.Uid]
 }
 
 func (tmc *testTMClient) AddVReplicationWorkflowsResponse(key string, resp *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse) {
