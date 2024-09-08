@@ -3144,12 +3144,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 	}
 
-	if req.GetForce() {
-		if ts.options == nil {
-			ts.options = &vtctldatapb.WorkflowOptions{}
-		}
-		ts.options.WarnOnPartialTabletRefresh = true
-	}
+	ts.force = req.GetForce()
 
 	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.GetShards(), req.GetForce())
 	if err != nil {

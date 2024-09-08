@@ -47894,9 +47894,6 @@ export namespace vtctldata {
 
         /** WorkflowOptions shards */
         shards?: (string[]|null);
-
-        /** WorkflowOptions warn_on_partial_tablet_refresh */
-        warn_on_partial_tablet_refresh?: (boolean|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -47916,9 +47913,6 @@ export namespace vtctldata {
 
         /** WorkflowOptions shards. */
         public shards: string[];
-
-        /** WorkflowOptions warn_on_partial_tablet_refresh. */
-        public warn_on_partial_tablet_refresh: boolean;
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.

@@ -246,7 +246,6 @@ func (m *WorkflowOptions) CloneVT() *WorkflowOptions {
 	r := new(WorkflowOptions)
 	r.TenantId = m.TenantId
 	r.StripShardedAutoIncrement = m.StripShardedAutoIncrement
-	r.WarnOnPartialTabletRefresh = m.WarnOnPartialTabletRefresh
 	if rhs := m.Shards; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -6579,16 +6578,6 @@ func (m *WorkflowOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
-	}
-	if m.WarnOnPartialTabletRefresh {
-		i--
-		if m.WarnOnPartialTabletRefresh {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x20
 	}
 	if len(m.Shards) > 0 {
 		for iNdEx := len(m.Shards) - 1; iNdEx >= 0; iNdEx-- {
@@ -21309,9 +21298,6 @@ func (m *WorkflowOptions) SizeVT() (n int) {
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
-	if m.WarnOnPartialTabletRefresh {
-		n += 2
-	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -29493,26 +29479,6 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Shards = append(m.Shards, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
-		case 4:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field WarnOnPartialTabletRefresh", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.WarnOnPartialTabletRefresh = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

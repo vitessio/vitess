@@ -225,7 +225,10 @@ type trafficSwitcher struct {
 	isPartialMigration bool
 	workflow           string
 
-	// if frozen is true, the rest of the fields are not set.
+	// Should we continue of we encounter some potentially non-fatal errors such
+	// as partial tablet refreshes?
+	force bool
+	// If frozen is true, the rest of the fields are not set.
 	frozen           bool
 	reverseWorkflow  string
 	id               int64
@@ -477,7 +480,7 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 		if isPartial {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
-			if ts.options != nil && ts.options.WarnOnPartialTabletRefresh {
+			if ts.options != nil && ts.force {
 				log.Warning(msg)
 				return nil
 			} else {
@@ -501,7 +504,7 @@ func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
 		if isPartial {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
-			if ts.options != nil && ts.options.WarnOnPartialTabletRefresh {
+			if ts.options != nil && ts.force {
 				log.Warning(msg)
 				return nil
 			} else {
@@ -727,7 +730,7 @@ func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace stri
 	if err := ts.TopoServer().UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, nil, access == disallowWrites /* disable */); err != nil {
 		return err
 	}
-	return ts.ws.refreshPrimaryTablets(ctx, shards, ts.options != nil && ts.options.WarnOnPartialTabletRefresh)
+	return ts.ws.refreshPrimaryTablets(ctx, shards, ts.options != nil && ts.force)
 }
 
 func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
@@ -1063,7 +1066,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context) error {
 			if isPartial {
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
 					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
-				if ts.options != nil && ts.options.WarnOnPartialTabletRefresh {
+				if ts.options != nil && ts.force {
 					log.Warning(msg)
 					return nil
 				} else {
@@ -1086,7 +1089,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context) error {
 			if isPartial {
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
 					target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
-				if ts.options != nil && ts.options.WarnOnPartialTabletRefresh {
+				if ts.options != nil && ts.force {
 					log.Warning(msg)
 					return nil
 				} else {
