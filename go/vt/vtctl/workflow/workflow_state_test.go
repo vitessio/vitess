@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -30,8 +28,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func setupMoveTables(t *testing.T) (context.Context, *testEnv) {
-	ctx := context.Background()
+func setupMoveTables(t *testing.T, ctx context.Context) *testEnv {
 	schema := map[string]*tabletmanagerdata.SchemaDefinition{
 		"t1": {
 			TableDefinitions: []*tabletmanagerdata.TableDefinition{
@@ -90,14 +87,15 @@ func setupMoveTables(t *testing.T) (context.Context, *testEnv) {
 	}
 	te.updateTableRoutingRules(t, ctx, nil, []string{"t1"},
 		"source", te.targetKeyspace.KeyspaceName, "source")
-	return ctx, te
+	return te
 }
 
+// TestWorkflowStateMoveTables tests the logic used to determine the state of a MoveTables workflow based on the
+// routing rules. We setup two workflows with the same table in both source and target keyspaces.
 func TestWorkflowStateMoveTables(t *testing.T) {
-	ctx, te := setupMoveTables(t)
+	ctx := context.Background()
+	te := setupMoveTables(t, ctx)
 	require.NotNil(t, te)
-	rules, _ := te.ts.GetRoutingRules(ctx)
-	log.Infof("rules: %v", rules)
 	type testCase struct {
 		name                   string
 		wf1SwitchedTabletTypes []topodatapb.TabletType
