@@ -60,6 +60,43 @@ func breakExpressionInLHSandRHS(
 	return
 }
 
+// original query:
+// select a.v1 + b.v2 + c.v3 from a, b, c where a.v1 = b.v2 and b.v2 = c.v3
+
+// select a.v1 from a
+// select a.v1 + b.v2 a c1, b.v2 from (values ::a) a(v1), b where a.v1 = b.v2
+// select d.c1 + c.v3 from (values ::d) d(c1, v2), c where d.v2 = c.v3
+
+func valuesJoinExpressionSplit(ctx *plancontext.PlanningContext, expr sqlparser.Expr, lhs semantics.TableSet, tableName string) (lhsExprs []*sqlparser.AliasedExpr, rhsExpr sqlparser.Expr) {
+	var replace sqlparser.Expr
+	rhsExpr = sqlparser.CopyOnRewrite(expr, func(node, parent sqlparser.SQLNode) bool {
+		nodeExpr, ok := node.(sqlparser.Expr)
+		if !ok {
+			return true
+		}
+
+		deps := ctx.SemTable.RecursiveDeps(nodeExpr)
+		if !deps.IsSolvedBy(lhs) || deps.IsEmpty() {
+			return true
+		}
+
+		alias := ""
+		if col, ok := nodeExpr.(*sqlparser.ColName); !ok {
+			alias = ctx.GetUniqueColumnName()
+			col = sqlparser.NewColNameWithQualifier(alias, sqlparser.NewTableName(tableName))
+			replace = col
+		}
+		lhsExprs = append(lhsExprs, sqlparser.NewAliasedExpr(nodeExpr, alias))
+		return false
+	}, func(cursor *sqlparser.CopyOnWriteCursor) {
+		if replace != nil {
+			cursor.Replace(replace)
+			replace = nil
+		}
+	}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+	return
+}
+
 // nothingNeedsFetching will return true if all the nodes in the expression are constant
 func nothingNeedsFetching(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (constant bool) {
 	constant = true

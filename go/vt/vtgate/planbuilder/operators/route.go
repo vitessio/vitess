@@ -119,8 +119,14 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 	nr := &NoneRouting{keyspace: ks}
 
-	if b := ctx.IsConstantBool(expr); b != nil && !*b {
-		return nr
+	if b := ctx.IsConstantBool(expr); b != nil {
+		if *b {
+			// if it's a constant true, we can just return the routing as is
+			return r
+		} else {
+			// if it's a constant false, we can return a NoneRouting
+			return nr
+		}
 	}
 
 	exit := func() Routing {

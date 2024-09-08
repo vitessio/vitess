@@ -18,6 +18,7 @@ package plancontext
 
 import (
 	"io"
+	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -28,10 +29,14 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+const columnPrefix = "_vtcol"
+
 type PlanningContext struct {
 	ReservedVars *sqlparser.ReservedVars
 	SemTable     *semantics.SemTable
 	VSchema      VSchema
+
+	reservedColCount int
 
 	// joinPredicates maps each original join predicate (key) to a slice of
 	// variations of the RHS predicates (value). This map is used to handle
@@ -70,6 +75,9 @@ type PlanningContext struct {
 	// This is a stack of CTEs being built. It's used when we have CTEs inside CTEs,
 	// to remember which is the CTE currently being assembled
 	CurrentCTE []*ContextCTE
+
+	// Columns contains the columns that are needed by ValuesJoin
+	Columns map[string][]string
 
 	// mirror contains a mirrored clone of this planning context.
 	mirror *PlanningContext
@@ -112,7 +120,14 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
 		Statement:         stmt,
+		Columns:           map[string][]string{},
 	}, nil
+}
+
+// GetUniqueColumnName generates a unique column name for the current planning context.
+func (ctx *PlanningContext) GetUniqueColumnName() string {
+	ctx.reservedColCount++
+	return columnPrefix + strconv.Itoa(ctx.reservedColCount)
 }
 
 // GetReservedArgumentFor retrieves a reserved argument name for a given expression.
@@ -136,6 +151,10 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 	ctx.ReservedArguments[expr] = bvName
 
 	return bvName
+}
+
+func (ctx *PlanningContext) GetReservedArgumentForString(s string) string {
+	return ctx.ReservedVars.ReserveVariable(s)
 }
 
 // ShouldSkip determines if a given expression should be ignored in the SQL output building.
@@ -456,6 +475,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		OuterTables:       ctx.OuterTables,
 		CurrentCTE:        ctx.CurrentCTE,
 		emptyEnv:          ctx.emptyEnv,
+		Columns:           ctx.Columns,
 		isMirrored:        true,
 	}
 	return ctx.mirror

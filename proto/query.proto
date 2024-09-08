@@ -219,7 +219,11 @@ enum Type {
   // Properties: 35, IsQuoted.
   VECTOR = 2083;
   // RAW specifies a type which won't be quoted but the value used as-is while encoding.
+  // Properties: 36, None.
   RAW = 2084;
+  // ROW_TUPLE represents multiple rows.
+  // Properties: 37, None.
+  ROW_TUPLE = 2085;
 }
 
 // Value represents a typed value.

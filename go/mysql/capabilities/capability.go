@@ -50,6 +50,7 @@ const (
 	ReplicaTerminologyCapability                                        // Supported in 8.0.26 and above, using SHOW REPLICA STATUS and all variations.
 	BinaryLogStatus                                                     // Supported in 8.2.0 and above, uses SHOW BINARY LOG STATUS
 	RestrictFKOnNonStandardKey                                          // Supported in 8.4.0 and above, restricts usage of non-standard indexes for foreign keys.
+	ValuesRow                                                           // Supported in 8.0.19 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-19.html
 )
 
 type CapableOf func(capability FlavorCapability) (bool, error)
@@ -125,6 +126,8 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 		return atLeast(8, 2, 0)
 	case RestrictFKOnNonStandardKey:
 		return atLeast(8, 4, 0)
+	case ValuesRow:
+		return atLeast(8, 0, 19)
 	default:
 		return false, nil
 	}

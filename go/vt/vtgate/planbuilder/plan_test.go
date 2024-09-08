@@ -260,7 +260,7 @@ func (s *planTestSuite) addPKsProvided(vschema *vindexes.VSchema, ks string, tbl
 	}
 }
 
-func (s *planTestSuite) TestSystemTables57() {
+func (s *planTestSuite) Test57MySQLMode() {
 	// first we move everything to use 5.7 logic
 	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: "5.7.9",
@@ -271,6 +271,7 @@ func (s *planTestSuite) TestSystemTables57() {
 		Env: env,
 	}
 	s.testFile("info_schema57_cases.json", vschemaWrapper, false)
+	s.testFile("from_cases57.json", vschemaWrapper, false)
 }
 
 func (s *planTestSuite) TestSysVarSetDisabled() {
