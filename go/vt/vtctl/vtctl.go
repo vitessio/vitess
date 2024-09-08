@@ -3827,9 +3827,11 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				Workflow:                  workflow,
 				Cells:                     *cells,
 				TabletTypes:               tabletTypes,
-				TabletSelectionPreference: tsp,
-				OnDdl:                     binlogdatapb.OnDDLAction(onddl),
-				State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt), // We don't allow changing this in the client command
+				TabletSelectionPreference: &tsp,
+			}
+			if onddl != int32(textutil.SimulatedNullInt) {
+				v := binlogdatapb.OnDDLAction(onddl)
+				rpcReq.(*tabletmanagerdatapb.UpdateVReplicationWorkflowRequest).OnDdl = &v
 			}
 		}
 		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq, *shards) // Only update currently uses the new RPC path

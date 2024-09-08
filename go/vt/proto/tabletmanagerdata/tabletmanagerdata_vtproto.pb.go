@@ -2314,9 +2314,6 @@ func (m *UpdateVReplicationWorkflowRequest) CloneVT() *UpdateVReplicationWorkflo
 	}
 	r := new(UpdateVReplicationWorkflowRequest)
 	r.Workflow = m.Workflow
-	r.TabletSelectionPreference = m.TabletSelectionPreference
-	r.OnDdl = m.OnDdl
-	r.State = m.State
 	if rhs := m.Cells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -2326,6 +2323,18 @@ func (m *UpdateVReplicationWorkflowRequest) CloneVT() *UpdateVReplicationWorkflo
 		tmpContainer := make([]topodata.TabletType, len(rhs))
 		copy(tmpContainer, rhs)
 		r.TabletTypes = tmpContainer
+	}
+	if rhs := m.TabletSelectionPreference; rhs != nil {
+		tmpVal := *rhs
+		r.TabletSelectionPreference = &tmpVal
+	}
+	if rhs := m.OnDdl; rhs != nil {
+		tmpVal := *rhs
+		r.OnDdl = &tmpVal
+	}
+	if rhs := m.State; rhs != nil {
+		tmpVal := *rhs
+		r.State = &tmpVal
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2361,9 +2370,6 @@ func (m *UpdateVReplicationWorkflowsRequest) CloneVT() *UpdateVReplicationWorkfl
 	}
 	r := new(UpdateVReplicationWorkflowsRequest)
 	r.AllWorkflows = m.AllWorkflows
-	r.State = m.State
-	r.Message = m.Message
-	r.StopPosition = m.StopPosition
 	if rhs := m.IncludeWorkflows; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -2373,6 +2379,18 @@ func (m *UpdateVReplicationWorkflowsRequest) CloneVT() *UpdateVReplicationWorkfl
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
 		r.ExcludeWorkflows = tmpContainer
+	}
+	if rhs := m.State; rhs != nil {
+		tmpVal := *rhs
+		r.State = &tmpVal
+	}
+	if rhs := m.Message; rhs != nil {
+		tmpVal := *rhs
+		r.Message = &tmpVal
+	}
+	if rhs := m.StopPosition; rhs != nil {
+		tmpVal := *rhs
+		r.StopPosition = &tmpVal
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -8400,18 +8418,18 @@ func (m *UpdateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.State != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.State))
+	if m.State != nil {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.State))
 		i--
 		dAtA[i] = 0x30
 	}
-	if m.OnDdl != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.OnDdl))
+	if m.OnDdl != nil {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.OnDdl))
 		i--
 		dAtA[i] = 0x28
 	}
-	if m.TabletSelectionPreference != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TabletSelectionPreference))
+	if m.TabletSelectionPreference != nil {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.TabletSelectionPreference))
 		i--
 		dAtA[i] = 0x20
 	}
@@ -8528,22 +8546,22 @@ func (m *UpdateVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.StopPosition) > 0 {
-		i -= len(m.StopPosition)
-		copy(dAtA[i:], m.StopPosition)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.StopPosition)))
+	if m.StopPosition != nil {
+		i -= len(*m.StopPosition)
+		copy(dAtA[i:], *m.StopPosition)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(*m.StopPosition)))
 		i--
 		dAtA[i] = 0x32
 	}
-	if len(m.Message) > 0 {
-		i -= len(m.Message)
-		copy(dAtA[i:], m.Message)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Message)))
+	if m.Message != nil {
+		i -= len(*m.Message)
+		copy(dAtA[i:], *m.Message)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(*m.Message)))
 		i--
 		dAtA[i] = 0x2a
 	}
-	if m.State != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.State))
+	if m.State != nil {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.State))
 		i--
 		dAtA[i] = 0x20
 	}
@@ -11457,14 +11475,14 @@ func (m *UpdateVReplicationWorkflowRequest) SizeVT() (n int) {
 		}
 		n += 1 + protohelpers.SizeOfVarint(uint64(l)) + l
 	}
-	if m.TabletSelectionPreference != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.TabletSelectionPreference))
+	if m.TabletSelectionPreference != nil {
+		n += 1 + protohelpers.SizeOfVarint(uint64(*m.TabletSelectionPreference))
 	}
-	if m.OnDdl != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.OnDdl))
+	if m.OnDdl != nil {
+		n += 1 + protohelpers.SizeOfVarint(uint64(*m.OnDdl))
 	}
-	if m.State != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.State))
+	if m.State != nil {
+		n += 1 + protohelpers.SizeOfVarint(uint64(*m.State))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -11505,15 +11523,15 @@ func (m *UpdateVReplicationWorkflowsRequest) SizeVT() (n int) {
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
-	if m.State != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.State))
+	if m.State != nil {
+		n += 1 + protohelpers.SizeOfVarint(uint64(*m.State))
 	}
-	l = len(m.Message)
-	if l > 0 {
+	if m.Message != nil {
+		l = len(*m.Message)
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	l = len(m.StopPosition)
-	if l > 0 {
+	if m.StopPosition != nil {
+		l = len(*m.StopPosition)
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -24576,7 +24594,7 @@ func (m *UpdateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletSelectionPreference", wireType)
 			}
-			m.TabletSelectionPreference = 0
+			var v TabletSelectionPreference
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -24586,16 +24604,17 @@ func (m *UpdateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TabletSelectionPreference |= TabletSelectionPreference(b&0x7F) << shift
+				v |= TabletSelectionPreference(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			m.TabletSelectionPreference = &v
 		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field OnDdl", wireType)
 			}
-			m.OnDdl = 0
+			var v binlogdata.OnDDLAction
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -24605,16 +24624,17 @@ func (m *UpdateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.OnDdl |= binlogdata.OnDDLAction(b&0x7F) << shift
+				v |= binlogdata.OnDDLAction(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			m.OnDdl = &v
 		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
 			}
-			m.State = 0
+			var v binlogdata.VReplicationWorkflowState
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -24624,11 +24644,12 @@ func (m *UpdateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.State |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+				v |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			m.State = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -24855,7 +24876,7 @@ func (m *UpdateVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
 			}
-			m.State = 0
+			var v binlogdata.VReplicationWorkflowState
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -24865,11 +24886,12 @@ func (m *UpdateVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.State |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+				v |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			m.State = &v
 		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Message", wireType)
@@ -24900,7 +24922,8 @@ func (m *UpdateVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Message = string(dAtA[iNdEx:postIndex])
+			s := string(dAtA[iNdEx:postIndex])
+			m.Message = &s
 			iNdEx = postIndex
 		case 6:
 			if wireType != 2 {
@@ -24932,7 +24955,8 @@ func (m *UpdateVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.StopPosition = string(dAtA[iNdEx:postIndex])
+			s := string(dAtA[iNdEx:postIndex])
+			m.StopPosition = &s
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

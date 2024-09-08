@@ -21,13 +21,13 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	"vitess.io/vitess/go/textutil"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -144,8 +144,7 @@ func commandUpdateState(cmd *cobra.Command, args []string) error {
 			Workflow:    workflowUpdateOptions.Workflow,
 			Cells:       textutil.SimulatedNullStringSlice,
 			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
-			State:       state,
+			State:       &state,
 		},
 	}
 

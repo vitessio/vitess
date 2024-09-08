@@ -495,15 +495,15 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
+		running := binlogdatapb.VReplicationWorkflowState_Running
 		if _, err := mz.tmc.UpdateVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow: mz.ms.Workflow,
-			State:    binlogdatapb.VReplicationWorkflowState_Running,
+			State:    &running,
 			// Don't change anything else, so pass simulated NULLs.
 			Cells: textutil.SimulatedNullStringSlice,
 			TabletTypes: []topodatapb.TabletType{
 				topodatapb.TabletType(textutil.SimulatedNullInt),
 			},
-			OnDdl: binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
 		}); err != nil {
 			return vterrors.Wrap(err, "failed to update workflow")
 		}

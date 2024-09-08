@@ -72,7 +72,7 @@ var (
 				if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(updateOptions.OnDDL)]; !ok {
 					return fmt.Errorf("invalid on-ddl value: %s", updateOptions.OnDDL)
 				}
-			} // Simulated NULL will need to be handled in command
+			}
 			if !changes {
 				return fmt.Errorf("no configuration options specified to update")
 			}
@@ -88,12 +88,11 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 	// We've already validated any provided value, if one WAS provided.
 	// Now we need to do the mapping from the string representation to
 	// the enum value.
-	onddl := int32(textutil.SimulatedNullInt) // Simulated NULL when no value provided
+	onddl := int32(textutil.SimulatedNullInt)
 	if val, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(updateOptions.OnDDL)]; ok {
 		onddl = val
 	}
 
-	// Simulated NULL when no value is provided.
 	tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
 	if cmd.Flags().Lookup("tablet-types-in-order").Changed {
 		if updateOptions.TabletTypesInPreferenceOrder {
@@ -109,10 +108,12 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			Workflow:                  baseOptions.Workflow,
 			Cells:                     updateOptions.Cells,
 			TabletTypes:               updateOptions.TabletTypes,
-			TabletSelectionPreference: tsp,
-			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
-			State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt), // We don't allow changing this in the client command
+			TabletSelectionPreference: &tsp,
 		},
+	}
+	if onddl != int32(textutil.SimulatedNullInt) {
+		v := binlogdatapb.OnDDLAction(onddl)
+		req.TabletRequest.OnDdl = &v
 	}
 
 	resp, err := common.GetClient().WorkflowUpdate(common.GetCommandCtx(), req)

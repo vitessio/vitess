@@ -397,8 +397,7 @@ func TestWorkflowUpdate(t *testing.T) {
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
-	nullSlice := textutil.SimulatedNullStringSlice                   // Used to represent a non-provided value
-	nullOnDDL := binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) // Used to represent a non-provided value
+	nullSlice := textutil.SimulatedNullStringSlice // Used to represent a non-provided value
 	tests := []struct {
 		name        string
 		cells       []string
@@ -411,21 +410,18 @@ func TestWorkflowUpdate(t *testing.T) {
 			name:        "no flags",
 			cells:       nullSlice,
 			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			onDDL:       nullOnDDL,
 			wantErr:     "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values",
 		},
 		{
 			name:        "only cells",
 			cells:       []string{"zone1"},
 			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			onDDL:       nullOnDDL,
 			output:      "The following workflow fields will be updated:\n  cells=\"zone1\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 		{
 			name:        "only tablet types",
 			cells:       nullSlice,
 			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
-			onDDL:       nullOnDDL,
 			output:      "The following workflow fields will be updated:\n  tablet_types=\"primary,replica\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 		{
@@ -449,7 +445,7 @@ func TestWorkflowUpdate(t *testing.T) {
 			rpcReq := &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Cells:       tcase.cells,
 				TabletTypes: tcase.tabletTypes,
-				OnDdl:       tcase.onDDL,
+				OnDdl:       &tcase.onDDL,
 			}
 
 			_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, rpcReq, nil)

@@ -80,8 +80,7 @@ func commandUpdateState(cmd *cobra.Command, args []string) error {
 			Workflow:    baseOptions.Workflow,
 			Cells:       textutil.SimulatedNullStringSlice,
 			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
-			State:       state,
+			State:       &state,
 		},
 	}
 

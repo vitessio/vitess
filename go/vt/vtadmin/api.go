@@ -34,7 +34,6 @@ import (
 
 	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/sets"
@@ -1718,14 +1717,12 @@ func (api *API) StartWorkflow(ctx context.Context, req *vtadminpb.StartWorkflowR
 		return nil, err
 	}
 
+	running := binlogdatapb.VReplicationWorkflowState_Running
 	return c.Vtctld.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: req.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-			Workflow:    req.Workflow,
-			Cells:       textutil.SimulatedNullStringSlice,
-			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
-			State:       binlogdatapb.VReplicationWorkflowState_Running,
+			Workflow: req.Workflow,
+			State:    &running,
 		},
 	})
 }
@@ -1748,14 +1745,12 @@ func (api *API) StopWorkflow(ctx context.Context, req *vtadminpb.StopWorkflowReq
 		return nil, nil
 	}
 
+	stopped := binlogdatapb.VReplicationWorkflowState_Stopped
 	return c.Vtctld.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: req.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-			Workflow:    req.Workflow,
-			Cells:       textutil.SimulatedNullStringSlice,
-			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
-			State:       binlogdatapb.VReplicationWorkflowState_Stopped,
+			Workflow: req.Workflow,
+			State:    &stopped,
 		},
 	})
 }
