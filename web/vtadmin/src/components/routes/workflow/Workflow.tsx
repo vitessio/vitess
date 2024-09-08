@@ -71,8 +71,13 @@ export const Workflow = () => {
                                 {data?.workflow?.source?.shards?.length! > 1 ? 'Source Shards: ' : 'Source Shard: '}
                                 {data?.workflow?.source?.shards?.map((shard) => (
                                     <code key={`${keyspace}/${shard}`}>
-                                        <ShardLink clusterID={clusterID} keyspace={keyspace} shard={shard}>
-                                            {`${keyspace}/${shard} `}
+                                        <ShardLink
+                                            className="mr-1"
+                                            clusterID={clusterID}
+                                            keyspace={keyspace}
+                                            shard={shard}
+                                        >
+                                            {`${keyspace}/${shard}`}
                                         </ShardLink>
                                     </code>
                                 ))}
@@ -81,8 +86,13 @@ export const Workflow = () => {
                                 {data?.workflow?.target?.shards?.length! > 1 ? 'Target Shards: ' : 'Target Shard: '}
                                 {data?.workflow?.target?.shards?.map((shard) => (
                                     <code key={`${keyspace}/${shard}`}>
-                                        <ShardLink clusterID={clusterID} keyspace={keyspace} shard={shard}>
-                                            {`${keyspace}/${shard} `}
+                                        <ShardLink
+                                            className="mr-1"
+                                            clusterID={clusterID}
+                                            keyspace={keyspace}
+                                            shard={shard}
+                                        >
+                                            {`${keyspace}/${shard}`}
                                         </ShardLink>
                                     </code>
                                 ))}

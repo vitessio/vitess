@@ -288,21 +288,21 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                     title="Table Copy State"
                 />
             )}
-            {streams.length <= 8 && (
-                <>
-                    <h3 className="mt-8 mb-4">Recent Logs</h3>
-                    {streams.map((stream) => (
-                        <div className="mt-2" key={stream.key}>
-                            <DataTable
-                                columns={LOG_COLUMNS}
-                                data={orderBy(stream.logs, 'id', 'desc')}
-                                renderRows={renderLogRows}
-                                pageSize={10}
-                                title={stream.key!}
-                            />
-                        </div>
-                    ))}
-                </>
+            <h3 className="mt-8 mb-4">Recent Logs</h3>
+            {streams.length <= 8 ? (
+                streams.map((stream) => (
+                    <div className="mt-2" key={stream.key}>
+                        <DataTable
+                            columns={LOG_COLUMNS}
+                            data={orderBy(stream.logs, 'id', 'desc')}
+                            renderRows={renderLogRows}
+                            pageSize={10}
+                            title={stream.key!}
+                        />
+                    </div>
+                ))
+            ) : (
+                <span>Recent logs from streams are not displayed due to the large number of shards.</span>
             )}
         </div>
     );

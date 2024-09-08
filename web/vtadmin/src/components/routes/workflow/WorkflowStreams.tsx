@@ -16,7 +16,6 @@
 
 import React from 'react';
 
-import { useWorkflow } from '../../../hooks/api';
 import { WorkflowStreamsLagChart } from '../../charts/WorkflowStreamsLagChart';
 import { env } from '../../../util/env';
 
