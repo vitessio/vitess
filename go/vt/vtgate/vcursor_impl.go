@@ -930,15 +930,26 @@ func (vc *vcursorImpl) SetPriority(priority string) {
 }
 
 func (vc *vcursorImpl) SetExecQueryTimeout(timeout *int) {
-	if timeout == nil {
+	// Determine the effective timeout: use passed timeout if non-nil, otherwise use session's query timeout if available
+	var execTimeout *int
+	if timeout != nil {
+		execTimeout = timeout
+	} else if sessionTimeout := int(vc.safeSession.GetQueryTimeout()); sessionTimeout > 0 {
+		execTimeout = &sessionTimeout
+	}
+
+	// If no effective timeout and no session options, return early
+	if execTimeout == nil {
 		if vc.safeSession.GetOptions() == nil {
 			return
 		}
 		vc.safeSession.GetOrCreateOptions().Timeout = nil
 		return
 	}
+
+	// Set the authoritative timeout using the determined execTimeout
 	vc.safeSession.GetOrCreateOptions().Timeout = &querypb.ExecuteOptions_AuthoritativeTimeout{
-		AuthoritativeTimeout: int64(*timeout),
+		AuthoritativeTimeout: int64(*execTimeout),
 	}
 }
 
