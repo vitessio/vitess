@@ -459,11 +459,7 @@ func benchmarkWorkload(b *testing.B, name string) {
 
 	testCases := readJSONTests(name + "_cases.json")
 	b.ResetTimer()
-	for _, version := range plannerVersions {
-		b.Run(version.String(), func(b *testing.B) {
-			benchmarkPlanner(b, version, testCases, vschemaWrapper)
-		})
-	}
+	benchmarkPlanner(b, Gen4, testCases, vschemaWrapper)
 }
 
 func (s *planTestSuite) TestBypassPlanningShardTargetFromFile() {
@@ -589,6 +585,32 @@ func (s *planTestSuite) TestOtherPlanningFromFile() {
 
 	s.testFile("other_read_cases.json", vschema, false)
 	s.testFile("other_admin_cases.json", vschema, false)
+}
+
+func (s *planTestSuite) TestMirrorPlanning() {
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(s.T(), "vschemas/mirror_schema.json", true),
+		TabletType_:   topodatapb.TabletType_PRIMARY,
+		SysVarEnabled: true,
+		TestBuilder:   TestBuilder,
+		Env:           vtenv.NewTestEnv(),
+	}
+
+	s.testFile("mirror_cases.json", vschema, false)
+}
+
+func (s *planTestSuite) TestOneMirror() {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(s.T(), "vschemas/mirror_schema.json", true),
+		TabletType_:   topodatapb.TabletType_PRIMARY,
+		SysVarEnabled: true,
+		TestBuilder:   TestBuilder,
+		Env:           vtenv.NewTestEnv(),
+	}
+
+	s.testFile("onecase.json", vschema, false)
 }
 
 func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSchema {
@@ -771,9 +793,6 @@ func BenchmarkPlanner(b *testing.B) {
 		b.Run(filename+"-gen4", func(b *testing.B) {
 			benchmarkPlanner(b, Gen4, testCases, vschema)
 		})
-		b.Run(filename+"-gen4left2right", func(b *testing.B) {
-			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
-		})
 	}
 }
 
@@ -836,6 +855,35 @@ func BenchmarkSelectVsDML(b *testing.B) {
 
 	b.Run("Select (random sample, N=32)", func(b *testing.B) {
 		benchmarkPlanner(b, Gen4, selectCases[:32], vschema)
+	})
+}
+
+func BenchmarkBaselineVsMirrored(b *testing.B) {
+	baseline := loadSchema(b, "vschemas/mirror_schema.json", true)
+	baseline.MirrorRules = map[string]*vindexes.MirrorRule{}
+	baselineVschema := &vschemawrapper.VSchemaWrapper{
+		V:             baseline,
+		SysVarEnabled: true,
+		Version:       Gen4,
+		Env:           vtenv.NewTestEnv(),
+	}
+
+	mirroredSchema := loadSchema(b, "vschemas/mirror_schema.json", true)
+	mirroredVschema := &vschemawrapper.VSchemaWrapper{
+		V:             mirroredSchema,
+		SysVarEnabled: true,
+		Version:       Gen4,
+		Env:           vtenv.NewTestEnv(),
+	}
+
+	cases := readJSONTests("mirror_cases.json")
+
+	b.Run("Baseline", func(b *testing.B) {
+		benchmarkPlanner(b, Gen4, cases, baselineVschema)
+	})
+
+	b.Run("Mirrored", func(b *testing.B) {
+		benchmarkPlanner(b, Gen4, cases, mirroredVschema)
 	})
 }
 

@@ -34,9 +34,13 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/syscallutil"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/schema"
 )
 
 // TestDisruptions tests that atomic transactions persevere through various disruptions.
@@ -44,12 +48,13 @@ func TestDisruptions(t *testing.T) {
 	testcases := []struct {
 		disruptionName  string
 		commitDelayTime string
-		disruption      func() error
+		disruption      func(t *testing.T) error
+		resetFunc       func(t *testing.T)
 	}{
 		{
 			disruptionName:  "No Disruption",
 			commitDelayTime: "1",
-			disruption: func() error {
+			disruption: func(t *testing.T) error {
 				return nil
 			},
 		},
@@ -67,6 +72,22 @@ func TestDisruptions(t *testing.T) {
 			disruptionName:  "Vttablet Restart",
 			commitDelayTime: "5",
 			disruption:      vttabletRestartShard3,
+		},
+		{
+			disruptionName:  "OnlineDDL",
+			commitDelayTime: "20",
+			disruption:      onlineDDL,
+		},
+		{
+			disruptionName:  "MoveTables - Complete",
+			commitDelayTime: "10",
+			disruption:      moveTablesComplete,
+			resetFunc:       moveTablesReset,
+		},
+		{
+			disruptionName:  "MoveTables - Cancel",
+			commitDelayTime: "10",
+			disruption:      moveTablesCancel,
 		},
 		{
 			disruptionName:  "EmergencyReparentShard",
@@ -119,7 +140,7 @@ func TestDisruptions(t *testing.T) {
 				}()
 			}
 			// Run the disruption.
-			err := tt.disruption()
+			err := tt.disruption(t)
 			require.NoError(t, err)
 			// Wait for the commit to have returned. We don't actually check for an error in the commit because the user might receive an error.
 			// But since we are waiting in CommitPrepared, the decision to commit the transaction should have already been taken.
@@ -128,6 +149,10 @@ func TestDisruptions(t *testing.T) {
 			waitForResults(t, "select id, col from twopc_t1 where col = 4 order by id", `[[INT64(4) INT64(4)] [INT64(6) INT64(4)] [INT64(9) INT64(4)]]`, 30*time.Second)
 			writeCancel()
 			writerWg.Wait()
+
+			if tt.resetFunc != nil {
+				tt.resetFunc(t)
+			}
 		})
 	}
 }
@@ -145,6 +170,7 @@ func threadToWrite(t *testing.T, ctx context.Context, id int) {
 			continue
 		}
 		_, _ = utils.ExecAllowError(t, conn, fmt.Sprintf("insert into twopc_t1(id, col) values(%d, %d)", id, rand.Intn(10000)))
+		conn.Close()
 	}
 }
 
@@ -170,11 +196,13 @@ func waitForResults(t *testing.T, query string, resultExpected string, waitTime 
 			ctx := context.Background()
 			conn, err := mysql.Connect(ctx, &vtParams)
 			if err == nil {
-				res := utils.Exec(t, conn, query)
+				res, _ := utils.ExecAllowError(t, conn, query)
 				conn.Close()
-				prevRes = res.Rows
-				if fmt.Sprintf("%v", res.Rows) == resultExpected {
-					return
+				if res != nil {
+					prevRes = res.Rows
+					if fmt.Sprintf("%v", res.Rows) == resultExpected {
+						return
+					}
 				}
 			}
 			time.Sleep(100 * time.Millisecond)
@@ -187,14 +215,14 @@ Cluster Level Disruptions for the fuzzer
 */
 
 // prsShard3 runs a PRS in shard 3 of the keyspace. It promotes the second tablet to be the new primary.
-func prsShard3() error {
+func prsShard3(t *testing.T) error {
 	shard := clusterInstance.Keyspaces[0].Shards[2]
 	newPrimary := shard.Vttablets[1]
 	return clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, newPrimary.Alias)
 }
 
 // ersShard3 runs a ERS in shard 3 of the keyspace. It promotes the second tablet to be the new primary.
-func ersShard3() error {
+func ersShard3(t *testing.T) error {
 	shard := clusterInstance.Keyspaces[0].Shards[2]
 	newPrimary := shard.Vttablets[1]
 	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
@@ -202,14 +230,14 @@ func ersShard3() error {
 }
 
 // vttabletRestartShard3 restarts the first vttablet of the third shard.
-func vttabletRestartShard3() error {
+func vttabletRestartShard3(t *testing.T) error {
 	shard := clusterInstance.Keyspaces[0].Shards[2]
 	tablet := shard.Vttablets[0]
 	return tablet.RestartOnlyTablet()
 }
 
 // mysqlRestartShard3 restarts MySQL on the first tablet of the third shard.
-func mysqlRestartShard3() error {
+func mysqlRestartShard3(t *testing.T) error {
 	shard := clusterInstance.Keyspaces[0].Shards[2]
 	vttablets := shard.Vttablets
 	tablet := vttablets[0]
@@ -226,4 +254,132 @@ func mysqlRestartShard3() error {
 		return err
 	}
 	return syscallutil.Kill(pid, syscall.SIGKILL)
+}
+
+// moveTablesCancel runs a move tables command that we cancel in the end.
+func moveTablesCancel(t *testing.T) error {
+	workflow := "TestDisruptions"
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1", []string{topodatapb.TabletType_REPLICA.String()})
+	// Initiate MoveTables for twopc_t1.
+	output, err := mtw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.ReverseReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.Cancel()
+	require.NoError(t, err, output)
+	return nil
+}
+
+// moveTablesComplete runs a move tables command that we complete in the end.
+func moveTablesComplete(t *testing.T) error {
+	workflow := "TestDisruptions"
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1", []string{topodatapb.TabletType_REPLICA.String()})
+	// Initiate MoveTables for twopc_t1.
+	output, err := mtw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.Complete()
+	require.NoError(t, err, output)
+	return nil
+}
+
+// moveTablesReset moves the table back from the unsharded keyspace to sharded
+func moveTablesReset(t *testing.T) {
+	// We apply the vschema again because previous move tables would have removed the entry for `twopc_t1`.
+	err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
+	require.NoError(t, err)
+	workflow := "TestDisruptions"
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, keyspaceName, unshardedKeyspaceName, "twopc_t1", []string{topodatapb.TabletType_REPLICA.String()})
+	// Initiate MoveTables for twopc_t1.
+	output, err := mtw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = mtw.Complete()
+	require.NoError(t, err, output)
+}
+
+var orderedDDL = []string{
+	"alter table twopc_t1 add column extra_col1 varchar(20)",
+	"alter table twopc_t1 add column extra_col2 varchar(20)",
+	"alter table twopc_t1 add column extra_col3 varchar(20)",
+	"alter table twopc_t1 add column extra_col4 varchar(20)",
+}
+
+var count = 0
+
+// onlineDDL runs a DDL statement.
+func onlineDDL(t *testing.T) error {
+	output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, orderedDDL[count%len(orderedDDL)], cluster.ApplySchemaParams{
+		DDLStrategy: "vitess --force-cut-over-after=1ms",
+	})
+	require.NoError(t, err)
+	count++
+	fmt.Println("uuid: ", output)
+	status := waitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	onlineddl.CheckMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), status)
+	require.Equal(t, schema.OnlineDDLStatusComplete, status)
+	return nil
+}
+
+func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	shardNames := map[string]bool{}
+	for _, shard := range shards {
+		shardNames[shard.Name] = true
+	}
+	query := fmt.Sprintf("show vitess_migrations from %s like '%s'", keyspaceName, uuid)
+
+	statusesMap := map[string]bool{}
+	for _, status := range expectStatuses {
+		statusesMap[string(status)] = true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	lastKnownStatus := ""
+	for {
+		select {
+		case <-ctx.Done():
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		case <-ticker.C:
+		}
+		countMatchedShards := 0
+		conn, err := mysql.Connect(ctx, vtParams)
+		if err != nil {
+			continue
+		}
+		r, err := utils.ExecAllowError(t, conn, query)
+		conn.Close()
+		if err != nil {
+			continue
+		}
+		for _, row := range r.Named().Rows {
+			shardName := row["shard"].ToString()
+			if !shardNames[shardName] {
+				// irrelevant shard
+				continue
+			}
+			lastKnownStatus = row["migration_status"].ToString()
+			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
+				countMatchedShards++
+			}
+		}
+		if countMatchedShards == len(shards) {
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		}
+	}
 }

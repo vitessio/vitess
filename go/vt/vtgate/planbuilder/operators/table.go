@@ -33,7 +33,7 @@ type (
 		VTable  *vindexes.Table
 		Columns []*sqlparser.ColName
 
-		noInputs
+		nullaryOperator
 	}
 	ColNameColumns interface {
 		GetColNames() []*sqlparser.ColName

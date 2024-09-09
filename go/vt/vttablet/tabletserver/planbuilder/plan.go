@@ -157,7 +157,7 @@ type Plan struct {
 	PlanID PlanType
 	// When the query indicates a single table
 	Table *schema.Table
-	// SELECT, UPDATE, DELETE statements may list multiple tables
+	// This indicates all the tables that are accessed in the query.
 	AllTables []*schema.Table
 
 	// Permissions stores the permissions for the tables accessed in the query.
@@ -257,6 +257,7 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 	if err != nil {
 		return nil, err
 	}
+	plan.AllTables = lookupAllTables(statement, tables)
 	plan.Permissions = BuildPermissions(statement)
 	return plan, nil
 }
@@ -274,14 +275,14 @@ func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Tab
 		if hasLockFunc(stmt) {
 			plan.NeedsReservedConn = true
 		}
-		plan.Table, plan.AllTables = lookupTables(stmt.From, tables)
+		plan.Table = lookupTables(stmt.From, tables)
 	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 	case *sqlparser.Analyze:
 		plan.PlanID = PlanOtherRead
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed for streaming", sqlparser.ASTToStatementType(statement))
 	}
-
+	plan.AllTables = lookupAllTables(statement, tables)
 	return plan, nil
 }
 

@@ -35,7 +35,7 @@ type (
 		Columns []*sqlparser.ColName
 		Value   sqlparser.Expr
 
-		noInputs
+		nullaryOperator
 	}
 
 	// VindexTable contains information about the vindex table we want to query

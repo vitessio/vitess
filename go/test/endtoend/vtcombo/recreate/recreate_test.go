@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -101,6 +102,9 @@ func TestDropAndRecreateWithSameShards(t *testing.T) {
 
 	cur := conn.Session(ks1+"@primary", nil)
 
+	mysqlConnCountBefore, err := getMySQLConnectionCount(ctx, cur)
+	require.Nil(t, err)
+
 	_, err = cur.Execute(ctx, "DROP DATABASE "+ks1, nil)
 	require.Nil(t, err)
 
@@ -108,6 +112,23 @@ func TestDropAndRecreateWithSameShards(t *testing.T) {
 	require.Nil(t, err)
 
 	assertTabletsPresent(t)
+
+	// Check the connection count after the CREATE. There will be zero connections after the DROP as the database
+	// no longer exists, but after it gets recreated any open pools will be able to reestablish connections.
+	mysqlConnCountAfter, err := getMySQLConnectionCount(ctx, cur)
+	require.Nil(t, err)
+
+	// Assert that we're not leaking mysql connections, but allow for some wiggle room due to transient connections
+	assert.InDelta(t, mysqlConnCountBefore, mysqlConnCountAfter, 5,
+		"not within allowable delta: mysqlConnCountBefore=%d, mysqlConnCountAfter=%d", mysqlConnCountBefore, mysqlConnCountAfter)
+}
+
+func getMySQLConnectionCount(ctx context.Context, session *vtgateconn.VTGateSession) (int, error) {
+	result, err := session.Execute(ctx, "select variable_value from performance_schema.global_status where variable_name='threads_connected'", nil)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(result.Rows[0][0].ToString())
 }
 
 func assertTabletsPresent(t *testing.T) {

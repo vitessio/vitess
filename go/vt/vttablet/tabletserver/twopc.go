@@ -169,7 +169,7 @@ func (tpc *TwoPC) Close() {
 }
 
 // SaveRedo saves the statements in the redo log using the supplied connection.
-func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []string) error {
+func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []tx.Query) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":         sqltypes.StringBindVariable(dtid),
 		"state":        sqltypes.Int64BindVariable(RedoStatePrepared),
@@ -185,7 +185,7 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 		rows[i] = []sqltypes.Value{
 			sqltypes.NewVarBinary(dtid),
 			sqltypes.NewInt64(int64(i + 1)),
-			sqltypes.NewVarBinary(query),
+			sqltypes.NewVarBinary(query.Sql),
 		}
 	}
 	extras := map[string]sqlparser.Encodable{

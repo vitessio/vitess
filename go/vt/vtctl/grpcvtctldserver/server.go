@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 
@@ -2390,6 +2391,50 @@ func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.Get
 
 	return &vtctldatapb.GetTopologyPathResponse{
 		Cell: cell,
+	}, nil
+}
+
+// GetUnresolvedTransactions is part of the vtctlservicepb.VtctldServer interface.
+// It returns the unresolved distributed transactions list for the provided keyspace.
+func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctldatapb.GetUnresolvedTransactionsRequest) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetUnresolvedTransactions")
+	defer span.Finish()
+
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	var mu sync.Mutex
+	var transactions []*querypb.TransactionMetadata
+
+	eg, newCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, shard := range shards {
+		eg.Go(func() error {
+			si, err := s.ts.GetShard(newCtx, req.Keyspace, shard)
+			if err != nil {
+				return err
+			}
+			primary, err := s.ts.GetTablet(newCtx, si.PrimaryAlias)
+			if err != nil {
+				return err
+			}
+			shardTrnxs, err := s.tmc.GetUnresolvedTransactions(newCtx, primary.Tablet)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			transactions = append(transactions, shardTrnxs...)
+			return nil
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetUnresolvedTransactionsResponse{
+		Transactions: transactions,
 	}, nil
 }
 
@@ -5034,6 +5079,7 @@ func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCr
 	span.Annotate("target_cells", req.TargetCells)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
+	span.Annotate("auto_start", req.AutoStart)
 	span.Annotate("auto_retry", req.AutoRetry)
 	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
@@ -5066,6 +5112,7 @@ func (s *VtctldServer) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffRe
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("shards", req.TargetShards)
 
 	resp, err = s.ws.VDiffResume(ctx, req)
 	return resp, err
@@ -5096,6 +5143,7 @@ func (s *VtctldServer) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStop
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("shards", req.TargetShards)
 
 	resp, err = s.ws.VDiffStop(ctx, req)
 	return resp, err

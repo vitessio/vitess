@@ -22,7 +22,7 @@ import (
 )
 
 func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator, *ApplyResult) {
-	op := tryMergeCTE(ctx, in.Seed, in.Term, in)
+	op := tryMergeCTE(ctx, in.Seed(), in.Term(), in)
 	if op == nil {
 		return in, NoRewrite
 	}
@@ -31,14 +31,22 @@ func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator
 }
 
 func tryMergeCTE(ctx *plancontext.PlanningContext, seed, term Operator, in *RecurseCTE) *Route {
-	seedRoute, termRoute, _, routingB, a, b, sameKeyspace := prepareInputRoutes(seed, term)
-	if seedRoute == nil || !sameKeyspace {
+	seedRoute, termRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(seed, term)
+	if seedRoute == nil {
 		return nil
 	}
 
 	switch {
 	case a == dual:
 		return mergeCTE(ctx, seedRoute, termRoute, routingB, in)
+	case b == dual:
+		return mergeCTE(ctx, seedRoute, termRoute, routingA, in)
+	case !sameKeyspace:
+		return nil
+	case a == anyShard:
+		return mergeCTE(ctx, seedRoute, termRoute, routingB, in)
+	case b == anyShard:
+		return mergeCTE(ctx, seedRoute, termRoute, routingA, in)
 	case a == sharded && b == sharded:
 		return tryMergeCTESharded(ctx, seedRoute, termRoute, in)
 	default:
@@ -71,16 +79,17 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 	hz := in.Horizon
 	hz.Source = term.Source
 	newTerm, _ := expandHorizon(ctx, hz)
+	cte := &RecurseCTE{
+		binaryOperator: newBinaryOp(seed.Source, newTerm),
+		Predicates:     in.Predicates,
+		Def:            in.Def,
+		LeftID:         in.LeftID,
+		OuterID:        in.OuterID,
+		Distinct:       in.Distinct,
+	}
 	return &Route{
-		Routing: r,
-		Source: &RecurseCTE{
-			Predicates: in.Predicates,
-			Def:        in.Def,
-			Seed:       seed.Source,
-			Term:       newTerm,
-			LeftID:     in.LeftID,
-			OuterID:    in.OuterID,
-		},
-		MergedWith: []*Route{term},
+		Routing:       r,
+		unaryOperator: newUnaryOp(cte),
+		MergedWith:    []*Route{term},
 	}
 }

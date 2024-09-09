@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `migration_context`               varchar(1024)    NOT NULL DEFAULT '',
     `ddl_action`                      varchar(16)      NOT NULL DEFAULT '',
     `message`                         text             NOT NULL,
+    `message_timestamp`               timestamp(6)     NULL     DEFAULT NULL,
     `eta_seconds`                     bigint           NOT NULL DEFAULT '-1',
     `rows_copied`                     bigint unsigned  NOT NULL DEFAULT '0',
     `table_rows`                      bigint           NOT NULL DEFAULT '0',
@@ -83,4 +84,4 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     KEY `table_complete_idx` (`migration_status`, `keyspace`(64), `mysql_table`(64), `completed_timestamp`),
     KEY `migration_context_idx` (`migration_context`(64)),
     KEY `reverted_uuid_idx` (`reverted_uuid`)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

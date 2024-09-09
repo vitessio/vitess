@@ -464,7 +464,7 @@ func TestRemoveParentForeignKey(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "[BUG] should only be used for single tables",
+			expectedErr: "VT13001: [BUG] should only be used for single tables",
 		},
 	}
 	for _, tt := range tests {
@@ -716,7 +716,7 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 					SingleTableSet(0).Merge(SingleTableSet(1)): {},
 				},
 			},
-			expectedErr: "[BUG] should only be used for single tables",
+			expectedErr: "VT13001: [BUG] should only be used for single tables",
 		},
 		{
 			name: "Error - Reading table info for child foreign keys",
@@ -734,7 +734,7 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 				},
 				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
 			},
-			expectedErr: "[BUG] should only be used for single tables",
+			expectedErr: "VT13001: [BUG] should only be used for single tables",
 		},
 	}
 	for _, tt := range tests {

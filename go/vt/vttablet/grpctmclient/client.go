@@ -658,6 +658,21 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 	return response.Result, nil
 }
 
+// GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
+func (client *Client) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	response, err := c.GetUnresolvedTransactions(ctx, &tabletmanagerdatapb.GetUnresolvedTransactionsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return response.Transactions, nil
+}
+
 //
 // Replication related methods
 //
@@ -1114,7 +1129,7 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	if err != nil {
 		return nil, err
 	}
-	return &replicationdatapb.StopReplicationStatus{ //nolint
+	return &replicationdatapb.StopReplicationStatus{ // nolint
 		Before: response.Status.Before,
 		After:  response.Status.After,
 	}, nil

@@ -32,7 +32,7 @@ import (
 // Projection is used when we need to evaluate expressions on the vtgate
 // It uses the evalengine to accomplish its goal
 type Projection struct {
-	Source Operator
+	unaryOperator
 
 	// Columns contain the expressions as viewed from the outside of this operator
 	Columns ProjCols
@@ -127,8 +127,8 @@ func newProjExprWithInner(ae *sqlparser.AliasedExpr, in sqlparser.Expr) *ProjExp
 
 func newAliasedProjection(src Operator) *Projection {
 	return &Projection{
-		Source:  src,
-		Columns: AliasedProjections{},
+		unaryOperator: newUnaryOp(src),
+		Columns:       AliasedProjections{},
 	}
 }
 
@@ -405,20 +405,9 @@ func (po *EvalEngine) expr()        {}
 func (po SubQueryExpression) expr() {}
 
 func (p *Projection) Clone(inputs []Operator) Operator {
-	return &Projection{
-		Source:   inputs[0],
-		Columns:  p.Columns, // TODO don't think we need to deep clone here
-		DT:       p.DT,
-		FromAggr: p.FromAggr,
-	}
-}
-
-func (p *Projection) Inputs() []Operator {
-	return []Operator{p.Source}
-}
-
-func (p *Projection) SetInputs(operators []Operator) {
-	p.Source = operators[0]
+	klone := *p
+	klone.Source = inputs[0]
+	return &klone
 }
 
 func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
