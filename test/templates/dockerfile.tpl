@@ -1,4 +1,4 @@
-ARG bootstrap_version=32.2
+ARG bootstrap_version=32.3
 ARG image="vitess/bootstrap:${bootstrap_version}-{{.Platform}}"
 
 FROM "${image}"
