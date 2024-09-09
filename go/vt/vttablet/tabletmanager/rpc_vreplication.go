@@ -458,14 +458,18 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if err = prototext.Unmarshal(source, bls); err != nil {
 			return nil, err
 		}
-		if req.OnDdl != nil {
+		// We also need to check for a SimulatedNull here to support older clients and
+		// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+		if req.OnDdl != nil && *req.OnDdl != binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) {
 			bls.OnDdl = *req.OnDdl
 		}
 		source, err = prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
 		}
-		if req.State != nil {
+		// We also need to check for a SimulatedNull here to support older clients and
+		// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+		if req.State != nil && *req.State != binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt) {
 			state = binlogdatapb.VReplicationWorkflowState_name[int32(*req.State)]
 		}
 		if state == binlogdatapb.VReplicationWorkflowState_Running.String() {
