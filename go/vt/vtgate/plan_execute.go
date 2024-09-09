@@ -20,18 +20,18 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
@@ -92,6 +92,7 @@ func (e *Executor) newExecute(
 		plan               *engine.Plan
 	)
 
+	var timeoutOnce sync.Once
 	for try := 0; try < MaxBufferingRetries; try++ {
 		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
 			// Without a wait we fail non-deterministically since the previous vschema will not have
@@ -138,6 +139,15 @@ func (e *Executor) newExecute(
 		// Add any warnings that the planner wants to add.
 		for _, warning := range plan.Warnings {
 			safeSession.RecordWarning(warning)
+		}
+
+		// set the overall query timeout if it is not already set
+		if vcursor.queryTimeout > 0 {
+			timeoutOnce.Do(func() {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, vcursor.queryTimeout)
+				defer cancel()
+			})
 		}
 
 		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)

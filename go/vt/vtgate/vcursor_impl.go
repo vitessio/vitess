@@ -122,6 +122,7 @@ type vcursorImpl struct {
 	vm                  VSchemaOperator
 	semTable            *semantics.SemTable
 	warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
+	queryTimeout        time.Duration
 
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 	pv       plancontext.PlannerVersion
@@ -934,7 +935,7 @@ func (vc *vcursorImpl) SetExecQueryTimeout(timeout *int) {
 	var execTimeout *int
 	if timeout != nil {
 		execTimeout = timeout
-	} else if sessionTimeout := int(vc.safeSession.GetQueryTimeout()); sessionTimeout > 0 {
+	} else if sessionTimeout := vc.GetQueryTimeout(0); sessionTimeout > 0 {
 		execTimeout = &sessionTimeout
 	}
 
@@ -947,6 +948,7 @@ func (vc *vcursorImpl) SetExecQueryTimeout(timeout *int) {
 		return
 	}
 
+	vc.queryTimeout = time.Duration(*execTimeout) * time.Millisecond
 	// Set the authoritative timeout using the determined execTimeout
 	vc.safeSession.GetOrCreateOptions().Timeout = &querypb.ExecuteOptions_AuthoritativeTimeout{
 		AuthoritativeTimeout: int64(*execTimeout),
