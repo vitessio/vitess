@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -621,7 +622,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
 				Cells:       []string{"zone3"},
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}, // So keep the current value of replica
+				TabletTypes: textutil.SimulatedNullTabletTypeSlice, // So keep the current value of replica
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, "zone3", tabletTypes[0], vreplID),
@@ -672,7 +673,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 				Workflow:    workflow,
 				State:       &stopped,
 				Cells:       textutil.SimulatedNullStringSlice,
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+				TabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set state = '%s', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				binlogdatapb.VReplicationWorkflowState_Stopped.String(), keyspace, shard, cells[0], tabletTypes[0], vreplID),
@@ -683,7 +684,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 				Workflow:    workflow,
 				State:       &running,
 				Cells:       textutil.SimulatedNullStringSlice,
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+				TabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			},
 			isCopying: true,
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Copying', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
@@ -743,8 +744,6 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 	tablet := tenv.addTablet(t, tabletUID, keyspace, shard)
 	defer tenv.deleteTablet(tablet.tablet)
 
-	hi := "hi"
-
 	tests := []struct {
 		name    string
 		request *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
@@ -771,7 +770,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				AllWorkflows: true,
 				State:        &running,
-				Message:      &hi,
+				Message:      ptr.Of("hi"),
 				StopPosition: &position,
 			},
 			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running', message = 'hi', stop_pos = '%s' where id in (%s)`, position, strings.Join(vreplIDs, ", ")),

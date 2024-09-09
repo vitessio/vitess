@@ -33,10 +33,9 @@ import (
 	"github.com/patrickmn/go-cache"
 
 	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/vtenv"
-
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -54,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtexplain"
 
@@ -1717,12 +1717,11 @@ func (api *API) StartWorkflow(ctx context.Context, req *vtadminpb.StartWorkflowR
 		return nil, err
 	}
 
-	running := binlogdatapb.VReplicationWorkflowState_Running
 	return c.Vtctld.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: req.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow: req.Workflow,
-			State:    &running,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
 		},
 	})
 }
@@ -1745,12 +1744,11 @@ func (api *API) StopWorkflow(ctx context.Context, req *vtadminpb.StopWorkflowReq
 		return nil, nil
 	}
 
-	stopped := binlogdatapb.VReplicationWorkflowState_Stopped
 	return c.Vtctld.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: req.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow: req.Workflow,
-			State:    &stopped,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
 		},
 	})
 }

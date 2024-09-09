@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -322,7 +323,6 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 }
 
 func (rs *resharder) startStreams(ctx context.Context) error {
-	running := binlogdatapb.VReplicationWorkflowState_Running
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary := rs.targetPrimaries[target.ShardName()]
 		// This is the rare case where we truly want to update every stream/record
@@ -331,7 +331,7 @@ func (rs *resharder) startStreams(ctx context.Context) error {
 		// that we've created on the new shards as we're migrating them.
 		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 			AllWorkflows: true,
-			State:        &running,
+			State:        ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
 		}
 		if _, err := rs.s.tmc.UpdateVReplicationWorkflows(ctx, targetPrimary.Tablet, req); err != nil {
 			return vterrors.Wrapf(err, "UpdateVReplicationWorkflows(%v, 'state='%s')",

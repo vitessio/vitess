@@ -36,9 +36,10 @@ const (
 )
 
 var (
-	delimitedListRegexp      = regexp.MustCompile(`[ ,;]+`)
-	SimulatedNullStringSlice = []string{sqltypes.NULL.String()}
-	SimulatedNullInt         = -1
+	delimitedListRegexp          = regexp.MustCompile(`[ ,;]+`)
+	SimulatedNullStringSlice     = []string{sqltypes.NULL.String()}
+	SimulatedNullTabletTypeSlice = []topodatapb.TabletType{topodatapb.TabletType(SimulatedNullInt)}
+	SimulatedNullInt             = -1
 )
 
 // SplitDelimitedList splits a given string by comma, semi-colon or space, and returns non-empty strings

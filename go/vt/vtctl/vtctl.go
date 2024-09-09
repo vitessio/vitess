@@ -99,6 +99,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/ptr"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
@@ -3805,7 +3806,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 					}
 				}
 			} else {
-				tabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}
+				tabletTypes = textutil.SimulatedNullTabletTypeSlice
 			}
 			onddl := int32(textutil.SimulatedNullInt) // To signify no value has been provided
 			if subFlags.Lookup("on-ddl").Changed {    // Validate the provided value
@@ -3830,8 +3831,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				TabletSelectionPreference: &tsp,
 			}
 			if onddl != int32(textutil.SimulatedNullInt) {
-				v := binlogdatapb.OnDDLAction(onddl)
-				rpcReq.(*tabletmanagerdatapb.UpdateVReplicationWorkflowRequest).OnDdl = &v
+				rpcReq.(*tabletmanagerdatapb.UpdateVReplicationWorkflowRequest).OnDdl = ptr.Of(binlogdatapb.OnDDLAction(onddl))
 			}
 		}
 		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq, *shards) // Only update currently uses the new RPC path

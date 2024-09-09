@@ -409,13 +409,13 @@ func TestWorkflowUpdate(t *testing.T) {
 		{
 			name:        "no flags",
 			cells:       nullSlice,
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+			tabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			wantErr:     "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values",
 		},
 		{
 			name:        "only cells",
 			cells:       []string{"zone1"},
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+			tabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			output:      "The following workflow fields will be updated:\n  cells=\"zone1\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 		{
@@ -427,7 +427,7 @@ func TestWorkflowUpdate(t *testing.T) {
 		{
 			name:        "only on-ddl",
 			cells:       nullSlice,
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+			tabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			onDDL:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
 			output:      "The following workflow fields will be updated:\n  on_ddl=\"EXEC_IGNORE\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},

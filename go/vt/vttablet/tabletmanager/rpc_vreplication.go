@@ -438,7 +438,8 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		source := row.AsBytes("source", []byte{})
 		state := row.AsString("state", "")
 		message := row.AsString("message", "")
-		if req.State != nil && *req.State == binlogdatapb.VReplicationWorkflowState_Running && strings.ToUpper(message) == workflow.Frozen {
+		if req.State != nil && *req.State == binlogdatapb.VReplicationWorkflowState_Running &&
+			strings.ToUpper(message) == workflow.Frozen {
 			return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil},
 				vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start a workflow when it is frozen")
 		}

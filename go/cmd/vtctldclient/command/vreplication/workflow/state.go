@@ -29,7 +29,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -79,7 +78,7 @@ func commandUpdateState(cmd *cobra.Command, args []string) error {
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow:    baseOptions.Workflow,
 			Cells:       textutil.SimulatedNullStringSlice,
-			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+			TabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			State:       &state,
 		},
 	}
