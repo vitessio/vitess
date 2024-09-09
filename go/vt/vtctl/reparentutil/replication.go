@@ -123,7 +123,7 @@ func FindValidEmergencyReparentCandidates(
 		case len(errantGTIDs) != 0:
 			// This tablet has errant GTIDs. It's not a valid candidate for
 			// reparent, so don't insert it into the final mapping.
-			log.Errorf("skipping %v because we detected errant GTIDs - %v", alias, errantGTIDs)
+			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, relayLogGTIDSet, errantGTIDs)
 			continue
 		}
 
