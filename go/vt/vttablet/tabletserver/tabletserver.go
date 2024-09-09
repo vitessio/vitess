@@ -262,10 +262,10 @@ func (tsv *TabletServer) loadQueryTimeoutWithOptions(options *querypb.ExecuteOpt
 }
 
 func loadAuthoritativeTimeout(options *querypb.ExecuteOptions) time.Duration {
-	if options == nil || options.GetTimeout() == nil {
+	if options == nil || options.Timeout == nil {
 		return -1
 	}
-	return time.Duration(options.GetAuthoritativeTimeout())
+	return time.Duration(options.GetAuthoritativeTimeout()) * time.Millisecond
 }
 
 // onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
