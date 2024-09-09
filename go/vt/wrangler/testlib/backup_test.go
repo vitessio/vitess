@@ -312,11 +312,20 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	assert.True(t, primary.FakeMysqlDaemon.Running)
 
 	// restore primary when database already exists
-	// checkNoDb should return false
-	// so fake the necessary queries
+	// we expect it to wipe the current database and
+	// do the restore so fake the necessary queries
 	primary.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES":                      {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("vt_test_keyspace")}}},
 		"SHOW TABLES FROM `vt_test_keyspace`": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}},
+	}
+	primary.FakeMysqlDaemon.ExpectedExecuteSuperQueryCurrent = 0
+	primary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE RESET REPLICA ALL",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
 	}
 
 	// Test restore with the backup timestamp
