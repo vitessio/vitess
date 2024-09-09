@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
-	"runtime/debug"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -30,7 +29,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -121,11 +119,6 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 }
 
 func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("DeleteVReplicationWorkflow panic %v: stack: %s", x, debug.Stack())
-		}
-	}()
 	if req == nil || req.Workflow == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no workflow provided")
 	}
@@ -180,11 +173,6 @@ func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabl
 }
 
 func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("ReadVReplicationWorkflows panic %v: stack: %s", x, debug.Stack())
-		}
-	}()
 	query, err := tm.buildReadVReplicationWorkflowsQuery(req)
 	if err != nil {
 		return nil, err
@@ -289,11 +277,6 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 }
 
 func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("ReadVReplicationWorkflow panic %v: stack: %s", x, debug.Stack())
-		}
-	}()
 	if req == nil || req.Workflow == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no workflow provided")
 	}
@@ -420,11 +403,6 @@ func isStreamCopying(tm *TabletManager, id int64) (bool, error) {
 // workflow stream when the record is updated, so we also in effect
 // restart the workflow stream via the update.
 func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("UpdateVReplicationWorkflow panic %v: stack: %s", x, debug.Stack())
-		}
-	}()
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 	}
@@ -533,11 +511,6 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 // Note: today this is only used during Reshard as all of the vreplication
 // streams need to be migrated from the old shards to the new ones.
 func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("UpdateVReplicationWorkflows panic %v: stack: %s", x, debug.Stack())
-		}
-	}()
 	query, err := tm.buildUpdateVReplicationWorkflowsQuery(req)
 	if err != nil {
 		return nil, err
@@ -643,11 +616,6 @@ func (tm *TabletManager) buildReadVReplicationWorkflowsQuery(req *tabletmanagerd
 // the metadata/flow control fields for N vreplication workflows based on the
 // request.
 func (tm *TabletManager) buildUpdateVReplicationWorkflowsQuery(req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (string, error) {
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("buildUpdateVReplicationWorkflowsQuery panic %v: stack: %s", x, debug.Stack())
-		}
-	}()
 	if req.GetAllWorkflows() && (len(req.GetIncludeWorkflows()) > 0 || len(req.GetExcludeWorkflows()) > 0) {
 		return "", errAllWithIncludeExcludeWorkflows
 	}
