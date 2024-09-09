@@ -631,7 +631,9 @@ func (tm *TabletManager) buildUpdateVReplicationWorkflowsQuery(req *tabletmanage
 	predicates := strings.Builder{}
 
 	// First add the SET clauses.
-	if req.State != nil {
+	// We also need to check for a SimulatedNull here to support older clients and
+	// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+	if req.State != nil && *req.State != binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt) {
 		state, ok := binlogdatapb.VReplicationWorkflowState_name[int32(req.GetState())]
 		if !ok {
 			return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid state value: %v", req.GetState())
@@ -639,14 +641,18 @@ func (tm *TabletManager) buildUpdateVReplicationWorkflowsQuery(req *tabletmanage
 		sets.WriteString(" state = ")
 		sets.WriteString(sqltypes.EncodeStringSQL(state))
 	}
-	if req.Message != nil {
+	// We also need to check for a SimulatedNull here to support older clients and
+	// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+	if req.Message != nil && *req.Message != sqltypes.Null.String() {
 		if sets.Len() > 0 {
 			sets.WriteByte(',')
 		}
 		sets.WriteString(" message = ")
 		sets.WriteString(sqltypes.EncodeStringSQL(req.GetMessage()))
 	}
-	if req.StopPosition != nil {
+	// We also need to check for a SimulatedNull here to support older clients and
+	// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+	if req.StopPosition != nil && *req.StopPosition != sqltypes.Null.String() {
 		if sets.Len() > 0 {
 			sets.WriteByte(',')
 		}
