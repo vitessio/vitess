@@ -929,6 +929,19 @@ func (vc *vcursorImpl) SetPriority(priority string) {
 	}
 }
 
+func (vc *vcursorImpl) SetExecQueryTimeout(timeout *int) {
+	if timeout == nil {
+		if vc.safeSession.GetOptions() == nil {
+			return
+		}
+		vc.safeSession.GetOrCreateOptions().Timeout = nil
+		return
+	}
+	vc.safeSession.GetOrCreateOptions().Timeout = &querypb.ExecuteOptions_AuthoritativeTimeout{
+		AuthoritativeTimeout: int64(*timeout),
+	}
+}
+
 // SetConsolidator implements the SessionActions interface
 func (vc *vcursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Consolidator) {
 	// Avoid creating session Options when they do not yet exist and the

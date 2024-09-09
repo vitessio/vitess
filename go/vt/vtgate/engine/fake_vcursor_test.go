@@ -61,6 +61,10 @@ type noopVCursor struct {
 	inTx bool
 }
 
+func (t *noopVCursor) SetExecQueryTimeout(timeout *int) {
+	panic("implement me")
+}
+
 // MySQLVersion implements VCursor.
 func (t *noopVCursor) Commit(ctx context.Context) error {
 	return nil

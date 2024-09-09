@@ -173,6 +173,7 @@ type (
 		SetConsolidator(querypb.ExecuteOptions_Consolidator)
 		SetWorkloadName(string)
 		SetPriority(string)
+		SetExecQueryTimeout(timeout *int)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)

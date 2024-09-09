@@ -1787,7 +1787,8 @@ func TestGetPlanPriority(t *testing.T) {
 
 			stmt, err := sqlparser.NewTestParser().Parse(testCase.sql)
 			assert.NoError(t, err)
-			crticalityFromStatement, _ := sqlparser.GetPriorityFromStatement(stmt)
+			qh, _ := sqlparser.BuildQueryHints(stmt)
+			crticalityFromStatement := qh.Priority
 
 			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, true, logStats)
 			if testCase.expectedError != nil {

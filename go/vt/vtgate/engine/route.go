@@ -142,7 +142,7 @@ func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 // addQueryTimeout adds a query timeout to the context it receives and returns the modified context along with the cancel function.
 func addQueryTimeout(ctx context.Context, vcursor VCursor, queryTimeout int) (context.Context, context.CancelFunc) {
 	timeout := vcursor.Session().GetQueryTimeout(queryTimeout)
-	if timeout != 0 {
+	if timeout > 0 {
 		return context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
 	}
 	return ctx, func() {}
