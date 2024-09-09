@@ -84,4 +84,4 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     KEY `table_complete_idx` (`migration_status`, `keyspace`(64), `mysql_table`(64), `completed_timestamp`),
     KEY `migration_context_idx` (`migration_context`(64)),
     KEY `reverted_uuid_idx` (`reverted_uuid`)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4
