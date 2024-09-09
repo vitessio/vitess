@@ -161,7 +161,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "tablet with errant GTIDs is excluded",
+			name: "tablet with superset GTIDs is included",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
@@ -169,19 +169,33 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
-				"errant": {
+				"r2": {
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1",
 					},
 				},
 			},
-			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
-				"p1": {
-					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+			expected:  []string{"r1", "r2"},
+			shouldErr: false,
+		},
+		{
+			name: "tablets with errant GTIDs are excluded",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1",
+					},
+				},
+				"r2": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:2-3",
+					},
 				},
 			},
-			expected:  []string{"r1", "p1"},
+			expected:  []string{},
 			shouldErr: false,
 		},
 		{
