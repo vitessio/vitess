@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
@@ -76,6 +77,7 @@ func TestHealthCheck(t *testing.T) {
 	tablet.Type = topodatapb.TabletType_REPLICA
 	input := make(chan *querypb.StreamHealthResponse)
 	conn := createFakeConn(tablet, input)
+	now := time.Now()
 
 	// create a channel and subscribe to healthcheck
 	resultChan := hc.Subscribe()
@@ -90,6 +92,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving:              false,
 		Stats:                nil,
 		PrimaryTermStartTime: 0,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	result := <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -101,6 +104,7 @@ func TestHealthCheck(t *testing.T) {
 
 		PrimaryTermStartTimestamp: 0,
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+		Timestamp:                 protoutil.TimeToProto(now),
 	}
 	input <- shr
 	result = <-resultChan
@@ -110,6 +114,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving:              true,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
 		PrimaryTermStartTime: 0,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	// create a context with timeout and select on it and channel
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -124,6 +129,7 @@ func TestHealthCheck(t *testing.T) {
 			Serving:              true,
 			Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
 			PrimaryTermStartTime: 0,
+			Timestamp:            protoutil.TimeToProto(now),
 		}},
 	}}
 	// we can't use assert.Equal here because of the special way we want to compare equality
@@ -137,6 +143,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving:                   true,
 		PrimaryTermStartTimestamp: 10,
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		Timestamp:                 protoutil.TimeToProto(now),
 	}
 	want = &TabletHealth{
 		Tablet: tablet,
@@ -149,6 +156,7 @@ func TestHealthCheck(t *testing.T) {
 		Conn:                 conn,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		PrimaryTermStartTime: 10,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	input <- shr
 	result = <-resultChan
@@ -166,6 +174,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving:                   false,
 		PrimaryTermStartTimestamp: 0,
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
+		Timestamp:                 protoutil.TimeToProto(now),
 	}
 	want = &TabletHealth{
 		Tablet:               tablet,
@@ -173,6 +182,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving:              false,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
 		PrimaryTermStartTime: 0,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	input <- shr
 	result = <-resultChan
@@ -186,6 +196,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving:                   true,
 		PrimaryTermStartTimestamp: 0,
 		RealtimeStats:             &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
+		Timestamp:                 protoutil.TimeToProto(now),
 	}
 	want = &TabletHealth{
 		Tablet:               tablet,
@@ -194,6 +205,7 @@ func TestHealthCheck(t *testing.T) {
 		Stats:                &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
 		PrimaryTermStartTime: 0,
 		LastError:            fmt.Errorf("vttablet error: some error"),
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	input <- shr
 	result = <-resultChan

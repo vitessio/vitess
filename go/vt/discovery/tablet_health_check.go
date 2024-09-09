@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -100,6 +101,7 @@ func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
 		LastError:            thc.LastError,
 		PrimaryTermStartTime: thc.PrimaryTermStartTime,
 		Serving:              thc.Serving,
+		Timestamp:            thc.Timestamp,
 	}
 }
 
@@ -126,6 +128,7 @@ func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 		thc.loggedServingState = true
 	}
 	thc.Serving = serving
+	thc.Timestamp = protoutil.TimeToProto(time.Now())
 }
 
 // stream streams healthcheck responses to callback.
