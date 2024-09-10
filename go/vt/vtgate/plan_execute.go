@@ -89,9 +89,9 @@ func (e *Executor) newExecute(
 		lastVSchemaCreated = vs.GetCreated()
 		result             *sqltypes.Result
 		plan               *engine.Plan
+		cancel             context.CancelFunc
 	)
 
-	var cancel context.CancelFunc
 	for try := 0; try < MaxBufferingRetries; try++ {
 		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
 			// Without a wait we fail non-deterministically since the previous vschema will not have
