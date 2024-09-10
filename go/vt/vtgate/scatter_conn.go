@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -76,20 +78,22 @@ type (
 	// resultsObserver will be given the chance to observe the results coming in for a specific query
 	resultsObserver interface {
 		observe(*sqltypes.Result)
-		close()
+		clone() resultsObserver
 	}
 
-	nullResultsObserver       struct{}
-	nullResultObserverFactory func(sql string) resultsObserver
+	nullResultsObserver struct{}
 )
 
 // resultObserverFactory is a factory function that creates a resultsObserver, associating them with the query
-var resultObserverFactory func(sql string) resultsObserver = func(sql string) resultsObserver {
+var resultObserverFactory = func(*logstats.LogStats) resultsObserver {
 	return nullResultsObserver{}
 }
 
 func (nullResultsObserver) observe(*sqltypes.Result) {}
-func (nullResultsObserver) close()                   {}
+
+func (nullResultsObserver) clone() resultsObserver {
+	return nullResultsObserver{}
+}
 
 // NewScatterConn creates a new ScatterConn.
 func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *ScatterConn {

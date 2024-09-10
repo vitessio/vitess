@@ -115,7 +115,6 @@ func (e *Executor) newExecute(
 		if err != nil {
 			return err
 		}
-		defer vcursor.Close() // we know this happens in a loop, but MaxBufferingRetries is small, so it's fine
 
 		// 3: Create a plan for the query.
 		// If we are retrying, it is likely that the routing rules have changed and hence we need to

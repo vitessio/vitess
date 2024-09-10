@@ -198,7 +198,7 @@ func newVCursorImpl(
 		pv:                  pv,
 		warmingReadsPercent: warmingReadsPct,
 		warmingReadsChannel: warmingReadsChan,
-		resultsObserver:     resultObserverFactory(sql),
+		resultsObserver:     resultObserverFactory(logStats),
 	}, nil
 }
 
@@ -1329,7 +1329,7 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 		topoServer:      vc.topoServer,
 		warnShardedOnly: vc.warnShardedOnly,
 		pv:              vc.pv,
-		resultsObserver: vc.resultsObserver,
+		resultsObserver: vc.resultsObserver.clone(),
 	}
 }
 
@@ -1402,7 +1402,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
-		resultsObserver:     vc.resultsObserver,
+		resultsObserver:     vc.resultsObserver.clone(),
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
@@ -1434,7 +1434,7 @@ func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
-		resultsObserver:     vc.resultsObserver,
+		resultsObserver:     vc.resultsObserver.clone(),
 	}
 
 	v.marginComments.Trailing += "/* mirror query */"
@@ -1459,8 +1459,4 @@ func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
 // GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.
 func (vc *vcursorImpl) GetForeignKeyChecksState() *bool {
 	return vc.fkChecksState
-}
-
-func (vc *vcursorImpl) Close() {
-	vc.resultsObserver.close()
 }
