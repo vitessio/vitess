@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -92,13 +91,7 @@ func (e *Executor) newExecute(
 		plan               *engine.Plan
 	)
 
-	var timeoutOnce sync.Once
 	var cancel context.CancelFunc
-	defer func() {
-		if cancel != nil {
-			cancel()
-		}
-	}()
 	for try := 0; try < MaxBufferingRetries; try++ {
 		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
 			// Without a wait we fail non-deterministically since the previous vschema will not have
@@ -148,10 +141,9 @@ func (e *Executor) newExecute(
 		}
 
 		// set the overall query timeout if it is not already set
-		if vcursor.queryTimeout > 0 {
-			timeoutOnce.Do(func() {
-				ctx, cancel = context.WithTimeout(ctx, vcursor.queryTimeout)
-			})
+		if vcursor.queryTimeout > 0 && cancel == nil {
+			ctx, cancel = context.WithTimeout(ctx, vcursor.queryTimeout)
+			defer cancel()
 		}
 
 		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)

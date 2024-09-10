@@ -55,6 +55,8 @@ type DBDDLPlugin interface {
 	DropDatabase(ctx context.Context, name string) error
 }
 
+const dbDDLDefaultTimeout = 500 * time.Millisecond
+
 // DBDDL is just a container around custom database provisioning plugins
 // The default behaviour is to just return an error
 type DBDDL struct {
@@ -131,7 +133,7 @@ func (c *DBDDL) createDatabase(ctx context.Context, vcursor VCursor, plugin DBDD
 		select {
 		case <-ctx.Done(): // context cancelled
 			return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate create database: destination not resolved")
-		case <-time.After(500 * time.Millisecond): // timeout
+		case <-time.After(dbDDLDefaultTimeout): // timeout
 		}
 	}
 	var queries []*querypb.BoundQuery
@@ -152,7 +154,7 @@ func (c *DBDDL) createDatabase(ctx context.Context, vcursor VCursor, plugin DBDD
 				select {
 				case <-ctx.Done(): // context cancelled
 					return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate create database: tablets not healthy")
-				case <-time.After(500 * time.Millisecond): // timeout
+				case <-time.After(dbDDLDefaultTimeout): // timeout
 				}
 				break
 			}
@@ -173,7 +175,7 @@ func (c *DBDDL) dropDatabase(ctx context.Context, vcursor VCursor, plugin DBDDLP
 		select {
 		case <-ctx.Done(): // context cancelled
 			return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate drop database: keyspace still available in vschema")
-		case <-time.After(500 * time.Millisecond): // timeout
+		case <-time.After(dbDDLDefaultTimeout): // timeout
 		}
 	}
 
