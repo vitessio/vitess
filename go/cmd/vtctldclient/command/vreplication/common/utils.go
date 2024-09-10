@@ -152,21 +152,18 @@ func validateOnDDL(cmd *cobra.Command) error {
 // ParseConfigOverrides converts a slice of key=value strings into a map of config overrides. The slice is passed
 // as a flag to the command, and the key=value pairs are used to override the default vreplication config values.
 func ParseConfigOverrides(overrides []string) (map[string]string, error) {
-	configOverrides := make(map[string]string)
+	configOverrides := make(map[string]string, len(overrides))
 	defaultConfig, err := vttablet.NewVReplicationConfig(nil)
 	if err != nil {
 		return nil, err
 	}
 	for _, kv := range overrides {
-		parts := strings.SplitN(kv, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("Invalid config override: %s", kv)
+		key, value, ok := strings.Cut(kv, "=")
+		if !ok {
+			return nil, fmt.Errorf("invalid config override format (var=value expected): %s", kv)
 		}
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-
 		if _, ok := defaultConfig.Map()[key]; !ok {
-			return nil, fmt.Errorf("Unknown vreplication config flag: %s", key)
+			return nil, fmt.Errorf("unknown vreplication config flag: %s", key)
 		}
 		configOverrides[key] = value
 	}

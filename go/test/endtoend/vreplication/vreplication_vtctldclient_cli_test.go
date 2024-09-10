@@ -231,10 +231,8 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 			"--workflow", workflow, "--config-overrides", overridesCSV)
 		return err
 	}
-	var tab *cluster.VttabletProcess
-	for _, tab = range targetTabs {
-		break
-	}
+	require.GreaterOrEqual(t, len(targetTabs), 1)
+	tab := maps.Values(targetTabs)[0]
 	require.NotNil(t, tab)
 	defaultConfig := vttablet.InitVReplicationConfigDefaults()
 	type testCase struct {

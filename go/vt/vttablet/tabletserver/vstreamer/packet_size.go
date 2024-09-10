@@ -45,8 +45,9 @@ type PacketSizer interface {
 	Limit() int
 }
 
-// DefaultPacketSizer creates a new PacketSizer using the default settings.
+// DefaultPacketSizer creates a new PacketSizer based on the provided values.
 // If dynamic packet sizing is enabled, this will return a dynamicPacketSizer.
+// Otherwise it will return a fixedPacketSize of packetSize.
 func DefaultPacketSizer(useDynamicPacketSize bool, packetSize int) PacketSizer {
 	if useDynamicPacketSize {
 		return newDynamicPacketSizer(packetSize)

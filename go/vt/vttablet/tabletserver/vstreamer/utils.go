@@ -18,21 +18,20 @@ package vstreamer
 
 import (
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 func GetVReplicationConfig(options *binlogdatapb.VStreamOptions) (*vttablet.VReplicationConfig, error) {
-	var config *vttablet.VReplicationConfig
-	var err error
-	if options != nil {
-		config, err = vttablet.NewVReplicationConfig(options.ConfigOverrides)
-		if err != nil {
-			log.Errorf("Error parsing VReplicationConfig: %v", err)
-			return nil, err
-		}
-	} else {
-		config = vttablet.InitVReplicationConfigDefaults()
+	if options == nil {
+		return vttablet.InitVReplicationConfigDefaults(), nil
+	}
+	config, err := vttablet.NewVReplicationConfig(options.ConfigOverrides)
+	if err != nil {
+		log.Errorf("Error parsing VReplicationConfig: %v", err)
+		return nil, vterrors.Wrapf(err, "failed to parse VReplicationConfig")
 	}
 	return config, nil
 }

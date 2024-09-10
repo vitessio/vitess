@@ -88,7 +88,7 @@ func registerCommands(root *cobra.Command) {
 	update.Flags().VarP((*topoproto.TabletTypeListFlag)(&updateOptions.TabletTypes), "tablet-types", "t", "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY).")
 	update.Flags().BoolVar(&updateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	update.Flags().StringVar(&updateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
-	update.Flags().StringSliceVar(&updateOptions.ConfigOverrides, "config-overrides", []string{}, "Specify one or more VReplication config flags to override as a comma-separated list of key=value pairs.")
+	update.Flags().StringSliceVar(&updateOptions.ConfigOverrides, "config-overrides", nil, "Specify one or more VReplication config flags to override as a comma-separated list of key=value pairs.")
 
 	common.AddShardSubsetFlag(update, &baseOptions.Shards)
 	base.AddCommand(update)
