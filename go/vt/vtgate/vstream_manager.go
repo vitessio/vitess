@@ -103,6 +103,10 @@ type vstream struct {
 	// default behavior is to automatically migrate the resharded streams from the old to the new shards
 	stopOnReshard bool
 
+	// This flag is set by the client, default is false.
+	// If true then the reshard journal events are sent in the stream irrespective of the stopOnReshard flag.
+	includeReshardJournalEvents bool
+
 	// mutex used to synchronize access to skew detection parameters
 	skewMu sync.Mutex
 	// channel is created whenever there is a skew detected. closing it implies the current skew has been fixed
@@ -169,22 +173,23 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		return fmt.Errorf("unable to get topo server")
 	}
 	vs := &vstream{
-		vgtid:              vgtid,
-		tabletType:         tabletType,
-		optCells:           flags.Cells,
-		filter:             filter,
-		send:               send,
-		resolver:           vsm.resolver,
-		journaler:          make(map[int64]*journalEvent),
-		minimizeSkew:       flags.GetMinimizeSkew(),
-		stopOnReshard:      flags.GetStopOnReshard(),
-		skewTimeoutSeconds: maxSkewTimeoutSeconds,
-		timestamps:         make(map[string]int64),
-		vsm:                vsm,
-		eventCh:            make(chan []*binlogdatapb.VEvent),
-		heartbeatInterval:  flags.GetHeartbeatInterval(),
-		ts:                 ts,
-		copyCompletedShard: make(map[string]struct{}),
+		vgtid:                       vgtid,
+		tabletType:                  tabletType,
+		optCells:                    flags.Cells,
+		filter:                      filter,
+		send:                        send,
+		resolver:                    vsm.resolver,
+		journaler:                   make(map[int64]*journalEvent),
+		minimizeSkew:                flags.GetMinimizeSkew(),
+		stopOnReshard:               flags.GetStopOnReshard(),
+		includeReshardJournalEvents: flags.GetIncludeReshardJournalEvents(),
+		skewTimeoutSeconds:          maxSkewTimeoutSeconds,
+		timestamps:                  make(map[string]int64),
+		vsm:                         vsm,
+		eventCh:                     make(chan []*binlogdatapb.VEvent),
+		heartbeatInterval:           flags.GetHeartbeatInterval(),
+		ts:                          ts,
+		copyCompletedShard:          make(map[string]struct{}),
 		tabletPickerOptions: discovery.TabletPickerOptions{
 			CellPreference: flags.GetCellPreference(),
 			TabletOrder:    flags.GetTabletOrder(),
@@ -677,8 +682,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				case binlogdatapb.VEventType_JOURNAL:
 					journal := event.Journal
 					// Journal events are not sent to clients by default, but only when
-					// StopOnReshard is set.
-					if vs.stopOnReshard && journal.MigrationType == binlogdatapb.MigrationType_SHARDS {
+					// IncludeReshardJournalEvents or StopOnReshard is set.
+					if (vs.includeReshardJournalEvents || vs.stopOnReshard) &&
+						journal.MigrationType == binlogdatapb.MigrationType_SHARDS {
 						sendevents = append(sendevents, event)
 						// Read any subsequent events until we get the VGTID->COMMIT events that
 						// always follow the JOURNAL event which is generated as a result of
@@ -726,7 +732,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				}
 				lag := event.CurrentTime/1e9 - event.Timestamp
 				vs.vsm.vstreamsLag.Set(labels, lag)
-
 			}
 			if len(sendevents) != 0 {
 				eventss = append(eventss, sendevents)

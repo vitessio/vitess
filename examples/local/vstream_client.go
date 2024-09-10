@@ -76,6 +76,7 @@ func main() {
 		// MinimizeSkew:      false,
 		// HeartbeatInterval: 60, //seconds
 		// StopOnReshard: true,
+		// IncludeReshardJournalEvents: true,
 	}
 	reader, err := conn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	if err != nil {
