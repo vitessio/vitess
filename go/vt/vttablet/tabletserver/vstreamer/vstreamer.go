@@ -1003,7 +1003,6 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		}
 		if afterOK {
 			rowChange.After = sqltypes.RowToProto3(afterValues)
-			// FIXME (Rohit): change these to accept options passed into the API
 			if (vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) &&
 				partial {
 
