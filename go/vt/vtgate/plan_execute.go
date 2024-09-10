@@ -93,6 +93,12 @@ func (e *Executor) newExecute(
 	)
 
 	var timeoutOnce sync.Once
+	var cancel context.CancelFunc
+	defer func() {
+		if cancel != nil {
+			cancel()
+		}
+	}()
 	for try := 0; try < MaxBufferingRetries; try++ {
 		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
 			// Without a wait we fail non-deterministically since the previous vschema will not have
@@ -144,9 +150,7 @@ func (e *Executor) newExecute(
 		// set the overall query timeout if it is not already set
 		if vcursor.queryTimeout > 0 {
 			timeoutOnce.Do(func() {
-				var cancel context.CancelFunc
 				ctx, cancel = context.WithTimeout(ctx, vcursor.queryTimeout)
-				defer cancel()
 			})
 		}
 
