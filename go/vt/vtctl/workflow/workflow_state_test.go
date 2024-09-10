@@ -119,7 +119,7 @@ func TestWorkflowStateMoveTables(t *testing.T) {
 		},
 		{
 			name:                   "switch reads and writes",
-			wf1SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY},
+			wf1SwitchedTabletTypes: defaultTabletTypes,
 			wf1ExpectedState:       "All Reads Switched. Writes Switched",
 		},
 		{
@@ -132,7 +132,7 @@ func TestWorkflowStateMoveTables(t *testing.T) {
 			name:                   "switch replica only",
 			wf1SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
 			wf1ExpectedState:       "Reads partially switched. All Replica Reads Switched. Rdonly not switched. Writes Not Switched",
-			wf2SwitchedTabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY},
+			wf2SwitchedTabletTypes: defaultTabletTypes,
 		},
 	}
 	tables := []string{"t1"}
@@ -152,16 +152,14 @@ func TestWorkflowStateMoveTables(t *testing.T) {
 		te.updateTableRoutingRules(t, ctx, nil, tables,
 			"source2", "target2", "source2")
 	}
-	resetRoutingRules()
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			resetRoutingRules()
 			te.updateTableRoutingRules(t, ctx, tc.wf1SwitchedTabletTypes, tables,
 				"source", te.targetKeyspace.KeyspaceName, te.targetKeyspace.KeyspaceName)
 			te.updateTableRoutingRules(t, ctx, tc.wf2SwitchedTabletTypes, tables,
 				"source2", "target2", "target2")
 			require.Equal(t, tc.wf1ExpectedState, getStateString("target", "wf1"))
-			// reset to initial state
-			resetRoutingRules()
 		})
 	}
 }

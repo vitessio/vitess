@@ -1034,8 +1034,9 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 			for _, table := range ts.Tables() {
 				// If a rule for the primary tablet type exists for any table and points to the target keyspace,
 				// then writes have been switched.
-				rr := globalRules[fmt.Sprintf("%s.%s", sourceKeyspace, table)]
-				if len(rr) > 0 && rr[0] != fmt.Sprintf("%s.%s", sourceKeyspace, table) {
+				ruleKey := fmt.Sprintf("%s.%s", sourceKeyspace, table)
+				rr := globalRules[ruleKey]
+				if len(rr) > 0 && rr[0] != ruleKey {
 					state.WritesSwitched = true
 					break
 				}

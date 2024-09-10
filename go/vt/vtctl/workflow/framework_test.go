@@ -58,6 +58,12 @@ const (
 	tabletUIDStep           = 10
 )
 
+var defaultTabletTypes = []topodatapb.TabletType{
+	topodatapb.TabletType_PRIMARY,
+	topodatapb.TabletType_REPLICA,
+	topodatapb.TabletType_RDONLY,
+}
+
 type testKeyspace struct {
 	KeyspaceName string
 	ShardNames   []string
@@ -209,7 +215,7 @@ func (env *testEnv) updateTableRoutingRules(t *testing.T, ctx context.Context,
 	tabletTypes []topodatapb.TabletType, tables []string, sourceKeyspace, targetKeyspace, toKeyspace string) {
 
 	if len(tabletTypes) == 0 {
-		tabletTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+		tabletTypes = defaultTabletTypes
 	}
 	rr, err := env.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
