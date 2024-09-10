@@ -873,22 +873,6 @@ func (vc *vcursorImpl) SetQueryTimeout(maxExecutionTime int64) {
 	vc.safeSession.QueryTimeout = maxExecutionTime
 }
 
-// GetQueryTimeout implements the SessionActions interface
-// The priority of adding query timeouts -
-// 1. Query timeout comment directive.
-// 2. If the comment directive is unspecified, then we use the session setting.
-// 3. If the comment directive and session settings is unspecified, then we use the global default specified by a flag.
-func (vc *vcursorImpl) GetQueryTimeout(queryTimeoutFromComments int) int {
-	if queryTimeoutFromComments != 0 {
-		return queryTimeoutFromComments
-	}
-	sessionQueryTimeout := int(vc.safeSession.GetQueryTimeout())
-	if sessionQueryTimeout != 0 {
-		return sessionQueryTimeout
-	}
-	return queryTimeout
-}
-
 // SetClientFoundRows implements the SessionActions interface
 func (vc *vcursorImpl) SetClientFoundRows(_ context.Context, clientFoundRows bool) error {
 	vc.safeSession.GetOrCreateOptions().ClientFoundRows = clientFoundRows
@@ -935,7 +919,7 @@ func (vc *vcursorImpl) SetExecQueryTimeout(timeout *int) {
 	var execTimeout *int
 	if timeout != nil {
 		execTimeout = timeout
-	} else if sessionTimeout := vc.GetQueryTimeout(0); sessionTimeout > 0 {
+	} else if sessionTimeout := vc.getQueryTimeout(); sessionTimeout > 0 {
 		execTimeout = &sessionTimeout
 	}
 
@@ -953,6 +937,16 @@ func (vc *vcursorImpl) SetExecQueryTimeout(timeout *int) {
 	vc.safeSession.GetOrCreateOptions().Timeout = &querypb.ExecuteOptions_AuthoritativeTimeout{
 		AuthoritativeTimeout: int64(*execTimeout),
 	}
+}
+
+// getQueryTimeout returns timeout based on the priority
+// session setting > global default specified by a flag.
+func (vc *vcursorImpl) getQueryTimeout() int {
+	sessionQueryTimeout := int(vc.safeSession.GetQueryTimeout())
+	if sessionQueryTimeout != 0 {
+		return sessionQueryTimeout
+	}
+	return queryTimeout
 }
 
 // SetConsolidator implements the SessionActions interface

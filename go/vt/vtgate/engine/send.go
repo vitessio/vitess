@@ -91,9 +91,6 @@ func (s *Send) GetTableName() string {
 
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, s.QueryTimeout)
-	defer cancelFunc()
-
 	rss, err := s.checkAndReturnShards(ctx, vcursor)
 	if err != nil {
 		return nil, err

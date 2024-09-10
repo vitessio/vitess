@@ -66,6 +66,8 @@ func TestQueryTimeoutWithDual(t *testing.T) {
 	assert.Error(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
 	assert.NoError(t, err)
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
+	assert.NoError(t, err)
 }
 
 func TestQueryTimeoutWithTables(t *testing.T) {

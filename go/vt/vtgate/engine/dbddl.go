@@ -102,8 +102,12 @@ func (c *DBDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 		log.Errorf("'%s' database ddl plugin is not registered. Falling back to default plugin", name)
 		plugin = databaseCreatorPlugins[defaultDBDDLPlugin]
 	}
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, c.queryTimeout)
-	defer cancelFunc()
+
+	if c.queryTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.queryTimeout)*time.Millisecond)
+		defer cancel()
+	}
 
 	if c.create {
 		return c.createDatabase(ctx, vcursor, plugin)
@@ -125,9 +129,9 @@ func (c *DBDDL) createDatabase(ctx context.Context, vcursor VCursor, plugin DBDD
 			break
 		}
 		select {
-		case <-ctx.Done(): //context cancelled
+		case <-ctx.Done(): // context cancelled
 			return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate create database: destination not resolved")
-		case <-time.After(500 * time.Millisecond): //timeout
+		case <-time.After(500 * time.Millisecond): // timeout
 		}
 	}
 	var queries []*querypb.BoundQuery
@@ -146,9 +150,9 @@ func (c *DBDDL) createDatabase(ctx context.Context, vcursor VCursor, plugin DBDD
 			if err != nil {
 				noErr = false
 				select {
-				case <-ctx.Done(): //context cancelled
+				case <-ctx.Done(): // context cancelled
 					return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate create database: tablets not healthy")
-				case <-time.After(500 * time.Millisecond): //timeout
+				case <-time.After(500 * time.Millisecond): // timeout
 				}
 				break
 			}
@@ -167,9 +171,9 @@ func (c *DBDDL) dropDatabase(ctx context.Context, vcursor VCursor, plugin DBDDLP
 	}
 	for vcursor.KeyspaceAvailable(c.name) {
 		select {
-		case <-ctx.Done(): //context cancelled
+		case <-ctx.Done(): // context cancelled
 			return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate drop database: keyspace still available in vschema")
-		case <-time.After(500 * time.Millisecond): //timeout
+		case <-time.After(500 * time.Millisecond): // timeout
 		}
 	}
 

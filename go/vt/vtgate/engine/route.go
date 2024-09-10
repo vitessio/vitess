@@ -130,22 +130,11 @@ func (route *Route) GetTableName() string {
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, route.QueryTimeout)
-	defer cancelFunc()
 	qr, err := route.executeInternal(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
-}
-
-// addQueryTimeout adds a query timeout to the context it receives and returns the modified context along with the cancel function.
-func addQueryTimeout(ctx context.Context, vcursor VCursor, queryTimeout int) (context.Context, context.CancelFunc) {
-	timeout := vcursor.Session().GetQueryTimeout(queryTimeout)
-	if timeout > 0 {
-		return context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
-	}
-	return ctx, func() {}
 }
 
 type cxtKey int
