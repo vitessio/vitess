@@ -82,7 +82,7 @@ func (u *UnicodeSet) CloseOver(attribute USet) {
 	foldSet := u.Clone()
 	n := u.RangeCount()
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		start := u.RangeStart(i)
 		end := u.RangeEnd(i)
 
