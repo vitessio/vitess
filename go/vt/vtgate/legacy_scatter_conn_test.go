@@ -380,6 +380,8 @@ func (o *recordingResultsObserver) observe(result *sqltypes.Result) {
 	mu.Unlock()
 }
 
+func (o *recordingResultsObserver) close() {}
+
 func TestMultiExecs(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	createSandbox("TestMultiExecs")

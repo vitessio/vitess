@@ -73,13 +73,23 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shardActionInfo *shardActionInfo) (*shardActionInfo, error)
 
 type (
+	// resultsObserver will be given the chance to observe the results coming in for a specific query
 	resultsObserver interface {
 		observe(*sqltypes.Result)
+		close()
 	}
-	nullResultsObserver struct{}
+
+	nullResultsObserver       struct{}
+	nullResultObserverFactory func(sql string) resultsObserver
 )
 
+// resultObserverFactory is a factory function that creates a resultsObserver, associating them with the query
+var resultObserverFactory func(sql string) resultsObserver = func(sql string) resultsObserver {
+	return nullResultsObserver{}
+}
+
 func (nullResultsObserver) observe(*sqltypes.Result) {}
+func (nullResultsObserver) close()                   {}
 
 // NewScatterConn creates a new ScatterConn.
 func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *ScatterConn {

@@ -111,10 +111,11 @@ func (e *Executor) newExecute(
 			}
 		}
 
-		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv, sql)
 		if err != nil {
 			return err
 		}
+		defer vcursor.Close() // we know this happens in a loop, but MaxBufferingRetries is small, so it's fine
 
 		// 3: Create a plan for the query.
 		// If we are retrying, it is likely that the routing rules have changed and hence we need to

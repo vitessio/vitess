@@ -147,6 +147,7 @@ func newVCursorImpl(
 	serv srvtopo.Server,
 	warnShardedOnly bool,
 	pv plancontext.PlannerVersion,
+	sql string,
 ) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
@@ -197,7 +198,7 @@ func newVCursorImpl(
 		pv:                  pv,
 		warmingReadsPercent: warmingReadsPct,
 		warmingReadsChannel: warmingReadsChan,
-		resultsObserver:     nullResultsObserver{},
+		resultsObserver:     resultObserverFactory(sql),
 	}, nil
 }
 
@@ -1401,7 +1402,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
-		resultsObserver:     nullResultsObserver{},
+		resultsObserver:     vc.resultsObserver,
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
@@ -1433,7 +1434,7 @@ func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
-		resultsObserver:     nullResultsObserver{},
+		resultsObserver:     vc.resultsObserver,
 	}
 
 	v.marginComments.Trailing += "/* mirror query */"
@@ -1458,4 +1459,8 @@ func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
 // GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.
 func (vc *vcursorImpl) GetForeignKeyChecksState() *bool {
 	return vc.fkChecksState
+}
+
+func (vc *vcursorImpl) Close() {
+	vc.resultsObserver.close()
 }
