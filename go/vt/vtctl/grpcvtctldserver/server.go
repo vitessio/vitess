@@ -5079,6 +5079,7 @@ func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCr
 	span.Annotate("target_cells", req.TargetCells)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
+	span.Annotate("auto_start", req.AutoStart)
 	span.Annotate("auto_retry", req.AutoRetry)
 	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
@@ -5111,6 +5112,7 @@ func (s *VtctldServer) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffRe
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("shards", req.TargetShards)
 
 	resp, err = s.ws.VDiffResume(ctx, req)
 	return resp, err
@@ -5141,6 +5143,7 @@ func (s *VtctldServer) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStop
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("shards", req.TargetShards)
 
 	resp, err = s.ws.VDiffStop(ctx, req)
 	return resp, err
