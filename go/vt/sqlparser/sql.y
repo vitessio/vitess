@@ -533,7 +533,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <strs> system_variable_list
 %type <str> system_variable
 %type <into> into_opt
-%type <assignExprs> on_dup_opt assignment_list
+%type <assignExprs> on_dup_opt assignment_list set_opt
 %type <setVarExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
 %type <assignExpr> assignment_expression
@@ -724,10 +724,19 @@ command:
   setParseTree(yylex, nil)
 }
 
-load_statement:
-  LOAD DATA local_opt infile_opt ignore_or_replace_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt
+set_opt:
   {
-    $$ = &Load{Local: $3, Infile: $4, IgnoreOrReplace: $5, Table: $6, Partition: $7, Charset: $8, Fields: $9, Lines: $10, IgnoreNum: $11, Columns: $12}
+    $$ = nil
+  }
+| SET assignment_list
+  {
+    $$ = $2
+  }
+
+load_statement:
+  LOAD DATA local_opt infile_opt ignore_or_replace_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt set_opt
+  {
+    $$ = &Load{Local: $3, Infile: $4, IgnoreOrReplace: $5, Table: $6, Partition: $7, Charset: $8, Fields: $9, Lines: $10, IgnoreNum: $11, Columns: $12, SetExprs: $13}
   }
 
 select_statement:

@@ -865,6 +865,7 @@ type Load struct {
 	*Lines
 	IgnoreNum *SQLVal
 	Columns
+	SetExprs  AssignmentExprs
 	IgnoreOrReplace string
 }
 
@@ -900,7 +901,11 @@ func (node *Load) Format(buf *TrackedBuffer) {
 	if len(node.Partition) > 0 {
 		buf.Myprintf(" partition (%v)", node.Partition)
 	}
+
 	buf.Myprintf("%s%v%v%s%v", charset, node.Fields, node.Lines, ignoreNum, node.Columns)
+	if node.SetExprs != nil {
+		buf.Myprintf(" set %v", node.SetExprs)
+	}
 }
 
 func (node *Load) walkSubtree(visit Visit) error {

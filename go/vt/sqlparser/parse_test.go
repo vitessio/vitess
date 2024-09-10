@@ -7252,74 +7252,105 @@ func TestLoadData(t *testing.T) {
 	testCases := []struct {
 		input  string
 		output string
-	}{{
-		// test with simple file
-		input:  "LOAD DATA INFILE 'x.txt' INTO TABLE c",
-		output: "load data infile 'x.txt' into table c",
-	}, {
-		input:  "LOAD DATA INFILE 'x.txt' IGNORE INTO TABLE c",
-		output: "load data infile 'x.txt' ignore into table c",
-	}, {
-		input:  "LOAD DATA INFILE 'x.txt' REPLACE INTO TABLE c",
-		output: "load data infile 'x.txt' replace into table c",
-	}, {
-		input:  "LOAD DATA INFILE '~/Desktop/x.txt' INTO TABLE c",
-		output: "load data infile '~/Desktop/x.txt' into table c",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test",
-		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' IGNORE INTO TABLE test",
-		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' ignore into table test",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' REPLACE INTO TABLE test",
-		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' replace into table test",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id)",
-		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id)",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4",
-		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id) character set UTF8MB4",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test FIELDS TERMINATED BY ''",
-		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test fields terminated by ''",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY ''",
-		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by ''",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) FIELDS TERMINATED BY '' ENCLOSED BY '' ESCAPED BY ''",
-		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id) fields terminated by '' enclosed by '' escaped by ''",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE 'y.txt' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' OPTIONALLY ENCLOSED BY '' ESCAPED BY '' LINES TERMINATED BY ''",
-		output: "load data local infile 'y.txt' into table test partition (id) character set UTF8MB4 fields terminated by '' optionally enclosed by '' escaped by '' lines terminated by ''",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' IGNORE 0 LINES (`pk`)",
-		output: "load data local infile 'l.csv' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines terminated by '' ignore 0 lines (pk)",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES STARTING BY 'xxx' IGNORE 0 LINES (`pk`)",
-		output: "load data local infile 'l.csv' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines starting by 'xxx' ignore 0 lines (pk)",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES STARTING BY 'xxx' IGNORE 0 ROWS (`pk`)",
-		output: "load data local infile 'l.csv' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines starting by 'xxx' ignore 0 lines (pk)",
-	}, {
-		input:  "LOAD DATA LOCAL INFILE 'g.xlsx' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' (`id`)",
-		output: "load data local infile 'g.xlsx' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines terminated by '' (id)",
-	}, {
-		input:  "LOAD DATA INFILE '/tmp/jokes.txt' INTO TABLE jokes FIELDS TERMINATED BY '' LINES TERMINATED BY '\n%%\n' (joke)",
-		output: "load data infile '/tmp/jokes.txt' into table jokes fields terminated by '' lines terminated by '\n%%\n' (joke)",
-	}, {
-		input:  "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table",
-		output: "load data infile 'data.txt' into table db2.my_table",
-	}, {
-		input:  "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table (c1, c2, c3)",
-		output: "load data infile 'data.txt' into table db2.my_table (c1, c2, c3)",
-	}, {
-		input:  "LOAD DATA INFILE '/tmp/test.txt' INTO TABLE test IGNORE 1 LINES",
-		output: "load data infile '/tmp/test.txt' into table test ignore 1 lines",
-	}, {
-		input:  "LOAD DATA INFILE '/tmp/test.txt' INTO TABLE test IGNORE 1 ROWS",
-		output: "load data infile '/tmp/test.txt' into table test ignore 1 lines",
-	}}
+	}{
+		{
+			// test with simple file
+			input:  "LOAD DATA INFILE 'x.txt' INTO TABLE c",
+			output: "load data infile 'x.txt' into table c",
+		},
+		{
+			input:  "LOAD DATA INFILE 'x.txt' IGNORE INTO TABLE c",
+			output: "load data infile 'x.txt' ignore into table c",
+		},
+		{
+			input:  "LOAD DATA INFILE 'x.txt' REPLACE INTO TABLE c",
+			output: "load data infile 'x.txt' replace into table c",
+		},
+		{
+			input:  "LOAD DATA INFILE '~/Desktop/x.txt' INTO TABLE c",
+			output: "load data infile '~/Desktop/x.txt' into table c",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test",
+			output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' IGNORE INTO TABLE test",
+			output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' ignore into table test",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' REPLACE INTO TABLE test",
+			output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' replace into table test",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id)",
+			output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id)",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4",
+			output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id) character set UTF8MB4",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test FIELDS TERMINATED BY ''",
+			output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test fields terminated by ''",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY ''",
+			output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by ''",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) FIELDS TERMINATED BY '' ENCLOSED BY '' ESCAPED BY ''",
+			output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id) fields terminated by '' enclosed by '' escaped by ''",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE 'y.txt' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' OPTIONALLY ENCLOSED BY '' ESCAPED BY '' LINES TERMINATED BY ''",
+			output: "load data local infile 'y.txt' into table test partition (id) character set UTF8MB4 fields terminated by '' optionally enclosed by '' escaped by '' lines terminated by ''",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' IGNORE 0 LINES (`pk`)",
+			output: "load data local infile 'l.csv' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines terminated by '' ignore 0 lines (pk)",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES STARTING BY 'xxx' IGNORE 0 LINES (`pk`)",
+			output: "load data local infile 'l.csv' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines starting by 'xxx' ignore 0 lines (pk)",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES STARTING BY 'xxx' IGNORE 0 ROWS (`pk`)",
+			output: "load data local infile 'l.csv' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines starting by 'xxx' ignore 0 lines (pk)",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE 'g.xlsx' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' (`id`)",
+			output: "load data local infile 'g.xlsx' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines terminated by '' (id)",
+		},
+		{
+			input:  "LOAD DATA INFILE '/tmp/jokes.txt' INTO TABLE jokes FIELDS TERMINATED BY '' LINES TERMINATED BY '\n%%\n' (joke)",
+			output: "load data infile '/tmp/jokes.txt' into table jokes fields terminated by '' lines terminated by '\n%%\n' (joke)",
+		},
+		{
+			input:  "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table",
+			output: "load data infile 'data.txt' into table db2.my_table",
+		},
+		{
+			input:  "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table (c1, c2, c3)",
+			output: "load data infile 'data.txt' into table db2.my_table (c1, c2, c3)",
+		},
+		{
+			input:  "LOAD DATA INFILE '/tmp/test.txt' INTO TABLE test IGNORE 1 LINES",
+			output: "load data infile '/tmp/test.txt' into table test ignore 1 lines",
+		},
+		{
+			input:  "LOAD DATA INFILE '/tmp/test.txt' INTO TABLE test IGNORE 1 ROWS",
+			output: "load data infile '/tmp/test.txt' into table test ignore 1 lines",
+		},
+		{
+			input:  "LOAD DATA INFILE '/tmp/test.txt' INTO TABLE test SET a = 1, b = 2, c = 3",
+			output: "load data infile '/tmp/test.txt' into table test set a = 1, b = 2, c = 3",
+		},
+		{
+			input:  "LOAD DATA LOCAL INFILE 'g.xlsx' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' (`id`) SET a = 1, b = 2, c = 3",
+			output: "load data local infile 'g.xlsx' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines terminated by '' (id) set a = 1, b = 2, c = 3",
+		},
+	}
 	for _, tcase := range testCases {
 		p, err := Parse(tcase.input)
 		require.NoError(t, err)
