@@ -708,22 +708,28 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						return err
 					}
 					if je != nil {
-						// We're going to be ending the tablet stream, so we ensure a reasonable
-						// minimum amount of time is alloted for clients to Recv the journal event
-						// before the stream's context is cancelled (which would cause the grpc
-						// SendMsg or RecvMsg to fail). If the client doesn't Recv the journal
-						// event before the stream ends then they'll have to resume from the last
-						// ShardGtid they received before the journal event.
-						endTimer := time.NewTimer(stopOnReshardDelay)
-						defer endTimer.Stop()
+						var endTimer *time.Timer
+						if vs.stopOnReshard {
+							// We're going to be ending the tablet stream, along with the VStream, so
+							// we ensure a reasonable minimum amount of time is alloted for clients
+							// to Recv the journal event before the VStream's context is cancelled
+							// (which would cause the grpc SendMsg or RecvMsg to fail). If the client
+							// doesn't Recv the journal event before the VStream ends then they'll
+							// have to resume from the last ShardGtid they received before the
+							// journal event.
+							endTimer = time.NewTimer(stopOnReshardDelay)
+							defer endTimer.Stop()
+						}
 						// Wait until all other participants converge and then return EOF after
-						// the minimum delay has passed.
+						// any minimum delay has passed.
 						journalDone = je.done
 						select {
 						case <-ctx.Done():
 							return ctx.Err()
 						case <-journalDone:
-							<-endTimer.C
+							if endTimer != nil {
+								<-endTimer.C
+							}
 							return io.EOF
 						}
 					}
