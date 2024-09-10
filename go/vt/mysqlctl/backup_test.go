@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -584,6 +585,7 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 		Mysqld:               mysqld,
 		Concurrency:          1,
 		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
 		DbName:               "test",
 		Keyspace:             "test",
 		Shard:                "-",
@@ -688,26 +690,28 @@ func TestShouldRestore(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
 	b, err := ShouldRestore(env.ctx, env.restoreParams)
-	assert.True(t, b)
-	assert.NoError(t, err)
-
-	// if MySQL is online on time, we should continue the restore
-	env.mysqld.WaitDuration = time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-	defer cancel()
-
-	b, err = ShouldRestore(ctx, env.restoreParams)
-	assert.True(t, b)
-	assert.NoError(t, err)
-
-	// but should return an error if waiting for MySQL longer than the context expected
-	env.mysqld.WaitDuration = time.Second * 2
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	b, err = ShouldRestore(ctx, env.restoreParams)
 	assert.False(t, b)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Error(t, err)
+
+	env.restoreParams.DeleteBeforeRestore = true
+	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	assert.True(t, b)
+	assert.NoError(t, err)
+	env.restoreParams.DeleteBeforeRestore = false
+
+	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("any_db")}}},
+	}
+	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	assert.NoError(t, err)
+	assert.True(t, b)
+
+	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("test")}}},
+	}
+	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	assert.False(t, b)
+	assert.NoError(t, err)
 }
 
 func TestScanLinesToLogger(t *testing.T) {

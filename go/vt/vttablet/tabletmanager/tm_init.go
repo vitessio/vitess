@@ -843,7 +843,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 			}
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, backupTime, restoreToTimestamp, restoreToPos, mysqlShutdownTimeout); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, mysqlShutdownTimeout); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 

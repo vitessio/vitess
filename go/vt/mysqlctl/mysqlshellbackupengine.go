@@ -100,7 +100,7 @@ const (
 )
 
 func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (result BackupResult, finalErr error) {
-	params.Logger.Infof("running ExecuteBackup in %s", params.TabletAlias)
+	params.Logger.Infof("Starting ExecuteBackup in %s", params.TabletAlias)
 
 	location := path.Join(mysqlShellBackupLocation, bh.Directory(), bh.Name())
 
@@ -225,7 +225,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 }
 
 func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-	params.Logger.Infof("running ExecuteRestore for %s", params.DbName)
+	params.Logger.Infof("Calling ExecuteRestore for %s (DeleteBeforeRestore: %v)", params.DbName, params.DeleteBeforeRestore)
 
 	err := be.restorePreCheck(ctx, params)
 	if err != nil {
@@ -248,35 +248,38 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, vterrors.Wrap(err, "disable semi-sync failed")
 	}
 
-	// if super read only is enabled, we need to disable it first so we can then remove existing databases
-	readonly, err := params.Mysqld.IsSuperReadOnly(ctx)
-	if err != nil {
-		return nil, vterrors.Wrap(err, fmt.Sprintf("checking if mysqld has super_read_only=enable: %v", err))
-	}
+	// if we received a RestoreFromBackup API call instead of it being a command line argument,
+	// we need to first clean the host before we start the restore.
+	if params.DeleteBeforeRestore {
+		params.Logger.Infof("restoring on an existing tablet, so dropping database %q", params.DbName)
 
-	if readonly {
-		resetFunc, err := params.Mysqld.SetSuperReadOnly(ctx, false)
+		readonly, err := params.Mysqld.IsSuperReadOnly(ctx)
 		if err != nil {
-			return nil, vterrors.Wrap(err, fmt.Sprintf("unable to disable super-read-only: %v", err))
+			return nil, vterrors.Wrap(err, fmt.Sprintf("checking if mysqld has super_read_only=enable: %v", err))
 		}
 
-		defer func() { // make sure we enable it back on after the restore is done
-			err := resetFunc()
+		if readonly {
+			resetFunc, err := params.Mysqld.SetSuperReadOnly(ctx, false)
 			if err != nil {
-				params.Logger.Errorf("Not able to set super_read_only to its original value after restore")
+				return nil, vterrors.Wrap(err, fmt.Sprintf("unable to disable super-read-only: %v", err))
 			}
-		}()
-	}
 
-	// we first need to drop existing databases so mysql shell can properly restore them from backup
-	params.Logger.Infof("restoring on an existing tablet, so dropping database %q", params.DbName)
+			defer func() {
+				err := resetFunc()
+				if err != nil {
+					params.Logger.Errorf("Not able to set super_read_only to its original value after restore")
+				}
+			}()
+		}
 
-	err = params.Mysqld.ExecuteSuperQueryList(ctx,
-		[]string{fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", params.DbName),
-			fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", sidecar.GetName())},
-	)
-	if err != nil {
-		return nil, vterrors.Wrap(err, fmt.Sprintf("dropping database %q failed", params.DbName))
+		err = params.Mysqld.ExecuteSuperQueryList(ctx,
+			[]string{fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", params.DbName),
+				fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", sidecar.GetName())},
+		)
+		if err != nil {
+			return nil, vterrors.Wrap(err, fmt.Sprintf("dropping database %q failed", params.DbName))
+		}
+
 	}
 
 	// we need to get rid of all the current replication information on the host.

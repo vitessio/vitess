@@ -128,6 +128,7 @@ func (tm *TabletManager) RestoreData(
 	ctx context.Context,
 	logger logutil.Logger,
 	waitForBackupInterval time.Duration,
+	deleteBeforeRestore bool,
 	backupTime time.Time,
 	restoreToTimetamp time.Time,
 	restoreToPos string,
@@ -180,14 +181,14 @@ func (tm *TabletManager) RestoreData(
 		RestoreToPos:       restoreToPos,
 		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimetamp),
 	}
-	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, req, mysqlShutdownTimeout)
+	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req, mysqlShutdownTimeout)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
+func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
 
 	tablet := tm.Tablet()
 	originalType := tablet.Type
@@ -222,6 +223,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		Logger:               logger,
 		Concurrency:          restoreConcurrency,
 		HookExtraEnv:         tm.hookExtraEnv(),
+		DeleteBeforeRestore:  deleteBeforeRestore,
 		DbName:               topoproto.TabletDbName(tablet),
 		Keyspace:             keyspace,
 		Shard:                tablet.Shard,

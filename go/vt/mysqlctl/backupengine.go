@@ -118,6 +118,10 @@ type RestoreParams struct {
 	Concurrency int
 	// Extra env variables for pre-restore and post-restore transform hooks
 	HookExtraEnv map[string]string
+	// DeleteBeforeRestore tells us whether existing data should be deleted before
+	// restoring. This is always set to false when starting a tablet with -restore_from_backup,
+	// but is set to true when executing a RestoreFromBackup command on an already running vttablet
+	DeleteBeforeRestore bool
 	// DbName is the name of the managed database / schema
 	DbName string
 	// Keyspace and Shard are used to infer the directory where backups are stored
@@ -148,6 +152,7 @@ func (p *RestoreParams) Copy() RestoreParams {
 		Logger:               p.Logger,
 		Concurrency:          p.Concurrency,
 		HookExtraEnv:         p.HookExtraEnv,
+		DeleteBeforeRestore:  p.DeleteBeforeRestore,
 		DbName:               p.DbName,
 		Keyspace:             p.Keyspace,
 		Shard:                p.Shard,

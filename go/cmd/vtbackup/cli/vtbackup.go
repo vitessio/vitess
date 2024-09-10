@@ -428,6 +428,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		Logger:               logutil.NewConsoleLogger(),
 		Concurrency:          concurrency,
 		HookExtraEnv:         extraEnv,
+		DeleteBeforeRestore:  true,
 		DbName:               dbName,
 		Keyspace:             initKeyspace,
 		Shard:                initShard,
