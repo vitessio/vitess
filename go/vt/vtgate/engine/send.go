@@ -47,6 +47,8 @@ type Send struct {
 	// IsDML specifies how to deal with autocommit behaviour
 	IsDML bool
 
+	IsDDL bool
+
 	// SingleShardOnly specifies that the query must be send to only single shard
 	SingleShardOnly bool
 
@@ -91,6 +93,10 @@ func (s *Send) GetTableName() string {
 
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	if err := s.commitIfDDL(ctx, vcursor); err != nil {
+		return nil, err
+	}
+
 	rss, err := s.checkAndReturnShards(ctx, vcursor)
 	if err != nil {
 		return nil, err
@@ -155,6 +161,10 @@ func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindV
 
 // TryStreamExecute implements Primitive interface
 func (s *Send) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	if err := s.commitIfDDL(ctx, vcursor); err != nil {
+		return err
+	}
+
 	rss, err := s.checkAndReturnShards(ctx, vcursor)
 	if err != nil {
 		return err
@@ -200,4 +210,12 @@ func (s *Send) description() PrimitiveDescription {
 		TargetDestination: s.TargetDestination,
 		Other:             other,
 	}
+}
+
+// commitIfDDL commits any open transaction before executing the ddl query.
+func (s *Send) commitIfDDL(ctx context.Context, vcursor VCursor) error {
+	if s.IsDDL {
+		return vcursor.Session().Commit(ctx)
+	}
+	return nil
 }
