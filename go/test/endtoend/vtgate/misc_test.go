@@ -807,7 +807,13 @@ func TestDDLTargeted(t *testing.T) {
 	utils.Exec(t, conn, "use `ks/-80`")
 	utils.Exec(t, conn, `begin`)
 	utils.Exec(t, conn, `create table ddl_targeted (id bigint primary key)`)
-	utils.Exec(t, conn, `commit`)
+	// implicit commit on ddl would have closed the open transaction
+	// so this execution should happen as autocommit.
+	utils.Exec(t, conn, `insert into ddl_targeted (id) values (1)`)
+	// this will have not impact and the row would have inserted.
+	utils.Exec(t, conn, `rollback`)
+	// validating the row
+	utils.AssertMatches(t, conn, `select id from ddl_targeted`, `[[INT64(1)]]`)
 }
 
 func TestLookupErrorMetric(t *testing.T) {
