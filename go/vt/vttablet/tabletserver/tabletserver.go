@@ -239,7 +239,7 @@ func (tsv *TabletServer) loadQueryTimeout() time.Duration {
 	return time.Duration(tsv.QueryTimeout.Load())
 }
 
-func (tsv *TabletServer) loadQueryTimeoutWithTx(txID int64, options *querypb.ExecuteOptions) time.Duration {
+func (tsv *TabletServer) loadQueryTimeoutWithTxAndOptions(txID int64, options *querypb.ExecuteOptions) time.Duration {
 	timeout := tsv.loadQueryTimeoutWithOptions(options)
 
 	if txID == 0 {
@@ -254,18 +254,11 @@ func (tsv *TabletServer) loadQueryTimeoutWithTx(txID int64, options *querypb.Exe
 }
 
 func (tsv *TabletServer) loadQueryTimeoutWithOptions(options *querypb.ExecuteOptions) time.Duration {
-	authoritativeTimeout := loadAuthoritativeTimeout(options)
-	if authoritativeTimeout >= 0 {
-		return authoritativeTimeout
+	// returns the authoritative timeout if it is set.
+	if options != nil && options.Timeout != nil {
+		return time.Duration(options.GetAuthoritativeTimeout()) * time.Millisecond
 	}
 	return time.Duration(tsv.QueryTimeout.Load())
-}
-
-func loadAuthoritativeTimeout(options *querypb.ExecuteOptions) time.Duration {
-	if options == nil || options.Timeout == nil {
-		return -1
-	}
-	return time.Duration(options.GetAuthoritativeTimeout()) * time.Millisecond
 }
 
 // onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
@@ -807,7 +800,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	allowOnShutdown := transactionID != 0
-	timeout := tsv.loadQueryTimeoutWithTx(transactionID, options)
+	timeout := tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options)
 	err = tsv.execRequest(
 		ctx, timeout,
 		"Execute", sql, bindVariables,
@@ -1309,7 +1302,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 	state.TabletAlias = tsv.alias
 
 	allowOnShutdown := transactionID != 0
-	timeout := tsv.loadQueryTimeoutWithTx(transactionID, options)
+	timeout := tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options)
 
 	err = tsv.execRequest(
 		ctx, timeout,
