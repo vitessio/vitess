@@ -23,9 +23,9 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -54,20 +54,6 @@ var (
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandExecuteMultiFetchAsDBA,
 		Aliases:               []string{"ExecuteMultiFetchAsDba"},
-	}
-	// GetUnresolvedTransactions makes an GetUnresolvedTransactions gRPC call to a vtctld.
-	GetUnresolvedTransactions = &cobra.Command{
-		Use:   "GetUnresolvedTransactions <keyspace>",
-		Short: "Retrieves unresolved transactions for the given keyspace.",
-		Args:  cobra.ExactArgs(1),
-		RunE:  commandGetUnresolvedTransactions,
-	}
-	// ConcludeTransaction makes a ConcludeTransaction gRPC call to a vtctld.
-	ConcludeTransaction = &cobra.Command{
-		Use:   "ConcludeTransaction <dtid> [<keyspace/shard> ...]",
-		Short: "Concludes the unresolved transaction by rolling back any prepared transaction and deleting the transaction metadata record.",
-		Args:  cobra.MinimumNArgs(1),
-		RunE:  commandConcludeTransaction,
 	}
 )
 
@@ -212,55 +198,6 @@ func commandExecuteMultiFetchAsDBA(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func commandGetUnresolvedTransactions(cmd *cobra.Command, args []string) error {
-	cli.FinishedParsing(cmd)
-
-	keyspace := cmd.Flags().Arg(0)
-	resp, err := client.GetUnresolvedTransactions(commandCtx,
-		&vtctldatapb.GetUnresolvedTransactionsRequest{
-			Keyspace: keyspace,
-		})
-	if err != nil {
-		return err
-	}
-
-	data, err := cli.MarshalJSON(resp.Transactions)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%s\n", data)
-	return nil
-}
-
-func commandConcludeTransaction(cmd *cobra.Command, args []string) error {
-	allArgs := cmd.Flags().Args()
-	shards, err := cli.ParseKeyspaceShards(allArgs[1:])
-	if err != nil {
-		return err
-	}
-	cli.FinishedParsing(cmd)
-
-	dtid := allArgs[0]
-	var participants []*querypb.Target
-	for _, shard := range shards {
-		participants = append(participants, &querypb.Target{
-			Keyspace: shard.Keyspace,
-			Shard:    shard.Name,
-		})
-	}
-	_, err = client.ConcludeTransaction(commandCtx,
-		&vtctldatapb.ConcludeTransactionRequest{
-			Dtid:         dtid,
-			Participants: participants,
-		})
-	if err != nil {
-		return err
-	}
-	fmt.Println("Successfully concluded the distributed transaction")
-
-	return nil
-}
-
 func init() {
 	ExecuteFetchAsApp.Flags().Int64Var(&executeFetchAsAppOptions.MaxRows, "max-rows", 10_000, "The maximum number of rows to fetch from the remote tablet.")
 	ExecuteFetchAsApp.Flags().BoolVar(&executeFetchAsAppOptions.UsePool, "use-pool", false, "Use the tablet connection pool instead of creating a fresh connection.")
@@ -278,7 +215,4 @@ func init() {
 	ExecuteMultiFetchAsDBA.Flags().BoolVar(&executeMultiFetchAsDBAOptions.ReloadSchema, "reload-schema", false, "Instructs the tablet to reload its schema after executing the query.")
 	ExecuteMultiFetchAsDBA.Flags().BoolVarP(&executeMultiFetchAsDBAOptions.JSON, "json", "j", false, "Output the results in JSON instead of a human-readable table.")
 	Root.AddCommand(ExecuteMultiFetchAsDBA)
-
-	Root.AddCommand(GetUnresolvedTransactions)
-	Root.AddCommand(ConcludeTransaction)
 }
