@@ -35,6 +35,7 @@ var _ Primitive = (*Distinct)(nil)
 type (
 	// Distinct Primitive is used to uniqueify results
 	Distinct struct {
+		identifiablePrimitive
 		Source    Primitive
 		CheckCols []CheckCol
 		Truncate  int

@@ -33,6 +33,7 @@ var _ Primitive = (*SimpleProjection)(nil)
 
 // SimpleProjection selects which columns to keep from the input
 type SimpleProjection struct {
+	identifiablePrimitive
 	// Cols defines the column numbers from the underlying primitive
 	// to be returned.
 	Cols []int

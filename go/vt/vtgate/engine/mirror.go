@@ -30,6 +30,7 @@ type (
 	// authoritative primitive and, based on whether a die-roll exceeds a
 	// percentage, to also execute a target Primitive.
 	percentBasedMirror struct {
+		identifiablePrimitive
 		percent   float32
 		primitive Primitive
 		target    Primitive
@@ -46,7 +47,7 @@ var _ Primitive = (*percentBasedMirror)(nil)
 
 // NewPercentBasedMirror creates a Mirror.
 func NewPercentBasedMirror(percentage float32, primitive Primitive, target Primitive) Primitive {
-	return &percentBasedMirror{percentage, primitive, target}
+	return &percentBasedMirror{percent: percentage, primitive: primitive, target: target}
 }
 
 func (m *percentBasedMirror) RouteType() string {

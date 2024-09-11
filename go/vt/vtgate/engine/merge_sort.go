@@ -48,6 +48,7 @@ var _ Primitive = (*MergeSort)(nil)
 // be used like other Primitives in VTGate. However, it satisfies the Primitive API
 // so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
+	identifiablePrimitive
 	noInputs
 	noTxNeeded
 

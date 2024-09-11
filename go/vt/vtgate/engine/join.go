@@ -32,6 +32,7 @@ var _ Primitive = (*Join)(nil)
 
 // Join specifies the parameters for a join primitive.
 type Join struct {
+	identifiablePrimitive
 	Opcode JoinOpcode
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.

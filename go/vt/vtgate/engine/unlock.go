@@ -28,6 +28,7 @@ var _ Primitive = (*Unlock)(nil)
 
 // Unlock primitive will execute unlock tables to all connections in the session.
 type Unlock struct {
+	identifiablePrimitive
 	noTxNeeded
 	noInputs
 }

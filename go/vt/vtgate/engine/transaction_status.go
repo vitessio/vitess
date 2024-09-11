@@ -30,6 +30,7 @@ var _ Primitive = (*TransactionStatus)(nil)
 
 // TransactionStatus is a primitive to call into executor via vcursor.
 type TransactionStatus struct {
+	identifiablePrimitive
 	noInputs
 	noTxNeeded
 

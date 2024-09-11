@@ -38,6 +38,23 @@ import (
 )
 
 func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operator) (engine.Primitive, error) {
+	// First we create the primitive tree from the operator tree
+	primitive, err := internalTransformToPrimitive(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll go over the primitive tree and assign unique IDs
+	id := 1
+	engine.PreOrderTraverse(primitive, func(primitive engine.Primitive) {
+		primitive.SetID(engine.PrimitiveID(id))
+		id++
+	})
+
+	return primitive, nil
+}
+
+func internalTransformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operator) (engine.Primitive, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -87,12 +104,12 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 }
 
 func transformPercentBasedMirror(ctx *plancontext.PlanningContext, op *operators.PercentBasedMirror) (engine.Primitive, error) {
-	primitive, err := transformToPrimitive(ctx, op.Operator())
+	primitive, err := internalTransformToPrimitive(ctx, op.Operator())
 	if err != nil {
 		return nil, err
 	}
 
-	target, err := transformToPrimitive(ctx.UseMirror(), op.Target())
+	target, err := internalTransformToPrimitive(ctx.UseMirror(), op.Target())
 	// Mirroring is best-effort. If we encounter an error while building the
 	// mirror target primitive, proceed without mirroring.
 	if err != nil {
@@ -103,14 +120,14 @@ func transformPercentBasedMirror(ctx *plancontext.PlanningContext, op *operators
 }
 
 func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWithInput) (engine.Primitive, error) {
-	input, err := transformToPrimitive(ctx, op.Source)
+	input, err := internalTransformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
 	var dmls []engine.Primitive
 	for _, dml := range op.DML {
-		del, err := transformToPrimitive(ctx, dml)
+		del, err := internalTransformToPrimitive(ctx, dml)
 		if err != nil {
 			return nil, err
 		}
@@ -138,7 +155,7 @@ func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (en
 }
 
 func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.UpsertSource) (iLp, uLp engine.Primitive, err error) {
-	iLp, err = transformToPrimitive(ctx, source.Insert)
+	iLp, err = internalTransformToPrimitive(ctx, source.Insert)
 	if err != nil {
 		return
 	}
@@ -146,14 +163,14 @@ func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.Upser
 	if ok {
 		ins.PreventAutoCommit = true
 	}
-	uLp, err = transformToPrimitive(ctx, source.Update)
+	uLp, err = internalTransformToPrimitive(ctx, source.Update)
 	return
 }
 
 func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (engine.Primitive, error) {
 	var prims []engine.Primitive
 	for _, source := range op.Sources {
-		prim, err := transformToPrimitive(ctx, source)
+		prim, err := internalTransformToPrimitive(ctx, source)
 		if err != nil {
 			return nil, err
 		}
@@ -198,7 +215,7 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 
 	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
-	selectionPlan, err := transformToPrimitive(ctx, op.Select())
+	selectionPlan, err := internalTransformToPrimitive(ctx, op.Select())
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +227,7 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 // transformFkCascade transforms a FkCascade operator into an engine primitive
 func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCascade) (engine.Primitive, error) {
 	// We convert the parent operator to a primitive
-	parentLP, err := transformToPrimitive(ctx, fkc.Parent)
+	parentLP, err := internalTransformToPrimitive(ctx, fkc.Parent)
 	if err != nil {
 		return nil, nil
 	}
@@ -218,7 +235,7 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 	// Once we have the parent primitive, we can create the selection primitive and the primitives for the children operators.
 	// For all of these, we don't need the semTable anymore. We set it to nil, to avoid using an incorrect one.
 	ctx.SemTable = nil
-	selLP, err := transformToPrimitive(ctx, fkc.Selection)
+	selLP, err := internalTransformToPrimitive(ctx, fkc.Selection)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +243,7 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 	// Go over the children and convert them to Primitives too.
 	var children []*engine.FkChild
 	for _, child := range fkc.Children {
-		childLP, err := transformToPrimitive(ctx, child.Op)
+		childLP, err := internalTransformToPrimitive(ctx, child.Op)
 		if err != nil {
 			return nil, err
 		}
@@ -248,12 +265,12 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 }
 
 func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery) (engine.Primitive, error) {
-	outer, err := transformToPrimitive(ctx, op.Outer)
+	outer, err := internalTransformToPrimitive(ctx, op.Outer)
 	if err != nil {
 		return nil, err
 	}
 
-	inner, err := transformToPrimitive(ctx, op.Subquery)
+	inner, err := internalTransformToPrimitive(ctx, op.Subquery)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +299,7 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 
 // transformFkVerify transforms a FkVerify operator into a engine primitive
 func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify) (engine.Primitive, error) {
-	inputLP, err := transformToPrimitive(ctx, fkv.Input)
+	inputLP, err := internalTransformToPrimitive(ctx, fkv.Input)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +311,7 @@ func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify
 	// Go over the children and convert them to Primitives too.
 	var verify []*engine.Verify
 	for _, v := range fkv.Verify {
-		lp, err := transformToPrimitive(ctx, v.Op)
+		lp, err := internalTransformToPrimitive(ctx, v.Op)
 		if err != nil {
 			return nil, err
 		}
@@ -314,7 +331,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	if op.WithRollup {
 		return nil, vterrors.VT12001("GROUP BY WITH ROLLUP not supported for sharded queries")
 	}
-	src, err := transformToPrimitive(ctx, op.Source)
+	src, err := internalTransformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +388,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 }
 
 func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct) (engine.Primitive, error) {
-	src, err := transformToPrimitive(ctx, op.Source)
+	src, err := internalTransformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +401,7 @@ func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct)
 }
 
 func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (engine.Primitive, error) {
-	plan, err := transformToPrimitive(ctx, op.Source)
+	plan, err := internalTransformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -413,7 +430,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src engine.Primitive, or
 }
 
 func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (engine.Primitive, error) {
-	src, err := transformToPrimitive(ctx, op.Source)
+	src, err := internalTransformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +499,7 @@ func newSimpleProjection(cols []int, colNames []string, src engine.Primitive) en
 }
 
 func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (engine.Primitive, error) {
-	src, err := transformToPrimitive(ctx, op.Source)
+	src, err := internalTransformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -501,11 +518,11 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (en
 }
 
 func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (engine.Primitive, error) {
-	lhs, err := transformToPrimitive(ctx, n.LHS)
+	lhs, err := internalTransformToPrimitive(ctx, n.LHS)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := transformToPrimitive(ctx, n.RHS)
+	rhs, err := internalTransformToPrimitive(ctx, n.RHS)
 	if err != nil {
 		return nil, err
 	}
@@ -862,7 +879,7 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (engine.Primitive, error) {
 	sources, err := slice.MapWithError(op.Sources, func(src operators.Operator) (engine.Primitive, error) {
-		primitive, err := transformToPrimitive(ctx, src)
+		primitive, err := internalTransformToPrimitive(ctx, src)
 		if err != nil {
 			return nil, err
 		}
@@ -880,7 +897,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (
 }
 
 func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (engine.Primitive, error) {
-	plan, err := transformToPrimitive(ctx, op.Source)
+	plan, err := internalTransformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -913,11 +930,11 @@ func createLimit(input engine.Primitive, limit *sqlparser.Limit, env *vtenv.Envi
 }
 
 func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin) (engine.Primitive, error) {
-	lhs, err := transformToPrimitive(ctx, op.LHS)
+	lhs, err := internalTransformToPrimitive(ctx, op.LHS)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := transformToPrimitive(ctx, op.RHS)
+	rhs, err := internalTransformToPrimitive(ctx, op.RHS)
 	if err != nil {
 		return nil, err
 	}
@@ -1000,11 +1017,11 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 }
 
 func transformRecurseCTE(ctx *plancontext.PlanningContext, op *operators.RecurseCTE) (engine.Primitive, error) {
-	seed, err := transformToPrimitive(ctx, op.Seed())
+	seed, err := internalTransformToPrimitive(ctx, op.Seed())
 	if err != nil {
 		return nil, err
 	}
-	term, err := transformToPrimitive(ctx, op.Term())
+	term, err := internalTransformToPrimitive(ctx, op.Term())
 	if err != nil {
 		return nil, err
 	}

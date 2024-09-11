@@ -32,6 +32,7 @@ var _ Primitive = (*Projection)(nil)
 
 // Projection can evaluate expressions and project the results
 type Projection struct {
+	identifiablePrimitive
 	noTxNeeded
 
 	Cols  []string
