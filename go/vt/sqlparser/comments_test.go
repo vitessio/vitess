@@ -474,8 +474,10 @@ func TestConsolidator(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.query, func(t *testing.T) {
 			stmt, _ := parser.Parse(test.query)
-			got := Consolidator(stmt)
-			assert.Equalf(t, test.expected, got, fmt.Sprintf("Consolidator(stmt) returned %v but expected %v", got, test.expected))
+			qh, err := BuildQueryHints(stmt)
+			require.NoError(t, err)
+			assert.Equalf(t, test.expected, qh.Consolidator,
+				"Consolidator(stmt) returned %v but expected %v", qh.Consolidator, test.expected)
 		})
 	}
 }
@@ -534,12 +536,12 @@ func TestGetPriorityFromStatement(t *testing.T) {
 			t.Parallel()
 			stmt, err := parser.Parse(testCase.query)
 			assert.NoError(t, err)
-			actualPriority, actualError := GetPriorityFromStatement(stmt)
+			qh, err := BuildQueryHints(stmt)
 			if testCase.expectedError != nil {
-				assert.ErrorIs(t, actualError, testCase.expectedError)
+				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, testCase.expectedPriority, actualPriority)
+				assert.Equal(t, testCase.expectedPriority, qh.Priority)
 			}
 		})
 	}
@@ -658,6 +660,41 @@ func TestSetMySQLSetVarValue(t *testing.T) {
 			}
 			newComments := c.SetMySQLSetVarValue(tt.key, tt.value)
 			require.EqualValues(t, tt.commentsWanted, newComments)
+		})
+	}
+}
+
+// TestQueryTimeout tests the extraction of Query_Timeout_MS from the comments.
+func TestQueryTimeout(t *testing.T) {
+	testCases := []struct {
+		query      string
+		expTimeout int
+		noTimeout  bool
+	}{{
+		query:     "select * from a_table",
+		noTimeout: true,
+	}, {
+		query:      "select /*vt+ QUERY_TIMEOUT_MS=21 */ * from another_table",
+		expTimeout: 21,
+	}, {
+		query:      "select /*vt+ QUERY_TIMEOUT_MS=0 */ * from another_table",
+		expTimeout: 0,
+	}, {
+		query:     "select /*vt+ PRIORITY=-42 */ * from another_table",
+		noTimeout: true,
+	}}
+
+	parser := NewTestParser()
+	for _, tc := range testCases {
+		t.Run(tc.query, func(t *testing.T) {
+			stmt, err := parser.Parse(tc.query)
+			assert.NoError(t, err)
+			qh, _ := BuildQueryHints(stmt)
+			if tc.noTimeout {
+				assert.Nil(t, qh.Timeout)
+			} else {
+				assert.Equal(t, tc.expTimeout, *qh.Timeout)
+			}
 		})
 	}
 }

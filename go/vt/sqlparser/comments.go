@@ -554,27 +554,6 @@ func AllowScatterDirective(stmt Statement) bool {
 	return checkDirective(stmt, DirectiveAllowScatter)
 }
 
-// ForeignKeyChecksState returns the state of foreign_key_checks variable if it is part of a SET_VAR optimizer hint in the comments.
-func ForeignKeyChecksState(stmt Statement) *bool {
-	cmt, ok := stmt.(Commented)
-	if ok {
-		fkChecksVal := cmt.GetParsedComments().GetMySQLSetVarValue(sysvars.ForeignKeyChecks)
-		// If the value of the `foreign_key_checks` optimizer hint is something that doesn't make sense,
-		// then MySQL just ignores it and treats it like the case, where it is unspecified. We are choosing
-		// to have the same behaviour here. If the value doesn't match any of the acceptable values, we return nil,
-		// that signifies that no value was specified.
-		switch strings.ToLower(fkChecksVal) {
-		case "on", "1":
-			fkState := true
-			return &fkState
-		case "off", "0":
-			fkState := false
-			return &fkState
-		}
-	}
-	return nil
-}
-
 func checkDirective(stmt Statement, key string) bool {
 	cmt, ok := stmt.(Commented)
 	if ok {
@@ -583,16 +562,80 @@ func checkDirective(stmt Statement, key string) bool {
 	return false
 }
 
-// GetPriorityFromStatement gets the priority from the provided Statement, using DirectivePriority
-func GetPriorityFromStatement(statement Statement) (string, error) {
-	commentedStatement, ok := statement.(Commented)
-	// This would mean that the statement lacks comments, so we can't obtain the workload from it. Hence default to
-	// empty priority
+type QueryHints struct {
+	IgnoreMaxMemoryRows bool
+	Consolidator        querypb.ExecuteOptions_Consolidator
+	Workload            string
+	ForeignKeyChecks    *bool
+	Priority            string
+	Timeout             *int
+}
+
+func BuildQueryHints(stmt Statement) (qh QueryHints, err error) {
+	qh = QueryHints{}
+
+	comment, ok := stmt.(Commented)
 	if !ok {
-		return "", nil
+		return qh, nil
 	}
 
-	directives := commentedStatement.GetParsedComments().Directives()
+	directives := comment.GetParsedComments().Directives()
+
+	qh.Priority, err = getPriority(directives)
+	if err != nil {
+		return qh, err
+	}
+	qh.IgnoreMaxMemoryRows = directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	qh.Consolidator = getConsolidator(stmt, directives)
+	qh.Workload = getWorkload(directives)
+	qh.ForeignKeyChecks = getForeignKeyChecksState(comment)
+	qh.Timeout = getQueryTimeout(directives)
+
+	return qh, nil
+}
+
+// getConsolidator returns the consolidator option.
+func getConsolidator(stmt Statement, directives *CommentDirectives) querypb.ExecuteOptions_Consolidator {
+	if _, isSelect := stmt.(SelectStatement); !isSelect {
+		return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
+	}
+	strv, isSet := directives.GetString(DirectiveConsolidator, "")
+	if !isSet {
+		return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
+	}
+	if i32v, ok := querypb.ExecuteOptions_Consolidator_value["CONSOLIDATOR_"+strings.ToUpper(strv)]; ok {
+		return querypb.ExecuteOptions_Consolidator(i32v)
+	}
+	return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
+}
+
+// getWorkload gets the workload name from the provided Statement, using workloadLabel as the name of
+// the query directive that specifies it.
+func getWorkload(directives *CommentDirectives) string {
+	workloadName, _ := directives.GetString(DirectiveWorkloadName, "")
+	return workloadName
+}
+
+// getForeignKeyChecksState returns the state of foreign_key_checks variable if it is part of a SET_VAR optimizer hint in the comments.
+func getForeignKeyChecksState(cmt Commented) *bool {
+	fkChecksVal := cmt.GetParsedComments().GetMySQLSetVarValue(sysvars.ForeignKeyChecks)
+	// If the value of the `foreign_key_checks` optimizer hint is something that doesn't make sense,
+	// then MySQL just ignores it and treats it like the case, where it is unspecified. We are choosing
+	// to have the same behaviour here. If the value doesn't match any of the acceptable values, we return nil,
+	// that signifies that no value was specified.
+	switch strings.ToLower(fkChecksVal) {
+	case "on", "1":
+		fkState := true
+		return &fkState
+	case "off", "0":
+		fkState := false
+		return &fkState
+	}
+	return nil
+}
+
+// getPriority gets the priority from the provided Statement, using DirectivePriority
+func getPriority(directives *CommentDirectives) (string, error) {
 	priority, ok := directives.GetString(DirectivePriority, "")
 	if !ok || priority == "" {
 		return "", nil
@@ -606,41 +649,16 @@ func GetPriorityFromStatement(statement Statement) (string, error) {
 	return priority, nil
 }
 
-// Consolidator returns the consolidator option.
-func Consolidator(stmt Statement) querypb.ExecuteOptions_Consolidator {
-	var comments *ParsedComments
-	switch stmt := stmt.(type) {
-	case *Select:
-		comments = stmt.Comments
-	default:
-		return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
-	}
-	if comments == nil {
-		return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
-	}
-	directives := comments.Directives()
-	strv, isSet := directives.GetString(DirectiveConsolidator, "")
-	if !isSet {
-		return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
-	}
-	if i32v, ok := querypb.ExecuteOptions_Consolidator_value["CONSOLIDATOR_"+strings.ToUpper(strv)]; ok {
-		return querypb.ExecuteOptions_Consolidator(i32v)
-	}
-	return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
-}
-
-// GetWorkloadNameFromStatement gets the workload name from the provided Statement, using workloadLabel as the name of
-// the query directive that specifies it.
-func GetWorkloadNameFromStatement(statement Statement) string {
-	commentedStatement, ok := statement.(Commented)
-	// This would mean that the statement lacks comments, so we can't obtain the workload from it. Hence default to
-	// empty workload name
-	if !ok {
-		return ""
+// getQueryTimeout gets the query timeout from the provided Statement, using DirectiveQueryTimeout
+func getQueryTimeout(directives *CommentDirectives) *int {
+	timeoutString, ok := directives.GetString(DirectiveQueryTimeout, "")
+	if !ok || timeoutString == "" {
+		return nil
 	}
 
-	directives := commentedStatement.GetParsedComments().Directives()
-	workloadName, _ := directives.GetString(DirectiveWorkloadName, "")
-
-	return workloadName
+	timeout, err := strconv.Atoi(timeoutString)
+	if err != nil || timeout < 0 {
+		return nil
+	}
+	return &timeout
 }

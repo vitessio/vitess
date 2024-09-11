@@ -173,6 +173,7 @@ type (
 		SetConsolidator(querypb.ExecuteOptions_Consolidator)
 		SetWorkloadName(string)
 		SetPriority(string)
+		SetExecQueryTimeout(timeout *int)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)
@@ -214,9 +215,6 @@ type (
 		// SetCommitOrder sets the commit order for the shard session in respect of the type of vindex lookup.
 		// This is used to select the right shard session to perform the vindex lookup query.
 		SetCommitOrder(co vtgatepb.CommitOrder)
-
-		// GetQueryTimeout gets the query timeout and takes in the query timeout from comments
-		GetQueryTimeout(queryTimeoutFromComment int) int
 
 		// SetQueryTimeout sets the query timeout
 		SetQueryTimeout(queryTimeout int64)

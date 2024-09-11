@@ -1105,15 +1105,16 @@ func (e *Executor) getPlan(
 		return nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	vcursor.SetIgnoreMaxMemoryRows(sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt))
-	vcursor.SetConsolidator(sqlparser.Consolidator(stmt))
-	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
-	vcursor.UpdateForeignKeyChecksState(sqlparser.ForeignKeyChecksState(stmt))
-	priority, err := sqlparser.GetPriorityFromStatement(stmt)
+	qh, err := sqlparser.BuildQueryHints(stmt)
 	if err != nil {
 		return nil, err
 	}
-	vcursor.SetPriority(priority)
+	vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
+	vcursor.SetConsolidator(qh.Consolidator)
+	vcursor.SetWorkloadName(qh.Workload)
+	vcursor.UpdateForeignKeyChecksState(qh.ForeignKeyChecks)
+	vcursor.SetPriority(qh.Priority)
+	vcursor.SetExecQueryTimeout(qh.Timeout)
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {

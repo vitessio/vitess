@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -325,4 +326,49 @@ func TestFirstSortedKeyspace(t *testing.T) {
 	ks, err := vc.FirstSortedKeyspace()
 	require.NoError(t, err)
 	require.Equal(t, ks3Schema.Keyspace, ks)
+}
+
+// TestSetExecQueryTimeout tests the SetExecQueryTimeout method.
+// Validates the timeout value is set based on override rule.
+func TestSetExecQueryTimeout(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	safeSession := NewSafeSession(nil)
+	vc, err := newVCursorImpl(safeSession, sqlparser.MarginComments{}, executor, nil, nil, &vindexes.VSchema{}, nil, nil, false, querypb.ExecuteOptions_Gen4)
+	require.NoError(t, err)
+
+	// flag timeout
+	queryTimeout = 20
+	vc.SetExecQueryTimeout(nil)
+	require.Equal(t, 20*time.Millisecond, vc.queryTimeout)
+	require.NotNil(t, safeSession.Options.Timeout)
+	require.EqualValues(t, 20, safeSession.Options.GetAuthoritativeTimeout())
+
+	// session timeout
+	safeSession.SetQueryTimeout(40)
+	vc.SetExecQueryTimeout(nil)
+	require.Equal(t, 40*time.Millisecond, vc.queryTimeout)
+	require.NotNil(t, safeSession.Options.Timeout)
+	require.EqualValues(t, 40, safeSession.Options.GetAuthoritativeTimeout())
+
+	// query hint timeout
+	timeoutQueryHint := 60
+	vc.SetExecQueryTimeout(&timeoutQueryHint)
+	require.Equal(t, 60*time.Millisecond, vc.queryTimeout)
+	require.NotNil(t, safeSession.Options.Timeout)
+	require.EqualValues(t, 60, safeSession.Options.GetAuthoritativeTimeout())
+
+	// query hint timeout - infinite
+	timeoutQueryHint = 0
+	vc.SetExecQueryTimeout(&timeoutQueryHint)
+	require.Equal(t, 0*time.Millisecond, vc.queryTimeout)
+	require.NotNil(t, safeSession.Options.Timeout)
+	require.EqualValues(t, 0, safeSession.Options.GetAuthoritativeTimeout())
+
+	// reset
+	queryTimeout = 0
+	safeSession.SetQueryTimeout(0)
+	vc.SetExecQueryTimeout(nil)
+	require.Equal(t, 0*time.Millisecond, vc.queryTimeout)
+	// this should be reset.
+	require.Nil(t, safeSession.Options.Timeout)
 }

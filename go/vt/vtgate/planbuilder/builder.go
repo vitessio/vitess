@@ -73,11 +73,14 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	// Store the foreign key mode like we do for vcursor.
 	vw, isVw := vschema.(*vschemawrapper.VSchemaWrapper)
 	if isVw {
-		fkState := sqlparser.ForeignKeyChecksState(stmt)
-		if fkState != nil {
+		qh, err := sqlparser.BuildQueryHints(stmt)
+		if err != nil {
+			return nil, err
+		}
+		if qh.ForeignKeyChecks != nil {
 			// Restore the old volue of ForeignKeyChecksState to not interfere with the next test cases.
 			oldVal := vw.ForeignKeyChecksState
-			vw.ForeignKeyChecksState = fkState
+			vw.ForeignKeyChecksState = qh.ForeignKeyChecks
 			defer func() {
 				vw.ForeignKeyChecksState = oldVal
 			}()

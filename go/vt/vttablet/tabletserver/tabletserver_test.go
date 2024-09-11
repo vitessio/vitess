@@ -683,6 +683,80 @@ func TestSmallerTimeout(t *testing.T) {
 	}
 }
 
+func TestLoadQueryTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	testcases := []struct {
+		name          string
+		txID          int64
+		setOptions    bool
+		optionTimeout int64
+
+		want time.Duration
+	}{{
+		name: "no options and no transaction",
+		want: 30 * time.Second,
+	}, {
+		name: "only transaction",
+		txID: 1234,
+		want: 30 * time.Second,
+	}, {
+		name:          "only option - infinite time",
+		setOptions:    true,
+		optionTimeout: 0,
+		want:          0 * time.Millisecond,
+	}, {
+		name:          "only option - lower time",
+		setOptions:    true,
+		optionTimeout: 3, // 3ms
+		want:          3 * time.Millisecond,
+	}, {
+		name:          "only option - higher time",
+		setOptions:    true,
+		optionTimeout: 40000, // 40s
+		want:          40 * time.Second,
+	}, {
+		name:          "transaction and option - infinite time",
+		txID:          1234,
+		setOptions:    true,
+		optionTimeout: 0,
+		want:          30 * time.Second,
+	}, {
+		name:          "transaction and option - lower time",
+		txID:          1234,
+		setOptions:    true,
+		optionTimeout: 3, // 3ms
+		want:          3 * time.Millisecond,
+	}, {
+		name:          "transaction and option - higher time",
+		txID:          1234,
+		setOptions:    true,
+		optionTimeout: 40000, // 40s
+		want:          30 * time.Second,
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var options *querypb.ExecuteOptions
+			if tcase.setOptions {
+				options = &querypb.ExecuteOptions{
+					Timeout: &querypb.ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: tcase.optionTimeout},
+				}
+			}
+			var got time.Duration
+			if tcase.txID != 0 {
+				got = tsv.loadQueryTimeoutWithTxAndOptions(tcase.txID, options)
+			} else {
+				got = tsv.loadQueryTimeoutWithOptions(options)
+			}
+			assert.Equal(t, tcase.want, got)
+		})
+	}
+}
+
 func TestTabletServerReserveConnection(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
