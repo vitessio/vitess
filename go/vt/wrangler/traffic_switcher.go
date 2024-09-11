@@ -397,7 +397,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 		return sw.logs(), nil
 	}
 	wr.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
-	if err := ts.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
+	if err := sw.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
 		ts.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
 	}
