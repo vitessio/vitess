@@ -238,6 +238,16 @@ func (tqsc *Controller) UnresolvedTransactions(context.Context, *querypb.Target)
 	return nil, nil
 }
 
+// ConcludeTransaction is part of the tabletserver.Controller interface
+func (tqsc *Controller) ConcludeTransaction(context.Context, *querypb.Target, string) error {
+	return nil
+}
+
+// RollbackPrepared is part of the tabletserver.Controller interface
+func (tqsc *Controller) RollbackPrepared(context.Context, *querypb.Target, string, int64) error {
+	return nil
+}
+
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
 	tqsc.mu.Lock()

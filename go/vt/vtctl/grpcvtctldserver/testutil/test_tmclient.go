@@ -659,6 +659,11 @@ func (fake *TabletManagerClient) GetUnresolvedTransactions(ctx context.Context, 
 	return fake.GetUnresolvedTransactionsResults[tablet.Shard], nil
 }
 
+// ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	return nil
+}
+
 // FullStatus is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	if fake.FullStatusResult != nil {

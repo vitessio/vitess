@@ -155,6 +155,15 @@ func (client *gRPCVtctldClient) CompleteSchemaMigration(ctx context.Context, in 
 	return client.c.CompleteSchemaMigration(ctx, in, opts...)
 }
 
+// ConcludeTransaction is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ConcludeTransaction(ctx context.Context, in *vtctldatapb.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldatapb.ConcludeTransactionResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ConcludeTransaction(ctx, in, opts...)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	if client.c == nil {
