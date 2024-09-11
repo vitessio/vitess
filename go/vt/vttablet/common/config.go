@@ -52,15 +52,15 @@ type VReplicationConfig struct {
 }
 
 var configMutex sync.Mutex
-var DefaultVReplicationConfig *VReplicationConfig
+var defaultVReplicationConfig *VReplicationConfig
 
 func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 	configMutex.Lock()
 	defer configMutex.Unlock()
-	if useCached && DefaultVReplicationConfig != nil {
-		return DefaultVReplicationConfig
+	if useCached && defaultVReplicationConfig != nil {
+		return defaultVReplicationConfig
 	}
-	DefaultVReplicationConfig = &VReplicationConfig{
+	defaultVReplicationConfig = &VReplicationConfig{
 		ExperimentalFlags:       vreplicationExperimentalFlags,
 		NetReadTimeout:          vreplicationNetReadTimeout,
 		NetWriteTimeout:         vreplicationNetWriteTimeout,
@@ -84,21 +84,23 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 
 		Overrides: make(map[string]string),
 	}
-	return DefaultVReplicationConfig
+	return defaultVReplicationConfig
 }
 
 func InitVReplicationConfigDefaults() *VReplicationConfig {
 	return GetVReplicationConfigDefaults(true)
 }
 
-func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, error) {
-	InitVReplicationConfigDefaults()
-
-	configMutex.Lock()
+// GetDefaultVReplicationConfig returns a copy of the default VReplicationConfig.
+func GetDefaultVReplicationConfig() *VReplicationConfig {
 	c := &VReplicationConfig{}
-	*c = *DefaultVReplicationConfig
-	configMutex.Unlock()
+	defaultConfig := GetVReplicationConfigDefaults(true)
+	*c = *defaultConfig
+	return c
+}
 
+func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, error) {
+	c := GetDefaultVReplicationConfig()
 	c.Overrides = maps.Clone(overrides)
 	var errors []string
 	getError := func(k, v string) string {
