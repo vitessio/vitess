@@ -136,7 +136,7 @@ func (rb *reorderBuffer) doFlush() bool {
 
 // appendFlush appends the normalized segment to rb.out.
 func appendFlush(rb *reorderBuffer) bool {
-	for i := 0; i < rb.nrune; i++ {
+	for i := range rb.nrune {
 		start := rb.rune[i].pos
 		end := start + rb.rune[i].size
 		rb.out = append(rb.out, rb.byte[start:end]...)

@@ -234,10 +234,10 @@ func TestLargeDecimals(t *testing.T) {
 }
 
 func TestVeryLargeDecimals(t *testing.T) {
-	for i := 0; i <= 65; i++ {
+	for i := range 66 {
 		integral := bytes.Repeat([]byte{'9'}, i)
 		integral = append(integral, '.')
-		for j := 0; j <= 65; j++ {
+		for j := range 66 {
 			decimal := append(integral, bytes.Repeat([]byte{'9'}, j)...)
 			_, err := NewFromMySQL(decimal)
 			if err != nil {
@@ -308,7 +308,7 @@ var decimals = []string{
 func BenchmarkDecimalParsing(b *testing.B) {
 	b.Run("Naive", func(b *testing.B) {
 		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
+		for range b.N {
 			for _, dec := range decimals {
 				_, _ = NewFromString(dec)
 			}
@@ -322,7 +322,7 @@ func BenchmarkDecimalParsing(b *testing.B) {
 
 	b.Run("MySQL", func(b *testing.B) {
 		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
+		for range b.N {
 			for _, dec := range decimalBytes {
 				_, _ = NewFromMySQL(dec)
 			}
@@ -365,7 +365,7 @@ func TestRoundtripStress(t *testing.T) {
 		count = 100
 	}
 
-	for n := 0; n < count; n++ {
+	for range count {
 		fb := strconv.AppendFloat(nil, rand.NormFloat64(), 'f', -1, 64)
 		d, err := NewFromMySQL(fb)
 		if err != nil {
@@ -381,13 +381,13 @@ func TestRoundtripStress(t *testing.T) {
 func BenchmarkFormatting(b *testing.B) {
 	const Count = 10000
 	var parsed = make([]Decimal, 0, Count)
-	for i := 0; i < Count; i++ {
+	for range Count {
 		parsed = append(parsed, NewFromFloat(rand.NormFloat64()))
 	}
 
 	b.Run("StringFixed(8)", func(b *testing.B) {
 		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
+		for range b.N {
 			for _, dec := range parsed {
 				_ = dec.StringFixed(8)
 			}
@@ -396,7 +396,7 @@ func BenchmarkFormatting(b *testing.B) {
 
 	b.Run("formatwithPrecision(8)", func(b *testing.B) {
 		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
+		for range b.N {
 			for _, dec := range parsed {
 				_ = dec.formatFast(8, true, false)
 			}
@@ -405,7 +405,7 @@ func BenchmarkFormatting(b *testing.B) {
 
 	b.Run("formatFast", func(b *testing.B) {
 		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
+		for range b.N {
 			for _, dec := range parsed {
 				_ = dec.formatFast(0, false, false)
 			}
@@ -414,7 +414,7 @@ func BenchmarkFormatting(b *testing.B) {
 
 	b.Run("formatSlow", func(b *testing.B) {
 		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
+		for range b.N {
 			for _, dec := range parsed {
 				_ = dec.formatSlow(false)
 			}

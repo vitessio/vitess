@@ -95,7 +95,7 @@ func benchmarkInserts(b *testing.B, params *mysql.ConnParams) {
 	b.ResetTimer()
 
 	// Do the insert.
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		_, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", i, i), 0, false)
 		if err != nil {
 			b.Fatalf("ExecuteFetch(%v) failed: %v", i, err)
@@ -106,7 +106,7 @@ func benchmarkInserts(b *testing.B, params *mysql.ConnParams) {
 func benchmarkParallelReads(b *testing.B, params *mysql.ConnParams, parallelCount int) {
 	ctx := context.Background()
 	wg := sync.WaitGroup{}
-	for i := 0; i < parallelCount; i++ {
+	for i := range parallelCount {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -116,7 +116,7 @@ func benchmarkParallelReads(b *testing.B, params *mysql.ConnParams, parallelCoun
 				b.Error(err)
 			}
 
-			for j := 0; j < b.N; j++ {
+			for j := range b.N {
 				if _, err := conn.ExecuteFetch("select * from a", 20000, true); err != nil {
 					b.Errorf("ExecuteFetch(%v, %v) failed: %v", i, j, err)
 				}
@@ -144,7 +144,7 @@ func BenchmarkSetVarsWithQueryHints(b *testing.B) {
 
 	for _, sleepDuration := range []time.Duration{0, 1 * time.Millisecond} {
 		b.Run(fmt.Sprintf("Sleep %d ms", sleepDuration/time.Millisecond), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for i := range b.N {
 				_, err := conn.ExecuteFetch(fmt.Sprintf("insert /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ into t(id) values (%d)", i), 1, false)
 				if err != nil {
 					b.Fatal(err)
@@ -194,7 +194,7 @@ func BenchmarkSetVarsMultipleSets(b *testing.B) {
 
 	for _, sleepDuration := range []time.Duration{0, 1 * time.Millisecond} {
 		b.Run(fmt.Sprintf("Sleep %d ms", sleepDuration/time.Millisecond), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for i := range b.N {
 				setFunc()
 
 				_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, false)
@@ -242,7 +242,7 @@ func BenchmarkSetVarsMultipleSetsInSameStmt(b *testing.B) {
 
 	for _, sleepDuration := range []time.Duration{0, 1 * time.Millisecond} {
 		b.Run(fmt.Sprintf("Sleep %d ms", sleepDuration/time.Millisecond), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for i := range b.N {
 				_, _, err := conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; insert into t(id) values (%d)", i), 1, false)
 				if err != nil {
 					b.Fatal(err)
@@ -304,7 +304,7 @@ func BenchmarkSetVarsSingleSet(b *testing.B) {
 
 	for _, sleepDuration := range []time.Duration{0, 1 * time.Millisecond} {
 		b.Run(fmt.Sprintf("Sleep %d ms", sleepDuration/time.Millisecond), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for i := range b.N {
 				_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, false)
 				if err != nil {
 					b.Fatal(err)

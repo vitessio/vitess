@@ -619,7 +619,7 @@ func NewMysql56GTIDSetFromSIDBlock(data []byte) (Mysql56GTIDSet, error) {
 	if err := binary.Read(buf, binary.LittleEndian, &nSIDs); err != nil {
 		return nil, vterrors.Wrapf(err, "cannot read nSIDs")
 	}
-	for i := uint64(0); i < nSIDs; i++ {
+	for i := range uint64(nSIDs) {
 		var sid SID
 		if c, err := buf.Read(sid[:]); err != nil || c != 16 {
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot read SID %v: %v %v", i, err, c)
