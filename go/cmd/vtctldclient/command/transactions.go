@@ -58,6 +58,17 @@ var (
 	}
 )
 
+type ConcludeTransactionOutput struct {
+	Dtid    string `json:"dtid"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
+}
+
+const (
+	concludeSuccess = "Successfully concluded the distributed transaction"
+	concludeFailure = "Failed to conclude the distributed transaction"
+)
+
 func commandGetUnresolvedTransactions(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
@@ -74,7 +85,7 @@ func commandGetUnresolvedTransactions(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s\n", data)
+	fmt.Println(string(data))
 	return nil
 }
 
@@ -94,17 +105,25 @@ func commandConcludeTransaction(cmd *cobra.Command, args []string) error {
 			Shard:    shard.Name,
 		})
 	}
+	output := ConcludeTransactionOutput{
+		Dtid:    dtid,
+		Message: concludeSuccess,
+	}
+
 	_, err = client.ConcludeTransaction(commandCtx,
 		&vtctldatapb.ConcludeTransactionRequest{
 			Dtid:         dtid,
 			Participants: participants,
 		})
 	if err != nil {
-		return err
+		output.Message = concludeFailure
+		output.Error = err.Error()
 	}
-	fmt.Println("Successfully concluded the distributed transaction")
 
-	return nil
+	data, _ := cli.MarshalJSON(output)
+	fmt.Println(string(data))
+
+	return err
 }
 
 func init() {
