@@ -39,6 +39,8 @@
 ### Release 
 #### General
  * [release-18.0] Bump to `v18.0.7-SNAPSHOT` after the `v18.0.6` release [#16454](https://github.com/vitessio/vitess/pull/16454)
+ * [xxxDRAFTxxx]r_elease of `v18.0.7` [#16740](https://github.com/vitessio/vitess/pull/16740)
+ * [release-18.0] Code Freeze for `v18.0.7` [#16744](https://github.com/vitessio/vitess/pull/16744)
 ### Testing 
 #### Query Serving
  * [release-18.0] Replace ErrorContains checks with Error checks before running upgrade downgrade [#16701](https://github.com/vitessio/vitess/pull/16701)
