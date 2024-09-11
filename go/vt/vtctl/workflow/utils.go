@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
@@ -665,21 +666,20 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 				allErrors.RecordError(fmt.Errorf("no tablet found to source data in keyspace %s, shard %s", keyspace, shard.ShardName()))
 				return
 			}
-			// Ensure the tablet has the expected privileges for a dry run. We don't do this
-			// for an actual execution as the privileges likely needed to perform the necessary
-			// work are a subset and the user may have locked things down as much as possible.
-			if req.GetDryRun() {
+			if req.GetEnableReverseReplication() {
+				// Ensure the tablet has the minimum privileges required on the sidecar database
+				// table in order to create the reverse workflow as part of the traffic switch.
 				for _, tablet := range tablets {
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
 						res, err := ts.ws.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
 						if err != nil {
-							allErrors.RecordError(vterrors.Wrapf(err, "failed to validate vreplication user permissions on tablet %s", topoproto.TabletAliasString(tablet.Alias)))
+							allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s", topoproto.TabletAliasString(tablet.Alias)))
 						}
 						if !res.GetOk() {
-							allErrors.RecordError(fmt.Errorf("WARNING: vreplication user %s does not have the expected full set of permissions on tablet %s and may not be able to perform some actions",
-								res.GetUser(), topoproto.TabletAliasString(tablet.Alias)))
+							allErrors.RecordError(fmt.Errorf("user %s does not have the required set of permissions (insert,update,delete) on the %s.vreplication table on tablet %s",
+								res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias)))
 						}
 					}()
 				}

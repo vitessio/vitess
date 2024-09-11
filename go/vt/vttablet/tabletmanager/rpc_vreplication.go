@@ -61,8 +61,22 @@ const (
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
 	// Check if workflow is still copying.
 	sqlGetVReplicationCopyStatus = "select distinct vrepl_id from %s.copy_state where vrepl_id = %d"
-	// Validate the full set of permissions needed to execute any vreplication related work.
-	sqlValidateVReplicationPermissions = "select if(count(*)>0, 1, 0) as good from mysql.user where user = %a and instr(concat(select_priv, insert_priv, update_priv, delete_priv, create_priv, drop_priv, reload_priv, process_priv, file_priv, references_priv, index_priv, alter_priv, show_db_priv, create_tmp_table_priv, lock_tables_priv, execute_priv, repl_slave_priv, repl_client_priv, create_view_priv, show_view_priv, create_routine_priv, alter_routine_priv, create_user_priv, event_priv, trigger_priv), 'N') = 0"
+	// Validate the minimum set of permissions needed to manage vreplication metadata.
+	sqlValidateVReplicationPermissions = `
+select if(count(*)>0, 1, 0) as good from mysql.user as u
+  left join mysql.db as d on (u.user = d.user)
+  left join mysql.tables_priv as t on (u.user = t.user)
+where u.user = %a
+  and (
+    (u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y')
+    or (d.db = %a and u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y')
+    or (t.db = %a and t.table_name = 'vreplication'
+      and find_in_set('insert', t.table_priv)
+	  and find_in_set('update', t.table_priv)
+	  and find_in_set('delete', t.table_priv)
+    )
+  )
+`
 )
 
 var (
@@ -534,9 +548,14 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 }
 
 // ValidateVReplicationPermissions validates that the --db_filtered_user has
-// the full expected set of global permissions.
+// the minimum permissions required on the sidecardb vreplication table
+// needed in order to manager vreplication metatdata.
 func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
-	query, err := sqlparser.ParseAndBind(sqlValidateVReplicationPermissions, sqltypes.StringBindVariable(tm.DBConfigs.Filtered.User))
+	query, err := sqlparser.ParseAndBind(sqlValidateVReplicationPermissions,
+		sqltypes.StringBindVariable(tm.DBConfigs.Filtered.User),
+		sqltypes.StringBindVariable(sidecar.GetName()),
+		sqltypes.StringBindVariable(sidecar.GetName()),
+	)
 	if err != nil {
 		return nil, err
 	}
