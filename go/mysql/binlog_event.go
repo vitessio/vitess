@@ -328,7 +328,7 @@ func (b *Bitmap) Set(index int, value bool) {
 // hence the non-efficient logic.
 func (b *Bitmap) BitCount() int {
 	sum := 0
-	for i := 0; i < b.count; i++ {
+	for i := range b.count {
 		if b.Bit(i) {
 			sum++
 		}

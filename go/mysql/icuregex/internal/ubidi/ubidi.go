@@ -297,7 +297,7 @@ func AddPropertyStarts(sa propertySet) {
 	mrs := mirrors()
 	/* add the code points from the bidi mirroring table */
 	length := idxs[ixMirrorLength]
-	for i := int32(0); i < length; i++ {
+	for i := range int32(length) {
 		c := mirrorCodePoint(rune(mrs[i]))
 		sa.AddRuneRange(c, c+1)
 	}
