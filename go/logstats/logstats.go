@@ -24,35 +24,42 @@ import (
 
 	"github.com/google/safehtml"
 
-	"vitess.io/vitess/go/logstats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// LogStats records the stats for a single vtgate query
-type LogStats struct {
-	Ctx            context.Context
-	Method         string
-	TabletType     string
-	StmtType       string
-	SQL            string
-	BindVariables  map[string]*querypb.BindVariable
-	StartTime      time.Time
-	EndTime        time.Time
-	ShardQueries   uint64
-	RowsAffected   uint64
-	RowsReturned   uint64
-	PlanTime       time.Duration
-	ExecuteTime    time.Duration
-	CommitTime     time.Duration
-	Error          error
-	TablesUsed     []string
-	SessionUUID    string
-	CachedPlan     bool
-	ActiveKeyspace string // ActiveKeyspace is the selected keyspace `use ks`
-}
+type (
+	// LogStats records the stats for a single vtgate query
+	LogStats struct {
+		Ctx            context.Context
+		Method         string
+		TabletType     string
+		StmtType       string
+		SQL            string
+		BindVariables  map[string]*querypb.BindVariable
+		StartTime      time.Time
+		EndTime        time.Time
+		ShardQueries   uint64
+		RowsAffected   uint64
+		RowsReturned   uint64
+		PlanTime       time.Duration
+		ExecuteTime    time.Duration
+		CommitTime     time.Duration
+		Error          error
+		TablesUsed     []string
+		SessionUUID    string
+		CachedPlan     bool
+		ActiveKeyspace string // ActiveKeyspace is the selected keyspace `use ks`
+		PrimitiveStats map[int]PrimitiveStats
+	}
+
+	PrimitiveStats struct {
+		NoOfCalls int
+		Rows      []int
+	}
+)
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
 // field values, and the StartTime field set to the present time.
@@ -127,7 +134,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	_, fullBindParams := params["full"]
 	remoteAddr, username := stats.RemoteAddrUsername()
 
-	log := logstats.NewLogger()
+	log := NewLogger()
 	log.Init(streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON)
 	log.Key("Method")
 	log.StringUnquoted(stats.Method)
@@ -177,6 +184,10 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Strings(stats.TablesUsed)
 	log.Key("ActiveKeyspace")
 	log.String(stats.ActiveKeyspace)
+	if len(stats.PrimitiveStats) > 0 {
+		log.Key("PrimitiveStats")
+		log.OpStats(stats.PrimitiveStats)
+	}
 
 	return log.Flush(w)
 }

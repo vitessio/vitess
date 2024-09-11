@@ -28,6 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/logstats"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/acl"
@@ -57,7 +59,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"

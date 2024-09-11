@@ -26,8 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/logstats"
+
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"

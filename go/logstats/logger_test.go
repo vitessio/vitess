@@ -244,6 +244,29 @@ func TestFlush(t *testing.T) {
 	assert.Equal(t, []byte("{\"testKey\": \"testValue\"}\n"), calledValue)
 }
 
+func TestOpStats(t *testing.T) {
+	tl := NewLogger()
+	tl.Init(false)
+	stats := map[int]PrimitiveStats{
+		1: {
+			NoOfCalls: 1,
+			Rows:      []int{100},
+		},
+		2: {
+			NoOfCalls: 2,
+			Rows:      []int{100, 200},
+		},
+		3: {
+			NoOfCalls: 10,
+			Rows:      []int{100, 200, 100, 200, 300, 100, 200, 100, 200, 300},
+		},
+	}
+	tl.OpStats(stats)
+
+	want := []byte(`{"1":{"Calls":1,"Rows":["100"]},"2":{"Calls":2,"Rows":["100","200"]},"3":{"Calls":10,"Rows":["100","200","100","200","300","100","200","100","200","300"]}}`)
+	assert.Equal(t, string(want), string(tl.b))
+}
+
 func TestBindVariables(t *testing.T) {
 	tcases := []struct {
 		name  string

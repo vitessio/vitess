@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/logstats"
+
 	"github.com/google/uuid"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -50,7 +52,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -511,6 +512,11 @@ func (vc *vcursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 		res, err := primitive.TryExecute(ctx, vc, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
+		}
+		if vc.logOperatorTraffic {
+			stats := vc.logStats.PrimitiveStats[int(primitive.GetID())]
+			stats.NoOfCalls++
+			stats.Rows = append(stats.Rows, len(res.Rows))
 		}
 		return res, err
 	}

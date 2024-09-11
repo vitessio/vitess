@@ -87,6 +87,35 @@ func (log *Logger) appendBVarsJSON(b []byte, bvars map[string]*querypb.BindVaria
 	return append(b, '}')
 }
 
+func appendJsonInt(b []byte, i int) []byte {
+	b = append(b, '"')
+	b = strconv.AppendInt(b, int64(i), 10)
+	return append(b, '"')
+}
+
+func (log *Logger) appendPrimitiveStats(b []byte, m map[int]PrimitiveStats) []byte {
+	b = append(b, '{')
+	for i := range len(m) {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		op := i + 1
+		b = appendJsonInt(b, op)
+		b = append(b, `:{"Calls":`...)
+		stats := m[op]
+		b = strconv.AppendInt(b, int64(stats.NoOfCalls), 10)
+		b = append(b, `,"Rows":[`...)
+		for rowIdx, rows := range stats.Rows {
+			if rowIdx > 0 {
+				b = append(b, ',')
+			}
+			b = appendJsonInt(b, rows)
+		}
+		b = append(b, `]}`...)
+	}
+	return append(b, '}')
+}
+
 func (log *Logger) Init(json bool) {
 	log.n = 0
 	log.json = json
@@ -163,6 +192,10 @@ func (log *Logger) BindVariables(bvars map[string]*querypb.BindVariable, full bo
 	// printing syntax, which was simply `fmt.Sprintf("%v")`, is not stable or
 	// safe to parse
 	log.b = log.appendBVarsJSON(log.b, bvars, full)
+}
+
+func (log *Logger) OpStats(stats map[int]PrimitiveStats) {
+	log.b = log.appendPrimitiveStats(log.b, stats)
 }
 
 func (log *Logger) Int(i int64) {

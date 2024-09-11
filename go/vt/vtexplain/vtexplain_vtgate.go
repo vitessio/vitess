@@ -26,6 +26,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/logstats"
+
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/stats"
@@ -38,7 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
