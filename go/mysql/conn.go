@@ -1249,7 +1249,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	}
 
 	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
-	for i := uint16(0); i < paramsCount; i++ {
+	for i := range uint16(paramsCount) {
 		parameterID := fmt.Sprintf("v%d", i+1)
 		bindVars[parameterID] = &querypb.BindVariable{}
 	}
