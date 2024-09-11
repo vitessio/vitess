@@ -29,7 +29,7 @@ import (
 var (
 	DistributedTransaction = &cobra.Command{
 		Use:   "DistributedTransaction <cmd>",
-		Short: "Operates on distributed transaction",
+		Short: "Perform commands on distributed transaction",
 		Args:  cobra.MinimumNArgs(2),
 
 		DisableFlagsInUseLine: true,
