@@ -72,8 +72,8 @@ where u.user = %a
     or (d.db = %a and u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y')
     or (t.db = %a and t.table_name = 'vreplication'
       and find_in_set('insert', t.table_priv)
-	  and find_in_set('update', t.table_priv)
-	  and find_in_set('delete', t.table_priv)
+      and find_in_set('update', t.table_priv)
+      and find_in_set('delete', t.table_priv)
     )
   )
 `
@@ -549,7 +549,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 
 // ValidateVReplicationPermissions validates that the --db_filtered_user has
 // the minimum permissions required on the sidecardb vreplication table
-// needed in order to manager vreplication metatdata.
+// needed in order to manager vreplication metadata.
 func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
 	query, err := sqlparser.ParseAndBind(sqlValidateVReplicationPermissions,
 		sqltypes.StringBindVariable(tm.DBConfigs.Filtered.User),

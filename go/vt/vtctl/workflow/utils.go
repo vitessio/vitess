@@ -668,7 +668,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 			}
 			if req.GetEnableReverseReplication() {
 				// Ensure the tablet has the minimum privileges required on the sidecar database
-				// table in order to create the reverse workflow as part of the traffic switch.
+				// table in order to manage the reverse workflow as part of the traffic switch.
 				for _, tablet := range tablets {
 					wg.Add(1)
 					go func() {

@@ -642,7 +642,8 @@ message ValidateVReplicationPermissionsRequest {
 message ValidateVReplicationPermissionsResponse {
   // The --db_filtered_user on the tablet.
   string user = 1;
-  // Does the user have the expected full set of global permissions.
+  // Does the user have the minimum privileges needed to manage
+  // vreplication metadata.
   bool ok = 2;
 }
 
