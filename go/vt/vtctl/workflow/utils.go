@@ -640,7 +640,7 @@ func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonl
 func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, keyspace string, shards []*topo.ShardInfo) error {
 	// We use the value from the workflow for the TabletPicker.
 	tabletTypesStr := ts.optTabletTypes
-	cells := req.Cells
+	cells := req.GetCells()
 	// If no cells were provided in the command then use the value from the workflow.
 	if len(cells) == 0 && ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
@@ -665,12 +665,31 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 				allErrors.RecordError(fmt.Errorf("no tablet found to source data in keyspace %s, shard %s", keyspace, shard.ShardName()))
 				return
 			}
+			// Ensure the tablet has the expected privileges for a dry run. We don't do this
+			// for an actual execution as the privileges likely needed to perform the necessary
+			// work are a subset and the user may have locked things down as much as possible.
+			if req.GetDryRun() {
+				for _, tablet := range tablets {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						res, err := ts.ws.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
+						if err != nil {
+							allErrors.RecordError(vterrors.Wrapf(err, "failed to validate vreplication user permissions on tablet %s", topoproto.TabletAliasString(tablet.Alias)))
+						}
+						if !res.GetOk() {
+							allErrors.RecordError(fmt.Errorf("WARNING: vreplication user %s does not have the expected full set of permissions on tablet %s and may not be able to perform some actions",
+								res.GetUser(), topoproto.TabletAliasString(tablet.Alias)))
+						}
+					}()
+				}
+			}
 		}(cells, keyspace, shard)
 	}
 
 	wg.Wait()
 	if allErrors.HasErrors() {
-		ts.Logger().Errorf("%s", allErrors.Error())
+		ts.Logger().Error(allErrors.Error())
 		return allErrors.Error()
 	}
 	return nil

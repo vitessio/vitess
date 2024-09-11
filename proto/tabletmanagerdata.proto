@@ -636,6 +636,16 @@ message ReadVReplicationWorkflowResponse {
   string options = 12;
 }
 
+message ValidateVReplicationPermissionsRequest {
+}
+
+message ValidateVReplicationPermissionsResponse {
+  // The --db_filtered_user on the tablet.
+  string user = 1;
+  // Does the user have the expected full set of global permissions.
+  bool ok = 2;
+}
+
 message VDiffRequest {
   string keyspace = 1;
   string workflow = 2;

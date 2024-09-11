@@ -61,6 +61,8 @@ const (
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
 	// Check if workflow is still copying.
 	sqlGetVReplicationCopyStatus = "select distinct vrepl_id from %s.copy_state where vrepl_id = %d"
+	// Validate the full set of permissions needed to execute any vreplication related work.
+	sqlValidateVReplicationPermissions = "select if(count(*)>0, 1, 0) as good from mysql.user where user = %a and instr(concat(select_priv, insert_priv, update_priv, delete_priv, create_priv, drop_priv, reload_priv, process_priv, file_priv, references_priv, index_priv, alter_priv, show_db_priv, create_tmp_table_priv, lock_tables_priv, execute_priv, repl_slave_priv, repl_client_priv, create_view_priv, show_view_priv, create_routine_priv, alter_routine_priv, create_user_priv, event_priv, trigger_priv), 'N') = 0"
 )
 
 var (
@@ -528,6 +530,36 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 		Result: &querypb.QueryResult{
 			RowsAffected: res.RowsAffected,
 		},
+	}, nil
+}
+
+// ValidateVReplicationPermissions validates that the --db_filtered_user has
+// the full expected set of global permissions.
+func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	query, err := sqlparser.ParseAndBind(sqlValidateVReplicationPermissions, sqltypes.StringBindVariable(tm.DBConfigs.Filtered.User))
+	if err != nil {
+		return nil, err
+	}
+	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch(query, 1, false)
+	if err != nil {
+		return nil, err
+	}
+	if qr == nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 { // Should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected response to query %s: expected 1 row with 1 column, got: %+v",
+			query, qr)
+	}
+	val, err := qr.Rows[0][0].ToBool()
+	if err != nil {
+		return nil, err
+	}
+	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+		User: tm.DBConfigs.Filtered.User,
+		Ok:   val,
 	}, nil
 }
 
