@@ -1612,7 +1612,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string)
 }
 
 func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
-	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, false)
+	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
 	vcursor.safeSession = &SafeSession{
 		Session: &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
@@ -1782,7 +1782,7 @@ func TestGetPlanPriority(t *testing.T) {
 			r, _, _, _, ctx := createExecutorEnv(t)
 
 			r.normalize = true
-			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, false)
+			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
 			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 			assert.NoError(t, err)
 

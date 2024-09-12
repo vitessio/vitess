@@ -59,7 +59,7 @@ func TestLogStatsFormat(t *testing.T) {
 		streamlog.SetRedactDebugUIQueries(false)
 		streamlog.SetQueryLogFormat("text")
 	}()
-	logStats := NewLogStats(context.Background(), "test", "sql1", "suuid", nil, false)
+	logStats := NewLogStats(context.Background(), "test", "sql1", "suuid", nil)
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
 	logStats.TablesUsed = []string{"ks1.tbl1", "ks2.tbl2"}
@@ -150,7 +150,7 @@ func TestLogStatsFormat(t *testing.T) {
 func TestLogStatsFilter(t *testing.T) {
 	defer func() { streamlog.SetQueryLogFilterTag("") }()
 
-	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "", map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}, false)
+	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "", map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)})
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
 	params := map[string][]string{"full": {}}
@@ -173,7 +173,7 @@ func TestLogStatsFilter(t *testing.T) {
 func TestLogStatsRowThreshold(t *testing.T) {
 	defer func() { streamlog.SetQueryLogRowThreshold(0) }()
 
-	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "", map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}, false)
+	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "", map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)})
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
 	params := map[string][]string{"full": {}}
@@ -197,14 +197,14 @@ func TestLogStatsContextHTML(t *testing.T) {
 		Html: testconversions.MakeHTMLForTest(html),
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	logStats := NewLogStats(ctx, "test", "sql1", "", map[string]*querypb.BindVariable{}, false)
+	logStats := NewLogStats(ctx, "test", "sql1", "", map[string]*querypb.BindVariable{})
 	if logStats.ContextHTML().String() != html {
 		t.Fatalf("expect to get html: %s, but got: %s", html, logStats.ContextHTML().String())
 	}
 }
 
 func TestLogStatsErrorStr(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1", "", map[string]*querypb.BindVariable{}, false)
+	logStats := NewLogStats(context.Background(), "test", "sql1", "", map[string]*querypb.BindVariable{})
 	if logStats.ErrorStr() != "" {
 		t.Fatalf("should not get error in stats, but got: %s", logStats.ErrorStr())
 	}
@@ -216,7 +216,7 @@ func TestLogStatsErrorStr(t *testing.T) {
 }
 
 func TestLogStatsRemoteAddrUsername(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1", "", map[string]*querypb.BindVariable{}, false)
+	logStats := NewLogStats(context.Background(), "test", "sql1", "", map[string]*querypb.BindVariable{})
 	addr, user := logStats.RemoteAddrUsername()
 	if addr != "" {
 		t.Fatalf("remote addr should be empty")
@@ -232,7 +232,7 @@ func TestLogStatsRemoteAddrUsername(t *testing.T) {
 		User:   username,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	logStats = NewLogStats(ctx, "test", "sql1", "", map[string]*querypb.BindVariable{}, false)
+	logStats = NewLogStats(ctx, "test", "sql1", "", map[string]*querypb.BindVariable{})
 	addr, user = logStats.RemoteAddrUsername()
 	if addr != remoteAddr {
 		t.Fatalf("expected to get remote addr: %s, but got: %s", remoteAddr, addr)

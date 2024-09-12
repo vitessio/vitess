@@ -520,7 +520,7 @@ func (vc *vcursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 }
 
 func (vc *vcursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Result) {
-	if vc.logOperatorTraffic {
+	if vc.logStats.LogOpStats() {
 		key := int(primitive.GetID())
 		stats := vc.logStats.PrimitiveStats[key]
 		stats.NoOfCalls++
@@ -544,7 +544,7 @@ func (vc *vcursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive
 }
 
 func (vc *vcursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primitive engine.Primitive) func(*sqltypes.Result) error {
-	if !vc.logOperatorTraffic {
+	if !vc.logStats.LogOpStats() {
 		return callback
 	}
 
@@ -1453,7 +1453,6 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
 		resultsObserver:     nullResultsObserver{},
-		logOperatorTraffic:  false,
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
@@ -1486,7 +1485,6 @@ func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
 		resultsObserver:     nullResultsObserver{},
-		logOperatorTraffic:  false,
 	}
 
 	v.marginComments.Trailing += "/* mirror query */"
