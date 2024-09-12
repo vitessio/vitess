@@ -43,8 +43,9 @@ func (t *Trace) GetTableName() string {
 }
 
 func (t *Trace) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	vcursor.EnableOperatorTracing()
-	return t.Inner.GetFields(ctx, vcursor, bindVars)
+	getter := vcursor.EnableOperatorTracing()
+	fields, err := t.Inner.GetFields(ctx, vcursor, bindVars)
+	return fields, err
 }
 
 func (t *Trace) NeedsTransaction() bool {

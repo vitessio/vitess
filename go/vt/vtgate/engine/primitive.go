@@ -141,7 +141,14 @@ type (
 		// UnresolvedTransactions reads the state of all the unresolved atomic transactions in the given keyspace.
 		UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error)
 
-		EnableOperatorTracing()
+		// EnableOperatorTracing enables operator tracing for the current session
+		// the returned function should be called after the query is done to get the operator stats
+		EnableOperatorTracing() func() map[int]PrimitiveStats
+	}
+
+	PrimitiveStats struct {
+		NoOfCalls int
+		Rows      []int
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

@@ -52,12 +52,6 @@ type (
 		SessionUUID    string
 		CachedPlan     bool
 		ActiveKeyspace string // ActiveKeyspace is the selected keyspace `use ks`
-		PrimitiveStats map[int]PrimitiveStats
-	}
-
-	PrimitiveStats struct {
-		NoOfCalls int
-		Rows      []int
 	}
 )
 

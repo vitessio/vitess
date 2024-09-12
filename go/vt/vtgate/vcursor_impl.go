@@ -132,6 +132,7 @@ type vcursorImpl struct {
 	warmingReadsChannel chan bool
 
 	resultsObserver resultsObserver
+	primitiveStats  map[int]engine.PrimitiveStats
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -520,12 +521,12 @@ func (vc *vcursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 }
 
 func (vc *vcursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Result) {
-	if vc.logStats.LogOpStats() {
+	if vc.primitiveStats != nil {
 		key := int(primitive.GetID())
-		stats := vc.logStats.PrimitiveStats[key]
+		stats := vc.primitiveStats[key]
 		stats.NoOfCalls++
 		stats.Rows = append(stats.Rows, len(res.Rows))
-		vc.logStats.PrimitiveStats[key] = stats
+		vc.primitiveStats[key] = stats
 	}
 }
 
@@ -1511,6 +1512,9 @@ func (vc *vcursorImpl) GetForeignKeyChecksState() *bool {
 	return vc.fkChecksState
 }
 
-func (vc *vcursorImpl) EnableOperatorTracing() {
-	vc.logStats.EnableOpStats()
+func (vc *vcursorImpl) EnableOperatorTracing() func() map[int]engine.PrimitiveStats {
+	vc.primitiveStats = map[int]engine.PrimitiveStats{}
+	return func() map[int]engine.PrimitiveStats {
+		return vc.primitiveStats
+	}
 }
