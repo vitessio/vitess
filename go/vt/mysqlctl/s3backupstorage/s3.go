@@ -181,7 +181,6 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 			u.PartSize = partSizeBytes
 		})
 		object := objName(bh.dir, bh.name, filename)
-		log.Infof("objName: %v", object)
 		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
 		// Using UploadWithContext breaks uploading to Minio and Ceph https://github.com/vitessio/vitess/issues/14188
 		_, err := uploader.Upload(context.Background(), &s3.PutObjectInput{
