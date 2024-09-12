@@ -63,8 +63,8 @@ type (
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
 // field values, and the StartTime field set to the present time.
-func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindVars map[string]*querypb.BindVariable) *LogStats {
-	return &LogStats{
+func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindVars map[string]*querypb.BindVariable, opStats bool) *LogStats {
+	l := &LogStats{
 		Ctx:           ctx,
 		Method:        methodName,
 		SQL:           sql,
@@ -72,6 +72,10 @@ func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindV
 		BindVariables: bindVars,
 		StartTime:     time.Now(),
 	}
+	if opStats {
+		l.PrimitiveStats = make(map[int]PrimitiveStats)
+	}
+	return l
 }
 
 // SaveEndTime sets the end time of this request to now

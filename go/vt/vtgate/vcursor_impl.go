@@ -513,14 +513,20 @@ func (vc *vcursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}
-		if vc.logOperatorTraffic {
-			stats := vc.logStats.PrimitiveStats[int(primitive.GetID())]
-			stats.NoOfCalls++
-			stats.Rows = append(stats.Rows, len(res.Rows))
-		}
+		vc.logOpTraffic(primitive, res)
 		return res, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
+}
+
+func (vc *vcursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Result) {
+	if vc.logOperatorTraffic {
+		key := int(primitive.GetID())
+		stats := vc.logStats.PrimitiveStats[key]
+		stats.NoOfCalls++
+		stats.Rows = append(stats.Rows, len(res.Rows))
+		vc.logStats.PrimitiveStats[key] = stats
+	}
 }
 
 func (vc *vcursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -531,12 +537,26 @@ func (vc *vcursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}
+		vc.logOpTraffic(primitive, res)
 		return res, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
+func (vc *vcursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primitive engine.Primitive) func(*sqltypes.Result) error {
+	if !vc.logOperatorTraffic {
+		return callback
+	}
+
+	return func(result *sqltypes.Result) error {
+		vc.logOpTraffic(primitive, result)
+		return callback(result)
+	}
+}
+
 func (vc *vcursorImpl) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	callback = vc.wrapCallback(callback, primitive)
+
 	for try := 0; try < MaxBufferingRetries; try++ {
 		err := primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
@@ -548,6 +568,8 @@ func (vc *vcursorImpl) StreamExecutePrimitive(ctx context.Context, primitive eng
 }
 
 func (vc *vcursorImpl) StreamExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
+	callback = vc.wrapCallback(callback, primitive)
+
 	// clone the vcursorImpl with a new session.
 	newVC := vc.cloneWithAutocommitSession()
 	for try := 0; try < MaxBufferingRetries; try++ {
@@ -614,12 +636,14 @@ func (vc *vcursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.resultsObserver)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
-
+	vc.logOpTraffic(primitive, qr)
 	return qr, errs
 }
 
 // StreamExecuteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
+	callback = vc.wrapCallback(callback, primitive)
+
 	noOfShards := len(rss)
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
 	err := vc.markSavepoint(ctx, rollbackOnError && (noOfShards > 1), map[string]*querypb.BindVariable{})
@@ -651,6 +675,7 @@ func (vc *vcursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.resultsObserver)
+	vc.logOpTraffic(primitive, qr)
 	return qr, vterrors.Aggregate(errs)
 }
 
@@ -1428,6 +1453,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
 		resultsObserver:     nullResultsObserver{},
+		logOperatorTraffic:  false,
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
@@ -1460,6 +1486,7 @@ func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
 		resultsObserver:     nullResultsObserver{},
+		logOperatorTraffic:  false,
 	}
 
 	v.marginComments.Trailing += "/* mirror query */"

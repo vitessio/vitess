@@ -36,7 +36,7 @@ import (
 
 func TestQuerylogzHandlerFormatting(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := logstats.NewLogStats(context.Background(), "Execute", "select name from test_table limit 1000", "suuid", nil)
+	logStats := logstats.NewLogStats(context.Background(), "Execute", "select name from test_table limit 1000", "suuid", nil, false)
 	logStats.StmtType = "select"
 	logStats.RowsAffected = 1000
 	logStats.ShardQueries = 1

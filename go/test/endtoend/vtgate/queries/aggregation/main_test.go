@@ -19,9 +19,10 @@ package aggregation
 import (
 	_ "embed"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
@@ -54,7 +55,7 @@ func TestMain(m *testing.M) {
 		// Start topo server
 		err := clusterInstance.StartTopo()
 		if err != nil {
-			return 1
+			log.Fatalf("topo err: %v", err.Error())
 		}
 
 		// Start keyspace
@@ -63,18 +64,18 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--log_operator_traffic=true"}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
-			return 1
+			log.Fatalf("Error starting keyspace: %v", err.Error())
 		}
 
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
-			return 1
+			log.Fatalf("Error starting vtgate: %v", err.Error())
 		}
 
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
@@ -82,8 +83,7 @@ func TestMain(m *testing.M) {
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
 		if err != nil {
-			fmt.Println(err)
-			return 1
+			log.Fatalf("Error creating mysql instance: %v", err)
 		}
 		defer closer()
 		mysqlParams = conn
