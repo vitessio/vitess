@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -996,7 +995,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 						constraint test_ibfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
 					)
 				`,
-			expectError: schema.ErrForeignKeyFound.Error(),
+			expectError: ErrForeignKeyFound.Error(),
 		},
 		{
 			name: "table with FK, allowed",
@@ -1211,8 +1210,9 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 				tc.mySQLVersion = testMySQLVersion
 			}
 			capableOf := mysql.ServerVersionCapableOf(tc.mySQLVersion)
-			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t"}
-			alters, err := ValidateAndEditAlterTableStatement(onlineDDL.Table, onlineDDL.UUID, capableOf, alterTable, m)
+			baseUUID := "a5a563da_dc1a_11ec_a416_0a43f95f28a3"
+			tableName := "t"
+			alters, err := ValidateAndEditAlterTableStatement(tableName, baseUUID, capableOf, alterTable, m)
 			assert.NoError(t, err)
 			var altersStrings []string
 			for _, alter := range alters {
