@@ -1510,3 +1510,7 @@ func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
 func (vc *vcursorImpl) GetForeignKeyChecksState() *bool {
 	return vc.fkChecksState
 }
+
+func (vc *vcursorImpl) EnableOperatorTracing() {
+	vc.logStats.EnableOpStats()
+}

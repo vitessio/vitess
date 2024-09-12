@@ -132,6 +132,8 @@ func (t *noopVCursor) UnresolvedTransactions(ctx context.Context, keyspace strin
 	panic("implement me")
 }
 
+func (t *noopVCursor) EnableOperatorTracing() {}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -873,6 +875,8 @@ func (f *loggingVCursor) UnresolvedTransactions(_ context.Context, _ string) ([]
 	}
 	return f.transactionStatusOutput, nil
 }
+
+func (f *loggingVCursor) EnableOperatorTracing() {}
 
 // SQLParser implements VCursor
 func (t *loggingVCursor) SQLParser() *sqlparser.Parser {

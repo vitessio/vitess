@@ -44,13 +44,6 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return nil, err
 	}
 
-	// We'll go over the primitive tree and assign unique IDs
-	id := 1
-	engine.PreOrderTraverse(primitive, func(primitive engine.Primitive) {
-		primitive.SetID(engine.PrimitiveID(id))
-		id++
-	})
-
 	return primitive, nil
 }
 

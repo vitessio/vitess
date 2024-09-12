@@ -140,6 +140,8 @@ type (
 
 		// UnresolvedTransactions reads the state of all the unresolved atomic transactions in the given keyspace.
 		UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error)
+
+		EnableOperatorTracing()
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

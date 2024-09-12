@@ -43,6 +43,34 @@
     }
   },
   {
+    "comment": "vexplain trace",
+    "query": "vexplain trace select * from user",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "vexplain trace select * from user",
+      "Instructions": {
+        "OperatorType": "Trace",
+        "Inputs": [
+          {
+            "ID": 1,
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select * from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "vexplain table",
     "query": "vexplain ALL select * from user",
     "plan": {
