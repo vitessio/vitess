@@ -60,12 +60,6 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	buf.WriteString("{")
 
 	prepend := ""
-	if pd.ID > 0 {
-		if err := marshalAdd(prepend, buf, "ID", int(pd.ID)); err != nil {
-			return nil, err
-		}
-		prepend = ","
-	}
 	if pd.InputName != "" {
 		if err := marshalAdd(prepend, buf, "InputName", pd.InputName); err != nil {
 			return nil, err

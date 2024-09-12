@@ -39,7 +39,7 @@ func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt
 	case sqlparser.PlanVExplainType:
 		return buildVExplainVtgatePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case sqlparser.TraceVExplainType:
-		return buildVExplainTracePlan(ctx, vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainTracePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vexplainStmt.Type.ToString())
 }

@@ -64,10 +64,10 @@ func (t *Trace) NeedsTransaction() bool {
 	return t.Inner.NeedsTransaction()
 }
 
-func preWalk(desc PrimitiveDescription, f func(PrimitiveDescription)) {
+func preWalk(desc *PrimitiveDescription, f func(*PrimitiveDescription)) {
 	f(desc)
 	for _, input := range desc.Inputs {
-		preWalk(input, f)
+		preWalk(&input, f)
 	}
 }
 
@@ -102,7 +102,7 @@ func (t *Trace) getExplainTraceOutput(getOpStats func() map[int]RowsReceived) (*
 	statsMap := getOpStats()
 
 	// let's add the stats to the description
-	preWalk(description, func(desc PrimitiveDescription) {
+	preWalk(&description, func(desc *PrimitiveDescription) {
 		stats, found := statsMap[int(desc.ID)]
 		if !found {
 			return
