@@ -17,13 +17,50 @@ limitations under the License.
 package schemadiff
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+var (
+	ErrForeignKeyFound = errors.New("Foreign key found")
+
+	copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
+)
+
+const (
+	maxConstraintNameLength = 64
+)
+
+type ConstraintType int
+
+const (
+	UnknownConstraintType ConstraintType = iota
+	CheckConstraintType
+	ForeignKeyConstraintType
+)
+
+var (
+	constraintIndicatorMap = map[int]string{
+		int(CheckConstraintType):      "chk",
+		int(ForeignKeyConstraintType): "fk",
+	}
+)
+
+func GetConstraintType(constraintInfo sqlparser.ConstraintInfo) ConstraintType {
+	if _, ok := constraintInfo.(*sqlparser.CheckConstraintDefinition); ok {
+		return CheckConstraintType
+	}
+	if _, ok := constraintInfo.(*sqlparser.ForeignKeyDefinition); ok {
+		return ForeignKeyConstraintType
+	}
+	return UnknownConstraintType
+}
 
 // ColumnChangeExpandsDataRange sees if target column has any value set/range that is impossible in source column.
 func ColumnChangeExpandsDataRange(source *ColumnDefinitionEntity, target *ColumnDefinitionEntity) (bool, string) {
@@ -587,4 +624,116 @@ func OnlineDDLMigrationTablesAnalysis(
 	}
 
 	return analysis, nil
+}
+
+// ValidateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
+// - extra validation (no FKs for now...)
+// - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
+func ValidateAndEditCreateTableStatement(originalTableName string, baseUUID string, createTable *sqlparser.CreateTable, allowForeignKeys bool) (constraintMap map[string]string, err error) {
+	constraintMap = map[string]string{}
+	hashExists := map[string]bool{}
+
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ForeignKeyDefinition:
+			if !allowForeignKeys {
+				return false, ErrForeignKeyFound
+			}
+		case *sqlparser.ConstraintDefinition:
+			oldName := node.Name.String()
+			newName := newConstraintName(originalTableName, baseUUID, node, hashExists, sqlparser.CanonicalString(node.Details), oldName)
+			node.Name = sqlparser.NewIdentifierCI(newName)
+			constraintMap[oldName] = newName
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, createTable); err != nil {
+		return constraintMap, err
+	}
+	return constraintMap, nil
+}
+
+// ValidateAndEditAlterTableStatement inspects the AlterTable statement and:
+// - modifies any CONSTRAINT name according to given name mapping
+// - explode ADD FULLTEXT KEY into multiple statements
+func ValidateAndEditAlterTableStatement(originalTableName string, baseUUID string, capableOf capabilities.CapableOf, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
+	capableOfInstantDDLXtrabackup, err := capableOf(capabilities.InstantDDLXtrabackupCapability)
+	if err != nil {
+		return nil, err
+	}
+
+	hashExists := map[string]bool{}
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.DropKey:
+			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType {
+				// drop a check or a foreign key constraint
+				mappedName, ok := constraintMap[node.Name.String()]
+				if !ok {
+					return false, fmt.Errorf("Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
+				}
+				node.Name = sqlparser.NewIdentifierCI(mappedName)
+			}
+		case *sqlparser.AddConstraintDefinition:
+			oldName := node.ConstraintDefinition.Name.String()
+			newName := newConstraintName(originalTableName, baseUUID, node.ConstraintDefinition, hashExists, sqlparser.CanonicalString(node.ConstraintDefinition.Details), oldName)
+			node.ConstraintDefinition.Name = sqlparser.NewIdentifierCI(newName)
+			constraintMap[oldName] = newName
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, alterTable); err != nil {
+		return alters, err
+	}
+	alters = append(alters, alterTable)
+	// Handle ADD FULLTEXT KEY statements
+	countAddFullTextStatements := 0
+	redactedOptions := make([]sqlparser.AlterOption, 0, len(alterTable.AlterOptions))
+	for i := range alterTable.AlterOptions {
+		opt := alterTable.AlterOptions[i]
+		switch opt := opt.(type) {
+		case sqlparser.AlgorithmValue:
+			if !capableOfInstantDDLXtrabackup {
+				// we do not pass ALGORITHM. We choose our own ALGORITHM.
+				continue
+			}
+		case *sqlparser.AddIndexDefinition:
+			if opt.IndexDefinition.Info.Type == sqlparser.IndexTypeFullText {
+				countAddFullTextStatements++
+				if countAddFullTextStatements > 1 {
+					// We've already got one ADD FULLTEXT KEY. We can't have another
+					// in the same statement
+					extraAlterTable := &sqlparser.AlterTable{
+						Table:        alterTable.Table,
+						AlterOptions: []sqlparser.AlterOption{opt},
+					}
+					if !capableOfInstantDDLXtrabackup {
+						extraAlterTable.AlterOptions = append(extraAlterTable.AlterOptions, copyAlgorithm)
+					}
+					alters = append(alters, extraAlterTable)
+					continue
+				}
+			}
+		}
+		redactedOptions = append(redactedOptions, opt)
+	}
+	alterTable.AlterOptions = redactedOptions
+	if !capableOfInstantDDLXtrabackup {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, copyAlgorithm)
+	}
+	return alters, nil
+}
+
+// AddInstantAlgorithm adds or modifies the AlterTable's ALGORITHM to INSTANT
+func AddInstantAlgorithm(alterTable *sqlparser.AlterTable) {
+	instantOpt := sqlparser.AlgorithmValue("INSTANT")
+	for i, opt := range alterTable.AlterOptions {
+		if _, ok := opt.(sqlparser.AlgorithmValue); ok {
+			// replace an existing algorithm
+			alterTable.AlterOptions[i] = instantOpt
+			return
+		}
+	}
+	// append an algorithm
+	alterTable.AlterOptions = append(alterTable.AlterOptions, instantOpt)
 }
