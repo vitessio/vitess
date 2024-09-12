@@ -2400,6 +2400,8 @@ func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctl
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetUnresolvedTransactions")
 	defer span.Finish()
 
+	span.Annotate("keyspace", req.Keyspace)
+
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
@@ -2443,6 +2445,9 @@ func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctl
 func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb.ConcludeTransactionRequest) (resp *vtctldatapb.ConcludeTransactionResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ConcludeTransaction")
 	defer span.Finish()
+
+	span.Annotate("dtid", req.Dtid)
+	span.Annotate("participants", req.Participants)
 
 	ss, err := dtids.ShardSession(req.Dtid)
 	if err != nil {
