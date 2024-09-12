@@ -62,20 +62,22 @@ const (
 	// Check if workflow is still copying.
 	sqlGetVReplicationCopyStatus = "select distinct vrepl_id from %s.copy_state where vrepl_id = %d"
 	// Validate the minimum set of permissions needed to manage vreplication metadata.
+	// This is a simple check for a matching user rather than any specific user@host
+	// combination.
 	sqlValidateVReplicationPermissions = `
 select if(count(*)>0, 1, 0) as good from mysql.user as u
   left join mysql.db as d on (u.user = d.user)
   left join mysql.tables_priv as t on (u.user = t.user)
 where u.user = %a
   and (
-    (u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y')
-    or (d.db = %a and u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y')
-    or (t.db = %a and t.table_name = 'vreplication'
+    (u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y') /* user has global privs */
+    or (d.db = %a and u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y') /* user has db privs */
+    or (t.db = %a and t.table_name = 'vreplication' /* user has table privs */
       and find_in_set('insert', t.table_priv)
       and find_in_set('update', t.table_priv)
       and find_in_set('delete', t.table_priv)
     )
-  )
+  ) limit 1
 `
 )
 
@@ -549,7 +551,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 
 // ValidateVReplicationPermissions validates that the --db_filtered_user has
 // the minimum permissions required on the sidecardb vreplication table
-// needed in order to manager vreplication metadata.
+// needed in order to manage vreplication metadata.
 func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
 	query, err := sqlparser.ParseAndBind(sqlValidateVReplicationPermissions,
 		sqltypes.StringBindVariable(tm.DBConfigs.Filtered.User),
@@ -573,8 +575,9 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 			query, qr)
 	}
 	val, err := qr.Rows[0][0].ToBool()
-	if err != nil {
-		return nil, err
+	if err != nil { // Should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for query %s: expected boolean-like value, got: %q",
+			query, qr.Rows[0][0].ToString())
 	}
 	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
 		User: tm.DBConfigs.Filtered.User,

@@ -666,23 +666,21 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 				allErrors.RecordError(fmt.Errorf("no tablet found to source data in keyspace %s, shard %s", keyspace, shard.ShardName()))
 				return
 			}
-			if req.GetEnableReverseReplication() {
-				// Ensure the tablet has the minimum privileges required on the sidecar database
-				// table in order to manage the reverse workflow as part of the traffic switch.
-				for _, tablet := range tablets {
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-						res, err := ts.ws.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
-						if err != nil {
-							allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s", topoproto.TabletAliasString(tablet.Alias)))
-						}
-						if !res.GetOk() {
-							allErrors.RecordError(fmt.Errorf("user %s does not have the required set of permissions (insert,update,delete) on the %s.vreplication table on tablet %s",
-								res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias)))
-						}
-					}()
-				}
+			// Ensure the tablet has the minimum privileges required on the sidecar database
+			// table in order to manage the reverse workflow as part of the traffic switch.
+			for _, tablet := range tablets {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					res, err := ts.ws.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
+					if err != nil {
+						allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s", topoproto.TabletAliasString(tablet.Alias)))
+					}
+					if !res.GetOk() {
+						allErrors.RecordError(fmt.Errorf("user %s does not have the required set of permissions (insert,update,delete) on the %s.vreplication table on tablet %s",
+							res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias)))
+					}
+				}()
 			}
 		}(cells, keyspace, shard)
 	}
