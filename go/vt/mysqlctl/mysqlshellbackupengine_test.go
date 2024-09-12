@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"testing"
 
@@ -25,6 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -174,4 +177,94 @@ func TestShouldDrainForBackupMySQLShell(t *testing.T) {
 
 	assert.True(t, engine.ShouldDrainForBackup(nil))
 	assert.True(t, engine.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
+}
+
+func TestCleanupMySQL(t *testing.T) {
+	type userRecord struct {
+		user, host string
+	}
+
+	tests := []struct {
+		name              string
+		existingDBs       []string
+		expectedDropDBs   []string
+		currentUser       string
+		existingUsers     []userRecord
+		expectedDropUsers []string
+	}{
+		{
+			name:            "testing only specific DBs",
+			existingDBs:     []string{"_vt", "vt_test"},
+			expectedDropDBs: []string{"_vt", "vt_test"},
+		},
+		{
+			name:            "testing with internal dbs",
+			existingDBs:     []string{"_vt", "mysql", "vt_test", "performance_schema"},
+			expectedDropDBs: []string{"_vt", "vt_test"},
+		},
+		{
+			name:            "with users",
+			existingDBs:     []string{"_vt", "mysql", "vt_test", "performance_schema"},
+			expectedDropDBs: []string{"_vt", "vt_test"},
+			existingUsers: []userRecord{
+				{"test", "localhost"},
+				{"app", "10.0.0.1"},
+			},
+			expectedDropUsers: []string{"'test'@'localhost'", "'app'@'10.0.0.1'"},
+		},
+		{
+			name:            "with reserved users",
+			existingDBs:     []string{"_vt", "mysql", "vt_test", "performance_schema"},
+			expectedDropDBs: []string{"_vt", "vt_test"},
+			existingUsers: []userRecord{
+				{"mysql.sys", "localhost"},
+				{"mysql.infoschema", "localhost"},
+				{"mysql.session", "localhost"},
+				{"test", "localhost"},
+				{"app", "10.0.0.1"},
+			},
+			expectedDropUsers: []string{"'test'@'localhost'", "'app'@'10.0.0.1'"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakedb := fakesqldb.New(t)
+			defer fakedb.Close()
+			mysql := NewFakeMysqlDaemon(fakedb)
+			defer mysql.Close()
+
+			databases := [][]sqltypes.Value{}
+			for _, db := range tt.existingDBs {
+				databases = append(databases, []sqltypes.Value{sqltypes.NewVarChar(db)})
+			}
+
+			users := [][]sqltypes.Value{}
+			for _, record := range tt.existingUsers {
+				users = append(users, []sqltypes.Value{sqltypes.NewVarChar(record.user), sqltypes.NewVarChar(record.host)})
+			}
+
+			mysql.FetchSuperQueryMap = map[string]*sqltypes.Result{
+				"SHOW DATABASES":                    {Rows: databases},
+				"SELECT user()":                     {Rows: [][]sqltypes.Value{{sqltypes.NewVarChar(tt.currentUser)}}},
+				"SELECT user, host FROM mysql.user": {Rows: users},
+			}
+
+			for _, drop := range tt.expectedDropDBs {
+				mysql.ExpectedExecuteSuperQueryList = append(mysql.ExpectedExecuteSuperQueryList,
+					fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", drop),
+				)
+			}
+
+			for _, drop := range tt.expectedDropUsers {
+				mysql.ExpectedExecuteSuperQueryList = append(mysql.ExpectedExecuteSuperQueryList,
+					fmt.Sprintf("DROP USER %s", drop),
+				)
+			}
+
+			err := cleanupMySQL(context.Background(), mysql, logutil.NewMemoryLogger())
+			require.NoError(t, err)
+		})
+	}
+
 }

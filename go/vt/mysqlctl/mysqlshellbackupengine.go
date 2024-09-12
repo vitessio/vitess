@@ -26,15 +26,17 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/servenv"
@@ -49,7 +51,7 @@ var (
 	// flags passed to the Dump command, as a JSON string
 	mysqlShellDumpFlags = `{"threads": 2}`
 	// flags passed to the Load command, as a JSON string
-	mysqlShellLoadFlags = `{"threads": 4, "updateGtidSet": "replace", "skipBinlog": true, "progressFile": ""}`
+	mysqlShellLoadFlags = `{"threads": 4, "loadUsers": true, "excludeUsers": ["'root'@'localhost'"], "updateGtidSet": "replace", "skipBinlog": true, "progressFile": ""}`
 	// drain a tablet when taking a backup
 	mysqlShellBackupShouldDrain = false
 	// disable redo logging and double write buffer
@@ -59,6 +61,15 @@ var (
 	knownObjectStoreParams = []string{"s3BucketName", "osBucketName", "azureContainerName"}
 
 	MySQLShellPreCheckError = errors.New("MySQLShellPreCheckError")
+
+	// internal databases not backed up by MySQL Shell
+	internalDBs = []string{
+		"information_schema", "mysql", "ndbinfo", "performance_schema", "sys",
+	}
+	// reserved MySQL users https://dev.mysql.com/doc/refman/8.0/en/reserved-accounts.html
+	reservedUsers = []string{
+		"mysql.sys@localhost", "mysql.session@localhost", "mysql.infoschema@localhost",
+	}
 )
 
 // MySQLShellBackupManifest represents a backup.
@@ -248,38 +259,32 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, vterrors.Wrap(err, "disable semi-sync failed")
 	}
 
-	// if we received a RestoreFromBackup API call instead of it being a command line argument,
-	// we need to first clean the host before we start the restore.
-	if params.DeleteBeforeRestore {
-		params.Logger.Infof("restoring on an existing tablet, so dropping database %q", params.DbName)
+	params.Logger.Infof("restoring on an existing tablet, so dropping database %q", params.DbName)
 
-		readonly, err := params.Mysqld.IsSuperReadOnly(ctx)
+	readonly, err := params.Mysqld.IsSuperReadOnly(ctx)
+	if err != nil {
+		return nil, vterrors.Wrap(err, fmt.Sprintf("checking if mysqld has super_read_only=enable: %v", err))
+	}
+
+	if readonly {
+		resetFunc, err := params.Mysqld.SetSuperReadOnly(ctx, false)
 		if err != nil {
-			return nil, vterrors.Wrap(err, fmt.Sprintf("checking if mysqld has super_read_only=enable: %v", err))
+			return nil, vterrors.Wrap(err, fmt.Sprintf("unable to disable super-read-only: %v", err))
 		}
 
-		if readonly {
-			resetFunc, err := params.Mysqld.SetSuperReadOnly(ctx, false)
+		defer func() {
+			err := resetFunc()
 			if err != nil {
-				return nil, vterrors.Wrap(err, fmt.Sprintf("unable to disable super-read-only: %v", err))
+				params.Logger.Errorf("Not able to set super_read_only to its original value after restore")
 			}
+		}()
+	}
 
-			defer func() {
-				err := resetFunc()
-				if err != nil {
-					params.Logger.Errorf("Not able to set super_read_only to its original value after restore")
-				}
-			}()
-		}
-
-		err = params.Mysqld.ExecuteSuperQueryList(ctx,
-			[]string{fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", params.DbName),
-				fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", sidecar.GetName())},
-		)
-		if err != nil {
-			return nil, vterrors.Wrap(err, fmt.Sprintf("dropping database %q failed", params.DbName))
-		}
-
+	err = cleanupMySQL(ctx, params.Mysqld, params.Logger)
+	if err != nil {
+		log.Errorf(err.Error())
+		// time.Sleep(time.Minute * 2)
+		return nil, vterrors.Wrap(err, "error cleaning MySQL")
 	}
 
 	// we need to get rid of all the current replication information on the host.
@@ -503,6 +508,64 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 	if err := scanner.Err(); err != nil {
 		params.Logger.Errorf("error reading from reader: %v", err)
 	}
+}
+
+func cleanupMySQL(ctx context.Context, mysql MysqlDaemon, logger logutil.Logger) error {
+	logger.Infof("Cleaning up MySQL ahead of a restore")
+	result, err := mysql.FetchSuperQuery(ctx, "SHOW DATABASES")
+	if err != nil {
+		return err
+	}
+
+	// drop all databases
+	for _, row := range result.Rows {
+		dbName := row[0].ToString()
+		if slices.Contains(internalDBs, dbName) {
+			continue // not dropping internal DBs
+		}
+
+		logger.Infof("Dropping DB %q", dbName)
+		err = mysql.ExecuteSuperQuery(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", row[0].ToString()))
+		if err != nil {
+			return fmt.Errorf("error droppping database %q: %w", row[0].ToString(), err)
+		}
+	}
+
+	// get current user
+	var currentUser string
+	result, err = mysql.FetchSuperQuery(ctx, "SELECT user()")
+	if err != nil {
+		return fmt.Errorf("error fetching current user: %w", err)
+	}
+
+	for _, row := range result.Rows {
+		currentUser = row[0].ToString()
+	}
+
+	// drop all users except reserved ones
+	result, err = mysql.FetchSuperQuery(ctx, "SELECT user, host FROM mysql.user")
+	if err != nil {
+		return err
+	}
+
+	for _, row := range result.Rows {
+		user := fmt.Sprintf("%s@%s", row[0].ToString(), row[1].ToString())
+
+		if user == currentUser {
+			continue // we don't drop the current user
+		}
+		if slices.Contains(reservedUsers, user) {
+			continue // we skip reserved MySQL users
+		}
+
+		logger.Infof("Dropping User %q", user)
+		err = mysql.ExecuteSuperQuery(ctx, fmt.Sprintf("DROP USER '%s'@'%s'", row[0].ToString(), row[1].ToString()))
+		if err != nil {
+			return fmt.Errorf("error droppping user %q: %w", user, err)
+		}
+	}
+
+	return err
 }
 
 func init() {
