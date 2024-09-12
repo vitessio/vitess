@@ -27,7 +27,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 )
 
 const (
@@ -89,4 +93,80 @@ func WriteTestCommunicationFile(t *testing.T, fileName string, content string) {
 // DeleteFile deletes the file specified.
 func DeleteFile(fileName string) {
 	_ = os.Remove(path.Join(os.Getenv("VTDATAROOT"), fileName))
+}
+
+// WaitForResults waits for the results of the query to be as expected.
+func WaitForResults(t *testing.T, vtParams *mysql.ConnParams, query string, resultExpected string, waitTime time.Duration) {
+	timeout := time.After(waitTime)
+	var prevRes []sqltypes.Row
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("didn't reach expected results for %s. Last results - %v", query, prevRes)
+		default:
+			ctx := context.Background()
+			conn, err := mysql.Connect(ctx, vtParams)
+			if err == nil {
+				res, _ := utils.ExecAllowError(t, conn, query)
+				conn.Close()
+				if res != nil {
+					prevRes = res.Rows
+					if fmt.Sprintf("%v", res.Rows) == resultExpected {
+						return
+					}
+				}
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, ks string, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	shardNames := map[string]bool{}
+	for _, shard := range shards {
+		shardNames[shard.Name] = true
+	}
+	query := fmt.Sprintf("show vitess_migrations from %s like '%s'", ks, uuid)
+
+	statusesMap := map[string]bool{}
+	for _, status := range expectStatuses {
+		statusesMap[string(status)] = true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	lastKnownStatus := ""
+	for {
+		select {
+		case <-ctx.Done():
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		case <-ticker.C:
+		}
+		countMatchedShards := 0
+		conn, err := mysql.Connect(ctx, vtParams)
+		if err != nil {
+			continue
+		}
+		r, err := utils.ExecAllowError(t, conn, query)
+		conn.Close()
+		if err != nil {
+			continue
+		}
+		for _, row := range r.Named().Rows {
+			shardName := row["shard"].ToString()
+			if !shardNames[shardName] {
+				// irrelevant shard
+				continue
+			}
+			lastKnownStatus = row["migration_status"].ToString()
+			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
+				countMatchedShards++
+			}
+		}
+		if countMatchedShards == len(shards) {
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		}
+	}
 }
