@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package stress
+package fuzz
 
 import (
 	"context"
@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
@@ -131,7 +132,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			fz.stop()
 
 			// Wait for all transactions to be resolved.
-			waitForResults(t, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 30*time.Second)
+			twopcutil.WaitForResults(t, &vtParams, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 30*time.Second)
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
 			fz.verifyTransactionsWereAtomic(t)
 
@@ -428,12 +429,16 @@ func vttabletRestarts(t *testing.T) {
 	}
 }
 
-var orderedDDLFuzzer = []string{
-	"alter table twopc_fuzzer_insert add column extra_col1 varchar(20)",
-	"alter table twopc_fuzzer_insert add column extra_col2 varchar(20)",
-	"alter table twopc_fuzzer_insert drop column extra_col1",
-	"alter table twopc_fuzzer_insert drop column extra_col2",
-}
+var (
+	count = 0
+
+	orderedDDLFuzzer = []string{
+		"alter table twopc_fuzzer_insert add column extra_col1 varchar(20)",
+		"alter table twopc_fuzzer_insert add column extra_col2 varchar(20)",
+		"alter table twopc_fuzzer_insert drop column extra_col1",
+		"alter table twopc_fuzzer_insert drop column extra_col2",
+	}
+)
 
 // onlineDDLFuzzer runs an online DDL statement while ignoring any errors for the fuzzer.
 func onlineDDLFuzzer(t *testing.T) {
@@ -445,7 +450,8 @@ func onlineDDLFuzzer(t *testing.T) {
 		return
 	}
 	fmt.Println("Running online DDL with uuid: ", output)
-	waitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	twopcutil.WaitForMigrationStatus(t, &vtParams, keyspaceName, clusterInstance.Keyspaces[0].Shards,
+		strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 }
 
 var moveTablesCount int
