@@ -737,3 +737,42 @@ func AddInstantAlgorithm(alterTable *sqlparser.AlterTable) {
 	// append an algorithm
 	alterTable.AlterOptions = append(alterTable.AlterOptions, instantOpt)
 }
+
+// DuplicateCreateTable parses the given `CREATE TABLE` statement, and returns:
+// - The format CreateTable AST
+// - A new CreateTable AST, with the table renamed as `newTableName`, and with constraints renamed deterministically
+// - Map of renamed constraints
+func DuplicateCreateTable(originalCreateTable *sqlparser.CreateTable, baseUUID string, newTableName string, allowForeignKeys bool) (
+	newCreateTable *sqlparser.CreateTable,
+	constraintMap map[string]string,
+	err error,
+) {
+	newCreateTable = sqlparser.Clone(originalCreateTable)
+	newCreateTable.SetTable(newCreateTable.GetTable().Qualifier.CompliantName(), newTableName)
+
+	// If this table has a self-referencing foreign key constraint, ensure the referenced table gets renamed:
+	renameSelfFK := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ConstraintDefinition:
+			fk, ok := node.Details.(*sqlparser.ForeignKeyDefinition)
+			if !ok {
+				return true, nil
+			}
+			if referencedTableName := fk.ReferenceDefinition.ReferencedTable.Name.String(); referencedTableName == originalCreateTable.Table.Name.String() {
+				// This is a self-referencing foreign key
+				// We need to rename the referenced table as well
+				fk.ReferenceDefinition.ReferencedTable.Name = sqlparser.NewIdentifierCS(newTableName)
+			}
+		}
+		return true, nil
+	}
+	_ = sqlparser.Walk(renameSelfFK, newCreateTable)
+
+	// manipulate CreateTable statement: take care of constraints names which have to be
+	// unique across the schema
+	constraintMap, err = ValidateAndEditCreateTableStatement(originalCreateTable.Table.Name.String(), baseUUID, newCreateTable, allowForeignKeys)
+	if err != nil {
+		return nil, nil, err
+	}
+	return newCreateTable, constraintMap, nil
+}

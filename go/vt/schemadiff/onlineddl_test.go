@@ -1265,3 +1265,63 @@ func TestAddInstantAlgorithm(t *testing.T) {
 		})
 	}
 }
+
+func TestDuplicateCreateTable(t *testing.T) {
+	baseUUID := "a5a563da_dc1a_11ec_a416_0a43f95f28a3"
+	allowForeignKeys := true
+
+	tcases := []struct {
+		sql           string
+		newName       string
+		expectSQL     string
+		expectMapSize int
+	}{
+		{
+			sql:       "create table t (id int primary key)",
+			newName:   "mytable",
+			expectSQL: "create table mytable (\n\tid int primary key\n)",
+		},
+		{
+			sql:           "create table t (id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade)",
+			newName:       "mytable",
+			expectSQL:     "create table mytable (\n\tid int primary key,\n\ti int,\n\tconstraint f_ewl7lthyax2xxocpib3hyyvxx foreign key (i) references parent (id) on delete cascade\n)",
+			expectMapSize: 1,
+		},
+		{
+			sql:           "create table self (id int primary key, i int, constraint f foreign key (i) references self (id))",
+			newName:       "mytable",
+			expectSQL:     "create table mytable (\n\tid int primary key,\n\ti int,\n\tconstraint f_6tlv90d9gcf4h6roalfnkdhar foreign key (i) references mytable (id)\n)",
+			expectMapSize: 1,
+		},
+		{
+			sql:     "create table self (id int primary key, i1 int, i2 int, constraint f1 foreign key (i1) references self (id), constraint f1 foreign key (i2) references parent (id))",
+			newName: "mytable",
+			expectSQL: `create table mytable (
+	id int primary key,
+	i1 int,
+	i2 int,
+	constraint f1_95jpox7sx4w0cv7dpspzmjbxu foreign key (i1) references mytable (id),
+	constraint f1_1fg002b1cuqoavgti5zp8pu91 foreign key (i2) references parent (id)
+)`,
+			expectMapSize: 1,
+		},
+	}
+	env := NewTestEnv()
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			stmt, err := env.Parser().ParseStrictDDL(tcase.sql)
+			require.NoError(t, err)
+			originalCreateTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+			require.NotNil(t, originalCreateTable)
+			newCreateTable, constraintMap, err := DuplicateCreateTable(originalCreateTable, baseUUID, tcase.newName, allowForeignKeys)
+			assert.NoError(t, err)
+			assert.NotNil(t, newCreateTable)
+			assert.NotNil(t, constraintMap)
+
+			newSQL := sqlparser.String(newCreateTable)
+			assert.Equal(t, tcase.expectSQL, newSQL)
+			assert.Equal(t, tcase.expectMapSize, len(constraintMap))
+		})
+	}
+}

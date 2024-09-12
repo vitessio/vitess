@@ -1278,45 +1278,6 @@ func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *conn
 	return deferFunc, nil
 }
 
-// duplicateCreateTable parses the given `CREATE TABLE` statement, and returns:
-// - The format CreateTable AST
-// - A new CreateTable AST, with the table renamed as `newTableName`, and with constraints renamed deterministically
-// - Map of renamed constraints
-func (e *Executor) duplicateCreateTable(ctx context.Context, onlineDDL *schema.OnlineDDL, originalCreateTable *sqlparser.CreateTable, newTableName string) (
-	newCreateTable *sqlparser.CreateTable,
-	constraintMap map[string]string,
-	err error,
-) {
-	newCreateTable = sqlparser.Clone(originalCreateTable)
-	newCreateTable.SetTable(newCreateTable.GetTable().Qualifier.CompliantName(), newTableName)
-
-	// If this table has a self-referencing foreign key constraint, ensure the referenced table gets renamed:
-	renameSelfFK := func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.ConstraintDefinition:
-			fk, ok := node.Details.(*sqlparser.ForeignKeyDefinition)
-			if !ok {
-				return true, nil
-			}
-			if referencedTableName := fk.ReferenceDefinition.ReferencedTable.Name.String(); referencedTableName == originalCreateTable.Table.Name.String() {
-				// This is a self-referencing foreign key
-				// We need to rename the referenced table as well
-				fk.ReferenceDefinition.ReferencedTable.Name = sqlparser.NewIdentifierCS(newTableName)
-			}
-		}
-		return true, nil
-	}
-	_ = sqlparser.Walk(renameSelfFK, newCreateTable)
-
-	// manipulate CreateTable statement: take care of constraints names which have to be
-	// unique across the schema
-	constraintMap, err = schemadiff.ValidateAndEditCreateTableStatement(onlineDDL.Table, onlineDDL.UUID, newCreateTable, onlineDDL.StrategySetting().IsAllowForeignKeysFlag())
-	if err != nil {
-		return nil, nil, err
-	}
-	return newCreateTable, constraintMap, nil
-}
-
 // createDuplicateTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
 // This function emulates MySQL's `CREATE TABLE LIKE ...` statement. The difference is that this function takes control over the generated CONSTRAINT names,
 // if any, such that they are deterministic across shards, as well as preserve original names where possible.
@@ -1329,7 +1290,7 @@ func (e *Executor) createDuplicateTableLike(ctx context.Context, newTableName st
 	if err != nil {
 		return nil, nil, err
 	}
-	vreplCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, originalCreateTable, newTableName)
+	vreplCreateTable, constraintMap, err := schemadiff.DuplicateCreateTable(originalCreateTable, onlineDDL.UUID, newTableName, onlineDDL.StrategySetting().IsAllowForeignKeysFlag())
 	if err != nil {
 		return nil, nil, err
 	}

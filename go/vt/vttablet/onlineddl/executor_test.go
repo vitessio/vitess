@@ -21,81 +21,11 @@ Functionality of this Executor is tested in go/test/endtoend/onlineddl/...
 package onlineddl
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
-
-func TestDuplicateCreateTable(t *testing.T) {
-	e := Executor{
-		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "DuplicateCreateTableTest"),
-	}
-	ctx := context.Background()
-	onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "something", Strategy: "vitess", Options: "--unsafe-allow-foreign-keys"}
-
-	tcases := []struct {
-		sql           string
-		newName       string
-		expectSQL     string
-		expectMapSize int
-	}{
-		{
-			sql:       "create table t (id int primary key)",
-			newName:   "mytable",
-			expectSQL: "create table mytable (\n\tid int primary key\n)",
-		},
-		{
-			sql:           "create table t (id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade)",
-			newName:       "mytable",
-			expectSQL:     "create table mytable (\n\tid int primary key,\n\ti int,\n\tconstraint f_bjj16562shq086ozik3zf6kjg foreign key (i) references parent (id) on delete cascade\n)",
-			expectMapSize: 1,
-		},
-		{
-			sql:           "create table self (id int primary key, i int, constraint f foreign key (i) references self (id))",
-			newName:       "mytable",
-			expectSQL:     "create table mytable (\n\tid int primary key,\n\ti int,\n\tconstraint f_8aymb58nzb78l5jhq600veg6y foreign key (i) references mytable (id)\n)",
-			expectMapSize: 1,
-		},
-		{
-			sql:     "create table self (id int primary key, i1 int, i2 int, constraint f1 foreign key (i1) references self (id), constraint f1 foreign key (i2) references parent (id))",
-			newName: "mytable",
-			expectSQL: `create table mytable (
-	id int primary key,
-	i1 int,
-	i2 int,
-	constraint f1_1rlsg9yls1t91i35zq5gyeoq7 foreign key (i1) references mytable (id),
-	constraint f1_59t4lvb1ncti6fxy27drad4jp foreign key (i2) references parent (id)
-)`,
-			expectMapSize: 1,
-		},
-	}
-	for _, tcase := range tcases {
-		t.Run(tcase.sql, func(t *testing.T) {
-			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tcase.sql)
-			require.NoError(t, err)
-			originalCreateTable, ok := stmt.(*sqlparser.CreateTable)
-			require.True(t, ok)
-			require.NotNil(t, originalCreateTable)
-			newCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, originalCreateTable, tcase.newName)
-			assert.NoError(t, err)
-			assert.NotNil(t, newCreateTable)
-			assert.NotNil(t, constraintMap)
-
-			newSQL := sqlparser.String(newCreateTable)
-			assert.Equal(t, tcase.expectSQL, newSQL)
-			assert.Equal(t, tcase.expectMapSize, len(constraintMap))
-		})
-	}
-}
 
 func TestShouldCutOverAccordingToBackoff(t *testing.T) {
 	tcases := []struct {
