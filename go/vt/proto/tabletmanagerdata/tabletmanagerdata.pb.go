@@ -5895,7 +5895,8 @@ type ValidateVReplicationPermissionsResponse struct {
 
 	// The --db_filtered_user on the tablet.
 	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
-	// Does the user have the expected full set of global permissions.
+	// Does the user have the minimum privileges needed to manage
+	// vreplication metadata.
 	Ok bool `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
 }
 
