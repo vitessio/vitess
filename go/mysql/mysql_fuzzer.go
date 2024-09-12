@@ -310,7 +310,7 @@ func FuzzTLSServer(data []byte) int {
 	totalQueries := 20
 	var queries [][]byte
 	c := gofuzzheaders.NewConsumer(data)
-	for i := 0; i < totalQueries; i++ {
+	for i := range totalQueries {
 		query, err := c.GetBytes()
 		if err != nil {
 			return -1
@@ -377,7 +377,7 @@ func FuzzTLSServer(data []byte) int {
 		return -1
 	}
 
-	for i := 0; i < len(queries); i++ {
+	for i := range len(queries) {
 		conn.writeFuzzedPacket(queries[i])
 	}
 	return 1

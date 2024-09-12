@@ -19,4 +19,4 @@ CREATE TABLE IF NOT EXISTS redo_statement(
   id bigint NOT NULL,
   statement mediumblob NOT NULL,
   primary key(dtid, id)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

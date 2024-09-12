@@ -31,3 +31,15 @@ create table user_extra
     col              varchar(50),
     primary key (id)
 );
+
+create table mirror_tbl1
+(
+    id bigint not null,
+    primary key(id)
+) Engine = InnoDB;
+
+create table mirror_tbl2
+(
+    id bigint not null,
+    primary key(id)
+) Engine = InnoDB;

@@ -166,7 +166,7 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 	// Check if the context is already past its deadline before
 	// trying to execute the query.
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("%v before execution started", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s before execution started", dbc.getErrorMessageFromContextError(ctx))
 	}
 
 	now := time.Now()
@@ -200,8 +200,8 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 	}
 }
 
-// terminate kills the query or connection based on the transaction status
-func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
+// getErrorMessageFromContextError gets the error message from context error.
+func (dbc *Conn) getErrorMessageFromContextError(ctx context.Context) string {
 	var errMsg string
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
@@ -211,6 +211,12 @@ func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
 	default:
 		errMsg = ctx.Err().Error()
 	}
+	return errMsg
+}
+
+// terminate kills the query or connection based on the transaction status
+func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
+	errMsg := dbc.getErrorMessageFromContextError(ctx)
 	if insideTxn {
 		// we can't safely kill a query in a transaction, we need to kill the connection
 		_ = dbc.Kill(errMsg, time.Since(now))
@@ -229,7 +235,7 @@ func (dbc *Conn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*
 	// Check if the context is already past its deadline before
 	// trying to fetch the next result.
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("%v before reading next result set", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s before reading next result set", dbc.getErrorMessageFromContextError(ctx))
 	}
 	res, _, _, err := dbc.conn.ReadQueryResult(maxrows, wantfields)
 	if err != nil {

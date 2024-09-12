@@ -1101,6 +1101,14 @@ message TopologyCell {
   int64 version = 5;
 }
 
+message GetUnresolvedTransactionsRequest {
+  string keyspace = 1;
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
 message GetVSchemaRequest {
   string keyspace = 1;
 }
@@ -1863,6 +1871,7 @@ message VDiffCreateRequest {
   int64 max_report_sample_rows = 19;
   vttime.Duration max_diff_duration = 20;
   int64 row_diff_column_truncate_at = 21;
+  optional bool auto_start = 22;
 }
 
 message VDiffCreateResponse {
@@ -1885,6 +1894,7 @@ message VDiffResumeRequest {
   string workflow = 1;
   string target_keyspace = 2;
   string uuid = 3;
+  repeated string target_shards = 4;
 }
 
 message VDiffResumeResponse {
@@ -1906,6 +1916,7 @@ message VDiffStopRequest {
   string workflow = 1;
   string target_keyspace = 2;
   string uuid = 3;
+  repeated string target_shards = 4;
 }
 
 message VDiffStopResponse {

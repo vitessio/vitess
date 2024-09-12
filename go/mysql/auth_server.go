@@ -601,7 +601,7 @@ func newSalt() ([]byte, error) {
 	}
 
 	// Salt must be a legal UTF8 string.
-	for i := 0; i < len(salt); i++ {
+	for i := range len(salt) {
 		salt[i] &= 0x7f
 		if salt[i] == '\x00' || salt[i] == '$' {
 			salt[i]++

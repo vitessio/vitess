@@ -82,6 +82,14 @@ func TestGenerateQuery(t *testing.T) {
 			},
 			output: "select * from a where id in (1, 'aa')",
 		}, {
+			desc:  "json bindvar and raw bindvar",
+			query: "insert into t values (:v1, :v2)",
+			bindVars: map[string]*querypb.BindVariable{
+				"v1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(querypb.Type_JSON, []byte(`{"key": "value"}`))),
+				"v2": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(querypb.Type_RAW, []byte(`json_object("k", "v")`))),
+			},
+			output: `insert into t values ('{"key": "value"}', json_object("k", "v"))`,
+		}, {
 			desc:  "list bind vars 0 arguments",
 			query: "select * from a where id in ::vals",
 			bindVars: map[string]*querypb.BindVariable{
@@ -139,20 +147,19 @@ func TestGenerateQuery(t *testing.T) {
 
 	parser := NewTestParser()
 	for _, tcase := range tcases {
-		tree, err := parser.Parse(tcase.query)
-		if err != nil {
-			t.Errorf("parse failed for %s: %v", tcase.desc, err)
-			continue
-		}
-		buf := NewTrackedBuffer(nil)
-		buf.Myprintf("%v", tree)
-		pq := buf.ParsedQuery()
-		bytes, err := pq.GenerateQuery(tcase.bindVars, tcase.extras)
-		if err != nil {
-			assert.Equal(t, tcase.output, err.Error())
-		} else {
-			assert.Equal(t, tcase.output, string(bytes))
-		}
+		t.Run(tcase.query, func(t *testing.T) {
+			tree, err := parser.Parse(tcase.query)
+			require.NoError(t, err)
+			buf := NewTrackedBuffer(nil)
+			buf.Myprintf("%v", tree)
+			pq := buf.ParsedQuery()
+			bytes, err := pq.GenerateQuery(tcase.bindVars, tcase.extras)
+			if err != nil {
+				assert.Equal(t, tcase.output, err.Error())
+			} else {
+				assert.Equal(t, tcase.output, bytes)
+			}
+		})
 	}
 }
 

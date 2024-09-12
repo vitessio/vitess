@@ -59,6 +59,7 @@ Available Commands:
   GetTablets                  Looks up tablets according to filter criteria.
   GetThrottlerStatus          Get the throttler status for the given tablet.
   GetTopologyPath             Gets the value associated with the particular path (key) in the topology server.
+  GetUnresolvedTransactions   Retrieves unresolved transactions for the given keyspace.
   GetVSchema                  Prints a JSON representation of a keyspace's topo record.
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
   LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.

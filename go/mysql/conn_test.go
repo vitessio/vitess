@@ -744,7 +744,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		cConn.Close()
 	}()
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		bytes := make([]byte, rand.IntN(16)+1)
 		_, err := crypto_rand.Read(bytes)
 		require.NoError(t, err, "error doing rand.Read")
@@ -1001,7 +1001,7 @@ func TestPrepareAndExecute(t *testing.T) {
 	// and check that the handler received the correct input
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		startGoRoutine(ctx, t, fmt.Sprintf("%d:%s", i, randSeq(i)))
 	}
 

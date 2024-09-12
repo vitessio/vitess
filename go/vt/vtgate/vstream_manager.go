@@ -61,6 +61,10 @@ const maxSkewTimeoutSeconds = 10 * 60
 // for a vstream
 const tabletPickerContextTimeout = 90 * time.Second
 
+// stopOnReshardDelay is how long we wait, at a minimum, after sending a reshard journal event before
+// ending the stream from the tablet.
+const stopOnReshardDelay = 500 * time.Millisecond
+
 // vstream contains the metadata for one VStream request.
 type vstream struct {
 	// mu protects parts of vgtid, the semantics of a send, and journaler.
@@ -620,7 +624,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			}
 
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
-			for _, event := range events {
+			for i, event := range events {
 				switch event.Type {
 				case binlogdatapb.VEventType_FIELD:
 					// Update table names and send.
@@ -670,12 +674,22 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
 						return err
 					}
-
 				case binlogdatapb.VEventType_JOURNAL:
 					journal := event.Journal
-					// Journal events are not sent to clients by default, but only when StopOnReshard is set
+					// Journal events are not sent to clients by default, but only when
+					// StopOnReshard is set.
 					if vs.stopOnReshard && journal.MigrationType == binlogdatapb.MigrationType_SHARDS {
 						sendevents = append(sendevents, event)
+						// Read any subsequent events until we get the VGTID->COMMIT events that
+						// always follow the JOURNAL event which is generated as a result of
+						// an autocommit insert into the _vt.resharding_journal table on the
+						// tablet.
+						for j := i + 1; j < len(events); j++ {
+							sendevents = append(sendevents, events[j])
+							if events[j].Type == binlogdatapb.VEventType_COMMIT {
+								break
+							}
+						}
 						eventss = append(eventss, sendevents)
 						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
 							return err
@@ -688,12 +702,22 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						return err
 					}
 					if je != nil {
-						// Wait till all other participants converge and return EOF.
+						// We're going to be ending the tablet stream, so we ensure a reasonable
+						// minimum amount of time is alloted for clients to Recv the journal event
+						// before the stream's context is cancelled (which would cause the grpc
+						// SendMsg or RecvMsg to fail). If the client doesn't Recv the journal
+						// event before the stream ends then they'll have to resume from the last
+						// ShardGtid they received before the journal event.
+						endTimer := time.NewTimer(stopOnReshardDelay)
+						defer endTimer.Stop()
+						// Wait until all other participants converge and then return EOF after
+						// the minimum delay has passed.
 						journalDone = je.done
 						select {
 						case <-ctx.Done():
 							return ctx.Err()
 						case <-journalDone:
+							<-endTimer.C
 							return io.EOF
 						}
 					}
@@ -965,6 +989,9 @@ func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string
 	if err != nil || len(shards) == 0 {
 		return false, err
 	}
+
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
 
 	// First check the typical case, where the VGTID shards match the serving shards.
 	// In that case it's NOT possible that an applicable reshard has happened because

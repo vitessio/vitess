@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package stress
+package fuzz
 
 import (
 	"context"
@@ -29,12 +29,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/syscallutil"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/schema"
 )
 
 var (
@@ -78,7 +83,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 		threads               int
 		updateSets            int
 		timeForTesting        time.Duration
-		clusterDisruptions    []func()
+		clusterDisruptions    []func(t *testing.T)
 		disruptionProbability []int
 	}{
 		{
@@ -100,12 +105,12 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			timeForTesting: 5 * time.Second,
 		},
 		{
-			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL and Vttablet restart disruptions",
-			threads:               15,
-			updateSets:            15,
+			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL, MoveTables disruptions",
+			threads:               4,
+			updateSets:            4,
 			timeForTesting:        5 * time.Second,
-			clusterDisruptions:    []func(){prs, ers, mysqlRestarts, vttabletRestarts},
-			disruptionProbability: []int{5, 5, 5, 5},
+			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer, moveTablesFuzzer},
+			disruptionProbability: []int{5, 5, 5, 5, 5, 5},
 		},
 	}
 
@@ -113,7 +118,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			conn, closer := start(t)
 			defer closer()
-			fz := newFuzzer(tt.threads, tt.updateSets, tt.clusterDisruptions, tt.disruptionProbability)
+			fz := newFuzzer(t, tt.threads, tt.updateSets, tt.clusterDisruptions, tt.disruptionProbability)
 
 			fz.initialize(t, conn)
 			conn.Close()
@@ -127,7 +132,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			fz.stop()
 
 			// Wait for all transactions to be resolved.
-			waitForResults(t, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 30*time.Second)
+			twopcutil.WaitForResults(t, &vtParams, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 30*time.Second)
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
 			fz.verifyTransactionsWereAtomic(t)
 
@@ -190,6 +195,7 @@ func getThreadIDsForUpdateSetFromFuzzInsert(t *testing.T, conn *mysql.Conn, upda
 type fuzzer struct {
 	threads    int
 	updateSets int
+	t          *testing.T
 
 	// shouldStop is an internal state variable, that tells the fuzzer
 	// whether it should stop or not.
@@ -199,14 +205,15 @@ type fuzzer struct {
 	// updateRowVals are the rows that we use to ensure 1 update on each shard with the same increment.
 	updateRowsVals [][]int
 	// clusterDisruptions are the cluster level disruptions that can happen in a running cluster.
-	clusterDisruptions []func()
+	clusterDisruptions []func(t *testing.T)
 	// disruptionProbability is the chance for the disruption to happen. We check this every 100 milliseconds.
 	disruptionProbability []int
 }
 
 // newFuzzer creates a new fuzzer struct.
-func newFuzzer(threads int, updateSets int, clusterDisruptions []func(), disruptionProbability []int) *fuzzer {
+func newFuzzer(t *testing.T, threads int, updateSets int, clusterDisruptions []func(t *testing.T), disruptionProbability []int) *fuzzer {
 	fz := &fuzzer{
+		t:                     t,
 		threads:               threads,
 		updateSets:            updateSets,
 		wg:                    sync.WaitGroup{},
@@ -364,7 +371,7 @@ func (fz *fuzzer) runClusterDisruptionThread(t *testing.T) {
 func (fz *fuzzer) runClusterDisruption(t *testing.T) {
 	for idx, prob := range fz.disruptionProbability {
 		if rand.Intn(100) < prob {
-			fz.clusterDisruptions[idx]()
+			fz.clusterDisruptions[idx](fz.t)
 			return
 		}
 	}
@@ -374,7 +381,7 @@ func (fz *fuzzer) runClusterDisruption(t *testing.T) {
 Cluster Level Disruptions for the fuzzer
 */
 
-func prs() {
+func prs(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	shard := shards[rand.Intn(len(shards))]
 	vttablets := shard.Vttablets
@@ -386,7 +393,7 @@ func prs() {
 	}
 }
 
-func ers() {
+func ers(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	shard := shards[rand.Intn(len(shards))]
 	vttablets := shard.Vttablets
@@ -398,7 +405,7 @@ func ers() {
 	}
 }
 
-func vttabletRestarts() {
+func vttabletRestarts(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	shard := shards[rand.Intn(len(shards))]
 	vttablets := shard.Vttablets
@@ -422,7 +429,64 @@ func vttabletRestarts() {
 	}
 }
 
-func mysqlRestarts() {
+var (
+	count = 0
+
+	orderedDDLFuzzer = []string{
+		"alter table twopc_fuzzer_insert add column extra_col1 varchar(20)",
+		"alter table twopc_fuzzer_insert add column extra_col2 varchar(20)",
+		"alter table twopc_fuzzer_insert drop column extra_col1",
+		"alter table twopc_fuzzer_insert drop column extra_col2",
+	}
+)
+
+// onlineDDLFuzzer runs an online DDL statement while ignoring any errors for the fuzzer.
+func onlineDDLFuzzer(t *testing.T) {
+	output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, orderedDDLFuzzer[count%len(orderedDDLFuzzer)], cluster.ApplySchemaParams{
+		DDLStrategy: "vitess --force-cut-over-after=1ms",
+	})
+	count++
+	if err != nil {
+		return
+	}
+	fmt.Println("Running online DDL with uuid: ", output)
+	twopcutil.WaitForMigrationStatus(t, &vtParams, keyspaceName, clusterInstance.Keyspaces[0].Shards,
+		strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+}
+
+var moveTablesCount int
+
+// moveTablesFuzzer runs a MoveTables workflow.
+func moveTablesFuzzer(t *testing.T) {
+	workflow := "TestTwoPCFuzzTest"
+	srcKeyspace := keyspaceName
+	targetKeyspace := unshardedKeyspaceName
+	if moveTablesCount%2 == 1 {
+		srcKeyspace = unshardedKeyspaceName
+		targetKeyspace = keyspaceName
+		// We apply the vschema again because previous move tables would have removed the entry for `twopc_fuzzer_update`.
+		err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
+		require.NoError(t, err)
+	}
+	log.Errorf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace)
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update", []string{topodatapb.TabletType_REPLICA.String()})
+	// Initiate MoveTables for twopc_fuzzer_update.
+	output, err := mtw.Create()
+	if err != nil {
+		log.Errorf("error creating MoveTables - %v, output - %v", err, output)
+		return
+	}
+	moveTablesCount++
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(1 * time.Minute)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	assert.NoError(t, err, output)
+	output, err = mtw.Complete()
+	assert.NoError(t, err, output)
+}
+
+func mysqlRestarts(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	shard := shards[rand.Intn(len(shards))]
 	vttablets := shard.Vttablets

@@ -26,7 +26,7 @@ import (
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS  Operator
+	binaryOperator
 	Predicate sqlparser.Expr
 	// JoinType is permitted to store only 3 of the possible values
 	// NormalJoinType, StraightJoinType and LeftJoinType.
@@ -42,26 +42,11 @@ func (j *Join) Clone(inputs []Operator) Operator {
 	clone := *j
 	clone.LHS = inputs[0]
 	clone.RHS = inputs[1]
-	return &Join{
-		LHS:       inputs[0],
-		RHS:       inputs[1],
-		Predicate: j.Predicate,
-		JoinType:  j.JoinType,
-	}
+	return &clone
 }
 
 func (j *Join) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
-}
-
-// Inputs implements the Operator interface
-func (j *Join) Inputs() []Operator {
-	return []Operator{j.LHS, j.RHS}
-}
-
-// SetInputs implements the Operator interface
-func (j *Join) SetInputs(ops []Operator) {
-	j.LHS, j.RHS = ops[0], ops[1]
 }
 
 func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {
@@ -89,7 +74,10 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult
 
 func createStraightJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	// for inner joins we can treat the predicates as filters on top of the join
-	joinOp := &Join{LHS: lhs, RHS: rhs, JoinType: join.Join}
+	joinOp := &Join{
+		binaryOperator: newBinaryOp(lhs, rhs),
+		JoinType:       join.Join,
+	}
 
 	return addJoinPredicates(ctx, join.Condition.On, joinOp)
 }
@@ -105,7 +93,10 @@ func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinT
 		join.Join = sqlparser.NaturalLeftJoinType
 	}
 
-	joinOp := &Join{LHS: lhs, RHS: rhs, JoinType: join.Join}
+	joinOp := &Join{
+		binaryOperator: newBinaryOp(lhs, rhs),
+		JoinType:       join.Join,
+	}
 
 	// mark the RHS as outer tables so we know which columns are nullable
 	ctx.OuterTables = ctx.OuterTables.Merge(TableID(rhs))
@@ -197,7 +188,9 @@ func createJoin(ctx *plancontext.PlanningContext, LHS, RHS Operator) Operator {
 		}
 		return op
 	}
-	return &Join{LHS: LHS, RHS: RHS}
+	return &Join{
+		binaryOperator: newBinaryOp(LHS, RHS),
+	}
 }
 
 func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
