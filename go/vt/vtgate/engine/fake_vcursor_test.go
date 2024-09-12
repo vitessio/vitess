@@ -132,6 +132,10 @@ func (t *noopVCursor) UnresolvedTransactions(ctx context.Context, keyspace strin
 	panic("implement me")
 }
 
+func (t *noopVCursor) StartPrimitiveTrace() func() map[int]RowsReceived {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -872,6 +876,10 @@ func (f *loggingVCursor) UnresolvedTransactions(_ context.Context, _ string) ([]
 		return nil, f.resultErr
 	}
 	return f.transactionStatusOutput, nil
+}
+
+func (f *loggingVCursor) StartPrimitiveTrace() func() map[int]RowsReceived {
+	panic("implement me")
 }
 
 // SQLParser implements VCursor

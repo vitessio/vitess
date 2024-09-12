@@ -48,6 +48,8 @@ type PrimitiveDescription struct {
 	ID        PrimitiveID
 	InputName string
 	Inputs    []PrimitiveDescription
+
+	Stats RowsReceived
 }
 
 // MarshalJSON serializes the PlanDescription into a JSON representation.
@@ -94,6 +96,14 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	}
 	if pd.TargetTabletType != topodatapb.TabletType_UNKNOWN {
 		if err := marshalAdd(prepend, buf, "TargetTabletType", pd.TargetTabletType.String()); err != nil {
+			return nil, err
+		}
+	}
+	if len(pd.Stats) > 0 {
+		if err := marshalAdd(prepend, buf, "NoOfCalls", len(pd.Stats)); err != nil {
+			return nil, err
+		}
+		if err := marshalAdd(prepend, buf, "Rows", pd.Stats); err != nil {
 			return nil, err
 		}
 	}

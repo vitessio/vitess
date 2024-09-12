@@ -38,6 +38,8 @@ func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt
 		return buildVExplainLoggingPlan(ctx, vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case sqlparser.PlanVExplainType:
 		return buildVExplainVtgatePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case sqlparser.TraceVExplainType:
+		return buildVExplainTracePlan(ctx, vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vexplainStmt.Type.ToString())
 }
@@ -165,4 +167,22 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
 	}, tables...), nil
+}
+
+func buildVExplainTracePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll go over the primitive tree and assign unique IDs
+	id := 1
+	engine.PreOrderTraverse(innerInstruction.primitive, func(primitive engine.Primitive) {
+		primitive.SetID(engine.PrimitiveID(id))
+		id++
+	})
+
+	// We'll set the trace engine as the root primitive
+	innerInstruction.primitive = &engine.Trace{Inner: innerInstruction.primitive}
+	return innerInstruction, nil
 }

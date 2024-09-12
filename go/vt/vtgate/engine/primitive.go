@@ -140,6 +140,10 @@ type (
 
 		// UnresolvedTransactions reads the state of all the unresolved atomic transactions in the given keyspace.
 		UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error)
+
+		// StartPrimitiveTrace starts a trace for the given primitive,
+		// and returns a function to get the trace logs after the primitive execution.
+		StartPrimitiveTrace() func() map[int]RowsReceived
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
