@@ -32,6 +32,7 @@ var _ Primitive = (*DDL)(nil)
 
 // DDL represents a DDL statement, either normal or online DDL
 type DDL struct {
+	identifiablePrimitive
 	noTxNeeded
 	noInputs
 

@@ -27,6 +27,7 @@ import (
 // SessionPrimitive the session primitive is a very small primitive used
 // when we have simple engine code that needs to interact with the Session
 type SessionPrimitive struct {
+	identifiablePrimitive
 	noInputs
 	noTxNeeded
 

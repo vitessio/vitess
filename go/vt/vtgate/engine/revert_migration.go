@@ -34,6 +34,7 @@ var _ Primitive = (*RevertMigration)(nil)
 
 // RevertMigration represents the instructions to perform an online schema change via vtctld
 type RevertMigration struct {
+	identifiablePrimitive
 	noTxNeeded
 	noInputs
 

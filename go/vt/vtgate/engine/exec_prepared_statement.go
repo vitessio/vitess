@@ -29,6 +29,7 @@ import (
 var _ Primitive = (*ExecStmt)(nil)
 
 type ExecStmt struct {
+	identifiablePrimitive
 	Params []*sqlparser.Variable
 	Input  Primitive
 }

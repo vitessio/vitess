@@ -33,6 +33,7 @@ var _ Primitive = (*Send)(nil)
 
 // Send is an operator to send query to the specific keyspace, tabletType and destination
 type Send struct {
+	identifiablePrimitive
 	noInputs
 
 	// Keyspace specifies the keyspace to send the query to.

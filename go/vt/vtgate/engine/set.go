@@ -45,6 +45,7 @@ import (
 type (
 	// Set contains the instructions to perform set.
 	Set struct {
+		identifiablePrimitive
 		noTxNeeded
 
 		Ops   []SetOp

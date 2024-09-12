@@ -35,6 +35,7 @@ var _ Primitive = (*Limit)(nil)
 
 // Limit is a primitive that performs the LIMIT operation.
 type Limit struct {
+	identifiablePrimitive
 	Count  evalengine.Expr
 	Offset evalengine.Expr
 	Input  Primitive

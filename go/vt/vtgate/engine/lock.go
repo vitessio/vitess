@@ -38,6 +38,7 @@ var _ Primitive = (*Lock)(nil)
 
 // Lock primitive will execute sql containing lock functions
 type Lock struct {
+	identifiablePrimitive
 	noInputs
 	noTxNeeded
 

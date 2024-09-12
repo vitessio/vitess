@@ -52,6 +52,7 @@ var (
 // Route represents the instructions to route a read query to
 // one or many vttablets.
 type Route struct {
+	identifiablePrimitive
 	// Route does not take inputs
 	noInputs
 

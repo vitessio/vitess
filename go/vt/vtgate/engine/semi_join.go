@@ -27,6 +27,7 @@ var _ Primitive = (*SemiJoin)(nil)
 
 // SemiJoin specifies the parameters for a SemiJoin primitive.
 type SemiJoin struct {
+	identifiablePrimitive
 	// Left and Right are the LHS and RHS primitives
 	// of the SemiJoin. They can be any primitive.
 	Left, Right Primitive

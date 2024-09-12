@@ -30,6 +30,7 @@ var _ Primitive = (*UpdateTarget)(nil)
 
 // UpdateTarget is an operator to update target string.
 type UpdateTarget struct {
+	identifiablePrimitive
 	noInputs
 	noTxNeeded
 

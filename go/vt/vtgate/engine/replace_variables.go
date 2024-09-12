@@ -27,6 +27,7 @@ var _ Primitive = (*ReplaceVariables)(nil)
 
 // ReplaceVariables is used in SHOW VARIABLES statements so that it replaces the values for vitess-aware variables
 type ReplaceVariables struct {
+	identifiablePrimitive
 	noTxNeeded
 	Input Primitive
 }

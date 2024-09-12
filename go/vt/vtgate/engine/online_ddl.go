@@ -34,6 +34,7 @@ var _ Primitive = (*OnlineDDL)(nil)
 
 // OnlineDDL represents the instructions to perform an online schema change via vtctld
 type OnlineDDL struct {
+	identifiablePrimitive
 	noTxNeeded
 	noInputs
 

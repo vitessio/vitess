@@ -35,6 +35,7 @@ var _ Primitive = (*VStream)(nil)
 
 // VStream is an operator for streaming specific keyspace, destination
 type VStream struct {
+	identifiablePrimitive
 	noTxNeeded
 	noInputs
 

@@ -31,6 +31,7 @@ var _ Primitive = (*UncorrelatedSubquery)(nil)
 // UncorrelatedSubquery executes a subquery once and uses
 // the result as a bind variable for the underlying primitive.
 type UncorrelatedSubquery struct {
+	identifiablePrimitive
 	Opcode PulloutOpcode
 
 	// SubqueryResult and HasValues are used to send in the bindvar used in the query to the underlying primitive

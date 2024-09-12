@@ -45,6 +45,7 @@ type PrimitiveDescription struct {
 	TargetTabletType topodatapb.TabletType
 	Other            map[string]any
 
+	ID        PrimitiveID
 	InputName string
 	Inputs    []PrimitiveDescription
 }
@@ -57,6 +58,12 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	buf.WriteString("{")
 
 	prepend := ""
+	if pd.ID > 0 {
+		if err := marshalAdd(prepend, buf, "ID", int(pd.ID)); err != nil {
+			return nil, err
+		}
+		prepend = ","
+	}
 	if pd.InputName != "" {
 		if err := marshalAdd(prepend, buf, "InputName", pd.InputName); err != nil {
 			return nil, err
@@ -184,6 +191,9 @@ func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj any) error {
 // PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree
 func PrimitiveToPlanDescription(in Primitive) PrimitiveDescription {
 	this := in.description()
+	if id := in.GetID(); id > 0 {
+		this.ID = id
+	}
 
 	inputs, infos := in.Inputs()
 	for idx, input := range inputs {

@@ -29,6 +29,7 @@ var _ Primitive = (*SQLCalcFoundRows)(nil)
 
 // SQLCalcFoundRows is a primitive to execute limit and count query as per their individual plan.
 type SQLCalcFoundRows struct {
+	identifiablePrimitive
 	LimitPrimitive Primitive
 	CountPrimitive Primitive
 }

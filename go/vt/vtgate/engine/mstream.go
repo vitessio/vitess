@@ -30,6 +30,7 @@ var _ Primitive = (*MStream)(nil)
 
 // MStream is an operator for message streaming from specific keyspace, destination
 type MStream struct {
+	identifiablePrimitive
 	noTxNeeded
 	noInputs
 

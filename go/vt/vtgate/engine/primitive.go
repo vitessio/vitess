@@ -250,6 +250,9 @@ type (
 		// description is the description, sans the inputs, of this Primitive.
 		// to get the plan description with all children, use PrimitiveToPlanDescription()
 		description() PrimitiveDescription
+
+		GetID() PrimitiveID
+		SetID(PrimitiveID)
 	}
 
 	// noInputs default implementation for Primitives that are leaves
@@ -260,6 +263,12 @@ type (
 
 	// txNeeded is a default implementation for Primitives that need transaction handling
 	txNeeded struct{}
+
+	PrimitiveID int
+
+	identifiablePrimitive struct {
+		id PrimitiveID
+	}
 )
 
 // Find will return the first Primitive that matches the evaluate function. If no match is found, nil will be returned
@@ -275,6 +284,14 @@ func Find(isMatch Match, start Primitive) Primitive {
 		}
 	}
 	return nil
+}
+
+func PreOrderTraverse(p Primitive, f func(Primitive)) {
+	f(p)
+	inputs, _ := p.Inputs()
+	for _, input := range inputs {
+		PreOrderTraverse(input, f)
+	}
 }
 
 // Exists traverses recursively down the Primitive tree structure, and returns true when Match returns true
@@ -293,4 +310,12 @@ func (noTxNeeded) NeedsTransaction() bool {
 
 func (txNeeded) NeedsTransaction() bool {
 	return true
+}
+
+func (i *identifiablePrimitive) GetID() PrimitiveID {
+	return i.id
+}
+
+func (i *identifiablePrimitive) SetID(id PrimitiveID) {
+	i.id = id
 }
