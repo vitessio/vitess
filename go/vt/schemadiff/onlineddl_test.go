@@ -24,12 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/sqlparser"
-)
-
-var (
-	testMySQLVersion = "8.0.34"
 )
 
 func TestGetConstraintType(t *testing.T) {
@@ -1119,21 +1115,40 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 }
 
 func TestValidateAndEditAlterTableStatement(t *testing.T) {
+	capableOf := func(capability capabilities.FlavorCapability) (bool, error) {
+		switch capability {
+		case
+			capabilities.InstantDDLXtrabackupCapability,
+			capabilities.InstantDDLFlavorCapability,
+			capabilities.InstantAddLastColumnFlavorCapability,
+			capabilities.InstantAddDropVirtualColumnFlavorCapability,
+			capabilities.InstantAddDropColumnFlavorCapability,
+			capabilities.InstantChangeColumnDefaultFlavorCapability,
+			capabilities.InstantChangeColumnVisibilityCapability,
+			capabilities.InstantExpandEnumCapability:
+			return true, nil
+		}
+		return false, nil
+	}
+	incapableOf := func(capability capabilities.FlavorCapability) (bool, error) {
+		return false, nil
+	}
+
 	tt := []struct {
-		alter        string
-		mySQLVersion string
-		m            map[string]string
-		expect       []string
+		alter     string
+		capableOf capabilities.CapableOf
+		m         map[string]string
+		expect    []string
 	}{
 		{
-			alter:        "alter table t add column i int",
-			mySQLVersion: "8.0.29",
-			expect:       []string{"alter table t add column i int, algorithm = copy"},
+			alter:     "alter table t add column i int",
+			capableOf: incapableOf,
+			expect:    []string{"alter table t add column i int, algorithm = copy"},
 		},
 		{
-			alter:        "alter table t add column i int",
-			mySQLVersion: "8.0.32",
-			expect:       []string{"alter table t add column i int"},
+			alter:     "alter table t add column i int",
+			capableOf: capableOf,
+			expect:    []string{"alter table t add column i int"},
 		},
 		{
 			alter:  "alter table t add column i int, add fulltext key name1_ft (name1)",
@@ -1197,6 +1212,9 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 	env := NewTestEnv()
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
+			if tc.capableOf == nil {
+				tc.capableOf = capableOf
+			}
 			stmt, err := env.Parser().ParseStrictDDL(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
@@ -1206,13 +1224,9 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			for k, v := range tc.m {
 				m[k] = v
 			}
-			if tc.mySQLVersion == "" {
-				tc.mySQLVersion = testMySQLVersion
-			}
-			capableOf := mysql.ServerVersionCapableOf(tc.mySQLVersion)
 			baseUUID := "a5a563da_dc1a_11ec_a416_0a43f95f28a3"
 			tableName := "t"
-			alters, err := ValidateAndEditAlterTableStatement(tableName, baseUUID, capableOf, alterTable, m)
+			alters, err := ValidateAndEditAlterTableStatement(tableName, baseUUID, tc.capableOf, alterTable, m)
 			assert.NoError(t, err)
 			var altersStrings []string
 			for _, alter := range alters {
