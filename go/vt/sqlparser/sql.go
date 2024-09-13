@@ -11369,7 +11369,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1273
 		{
-			yyLOCAL = &AlterTable{Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].identifierCI}, Options: yyDollar[5].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strs).Parsed(), Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].identifierCI}, Options: yyDollar[5].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -11378,7 +11378,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1278
 		{
-			yyLOCAL = &AlterTable{Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: IndexTypeFullText}, Options: yyDollar[6].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strs).Parsed(), Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: IndexTypeFullText}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -11387,7 +11387,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1283
 		{
-			yyLOCAL = &AlterTable{Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: IndexTypeSpatial}, Options: yyDollar[6].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strs).Parsed(), Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: IndexTypeSpatial}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -11396,7 +11396,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1288
 		{
-			yyLOCAL = &AlterTable{Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: IndexTypeUnique}, Options: yyDollar[6].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strs).Parsed(), Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: IndexTypeUnique}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL

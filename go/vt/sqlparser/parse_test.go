@@ -1786,6 +1786,12 @@ var (
 		input:  `create index Indexes on b (col1)`,
 		output: "alter table b add key `Indexes` (col1)",
 	}, {
+		input:  `create /*vt+ foo=1 */ index Indexes on b (col1)`,
+		output: "alter /*vt+ foo=1 */ table b add key `Indexes` (col1)",
+	}, {
+		input:  `alter /*vt+ foo=1 */ table b add key Indexes (col1)`,
+		output: "alter /*vt+ foo=1 */ table b add key `Indexes` (col1)",
+	}, {
 		input:  `create fulltext index Indexes on b (col1)`,
 		output: "alter table b add fulltext key `Indexes` (col1)",
 	}, {
