@@ -690,6 +690,9 @@ func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
 	if err := VisitIdentifierCS(in.DBName, f); err != nil {
 		return err
 	}

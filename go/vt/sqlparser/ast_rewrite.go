@@ -831,6 +831,11 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 			return true
 		}
 	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterDatabase).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
 	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*AlterDatabase).DBName = newNode.(IdentifierCS)
 	}) {

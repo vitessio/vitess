@@ -2186,7 +2186,7 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateDatabase) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "create database %v", node.Comments)
+	buf.astPrintf(node, "create %vdatabase ", node.Comments)
 	if node.IfNotExists {
 		buf.literal("if not exists ")
 	}
@@ -2205,7 +2205,7 @@ func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AlterDatabase) Format(buf *TrackedBuffer) {
-	buf.literal("alter database")
+	buf.astPrintf(node, "alter %vdatabase", node.Comments)
 	if node.DBName.NotEmpty() {
 		buf.astPrintf(node, " %v", node.DBName)
 	}
