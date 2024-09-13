@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -42,7 +43,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -497,13 +497,10 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 		}
 		if _, err := mz.tmc.UpdateVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow: mz.ms.Workflow,
-			State:    binlogdatapb.VReplicationWorkflowState_Running,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
 			// Don't change anything else, so pass simulated NULLs.
-			Cells: textutil.SimulatedNullStringSlice,
-			TabletTypes: []topodatapb.TabletType{
-				topodatapb.TabletType(textutil.SimulatedNullInt),
-			},
-			OnDdl: binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+			Cells:       textutil.SimulatedNullStringSlice,
+			TabletTypes: textutil.SimulatedNullTabletTypeSlice,
 		}); err != nil {
 			return vterrors.Wrap(err, "failed to update workflow")
 		}

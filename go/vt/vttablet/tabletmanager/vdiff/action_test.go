@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -46,7 +47,6 @@ func TestPerformVDiffAction(t *testing.T) {
 		query  string
 		result *sqltypes.Result // Optional if you need a non-empty result
 	}
-	false := false
 
 	tests := []struct {
 		name          string
@@ -103,7 +103,7 @@ func TestPerformVDiffAction(t *testing.T) {
 				Options: &tabletmanagerdatapb.VDiffOptions{
 					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
 					CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
-						AutoStart: &false,
+						AutoStart: ptr.Of(false),
 					},
 				},
 			},
