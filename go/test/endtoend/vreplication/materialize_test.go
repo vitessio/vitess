@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -234,4 +235,98 @@ func TestMaterializeVtctldClient(t *testing.T) {
 	t.Run("ShardedMaterialize", func(t *testing.T) {
 		testShardedMaterialize(t, true)
 	})
+}
+
+const (
+	refSchema = `
+  create table ref1 (
+  id bigint not null,
+  val varbinary(10) not null,
+  primary key (id)
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+  create table ref2 (
+  id bigint not null,
+  id2 bigint not null,
+  primary key (id)
+  ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+`
+
+	refSourceVSchema = `
+{
+  "tables": {
+    "ref1": {
+      "type": "reference"
+    },
+	"ref2": {
+      "type": "reference"
+	}
+  }
+}
+`
+	refTargetVSchema = `
+{
+	  "tables": {
+        "ref1": {
+			  "type": "reference",
+			  "source": "ks1.ref1"
+        },
+		"ref2": {
+			  "type": "reference",
+			  "source": "ks1.ref2"
+        }
+      }
+}
+`
+	initRef1DataQuery = `insert into ks1.ref1(id, val) values (1, 'abc'), (2, 'def'), (3, 'ghi')`
+	initRef2DataQuery = `insert into ks1.ref2(id, id2) values (1, 1), (2, 2), (3, 3)`
+)
+
+func TestReferenceTableMaterialize(t *testing.T) {
+	vc = NewVitessCluster(t, nil)
+	require.NotNil(t, vc)
+	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
+	defer func() { defaultReplicas = 1 }()
+	shards := []string{"-80", "80-"}
+	defer vc.TearDown()
+	defaultCell := vc.Cells[vc.CellNames[0]]
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "ks1", "0", refSourceVSchema, refSchema, defaultReplicas, defaultRdonly, 100, nil)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "ks2", strings.Join(shards, ","), refTargetVSchema, refSchema, defaultReplicas, defaultRdonly, 200, nil)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	verifyClusterHealth(t, vc)
+	_, err := vtgateConn.ExecuteFetch(initRef1DataQuery, 0, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch(initRef2DataQuery, 0, false)
+	require.NoError(t, err)
+
+	err = vc.VtctldClient.ExecuteCommand("Materialize", "--target-keyspace", "ks2", "--workflow", "wf1", "create",
+		"--source-keyspace", "ks1", "--reference", "--tables", "ref1,ref2")
+	require.NoError(t, err, "Materialize")
+	for _, shard := range shards {
+		tab := vc.getPrimaryTablet(t, "ks2", shard)
+		catchup(t, tab, "wf1", "Materialize")
+	}
+
+	for _, shard := range shards {
+		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref1", 3)
+		waitForQueryResult(t, vtgateConn, "ks2:"+shard, "select id, val from ref1",
+			`[[INT64(1) VARBINARY("abc")] [INT64(2) VARBINARY("def")] [INT64(3) VARBINARY("ghi")]]`)
+		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref2", 3)
+		waitForQueryResult(t, vtgateConn, "ks2:"+shard, "select id, id2 from ref2",
+			`[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)]]`)
+	}
+	vdiff(t, "ks2", "wf1", defaultCellName, false, true, nil)
+
+	queries := []string{
+		"insert into ks1.ref1(id, val) values (4, 'jkl'), (5, 'mno')",
+		"insert into ks1.ref2(id, id2) values (4, 4), (5, 5)",
+		"delete from ks1.ref1 where id=1",
+		"delete from ks1.ref2 where id=1",
+		"update ks1.ref1 set val='xyz'",
+		"update ks1.ref2 set id2=3 where id=2",
+	}
+	for _, query := range queries {
+		execVtgateQuery(t, vtgateConn, "ks1", query)
+	}
+	vdiff(t, "ks2", "wf1", defaultCellName, false, true, nil)
 }

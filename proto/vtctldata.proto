@@ -98,6 +98,8 @@ message MaterializeSettings {
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
   WorkflowOptions workflow_options = 17;
+  bool is_reference = 18;
+  repeated string tables = 19;
 }
 
 /* Data types for VtctldServer */

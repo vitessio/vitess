@@ -1284,6 +1284,16 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		cells[i] = strings.TrimSpace(cells[i])
 	}
 
+	if ms.IsReference {
+		for _, table := range ms.Tables {
+			ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
+				TargetTable:      table,
+				SourceExpression: fmt.Sprintf("select * from %s", table),
+				CreateDdl:        "create table %s like " + table,
+			})
+		}
+	}
+
 	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 		Workflow:                  ms.Workflow,
 		Cells:                     strings.Split(ms.Cell, ","),
