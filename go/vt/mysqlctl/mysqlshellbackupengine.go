@@ -49,7 +49,7 @@ var (
 	// flags passed to the mysql shell utility, used both on dump/restore
 	mysqlShellFlags = "--defaults-file=/dev/null --js -h localhost"
 	// flags passed to the Dump command, as a JSON string
-	mysqlShellDumpFlags = `{"threads": 2}`
+	mysqlShellDumpFlags = `{"threads": 4}`
 	// flags passed to the Load command, as a JSON string
 	mysqlShellLoadFlags = `{"threads": 4, "loadUsers": true, "excludeUsers": ["'root'@'localhost'"], "updateGtidSet": "replace", "skipBinlog": true, "progressFile": ""}`
 	// drain a tablet when taking a backup
