@@ -20,11 +20,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -59,6 +61,7 @@ var (
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
 	sourceThrottlerAppName = throttlerapp.VStreamerName
 	targetThrottlerAppName = throttlerapp.VPlayerName
+	testedPermissionChecks atomic.Bool
 )
 
 const (
@@ -797,6 +800,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			commit, _ = vc.startQuery(t, openTxQuery)
 		}
 		switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
+		var shardNames []string
+		for shardName := range maps.Keys(vc.Cells[defaultCell.Name].Keyspaces["product"].Shards) {
+			shardNames = append(shardNames, shardName)
+		}
+		testPermissionChecks(t, workflowType, sourceKs, shardNames, targetKs, workflow)
 		switchWrites(t, workflowType, ksWorkflow, false)
 
 		checkThatVDiffFails(t, targetKs, workflow)
@@ -1587,6 +1595,54 @@ func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunRes
 		"SwitchTraffic", "--tablet-types=primary", "--dry-run")
 	require.NoError(t, err, fmt.Sprintf("Switch writes DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
+}
+
+// testPermissionsChecks confirms that for the SwitchTraffic command, the necessary
+// permissions are checked properly.
+func testPermissionChecks(t *testing.T, workflowType, sourceKeyspace string, sourceShards []string, targetKeyspace, workflow string) {
+	applyPrivileges := func(query string) {
+		for _, shard := range sourceShards {
+			t.Logf("Applying privileges %q on shard %s/%s", query, sourceKeyspace, shard)
+			primary := vc.getPrimaryTablet(t, sourceKeyspace, shard)
+			_, err := primary.QueryTablet(query, primary.Keyspace, false)
+			require.NoError(t, err)
+		}
+	}
+	runDryRunCmd := func(expectErr bool) {
+		_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKeyspace,
+			"SwitchTraffic", "--tablet-types=primary", "--dry-run")
+		require.True(t, ((err == nil) != expectErr), "expected error: %t, got: %v", expectErr, err)
+	}
+
+	t.Run("test switch traffic permission checks", func(t *testing.T) {
+		t.Run("test without global privileges", func(t *testing.T) {
+			applyPrivileges("revoke select,insert,update,delete on *.* from vt_filtered@localhost")
+			runDryRunCmd(true)
+		})
+
+		t.Run("test with db level privileges", func(t *testing.T) {
+			applyPrivileges("grant select,insert,update,delete on _vt.* to vt_filtered@localhost")
+			runDryRunCmd(false)
+		})
+
+		t.Run("test without global or db level privileges", func(t *testing.T) {
+			applyPrivileges("revoke select,insert,update,delete on _vt.* from vt_filtered@localhost")
+			runDryRunCmd(true)
+		})
+
+		t.Run("test with table level privileges", func(t *testing.T) {
+			applyPrivileges("grant select,insert,update,delete on _vt.vreplication to vt_filtered@localhost")
+			runDryRunCmd(false)
+		})
+
+		t.Run("test without global, db, or table level privileges", func(t *testing.T) {
+			applyPrivileges("revoke select,insert,update,delete on _vt.vreplication from vt_filtered@localhost")
+			runDryRunCmd(true)
+		})
+
+		// Put global privs back in place.
+		applyPrivileges("grant select,insert,update,delete on *.* from vt_filtered@localhost")
+	})
 }
 
 // restartWorkflow confirms that a workflow can be successfully
