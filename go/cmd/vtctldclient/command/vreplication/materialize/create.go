@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -30,6 +33,8 @@ import (
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+const missingCreateParams = "either --table-settings, for a regular Materialize workflow, or, --reference and --tables must be provided, if materializing reference tables"
 
 var (
 	createOptions = struct {
@@ -76,6 +81,20 @@ should be copied as-is from the source keyspace. Here's an example value for tab
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 				return err
+			}
+
+			var hasTableSettings, isReference bool
+			if createOptions.TableSettings.val != nil {
+				hasTableSettings = true
+			}
+			if common.CreateOptions.IsReference && len(common.CreateOptions.Tables) > 0 {
+				isReference = true
+			}
+			if !hasTableSettings && !isReference {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, missingCreateParams)
+			}
+			if hasTableSettings && isReference {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference/--tables")
 			}
 			return nil
 		},
