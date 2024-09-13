@@ -2803,12 +2803,12 @@ var (
 	}, {
 		input: "rollback",
 	}, {
-		input: "create database /* simple */ test_db",
+		input: "create /* simple */ database test_db",
 	}, {
 		input:  "create schema test_db",
 		output: "create database test_db",
 	}, {
-		input: "create database /* simple */ if not exists test_db",
+		input: "create /* simple */ database if not exists test_db",
 	}, {
 		input:  "create schema if not exists test_db",
 		output: "create database if not exists test_db",
