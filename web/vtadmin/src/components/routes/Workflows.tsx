@@ -35,8 +35,14 @@ import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { UseQueryResult } from 'react-query';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import WorkflowActions from './workflows/WorkflowActions';
+import { isReadOnlyMode } from '../../util/env';
 
 export const ThrottleThresholdSeconds = 60;
+
+const COLUMNS = ['Workflow', 'Source', 'Target', 'Streams', 'Last Updated', 'Actions'];
+const READ_ONLY_COLUMNS = ['Workflow', 'Source', 'Target', 'Streams', 'Last Updated'];
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -180,6 +186,17 @@ export const Workflows = () => {
                         <div className="font-sans whitespace-nowrap">{formatDateTime(row.timeUpdated)}</div>
                         <div className="font-sans text-sm text-secondary">{formatRelativeTime(row.timeUpdated)}</div>
                     </DataCell>
+
+                    <ReadOnlyGate>
+                        <DataCell>
+                            <WorkflowActions
+                                refetchWorkflows={workflowsQuery.refetch}
+                                keyspace={row.keyspace as string}
+                                clusterID={row.clusterID as string}
+                                name={row.name as string}
+                            />
+                        </DataCell>
+                    </ReadOnlyGate>
                 </tr>
             );
         });
@@ -199,7 +216,7 @@ export const Workflows = () => {
                 />
 
                 <DataTable
-                    columns={['Workflow', 'Source', 'Target', 'Streams', 'Last Updated']}
+                    columns={isReadOnlyMode() ? READ_ONLY_COLUMNS : COLUMNS}
                     data={sortedData}
                     renderRows={renderRows}
                 />

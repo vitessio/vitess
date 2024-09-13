@@ -45,7 +45,7 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	if vschema.Destination() != nil {
-		return buildByPassPlan(sql, vschema)
+		return buildByPassPlan(sql, vschema, true)
 	}
 	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(ctx, sql, ddlStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
@@ -80,7 +80,7 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 	return newPlanResult(eddl, tc.getTables()...), nil
 }
 
-func buildByPassPlan(sql string, vschema plancontext.VSchema) (*planResult, error) {
+func buildByPassPlan(sql string, vschema plancontext.VSchema, isDDL bool) (*planResult, error) {
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
@@ -89,6 +89,7 @@ func buildByPassPlan(sql string, vschema plancontext.VSchema) (*planResult, erro
 		Keyspace:          keyspace,
 		TargetDestination: vschema.Destination(),
 		Query:             sql,
+		IsDDL:             isDDL,
 	}
 	return newPlanResult(send), nil
 }

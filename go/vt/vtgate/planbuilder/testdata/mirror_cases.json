@@ -1,0 +1,397 @@
+[
+  {
+    "comment": "select unsharded, qualified, table mirrored to unsharded table",
+    "query": "select t1.id from unsharded_src1.t1 where t1.id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t1.id from unsharded_src1.t1 where t1.id = 1",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_src1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t1.id from t1 where 1 != 1",
+            "Query": "select t1.id from t1 where t1.id = 1",
+            "Table": "t1"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_dst1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t1.id from t1 where 1 != 1",
+            "Query": "select t1.id from t1 where t1.id = 1",
+            "Table": "t1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_dst1.t1",
+        "unsharded_src1.t1"
+      ]
+    }
+  },
+  {
+    "comment": "select unsharded, qualified, table mirrored to unsharded table with zero percentage",
+    "query": "select t3.id from unsharded_src1.t3 where t3.id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t3.id from unsharded_src1.t3 where t3.id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_src1",
+          "Sharded": false
+        },
+        "FieldQuery": "select t3.id from t3 where 1 != 1",
+        "Query": "select t3.id from t3 where t3.id = 1",
+        "Table": "t3"
+      },
+      "TablesUsed": [
+        "unsharded_src1.t3"
+      ]
+    }
+  },
+  {
+    "comment": "select unsharded, qualified, table mirrored to sharded table",
+    "query": "select t2.id from unsharded_src1.t2 where t2.id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t2.id from unsharded_src1.t2 where t2.id = 1",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_src1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t2.id from t2 where 1 != 1",
+            "Query": "select t2.id from t2 where t2.id = 1",
+            "Table": "t2"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_dst1",
+              "Sharded": true
+            },
+            "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
+            "Query": "select t2.id from t1 as t2 where t2.id = 1",
+            "Table": "t1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "xxhash"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_dst1.t1",
+        "unsharded_src1.t2"
+      ]
+    }
+  },
+  {
+    "comment": "select two unsharded, qualified, tables, one mirrored to unsharded table, other to sharded table",
+    "query": "select t1.id, t2.id from unsharded_src1.t1, unsharded_src1.t2 where t1.id = t2.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t1.id, t2.id from unsharded_src1.t1, unsharded_src1.t2 where t1.id = t2.id",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_src1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t1.id, t2.id from t1, t2 where 1 != 1",
+            "Query": "select t1.id, t2.id from t1, t2 where t1.id = t2.id",
+            "Table": "t1, t2"
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "t1_id1": 0
+            },
+            "TableName": "t1_t1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_dst1",
+                  "Sharded": false
+                },
+                "FieldQuery": "select t1.id from t1 where 1 != 1",
+                "Query": "select t1.id from t1",
+                "Table": "t1"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "sharded_dst1",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
+                "Query": "select t2.id from t1 as t2 where t2.id = :t1_id1",
+                "Table": "t1",
+                "Values": [
+                  ":t1_id1"
+                ],
+                "Vindex": "xxhash"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_dst1.t1",
+        "unsharded_dst1.t1",
+        "unsharded_src1.t1",
+        "unsharded_src1.t2"
+      ]
+    }
+  },
+  {
+    "comment": "union of selects from unsharded, qualified, tables, one mirrored to unsharded table, other to sharded table",
+    "query": "select t1.id from unsharded_src1.t1 union select t2.id from unsharded_src1.t2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t1.id from unsharded_src1.t1 union select t2.id from unsharded_src1.t2",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_src1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t1.id from t1 where 1 != 1 union select t2.id from t2 where 1 != 1",
+            "Query": "select t1.id from t1 union select t2.id from t2",
+            "Table": "t1, t2"
+          },
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_dst1",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select t1.id from t1 where 1 != 1) as dt(c0) where 1 != 1",
+                    "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t1.id from t1) as dt(c0)",
+                    "Table": "t1"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "sharded_dst1",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select t2.id from t1 as t2 where 1 != 1) as dt(c0) where 1 != 1",
+                    "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t2.id from t1 as t2) as dt(c0)",
+                    "Table": "t1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_dst1.t1",
+        "unsharded_dst1.t1",
+        "unsharded_src1.t1",
+        "unsharded_src1.t2"
+      ]
+    }
+  },
+  {
+    "comment": "inserts are not mirrored",
+    "query": "insert into unsharded_src1.t1 (id) values(1)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded_src1.t1 (id) values(1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_src1",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into t1(id) values (1)",
+        "TableName": "t1"
+      },
+      "TablesUsed": [
+        "unsharded_src1.t1"
+      ]
+    }
+  },
+  {
+    "comment": "updates are not mirrored",
+    "query": "update unsharded_src1.t1 set data = 'a' where id = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update unsharded_src1.t1 set data = 'a' where id = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_src1",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update t1 set `data` = 'a' where id = 1",
+        "Table": "t1"
+      },
+      "TablesUsed": [
+        "unsharded_src1.t1"
+      ]
+    }
+  },
+  {
+    "comment": "deletes are not mirrored",
+    "query": "delete from unsharded_src1.t1 where id = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from unsharded_src1.t1 where id = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_src1",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from t1 where id = 1",
+        "Table": "t1"
+      },
+      "TablesUsed": [
+        "unsharded_src1.t1"
+      ]
+    }
+  },
+  {
+    "comment": "self-mirror is not allowed",
+    "query": "select t1.id from unsharded_src2.t1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t1.id from unsharded_src2.t1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_src2",
+          "Sharded": false
+        },
+        "FieldQuery": "select t1.id from t1 where 1 != 1",
+        "Query": "select t1.id from t1",
+        "Table": "t1"
+      },
+      "TablesUsed": [
+        "unsharded_src2.t1"
+      ]
+    }
+  },
+  {
+    "comment": "chained mirror is not allowed",
+    "query": "select t2.id from unsharded_src2.t2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t2.id from unsharded_src2.t2",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 4,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_src2",
+              "Sharded": false
+            },
+            "FieldQuery": "select t2.id from t2 where 1 != 1",
+            "Query": "select t2.id from t2",
+            "Table": "t2"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_dst2",
+              "Sharded": false
+            },
+            "FieldQuery": "select t2.id from t2 where 1 != 1",
+            "Query": "select t2.id from t2",
+            "Table": "t2"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_dst2.t2",
+        "unsharded_src2.t2"
+      ]
+    }
+  },
+  {
+    "comment": "circular mirror is not allowed",
+    "query": "select t1.id from unsharded_src3.t1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t1.id from unsharded_src3.t1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_src3",
+          "Sharded": false
+        },
+        "FieldQuery": "select t1.id from t1 where 1 != 1",
+        "Query": "select t1.id from t1",
+        "Table": "t1"
+      },
+      "TablesUsed": [
+        "unsharded_src3.t1"
+      ]
+    }
+  }
+]

@@ -1787,14 +1787,15 @@ func TestGetPlanPriority(t *testing.T) {
 
 			stmt, err := sqlparser.NewTestParser().Parse(testCase.sql)
 			assert.NoError(t, err)
-			crticalityFromStatement, _ := sqlparser.GetPriorityFromStatement(stmt)
+			qh, _ := sqlparser.BuildQueryHints(stmt)
+			priorityFromStatement := qh.Priority
 
 			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, true, logStats)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, testCase.expectedPriority, crticalityFromStatement)
+				assert.Equal(t, testCase.expectedPriority, priorityFromStatement)
 				assert.Equal(t, testCase.expectedPriority, vCursor.safeSession.Options.Priority)
 			}
 		})

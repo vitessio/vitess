@@ -254,7 +254,7 @@ func TestLargeTableMapEvent(t *testing.T) {
 	types := make([]byte, 0, colLen)
 	metadata := make([]uint16, 0, colLen)
 
-	for i := 0; i < colLen; i++ {
+	for range colLen {
 		types = append(types, binlog.TypeLongLong)
 		metadata = append(metadata, 0)
 	}
@@ -429,7 +429,7 @@ func TestLargeRowsEvent(t *testing.T) {
 	types := make([]byte, 0, colLen)
 	metadata := make([]uint16, 0, colLen)
 
-	for i := 0; i < colLen; i++ {
+	for range colLen {
 		types = append(types, binlog.TypeLong)
 		metadata = append(metadata, 0)
 	}
@@ -446,7 +446,7 @@ func TestLargeRowsEvent(t *testing.T) {
 
 	identify := make([]byte, 0, colLen*4)
 	data := make([]byte, 0, colLen*4)
-	for i := 0; i < colLen; i++ {
+	for range colLen {
 		identify = append(identify, 0x10, 0x20, 0x30, 0x40)
 		data = append(data, 0x10, 0x20, 0x30, 0x40)
 	}
@@ -467,7 +467,7 @@ func TestLargeRowsEvent(t *testing.T) {
 	}
 
 	// All rows are included, none are NULL.
-	for i := 0; i < colLen; i++ {
+	for i := range colLen {
 		rows.IdentifyColumns.Set(i, true)
 		rows.DataColumns.Set(i, true)
 	}
@@ -476,7 +476,7 @@ func TestLargeRowsEvent(t *testing.T) {
 	// 1076895760 is 0x40302010.
 	identifies, _ := rows.StringIdentifiesForTests(tm, 0)
 	expected := make([]string, 0, colLen)
-	for i := 0; i < colLen; i++ {
+	for range colLen {
 		expected = append(expected, "1076895760")
 	}
 	if !reflect.DeepEqual(identifies, expected) {

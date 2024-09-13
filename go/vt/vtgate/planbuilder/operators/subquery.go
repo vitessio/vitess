@@ -232,11 +232,7 @@ var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be insid
 
 func (sq *SubQuery) addLimit() {
 	// for a correlated subquery, we can add a limit 1 to the subquery
-	sq.Subquery = &Limit{
-		Source: sq.Subquery,
-		AST:    &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")},
-		Top:    true,
-	}
+	sq.Subquery = newLimit(sq.Subquery, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")}, true)
 }
 
 func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) Operator {

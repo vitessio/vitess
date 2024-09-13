@@ -134,6 +134,12 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 		addPred = stmt.AddWhere
 	case *sqlparser.Delete:
 		addPred = stmt.AddWhere
+	case nil:
+		// this would happen if we are adding a predicate on a dual query.
+		// we use this when building recursive CTE queries
+		sel := &sqlparser.Select{}
+		addPred = sel.AddWhere
+		qb.stmt = sel
 	default:
 		panic(fmt.Sprintf("cant add WHERE to %T", qb.stmt))
 	}
@@ -236,10 +242,11 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 	}
 }
 
-func (qb *queryBuilder) recursiveCteWith(other *queryBuilder, name, alias string) {
+func (qb *queryBuilder) recursiveCteWith(other *queryBuilder, name, alias string, distinct bool) {
 	cteUnion := &sqlparser.Union{
-		Left:  qb.stmt.(sqlparser.SelectStatement),
-		Right: other.stmt.(sqlparser.SelectStatement),
+		Left:     qb.stmt.(sqlparser.SelectStatement),
+		Right:    other.stmt.(sqlparser.SelectStatement),
+		Distinct: distinct,
 	}
 
 	qb.stmt = &sqlparser.Select{
@@ -710,16 +717,16 @@ func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
 		return jc.Original
 	})
 	pred := sqlparser.AndExpressions(predicates...)
-	buildQuery(op.Seed, qb)
+	buildQuery(op.Seed(), qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
-	buildQuery(op.Term, qbR)
+	buildQuery(op.Term(), qbR)
 	qbR.addPredicate(pred)
 	infoFor, err := qb.ctx.SemTable.TableInfoFor(op.OuterID)
 	if err != nil {
 		panic(err)
 	}
 
-	qb.recursiveCteWith(qbR, op.Def.Name, infoFor.GetAliasedTableExpr().As.String())
+	qb.recursiveCteWith(qbR, op.Def.Name, infoFor.GetAliasedTableExpr().As.String(), op.Distinct)
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {

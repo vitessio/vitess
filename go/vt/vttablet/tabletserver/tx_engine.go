@@ -75,7 +75,11 @@ type TxEngine struct {
 	// transition while creating new transactions
 	beginRequests sync.WaitGroup
 
-	twopcEnabled        bool
+	// twopcEnabled is the flag value of whether the user has enabled twopc or not.
+	twopcEnabled bool
+	// twopcAllowed is wether it is safe to allow two pc transactions or not.
+	// If the primary tablet doesn't run with semi-sync we set this to false, and disallow any prepared calls.
+	twopcAllowed        bool
 	shutdownGracePeriod time.Duration
 	coordinatorAddress  string
 	abandonAge          time.Duration
@@ -100,6 +104,9 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	}
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
+	// We initially allow twoPC (handles vttablet restarts).
+	// We will disallow them, when a new tablet is promoted if semi-sync is turned off.
+	te.twopcAllowed = true
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
 		if config.TwoPCAbandonAge <= 0 {
@@ -115,7 +122,7 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	// perform metadata state change operations. Without this,
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
-	te.preparedPool = NewTxPreparedPool(config.TxPool.Size - 2)
+	te.preparedPool = NewTxPreparedPool(config.TxPool.Size-2, te.twopcEnabled)
 	readPool := connpool.NewPool(env, "TxReadPool", tabletenv.ConnPoolConfig{
 		Size:        3,
 		IdleTimeout: env.Config().TxPool.IdleTimeout,
@@ -427,7 +434,7 @@ outer:
 			continue
 		}
 		for _, stmt := range preparedTx.Queries {
-			conn.TxProperties().RecordQuery(stmt)
+			conn.TxProperties().RecordQuery(stmt, te.env.Environment().Parser())
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))

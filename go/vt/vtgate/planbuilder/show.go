@@ -45,7 +45,7 @@ const (
 
 func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.Destination() != nil {
-		return buildByPassPlan(sql, vschema)
+		return buildByPassPlan(sql, vschema, false)
 	}
 
 	var prim engine.Primitive

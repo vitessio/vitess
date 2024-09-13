@@ -114,7 +114,7 @@ func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string)
 	t.Helper()
 	_, err := ExecAllowError(t, conn, query)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), expected, "actual error: %s", err.Error())
+	assert.ErrorContains(t, err, expected, "actual error: %s", err.Error())
 }
 
 // AssertMatchesNoOrder executes the given query and makes sure it matches the given `expected` string.

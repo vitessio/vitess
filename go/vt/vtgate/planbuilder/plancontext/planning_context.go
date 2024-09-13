@@ -70,6 +70,15 @@ type PlanningContext struct {
 	// This is a stack of CTEs being built. It's used when we have CTEs inside CTEs,
 	// to remember which is the CTE currently being assembled
 	CurrentCTE []*ContextCTE
+
+	// mirror contains a mirrored clone of this planning context.
+	mirror *PlanningContext
+
+	// isMirrored indicates that mirrored tables should be used.
+	isMirrored bool
+
+	emptyEnv    *evalengine.ExpressionEnv
+	constantCfg *evalengine.Config
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -381,6 +390,10 @@ func (ctx *PlanningContext) ContainsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 	return
 }
 
+func (ctx *PlanningContext) IsMirrored() bool {
+	return ctx.isMirrored
+}
+
 type ContextCTE struct {
 	*semantics.CTE
 	Id         semantics.TableSet
@@ -419,4 +432,69 @@ func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
 		return nil
 	}
 	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
+}
+
+func (ctx *PlanningContext) UseMirror() *PlanningContext {
+	if ctx.isMirrored {
+		panic(vterrors.VT13001("cannot mirror already mirrored planning context"))
+	}
+	if ctx.mirror != nil {
+		return ctx.mirror
+	}
+	ctx.mirror = &PlanningContext{
+		ReservedVars:      ctx.ReservedVars,
+		SemTable:          ctx.SemTable,
+		VSchema:           ctx.VSchema,
+		joinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
+		skipPredicates:    map[sqlparser.Expr]any{},
+		PlannerVersion:    ctx.PlannerVersion,
+		ReservedArguments: map[sqlparser.Expr]string{},
+		VerifyAllFKs:      ctx.VerifyAllFKs,
+		MergedSubqueries:  ctx.MergedSubqueries,
+		CurrentPhase:      ctx.CurrentPhase,
+		Statement:         ctx.Statement,
+		OuterTables:       ctx.OuterTables,
+		CurrentCTE:        ctx.CurrentCTE,
+		emptyEnv:          ctx.emptyEnv,
+		isMirrored:        true,
+	}
+	return ctx.mirror
+}
+
+// IsConstantBool checks whether this predicate can be evaluated at plan-time.
+// If it can, it returns the constant value.
+func (ctx *PlanningContext) IsConstantBool(expr sqlparser.Expr) *bool {
+	if !ctx.SemTable.RecursiveDeps(expr).IsEmpty() {
+		// we have column dependencies, so we can be pretty sure
+		// we won't be able to use the evalengine to check if this is constant false
+		return nil
+	}
+	env := ctx.VSchema.Environment()
+	collation := ctx.VSchema.ConnCollation()
+	if ctx.constantCfg == nil {
+		ctx.constantCfg = &evalengine.Config{
+			Collation:     collation,
+			Environment:   env,
+			NoCompilation: true,
+		}
+	}
+	eexpr, err := evalengine.Translate(expr, ctx.constantCfg)
+	if ctx.emptyEnv == nil {
+		ctx.emptyEnv = evalengine.EmptyExpressionEnv(env)
+	}
+	if err != nil {
+		return nil
+	}
+	eres, err := ctx.emptyEnv.Evaluate(eexpr)
+	if err != nil {
+		return nil
+	}
+	if eres.Value(collation).IsNull() {
+		return nil
+	}
+	b, err := eres.ToBooleanStrict()
+	if err != nil {
+		return nil
+	}
+	return &b
 }

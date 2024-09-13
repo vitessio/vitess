@@ -26,8 +26,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const foreignKeyConstraintValues = "fkc_vals"
-const foreignKeyUpdateExpr = "fkc_upd"
+const (
+	foreignKeyConstraintValues = "fkc_vals"
+	foreignKeyUpdateExpr       = "fkc_upd"
+)
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) Operator {
@@ -47,19 +49,26 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 	}
 }
 
+func translateQueryToOpWithMirroring(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) Operator {
+	op := translateQueryToOp(ctx, stmt)
+
+	if selStmt, ok := stmt.(sqlparser.SelectStatement); ok {
+		if mi := ctx.SemTable.GetMirrorInfo(); mi.Percent > 0 {
+			mirrorOp := translateQueryToOp(ctx.UseMirror(), selStmt)
+			op = NewPercentBasedMirror(mi.Percent, op, mirrorOp)
+		}
+	}
+
+	return op
+}
+
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {
 	op := crossJoin(ctx, sel.From)
 
-	if sel.Where != nil {
-		op = addWherePredicates(ctx, sel.Where.Expr, op)
-	}
+	op = addWherePredicates(ctx, sel.GetWherePredicate(), op)
 
 	if sel.Comments != nil || sel.Lock != sqlparser.NoLock {
-		op = &LockAndComment{
-			Source:   op,
-			Comments: sel.Comments,
-			Lock:     sel.Lock,
-		}
+		op = newLockAndComment(op, sel.Comments, sel.Lock)
 	}
 
 	op = newHorizon(op, sel)
@@ -73,15 +82,26 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 	return sqc.getRootOperator(op, nil)
 }
 
-func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
+func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, in sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
 	outerID := TableID(op)
-	exprs := sqlparser.SplitAndExpression(nil, expr)
-	for _, expr := range exprs {
+	for _, expr := range sqlparser.SplitAndExpression(nil, in) {
 		sqlparser.RemoveKeyspaceInCol(expr)
+		expr = simplifyPredicates(ctx, expr)
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
 		}
+		boolean := ctx.IsConstantBool(expr)
+		if boolean != nil {
+			if *boolean {
+				// If the predicate is true, we can ignore it.
+				continue
+			}
+
+			// If the predicate is false, we push down a false predicate to influence routing
+			expr = sqlparser.NewIntLiteral("0")
+		}
+
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
@@ -275,6 +295,20 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 
 			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
+			if ctx.IsMirrored() {
+				if mr := tableInfo.GetMirrorRule(); mr != nil {
+					newTbl := sqlparser.Clone(tbl)
+					newTbl.Qualifier = sqlparser.NewIdentifierCS(mr.Table.Keyspace.Name)
+					newTbl.Name = mr.Table.Name
+					if newTbl.Name.String() != tbl.Name.String() {
+						tableExpr = sqlparser.Clone(tableExpr)
+						tableExpr.As = tbl.Name
+					}
+					tbl = newTbl
+				} else {
+					panic(vterrors.VT13001(fmt.Sprintf("unable to find mirror rule for table: %T", tbl)))
+				}
+			}
 			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
 			qg.Tables = append(qg.Tables, qt)
 			return qg
@@ -337,7 +371,7 @@ func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE, ou
 		panic(err)
 	}
 
-	return newRecurse(ctx, def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def), outerID)
+	return newRecurse(ctx, def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def), outerID, union.Distinct)
 }
 
 func idForRecursiveTable(ctx *plancontext.PlanningContext, def *semantics.CTE) semantics.TableSet {

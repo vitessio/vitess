@@ -149,11 +149,20 @@ func (sizegen *sizegen) generateType(pkg *types.Package, file *codeFile, named *
 	case *types.Interface:
 		findImplementations(pkg.Scope(), tt, func(tt types.Type) {
 			if _, isStruct := tt.Underlying().(*types.Struct); isStruct {
-				sizegen.generateKnownType(tt.(*types.Named))
+				sizegen.generateTyp(tt)
 			}
 		})
 	default:
 		// no-op
+	}
+}
+
+func (sizegen *sizegen) generateTyp(tt types.Type) {
+	switch tt := tt.(type) {
+	case *types.Named:
+		sizegen.generateKnownType(tt)
+	case *types.Alias:
+		sizegen.generateTyp(types.Unalias(tt))
 	}
 }
 
