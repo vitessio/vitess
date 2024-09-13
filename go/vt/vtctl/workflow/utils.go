@@ -677,7 +677,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 						allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s", topoproto.TabletAliasString(tablet.Alias)))
 					}
 					if !res.GetOk() {
-						allErrors.RecordError(fmt.Errorf("user %s does not have the required set of permissions (insert,update,delete) on the %s.vreplication table on tablet %s",
+						allErrors.RecordError(fmt.Errorf("user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
 							res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias)))
 					}
 				}()

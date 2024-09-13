@@ -70,9 +70,10 @@ select if(count(*)>0, 1, 0) as good from mysql.user as u
   left join mysql.tables_priv as t on (u.user = t.user)
 where u.user = %a
   and (
-    (u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y') /* user has global privs */
-    or (d.db = %a and u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y') /* user has db privs */
+    (u.select_priv = 'y' and u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y') /* user has global privs */
+    or (d.db = %a and d.select_priv = 'y' and d.insert_priv = 'y' and d.update_priv = 'y' and d.delete_priv = 'y') /* user has db privs */
     or (t.db = %a and t.table_name = 'vreplication' /* user has table privs */
+      and find_in_set('select', t.table_priv)
       and find_in_set('insert', t.table_priv)
       and find_in_set('update', t.table_priv)
       and find_in_set('delete', t.table_priv)
