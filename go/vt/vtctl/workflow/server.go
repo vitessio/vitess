@@ -962,6 +962,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		// Nothing left to do.
 		return ts, state, nil
 	}
+
 	var sourceKeyspace string
 
 	// We reverse writes by using the source_keyspace.workflowname_reverse workflow
@@ -1320,6 +1321,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		externalTopo *topo.Server
 		sourceTopo   = s.ts
 	)
+
 	// When the source is an external cluster mounted using the Mount command.
 	if req.ExternalClusterName != "" {
 		externalTopo, err = s.ts.OpenExternalVitessClusterServer(ctx, req.ExternalClusterName)
@@ -1418,6 +1420,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if req.DropForeignKeys {
 		createDDLMode = createDDLAsCopyDropForeignKeys
 	}
+
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table))
@@ -1459,6 +1462,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 	sw := &switcher{s: s, ts: ts}
+
 	// When creating the workflow, locking the workflow and its target keyspace is sufficient.
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "MoveTablesCreate")
@@ -1494,6 +1498,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			}
 		}
 	}()
+
 	// Now that the streams have been successfully created, let's put the associated
 	// routing rules and denied tables entries in place.
 	if externalTopo == nil {
@@ -1525,6 +1530,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if err != nil {
 		return nil, err
 	}
+
 	migrationID, err := getMigrationID(targetKeyspace, tabletShards)
 	if err != nil {
 		return nil, err
@@ -1544,6 +1550,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, msg)
 		}
 	}
+
 	if req.AutoStart {
 		if err := mz.startStreams(ctx); err != nil {
 			return nil, err
@@ -2122,6 +2129,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			resp.TableCopyState[table].BytesPercentage = tableSizePct
 		}
 	}
+
 	workflow, err := s.GetWorkflow(ctx, req.Keyspace, req.Workflow, false, req.Shards)
 	if err != nil {
 		return nil, err
@@ -2177,6 +2185,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			resp.ShardStreams[ksShard].Streams[i] = ts
 		}
 	}
+
 	return resp, nil
 }
 
@@ -2728,6 +2737,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	if err != nil {
 		return nil, err
 	}
+
 	sourceShards, targetShards := ts.getSourceAndTargetShardsNames()
 
 	ts.isPartialMigration, err = ts.isPartialMoveTables(sourceShards, targetShards)

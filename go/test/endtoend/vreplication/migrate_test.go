@@ -20,12 +20,10 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/log"
 
 	"github.com/tidwall/gjson"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/require"
 
@@ -320,7 +318,6 @@ func TestMigrateSharded(t *testing.T) {
 	createMoveTablesWorkflow(t, "customer,Lead,datze,customer2")
 	tstWorkflowSwitchReadsAndWrites(t)
 	tstWorkflowComplete(t)
-	log.Infof("The sharded keyspace customer is setup")
 
 	var err error
 	// create external cluster
@@ -340,7 +337,6 @@ func TestMigrateSharded(t *testing.T) {
 	verifyClusterHealth(t, extVc)
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
 	defer extVtgateConn.Close()
-	log.Infof("The external keyspace rating is setup")
 
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Migrate
 	var output string
@@ -356,15 +352,14 @@ func TestMigrateSharded(t *testing.T) {
 		t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 	}
 	waitForWorkflowState(t, extVc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	time.Sleep(3 * time.Second)
-	vc = extVc // this is because currently doVtctldclientVDiff is using the global vc :-(
+	// this is because currently doVtctldclientVDiff is using the global vc :-( and we want to run a diff on the extVc cluster
+	vc = extVc
 	doVtctldclientVDiff(t, "rating", "e1", "zone1", nil)
 }
 
 func setupExtKeyspace(t *testing.T, vc *VitessCluster, ksName, cellName string) {
 	rdonly := 0
 	shards := []string{"-80", "80-"}
-	log.Infof("vc is %v, cell is %v", vc, vc.Cells[cellName])
 	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells[cellName]}, ksName, strings.Join(shards, ","),
 		customerVSchema, customerSchema, defaultReplicas, rdonly, 1200, nil); err != nil {
 		t.Fatal(err)
@@ -374,10 +369,10 @@ func setupExtKeyspace(t *testing.T, vc *VitessCluster, ksName, cellName string) 
 		err := cluster.WaitForHealthyShard(vc.VtctldClient, ksName, shard)
 		require.NoError(t, err)
 		if defaultReplicas > 0 {
-			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shard), defaultReplicas, 30*time.Second))
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shard), defaultReplicas, waitTimeout))
 		}
 		if rdonly > 0 {
-			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shard), defaultRdonly, 30*time.Second))
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shard), defaultRdonly, waitTimeout))
 		}
 	}
 }
