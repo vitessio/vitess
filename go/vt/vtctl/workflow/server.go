@@ -3146,7 +3146,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	ts.force = req.GetForce()
 
-	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.GetShards(), req.GetForce())
+	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.GetShards())
 	if err != nil {
 		return nil, err
 	}
@@ -3651,7 +3651,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 }
 
 func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *State, direction TrafficSwitchDirection,
-	maxAllowedReplLagSecs int64, shards []string, force bool) (reason string, err error) {
+	maxAllowedReplLagSecs int64, shards []string) (reason string, err error) {
 	if direction == DirectionForward && state.WritesSwitched ||
 		direction == DirectionBackward && !state.WritesSwitched {
 		s.Logger().Infof("writes already switched no need to check lag")
@@ -3692,7 +3692,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
 				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
 					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
-				if partial && force {
+				if partial && ts.force {
 					log.Warning(msg)
 				} else {
 					m.Lock()
