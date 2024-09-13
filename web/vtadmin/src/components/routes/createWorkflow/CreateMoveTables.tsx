@@ -1,5 +1,5 @@
 /**
- * Copyright 2022 The Vitess Authors.
+ * Copyright 2024 The Vitess Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import { useEffect, useState } from 'react';
-import { useQueryClient } from 'react-query';
 import { Link, useHistory } from 'react-router-dom';
 
 import { useClusters, useCreateMoveTables, useKeyspaces } from '../../../hooks/api';
@@ -29,8 +28,8 @@ import { TextInput } from '../../TextInput';
 import { success } from '../../Snackbar';
 import { FormError } from '../../forms/FormError';
 import Toggle from '../../toggle/Toggle';
-import { vtadmin } from '../../../proto/vtadmin';
-import { MultiSelect } from '../../multiSelect/MultiSelect';
+import { topodata, vtadmin } from '../../../proto/vtadmin';
+import { MultiSelect } from '../../inputs/MultiSelect';
 
 interface FormData {
     clusterID: string;
@@ -55,7 +54,7 @@ const DEFAULT_FORM_DATA: FormData = {
     tables: '',
     cells: '',
     externalCluster: '',
-    onDDL: '',
+    onDDL: 'IGNORE',
     sourceTimeZone: '',
     autoStart: true,
     allTables: false,
@@ -64,10 +63,15 @@ const DEFAULT_FORM_DATA: FormData = {
 export const CreateMoveTables = () => {
     useDocumentTitle('Create a Move Tables Workflow');
 
-    const queryClient = useQueryClient();
     const history = useHistory();
 
     const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
+
+    const onDDLOptions = ['IGNORE', 'STOP', 'EXEC', 'EXEC_IGNORE'];
+
+    const tabletTypes = ['PRIMARY', 'RDONLY', 'BACKUP'];
+
+    const [selectedTabletTypes, setSelectedTabletTypes] = useState<string[]>([]);
 
     const [clusterKeyspaces, setClusterKeyspaces] = useState<vtadmin.Keyspace[]>([]);
 
@@ -115,7 +119,12 @@ export const CreateMoveTables = () => {
         selectedTargetKeyspace = keyspaces.find((ks) => ks.keyspace?.name === formData.targetKeyspace);
     }
 
-    const isValid = !!selectedCluster && !!formData.targetKeyspace && !!formData.targetKeyspace && !!formData.workflow;
+    const isValid =
+        !!selectedCluster &&
+        !!formData.targetKeyspace &&
+        !!formData.targetKeyspace &&
+        !!formData.workflow &&
+        !!formData.onDDL;
     const isDisabled = !isValid || mutation.isLoading;
 
     const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
@@ -126,10 +135,6 @@ export const CreateMoveTables = () => {
     useEffect(() => {
         setClusterKeyspaces(keyspaces.filter((ks) => ks.cluster?.id === formData.clusterID));
     }, [formData.clusterID, keyspaces]);
-
-    // TODO: Refac this
-    const tabletTypes = ['PRIMARY, RDONLY, BACKUP'];
-    const [selectedTabletTypes, setSelecltedTabletTypes] = useState<string[]>([]);
 
     return (
         <div>
@@ -189,15 +194,7 @@ export const CreateMoveTables = () => {
                         selectedItem={selectedTargetKeyspace}
                     />
 
-                    <MultiSelect
-                        items={tabletTypes}
-                        selectedItems={selectedTabletTypes}
-                        setSelectedItems={setSelecltedTabletTypes}
-                        itemToString={(item) => item}
-                        renderDisplayText={(items) => items.join(', ')}
-                    />
-
-                    <Label className="block my-8" label="Workflow Name">
+                    <Label className="block" label="Workflow Name">
                         <TextInput
                             onChange={(e) => setFormData({ ...formData, workflow: e.target.value })}
                             value={formData.workflow || ''}
@@ -205,28 +202,55 @@ export const CreateMoveTables = () => {
                         />
                     </Label>
 
-                    <Label className="block my-8" label="Tables">
+                    <Label className="block" label="Tables">
                         <TextInput
                             onChange={(e) => setFormData({ ...formData, tables: e.target.value })}
                             value={formData.tables || ''}
                         />
                     </Label>
 
-                    <Label className="block my-8" label="Cells">
+                    <Label className="block" label="Cells">
                         <TextInput
                             onChange={(e) => setFormData({ ...formData, cells: e.target.value })}
                             value={formData.cells || ''}
                         />
                     </Label>
 
-                    <Label className="block my-8" label="External Cluster">
+                    <Label className="block" label="External Cluster">
                         <TextInput
                             onChange={(e) => setFormData({ ...formData, externalCluster: e.target.value })}
                             value={formData.externalCluster || ''}
                         />
                     </Label>
 
-                    <div className="mt-2">
+                    <Label className="block" label="Source Time Zone">
+                        <TextInput
+                            onChange={(e) => setFormData({ ...formData, sourceTimeZone: e.target.value })}
+                            value={formData.sourceTimeZone || ''}
+                        />
+                    </Label>
+
+                    <Select
+                        className="block w-full"
+                        inputClassName="block w-full"
+                        items={onDDLOptions}
+                        label="OnDDL Strategy"
+                        onChange={(option) => setFormData({ ...formData, onDDL: option || '' })}
+                        placeholder={'Select the OnDDL strategy'}
+                        selectedItem={formData.onDDL}
+                    />
+
+                    <MultiSelect
+                        className="block w-full"
+                        inputClassName="block w-full"
+                        items={tabletTypes}
+                        selectedItems={selectedTabletTypes}
+                        label="Tablet Types"
+                        setSelectedItems={setSelectedTabletTypes}
+                        placeholder="Select tablet types"
+                    />
+
+                    <div className="mt-4">
                         <div className="flex items-center">
                             <Toggle
                                 className="mr-2"
@@ -238,7 +262,7 @@ export const CreateMoveTables = () => {
                         If enabled, the move will be started automatically.
                     </div>
 
-                    <div className="mt-2">
+                    <div className="mt-4">
                         <div className="flex items-center">
                             <Toggle
                                 className="mr-2"
@@ -254,7 +278,7 @@ export const CreateMoveTables = () => {
                         <FormError error={mutation.error} title="Couldn't create workflow. Please try again." />
                     )}
 
-                    <div className="my-12">
+                    <div className="my-8">
                         <button className="btn" disabled={isDisabled} type="submit">
                             {mutation.isLoading ? 'Creating Workflow...' : 'Create Workflow'}
                         </button>

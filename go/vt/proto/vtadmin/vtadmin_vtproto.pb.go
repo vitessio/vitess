@@ -1676,10 +1676,9 @@ func (m *MoveTablesCreateRequest) CloneVT() *MoveTablesCreateRequest {
 	if m == nil {
 		return (*MoveTablesCreateRequest)(nil)
 	}
-	r := &MoveTablesCreateRequest{
-		ClusterId: m.ClusterId,
-		Request:   m.Request.CloneVT(),
-	}
+	r := new(MoveTablesCreateRequest)
+	r.ClusterId = m.ClusterId
+	r.Request = m.Request.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -6662,14 +6661,14 @@ func (m *MoveTablesCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 			return 0, err
 		}
 		i -= size
-		i = encodeVarint(dAtA, i, uint64(size))
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
 	if len(m.ClusterId) > 0 {
 		i -= len(m.ClusterId)
 		copy(dAtA[i:], m.ClusterId)
-		i = encodeVarint(dAtA, i, uint64(len(m.ClusterId)))
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ClusterId)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -10483,11 +10482,11 @@ func (m *MoveTablesCreateRequest) SizeVT() (n int) {
 	_ = l
 	l = len(m.ClusterId)
 	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.Request != nil {
 		l = m.Request.SizeVT()
-		n += 1 + l + sov(uint64(l))
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -21223,7 +21222,7 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
 			if shift >= 64 {
-				return ErrIntOverflow
+				return protohelpers.ErrIntOverflow
 			}
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
@@ -21251,7 +21250,7 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -21265,11 +21264,11 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			intStringLen := int(stringLen)
 			if intStringLen < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			postIndex := iNdEx + intStringLen
 			if postIndex < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
@@ -21283,7 +21282,7 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -21296,11 +21295,11 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			if msglen < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			postIndex := iNdEx + msglen
 			if postIndex < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
@@ -21314,12 +21313,12 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skip(dAtA[iNdEx:])
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
 			if (skippy < 0) || (iNdEx+skippy) < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
