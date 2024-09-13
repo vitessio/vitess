@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -331,10 +331,7 @@ func (rs *resharder) startStreams(ctx context.Context) error {
 		// that we've created on the new shards as we're migrating them.
 		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 			AllWorkflows: true,
-			State:        binlogdatapb.VReplicationWorkflowState_Running,
-			// We don't want to update anything else so use simulated NULLs.
-			Message:      textutil.SimulatedNullString,
-			StopPosition: textutil.SimulatedNullString,
+			State:        ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
 		}
 		if _, err := rs.s.tmc.UpdateVReplicationWorkflows(ctx, targetPrimary.Tablet, req); err != nil {
 			return vterrors.Wrapf(err, "UpdateVReplicationWorkflows(%v, 'state='%s')",
