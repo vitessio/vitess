@@ -95,41 +95,55 @@ func TestMySQLShellBackupRestorePreCheck(t *testing.T) {
 
 	engine := MySQLShellBackupEngine{}
 	tests := []struct {
-		name  string
-		flags string
-		err   error
+		name              string
+		flags             string
+		err               error
+		shouldDeleteUsers bool
 	}{
 		{
 			"empty load flags",
 			`{}`,
 			MySQLShellPreCheckError,
+			false,
 		},
 		{
 			"only updateGtidSet",
 			`{"updateGtidSet": "replace"}`,
 			MySQLShellPreCheckError,
+			false,
 		},
 		{
 			"only progressFile",
 			`{"progressFile": ""}`,
 			MySQLShellPreCheckError,
+			false,
 		},
 		{
 			"both values but unsupported values",
 			`{"updateGtidSet": "append", "progressFile": "/tmp/test1"}`,
 			MySQLShellPreCheckError,
+			false,
 		},
 		{
 			"supported values",
-			`{"updateGtidSet": "replace", "progressFile": "", "skipBinlog": true}`,
+			`{"updateGtidSet": "replace", "progressFile": "", "skipBinlog": true, "loadUsers": false}`,
 			nil,
+			false,
+		},
+		{
+			"should delete users",
+			`{"updateGtidSet": "replace", "progressFile": "", "skipBinlog": true, "loadUsers": true}`,
+			nil,
+			true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mysqlShellLoadFlags = tt.flags
-			assert.ErrorIs(t, engine.restorePreCheck(context.Background(), RestoreParams{}), tt.err)
+			shouldDeleteUsers, err := engine.restorePreCheck(context.Background(), RestoreParams{})
+			assert.ErrorIs(t, err, tt.err)
+			assert.Equal(t, tt.shouldDeleteUsers, shouldDeleteUsers)
 		})
 	}
 
@@ -152,12 +166,13 @@ func TestMySQLShellBackupRestorePreCheckDisableRedolog(t *testing.T) {
 	}
 
 	// this should work as it is supported since 8.0.21
-	require.NoError(t, engine.restorePreCheck(context.Background(), params))
+	_, err := engine.restorePreCheck(context.Background(), params)
+	require.NoError(t, err, params)
 
 	// it should error out if we change to an older version
 	fakeMysqld.Version = "8.0.20"
 
-	err := engine.restorePreCheck(context.Background(), params)
+	_, err = engine.restorePreCheck(context.Background(), params)
 	require.ErrorIs(t, err, MySQLShellPreCheckError)
 	require.ErrorContains(t, err, "doesn't support disabling the redo log")
 }
@@ -191,6 +206,7 @@ func TestCleanupMySQL(t *testing.T) {
 		currentUser       string
 		existingUsers     []userRecord
 		expectedDropUsers []string
+		shouldDeleteUsers bool
 	}{
 		{
 			name:            "testing only specific DBs",
@@ -203,7 +219,18 @@ func TestCleanupMySQL(t *testing.T) {
 			expectedDropDBs: []string{"_vt", "vt_test"},
 		},
 		{
-			name:            "with users",
+			name:            "with users but without delete",
+			existingDBs:     []string{"_vt", "mysql", "vt_test", "performance_schema"},
+			expectedDropDBs: []string{"_vt", "vt_test"},
+			existingUsers: []userRecord{
+				{"test", "localhost"},
+				{"app", "10.0.0.1"},
+			},
+			expectedDropUsers: []string{},
+			shouldDeleteUsers: false,
+		},
+		{
+			name:            "with users and delete",
 			existingDBs:     []string{"_vt", "mysql", "vt_test", "performance_schema"},
 			expectedDropDBs: []string{"_vt", "vt_test"},
 			existingUsers: []userRecord{
@@ -211,6 +238,7 @@ func TestCleanupMySQL(t *testing.T) {
 				{"app", "10.0.0.1"},
 			},
 			expectedDropUsers: []string{"'test'@'localhost'", "'app'@'10.0.0.1'"},
+			shouldDeleteUsers: true,
 		},
 		{
 			name:            "with reserved users",
@@ -224,6 +252,7 @@ func TestCleanupMySQL(t *testing.T) {
 				{"app", "10.0.0.1"},
 			},
 			expectedDropUsers: []string{"'test'@'localhost'", "'app'@'10.0.0.1'"},
+			shouldDeleteUsers: true,
 		},
 	}
 
@@ -256,14 +285,24 @@ func TestCleanupMySQL(t *testing.T) {
 				)
 			}
 
-			for _, drop := range tt.expectedDropUsers {
-				mysql.ExpectedExecuteSuperQueryList = append(mysql.ExpectedExecuteSuperQueryList,
-					fmt.Sprintf("DROP USER %s", drop),
-				)
+			if tt.shouldDeleteUsers {
+				for _, drop := range tt.expectedDropUsers {
+					mysql.ExpectedExecuteSuperQueryList = append(mysql.ExpectedExecuteSuperQueryList,
+						fmt.Sprintf("DROP USER %s", drop),
+					)
+				}
 			}
 
-			err := cleanupMySQL(context.Background(), mysql, logutil.NewMemoryLogger())
+			params := RestoreParams{
+				Mysqld: mysql,
+				Logger: logutil.NewMemoryLogger(),
+			}
+
+			err := cleanupMySQL(context.Background(), params, tt.shouldDeleteUsers)
 			require.NoError(t, err)
+
+			require.Equal(t, len(tt.expectedDropDBs)+len(tt.expectedDropUsers), mysql.ExpectedExecuteSuperQueryCurrent,
+				"unexpected number of queries executed")
 		})
 	}
 
