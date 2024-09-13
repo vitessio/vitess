@@ -14,6 +14,7 @@
   - **[Allow Cross Cell Promotion in PRS](#allow-cross-cell)**
   - **[Support for recursive CTEs](#recursive-cte)**
   - **[VTGate Tablet Balancer](#tablet-balancer)**
+  - **[Query Timeout Override](#query-timeout)**
   - **[New Backup Engine](#new-backup-engine)**
 
 ## <a id="major-changes"/>Major Changes
@@ -115,6 +116,21 @@ When a VTGate routes a query and has multiple available tablets for a given shar
 The tablet balancer is enabled by a new flag `--enable-balancer` and configured by `--balancer-vtgate-cells` and `--balancer-keyspaces`.
 
 See [RFC for details](https://github.com/vitessio/vitess/issues/12241).
+
+### <a id="query-timeout"/>Query Timeout Override
+VTGate sends an authoritative query timeout to VTTablet when the `QUERY_TIMEOUT_MS` comment directive, 
+`query_timeout` session system variable, or `query-timeout` flag is set. 
+The order of precedence is: `QUERY_TIMEOUT_MS` > `query_timeout` > `query-timeout`. 
+VTTablet overrides its default query timeout with the value received from VTGate. 
+All timeouts are specified in milliseconds.
+
+When a query is executed inside a transaction, this behavior does not apply; instead, 
+the smaller of the transaction timeout or the query timeout from VTGate is used.
+
+A query can also be set to have no timeout by using the `QUERY_TIMEOUT_MS` comment directive with a value of `0`.
+
+Example usage:
+`select /*vt+ QUERY_TIMEOUT_MS=30 */ col from tbl`
 
 ### <a id="new-backup-engine"/>New Backup Engine
 

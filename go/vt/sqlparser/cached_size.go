@@ -177,6 +177,8 @@ func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field DBName vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.DBName.CachedSize(false)
 	// field AlterOptions []vitess.io/vitess/go/vt/sqlparser.DatabaseOption

@@ -328,7 +328,7 @@ func hasSpecialChars(s string) bool {
 	if strings.IndexByte(s, '"') >= 0 || strings.IndexByte(s, '\\') >= 0 {
 		return true
 	}
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] < 0x20 {
 			return true
 		}
@@ -420,7 +420,7 @@ func unescapeStringBestEffort(s string) string {
 // parseRawKey is similar to parseRawString, but is optimized
 // for small-sized keys without escape sequences.
 func parseRawKey(s string) (string, string, bool, error) {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == '"' {
 			// Fast path.
 			return s[:i], s[i+1:], false, nil

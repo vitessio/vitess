@@ -32,7 +32,6 @@ import (
 	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
@@ -146,7 +145,7 @@ func TestDisruptions(t *testing.T) {
 			// But since we are waiting in CommitPrepared, the decision to commit the transaction should have already been taken.
 			wg.Wait()
 			// Check the data in the table.
-			waitForResults(t, "select id, col from twopc_t1 where col = 4 order by id", `[[INT64(4) INT64(4)] [INT64(6) INT64(4)] [INT64(9) INT64(4)]]`, 30*time.Second)
+			twopcutil.WaitForResults(t, &vtParams, "select id, col from twopc_t1 where col = 4 order by id", `[[INT64(4) INT64(4)] [INT64(6) INT64(4)] [INT64(9) INT64(4)]]`, 30*time.Second)
 			writeCancel()
 			writerWg.Wait()
 
@@ -181,32 +180,6 @@ func reparentToFirstTablet(t *testing.T) {
 		primary := shard.Vttablets[0]
 		err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, primary.Alias)
 		require.NoError(t, err)
-	}
-}
-
-// waitForResults waits for the results of the query to be as expected.
-func waitForResults(t *testing.T, query string, resultExpected string, waitTime time.Duration) {
-	timeout := time.After(waitTime)
-	var prevRes []sqltypes.Row
-	for {
-		select {
-		case <-timeout:
-			t.Fatalf("didn't reach expected results for %s. Last results - %v", query, prevRes)
-		default:
-			ctx := context.Background()
-			conn, err := mysql.Connect(ctx, &vtParams)
-			if err == nil {
-				res, _ := utils.ExecAllowError(t, conn, query)
-				conn.Close()
-				if res != nil {
-					prevRes = res.Rows
-					if fmt.Sprintf("%v", res.Rows) == resultExpected {
-						return
-					}
-				}
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
 	}
 }
 
@@ -328,58 +301,9 @@ func onlineDDL(t *testing.T) error {
 	require.NoError(t, err)
 	count++
 	fmt.Println("uuid: ", output)
-	status := waitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	status := twopcutil.WaitForMigrationStatus(t, &vtParams, keyspaceName, clusterInstance.Keyspaces[0].Shards,
+		strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 	onlineddl.CheckMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), status)
 	require.Equal(t, schema.OnlineDDLStatusComplete, status)
 	return nil
-}
-
-func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
-	shardNames := map[string]bool{}
-	for _, shard := range shards {
-		shardNames[shard.Name] = true
-	}
-	query := fmt.Sprintf("show vitess_migrations from %s like '%s'", keyspaceName, uuid)
-
-	statusesMap := map[string]bool{}
-	for _, status := range expectStatuses {
-		statusesMap[string(status)] = true
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	lastKnownStatus := ""
-	for {
-		select {
-		case <-ctx.Done():
-			return schema.OnlineDDLStatus(lastKnownStatus)
-		case <-ticker.C:
-		}
-		countMatchedShards := 0
-		conn, err := mysql.Connect(ctx, vtParams)
-		if err != nil {
-			continue
-		}
-		r, err := utils.ExecAllowError(t, conn, query)
-		conn.Close()
-		if err != nil {
-			continue
-		}
-		for _, row := range r.Named().Rows {
-			shardName := row["shard"].ToString()
-			if !shardNames[shardName] {
-				// irrelevant shard
-				continue
-			}
-			lastKnownStatus = row["migration_status"].ToString()
-			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
-				countMatchedShards++
-			}
-		}
-		if countMatchedShards == len(shards) {
-			return schema.OnlineDDLStatus(lastKnownStatus)
-		}
-	}
 }
