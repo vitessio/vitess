@@ -19,6 +19,7 @@
     "highcharts-react-official": "^3.1.0",
     "history": "^5.3.0",
     "lodash-es": "^4.17.21",
+    "path-to-regexp": "^8.1.0",
     "postcss-flexbugs-fixes": "^5.0.2",
     "postcss-preset-env": "^8.0.1",
     "query-string": "^7.1.3",
