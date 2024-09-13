@@ -49,7 +49,7 @@ var (
 	// ConcludeTransaction makes a ConcludeTransaction gRPC call to a vtctld.
 	ConcludeTransaction = &cobra.Command{
 		Use:     "conclude <dtid> [<keyspace/shard> ...]",
-		Short:   "Concludes the unresolved transaction by rolling back the prepared transaction on all participating shards and removing the transaction metadata record.",
+		Short:   "Concludes the unresolved transaction by rolling back the prepared transaction on each participating shard and removing the transaction metadata record.",
 		Aliases: []string{"Conclude"},
 		Args:    cobra.MinimumNArgs(1),
 		RunE:    commandConcludeTransaction,
