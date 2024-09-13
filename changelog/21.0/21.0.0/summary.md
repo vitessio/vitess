@@ -14,6 +14,7 @@
   - **[Allow Cross Cell Promotion in PRS](#allow-cross-cell)**
   - **[Support for recursive CTEs](#recursive-cte)**
   - **[VTGate Tablet Balancer](#tablet-balancer)**
+  - **[New Backup Engine](#new-backup-engine)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -114,3 +115,10 @@ When a VTGate routes a query and has multiple available tablets for a given shar
 The tablet balancer is enabled by a new flag `--enable-balancer` and configured by `--balancer-vtgate-cells` and `--balancer-keyspaces`.
 
 See [RFC for details](https://github.com/vitessio/vitess/issues/12241).
+
+### <a id="new-backup-engine"/>New Backup Engine
+
+We are introducing a the backup engine supporting logical backups starting on v21 to support use cases that require something else besides physical backups. This is experimental and is based on the 
+[MySQL Shell](https://dev.mysql.com/doc/mysql-shell/8.0/en/).
+
+The new engine is enabled by using `--backup_engine_implementation=mysqlshell`. There are other options that are required, so check the docs on which options are required and how to use it.
