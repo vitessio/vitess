@@ -37061,6 +37061,9 @@ export namespace query {
 
         /** ExecuteOptions priority */
         priority?: (string|null);
+
+        /** ExecuteOptions authoritative_timeout */
+        authoritative_timeout?: (number|Long|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -37107,6 +37110,12 @@ export namespace query {
 
         /** ExecuteOptions priority. */
         public priority: string;
+
+        /** ExecuteOptions authoritative_timeout. */
+        public authoritative_timeout?: (number|Long|null);
+
+        /** ExecuteOptions timeout. */
+        public timeout?: "authoritative_timeout";
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.

@@ -21,4 +21,4 @@ CREATE TABLE IF NOT EXISTS dt_participant
     keyspace varchar(256) NOT NULL,
     shard varchar(256) NOT NULL,
     primary key(dtid, id)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

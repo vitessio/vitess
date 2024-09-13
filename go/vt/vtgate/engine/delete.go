@@ -42,9 +42,6 @@ type Delete struct {
 
 // TryExecute performs a non-streaming exec.
 func (del *Delete) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, del.QueryTimeout)
-	defer cancelFunc()
-
 	rss, bvs, err := del.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err

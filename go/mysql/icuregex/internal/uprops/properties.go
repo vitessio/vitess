@@ -114,7 +114,7 @@ func getInclusionsForBinaryProperty(prop Property) (*uset.UnicodeSet, error) {
 	numRanges := incl.RangeCount()
 	startHasProperty := rune(-1)
 
-	for i := 0; i < numRanges; i++ {
+	for i := range numRanges {
 		rangeEnd := incl.RangeEnd(i)
 		for c := incl.RangeStart(i); c <= rangeEnd; c++ {
 			if HasBinaryProperty(c, prop) {
@@ -152,7 +152,7 @@ func getInclusionsForIntProperty(prop Property) (*uset.UnicodeSet, error) {
 	numRanges := incl.RangeCount()
 	prevValue := int32(0)
 
-	for i := 0; i < numRanges; i++ {
+	for i := range numRanges {
 		rangeEnd := incl.RangeEnd(i)
 		for c := incl.RangeStart(i); c <= rangeEnd; c++ {
 			value := getIntPropertyValue(c, prop)

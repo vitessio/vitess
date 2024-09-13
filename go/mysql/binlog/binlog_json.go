@@ -224,7 +224,7 @@ var binaryIntSizes = map[jsonDataType]int{
 func binparserInt(typ jsonDataType, data []byte, pos int) (*json.Value, error) {
 	var val uint64
 	size := binaryIntSizes[typ]
-	for i := 0; i < size; i++ {
+	for i := range size {
 		val = val + uint64(data[pos+i])<<(8*i)
 	}
 	var s string
@@ -344,7 +344,7 @@ func binparserArray(typ jsonDataType, data []byte, pos int) (node *json.Value, e
 	large := typ == jsonLargeArray
 	elementCount, pos = readInt(data, pos, large)
 	_, pos = readInt(data, pos, large)
-	for i := 0; i < elementCount; i++ {
+	for range elementCount {
 		elem, pos, err = binparserElement(data, pos, large)
 		if err != nil {
 			return nil, err
@@ -366,7 +366,7 @@ func binparserObject(typ jsonDataType, data []byte, pos int) (node *json.Value, 
 	_, pos = readInt(data, pos, large)
 
 	keys := make([]string, elementCount) // stores all the keys in this object
-	for i := 0; i < elementCount; i++ {
+	for i := range elementCount {
 		var keyOffset int
 		var keyLength int
 		keyOffset, pos = readInt(data, pos, large)
@@ -384,7 +384,7 @@ func binparserObject(typ jsonDataType, data []byte, pos int) (node *json.Value, 
 	var elem *json.Value
 
 	// get the value for each key
-	for i := 0; i < elementCount; i++ {
+	for i := range elementCount {
 		elem, pos, err = binparserElement(data, pos, large)
 		if err != nil {
 			return nil, err
