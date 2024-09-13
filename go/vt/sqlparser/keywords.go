@@ -277,6 +277,7 @@ var keywords = map[string]int{
 	"geometry":                      GEOMETRY,
 	"geometrycollection":            GEOMETRYCOLLECTION,
 	"get":                           GET,
+	"get_format":                    GET_FORMAT,
 	"global":                        GLOBAL,
 	"grant":                         GRANT,
 	"grants":                        GRANTS,

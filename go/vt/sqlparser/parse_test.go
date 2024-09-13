@@ -5836,7 +5836,6 @@ func TestFunctionCalls(t *testing.T) {
 		"select GET_DD_COLUMN_PRIVILEGES() from dual",
 		"select GET_DD_CREATE_OPTIONS() from dual",
 		"select GET_DD_INDEX_SUB_PART_LENGTH() from dual",
-		"select GET_FORMAT() from dual",
 		"select GET_LOCK() from dual",
 		"select GREATEST() from dual",
 		"select group_concat(col) from dual",
@@ -6197,6 +6196,32 @@ func TestFunctionCalls(t *testing.T) {
 		{
 			input:  "SELECT POSITION(1 + 1 in foo)",
 			output: "select LOCATE(1 + 1, foo)",
+		},
+
+		// get_format function calls
+		{
+			input:  "select get_format(date, 'str')",
+			output: "select get_format('date', 'str')",
+		},
+		{
+			input:  "select get_format(datetime, 'str')",
+			output: "select get_format('datetime', 'str')",
+		},
+		{
+			input:  "select get_format(time, 'str')",
+			output: "select get_format('time', 'str')",
+		},
+		{
+			input:  "select get_format(timestamp, 'str')",
+			output: "select get_format('timestamp', 'str')",
+		},
+		{
+			input:  "select get_format(date, @a)",
+			output: "select get_format('date', @a)",
+		},
+		{
+			input:  "select get_format(date, concat('abc', '123'))",
+			output: "select get_format('date', concat('abc', '123'))",
 		},
 	}
 

@@ -368,6 +368,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> TRIM LEADING TRAILING BOTH
 %token <bytes> GROUP_CONCAT SEPARATOR
 %token <bytes> TIMESTAMPADD TIMESTAMPDIFF EXTRACT
+%token <bytes> GET_FORMAT
 
 // Window functions
 %token <bytes> OVER WINDOW GROUPING GROUPS
@@ -495,7 +496,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> compare
 %type <ins> insert_data insert_data_alias insert_data_select insert_data_values
 %type <expr> value value_expression num_val as_of_opt limit_val integral_or_interval_expr timestamp_value
-%type <bytes> time_unit non_microsecond_time_unit
+%type <bytes> time_unit non_microsecond_time_unit date_datetime_time_timestamp
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <expr> func_datetime_prec_opt function_call_window function_call_aggregate_with_window function_call_on_update
 %type <str> is_suffix
@@ -6499,6 +6500,12 @@ window_definition:
     $$ = def
   }
 
+date_datetime_time_timestamp:
+  DATE
+| DATETIME
+| TIME
+| TIMESTAMP
+
 time_unit:
   non_microsecond_time_unit
 | MICROSECOND
@@ -7803,6 +7810,10 @@ function_call_nonkeyword:
 | EXTRACT openb time_unit FROM value_expression closeb
   {
     $$ = &ExtractFuncExpr{Name: string($1), Unit: string($3), Expr: $5}
+  }
+| GET_FORMAT openb date_datetime_time_timestamp ',' value_expression closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: NewStrVal($3)}, &AliasedExpr{Expr: $5}}}
   }
 
 // functions that can be used with the ON UPDATE clause
@@ -9914,6 +9925,7 @@ non_reserved_keyword2:
 | FILE
 | FIRST
 | FULL
+| GET_FORMAT
 | IDENTIFIED
 | NONE
 | PASSWORD
