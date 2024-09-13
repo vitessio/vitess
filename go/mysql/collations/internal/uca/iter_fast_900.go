@@ -301,7 +301,7 @@ func (it *FastIterator900) NextWeightBlock64(dstbytes []byte) int {
 
 	// Slow path: just loop up to 8 times to fill the buffer and bail
 	// early if we exhaust the iterator.
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		w, ok := it.Next()
 		if !ok {
 			return i * 2

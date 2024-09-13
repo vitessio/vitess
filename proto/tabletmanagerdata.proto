@@ -707,9 +707,9 @@ message UpdateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
   repeated topodata.TabletType tablet_types = 3;
-  TabletSelectionPreference tablet_selection_preference = 4;
-  binlogdata.OnDDLAction on_ddl = 5;
-  binlogdata.VReplicationWorkflowState state = 6;
+  optional TabletSelectionPreference tablet_selection_preference = 4;
+  optional binlogdata.OnDDLAction on_ddl = 5;
+  optional binlogdata.VReplicationWorkflowState state = 6;
   reserved 7; // unused, was: repeated string shards
 }
 
@@ -727,9 +727,9 @@ message UpdateVReplicationWorkflowsRequest {
   bool all_workflows = 1;
   repeated string include_workflows = 2;
   repeated string exclude_workflows = 3;
-  binlogdata.VReplicationWorkflowState state = 4;
-  string message = 5;
-  string stop_position = 6;
+  optional binlogdata.VReplicationWorkflowState state = 4;
+  optional string message = 5;
+  optional string stop_position = 6;
 }
 
 message UpdateVReplicationWorkflowsResponse {
