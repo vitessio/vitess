@@ -28,7 +28,7 @@ import { TextInput } from '../../TextInput';
 import { success } from '../../Snackbar';
 import { FormError } from '../../forms/FormError';
 import Toggle from '../../toggle/Toggle';
-import { topodata, vtadmin } from '../../../proto/vtadmin';
+import { vtadmin } from '../../../proto/vtadmin';
 import { MultiSelect } from '../../inputs/MultiSelect';
 
 interface FormData {
