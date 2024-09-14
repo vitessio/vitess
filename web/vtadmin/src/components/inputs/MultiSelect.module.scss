@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- .container {
+.container {
     display: inline-block;
     position: relative;
 }
@@ -55,13 +55,6 @@
     cursor: not-allowed;
 }
 
-.large .toggle {
-    font-size: theme('fontSize.lg');
-    height: var(--inputHeightLarge);
-    min-width: 24rem;
-    padding: 0 16px;
-}
-
 .chevron {
     height: 20px;
     position: absolute;
@@ -85,14 +78,7 @@
     z-index: 1000;
 }
 
-.menu {
-    list-style-type: none;
-    margin: 0;
-    outline: none;
-    padding: 0;
-}
-
-.menuItem {
+.listItem {
     background: none;
     border: none;
     box-sizing: border-box;
@@ -114,49 +100,6 @@
         background: var(--backgroundPrimaryHighlight);
         cursor: pointer;
     }
-
-    &:active,
-    &:focus {
-        background: var(--backgroundPrimaryHighlight);
-    }
-}
-
-.clear {
-    background: none;
-    border: none;
-    box-sizing: border-box;
-    color: var(--textColorSecondary);
-    cursor: pointer;
-    display: block;
-    font-family: var(--fontFamilyPrimary);
-    font-size: var(--fontSizeBody);
-    min-width: 16rem;
-    padding: 4px 12px;
-    position: relative;
-    text-align: left;
-    transition: all 0.1s ease-in-out;
-    white-space: nowrap;
-    width: 100%;
-
-    &:hover,
-    &:active,
-    &:focus {
-        background: var(--backgroundPrimaryHighlight);
-    }
-}
-
-.large .clear {
-    font-size: theme('fontSize.lg');
-    padding: 8px 16px;
-}
-
-.emptyContainer {
-    outline: none;
-    padding: 8px 12px;
-}
-
-.emptyPlaceholder {
-    color: var(--textColorSecondary);
 }
 
 .selected {

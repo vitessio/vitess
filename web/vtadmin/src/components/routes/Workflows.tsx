@@ -196,9 +196,9 @@ export const Workflows = () => {
                     <ReadOnlyGate>
                         <div>
                             <Dropdown dropdownButton={Icons.circleAdd} position="bottom-right">
-                                <MenuItem>
-                                    <Link to="/workflows/move_tables/create">Move Tables</Link>
-                                </MenuItem>
+                                <Link to="/workflows/move_tables/create">
+                                    <MenuItem>Move Tables</MenuItem>
+                                </Link>
                                 <MenuItem disabled>Reshard</MenuItem>
                                 <MenuItem disabled>Materialize</MenuItem>
                             </Dropdown>

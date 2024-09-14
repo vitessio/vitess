@@ -27,7 +27,7 @@ interface Props<T> {
     items: T[];
     itemToString?: (item: T) => string;
     label: string;
-    setSelectedItems: (selectedItems: T[]) => void;
+    onChange: (selectedItems: T[]) => void;
     placeholder: string;
     renderItem?: (item: T) => JSX.Element | string;
     selectedItems: T[];
@@ -45,7 +45,7 @@ export const MultiSelect = <T,>({
     placeholder,
     renderItem,
     selectedItems,
-    setSelectedItems,
+    onChange,
     description,
     required,
 }: Props<T>) => {
@@ -56,42 +56,38 @@ export const MultiSelect = <T,>({
         return itemToString(item);
     };
 
-    const selectedItemsText = `Selected (${selectedItems.length}): ${selectedItems.map((item) => _renderItem(item)).join(', ')}`
+    const selectedItemsText = `Selected (${selectedItems.length}): ${selectedItems.map((item) => _renderItem(item)).join(', ')}`;
 
     return (
         <div className={cx(style.container, className, { [style.disabled]: disabled })}>
-            {label && (
-            <Label label={label} required={required} />
-            )}
+            {label && <Label label={label} required={required} />}
             {description && <div className="mt-[-4px] mb-4">{description}</div>}
 
-            <Listbox value={selectedItems} onChange={setSelectedItems}  multiple>
+            <Listbox value={selectedItems} onChange={onChange} multiple>
                 {({ open }) => (
                     <>
                         <Listbox.Button
-                            className={cx(style.toggle, inputClassName, { [style.open]: open, [style.disabled]: disabled })}
+                            className={cx(style.toggle, inputClassName, {
+                                [style.open]: open,
+                                [style.disabled]: disabled,
+                            })}
                         >
-                            {selectedItems.length > 0
-                                ? selectedItemsText
-                                : placeholder}
+                            {selectedItems.length > 0 ? selectedItemsText : placeholder}
                             <Icon className={style.chevron} icon={open ? Icons.chevronUp : Icons.chevronDown} />
                         </Listbox.Button>
                         <Listbox.Options className={cx(style.dropdown, { [style.hidden]: !open })}>
                             {items.map((item, index) => (
                                 <Listbox.Option
-                                    as="button"
                                     key={index}
                                     value={item}
                                     className={({ active, selected }) =>
-                                        cx(style.menuItem, {
+                                        cx(style.listItem, {
                                             [style.active]: active,
                                             [style.selected]: selected,
                                         })
                                     }
                                 >
-                                        <div>
-                                            {_renderItem(item)}
-                                        </div>
+                                    <div>{_renderItem(item)}</div>
                                 </Listbox.Option>
                             ))}
                         </Listbox.Options>

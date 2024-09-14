@@ -38,7 +38,10 @@ interface FormData {
     sourceKeyspace: string;
     tables: string;
     cells: string;
-    tabletTypes?: number[];
+    tabletTypes: {
+        id: number;
+        type: string;
+    }[];
     externalCluster: string;
     onDDL: string;
     sourceTimeZone: string;
@@ -53,6 +56,7 @@ const DEFAULT_FORM_DATA: FormData = {
     sourceKeyspace: '',
     tables: '',
     cells: '',
+    tabletTypes: [],
     externalCluster: '',
     onDDL: 'IGNORE',
     sourceTimeZone: '',
@@ -60,18 +64,49 @@ const DEFAULT_FORM_DATA: FormData = {
     allTables: false,
 };
 
+const TABLET_TYPES = [
+    {
+        id: 1,
+        type: 'PRIMARY',
+    },
+    {
+        id: 2,
+        type: 'REPLICA',
+    },
+    {
+        id: 3,
+        type: 'RDONLY',
+    },
+    {
+        id: 4,
+        type: 'SPARE',
+    },
+    {
+        id: 5,
+        type: 'EXPERIMENTAL',
+    },
+    {
+        id: 6,
+        type: 'BACKUP',
+    },
+    {
+        id: 7,
+        type: 'RESTORE',
+    },
+    {
+        id: 8,
+        type: 'DRAINED',
+    },
+];
+
+const onDDLOptions = ['IGNORE', 'STOP', 'EXEC', 'EXEC_IGNORE'];
+
 export const CreateMoveTables = () => {
     useDocumentTitle('Create a Move Tables Workflow');
 
     const history = useHistory();
 
     const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
-
-    const onDDLOptions = ['IGNORE', 'STOP', 'EXEC', 'EXEC_IGNORE'];
-
-    const tabletTypes = ['PRIMARY', 'RDONLY', 'BACKUP'];
-
-    const [selectedTabletTypes, setSelectedTabletTypes] = useState<string[]>([]);
 
     const [clusterKeyspaces, setClusterKeyspaces] = useState<vtadmin.Keyspace[]>([]);
 
@@ -86,9 +121,11 @@ export const CreateMoveTables = () => {
                 workflow: formData.workflow,
                 source_keyspace: formData.sourceKeyspace,
                 target_keyspace: formData.targetKeyspace,
-                include_tables: formData.tables.split(',').map((table) => table.trim()),
+                include_tables: !formData.allTables
+                    ? formData.tables.split(',').map((table) => table.trim())
+                    : undefined,
                 cells: formData.cells.split(',').map((cell) => cell.trim()),
-                tablet_types: formData.tabletTypes,
+                tablet_types: formData.tabletTypes.map((tt) => tt.id),
                 all_tables: formData.allTables,
                 on_ddl: formData.onDDL,
                 external_cluster_name: formData.externalCluster,
@@ -149,7 +186,7 @@ export const CreateMoveTables = () => {
             <ContentContainer className="max-w-screen-sm">
                 <form onSubmit={onSubmit}>
                     <Select
-                        className="block w-full"
+                        className="block w-full my-2"
                         disabled={clustersQuery.isLoading}
                         inputClassName="block w-full"
                         itemToString={(cluster) => cluster?.name || ''}
@@ -169,7 +206,7 @@ export const CreateMoveTables = () => {
                     )}
 
                     <Select
-                        className="block w-full"
+                        className="block w-full my-2"
                         disabled={keyspacesQuery.isLoading || !selectedCluster}
                         inputClassName="block w-full"
                         itemToString={(ks) => ks?.keyspace?.name || ''}
@@ -182,7 +219,7 @@ export const CreateMoveTables = () => {
                     />
 
                     <Select
-                        className="block w-full"
+                        className="block w-full my-2"
                         disabled={keyspacesQuery.isLoading || !selectedCluster}
                         inputClassName="block w-full"
                         itemToString={(ks) => ks?.keyspace?.name || ''}
@@ -194,7 +231,7 @@ export const CreateMoveTables = () => {
                         selectedItem={selectedTargetKeyspace}
                     />
 
-                    <Label className="block" label="Workflow Name">
+                    <Label className="block my-2" label="Workflow Name">
                         <TextInput
                             onChange={(e) => setFormData({ ...formData, workflow: e.target.value })}
                             value={formData.workflow || ''}
@@ -202,67 +239,15 @@ export const CreateMoveTables = () => {
                         />
                     </Label>
 
-                    <Label className="block" label="Tables">
+                    <Label className="block my-2" label="Tables">
                         <TextInput
                             onChange={(e) => setFormData({ ...formData, tables: e.target.value })}
+                            disabled={formData.allTables}
                             value={formData.tables || ''}
                         />
                     </Label>
 
-                    <Label className="block" label="Cells">
-                        <TextInput
-                            onChange={(e) => setFormData({ ...formData, cells: e.target.value })}
-                            value={formData.cells || ''}
-                        />
-                    </Label>
-
-                    <Label className="block" label="External Cluster">
-                        <TextInput
-                            onChange={(e) => setFormData({ ...formData, externalCluster: e.target.value })}
-                            value={formData.externalCluster || ''}
-                        />
-                    </Label>
-
-                    <Label className="block" label="Source Time Zone">
-                        <TextInput
-                            onChange={(e) => setFormData({ ...formData, sourceTimeZone: e.target.value })}
-                            value={formData.sourceTimeZone || ''}
-                        />
-                    </Label>
-
-                    <Select
-                        className="block w-full"
-                        inputClassName="block w-full"
-                        items={onDDLOptions}
-                        label="OnDDL Strategy"
-                        onChange={(option) => setFormData({ ...formData, onDDL: option || '' })}
-                        placeholder={'Select the OnDDL strategy'}
-                        selectedItem={formData.onDDL}
-                    />
-
-                    <MultiSelect
-                        className="block w-full"
-                        inputClassName="block w-full"
-                        items={tabletTypes}
-                        selectedItems={selectedTabletTypes}
-                        label="Tablet Types"
-                        setSelectedItems={setSelectedTabletTypes}
-                        placeholder="Select tablet types"
-                    />
-
-                    <div className="mt-4">
-                        <div className="flex items-center">
-                            <Toggle
-                                className="mr-2"
-                                enabled={formData.autoStart}
-                                onChange={() => setFormData({ ...formData, autoStart: !formData.autoStart })}
-                            />
-                            <Label label="Auto Start" />
-                        </div>
-                        If enabled, the move will be started automatically.
-                    </div>
-
-                    <div className="mt-4">
+                    <div className="my-2">
                         <div className="flex items-center">
                             <Toggle
                                 className="mr-2"
@@ -272,6 +257,60 @@ export const CreateMoveTables = () => {
                             <Label label="All Tables" />
                         </div>
                         If enabled, the move will copy all the tables from source keyspace.
+                    </div>
+
+                    <Label className="block my-2" label="Cells">
+                        <TextInput
+                            onChange={(e) => setFormData({ ...formData, cells: e.target.value })}
+                            value={formData.cells || ''}
+                        />
+                    </Label>
+
+                    <Label className="block my-2" label="External Cluster">
+                        <TextInput
+                            onChange={(e) => setFormData({ ...formData, externalCluster: e.target.value })}
+                            value={formData.externalCluster || ''}
+                        />
+                    </Label>
+
+                    <Label className="block my-2" label="Source Time Zone">
+                        <TextInput
+                            onChange={(e) => setFormData({ ...formData, sourceTimeZone: e.target.value })}
+                            value={formData.sourceTimeZone || ''}
+                        />
+                    </Label>
+
+                    <Select
+                        className="block w-full my-2"
+                        inputClassName="block w-full"
+                        items={onDDLOptions}
+                        label="OnDDL Strategy"
+                        onChange={(option) => setFormData({ ...formData, onDDL: option || '' })}
+                        placeholder={'Select the OnDDL strategy'}
+                        selectedItem={formData.onDDL}
+                    />
+
+                    <MultiSelect
+                        className="block w-full my-2"
+                        inputClassName="block w-full"
+                        items={TABLET_TYPES}
+                        itemToString={(tt) => tt.type}
+                        selectedItems={formData.tabletTypes}
+                        label="Tablet Types"
+                        onChange={(types) => setFormData({ ...formData, tabletTypes: types })}
+                        placeholder="Select tablet types"
+                    />
+
+                    <div className="my-2">
+                        <div className="flex items-center">
+                            <Toggle
+                                className="mr-2"
+                                enabled={formData.autoStart}
+                                onChange={() => setFormData({ ...formData, autoStart: !formData.autoStart })}
+                            />
+                            <Label label="Auto Start" />
+                        </div>
+                        If enabled, the move will be started automatically.
                     </div>
 
                     {mutation.isError && !mutation.isLoading && (
