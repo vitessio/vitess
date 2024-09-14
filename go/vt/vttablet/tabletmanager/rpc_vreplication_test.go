@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -96,6 +97,11 @@ var (
 	position           = fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition)
 	setNetReadTimeout  = fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout)
 	setNetWriteTimeout = fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout)
+	inOrder            = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	running            = binlogdatapb.VReplicationWorkflowState_Running
+	stopped            = binlogdatapb.VReplicationWorkflowState_Stopped
+	exec               = binlogdatapb.OnDDLAction_EXEC
+	execIgnore         = binlogdatapb.OnDDLAction_EXEC_IGNORE
 )
 
 // TestCreateVReplicationWorkflow tests the query generated
@@ -605,7 +611,6 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update cells",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
-				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:    []string{"zone2"},
 				// TabletTypes is an empty value, so the current value should be cleared
 			},
@@ -616,9 +621,8 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update cells, NULL tablet_types",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
-				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:       []string{"zone3"},
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}, // So keep the current value of replica
+				TabletTypes: textutil.SimulatedNullTabletTypeSlice, // So keep the current value of replica
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, "zone3", tabletTypes[0], vreplID),
@@ -627,8 +631,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update tablet_types",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:                  workflow,
-				State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
-				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+				TabletSelectionPreference: &inOrder,
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '', tablet_types = '%s' where id in (%d)`,
@@ -638,7 +641,6 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update tablet_types, NULL cells",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
-				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:       textutil.SimulatedNullStringSlice, // So keep the current value of zone1
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
 			},
@@ -649,8 +651,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update on_ddl",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
-				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
-				OnDdl:    binlogdatapb.OnDDLAction_EXEC,
+				OnDdl:    &exec,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}} on_ddl:%s', cell = '', tablet_types = '' where id in (%d)`,
 				keyspace, shard, binlogdatapb.OnDDLAction_EXEC.String(), vreplID),
@@ -659,10 +660,9 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update cell,tablet_types,on_ddl",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
-				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:       []string{"zone1", "zone2", "zone3"},
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY},
-				OnDdl:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
+				OnDdl:       &execIgnore,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, binlogdatapb.OnDDLAction_EXEC_IGNORE.String(), "zone1,zone2,zone3", "rdonly,replica,primary", vreplID),
@@ -671,10 +671,9 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update state",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
-				State:       binlogdatapb.VReplicationWorkflowState_Stopped,
+				State:       &stopped,
 				Cells:       textutil.SimulatedNullStringSlice,
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-				OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+				TabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set state = '%s', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				binlogdatapb.VReplicationWorkflowState_Stopped.String(), keyspace, shard, cells[0], tabletTypes[0], vreplID),
@@ -683,10 +682,9 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update to running while copying",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
-				State:       binlogdatapb.VReplicationWorkflowState_Running,
+				State:       &running,
 				Cells:       textutil.SimulatedNullStringSlice,
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-				OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+				TabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			},
 			isCopying: true,
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Copying', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
@@ -700,7 +698,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v", err)
+					t.Errorf("Recovered from panic: %v, stack: %s", err, debug.Stack())
 				}
 			}()
 
@@ -710,8 +708,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			// These are the same for each RPC call.
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(selectQuery, selectRes, nil)
-			if tt.request.State == binlogdatapb.VReplicationWorkflowState_Running ||
-				tt.request.State == binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt) {
+			if tt.request.State == nil || *tt.request.State == binlogdatapb.VReplicationWorkflowState_Running {
 				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 				if tt.isCopying {
 					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, copying, nil)
@@ -756,9 +753,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			name: "update only state=running for all workflows",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				AllWorkflows: true,
-				State:        binlogdatapb.VReplicationWorkflowState_Running,
-				Message:      textutil.SimulatedNullString,
-				StopPosition: textutil.SimulatedNullString,
+				State:        &running,
 			},
 			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running' where id in (%s)`, strings.Join(vreplIDs, ", ")),
 		},
@@ -766,9 +761,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			name: "update only state=running for all but reverse workflows",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				ExcludeWorkflows: []string{workflow.ReverseWorkflowName("testwf")},
-				State:            binlogdatapb.VReplicationWorkflowState_Running,
-				Message:          textutil.SimulatedNullString,
-				StopPosition:     textutil.SimulatedNullString,
+				State:            &running,
 			},
 			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running' where id in (%s)`, strings.Join(vreplIDs, ", ")),
 		},
@@ -776,9 +769,9 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			name: "update all vals for all workflows",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				AllWorkflows: true,
-				State:        binlogdatapb.VReplicationWorkflowState_Running,
-				Message:      "hi",
-				StopPosition: position,
+				State:        &running,
+				Message:      ptr.Of("hi"),
+				StopPosition: &position,
 			},
 			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running', message = 'hi', stop_pos = '%s' where id in (%s)`, position, strings.Join(vreplIDs, ", ")),
 		},
@@ -786,9 +779,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			name: "update state=stopped, messege=for vdiff for two workflows",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				IncludeWorkflows: []string{"testwf", "testwf2"},
-				State:            binlogdatapb.VReplicationWorkflowState_Running,
-				Message:          textutil.SimulatedNullString,
-				StopPosition:     textutil.SimulatedNullString,
+				State:            &running,
 			},
 			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running' where id in (%s)`, strings.Join(vreplIDs, ", ")),
 		},
@@ -3235,6 +3226,12 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 			DBName: "vt_testks",
 		},
 	}
+	forVdiff := "for vdiff"
+	forPos := "for until position"
+	forTest := "test message"
+	stopPos1 := "MySQL56/17b1039f-21b6-13ed-b365-1a43f95f28a3:1-20"
+	stopPos2 := "MySQL56/17b1039f-21b6-13ed-b365-1a43f95f28a3:1-9999"
+
 	tests := []struct {
 		name    string
 		req     *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
@@ -3242,18 +3239,14 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "nothing to update",
-			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
-				State:        binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
-				Message:      textutil.SimulatedNullString,
-				StopPosition: textutil.SimulatedNullString,
-			},
+			name:    "nothing to update",
+			req:     &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{},
 			wantErr: errNoFieldsToUpdate.Error(),
 		},
 		{
 			name: "mutually exclusive options",
 			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
-				State:            binlogdatapb.VReplicationWorkflowState_Running,
+				State:            &running,
 				AllWorkflows:     true,
 				ExcludeWorkflows: []string{"wf1"},
 			},
@@ -3262,9 +3255,9 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 		{
 			name: "all values and options",
 			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
-				State:            binlogdatapb.VReplicationWorkflowState_Running,
-				Message:          "test message",
-				StopPosition:     "MySQL56/17b1039f-21b6-13ed-b365-1a43f95f28a3:1-20",
+				State:            &running,
+				Message:          &forTest,
+				StopPosition:     &stopPos1,
 				IncludeWorkflows: []string{"wf2", "wf3"},
 				ExcludeWorkflows: []string{"1wf"},
 			},
@@ -3273,9 +3266,7 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 		{
 			name: "state for all",
 			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
-				State:        binlogdatapb.VReplicationWorkflowState_Running,
-				Message:      textutil.SimulatedNullString,
-				StopPosition: textutil.SimulatedNullString,
+				State:        &running,
 				AllWorkflows: true,
 			},
 			want: "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running' where db_name = 'vt_testks'",
@@ -3283,9 +3274,8 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 		{
 			name: "stop all for vdiff",
 			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
-				State:        binlogdatapb.VReplicationWorkflowState_Stopped,
-				Message:      "for vdiff",
-				StopPosition: textutil.SimulatedNullString,
+				State:        &stopped,
+				Message:      &forVdiff,
 				AllWorkflows: true,
 			},
 			want: "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Stopped', message = 'for vdiff' where db_name = 'vt_testks'",
@@ -3293,9 +3283,9 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 		{
 			name: "start one until position",
 			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
-				State:            binlogdatapb.VReplicationWorkflowState_Running,
-				Message:          "for until position",
-				StopPosition:     "MySQL56/17b1039f-21b6-13ed-b365-1a43f95f28a3:1-9999",
+				State:            &running,
+				Message:          &forPos,
+				StopPosition:     &stopPos2,
 				IncludeWorkflows: []string{"wf1"},
 			},
 			want: "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running', message = 'for until position', stop_pos = 'MySQL56/17b1039f-21b6-13ed-b365-1a43f95f28a3:1-9999' where db_name = 'vt_testks' and workflow in ('wf1')",
