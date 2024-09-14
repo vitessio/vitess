@@ -56,7 +56,16 @@ const DEFAULT_FORM_DATA: FormData = {
     sourceKeyspace: '',
     tables: '',
     cells: '',
-    tabletTypes: [],
+    tabletTypes: [
+        {
+            id: 1,
+            type: 'PRIMARY',
+        },
+        {
+            id: 2,
+            type: 'REPLICA',
+        },
+    ],
     externalCluster: '',
     onDDL: 'IGNORE',
     sourceTimeZone: '',
