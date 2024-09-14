@@ -61,6 +61,10 @@ type noopVCursor struct {
 	inTx bool
 }
 
+func (t *noopVCursor) SetExecQueryTimeout(timeout *int) {
+	panic("implement me")
+}
+
 // MySQLVersion implements VCursor.
 func (t *noopVCursor) Commit(ctx context.Context) error {
 	return nil
@@ -303,10 +307,6 @@ func (t *noopVCursor) SetClientFoundRows(context.Context, bool) error {
 }
 
 func (t *noopVCursor) SetQueryTimeout(maxExecutionTime int64) {
-}
-
-func (t *noopVCursor) GetQueryTimeout(queryTimeoutFromComments int) int {
-	return queryTimeoutFromComments
 }
 
 func (t *noopVCursor) SetSkipQueryPlanCache(context.Context, bool) error {

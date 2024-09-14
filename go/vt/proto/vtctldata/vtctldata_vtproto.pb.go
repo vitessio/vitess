@@ -5023,6 +5023,10 @@ func (m *VDiffCreateRequest) CloneVT() *VDiffCreateRequest {
 		copy(tmpContainer, rhs)
 		r.Tables = tmpContainer
 	}
+	if rhs := m.AutoStart; rhs != nil {
+		tmpVal := *rhs
+		r.AutoStart = &tmpVal
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -5094,6 +5098,11 @@ func (m *VDiffResumeRequest) CloneVT() *VDiffResumeRequest {
 	r.Workflow = m.Workflow
 	r.TargetKeyspace = m.TargetKeyspace
 	r.Uuid = m.Uuid
+	if rhs := m.TargetShards; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.TargetShards = tmpContainer
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -5171,6 +5180,11 @@ func (m *VDiffStopRequest) CloneVT() *VDiffStopRequest {
 	r.Workflow = m.Workflow
 	r.TargetKeyspace = m.TargetKeyspace
 	r.Uuid = m.Uuid
+	if rhs := m.TargetShards; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.TargetShards = tmpContainer
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -19166,6 +19180,18 @@ func (m *VDiffCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.AutoStart != nil {
+		i--
+		if *m.AutoStart {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xb0
+	}
 	if m.RowDiffColumnTruncateAt != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.RowDiffColumnTruncateAt))
 		i--
@@ -19522,6 +19548,15 @@ func (m *VDiffResumeRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.TargetShards) > 0 {
+		for iNdEx := len(m.TargetShards) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.TargetShards[iNdEx])
+			copy(dAtA[i:], m.TargetShards[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.TargetShards[iNdEx])))
+			i--
+			dAtA[i] = 0x22
+		}
+	}
 	if len(m.Uuid) > 0 {
 		i -= len(m.Uuid)
 		copy(dAtA[i:], m.Uuid)
@@ -19717,6 +19752,15 @@ func (m *VDiffStopRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.TargetShards) > 0 {
+		for iNdEx := len(m.TargetShards) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.TargetShards[iNdEx])
+			copy(dAtA[i:], m.TargetShards[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.TargetShards[iNdEx])))
+			i--
+			dAtA[i] = 0x22
+		}
 	}
 	if len(m.Uuid) > 0 {
 		i -= len(m.Uuid)
@@ -25992,6 +26036,9 @@ func (m *VDiffCreateRequest) SizeVT() (n int) {
 	if m.RowDiffColumnTruncateAt != 0 {
 		n += 2 + protohelpers.SizeOfVarint(uint64(m.RowDiffColumnTruncateAt))
 	}
+	if m.AutoStart != nil {
+		n += 3
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -26059,6 +26106,12 @@ func (m *VDiffResumeRequest) SizeVT() (n int) {
 	l = len(m.Uuid)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if len(m.TargetShards) > 0 {
+		for _, s := range m.TargetShards {
+			l = len(s)
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -26136,6 +26189,12 @@ func (m *VDiffStopRequest) SizeVT() (n int) {
 	l = len(m.Uuid)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if len(m.TargetShards) > 0 {
+		for _, s := range m.TargetShards {
+			l = len(s)
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -60084,6 +60143,27 @@ func (m *VDiffCreateRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 22:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AutoStart", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			b := bool(v != 0)
+			m.AutoStart = &b
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -60511,6 +60591,38 @@ func (m *VDiffResumeRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Uuid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TargetShards", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TargetShards = append(m.TargetShards, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -61036,6 +61148,38 @@ func (m *VDiffStopRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Uuid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TargetShards", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TargetShards = append(m.TargetShards, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

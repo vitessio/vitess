@@ -30356,6 +30356,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions max_diff_seconds */
         max_diff_seconds?: (number|Long|null);
+
+        /** VDiffCoreOptions auto_start */
+        auto_start?: (boolean|null);
     }
 
     /** Represents a VDiffCoreOptions. */
@@ -30393,6 +30396,12 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions max_diff_seconds. */
         public max_diff_seconds: (number|Long);
+
+        /** VDiffCoreOptions auto_start. */
+        public auto_start?: (boolean|null);
+
+        /** VDiffCoreOptions _auto_start. */
+        public _auto_start?: "auto_start";
 
         /**
          * Creates a new VDiffCoreOptions instance using the specified properties.
@@ -37176,6 +37185,9 @@ export namespace query {
 
         /** ExecuteOptions priority */
         priority?: (string|null);
+
+        /** ExecuteOptions authoritative_timeout */
+        authoritative_timeout?: (number|Long|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -37222,6 +37234,12 @@ export namespace query {
 
         /** ExecuteOptions priority. */
         public priority: string;
+
+        /** ExecuteOptions authoritative_timeout. */
+        public authoritative_timeout?: (number|Long|null);
+
+        /** ExecuteOptions timeout. */
+        public timeout?: "authoritative_timeout";
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
@@ -72363,6 +72381,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest row_diff_column_truncate_at */
         row_diff_column_truncate_at?: (number|Long|null);
+
+        /** VDiffCreateRequest auto_start */
+        auto_start?: (boolean|null);
     }
 
     /** Represents a VDiffCreateRequest. */
@@ -72436,6 +72457,12 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest row_diff_column_truncate_at. */
         public row_diff_column_truncate_at: (number|Long);
+
+        /** VDiffCreateRequest auto_start. */
+        public auto_start?: (boolean|null);
+
+        /** VDiffCreateRequest _auto_start. */
+        public _auto_start?: "auto_start";
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.
@@ -72823,6 +72850,9 @@ export namespace vtctldata {
 
         /** VDiffResumeRequest uuid */
         uuid?: (string|null);
+
+        /** VDiffResumeRequest target_shards */
+        target_shards?: (string[]|null);
     }
 
     /** Represents a VDiffResumeRequest. */
@@ -72842,6 +72872,9 @@ export namespace vtctldata {
 
         /** VDiffResumeRequest uuid. */
         public uuid: string;
+
+        /** VDiffResumeRequest target_shards. */
+        public target_shards: string[];
 
         /**
          * Creates a new VDiffResumeRequest instance using the specified properties.
@@ -73229,6 +73262,9 @@ export namespace vtctldata {
 
         /** VDiffStopRequest uuid */
         uuid?: (string|null);
+
+        /** VDiffStopRequest target_shards */
+        target_shards?: (string[]|null);
     }
 
     /** Represents a VDiffStopRequest. */
@@ -73248,6 +73284,9 @@ export namespace vtctldata {
 
         /** VDiffStopRequest uuid. */
         public uuid: string;
+
+        /** VDiffStopRequest target_shards. */
+        public target_shards: string[];
 
         /**
          * Creates a new VDiffStopRequest instance using the specified properties.

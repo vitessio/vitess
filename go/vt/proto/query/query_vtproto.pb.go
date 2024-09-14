@@ -181,6 +181,11 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 		copy(tmpContainer, rhs)
 		r.TransactionAccessMode = tmpContainer
 	}
+	if m.Timeout != nil {
+		r.Timeout = m.Timeout.(interface {
+			CloneVT() isExecuteOptions_Timeout
+		}).CloneVT()
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -190,6 +195,15 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 
 func (m *ExecuteOptions) CloneMessageVT() proto.Message {
 	return m.CloneVT()
+}
+
+func (m *ExecuteOptions_AuthoritativeTimeout) CloneVT() isExecuteOptions_Timeout {
+	if m == nil {
+		return (*ExecuteOptions_AuthoritativeTimeout)(nil)
+	}
+	r := new(ExecuteOptions_AuthoritativeTimeout)
+	r.AuthoritativeTimeout = m.AuthoritativeTimeout
+	return r
 }
 
 func (m *Field) CloneVT() *Field {
@@ -1868,6 +1882,15 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if vtmsg, ok := m.Timeout.(interface {
+		MarshalToSizedBufferVT([]byte) (int, error)
+	}); ok {
+		size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+	}
 	if len(m.Priority) > 0 {
 		i -= len(m.Priority)
 		copy(dAtA[i:], m.Priority)
@@ -1968,6 +1991,20 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *ExecuteOptions_AuthoritativeTimeout) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *ExecuteOptions_AuthoritativeTimeout) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	i = protohelpers.EncodeVarint(dAtA, i, uint64(m.AuthoritativeTimeout))
+	i--
+	dAtA[i] = 0x1
+	i--
+	dAtA[i] = 0x88
+	return len(dAtA) - i, nil
+}
 func (m *Field) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -6117,10 +6154,22 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if l > 0 {
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if vtmsg, ok := m.Timeout.(interface{ SizeVT() int }); ok {
+		n += vtmsg.SizeVT()
+	}
 	n += len(m.unknownFields)
 	return n
 }
 
+func (m *ExecuteOptions_AuthoritativeTimeout) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 2 + protohelpers.SizeOfVarint(uint64(m.AuthoritativeTimeout))
+	return n
+}
 func (m *Field) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -8827,6 +8876,26 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Priority = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 17:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AuthoritativeTimeout", wireType)
+			}
+			var v int64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Timeout = &ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: v}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
