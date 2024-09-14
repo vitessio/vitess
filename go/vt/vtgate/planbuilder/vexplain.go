@@ -89,7 +89,7 @@ func buildVExplainVtgatePlan(ctx context.Context, explainStatement sqlparser.Sta
 	if err != nil {
 		return nil, err
 	}
-	description := engine.PrimitiveToPlanDescription(innerInstruction.primitive)
+	description := engine.PrimitiveToPlanDescription(innerInstruction.primitive, nil)
 	output, err := json.MarshalIndent(description, "", "\t")
 	if err != nil {
 		return nil, err

@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
@@ -48,33 +47,22 @@ func TestSimpleVexplainTrace(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
-				{Name: "col1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-				{Name: "col2", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-				{Name: "weight_string(col2)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+				{Name: "col1", Type: sqltypes.Int32},
+				{Name: "col2", Type: sqltypes.Int32},
+				{Name: "weight_string(col2)"},
 			},
 			InsertID: 0,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewInt32(1),
-				// i%4 ensures that there are duplicates across shards.
-				// This will allow us to test that cross-shard ordering
-				// still works correctly.
-				sqltypes.NewInt32(int32(i % 4)),
-				sqltypes.NULL,
-			}, {
-				sqltypes.NewInt32(1),
-				// i%4 ensures that there are duplicates across shards.
-				// This will allow us to test that cross-shard ordering
-				// still works correctly.
-				sqltypes.NewInt32(int32(i % 4)),
-				sqltypes.NULL,
-			}},
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewInt32(1), sqltypes.NewInt32(int32(i % 4)), sqltypes.NULL},
+				{sqltypes.NewInt32(2), sqltypes.NewInt32(int32(i % 4)), sqltypes.NULL},
+			},
 		}})
 		conns = append(conns, sbc)
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
 
-	query := "vexplain trace select col1, col2 from music order by col2 desc"
+	query := "vexplain trace select count(*), col2 from music group by col2"
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
@@ -82,7 +70,7 @@ func TestSimpleVexplainTrace(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, col2, weight_string(col2) from music order by music.col2 desc",
+		Sql:           "select count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -90,21 +78,31 @@ func TestSimpleVexplainTrace(t *testing.T) {
 	}
 
 	expectedRowString := `{
-	"OperatorType": "Route",
-	"Variant": "Scatter",
-	"Keyspace": {
-		"Name": "TestExecutor",
-		"Sharded": true
-	},
+	"OperatorType": "Aggregate",
+	"Variant": "Ordered",
 	"NoOfCalls": 1,
-	"Rows": [
-		16
-	],
-	"FieldQuery": "select col1, col2, weight_string(col2) from music where 1 != 1",
-	"OrderBy": "(1|2) DESC",
-	"Query": "select col1, col2, weight_string(col2) from music order by music.col2 desc",
+	"AvgRowSize": 4,
+	"MedianRowSize": 4,
+	"Aggregates": "sum_count_star(0) AS count(*)",
+	"GroupBy": "(1|2)",
 	"ResultColumns": 2,
-	"Table": "music"
+	"Inputs": [
+		{
+			"OperatorType": "Route",
+			"Variant": "Scatter",
+			"Keyspace": {
+				"Name": "TestExecutor",
+				"Sharded": true
+			},
+			"NoOfCalls": 2,
+			"AvgRowSize": 16,
+			"MedianRowSize": 16,
+			"FieldQuery": "select count(*), col2, weight_string(col2) from music where 1 != 1 group by col2, weight_string(col2)",
+			"OrderBy": "(1|2) ASC",
+			"Query": "select count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc",
+			"Table": "music"
+		}
+	]
 }`
 
 	gotRowString := gotResult.Rows[0][0].ToString()

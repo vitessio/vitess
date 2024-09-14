@@ -64,16 +64,9 @@ func (t *Trace) NeedsTransaction() bool {
 	return t.Inner.NeedsTransaction()
 }
 
-func preWalk(desc *PrimitiveDescription, f func(*PrimitiveDescription)) {
-	f(desc)
-	for _, input := range desc.Inputs {
-		preWalk(&input, f)
-	}
-}
-
 func (t *Trace) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	getOpStats := vcursor.StartPrimitiveTrace()
-	_, err := t.Inner.TryExecute(ctx, vcursor, bindVars, wantfields)
+	_, err := vcursor.ExecutePrimitive(ctx, t.Inner, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +77,7 @@ func (t *Trace) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 func (t *Trace) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	getOpsStats := vcursor.StartPrimitiveTrace()
 	noop := func(result *sqltypes.Result) error { return nil }
-	err := t.Inner.TryStreamExecute(ctx, vcursor, bindVars, wantfields, noop)
+	err := vcursor.StreamExecutePrimitive(ctx, t.Inner, bindVars, wantfields, noop)
 	if err != nil {
 		return err
 	}
@@ -98,17 +91,7 @@ func (t *Trace) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 }
 
 func (t *Trace) getExplainTraceOutput(getOpStats func() map[int]RowsReceived) (*sqltypes.Result, error) {
-	description := PrimitiveToPlanDescription(t.Inner)
-	statsMap := getOpStats()
-
-	// let's add the stats to the description
-	preWalk(&description, func(desc *PrimitiveDescription) {
-		stats, found := statsMap[int(desc.ID)]
-		if !found {
-			return
-		}
-		desc.Stats = stats
-	})
+	description := PrimitiveToPlanDescription(t.Inner, getOpStats())
 
 	output, err := json.MarshalIndent(description, "", "\t")
 	if err != nil {

@@ -45,7 +45,6 @@ type PrimitiveDescription struct {
 	TargetTabletType topodatapb.TabletType
 	Other            map[string]any
 
-	ID        PrimitiveID
 	InputName string
 	Inputs    []PrimitiveDescription
 
@@ -97,7 +96,11 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 		if err := marshalAdd(prepend, buf, "NoOfCalls", len(pd.Stats)); err != nil {
 			return nil, err
 		}
-		if err := marshalAdd(prepend, buf, "Rows", pd.Stats); err != nil {
+
+		if err := marshalAdd(prepend, buf, "AvgRowSize", average(pd.Stats)); err != nil {
+			return nil, err
+		}
+		if err := marshalAdd(prepend, buf, "MedianRowSize", median(pd.Stats)); err != nil {
 			return nil, err
 		}
 	}
@@ -115,6 +118,28 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	buf.WriteString("}")
 
 	return buf.Bytes(), nil
+}
+
+func average(nums []int) float64 {
+	total := 0
+	for _, num := range nums {
+		total += num
+	}
+	return float64(total) / float64(len(nums))
+}
+
+func median(nums []int) float64 {
+	sortedNums := make([]int, len(nums))
+	copy(sortedNums, nums)
+	sort.Ints(sortedNums)
+
+	n := len(sortedNums)
+	if n%2 == 0 {
+		mid1 := sortedNums[n/2-1]
+		mid2 := sortedNums[n/2]
+		return float64(mid1+mid2) / 2.0
+	}
+	return float64(sortedNums[n/2])
 }
 
 func (pd PrimitiveDescription) addToGraph(g *graphviz.Graph) (*graphviz.Node, error) {
@@ -157,7 +182,7 @@ func (pd PrimitiveDescription) addToGraph(g *graphviz.Graph) (*graphviz.Node, er
 
 func GraphViz(p Primitive) (*graphviz.Graph, error) {
 	g := graphviz.New()
-	description := PrimitiveToPlanDescription(p)
+	description := PrimitiveToPlanDescription(p, nil)
 	_, err := description.addToGraph(g)
 	if err != nil {
 		return nil, err
@@ -193,15 +218,16 @@ func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj any) error {
 }
 
 // PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree
-func PrimitiveToPlanDescription(in Primitive) PrimitiveDescription {
+// If stats is not nil, it will be used to populate the stats field of the PlanDescription
+func PrimitiveToPlanDescription(in Primitive, stats map[int]RowsReceived) PrimitiveDescription {
 	this := in.description()
-	if id := in.GetID(); id > 0 {
-		this.ID = id
+	if id := in.GetID(); stats != nil && id > 0 {
+		this.Stats = stats[int(id)]
 	}
 
 	inputs, infos := in.Inputs()
 	for idx, input := range inputs {
-		pd := PrimitiveToPlanDescription(input)
+		pd := PrimitiveToPlanDescription(input, stats)
 		if infos != nil {
 			for k, v := range infos[idx] {
 				if k == inputName {
