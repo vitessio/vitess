@@ -46,6 +46,10 @@ func CreateTempScript(t *testing.T, content string) (fileName string) {
 func MysqlClientExecFile(t *testing.T, mysqlParams *mysql.ConnParams, testDataPath, testName string, fileName string) (output string) {
 	t.Helper()
 
+	errorFile, err := os.CreateTemp("", "onlineddl-test-")
+	require.NoError(t, err)
+	defer os.Remove(errorFile.Name())
+
 	bashPath, err := exec.LookPath("bash")
 	require.NoError(t, err)
 	mysqlPath, err := exec.LookPath("mysql")
@@ -55,14 +59,14 @@ func MysqlClientExecFile(t *testing.T, mysqlParams *mysql.ConnParams, testDataPa
 	if !filepath.IsAbs(fileName) {
 		filePath, _ = filepath.Abs(path.Join(testDataPath, testName, fileName))
 	}
-	bashCommand := fmt.Sprintf(`%s -u%s --socket=%s --database=%s -s -s < %s 2> /tmp/error.log`, mysqlPath, mysqlParams.Uname, mysqlParams.UnixSocket, mysqlParams.DbName, filePath)
+	bashCommand := fmt.Sprintf(`%s -u%s --socket=%s --database=%s -s -s < %s 2> %s`, mysqlPath, mysqlParams.Uname, mysqlParams.UnixSocket, mysqlParams.DbName, filePath, errorFile.Name())
 	cmd, err := exec.Command(
 		bashPath,
 		"-c",
 		bashCommand,
 	).Output()
 
-	errorContent, readerr := os.ReadFile("/tmp/error.log")
+	errorContent, readerr := os.ReadFile(errorFile.Name())
 	require.NoError(t, readerr)
 	require.NoError(t, err, "error details: %s", errorContent)
 	return string(cmd)
