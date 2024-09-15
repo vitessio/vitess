@@ -56,7 +56,9 @@ export const MultiSelect = <T,>({
         return itemToString(item);
     };
 
-    const selectedItemsText = `Selected (${selectedItems.length}): ${selectedItems.map((item) => _renderItem(item)).join(', ')}`;
+    const selectedItemsText = `Selected (${selectedItems.length}): ${selectedItems
+        .map((item) => _renderItem(item))
+        .join(', ')}`;
 
     return (
         <div className={cx(style.container, className, { [style.disabled]: disabled })}>
