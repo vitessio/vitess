@@ -62,6 +62,8 @@ func MysqlClientExecFile(t *testing.T, mysqlParams *mysql.ConnParams, testDataPa
 		bashCommand,
 	).Output()
 
-	require.NoError(t, err)
+	errorContent, readerr := os.ReadFile("/tmp/error.log")
+	require.NoError(t, readerr)
+	require.NoError(t, err, "error details: %s", errorContent)
 	return string(cmd)
 }
