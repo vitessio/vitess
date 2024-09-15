@@ -306,7 +306,6 @@ func (mz *materializer) deploySchema() error {
 			if ts.CreateDdl == "" {
 				return fmt.Errorf("target table %v does not exist and there is no create ddl defined", ts.TargetTable)
 			}
-
 			var err error
 			mu.Lock()
 			if len(sourceDDLs) == 0 {

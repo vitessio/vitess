@@ -34,7 +34,7 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-const missingCreateParams = "either --table-settings, for a regular Materialize workflow, or, --reference and --tables must be provided, if materializing reference tables"
+const missingCreateParams = "either --table-settings (for a regular Materialize workflow) or (--reference and --tables, if materializing reference tables) must be specified"
 
 var (
 	createOptions = struct {
@@ -90,11 +90,15 @@ should be copied as-is from the source keyspace. Here's an example value for tab
 			if common.CreateOptions.IsReference && len(common.CreateOptions.Tables) > 0 {
 				isReference = true
 			}
-			if !hasTableSettings && !isReference {
+			switch {
+			case !hasTableSettings && !isReference:
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, missingCreateParams)
-			}
-			if hasTableSettings && isReference {
+			case hasTableSettings && isReference:
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference/--tables")
+			case common.CreateOptions.IsReference && len(common.CreateOptions.Tables) == 0:
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify --reference without --tables")
+			case !common.CreateOptions.IsReference && len(common.CreateOptions.Tables) > 0:
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify --tables without --reference")
 			}
 			return nil
 		},

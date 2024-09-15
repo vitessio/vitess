@@ -487,8 +487,9 @@ type MaterializeSettings struct {
 	TabletSelectionPreference tabletmanagerdata.TabletSelectionPreference `protobuf:"varint,15,opt,name=tablet_selection_preference,json=tabletSelectionPreference,proto3,enum=tabletmanagerdata.TabletSelectionPreference" json:"tablet_selection_preference,omitempty"`
 	AtomicCopy                bool                                        `protobuf:"varint,16,opt,name=atomic_copy,json=atomicCopy,proto3" json:"atomic_copy,omitempty"`
 	WorkflowOptions           *WorkflowOptions                            `protobuf:"bytes,17,opt,name=workflow_options,json=workflowOptions,proto3" json:"workflow_options,omitempty"`
-	IsReference               bool                                        `protobuf:"varint,18,opt,name=is_reference,json=isReference,proto3" json:"is_reference,omitempty"`
-	Tables                    []string                                    `protobuf:"bytes,19,rep,name=tables,proto3" json:"tables,omitempty"`
+	// IsReference and Tables are set if the materialization is for reference tables.
+	IsReference bool     `protobuf:"varint,18,opt,name=is_reference,json=isReference,proto3" json:"is_reference,omitempty"`
+	Tables      []string `protobuf:"bytes,19,rep,name=tables,proto3" json:"tables,omitempty"`
 }
 
 func (x *MaterializeSettings) Reset() {

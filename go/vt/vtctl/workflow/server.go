@@ -1289,7 +1289,7 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 			ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 				TargetTable:      table,
 				SourceExpression: fmt.Sprintf("select * from %s", table),
-				CreateDdl:        "create table %s like " + table,
+				CreateDdl:        createDDLAsCopyDropForeignKeys,
 			})
 		}
 	}

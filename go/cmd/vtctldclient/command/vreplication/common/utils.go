@@ -68,8 +68,10 @@ var (
 		MySQLServerVersion           string
 		TruncateUILen                int
 		TruncateErrLen               int
-		IsReference                  bool
-		Tables                       []string
+
+		// IsReference and Tables are used while materializing reference tables.
+		IsReference bool
+		Tables      []string
 		ConfigOverrides              []string
 	}{}
 )
