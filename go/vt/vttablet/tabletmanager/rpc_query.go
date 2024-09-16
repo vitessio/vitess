@@ -275,31 +275,6 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	return sqltypes.ResultToProto3(result), err
 }
 
-// GetUnresolvedTransactions returns the unresolved distributed transactions list for the Metadata manager.
-func (tm *TabletManager) GetUnresolvedTransactions(ctx context.Context, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error) {
-	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
-		return nil, err
-	}
-
-	tablet := tm.Tablet()
-	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	return tm.QueryServiceControl.UnresolvedTransactions(ctx, target, abandonAgeSeconds)
-}
-
-// ConcludeTransaction concludes the given distributed transaction.
-func (tm *TabletManager) ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error {
-	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
-		return err
-	}
-
-	tablet := tm.Tablet()
-	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	if req.Mm {
-		return tm.QueryServiceControl.ConcludeTransaction(ctx, target, req.Dtid)
-	}
-	return tm.QueryServiceControl.RollbackPrepared(ctx, target, req.Dtid, 0)
-}
-
 // ExecuteQuery submits a new online DDL request
 func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {

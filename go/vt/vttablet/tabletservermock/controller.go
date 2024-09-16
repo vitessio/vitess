@@ -242,6 +242,12 @@ func (tqsc *Controller) UnresolvedTransactions(context.Context, *querypb.Target,
 	return nil, nil
 }
 
+// ReadTransaction is part of the tabletserver.Controller interface
+func (tqsc *Controller) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error) {
+	tqsc.MethodCalled["ReadTransaction"] = true
+	return nil, nil
+}
+
 // ConcludeTransaction is part of the tabletserver.Controller interface
 func (tqsc *Controller) ConcludeTransaction(context.Context, *querypb.Target, string) error {
 	tqsc.MethodCalled["ConcludeTransaction"] = true

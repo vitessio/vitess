@@ -23425,200 +23425,6 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a ConcludeTransactionRequest. */
-    interface IConcludeTransactionRequest {
-
-        /** ConcludeTransactionRequest dtid */
-        dtid?: (string|null);
-
-        /** ConcludeTransactionRequest mm */
-        mm?: (boolean|null);
-    }
-
-    /** Represents a ConcludeTransactionRequest. */
-    class ConcludeTransactionRequest implements IConcludeTransactionRequest {
-
-        /**
-         * Constructs a new ConcludeTransactionRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: tabletmanagerdata.IConcludeTransactionRequest);
-
-        /** ConcludeTransactionRequest dtid. */
-        public dtid: string;
-
-        /** ConcludeTransactionRequest mm. */
-        public mm: boolean;
-
-        /**
-         * Creates a new ConcludeTransactionRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ConcludeTransactionRequest instance
-         */
-        public static create(properties?: tabletmanagerdata.IConcludeTransactionRequest): tabletmanagerdata.ConcludeTransactionRequest;
-
-        /**
-         * Encodes the specified ConcludeTransactionRequest message. Does not implicitly {@link tabletmanagerdata.ConcludeTransactionRequest.verify|verify} messages.
-         * @param message ConcludeTransactionRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: tabletmanagerdata.IConcludeTransactionRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ConcludeTransactionRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ConcludeTransactionRequest.verify|verify} messages.
-         * @param message ConcludeTransactionRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: tabletmanagerdata.IConcludeTransactionRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ConcludeTransactionRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ConcludeTransactionRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ConcludeTransactionRequest;
-
-        /**
-         * Decodes a ConcludeTransactionRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ConcludeTransactionRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ConcludeTransactionRequest;
-
-        /**
-         * Verifies a ConcludeTransactionRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ConcludeTransactionRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ConcludeTransactionRequest
-         */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ConcludeTransactionRequest;
-
-        /**
-         * Creates a plain object from a ConcludeTransactionRequest message. Also converts values to other types if specified.
-         * @param message ConcludeTransactionRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: tabletmanagerdata.ConcludeTransactionRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ConcludeTransactionRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ConcludeTransactionRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ConcludeTransactionResponse. */
-    interface IConcludeTransactionResponse {
-    }
-
-    /** Represents a ConcludeTransactionResponse. */
-    class ConcludeTransactionResponse implements IConcludeTransactionResponse {
-
-        /**
-         * Constructs a new ConcludeTransactionResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: tabletmanagerdata.IConcludeTransactionResponse);
-
-        /**
-         * Creates a new ConcludeTransactionResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ConcludeTransactionResponse instance
-         */
-        public static create(properties?: tabletmanagerdata.IConcludeTransactionResponse): tabletmanagerdata.ConcludeTransactionResponse;
-
-        /**
-         * Encodes the specified ConcludeTransactionResponse message. Does not implicitly {@link tabletmanagerdata.ConcludeTransactionResponse.verify|verify} messages.
-         * @param message ConcludeTransactionResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: tabletmanagerdata.IConcludeTransactionResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ConcludeTransactionResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ConcludeTransactionResponse.verify|verify} messages.
-         * @param message ConcludeTransactionResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: tabletmanagerdata.IConcludeTransactionResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ConcludeTransactionResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ConcludeTransactionResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ConcludeTransactionResponse;
-
-        /**
-         * Decodes a ConcludeTransactionResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ConcludeTransactionResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ConcludeTransactionResponse;
-
-        /**
-         * Verifies a ConcludeTransactionResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ConcludeTransactionResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ConcludeTransactionResponse
-         */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ConcludeTransactionResponse;
-
-        /**
-         * Creates a plain object from a ConcludeTransactionResponse message. Also converts values to other types if specified.
-         * @param message ConcludeTransactionResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: tabletmanagerdata.ConcludeTransactionResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ConcludeTransactionResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ConcludeTransactionResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
     /** Properties of a ReadTransactionRequest. */
     interface IReadTransactionRequest {
 
@@ -23807,6 +23613,200 @@ export namespace tabletmanagerdata {
 
         /**
          * Gets the default type url for ReadTransactionResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ConcludeTransactionRequest. */
+    interface IConcludeTransactionRequest {
+
+        /** ConcludeTransactionRequest dtid */
+        dtid?: (string|null);
+
+        /** ConcludeTransactionRequest mm */
+        mm?: (boolean|null);
+    }
+
+    /** Represents a ConcludeTransactionRequest. */
+    class ConcludeTransactionRequest implements IConcludeTransactionRequest {
+
+        /**
+         * Constructs a new ConcludeTransactionRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IConcludeTransactionRequest);
+
+        /** ConcludeTransactionRequest dtid. */
+        public dtid: string;
+
+        /** ConcludeTransactionRequest mm. */
+        public mm: boolean;
+
+        /**
+         * Creates a new ConcludeTransactionRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ConcludeTransactionRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IConcludeTransactionRequest): tabletmanagerdata.ConcludeTransactionRequest;
+
+        /**
+         * Encodes the specified ConcludeTransactionRequest message. Does not implicitly {@link tabletmanagerdata.ConcludeTransactionRequest.verify|verify} messages.
+         * @param message ConcludeTransactionRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IConcludeTransactionRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ConcludeTransactionRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ConcludeTransactionRequest.verify|verify} messages.
+         * @param message ConcludeTransactionRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IConcludeTransactionRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ConcludeTransactionRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ConcludeTransactionRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ConcludeTransactionRequest;
+
+        /**
+         * Decodes a ConcludeTransactionRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ConcludeTransactionRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ConcludeTransactionRequest;
+
+        /**
+         * Verifies a ConcludeTransactionRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ConcludeTransactionRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ConcludeTransactionRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ConcludeTransactionRequest;
+
+        /**
+         * Creates a plain object from a ConcludeTransactionRequest message. Also converts values to other types if specified.
+         * @param message ConcludeTransactionRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ConcludeTransactionRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ConcludeTransactionRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ConcludeTransactionRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ConcludeTransactionResponse. */
+    interface IConcludeTransactionResponse {
+    }
+
+    /** Represents a ConcludeTransactionResponse. */
+    class ConcludeTransactionResponse implements IConcludeTransactionResponse {
+
+        /**
+         * Constructs a new ConcludeTransactionResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IConcludeTransactionResponse);
+
+        /**
+         * Creates a new ConcludeTransactionResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ConcludeTransactionResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IConcludeTransactionResponse): tabletmanagerdata.ConcludeTransactionResponse;
+
+        /**
+         * Encodes the specified ConcludeTransactionResponse message. Does not implicitly {@link tabletmanagerdata.ConcludeTransactionResponse.verify|verify} messages.
+         * @param message ConcludeTransactionResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IConcludeTransactionResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ConcludeTransactionResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ConcludeTransactionResponse.verify|verify} messages.
+         * @param message ConcludeTransactionResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IConcludeTransactionResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ConcludeTransactionResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ConcludeTransactionResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ConcludeTransactionResponse;
+
+        /**
+         * Decodes a ConcludeTransactionResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ConcludeTransactionResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ConcludeTransactionResponse;
+
+        /**
+         * Verifies a ConcludeTransactionResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ConcludeTransactionResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ConcludeTransactionResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ConcludeTransactionResponse;
+
+        /**
+         * Creates a plain object from a ConcludeTransactionResponse message. Also converts values to other types if specified.
+         * @param message ConcludeTransactionResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ConcludeTransactionResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ConcludeTransactionResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ConcludeTransactionResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -60522,8 +60522,8 @@ export namespace vtctldata {
         /** GetUnresolvedTransactionsRequest keyspace */
         keyspace?: (string|null);
 
-        /** GetUnresolvedTransactionsRequest min_age */
-        min_age?: (number|Long|null);
+        /** GetUnresolvedTransactionsRequest abandon_age */
+        abandon_age?: (number|Long|null);
     }
 
     /** Represents a GetUnresolvedTransactionsRequest. */
@@ -60538,8 +60538,8 @@ export namespace vtctldata {
         /** GetUnresolvedTransactionsRequest keyspace. */
         public keyspace: string;
 
-        /** GetUnresolvedTransactionsRequest min_age. */
-        public min_age: (number|Long);
+        /** GetUnresolvedTransactionsRequest abandon_age. */
+        public abandon_age: (number|Long);
 
         /**
          * Creates a new GetUnresolvedTransactionsRequest instance using the specified properties.

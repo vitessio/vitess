@@ -103,6 +103,9 @@ type Controller interface {
 	// UnresolvedTransactions returns all unresolved transactions list
 	UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error)
 
+	// ReadTransaction returns all unresolved transactions list
+	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error)
+
 	// ConcludeTransaction deletes the distributed transaction metadata
 	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error
 

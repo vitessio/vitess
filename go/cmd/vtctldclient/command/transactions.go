@@ -82,8 +82,8 @@ func commandGetUnresolvedTransactions(cmd *cobra.Command, args []string) error {
 
 	resp, err := client.GetUnresolvedTransactions(commandCtx,
 		&vtctldatapb.GetUnresolvedTransactionsRequest{
-			Keyspace: unresolvedTransactionsOptions.Keyspace,
-			MinAge:   unresolvedTransactionsOptions.AbandonAge,
+			Keyspace:   unresolvedTransactionsOptions.Keyspace,
+			AbandonAge: unresolvedTransactionsOptions.AbandonAge,
 		})
 	if err != nil {
 		return err

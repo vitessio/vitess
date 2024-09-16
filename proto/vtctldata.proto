@@ -1103,7 +1103,7 @@ message TopologyCell {
 
 message GetUnresolvedTransactionsRequest {
   string keyspace = 1;
-  int64 min_age = 2; // in seconds
+  int64 abandon_age = 2; // in seconds
 }
 
 message GetUnresolvedTransactionsResponse {

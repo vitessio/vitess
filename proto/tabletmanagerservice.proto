@@ -86,11 +86,15 @@ service TabletManager {
 
   rpc ExecuteFetchAsApp(tabletmanagerdata.ExecuteFetchAsAppRequest) returns (tabletmanagerdata.ExecuteFetchAsAppResponse) {};
 
+  //
+  // Distributed Transaction related methods
+  //
+
   rpc GetUnresolvedTransactions(tabletmanagerdata.GetUnresolvedTransactionsRequest) returns (tabletmanagerdata.GetUnresolvedTransactionsResponse) {};
 
-  rpc ConcludeTransaction(tabletmanagerdata.ConcludeTransactionRequest) returns (tabletmanagerdata.ConcludeTransactionResponse) {};
-
   rpc ReadTransaction(tabletmanagerdata.ReadTransactionRequest) returns (tabletmanagerdata.ReadTransactionResponse) {};
+
+  rpc ConcludeTransaction(tabletmanagerdata.ConcludeTransactionRequest) returns (tabletmanagerdata.ConcludeTransactionResponse) {};
 
   //
   // Replication related methods

@@ -2782,6 +2782,100 @@ func (x *GetUnresolvedTransactionsResponse) GetTransactions() []*query.Transacti
 	return nil
 }
 
+type ReadTransactionRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Dtid string `protobuf:"bytes,1,opt,name=dtid,proto3" json:"dtid,omitempty"`
+}
+
+func (x *ReadTransactionRequest) Reset() {
+	*x = ReadTransactionRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[50]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ReadTransactionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadTransactionRequest) ProtoMessage() {}
+
+func (x *ReadTransactionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[50]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadTransactionRequest.ProtoReflect.Descriptor instead.
+func (*ReadTransactionRequest) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *ReadTransactionRequest) GetDtid() string {
+	if x != nil {
+		return x.Dtid
+	}
+	return ""
+}
+
+type ReadTransactionResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Transaction *query.TransactionMetadata `protobuf:"bytes,1,opt,name=transaction,proto3" json:"transaction,omitempty"`
+}
+
+func (x *ReadTransactionResponse) Reset() {
+	*x = ReadTransactionResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[51]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ReadTransactionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadTransactionResponse) ProtoMessage() {}
+
+func (x *ReadTransactionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[51]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadTransactionResponse.ProtoReflect.Descriptor instead.
+func (*ReadTransactionResponse) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *ReadTransactionResponse) GetTransaction() *query.TransactionMetadata {
+	if x != nil {
+		return x.Transaction
+	}
+	return nil
+}
+
 type ConcludeTransactionRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -2794,7 +2888,7 @@ type ConcludeTransactionRequest struct {
 func (x *ConcludeTransactionRequest) Reset() {
 	*x = ConcludeTransactionRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[50]
+		mi := &file_tabletmanagerdata_proto_msgTypes[52]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2807,7 +2901,7 @@ func (x *ConcludeTransactionRequest) String() string {
 func (*ConcludeTransactionRequest) ProtoMessage() {}
 
 func (x *ConcludeTransactionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[50]
+	mi := &file_tabletmanagerdata_proto_msgTypes[52]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2820,7 +2914,7 @@ func (x *ConcludeTransactionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConcludeTransactionRequest.ProtoReflect.Descriptor instead.
 func (*ConcludeTransactionRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{50}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *ConcludeTransactionRequest) GetDtid() string {
@@ -2846,7 +2940,7 @@ type ConcludeTransactionResponse struct {
 func (x *ConcludeTransactionResponse) Reset() {
 	*x = ConcludeTransactionResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[51]
+		mi := &file_tabletmanagerdata_proto_msgTypes[53]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2859,7 +2953,7 @@ func (x *ConcludeTransactionResponse) String() string {
 func (*ConcludeTransactionResponse) ProtoMessage() {}
 
 func (x *ConcludeTransactionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[51]
+	mi := &file_tabletmanagerdata_proto_msgTypes[53]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2872,101 +2966,7 @@ func (x *ConcludeTransactionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConcludeTransactionResponse.ProtoReflect.Descriptor instead.
 func (*ConcludeTransactionResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{51}
-}
-
-type ReadTransactionRequest struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Dtid string `protobuf:"bytes,1,opt,name=dtid,proto3" json:"dtid,omitempty"`
-}
-
-func (x *ReadTransactionRequest) Reset() {
-	*x = ReadTransactionRequest{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[52]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ReadTransactionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ReadTransactionRequest) ProtoMessage() {}
-
-func (x *ReadTransactionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[52]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ReadTransactionRequest.ProtoReflect.Descriptor instead.
-func (*ReadTransactionRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{52}
-}
-
-func (x *ReadTransactionRequest) GetDtid() string {
-	if x != nil {
-		return x.Dtid
-	}
-	return ""
-}
-
-type ReadTransactionResponse struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Transaction *query.TransactionMetadata `protobuf:"bytes,1,opt,name=transaction,proto3" json:"transaction,omitempty"`
-}
-
-func (x *ReadTransactionResponse) Reset() {
-	*x = ReadTransactionResponse{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[53]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ReadTransactionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ReadTransactionResponse) ProtoMessage() {}
-
-func (x *ReadTransactionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[53]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ReadTransactionResponse.ProtoReflect.Descriptor instead.
-func (*ReadTransactionResponse) Descriptor() ([]byte, []int) {
 	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{53}
-}
-
-func (x *ReadTransactionResponse) GetTransaction() *query.TransactionMetadata {
-	if x != nil {
-		return x.Transaction
-	}
-	return nil
 }
 
 type ReplicationStatusRequest struct {
@@ -8095,21 +8095,21 @@ var file_tabletmanagerdata_proto_rawDesc = []byte{
 	0x6f, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x71, 0x75, 0x65, 0x72,
 	0x79, 0x2e, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4d, 0x65, 0x74,
 	0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x0c, 0x74, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69,
-	0x6f, 0x6e, 0x73, 0x22, 0x40, 0x0a, 0x1a, 0x43, 0x6f, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54,
-	0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x74, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x04, 0x64, 0x74, 0x69, 0x64, 0x12, 0x0e, 0x0a, 0x02, 0x6d, 0x6d, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x08, 0x52, 0x02, 0x6d, 0x6d, 0x22, 0x1d, 0x0a, 0x1b, 0x43, 0x6f, 0x6e, 0x63, 0x6c, 0x75, 0x64,
-	0x65, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x2c, 0x0a, 0x16, 0x52, 0x65, 0x61, 0x64, 0x54, 0x72, 0x61, 0x6e,
-	0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12,
-	0x0a, 0x04, 0x64, 0x74, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x64, 0x74,
-	0x69, 0x64, 0x22, 0x57, 0x0a, 0x17, 0x52, 0x65, 0x61, 0x64, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61,
-	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3c, 0x0a,
-	0x0b, 0x74, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x54, 0x72, 0x61, 0x6e, 0x73,
-	0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x0b,
-	0x74, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x1a, 0x0a, 0x18, 0x52,
+	0x6f, 0x6e, 0x73, 0x22, 0x2c, 0x0a, 0x16, 0x52, 0x65, 0x61, 0x64, 0x54, 0x72, 0x61, 0x6e, 0x73,
+	0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a,
+	0x04, 0x64, 0x74, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x64, 0x74, 0x69,
+	0x64, 0x22, 0x57, 0x0a, 0x17, 0x52, 0x65, 0x61, 0x64, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63,
+	0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3c, 0x0a, 0x0b,
+	0x74, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x1a, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61,
+	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x0b, 0x74,
+	0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x40, 0x0a, 0x1a, 0x43, 0x6f,
+	0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f,
+	0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x74, 0x69, 0x64,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x64, 0x74, 0x69, 0x64, 0x12, 0x0e, 0x0a, 0x02,
+	0x6d, 0x6d, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6d, 0x6d, 0x22, 0x1d, 0x0a, 0x1b,
+	0x43, 0x6f, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74,
+	0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x1a, 0x0a, 0x18, 0x52,
 	0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
 	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x4c, 0x0a, 0x19, 0x52, 0x65, 0x70, 0x6c, 0x69,
 	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70,
@@ -8921,10 +8921,10 @@ var file_tabletmanagerdata_proto_goTypes = []any{
 	(*ExecuteFetchAsAppResponse)(nil),               // 49: tabletmanagerdata.ExecuteFetchAsAppResponse
 	(*GetUnresolvedTransactionsRequest)(nil),        // 50: tabletmanagerdata.GetUnresolvedTransactionsRequest
 	(*GetUnresolvedTransactionsResponse)(nil),       // 51: tabletmanagerdata.GetUnresolvedTransactionsResponse
-	(*ConcludeTransactionRequest)(nil),              // 52: tabletmanagerdata.ConcludeTransactionRequest
-	(*ConcludeTransactionResponse)(nil),             // 53: tabletmanagerdata.ConcludeTransactionResponse
-	(*ReadTransactionRequest)(nil),                  // 54: tabletmanagerdata.ReadTransactionRequest
-	(*ReadTransactionResponse)(nil),                 // 55: tabletmanagerdata.ReadTransactionResponse
+	(*ReadTransactionRequest)(nil),                  // 52: tabletmanagerdata.ReadTransactionRequest
+	(*ReadTransactionResponse)(nil),                 // 53: tabletmanagerdata.ReadTransactionResponse
+	(*ConcludeTransactionRequest)(nil),              // 54: tabletmanagerdata.ConcludeTransactionRequest
+	(*ConcludeTransactionResponse)(nil),             // 55: tabletmanagerdata.ConcludeTransactionResponse
 	(*ReplicationStatusRequest)(nil),                // 56: tabletmanagerdata.ReplicationStatusRequest
 	(*ReplicationStatusResponse)(nil),               // 57: tabletmanagerdata.ReplicationStatusResponse
 	(*PrimaryStatusRequest)(nil),                    // 58: tabletmanagerdata.PrimaryStatusRequest
@@ -9745,30 +9745,6 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[50].Exporter = func(v any, i int) any {
-			switch v := v.(*ConcludeTransactionRequest); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_tabletmanagerdata_proto_msgTypes[51].Exporter = func(v any, i int) any {
-			switch v := v.(*ConcludeTransactionResponse); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_tabletmanagerdata_proto_msgTypes[52].Exporter = func(v any, i int) any {
 			switch v := v.(*ReadTransactionRequest); i {
 			case 0:
 				return &v.state
@@ -9780,8 +9756,32 @@ func file_tabletmanagerdata_proto_init() {
 				return nil
 			}
 		}
-		file_tabletmanagerdata_proto_msgTypes[53].Exporter = func(v any, i int) any {
+		file_tabletmanagerdata_proto_msgTypes[51].Exporter = func(v any, i int) any {
 			switch v := v.(*ReadTransactionResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[52].Exporter = func(v any, i int) any {
+			switch v := v.(*ConcludeTransactionRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[53].Exporter = func(v any, i int) any {
+			switch v := v.(*ConcludeTransactionResponse); i {
 			case 0:
 				return &v.state
 			case 1:
