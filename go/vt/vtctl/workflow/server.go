@@ -3399,7 +3399,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		// Does the source keyspace have tablets that are able to manage
 		// the reverse workflow?
 		if err := s.validatePrimaryTabletsHaveRequiredVReplicationPermissions(ctx, ts.SourceKeyspaceName(), ts.SourceShards()); err != nil {
-			return handleError(fmt.Sprintf("primary tablets are not able to manage reverse vreplication stream in the %s keyspace",
+			return handleError(fmt.Sprintf("primary tablets are not able to fully manage the reverse vreplication workflow in the %s keyspace",
 				ts.SourceKeyspaceName()), err)
 		}
 		// Does the target keyspace have tablets available to stream from
