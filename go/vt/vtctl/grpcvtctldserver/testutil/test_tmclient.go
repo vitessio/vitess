@@ -671,6 +671,14 @@ func (fake *TabletManagerClient) ConcludeTransaction(ctx context.Context, tablet
 	return nil
 }
 
+// ReadTransaction is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	if fake.CallError {
+		return nil, fmt.Errorf("%w: blocked call for ReadTransaction on fake TabletManagerClient", assert.AnError)
+	}
+	return nil, nil
+}
+
 // FullStatus is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	if fake.FullStatusResult != nil {

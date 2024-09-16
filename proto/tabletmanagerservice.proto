@@ -90,6 +90,8 @@ service TabletManager {
 
   rpc ConcludeTransaction(tabletmanagerdata.ConcludeTransactionRequest) returns (tabletmanagerdata.ConcludeTransactionResponse) {};
 
+  rpc ReadTransaction(tabletmanagerdata.ReadTransactionRequest) returns (tabletmanagerdata.ReadTransactionResponse) {};
+
   //
   // Replication related methods
   //
