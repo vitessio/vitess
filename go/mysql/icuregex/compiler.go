@@ -240,7 +240,7 @@ func (c *compiler) nextChar(ch *reChar) {
 				//
 				ch.char = 0
 				c.nextCharLL() // Consume the initial 0.
-				for index := 0; index < 3; index++ {
+				for index := range 3 {
 					ch2 := c.peekCharLL()
 					if ch2 < chDigit0 || ch2 > chDigit7 {
 						if index == 0 {
@@ -1740,7 +1740,7 @@ func (c *compiler) stripNOPs() {
 	// Make a first pass over the code, computing the amount that things
 	//   will be offset at each location in the original code.
 	var loc, d int
-	for loc = 0; loc < end; loc++ {
+	for loc = range end {
 		deltas = append(deltas, d)
 		op := c.out.compiledPat[loc]
 		if op.typ() == urxNop {
@@ -1753,7 +1753,7 @@ func (c *compiler) stripNOPs() {
 	//  are being moved.  The array of offsets from the first step is used
 	//  to compute the new operand values.
 	var src, dst int
-	for src = 0; src < end; src++ {
+	for src = range end {
 		op := c.out.compiledPat[src]
 		opType := op.typ()
 

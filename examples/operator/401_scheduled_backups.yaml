@@ -42,7 +42,7 @@ spec:
         jobTimeoutMinute: 5
         strategies:
           - name: BackupShard
-            keyspace: "customer"
+            keyspace: "commerce"
             shard: "-"
   images:
     vtctld: vitess/lite:latest

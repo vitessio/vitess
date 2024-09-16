@@ -203,7 +203,7 @@ func parseInt(str string) (string, uint8) {
 	start := 0
 	end := 0
 whitespace:
-	for i := 0; i < len(str); i++ {
+	for i := range len(str) {
 		switch str[i] {
 		case ' ', '\f', '\n', '\r', '\t', '\v':
 			start++
@@ -214,7 +214,7 @@ whitespace:
 	}
 	str = str[start:]
 
-	for i := 0; i < len(str); i++ {
+	for i := range len(str) {
 		if str[i] < '0' || str[i] > '9' {
 			end = i
 			break

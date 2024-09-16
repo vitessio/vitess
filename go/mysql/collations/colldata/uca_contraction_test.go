@@ -129,7 +129,7 @@ func benchmarkFind(b *testing.B, input []byte, contract uca.Contractor) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		in := input
 		for len(in) > 0 {
 			cp, width := utf8.DecodeRune(in)
@@ -144,7 +144,7 @@ func benchmarkFindJA(b *testing.B, input []byte, contract uca.Contractor) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		prev := rune(0)
 		in := input
 		for len(in) > 0 {
@@ -166,7 +166,7 @@ func newStrgen() *strgen {
 }
 
 func (s *strgen) withASCII() *strgen {
-	for r := rune(0); r < utf8.RuneSelf; r++ {
+	for r := range rune(utf8.RuneSelf) {
 		s.repertoire[r] = struct{}{}
 	}
 	return s

@@ -33,11 +33,9 @@ import (
 	"github.com/patrickmn/go-cache"
 
 	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/vtenv"
-
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -55,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtexplain"
 
@@ -1721,11 +1720,8 @@ func (api *API) StartWorkflow(ctx context.Context, req *vtadminpb.StartWorkflowR
 	return c.Vtctld.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: req.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-			Workflow:    req.Workflow,
-			Cells:       textutil.SimulatedNullStringSlice,
-			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
-			State:       binlogdatapb.VReplicationWorkflowState_Running,
+			Workflow: req.Workflow,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
 		},
 	})
 }
@@ -1751,11 +1747,8 @@ func (api *API) StopWorkflow(ctx context.Context, req *vtadminpb.StopWorkflowReq
 	return c.Vtctld.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: req.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-			Workflow:    req.Workflow,
-			Cells:       textutil.SimulatedNullStringSlice,
-			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
-			State:       binlogdatapb.VReplicationWorkflowState_Stopped,
+			Workflow: req.Workflow,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
 		},
 	})
 }

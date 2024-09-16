@@ -30701,13 +30701,22 @@ export namespace tabletmanagerdata {
         public tablet_types: topodata.TabletType[];
 
         /** UpdateVReplicationWorkflowRequest tablet_selection_preference. */
-        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+        public tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
 
         /** UpdateVReplicationWorkflowRequest on_ddl. */
-        public on_ddl: binlogdata.OnDDLAction;
+        public on_ddl?: (binlogdata.OnDDLAction|null);
 
         /** UpdateVReplicationWorkflowRequest state. */
-        public state: binlogdata.VReplicationWorkflowState;
+        public state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest _tablet_selection_preference. */
+        public _tablet_selection_preference?: "tablet_selection_preference";
+
+        /** UpdateVReplicationWorkflowRequest _on_ddl. */
+        public _on_ddl?: "on_ddl";
+
+        /** UpdateVReplicationWorkflowRequest _state. */
+        public _state?: "state";
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -30925,13 +30934,22 @@ export namespace tabletmanagerdata {
         public exclude_workflows: string[];
 
         /** UpdateVReplicationWorkflowsRequest state. */
-        public state: binlogdata.VReplicationWorkflowState;
+        public state?: (binlogdata.VReplicationWorkflowState|null);
 
         /** UpdateVReplicationWorkflowsRequest message. */
-        public message: string;
+        public message?: (string|null);
 
         /** UpdateVReplicationWorkflowsRequest stop_position. */
-        public stop_position: string;
+        public stop_position?: (string|null);
+
+        /** UpdateVReplicationWorkflowsRequest _state. */
+        public _state?: "state";
+
+        /** UpdateVReplicationWorkflowsRequest _message. */
+        public _message?: "message";
+
+        /** UpdateVReplicationWorkflowsRequest _stop_position. */
+        public _stop_position?: "stop_position";
 
         /**
          * Creates a new UpdateVReplicationWorkflowsRequest instance using the specified properties.
