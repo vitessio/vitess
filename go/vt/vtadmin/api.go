@@ -414,6 +414,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/externally_promoted", httpAPI.Adapt(vtadminhttp.TabletExternallyPromoted)).Name("API.TabletExternallyPromoted").Methods("POST")
+	router.HandleFunc("/transactions/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetUnresolvedTransactions)).Name("API.GetUnresolvedTransactions").Methods("GET")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -1480,6 +1481,27 @@ func (api *API) GetTopologyPath(ctx context.Context, req *vtadminpb.GetTopologyP
 	}
 
 	return c.Vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{Path: req.Path})
+}
+
+// GetUnresolvedTransactions is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetUnresolvedTransactions(ctx context.Context, req *vtadminpb.GetUnresolvedTransactionsRequest) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetUnresolvedTransactions")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetUnresolvedTransactions(ctx, &vtctldatapb.GetUnresolvedTransactionsRequest{
+		Keyspace: req.Keyspace,
+	})
 }
 
 // GetVSchema is part of the vtadminpb.VTAdminServer interface.

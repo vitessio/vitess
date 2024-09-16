@@ -444,6 +444,20 @@ export namespace vtadmin {
         public getTopologyPath(request: vtadmin.IGetTopologyPathRequest): Promise<vtctldata.GetTopologyPathResponse>;
 
         /**
+         * Calls GetUnresolvedTransactions.
+         * @param request GetUnresolvedTransactionsRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetUnresolvedTransactionsResponse
+         */
+        public getUnresolvedTransactions(request: vtadmin.IGetUnresolvedTransactionsRequest, callback: vtadmin.VTAdmin.GetUnresolvedTransactionsCallback): void;
+
+        /**
+         * Calls GetUnresolvedTransactions.
+         * @param request GetUnresolvedTransactionsRequest message or plain object
+         * @returns Promise
+         */
+        public getUnresolvedTransactions(request: vtadmin.IGetUnresolvedTransactionsRequest): Promise<vtctldata.GetUnresolvedTransactionsResponse>;
+
+        /**
          * Calls GetVSchema.
          * @param request GetVSchemaRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and VSchema
@@ -1089,6 +1103,13 @@ export namespace vtadmin {
          * @param [response] GetTopologyPathResponse
          */
         type GetTopologyPathCallback = (error: (Error|null), response?: vtctldata.GetTopologyPathResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getUnresolvedTransactions}.
+         * @param error Error, if any
+         * @param [response] GetUnresolvedTransactionsResponse
+         */
+        type GetUnresolvedTransactionsCallback = (error: (Error|null), response?: vtctldata.GetUnresolvedTransactionsResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getVSchema}.
@@ -8067,6 +8088,109 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for GetTopologyPathRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetUnresolvedTransactionsRequest. */
+    interface IGetUnresolvedTransactionsRequest {
+
+        /** GetUnresolvedTransactionsRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetUnresolvedTransactionsRequest keyspace */
+        keyspace?: (string|null);
+    }
+
+    /** Represents a GetUnresolvedTransactionsRequest. */
+    class GetUnresolvedTransactionsRequest implements IGetUnresolvedTransactionsRequest {
+
+        /**
+         * Constructs a new GetUnresolvedTransactionsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetUnresolvedTransactionsRequest);
+
+        /** GetUnresolvedTransactionsRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetUnresolvedTransactionsRequest keyspace. */
+        public keyspace: string;
+
+        /**
+         * Creates a new GetUnresolvedTransactionsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetUnresolvedTransactionsRequest instance
+         */
+        public static create(properties?: vtadmin.IGetUnresolvedTransactionsRequest): vtadmin.GetUnresolvedTransactionsRequest;
+
+        /**
+         * Encodes the specified GetUnresolvedTransactionsRequest message. Does not implicitly {@link vtadmin.GetUnresolvedTransactionsRequest.verify|verify} messages.
+         * @param message GetUnresolvedTransactionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetUnresolvedTransactionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetUnresolvedTransactionsRequest message, length delimited. Does not implicitly {@link vtadmin.GetUnresolvedTransactionsRequest.verify|verify} messages.
+         * @param message GetUnresolvedTransactionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetUnresolvedTransactionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetUnresolvedTransactionsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetUnresolvedTransactionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetUnresolvedTransactionsRequest;
+
+        /**
+         * Decodes a GetUnresolvedTransactionsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetUnresolvedTransactionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetUnresolvedTransactionsRequest;
+
+        /**
+         * Verifies a GetUnresolvedTransactionsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetUnresolvedTransactionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetUnresolvedTransactionsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetUnresolvedTransactionsRequest;
+
+        /**
+         * Creates a plain object from a GetUnresolvedTransactionsRequest message. Also converts values to other types if specified.
+         * @param message GetUnresolvedTransactionsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetUnresolvedTransactionsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetUnresolvedTransactionsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetUnresolvedTransactionsRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
