@@ -719,7 +719,7 @@ func (r *Route) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 // in Inputs() and thus not a part of the operator tree
 func (r *Route) TablesUsed(in []string) []string {
 	for _, mw := range r.MergedWith {
-		in = append(in, mw.TablesUsed(in)...)
+		in = append(in, TablesUsed(mw)...)
 	}
 	return in
 }
