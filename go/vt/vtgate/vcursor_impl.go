@@ -535,7 +535,11 @@ func (vc *vcursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Re
 	if vc.primitiveStats != nil {
 		key := int(primitive.GetID())
 		rows := vc.primitiveStats[key]
-		rows = append(rows, len(res.Rows))
+		if res == nil {
+			rows = append(rows, 0)
+		} else {
+			rows = append(rows, len(res.Rows))
+		}
 		vc.primitiveStats[key] = rows
 	}
 }
