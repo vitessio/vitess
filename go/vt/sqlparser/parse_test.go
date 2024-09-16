@@ -1693,10 +1693,16 @@ var (
 		}, {
 			input:  "alter table a add foo int",
 			output: "alter table a add column (\n\tfoo int\n)",
-		}, {
+		},
+		{
 			input:  "alter table a add spatial key foo (column1)",
 			output: "alter table a add spatial index foo (column1)",
-		}, {
+		},
+		{
+			input:  "alter table a add vector key foo (column1)",
+			output: "alter table a add vector index foo (column1)",
+		},
+		{
 			input:  "alter table a add unique key foo (column1)",
 			output: "alter table a add unique index foo (column1)",
 		}, {
@@ -1794,13 +1800,20 @@ var (
 		{
 			input:  "alter table a add column id int",
 			output: "alter table a add column (\n\tid int\n)",
-		}, {
+		},
+		{
 			input: "alter table a add index idx (id)",
-		}, {
+		},
+		{
 			input: "alter table a add fulltext index idx (id)",
-		}, {
+		},
+		{
 			input: "alter table a add spatial index idx (id)",
-		}, {
+		},
+		{
+			input: "alter table a add vector index idx (id)",
+		},
+		{
 			input:  "alter table a add foreign key (x) references y(z)",
 			output: "alter table a add foreign key (x) references y (z)",
 		}, {
@@ -1939,19 +1952,28 @@ var (
 		}, {
 			input:  "CREATE INDEX `c` on `dolt_test`.`a`(`b` ASC) VISIBLE",
 			output: "alter table dolt_test.a add index c (b) VISIBLE",
-		}, {
+		},
+		{
 			input:  "create unique index a on b (id)",
 			output: "alter table b add unique index a (id)",
-		}, {
+		},
+		{
 			input:  "create unique index a using btree on b (id)",
 			output: "alter table b add unique index a using btree (id)",
-		}, {
+		},
+		{
 			input:  "create fulltext index a using btree on b (id)",
 			output: "alter table b add fulltext index a using btree (id)",
-		}, {
+		},
+		{
 			input:  "create spatial index a using btree on b (id)",
 			output: "alter table b add spatial index a using btree (id)",
-		}, {
+		},
+		{
+			input:  "create vector index a using btree on b (id)",
+			output: "alter table b add vector index a using btree (id)",
+		},
+		{
 			input:  "create ALGORITHM=UNDEFINED DEFINER=`UserName`@`localhost` SQL SECURITY DEFINER view a as select current_timestamp()",
 			output: "create algorithm = undefined definer = `UserName`@`localhost` sql security definer view a as select current_timestamp(0)",
 		}, {
@@ -6609,6 +6631,7 @@ func TestCreateTable(t *testing.T) {
 				"	primary key (id),\n" +
 				"	spatial key geom (geom),\n" +
 				"	fulltext key fts (full_name),\n" +
+				"	vector key vec (vec_col),\n" +
 				"	unique key by_username (username),\n" +
 				"	unique by_username2 (username),\n" +
 				"	unique index by_username3 (username),\n" +
@@ -8755,6 +8778,7 @@ var correctlyDontParse = []string{
 	"varchar",
 	"varcharacter",
 	"varying",
+	"vector",
 	"virtual",
 	"when",
 	"where",

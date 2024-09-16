@@ -2153,6 +2153,7 @@ const (
 	UniqueStr     = "unique"
 	SpatialStr    = "spatial"
 	FulltextStr   = "fulltext"
+	VectorStr     = "vector"
 	SetStr        = "set"
 	TemporaryStr  = "temporary"
 	PrimaryStr    = "primary"
@@ -3400,6 +3401,7 @@ type IndexInfo struct {
 	Spatial  bool
 	Unique   bool
 	Fulltext bool
+	Vector   bool
 }
 
 // Format formats the node.

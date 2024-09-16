@@ -286,7 +286,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD MODIFY CHANGE
-%token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
+%token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL VECTOR FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER LAST
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT EXTENDED
@@ -4039,6 +4039,10 @@ index_info:
 | FULLTEXT index_or_key_opt name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Fulltext: true}
+  }
+| VECTOR index_or_key name_opt
+  {
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Vector: true}
   }
 | CONSTRAINT name_opt UNIQUE index_or_key_opt name_opt
   {
@@ -8845,6 +8849,8 @@ key_type:
   { $$ = FulltextStr }
 | SPATIAL
   { $$ = SpatialStr }
+| VECTOR
+  { $$ = VectorStr }
 
 key_type_opt:
   { $$ = "" }
@@ -9336,6 +9342,7 @@ reserved_keyword:
 | VARYING
 | VAR_POP
 | VAR_SAMP
+| VECTOR
 | VIRTUAL
 | WHEN
 | WHERE
@@ -9608,6 +9615,7 @@ qualified_column_name_safe_reserved_keyword:
 | VARYING
 | VAR_POP
 | VAR_SAMP
+| VECTOR
 | VIRTUAL
 | WHERE
 | WHILE
