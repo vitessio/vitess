@@ -35,6 +35,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
@@ -3395,8 +3396,16 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 
 	if req.EnableReverseReplication {
+		// Does the source keyspace have tablets that are able to manage
+		// the reverse workflow?
+		if err := s.validatePrimaryTabletsHaveRequiredVReplicationPermissions(ctx, ts.SourceKeyspaceName(), ts.SourceShards()); err != nil {
+			return handleError(fmt.Sprintf("primary tablets are not able to manage reverse vreplication stream in the %s keyspace",
+				ts.SourceKeyspaceName()), err)
+		}
+		// Does the target keyspace have tablets available to stream from
+		// for the reverse workflow?
 		if err := areTabletsAvailableToStreamFrom(ctx, req, ts, ts.TargetKeyspaceName(), ts.TargetShards()); err != nil {
-			return handleError(fmt.Sprintf("no tablets were available to stream from in the %s keyspace", ts.SourceKeyspaceName()), err)
+			return handleError(fmt.Sprintf("no tablets were available to stream from in the %s keyspace", ts.TargetKeyspaceName()), err)
 		}
 	}
 
@@ -4302,6 +4311,43 @@ func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMir
 		return handleError("failed to mirror traffic for the tables", err)
 	}
 
+	return nil
+}
+
+// validatePrimaryTabletsHaveRequiredVReplicationPermissions checks that all primary tablets
+// in the given keyspace shards have the required permissions necessary to perform actions on
+// the workflow record.
+func (s *Server) validatePrimaryTabletsHaveRequiredVReplicationPermissions(ctx context.Context, keyspace string, shards []*topo.ShardInfo) error {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, shard := range shards {
+		primary := shard.PrimaryAlias
+		if primary == nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s/%s shard does not have a primary tablet", keyspace, shard.ShardName())
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tablet, err := s.ts.GetTablet(ctx, primary)
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrapf(err, "failed to get primary tablet for %s/%s shard", keyspace, shard.ShardName()))
+			}
+			// Ensure the tablet has the minimum privileges required on the sidecar database
+			// table in order to manage the workflow.
+			res, err := s.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s", topoproto.TabletAliasString(tablet.Alias)))
+			}
+			if !res.GetOk() {
+				allErrors.RecordError(fmt.Errorf("user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
+					res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias)))
+			}
+		}()
+	}
+	wg.Wait()
+	if allErrors.HasErrors() {
+		return allErrors.Error()
+	}
 	return nil
 }
 

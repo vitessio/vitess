@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,7 +60,6 @@ var (
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
 	sourceThrottlerAppName = throttlerapp.VStreamerName
 	targetThrottlerAppName = throttlerapp.VPlayerName
-	testedPermissionChecks atomic.Bool
 )
 
 const (
@@ -801,10 +799,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 		switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
 		var shardNames []string
-		for shardName := range maps.Keys(vc.Cells[defaultCell.Name].Keyspaces["product"].Shards) {
+		for shardName := range maps.Keys(vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards) {
 			shardNames = append(shardNames, shardName)
 		}
-		testPermissionChecks(t, workflowType, sourceKs, shardNames, targetKs, workflow)
+		testSwitchTrafficPermissionChecks(t, workflowType, sourceKs, shardNames, targetKs, workflow)
 		switchWrites(t, workflowType, ksWorkflow, false)
 
 		checkThatVDiffFails(t, targetKs, workflow)
@@ -1597,12 +1595,12 @@ func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunRes
 	validateDryRunResults(t, output, dryRunResults)
 }
 
-// testPermissionsChecks confirms that for the SwitchTraffic command, the necessary
-// permissions are checked properly.
-func testPermissionChecks(t *testing.T, workflowType, sourceKeyspace string, sourceShards []string, targetKeyspace, workflow string) {
+// testSwitchTrafficPermissionsChecks confirms that for the SwitchTraffic command, the
+// necessary permissions are checked properly on the source keyspace's primary tablets.
+// This ensures that we can create and manage the reverse vreplication workflow.
+func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspace string, sourceShards []string, targetKeyspace, workflow string) {
 	applyPrivileges := func(query string) {
 		for _, shard := range sourceShards {
-			t.Logf("Applying privileges %q on shard %s/%s", query, sourceKeyspace, shard)
 			primary := vc.getPrimaryTablet(t, sourceKeyspace, shard)
 			_, err := primary.QueryTablet(query, primary.Keyspace, false)
 			require.NoError(t, err)
@@ -1611,8 +1609,13 @@ func testPermissionChecks(t *testing.T, workflowType, sourceKeyspace string, sou
 	runDryRunCmd := func(expectErr bool) {
 		_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKeyspace,
 			"SwitchTraffic", "--tablet-types=primary", "--dry-run")
-		require.True(t, ((err == nil) != expectErr), "expected error: %t, got: %v", expectErr, err)
+		require.True(t, ((err != nil) == expectErr), "expected error: %t, got: %v", expectErr, err)
 	}
+
+	defer func() {
+		// Put global privs back in place.
+		applyPrivileges("grant select,insert,update,delete on *.* to vt_filtered@localhost")
+	}()
 
 	t.Run("test switch traffic permission checks", func(t *testing.T) {
 		t.Run("test without global privileges", func(t *testing.T) {
@@ -1621,27 +1624,28 @@ func testPermissionChecks(t *testing.T, workflowType, sourceKeyspace string, sou
 		})
 
 		t.Run("test with db level privileges", func(t *testing.T) {
-			applyPrivileges("grant select,insert,update,delete on _vt.* to vt_filtered@localhost")
+			applyPrivileges(fmt.Sprintf("grant select,insert,update,delete on %s.* to vt_filtered@localhost",
+				sidecarDBIdentifier))
 			runDryRunCmd(false)
 		})
 
 		t.Run("test without global or db level privileges", func(t *testing.T) {
-			applyPrivileges("revoke select,insert,update,delete on _vt.* from vt_filtered@localhost")
+			applyPrivileges(fmt.Sprintf("revoke select,insert,update,delete on %s.* from vt_filtered@localhost",
+				sidecarDBIdentifier))
 			runDryRunCmd(true)
 		})
 
 		t.Run("test with table level privileges", func(t *testing.T) {
-			applyPrivileges("grant select,insert,update,delete on _vt.vreplication to vt_filtered@localhost")
+			applyPrivileges(fmt.Sprintf("grant select,insert,update,delete on %s.vreplication to vt_filtered@localhost",
+				sidecarDBIdentifier))
 			runDryRunCmd(false)
 		})
 
 		t.Run("test without global, db, or table level privileges", func(t *testing.T) {
-			applyPrivileges("revoke select,insert,update,delete on _vt.vreplication from vt_filtered@localhost")
+			applyPrivileges(fmt.Sprintf("revoke select,insert,update,delete on %s.vreplication from vt_filtered@localhost",
+				sidecarDBIdentifier))
 			runDryRunCmd(true)
 		})
-
-		// Put global privs back in place.
-		applyPrivileges("grant select,insert,update,delete on *.* from vt_filtered@localhost")
 	})
 }
 
