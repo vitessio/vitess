@@ -97,10 +97,10 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 
-		if err := marshalAdd(prepend, buf, "AvgRowSize", average(pd.Stats)); err != nil {
+		if err := marshalAdd(prepend, buf, "AvgNumberOfRows", average(pd.Stats)); err != nil {
 			return nil, err
 		}
-		if err := marshalAdd(prepend, buf, "MedianRowSize", median(pd.Stats)); err != nil {
+		if err := marshalAdd(prepend, buf, "MedianNumberOfRows", median(pd.Stats)); err != nil {
 			return nil, err
 		}
 	}
