@@ -316,6 +316,14 @@ message GetUnresolvedTransactionsResponse {
   repeated query.TransactionMetadata transactions = 1;
 }
 
+message ConcludeTransactionRequest {
+  string dtid = 1;
+  bool mm = 2;
+}
+
+message ConcludeTransactionResponse {
+}
+
 message ReplicationStatusRequest {
 }
 
