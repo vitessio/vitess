@@ -26,10 +26,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -212,7 +214,7 @@ func shortCircuitTestAfterQuery(query string, dbClient *binlogplayer.MockDBClien
 	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'Error: Short circuiting test')", singleRowAffected, nil)
 }
 
-//--------------------------------------
+// --------------------------------------
 // Topos and tablets
 
 // fakeTabletConn implement TabletConn interface. We only care about the
@@ -248,7 +250,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return vdiffenv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
+	return vdiffenv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, nil)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
@@ -282,7 +284,7 @@ func (ftc *fakeTabletConn) Close(ctx context.Context) error {
 	return nil
 }
 
-//--------------------------------------
+// --------------------------------------
 // Binlog Client to TabletManager
 
 // fakeBinlogClient satisfies binlogplayer.Client.
@@ -343,7 +345,7 @@ func (bts *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 	return nil, bts.ctx.Err()
 }
 
-//--------------------------------------
+// --------------------------------------
 // DBCLient wrapper
 
 func realDBClientFactory() binlogplayer.DBClient {
@@ -422,7 +424,11 @@ func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltyp
 	return results, nil
 }
 
-//----------------------------------------------
+func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return dbc.conn.SupportsCapability(capability)
+}
+
+// ----------------------------------------------
 // fakeTMClient
 
 type fakeTMClient struct {
@@ -508,6 +514,10 @@ func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb
 
 func (tmc *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
+func (tmc *fakeTMClient) GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	return &tabletmanagerdatapb.GetThrottlerStatusResponse{}, nil
 }
 
 // ----------------------------------------------
@@ -613,10 +623,10 @@ func (tvde *testVDiffEnv) close() {
 		tstenv.SchemaEngine.Reload(context.Background())
 	}
 	tvde.tablets = nil
-	vdiffenv.vse.Close()
-	vdiffenv.vre.Close()
-	vdiffenv.vde.Close()
-	vdiffenv.dbClient.Close()
+	tvde.vse.Close()
+	tvde.vre.Close()
+	tvde.vde.Close()
+	tvde.dbClient.Close()
 }
 
 func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *fakeTabletConn {
@@ -650,4 +660,17 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 	}
 	tstenv.SchemaEngine.Reload(context.Background())
 	return tvde.tablets[id]
+}
+
+func (tvde *testVDiffEnv) createController(t *testing.T, id int) *controller {
+	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		vdiffTestCols,
+		vdiffTestColTypes,
+	),
+		fmt.Sprintf("%d|%s|%s|%s|%s|%s|%s|%s|", id, uuid.New(), tvde.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
+	)
+	tvde.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %d", id), noResults, nil)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), tvde.dbClientFactory, tstenv.TopoServ, tvde.vde, tvde.opts)
+	require.NoError(t, err)
+	return ct
 }

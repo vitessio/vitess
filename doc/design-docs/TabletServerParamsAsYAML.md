@@ -126,7 +126,6 @@ heartbeatIntervalMilliseconds: 0         # heartbeat_enable, heartbeat_interval
 shutdownGracePeriodSeconds: 0            # transaction_shutdown_grace_period
 passthroughDML: false                    # queryserver-config-passthrough-dmls
 streamBufferSize: 32768                  # queryserver-config-stream-buffer-size
-queryCacheSize: 5000                     # queryserver-config-query-cache-size
 schemaReloadIntervalSeconds: 1800        # queryserver-config-schema-reload-time
 watchReplication: false                  # watch_replication_stream
 terseErrors: false                       # queryserver-config-terse-errors

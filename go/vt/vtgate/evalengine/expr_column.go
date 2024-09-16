@@ -151,6 +151,8 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 		c.asm.PushColumn_date(column.Offset)
 	case tt == sqltypes.Time:
 		c.asm.PushColumn_time(column.Offset)
+	case tt == sqltypes.Vector:
+		c.asm.PushColumn_vector(column.Offset)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}

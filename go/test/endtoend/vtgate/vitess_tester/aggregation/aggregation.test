@@ -56,5 +56,9 @@ select COUNT(*)
 from (select 1 as one
       FROM `t3`
       WHERE `t3`.`name` = 'B'
-      ORDER BY id DESC LIMIT 25
-      OFFSET 0) subquery_for_count;
+      ORDER BY id DESC
+      LIMIT 25 OFFSET 0) subquery_for_count;
+
+select u.id, u.t1_id, t.num_segments
+from (select id, count(*) as num_segments from t1 group by 1 order by 2 desc limit 20) t
+         join t2 u on u.id = t.id;

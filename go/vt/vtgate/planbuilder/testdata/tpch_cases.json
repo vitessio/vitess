@@ -25,7 +25,6 @@
             "Variant": "Ordered",
             "Aggregates": "sum(2) AS sum_qty, sum(3) AS sum_base_price, sum(4) AS sum_disc_price, sum(5) AS sum_charge, sum(6) AS avg_qty, sum(7) AS avg_price, sum(8) AS avg_disc, sum_count_star(9) AS count_order, sum_count(10) AS count(l_quantity), sum_count(11) AS count(l_extendedprice), sum_count(12) AS count(l_discount)",
             "GroupBy": "(0|13), (1|14)",
-            "ResultColumns": 13,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -74,7 +73,6 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum(1) AS revenue",
                 "GroupBy": "(0|4), (2|5), (3|6)",
-                "ResultColumns": 6,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -279,13 +277,13 @@
         "OperatorType": "Sort",
         "Variant": "Memory",
         "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci",
+        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum(1) AS revenue",
             "GroupBy": "(0|2)",
-            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Projection",
@@ -802,7 +800,6 @@
             "Variant": "Ordered",
             "Aggregates": "sum(1) AS sum(case when nation = 'BRAZIL' then volume else 0 end), sum(2) AS sum(volume)",
             "GroupBy": "(0|3)",
-            "ResultColumns": 3,
             "Inputs": [
               {
                 "OperatorType": "Projection",
@@ -832,7 +829,6 @@
                             "Variant": "Ordered",
                             "Aggregates": "sum(0) AS sum(case when nation = 'BRAZIL' then volume else 0 end), sum(1) AS sum(volume)",
                             "GroupBy": "(2|3)",
-                            "ResultColumns": 3,
                             "Inputs": [
                               {
                                 "OperatorType": "Join",
@@ -1112,12 +1108,11 @@
                         "Variant": "Ordered",
                         "Aggregates": "sum(0) AS sum_profit",
                         "GroupBy": "(1|3), (2|4)",
-                        "ResultColumns": 4,
                         "Inputs": [
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "R:0,L:0,L:4,L:6,L:7",
+                            "JoinColumnIndexes": "R:0,L:0,L:4,L:6,L:8",
                             "JoinVars": {
                               "l_discount": 2,
                               "l_extendedprice": 1,
@@ -1130,7 +1125,7 @@
                               {
                                 "OperatorType": "Sort",
                                 "Variant": "Memory",
-                                "OrderBy": "(0|6) ASC, (4|7) ASC",
+                                "OrderBy": "(0|6) ASC, (4|8) ASC",
                                 "Inputs": [
                                   {
                                     "OperatorType": "Join",
@@ -1349,13 +1344,13 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "2 DESC COLLATE utf8mb4_0900_ai_ci",
+            "ResultColumns": 8,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum(2) AS revenue",
                 "GroupBy": "(0|8), (1|9), (3|10), (6|11), (4|12), (5|13), (7|14)",
-                "ResultColumns": 8,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -1660,6 +1655,7 @@
             "InputName": "Outer",
             "OperatorType": "Filter",
             "Predicate": "sum(ps_supplycost * ps_availqty) > :__sq1",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Sort",
@@ -1671,7 +1667,6 @@
                     "Variant": "Ordered",
                     "Aggregates": "sum(1) AS value",
                     "GroupBy": "(0|2)",
-                    "ResultColumns": 2,
                     "Inputs": [
                       {
                         "OperatorType": "Projection",
@@ -1892,23 +1887,24 @@
             "GroupBy": "0",
             "Inputs": [
               {
-                "OperatorType": "SimpleProjection",
-                "Columns": "1,3",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  ":1 as c_count",
+                  "1 as 1"
+                ],
                 "Inputs": [
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Ordered",
-                    "Aggregates": "sum_count(1) AS count(o_orderkey), any_value(3)",
+                    "Aggregates": "sum_count(1) AS count(o_orderkey)",
                     "GroupBy": "(0|2)",
-                    "ResultColumns": 4,
                     "Inputs": [
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
                           ":2 as c_custkey",
                           "count(*) * count(o_orderkey) as count(o_orderkey)",
-                          ":3 as weight_string(c_custkey)",
-                          ":4 as 1"
+                          ":3 as weight_string(c_custkey)"
                         ],
                         "Inputs": [
                           {
@@ -1919,7 +1915,7 @@
                               {
                                 "OperatorType": "Join",
                                 "Variant": "LeftJoin",
-                                "JoinColumnIndexes": "R:0,L:0,L:1,L:2,L:3",
+                                "JoinColumnIndexes": "R:0,L:0,L:1,L:2",
                                 "JoinVars": {
                                   "c_custkey": 1
                                 },
@@ -1932,9 +1928,9 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select count(*), c_custkey, weight_string(c_custkey), 1 from customer where 1 != 1 group by c_custkey, weight_string(c_custkey)",
+                                    "FieldQuery": "select count(*), c_custkey, weight_string(c_custkey) from customer where 1 != 1 group by c_custkey, weight_string(c_custkey)",
                                     "OrderBy": "(1|2) ASC",
-                                    "Query": "select count(*), c_custkey, weight_string(c_custkey), 1 from customer group by c_custkey, weight_string(c_custkey) order by c_custkey asc",
+                                    "Query": "select count(*), c_custkey, weight_string(c_custkey) from customer group by c_custkey, weight_string(c_custkey) order by c_custkey asc",
                                     "Table": "customer"
                                   },
                                   {
@@ -1986,41 +1982,51 @@
             "Aggregates": "any_value(0), sum(1) AS sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end), sum(2) AS sum(l_extendedprice * (1 - l_discount))",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0,L:3",
-                "JoinVars": {
-                  "l_discount": 2,
-                  "l_extendedprice": 1,
-                  "l_partkey": 4
-                },
-                "TableName": "lineitem_part",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "100.00 as 100.00",
+                  ":0 as case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end",
+                  ":1 as l_extendedprice * (1 - l_discount)"
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": true
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "R:0,L:2",
+                    "JoinVars": {
+                      "l_discount": 1,
+                      "l_extendedprice": 0,
+                      "l_partkey": 3
                     },
-                    "FieldQuery": "select 100.00, l_extendedprice, l_discount, l_extendedprice * (1 - l_discount), l_partkey from lineitem where 1 != 1",
-                    "Query": "select 100.00, l_extendedprice, l_discount, l_extendedprice * (1 - l_discount), l_partkey from lineitem where l_shipdate >= date('1995-09-01') and l_shipdate < date('1995-09-01') + interval '1' month",
-                    "Table": "lineitem"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "EqualUnique",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select case when p_type like 'PROMO%' then :l_extendedprice * (1 - :l_discount) else 0 end from part where 1 != 1",
-                    "Query": "select case when p_type like 'PROMO%' then :l_extendedprice * (1 - :l_discount) else 0 end from part where p_partkey = :l_partkey",
-                    "Table": "part",
-                    "Values": [
-                      ":l_partkey"
-                    ],
-                    "Vindex": "hash"
+                    "TableName": "lineitem_part",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select l_extendedprice, l_discount, l_extendedprice * (1 - l_discount), l_partkey from lineitem where 1 != 1",
+                        "Query": "select l_extendedprice, l_discount, l_extendedprice * (1 - l_discount), l_partkey from lineitem where l_shipdate >= date('1995-09-01') and l_shipdate < date('1995-09-01') + interval '1' month",
+                        "Table": "lineitem"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select case when p_type like 'PROMO%' then :l_extendedprice * (1 - :l_discount) else 0 end from part where 1 != 1",
+                        "Query": "select case when p_type like 'PROMO%' then :l_extendedprice * (1 - :l_discount) else 0 end from part where p_partkey = :l_partkey",
+                        "Table": "part",
+                        "Values": [
+                          ":l_partkey"
+                        ],
+                        "Vindex": "hash"
+                      }
+                    ]
                   }
                 ]
               }
@@ -2052,7 +2058,6 @@
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
             "Aggregates": "max(0|1) AS max(total_revenue)",
-            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2106,7 +2111,6 @@
             "Variant": "Ordered",
             "Aggregates": "count_distinct(3|7) AS supplier_cnt",
             "GroupBy": "(0|4), (1|5), (2|6)",
-            "ResultColumns": 7,
             "Inputs": [
               {
                 "OperatorType": "Sort",
@@ -2116,9 +2120,9 @@
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:0,R:1,R:2,L:0,R:3,R:4,R:5,L:1",
+                    "JoinColumnIndexes": "R:0,R:1,R:2,L:0,R:3,R:4,R:5,L:2",
                     "JoinVars": {
-                      "ps_partkey": 2,
+                      "ps_partkey": 1,
                       "ps_suppkey": 0
                     },
                     "TableName": "partsupp_part",
@@ -2151,8 +2155,8 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where 1 != 1",
-                            "Query": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where not :__sq_has_values or ps_suppkey not in ::__sq1",
+                            "FieldQuery": "select ps_suppkey, ps_partkey, weight_string(ps_suppkey) from partsupp where 1 != 1",
+                            "Query": "select ps_suppkey, ps_partkey, weight_string(ps_suppkey) from partsupp where not :__sq_has_values or ps_suppkey not in ::__sq1",
                             "Table": "partsupp"
                           }
                         ]
@@ -2444,7 +2448,6 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum_count_star(1) AS numwait",
                 "GroupBy": "(0|2)",
-                "ResultColumns": 3,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",

@@ -23,7 +23,11 @@ const (
 	// Select.Distinct
 	AllStr              = "all "
 	DistinctStr         = "distinct "
+	HighPriorityStr     = "high_priority "
 	StraightJoinHint    = "straight_join "
+	SQLSmallResultStr   = "sql_small_result "
+	SQLBigResultStr     = "sql_big_result "
+	SQLBufferResultStr  = "sql_buffer_result "
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
@@ -945,6 +949,7 @@ const (
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType
+	CleanupAllMigrationType
 	ThrottleMigrationType
 	ThrottleAllMigrationType
 	UnthrottleMigrationType

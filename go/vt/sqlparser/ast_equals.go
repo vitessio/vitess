@@ -1340,6 +1340,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowThrottlerStatus(a, b)
+	case *ShowTransactionStatus:
+		b, ok := inB.(*ShowTransactionStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowTransactionStatus(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -1757,6 +1763,7 @@ func (cmp *Comparator) RefOfAlterDatabase(a, b *AlterDatabase) bool {
 	}
 	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
 		a.FullyParsed == b.FullyParsed &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCS(a.DBName, b.DBName) &&
 		cmp.SliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
 }
@@ -2187,7 +2194,7 @@ func (cmp *Comparator) RefOfCommonTableExpr(a, b *CommonTableExpr) bool {
 	}
 	return cmp.IdentifierCS(a.ID, b.ID) &&
 		cmp.Columns(a.Columns, b.Columns) &&
-		cmp.RefOfSubquery(a.Subquery, b.Subquery)
+		cmp.SelectStatement(a.Subquery, b.Subquery)
 }
 
 // RefOfComparisonExpr does deep equals between the two objects.
@@ -4184,7 +4191,11 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		a.HighPriority == b.HighPriority &&
 		a.StraightJoinHint == b.StraightJoinHint &&
+		a.SQLSmallResult == b.SQLSmallResult &&
+		a.SQLBigResult == b.SQLBigResult &&
+		a.SQLBufferResult == b.SQLBufferResult &&
 		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
 		cmp.RefOfBool(a.Cache, b.Cache) &&
 		cmp.RefOfWith(a.With, b.With) &&
@@ -4361,6 +4372,18 @@ func (cmp *Comparator) RefOfShowThrottlerStatus(a, b *ShowThrottlerStatus) bool 
 		return false
 	}
 	return cmp.Comments(a.Comments, b.Comments)
+}
+
+// RefOfShowTransactionStatus does deep equals between the two objects.
+func (cmp *Comparator) RefOfShowTransactionStatus(a, b *ShowTransactionStatus) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Keyspace == b.Keyspace &&
+		a.TransactionID == b.TransactionID
 }
 
 // RefOfStarExpr does deep equals between the two objects.
@@ -6774,6 +6797,12 @@ func (cmp *Comparator) ShowInternal(inA, inB ShowInternal) bool {
 			return false
 		}
 		return cmp.RefOfShowOther(a, b)
+	case *ShowTransactionStatus:
+		b, ok := inB.(*ShowTransactionStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowTransactionStatus(a, b)
 	default:
 		// this should never happen
 		return false

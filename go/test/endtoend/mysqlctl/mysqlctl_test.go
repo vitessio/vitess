@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, sidecar.DefaultName); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, sidecar.DefaultName, ""); err != nil {
 			return 1
 		}
 

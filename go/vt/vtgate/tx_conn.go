@@ -26,14 +26,13 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 // nonAtomicCommitWarnMaxShards limits the number of shard names reported in
@@ -59,6 +58,16 @@ var txAccessModeToEOTxAccessMode = map[sqlparser.TxAccessMode]querypb.ExecuteOpt
 	sqlparser.ReadWrite:              querypb.ExecuteOptions_READ_WRITE,
 	sqlparser.ReadOnly:               querypb.ExecuteOptions_READ_ONLY,
 }
+
+type commitPhase int
+
+const (
+	Commit2pcCreateTransaction commitPhase = iota
+	Commit2pcPrepare
+	Commit2pcStartCommit
+	Commit2pcPrepareCommit
+	Commit2pcConclude
+)
 
 // Begin begins a new transaction. If one is already in progress, it commits it
 // and starts a new one.
@@ -177,7 +186,7 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 }
 
 // commit2PC will not used the pinned tablets - to make sure we use the current source, we need to use the gateway's queryservice
-func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
+func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err error) {
 	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
 		_ = txc.Rollback(ctx, session)
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "pre or post actions not allowed for 2PC commits")
@@ -188,45 +197,118 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return txc.commitNormal(ctx, session)
 	}
 
-	participants := make([]*querypb.Target, 0, len(session.ShardSessions)-1)
-	for _, s := range session.ShardSessions[1:] {
-		participants = append(participants, s.Target)
-	}
 	mmShard := session.ShardSessions[0]
+	rmShards := session.ShardSessions[1:]
 	dtid := dtids.New(mmShard)
-	err := txc.tabletGateway.CreateTransaction(ctx, mmShard.Target, dtid, participants)
-	if err != nil {
-		// Normal rollback is safe because nothing was prepared yet.
-		_ = txc.Rollback(ctx, session)
-		return err
+	participants := make([]*querypb.Target, len(rmShards))
+	for i, s := range rmShards {
+		participants[i] = s.Target
 	}
 
-	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
-		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
-	})
-	if err != nil {
-		// TODO(sougou): Perform a more fine-grained cleanup
-		// including unprepared transactions.
-		if resumeErr := txc.Resolve(ctx, dtid); resumeErr != nil {
-			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
+	var txPhase commitPhase
+	defer func() {
+		if err == nil {
+			return
 		}
-		// Return the original error even if the previous operation fails.
+		txc.errActionAndLogWarn(ctx, session, txPhase, dtid, mmShard, rmShards)
+	}()
+
+	txPhase = Commit2pcCreateTransaction
+	if err = txc.tabletGateway.CreateTransaction(ctx, mmShard.Target, dtid, participants); err != nil {
 		return err
 	}
 
+	if DebugTwoPc { // Test code to simulate a failure after RM prepare
+		if terr := checkTestFailure(ctx, "TRCreated_FailNow", nil); terr != nil {
+			return terr
+		}
+	}
+
+	txPhase = Commit2pcPrepare
+	prepareAction := func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
+		if DebugTwoPc { // Test code to simulate a failure during RM prepare
+			if terr := checkTestFailure(ctx, "RMPrepare_-40_FailNow", s.Target); terr != nil {
+				return terr
+			}
+		}
+		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
+	}
+	if err = txc.runSessions(ctx, rmShards, session.logging, prepareAction); err != nil {
+		return err
+	}
+
+	if DebugTwoPc { // Test code to simulate a failure after RM prepare
+		if terr := checkTestFailure(ctx, "RMPrepared_FailNow", nil); terr != nil {
+			return terr
+		}
+	}
+
+	txPhase = Commit2pcStartCommit
 	err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
 		return err
 	}
 
-	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
+	if DebugTwoPc { // Test code to simulate a failure after MM commit
+		if terr := checkTestFailure(ctx, "MMCommitted_FailNow", nil); terr != nil {
+			return terr
+		}
+	}
+
+	txPhase = Commit2pcPrepareCommit
+	prepareCommitAction := func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
+		if DebugTwoPc { // Test code to simulate a failure during RM prepare
+			if terr := checkTestFailure(ctx, "RMCommit_-40_FailNow", s.Target); terr != nil {
+				return terr
+			}
+		}
 		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
-	})
-	if err != nil {
+	}
+	if err = txc.runSessions(ctx, rmShards, session.logging, prepareCommitAction); err != nil {
 		return err
 	}
 
-	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+	// At this point, application can continue forward.
+	// The transaction is already committed.
+	// This step is to clean up the transaction metadata.
+	txPhase = Commit2pcConclude
+	_ = txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+	return nil
+}
+
+func (txc *TxConn) errActionAndLogWarn(ctx context.Context, session *SafeSession, txPhase commitPhase, dtid string, mmShard *vtgatepb.Session_ShardSession, rmShards []*vtgatepb.Session_ShardSession) {
+	switch txPhase {
+	case Commit2pcCreateTransaction:
+		// Normal rollback is safe because nothing was prepared yet.
+		if rollbackErr := txc.Rollback(ctx, session); rollbackErr != nil {
+			log.Warningf("Rollback failed after Create Transaction failure: %v", rollbackErr)
+		}
+	case Commit2pcPrepare:
+		// Rollback the prepared and unprepared transactions.
+		if resumeErr := txc.rollbackTx(ctx, dtid, mmShard, rmShards, session.logging); resumeErr != nil {
+			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
+		}
+	}
+	session.RecordWarning(&querypb.QueryWarning{
+		Code:    uint32(sqlerror.ERInAtomicRecovery),
+		Message: createWarningMessage(dtid, txPhase)})
+}
+
+func createWarningMessage(dtid string, txPhase commitPhase) string {
+	warningMsg := fmt.Sprintf("%s distributed transaction ID failed during", dtid)
+	switch txPhase {
+	case Commit2pcCreateTransaction:
+		warningMsg += " transaction record creation; rollback attempted; conclude on recovery"
+	case Commit2pcPrepare:
+		warningMsg += " transaction prepare phase; prepare transaction rollback attempted; conclude on recovery"
+	case Commit2pcStartCommit:
+		warningMsg += " metadata manager commit; transaction will be committed/rollbacked based on the state on recovery"
+	case Commit2pcPrepareCommit:
+		warningMsg += " resource manager commit; transaction will be committed on recovery"
+	case Commit2pcConclude:
+		warningMsg += " transaction conclusion"
+	}
+	return warningMsg
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
@@ -343,46 +425,83 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 	})
 }
 
-// Resolve resolves the specified 2PC transaction.
-func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
-	mmShard, err := dtids.ShardSession(dtid)
+// ResolveTransactions fetches all unresolved transactions and resolves them.
+func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Target) error {
+	transactions, err := txc.tabletGateway.UnresolvedTransactions(ctx, target)
 	if err != nil {
 		return err
 	}
 
-	transaction, err := txc.tabletGateway.ReadTransaction(ctx, mmShard.Target, dtid)
+	failedResolution := 0
+	for _, txRecord := range transactions {
+		log.Infof("Resolving transaction ID: %s", txRecord.Dtid)
+		err = txc.resolveTx(ctx, target, txRecord)
+		if err != nil {
+			failedResolution++
+			log.Errorf("Failed to resolve transaction ID: %s with error: %v", txRecord.Dtid, err)
+		}
+	}
+	if failedResolution == 0 {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to resolve %d out of %d transactions", failedResolution, len(transactions))
+}
+
+// resolveTx resolves the specified distributed transaction.
+func (txc *TxConn) resolveTx(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
+	mmShard, err := dtids.ShardSession(transaction.Dtid)
 	if err != nil {
 		return err
 	}
-	if transaction == nil || transaction.Dtid == "" {
-		// It was already resolved.
-		return nil
-	}
+
 	switch transaction.State {
 	case querypb.TransactionState_PREPARE:
 		// If state is PREPARE, make a decision to rollback and
 		// fallthrough to the rollback workflow.
-		qs, err := txc.queryService(ctx, mmShard.TabletAlias)
-		if err != nil {
-			return err
-		}
-		if err := qs.SetRollback(ctx, mmShard.Target, transaction.Dtid, mmShard.TransactionId); err != nil {
+		if err = txc.tabletGateway.SetRollback(ctx, target, transaction.Dtid, mmShard.TransactionId); err != nil {
 			return err
 		}
 		fallthrough
 	case querypb.TransactionState_ROLLBACK:
-		if err := txc.resumeRollback(ctx, mmShard.Target, transaction); err != nil {
+		if err = txc.resumeRollback(ctx, target, transaction); err != nil {
 			return err
 		}
 	case querypb.TransactionState_COMMIT:
-		if err := txc.resumeCommit(ctx, mmShard.Target, transaction); err != nil {
+		if err = txc.resumeCommit(ctx, target, transaction); err != nil {
 			return err
 		}
 	default:
 		// Should never happen.
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid state: %v", transaction.State)
+		return vterrors.VT13001(fmt.Sprintf("invalid state: %v", transaction.State))
 	}
 	return nil
+}
+
+// rollbackTx rollbacks the specified distributed transaction.
+// Rollbacks happens on the metadata manager and all participants irrespective of the failure.
+func (txc *TxConn) rollbackTx(ctx context.Context, dtid string, mmShard *vtgatepb.Session_ShardSession, participants []*vtgatepb.Session_ShardSession, logging *executeLogger) error {
+	var errs []error
+	if mmErr := txc.rollbackMM(ctx, dtid, mmShard); mmErr != nil {
+		errs = append(errs, mmErr)
+	}
+	if rmErr := txc.runSessions(ctx, participants, logging, func(ctx context.Context, session *vtgatepb.Session_ShardSession, logger *executeLogger) error {
+		return txc.tabletGateway.RollbackPrepared(ctx, session.Target, dtid, session.TransactionId)
+	}); rmErr != nil {
+		errs = append(errs, rmErr)
+	}
+	if err := vterrors.Aggregate(errs); err != nil {
+		return err
+	}
+	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+
+}
+
+func (txc *TxConn) rollbackMM(ctx context.Context, dtid string, mmShard *vtgatepb.Session_ShardSession) error {
+	qs, err := txc.queryService(ctx, mmShard.TabletAlias)
+	if err != nil {
+		return err
+	}
+	return qs.SetRollback(ctx, mmShard.Target, dtid, mmShard.TransactionId)
 }
 
 func (txc *TxConn) resumeRollback(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
@@ -446,4 +565,28 @@ func (txc *TxConn) runTargets(targets []*querypb.Target, action func(*querypb.Ta
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+func (txc *TxConn) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	mmShard, err := dtids.ShardSession(transactionID)
+	if err != nil {
+		return nil, err
+	}
+	return txc.tabletGateway.ReadTransaction(ctx, mmShard.Target, transactionID)
+}
+
+func (txc *TxConn) UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	var tmList []*querypb.TransactionMetadata
+	var mu sync.Mutex
+	err := txc.runTargets(targets, func(target *querypb.Target) error {
+		res, err := txc.tabletGateway.UnresolvedTransactions(ctx, target)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		tmList = append(tmList, res...)
+		return nil
+	})
+	return tmList, err
 }

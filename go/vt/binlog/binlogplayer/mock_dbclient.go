@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -102,13 +103,13 @@ func NewMockDbaClient(t *testing.T) *MockDBClient {
 // ExpectRequest adds an expected result to the mock.
 // This function should not be called conncurrently with other commands.
 func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err error) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	select {
 	case <-dc.done:
 		dc.done = make(chan struct{})
 	default:
 	}
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  query,
 		result: result,
@@ -120,13 +121,13 @@ func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err
 // queryRE is a regular expression.
 // This function should not be called conncurrently with other commands.
 func (dc *MockDBClient) ExpectRequestRE(queryRE string, result *sqltypes.Result, err error) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	select {
 	case <-dc.done:
 		dc.done = make(chan struct{})
 	default:
 	}
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  queryRE,
 		re:     regexp.MustCompile(queryRE),
@@ -259,4 +260,8 @@ func (dc *MockDBClient) RemoveInvariant(query string) {
 	dc.expectMu.Lock()
 	defer dc.expectMu.Unlock()
 	delete(dc.invariants, query)
+}
+
+func (dc *MockDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return false, nil
 }

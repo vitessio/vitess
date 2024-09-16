@@ -340,6 +340,13 @@ var tableACLConfig = `{
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
+    },
+    {
+      "name": "vitess_twopc",
+      "table_names_or_prefixes": ["dt_state"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
     }
   ]
 }`

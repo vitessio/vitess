@@ -309,6 +309,21 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
+message GetUnresolvedTransactionsRequest {
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
+message ConcludeTransactionRequest {
+  string dtid = 1;
+  bool mm = 2;
+}
+
+message ConcludeTransactionResponse {
+}
+
 message ReplicationStatusRequest {
 }
 
@@ -657,6 +672,7 @@ message VDiffReportOptions {
   bool debug_query = 2;
   string format = 3;
   int64 max_sample_rows = 4;
+  int64 row_diff_column_truncate_at = 5;
 }
 
 message VDiffCoreOptions {
@@ -669,6 +685,7 @@ message VDiffCoreOptions {
   int64 max_extra_rows_to_compare = 7;
   bool update_table_stats = 8;
   int64 max_diff_seconds = 9;
+  optional bool auto_start = 10;
 }
 
 message VDiffOptions {
@@ -687,9 +704,9 @@ message UpdateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
   repeated topodata.TabletType tablet_types = 3;
-  TabletSelectionPreference tablet_selection_preference = 4;
-  binlogdata.OnDDLAction on_ddl = 5;
-  binlogdata.VReplicationWorkflowState state = 6;
+  optional TabletSelectionPreference tablet_selection_preference = 4;
+  optional binlogdata.OnDDLAction on_ddl = 5;
+  optional binlogdata.VReplicationWorkflowState state = 6;
   reserved 7; // unused, was: repeated string shards
 }
 
@@ -707,9 +724,9 @@ message UpdateVReplicationWorkflowsRequest {
   bool all_workflows = 1;
   repeated string include_workflows = 2;
   repeated string exclude_workflows = 3;
-  binlogdata.VReplicationWorkflowState state = 4;
-  string message = 5;
-  string stop_position = 6;
+  optional binlogdata.VReplicationWorkflowState state = 4;
+  optional string message = 5;
+  optional string stop_position = 6;
 }
 
 message UpdateVReplicationWorkflowsResponse {
@@ -736,6 +753,14 @@ message CheckThrottlerRequest {
   bool multi_metrics_enabled = 5;
 }
 
+enum CheckThrottlerResponseCode {
+  UNDEFINED = 0;
+  OK = 1;
+  THRESHOLD_EXCEEDED = 2;
+  APP_DENIED = 3;
+  UNKNOWN_METRIC = 4;
+  INTERNAL_ERROR = 5;
+}
 
 message CheckThrottlerResponse {
   // StatusCode is HTTP compliant response code (e.g. 200 for OK)
@@ -767,10 +792,21 @@ message CheckThrottlerResponse {
     string message = 6;
     // Scope used in this check
     string scope = 7;
+    // ResponseCode is the enum representation of the response
+    CheckThrottlerResponseCode response_code = 8;
   }
   // Metrics is a map (metric name -> metric value/error) so that the client has as much
   // information as possible about all the checked metrics.
   map<string, Metric> metrics = 7;
+
+  // AppName is the name of app that was matched by the throttler
+  string app_name = 8;
+
+  // Summary is a human readable analysis of the result
+  string summary = 9;
+
+  // ResponseCode is the enum representation of the response
+  CheckThrottlerResponseCode response_code = 10;
 }
 
 message GetThrottlerStatusRequest {
@@ -829,6 +865,8 @@ message GetThrottlerStatusResponse {
   message RecentApp {
     vttime.Time checked_at = 1;
     int32 status_code = 2;
+    // ResponseCode is the enum representation of the response
+    CheckThrottlerResponseCode response_code = 3;
   }
   // RecentApps is a map of app names to their recent check status
   map<string, RecentApp> recent_apps = 18;

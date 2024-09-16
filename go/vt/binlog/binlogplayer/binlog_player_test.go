@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -452,5 +454,38 @@ func TestReadVReplicationStatus(t *testing.T) {
 	got := ReadVReplicationStatus(482821)
 	if got != want {
 		t.Errorf("ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
+	}
+}
+
+func TestEncodeString(t *testing.T) {
+	tcases := []struct {
+		in, out string
+	}{
+		{
+			in:  "",
+			out: "''",
+		},
+		{
+			in:  "a",
+			out: "'a'",
+		},
+		{
+			in:  "here's",
+			out: "'here\\'s'",
+		},
+		{
+			in:  "online-ddl is denied access due to lag metric value 94.821447 exceeding threshold 5",
+			out: "'online-ddl is denied access due to lag metric value 94.821447 exceeding threshold 5'",
+		},
+		{
+			in:  "'a','b','c'",
+			out: "'\\'a\\',\\'b\\',\\'c\\''",
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			out := encodeString(tcase.in)
+			assert.Equal(t, tcase.out, out)
+		})
 	}
 }

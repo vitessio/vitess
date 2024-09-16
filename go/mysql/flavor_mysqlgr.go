@@ -42,8 +42,8 @@ type mysqlGRFlavor struct {
 }
 
 // newMysqlGRFlavor creates a new mysqlGR flavor.
-func newMysqlGRFlavor() flavor {
-	return &mysqlGRFlavor{}
+func newMysqlGRFlavor(serverVersion string) flavor {
+	return &mysqlGRFlavor{mysqlFlavor{serverVersion: serverVersion}}
 }
 
 // startReplicationCommand returns the command to start the replication.

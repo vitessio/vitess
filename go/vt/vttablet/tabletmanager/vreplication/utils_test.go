@@ -17,17 +17,21 @@ limitations under the License.
 package vreplication
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestInsertLogTruncation(t *testing.T) {
@@ -94,6 +98,63 @@ func TestInsertLogTruncation(t *testing.T) {
 			dbClient.ExpectRequest(fmt.Sprintf(insertStmtf, vrID, typ, state, encodeString(messageOut)), &sqltypes.Result{}, nil)
 			insertLog(vdbClient, typ, vrID, state, tc.message)
 			dbClient.Wait()
+		})
+	}
+}
+
+// TestIsUnrecoverableError tests the different error cases for isUnrecoverableError().
+func TestIsUnrecoverableError(t *testing.T) {
+	if runNoBlobTest {
+		t.Skip()
+	}
+
+	type testCase struct {
+		name     string
+		err      error
+		expected bool
+	}
+
+	testCases := []testCase{
+		{
+			name:     "Nil error",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "vterrors.Code_FAILED_PRECONDITION",
+			err:      vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "test error"),
+			expected: true,
+		},
+		{
+			name:     "vterrors.Code_FAILED_PRECONDITION, WrongTablet",
+			err:      vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, "PRIMARY", "REPLICA", nil),
+			expected: false,
+		},
+		{
+			name:     "Non-SQL error",
+			err:      errors.New("non-SQL error"),
+			expected: false,
+		},
+		{
+			name:     "SQL error with ERUnknownError",
+			err:      sqlerror.NewSQLError(sqlerror.ERUnknownError, "test SQL error", "test"),
+			expected: false,
+		},
+		{
+			name:     "SQL error with ERAccessDeniedError",
+			err:      sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, "access denied", "test"),
+			expected: true,
+		},
+		{
+			name:     "SQL error with ERDataOutOfRange",
+			err:      sqlerror.NewSQLError(sqlerror.ERDataOutOfRange, "data out of range", "test"),
+			expected: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := isUnrecoverableError(tc.err)
+			require.Equal(t, tc.expected, result)
 		})
 	}
 }

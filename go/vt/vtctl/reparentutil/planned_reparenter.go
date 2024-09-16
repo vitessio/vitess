@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -44,6 +45,7 @@ var (
 	prsCounter = stats.NewCountersWithMultiLabels("PlannedReparentCounts", "Number of times Planned Reparent Shard has been run",
 		[]string{"Keyspace", "Shard", "Result"},
 	)
+	InnodbBufferPoolsDataVar = "Innodb_buffer_pool_pages_data"
 )
 
 // PlannedReparenter performs PlannedReparentShard operations.
@@ -57,10 +59,11 @@ type PlannedReparenter struct {
 // operations. Options are passed by value, so it is safe for callers to mutate
 // resue options structs for multiple calls.
 type PlannedReparentOptions struct {
-	NewPrimaryAlias     *topodatapb.TabletAlias
-	AvoidPrimaryAlias   *topodatapb.TabletAlias
-	WaitReplicasTimeout time.Duration
-	TolerableReplLag    time.Duration
+	NewPrimaryAlias         *topodatapb.TabletAlias
+	AvoidPrimaryAlias       *topodatapb.TabletAlias
+	WaitReplicasTimeout     time.Duration
+	TolerableReplLag        time.Duration
+	AllowCrossCellPromotion bool
 
 	// Private options managed internally. We use value-passing semantics to
 	// set these options inside a PlannedReparent without leaking these details
@@ -158,6 +161,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	ctx context.Context,
 	ev *events.Reparent,
 	tabletMap map[string]*topo.TabletInfo,
+	innodbBufferPoolData map[string]int,
 	opts *PlannedReparentOptions, // we take a pointer here to set NewPrimaryAlias
 ) (isNoop bool, err error) {
 	// We don't want to fail when both NewPrimaryAlias and AvoidPrimaryAlias are nil.
@@ -178,7 +182,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	}
 
 	event.DispatchUpdate(ev, "electing a primary candidate")
-	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, innodbBufferPoolData, opts, pr.logger)
 	if err != nil {
 		return true, err
 	}
@@ -523,13 +527,13 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
-	err = pr.verifyAllTabletsReachable(ctx, tabletMap)
+	innodbBufferPoolData, err := pr.verifyAllTabletsReachable(ctx, tabletMap)
 	if err != nil {
 		return err
 	}
 
 	// Check invariants that PlannedReparentShard depends on.
-	if isNoop, err := pr.preflightChecks(ctx, ev, tabletMap, &opts); err != nil {
+	if isNoop, err := pr.preflightChecks(ctx, ev, tabletMap, innodbBufferPoolData, &opts); err != nil {
 		return err
 	} else if isNoop {
 		return nil
@@ -730,18 +734,30 @@ func (pr *PlannedReparenter) reparentTablets(
 }
 
 // verifyAllTabletsReachable verifies that all the tablets are reachable when running PRS.
-func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) error {
+func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) (map[string]int, error) {
 	// Create a cancellable context for the entire set of RPCs to verify reachability.
 	verifyCtx, verifyCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer verifyCancel()
 
+	innodbBufferPoolsData := make(map[string]int)
+	var mu sync.Mutex
 	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
-	for _, info := range tabletMap {
+	for tblStr, info := range tabletMap {
 		tablet := info.Tablet
 		errorGroup.Go(func() error {
-			_, err := pr.tmc.PrimaryStatus(groupCtx, tablet)
-			return err
+			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{InnodbBufferPoolsDataVar})
+			if err != nil {
+				return err
+			}
+			// We are ignoring the error in conversion because some MySQL variants might not have this
+			// status variable like MariaDB.
+			val, _ := strconv.Atoi(statusValues[InnodbBufferPoolsDataVar])
+			mu.Lock()
+			defer mu.Unlock()
+			innodbBufferPoolsData[tblStr] = val
+			return nil
 		})
 	}
-	return errorGroup.Wait()
+	err := errorGroup.Wait()
+	return innodbBufferPoolsData, err
 }

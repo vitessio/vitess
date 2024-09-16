@@ -359,6 +359,18 @@ func (f *FakeQueryService) ReadTransaction(ctx context.Context, target *querypb.
 	return Metadata, nil
 }
 
+// UnresolvedTransactions is part of the queryservice.QueryService interface
+func (f *FakeQueryService) UnresolvedTransactions(ctx context.Context, target *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	if f.HasError {
+		return nil, f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkTargetCallerID(ctx, "UnresolvedTransactions", target)
+	return []*querypb.TransactionMetadata{Metadata}, nil
+}
+
 // ExecuteQuery is a fake test query.
 const ExecuteQuery = "executeQuery"
 

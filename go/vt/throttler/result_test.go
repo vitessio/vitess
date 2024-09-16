@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	resultIncreased = result{
+	resultIncreased = Result{
 		Now:                          sinceZero(1234 * time.Millisecond),
 		RateChange:                   increasedRate,
 		lastRateChange:               sinceZero(1 * time.Millisecond),
@@ -46,7 +46,7 @@ var (
 		GuessedReplicationBacklogOld: 0,
 		GuessedReplicationBacklogNew: 0,
 	}
-	resultDecreased = result{
+	resultDecreased = Result{
 		Now:                          sinceZero(5000 * time.Millisecond),
 		RateChange:                   decreasedRate,
 		lastRateChange:               sinceZero(1234 * time.Millisecond),
@@ -68,7 +68,7 @@ var (
 		GuessedReplicationBacklogOld: 10,
 		GuessedReplicationBacklogNew: 20,
 	}
-	resultEmergency = result{
+	resultEmergency = Result{
 		Now:                          sinceZero(10123 * time.Millisecond),
 		RateChange:                   decreasedRate,
 		lastRateChange:               sinceZero(5000 * time.Millisecond),
@@ -94,7 +94,7 @@ var (
 
 func TestResultString(t *testing.T) {
 	testcases := []struct {
-		r    result
+		r    Result
 		want string
 	}{
 		{
@@ -134,24 +134,24 @@ reason: emergency state decreased the rate`,
 
 func TestResultRing(t *testing.T) {
 	// Test data.
-	r1 := result{Reason: "r1"}
-	r2 := result{Reason: "r2"}
-	r3 := result{Reason: "r3"}
+	r1 := Result{Reason: "r1"}
+	r2 := Result{Reason: "r2"}
+	r3 := Result{Reason: "r3"}
 
 	rr := newResultRing(2)
 
 	// Use the ring partially.
 	rr.add(r1)
-	got, want := rr.latestValues(), []result{r1}
+	got, want := rr.latestValues(), []Result{r1}
 	require.Equal(t, want, got, "items not correctly added to resultRing")
 
 	// Use it fully.
 	rr.add(r2)
-	got, want = rr.latestValues(), []result{r2, r1}
+	got, want = rr.latestValues(), []Result{r2, r1}
 	require.Equal(t, want, got, "items not correctly added to resultRing")
 
 	// Let it wrap.
 	rr.add(r3)
-	got, want = rr.latestValues(), []result{r3, r2}
+	got, want = rr.latestValues(), []Result{r3, r2}
 	require.Equal(t, want, got, "resultRing did not wrap correctly")
 }

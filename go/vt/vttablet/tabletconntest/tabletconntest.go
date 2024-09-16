@@ -399,6 +399,33 @@ func testReadTransactionPanics(t *testing.T, conn queryservice.QueryService, f *
 	})
 }
 
+func testUnresolvedTransactions(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testUnresolvedTransactions")
+	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+	transactions, err := conn.UnresolvedTransactions(ctx, TestTarget)
+	require.NoError(t, err)
+	require.True(t, proto.Equal(transactions[0], Metadata))
+}
+
+func testUnresolvedTransactionsError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testUnresolvedTransactionsError")
+	f.HasError = true
+	testErrorHelper(t, f, "UnresolvedTransactions", func(ctx context.Context) error {
+		_, err := conn.UnresolvedTransactions(ctx, TestTarget)
+		return err
+	})
+	f.HasError = false
+}
+
+func testUnresolvedTransactionsPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testUnresolvedTransactionsPanics")
+	testPanicHelper(t, f, "UnresolvedTransactions", func(ctx context.Context) error {
+		_, err := conn.UnresolvedTransactions(ctx, TestTarget)
+		return err
+	})
+}
+
 func testExecute(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testExecute")
 	f.ExpectedTransactionID = ExecuteTransactionID
@@ -936,6 +963,7 @@ func TestSuite(ctx context.Context, t *testing.T, protocol string, tablet *topod
 		testSetRollback,
 		testConcludeTransaction,
 		testReadTransaction,
+		testUnresolvedTransactions,
 		testExecute,
 		testBeginExecute,
 		testStreamExecute,
@@ -956,6 +984,7 @@ func TestSuite(ctx context.Context, t *testing.T, protocol string, tablet *topod
 		testSetRollbackError,
 		testConcludeTransactionError,
 		testReadTransactionError,
+		testUnresolvedTransactionsError,
 		testExecuteError,
 		testBeginExecuteErrorInBegin,
 		testBeginExecuteErrorInExecute,
@@ -979,6 +1008,7 @@ func TestSuite(ctx context.Context, t *testing.T, protocol string, tablet *topod
 		testSetRollbackPanics,
 		testConcludeTransactionPanics,
 		testReadTransactionPanics,
+		testUnresolvedTransactionsPanics,
 		testExecutePanics,
 		testBeginExecutePanics,
 		testStreamExecutePanics,

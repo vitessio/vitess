@@ -95,14 +95,7 @@ func (ts *tableStreamer) Stream() error {
 	defer conn.Close()
 	ts.snapshotConn = conn
 
-	_, err = conn.ExecuteFetch("set session session_track_gtids = START_GTID", 1, false)
-	if err != nil {
-		// session_track_gtids = START_GTID unsupported or cannot execute. Resort to LOCK-based snapshot
-		ts.gtid, err = conn.startSnapshotAllTables(ts.ctx)
-	} else {
-		// session_track_gtids = START_GTID supported. Get a transaction with consistent GTID without LOCKing tables.
-		ts.gtid, err = conn.startSnapshotWithConsistentGTID(ts.ctx)
-	}
+	ts.gtid, err = conn.startSnapshotAllTables(ts.ctx)
 	if err != nil {
 		return err
 	}

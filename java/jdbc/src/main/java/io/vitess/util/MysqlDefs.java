@@ -87,6 +87,7 @@ public final class MysqlDefs {
   static final int FIELD_TYPE_VARCHAR = 15;
   // Newer data types
   static final int FIELD_TYPE_YEAR = 13;
+  static final int FIELD_TYPE_VECTOR = 242;
   static final int FIELD_TYPE_JSON = 245;
   static final int INIT_DB = 2;
 
@@ -166,6 +167,7 @@ public final class MysqlDefs {
     mysqlToJdbcTypesMap.put("SET", mysqlToJavaType(FIELD_TYPE_SET));
     mysqlToJdbcTypesMap.put("GEOMETRY", mysqlToJavaType(FIELD_TYPE_GEOMETRY));
     mysqlToJdbcTypesMap.put("JSON", mysqlToJavaType(FIELD_TYPE_JSON));
+    mysqlToJdbcTypesMap.put("VECTOR", mysqlToJavaType(FIELD_TYPE_VECTOR));
   }
 
   static {
@@ -200,6 +202,7 @@ public final class MysqlDefs {
     vitesstoMySqlType.put(Query.Type.TUPLE, Types.OTHER);
     vitesstoMySqlType.put(Query.Type.GEOMETRY, Types.BINARY);
     vitesstoMySqlType.put(Query.Type.JSON, Types.CHAR);
+    vitesstoMySqlType.put(Query.Type.VECTOR, Types.BINARY);
   }
 
   static {
@@ -337,6 +340,7 @@ public final class MysqlDefs {
 
         break;
       case MysqlDefs.FIELD_TYPE_GEOMETRY:
+      case MysqlDefs.FIELD_TYPE_VECTOR:
         jdbcType = Types.BINARY;
 
         break;
@@ -423,6 +427,8 @@ public final class MysqlDefs {
       return mysqlToJavaType(FIELD_TYPE_BIT);
     } else if (mysqlType.equalsIgnoreCase("JSON")) {
       return mysqlToJavaType(FIELD_TYPE_JSON);
+    } else if (mysqlType.equalsIgnoreCase("VECTOR")) {
+      return mysqlToJavaType(FIELD_TYPE_VECTOR);
     }
 
     // Punt
@@ -508,6 +514,9 @@ public final class MysqlDefs {
 
       case MysqlDefs.FIELD_TYPE_GEOMETRY:
         return "FIELD_TYPE_GEOMETRY";
+
+      case MysqlDefs.FIELD_TYPE_VECTOR:
+        return "FIELD_TYPE_VECTOR";
 
       case MysqlDefs.FIELD_TYPE_JSON:
         return "FIELD_TYPE_JSON";

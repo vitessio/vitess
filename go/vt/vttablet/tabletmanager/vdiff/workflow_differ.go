@@ -205,7 +205,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		}
 		log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
 		diffTimer = time.NewTimer(maxDiffRuntime)
-		diffReport, diffErr = td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows, diffTimer.C)
+		diffReport, diffErr = td.diff(ctx, wd.opts.CoreOptions, wd.opts.ReportOptions, diffTimer.C)
 		if diffErr == nil { // We finished the diff successfully
 			break
 		}

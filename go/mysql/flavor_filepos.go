@@ -32,19 +32,25 @@ import (
 )
 
 type filePosFlavor struct {
-	format     BinlogFormat
-	file       string
-	savedEvent BinlogEvent
+	format        BinlogFormat
+	file          string
+	savedEvent    BinlogEvent
+	serverVersion string
 }
 
 // newFilePosFlavor creates a new filePos flavor.
-func newFilePosFlavor() flavor {
-	return &filePosFlavor{}
+func newFilePosFlavor(serverVersion string) flavor {
+	return &filePosFlavor{serverVersion: serverVersion}
 }
 
 // primaryGTIDSet is part of the Flavor interface.
 func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
-	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
+	query := "SHOW MASTER STATUS"
+	if ok, err := c.SupportsCapability(capabilities.BinaryLogStatus); err == nil && ok {
+		query = "SHOW BINARY LOG STATUS"
+	}
+
+	qr, err := c.ExecuteFetch(query, 100, true /* wantfields */)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +148,7 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 		}
 		switch result[0] {
 		case EOFPacket:
-			return nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", io.EOF)
+			return nil, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", io.EOF)
 		case ErrPacket:
 			return nil, ParseErrorPacket(result)
 		}
@@ -291,14 +297,21 @@ func (flv *filePosFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos re
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "position is not filePos compatible: %#v", pos.GTIDSet)
 	}
+	queryPos := "SELECT MASTER_POS_WAIT('%s', %d)"
+	queryPosSub := "SELECT MASTER_POS_WAIT('%s', %d, %.6f)"
 
-	query := fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.File, filePosPos.Pos)
+	if ok, err := c.SupportsCapability(capabilities.ReplicaTerminologyCapability); err == nil && ok {
+		queryPos = "SELECT SOURCE_POS_WAIT('%s', %d)"
+		queryPosSub = "SELECT SOURCE_POS_WAIT('%s', %d, %.6f)"
+	}
+
+	query := fmt.Sprintf(queryPos, filePosPos.File, filePosPos.Pos)
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
 			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
-		query = fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %.6f)", filePosPos.File, filePosPos.Pos, timeout.Seconds())
+		query = fmt.Sprintf(queryPosSub, filePosPos.File, filePosPos.Pos, timeout.Seconds())
 	}
 
 	result, err := c.ExecuteFetch(query, 1, false)
@@ -354,8 +367,10 @@ func (*filePosFlavor) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (*filePosFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+func (f *filePosFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
+	case capabilities.BinaryLogStatus:
+		return capabilities.ServerVersionAtLeast(f.serverVersion, 8, 2, 0)
 	default:
 		return false, nil
 	}

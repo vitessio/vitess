@@ -335,7 +335,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool) (*[]string, error) {
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
-		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
+		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: %v", message, err)
 		wr.Logger().Error(werr)
 		return nil, werr
 	}
@@ -346,7 +346,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	}
 	if ts == nil {
 		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
-		return handleError("failed to get the current state of the workflow", fmt.Errorf(errorMsg))
+		return handleError("failed to get the current state of the workflow", errors.New(errorMsg))
 	}
 	log.Infof("Switching reads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflowName, servedTypes, cells, ws)
 	var switchReplicas, switchRdonly bool
@@ -478,7 +478,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	cancel, reverse, reverseReplication bool, dryRun, initializeTargetSequences bool) (journalID int64, dryRunResults *[]string, err error) {
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
-		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
+		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: %v", message, err)
 		wr.Logger().Error(werr)
 		return 0, nil, werr
 	}
@@ -490,7 +490,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	}
 	if ts == nil {
 		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
-		return handleError("failed to get the current workflow state", fmt.Errorf(errorMsg))
+		return handleError("failed to get the current workflow state", errors.New(errorMsg))
 	}
 
 	var sw iswitcher
@@ -1723,7 +1723,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		_ = ts.ForAllSources(func(source *workflow.MigrationSource) error {
 			wg.Add(1)
 			if source.GetShard().IsPrimaryServing {
-				rec.RecordError(fmt.Errorf(fmt.Sprintf("Shard %s is still serving", source.GetShard().ShardName())))
+				rec.RecordError(fmt.Errorf("Shard %s is still serving", source.GetShard().ShardName()))
 			}
 			wg.Done()
 			return nil

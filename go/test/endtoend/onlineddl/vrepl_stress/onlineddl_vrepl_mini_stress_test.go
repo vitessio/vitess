@@ -229,7 +229,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
+func TestVreplMiniStressSchemaChanges(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	ctx := context.Background()
@@ -237,7 +237,7 @@ func TestSchemaChange(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("create schema", func(t *testing.T) {
 		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))

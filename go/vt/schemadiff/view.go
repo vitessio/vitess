@@ -310,6 +310,18 @@ func NewCreateViewEntity(env *Environment, c *sqlparser.CreateView) (*CreateView
 	return entity, nil
 }
 
+func NewCreateViewEntityFromSQL(env *Environment, sql string) (*CreateViewEntity, error) {
+	stmt, err := env.Parser().ParseStrictDDL(sql)
+	if err != nil {
+		return nil, err
+	}
+	createView, ok := stmt.(*sqlparser.CreateView)
+	if !ok {
+		return nil, ErrExpectedCreateTable
+	}
+	return NewCreateViewEntity(env, createView)
+}
+
 func (c *CreateViewEntity) normalize() {
 	// Drop the default algorithm
 	if strings.EqualFold(c.CreateView.Algorithm, "undefined") {

@@ -574,7 +574,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "bad query",
 			}},
 		},
-		err: "syntax error at position 4 near 'bad' in query: bad query",
+		err: "failed to build table replication plan for t1 table: syntax error at position 4 near 'bad' in query: bad query",
 	}, {
 		// not a select
 		input: &binlogdatapb.Filter{
@@ -583,7 +583,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "update t1 set val = 1",
 			}},
 		},
-		err: "unsupported non-select statement in query: update t1 set val = 1",
+		err: "failed to build table replication plan for t1 table: unsupported non-select statement in query: update t1 set val = 1",
 	}, {
 		// no distinct
 		input: &binlogdatapb.Filter{
@@ -592,7 +592,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select distinct c1 from t1",
 			}},
 		},
-		err: "unsupported distinct clause in query: select distinct c1 from t1",
+		err: "failed to build table replication plan for t1 table: unsupported distinct clause in query: select distinct c1 from t1",
 	}, {
 		// no ',' join
 		input: &binlogdatapb.Filter{
@@ -601,7 +601,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from t1, t2",
 			}},
 		},
-		err: "unsupported multi-table usage in query: select * from t1, t2",
+		err: "failed to build table replication plan for t1 table: unsupported multi-table usage in query: select * from t1, t2",
 	}, {
 		// no join
 		input: &binlogdatapb.Filter{
@@ -610,7 +610,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from t1 join t2",
 			}},
 		},
-		err: "unsupported from expression (*sqlparser.JoinTableExpr) in query: select * from t1 join t2",
+		err: "failed to build table replication plan for t1 table: unsupported from expression (*sqlparser.JoinTableExpr) in query: select * from t1 join t2",
 	}, {
 		// no subqueries
 		input: &binlogdatapb.Filter{
@@ -619,7 +619,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from (select * from t2) as a",
 			}},
 		},
-		err: "unsupported from source (*sqlparser.DerivedTable) in query: select * from (select * from t2) as a",
+		err: "failed to build table replication plan for t1 table: unsupported from source (*sqlparser.DerivedTable) in query: select * from (select * from t2) as a",
 	}, {
 		// cannot combine '*' with other
 		input: &binlogdatapb.Filter{
@@ -628,7 +628,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select *, c1 from t1",
 			}},
 		},
-		err: "unsupported mix of '*' and columns in query: select *, c1 from t1",
+		err: "failed to build table replication plan for t1 table: unsupported mix of '*' and columns in query: select *, c1 from t1",
 	}, {
 		// cannot combine '*' with other (different code path)
 		input: &binlogdatapb.Filter{
@@ -637,7 +637,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select c1, * from t1",
 			}},
 		},
-		err: "invalid expression: * in query: select c1, * from t1",
+		err: "failed to build table replication plan for t1 table: invalid expression: * in query: select c1, * from t1",
 	}, {
 		// no distinct in func
 		input: &binlogdatapb.Filter{
@@ -646,7 +646,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select hour(distinct c1) as a from t1",
 			}},
 		},
-		err: "syntax error at position 21 near 'distinct' in query: select hour(distinct c1) as a from t1",
+		err: "failed to build table replication plan for t1 table: syntax error at position 21 near 'distinct' in query: select hour(distinct c1) as a from t1",
 	}, {
 		// funcs need alias
 		input: &binlogdatapb.Filter{
@@ -655,7 +655,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select hour(c1) from t1",
 			}},
 		},
-		err: "expression needs an alias: hour(c1) in query: select hour(c1) from t1",
+		err: "failed to build table replication plan for t1 table: expression needs an alias: hour(c1) in query: select hour(c1) from t1",
 	}, {
 		// only count(*)
 		input: &binlogdatapb.Filter{
@@ -664,7 +664,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select count(c1) as c from t1",
 			}},
 		},
-		err: "only count(*) is supported: count(c1) in query: select count(c1) as c from t1",
+		err: "failed to build table replication plan for t1 table: only count(*) is supported: count(c1) in query: select count(c1) as c from t1",
 	}, {
 		// no sum(*)
 		input: &binlogdatapb.Filter{
@@ -673,7 +673,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(*) as c from t1",
 			}},
 		},
-		err: "syntax error at position 13 in query: select sum(*) as c from t1",
+		err: "failed to build table replication plan for t1 table: syntax error at position 13 in query: select sum(*) as c from t1",
 	}, {
 		// sum should have only one argument
 		input: &binlogdatapb.Filter{
@@ -682,7 +682,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(a, b) as c from t1",
 			}},
 		},
-		err: "syntax error at position 14 in query: select sum(a, b) as c from t1",
+		err: "failed to build table replication plan for t1 table: syntax error at position 14 in query: select sum(a, b) as c from t1",
 	}, {
 		// no complex expr in sum
 		input: &binlogdatapb.Filter{
@@ -691,7 +691,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(a + b) as c from t1",
 			}},
 		},
-		err: "unsupported non-column name in sum clause: sum(a + b) in query: select sum(a + b) as c from t1",
+		err: "failed to build table replication plan for t1 table: unsupported non-column name in sum clause: sum(a + b) in query: select sum(a + b) as c from t1",
 	}, {
 		// no complex expr in group by
 		input: &binlogdatapb.Filter{
@@ -700,7 +700,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select a from t1 group by a + 1",
 			}},
 		},
-		err: "unsupported non-column name or alias in group by clause: a + 1 in query: select a from t1 group by a + 1",
+		err: "failed to build table replication plan for t1 table: unsupported non-column name or alias in group by clause: a + 1 in query: select a from t1 group by a + 1",
 	}, {
 		// group by does not reference alias
 		input: &binlogdatapb.Filter{
@@ -709,7 +709,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select a as b from t1 group by a",
 			}},
 		},
-		err: "group by expression does not reference an alias in the select list: a in query: select a as b from t1 group by a",
+		err: "failed to build table replication plan for t1 table: group by expression does not reference an alias in the select list: a in query: select a as b from t1 group by a",
 	}, {
 		// cannot group by aggr
 		input: &binlogdatapb.Filter{
@@ -718,7 +718,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select count(*) as a from t1 group by a",
 			}},
 		},
-		err: "group by expression is not allowed to reference an aggregate expression: a in query: select count(*) as a from t1 group by a",
+		err: "failed to build table replication plan for t1 table: group by expression is not allowed to reference an aggregate expression: a in query: select count(*) as a from t1 group by a",
 	}}
 
 	PrimaryKeyInfos := map[string][]*ColumnInfo{

@@ -223,8 +223,10 @@
         "Aggregates": "count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": "3",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -237,8 +239,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where id > 12) as x limit 10",
+                    "FieldQuery": "select 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select 1 from (select phone, id, city from `user` where id > 12) as x limit 10",
                     "Table": "`user`"
                   }
                 ]
@@ -336,8 +338,12 @@
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": "1,2,3",
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":1 as val1",
+              "1 as 1",
+              ":2 as weight_string(val1)"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -350,9 +356,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
-                    "OrderBy": "(1|3) ASC",
-                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by `user`.val1 asc limit 2",
+                    "FieldQuery": "select x.id, x.val1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
+                    "OrderBy": "(1|2) ASC",
+                    "Query": "select x.id, x.val1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2",
                     "Table": "`user`"
                   }
                 ]
@@ -479,7 +485,6 @@
             "Variant": "Ordered",
             "Aggregates": "max(1|3) AS bazo",
             "GroupBy": "(0|2)",
-            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -518,7 +523,6 @@
             "Variant": "Ordered",
             "Aggregates": "sum_count(1) AS bazo",
             "GroupBy": "(0|2)",
-            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -565,7 +569,6 @@
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "GroupBy": "0, (1|2)",
-                "ResultColumns": 2,
                 "Inputs": [
                   {
                     "OperatorType": "SimpleProjection",
@@ -574,7 +577,7 @@
                       {
                         "OperatorType": "Aggregate",
                         "Variant": "Scalar",
-                        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS a, any_value(2)",
+                        "Aggregates": "any_value(0|2) AS id, sum_count_star(1) AS a",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -583,9 +586,9 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select id, count(*) as a, weight_string(id) from `user` where 1 != 1",
-                            "OrderBy": "1 ASC, (0|2) ASC",
-                            "Query": "select id, count(*) as a, weight_string(id) from `user` order by count(*) asc, id asc",
+                            "FieldQuery": "select dt.c0 as id, dt.c1 as a, weight_string(dt.c0), weight_string(dt.c0) from (select id, count(*) as a from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                            "OrderBy": "1 ASC, (0|3) ASC",
+                            "Query": "select dt.c0 as id, dt.c1 as a, weight_string(dt.c0), weight_string(dt.c0) from (select id, count(*) as a from `user` order by count(*) asc, id asc) as dt(c0, c1)",
                             "Table": "`user`"
                           }
                         ]
@@ -718,13 +721,15 @@
         "Aggregates": "count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": "1",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Scalar",
-                "Aggregates": "sum_count_star(0) AS count(*), any_value(1)",
+                "Aggregates": "sum_count_star(0) AS count(*)",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -733,8 +738,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(*), 1 from `user` where 1 != 1",
-                    "Query": "select count(*), 1 from `user`",
+                    "FieldQuery": "select count(*) from `user` where 1 != 1",
+                    "Query": "select count(*) from `user`",
                     "Table": "`user`"
                   }
                 ]
@@ -1999,8 +2004,11 @@
                     "Aggregates": "any_value(0), sum(1) AS sum(num)",
                     "Inputs": [
                       {
-                        "OperatorType": "SimpleProjection",
-                        "Columns": "1,0",
+                        "OperatorType": "Projection",
+                        "Expressions": [
+                          "1000 as 1000",
+                          ":0 as num"
+                        ],
                         "Inputs": [
                           {
                             "OperatorType": "Concatenate",
@@ -2012,11 +2020,13 @@
                                   {
                                     "OperatorType": "Aggregate",
                                     "Variant": "Scalar",
-                                    "Aggregates": "count_star(0) AS num, any_value(1)",
+                                    "Aggregates": "count_star(0) AS num",
                                     "Inputs": [
                                       {
-                                        "OperatorType": "SimpleProjection",
-                                        "Columns": "1,2",
+                                        "OperatorType": "Projection",
+                                        "Expressions": [
+                                          "1 as 1"
+                                        ],
                                         "Inputs": [
                                           {
                                             "OperatorType": "Limit",
@@ -2029,8 +2039,8 @@
                                                   "Name": "user",
                                                   "Sharded": true
                                                 },
-                                                "FieldQuery": "select t.id, 1, 1000 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'open' and `user`.intcol = 1) as t limit :__upper_limit",
+                                                "FieldQuery": "select 1 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+                                                "Query": "select 1 from (select `user`.id from `user` where `user`.textcol1 = 'open' and `user`.intcol = 1) as t limit :__upper_limit",
                                                 "Table": "`user`"
                                               }
                                             ]
@@ -2048,11 +2058,13 @@
                                   {
                                     "OperatorType": "Aggregate",
                                     "Variant": "Scalar",
-                                    "Aggregates": "count_star(0) AS num, any_value(1)",
+                                    "Aggregates": "count_star(0) AS num",
                                     "Inputs": [
                                       {
-                                        "OperatorType": "SimpleProjection",
-                                        "Columns": "1,2",
+                                        "OperatorType": "Projection",
+                                        "Expressions": [
+                                          "1 as 1"
+                                        ],
                                         "Inputs": [
                                           {
                                             "OperatorType": "Limit",
@@ -2065,8 +2077,8 @@
                                                   "Name": "user",
                                                   "Sharded": true
                                                 },
-                                                "FieldQuery": "select t.id, 1, 1000 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'closed' and `user`.intcol = 1) as t limit :__upper_limit",
+                                                "FieldQuery": "select 1 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+                                                "Query": "select 1 from (select `user`.id from `user` where `user`.textcol1 = 'closed' and `user`.intcol = 1) as t limit :__upper_limit",
                                                 "Table": "`user`"
                                               }
                                             ]
@@ -2091,6 +2103,462 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE that cannot be merged",
+    "query": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "JoinVars": {
+              "cte_id": 1
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, id from `user` where 1 != 1",
+                "Query": "select `name`, id from `user` where manager_id is null",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.`name`, e.id from `user` as e where 1 != 1",
+                "Query": "select e.`name`, e.id from `user` as e where e.manager_id = :cte_id",
+                "Table": "`user`, dual"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE that cannot be merged 2",
+    "query": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from cte join user e on e.manager_id = cte.id) select name from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from cte join user e on e.manager_id = cte.id) select name from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "JoinVars": {
+              "cte_id": 1
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, id from `user` where 1 != 1",
+                "Query": "select `name`, id from `user` where manager_id is null",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.`name`, e.id from `user` as e where 1 != 1",
+                "Query": "select e.`name`, e.id from `user` as e where e.manager_id = :cte_id",
+                "Table": "`user`, dual"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Merge into a single dual route",
+    "query": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "with recursive cte as (select 1 as n from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 as n from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "Table": "dual"
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with star projection",
+    "query": "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "with recursive cte as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "Table": "dual"
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE calculations on the term side - merged",
+    "query": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL and id = 6 UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id and e.id = 6) SELECT * FROM emp_cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL and id = 6 UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id and e.id = 6) SELECT * FROM emp_cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive emp_cte as (select id, 1 as `level` from `user` where 1 != 1 union all select e.id, cte.`level` + 1 from cte as cte, `user` as e where 1 != 1) select id, `level` from emp_cte where 1 != 1",
+        "Query": "with recursive emp_cte as (select id, 1 as `level` from `user` where manager_id is null and id = 6 union all select e.id, cte.`level` + 1 from cte as cte, `user` as e where e.id = 6 and e.manager_id = cte.id) select id, `level` from emp_cte",
+        "Table": "`user`, dual",
+        "Values": [
+          "6"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE calculations on the term side - unmerged",
+    "query": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id) SELECT * FROM emp_cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE emp_cte AS (SELECT id, 1 AS level FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, cte.level + 1 FROM user e JOIN emp_cte cte ON e.manager_id = cte.id) SELECT * FROM emp_cte",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "cte_id": 0,
+          "cte_level": 1
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, 1 as `level` from `user` where 1 != 1",
+            "Query": "select id, 1 as `level` from `user` where manager_id is null",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where 1 != 1",
+            "Query": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where e.manager_id = :cte_id",
+            "Table": "`user`, dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Outer join with recursive CTE",
+    "query": "WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 100 AS value, 1 AS manager_id UNION ALL SELECT id + 1, value * 2, id FROM literal_cte WHERE id < 5) SELECT l.id, l.value, l.manager_id, e.name AS employee_name FROM literal_cte l LEFT JOIN user e ON l.id = e.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 100 AS value, 1 AS manager_id UNION ALL SELECT id + 1, value * 2, id FROM literal_cte WHERE id < 5) SELECT l.id, l.value, l.manager_id, e.name AS employee_name FROM literal_cte l LEFT JOIN user e ON l.id = e.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,L:1,L:2,R:0",
+        "JoinVars": {
+          "l_id": 0
+        },
+        "TableName": "dual_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "with recursive literal_cte as (select 1 as id, 100 as value, 1 as manager_id from dual where 1 != 1 union all select id + 1, value * 2, id from literal_cte where 1 != 1) select l.id, l.value, l.manager_id from literal_cte as l where 1 != 1",
+            "Query": "with recursive literal_cte as (select 1 as id, 100 as value, 1 as manager_id from dual union all select id + 1, value * 2, id from literal_cte where id < 5) select l.id, l.value, l.manager_id from literal_cte as l",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select e.`name` as employee_name from `user` as e where 1 != 1",
+            "Query": "select e.`name` as employee_name from `user` as e where e.id = :l_id",
+            "Table": "`user`",
+            "Values": [
+              ":l_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Aggregation on the output of a recursive CTE",
+    "query": "WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, e.name, e.manager_id FROM user e INNER JOIN emp_cte cte ON e.manager_id = cte.id) SELECT manager_id, COUNT(*) AS employee_count FROM emp_cte GROUP BY manager_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, e.name, e.manager_id FROM user e INNER JOIN emp_cte cte ON e.manager_id = cte.id) SELECT manager_id, COUNT(*) AS employee_count FROM emp_cte GROUP BY manager_id",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count_star(1) AS employee_count",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":2 as manager_id",
+              "1 as 1",
+              "weight_string(:2) as weight_string(manager_id)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(2|3) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "RecurseCTE",
+                    "JoinVars": {
+                      "cte_id": 0
+                    },
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, dt.c2 as manager_id, weight_string(dt.c2) from (select id, `name`, manager_id from `user` where 1 != 1) as dt(c0, c1, c2) where 1 != 1",
+                        "Query": "select dt.c0 as id, dt.c1 as `name`, dt.c2 as manager_id, weight_string(dt.c2) from (select id, `name`, manager_id from `user` where manager_id is null) as dt(c0, c1, c2)",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select e.id, e.`name`, e.manager_id, weight_string(e.manager_id) from `user` as e where 1 != 1",
+                        "Query": "select e.id, e.`name`, e.manager_id, weight_string(e.manager_id) from `user` as e where e.manager_id = :cte_id",
+                        "Table": "`user`, dual"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Query that can be merged, dual on the RHS of the UNION",
+    "query": "with recursive cte as (select id from user where id = 72 union all select id+1 from cte where id < 100) select * from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id from user where id = 72 union all select id+1 from cte where id < 100) select * from cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select id from `user` where 1 != 1 union all select id + 1 from cte where 1 != 1) select id from cte where 1 != 1",
+        "Query": "with recursive cte as (select id from `user` where id = 72 union all select id + 1 from cte where id < 100) select id from cte",
+        "Table": "`user`, dual",
+        "Values": [
+          "72"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Merge CTE with reference tables",
+    "query": "with recursive cte as (select ue.id, ue.foo from user u join user_extra ue on u.id = ue.user_id union all select sr.id, sr.foo from cte join main.source_of_ref sr on sr.foo = cte.foo join main.rerouted_ref rr on rr.bar = sr.bar) select * from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select ue.id, ue.foo from user u join user_extra ue on u.id = ue.user_id union all select sr.id, sr.foo from cte join main.source_of_ref sr on sr.foo = cte.foo join main.rerouted_ref rr on rr.bar = sr.bar) select * from cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select ue.id, ue.foo from `user` as u, user_extra as ue where 1 != 1 union all select sr.id, sr.foo from ref_with_source as sr, ref as rr where 1 != 1) select id, foo from cte where 1 != 1",
+        "Query": "with recursive cte as (select ue.id, ue.foo from `user` as u, user_extra as ue where u.id = ue.user_id union all select sr.id, sr.foo from ref_with_source as sr, ref as rr where rr.bar = sr.bar and sr.foo = cte.foo) select id, foo from cte",
+        "Table": "`user`, ref, ref_with_source, user_extra"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.ref_with_source",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Merge CTE with reference tables 2",
+    "query": "with recursive cte as (select sr.id, sr.foo from main.source_of_ref sr join main.rerouted_ref rr on rr.bar = sr.bar union all select ue.id, ue.foo from cte join user_extra ue on cte.foo = ue.foo join user u on ue.user_id = u.id) select * from cte",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select sr.id, sr.foo from main.source_of_ref sr join main.rerouted_ref rr on rr.bar = sr.bar union all select ue.id, ue.foo from cte join user_extra ue on cte.foo = ue.foo join user u on ue.user_id = u.id) select * from cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select 1 from ref_with_source as sr, ref as rr where 1 != 1 union all select ue.id, ue.foo from cte, user_extra as ue, `user` as u where 1 != 1) select id, foo from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 from ref_with_source as sr, ref as rr where rr.bar = sr.bar union all select ue.id, ue.foo from cte, user_extra as ue, `user` as u where ue.user_id = u.id and cte.foo = ue.foo) select id, foo from cte",
+        "Table": "`user`, dual, ref, ref_with_source, user_extra"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.ref",
+        "user.ref_with_source",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Merged recursive CTE with DISTINCT",
+    "query": "WITH RECURSIVE hierarchy AS (SELECT id, name, manager_id FROM user UNION ALL SELECT id, name, manager_id FROM user UNION DISTINCT SELECT id*2, name, manager_id from hierarchy WHERE id < 10 ) SELECT * FROM hierarchy",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE hierarchy AS (SELECT id, name, manager_id FROM user UNION ALL SELECT id, name, manager_id FROM user UNION DISTINCT SELECT id*2, name, manager_id from hierarchy WHERE id < 10 ) SELECT * FROM hierarchy",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive hierarchy as (select id, `name`, manager_id from `user` where 1 != 1 union all select id, `name`, manager_id from `user` where 1 != 1 union select id * 2, `name`, manager_id from hierarchy where 1 != 1) select id, `name`, manager_id from hierarchy where 1 != 1",
+        "Query": "with recursive hierarchy as (select id, `name`, manager_id from `user` union all select id, `name`, manager_id from `user` union select id * 2, `name`, manager_id from hierarchy where id < 10) select id, `name`, manager_id from hierarchy",
+        "Table": "`user`, dual"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Query that caused planner to stack overflow",
+    "query": "SELECT * FROM (SELECT 1 UNION ALL SELECT 2) AS dt(a) WHERE EXISTS(WITH RECURSIVE qn AS (SELECT a * 0 AS b UNION ALL SELECT b + 1 FROM qn WHERE b = 0) SELECT * FROM qn WHERE b = a)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM (SELECT 1 UNION ALL SELECT 2) AS dt(a) WHERE EXISTS(WITH RECURSIVE qn AS (SELECT a * 0 AS b UNION ALL SELECT b + 1 FROM qn WHERE b = 0) SELECT * FROM qn WHERE b = a)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select a from (select 1 from dual where 1 != 1 union all select 2 from dual where 1 != 1) as dt(a) where 1 != 1",
+        "Query": "select a from (select 1 from dual union all select 2 from dual) as dt(a) where exists (with recursive qn as (select a * 0 as b from dual union all select b + 1 from qn where b = 0) select 1 from qn where b = a)",
+        "Table": "dual"
+      },
+      "TablesUsed": [
+        "main.dual"
       ]
     }
   }

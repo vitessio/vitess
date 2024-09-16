@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -110,9 +109,7 @@ func TestRootWithInternalVtctld(t *testing.T) {
 
 			err := command.Root.Execute()
 			if tc.expectErr != "" {
-				if !strings.Contains(err.Error(), tc.expectErr) {
-					t.Errorf(fmt.Sprintf("%s error = %v, expectErr = %v", tc.command, err, tc.expectErr))
-				}
+				require.ErrorContains(t, err, tc.expectErr)
 			} else {
 				require.NoError(t, err, "unexpected error: %v", err)
 			}

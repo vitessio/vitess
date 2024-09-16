@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -115,7 +116,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		ts:              ts,
 		se:              se,
 		cell:            cell,
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VStreamerName, throttle.ThrottleCheckSelf),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VStreamerName, base.UndefinedScope),
 
 		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
@@ -232,7 +233,10 @@ func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Conn
 
 // Stream starts a new stream.
 // This streams events from the binary logs
-func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
+	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name,
+	send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
+
 	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
 		return err
 	}
@@ -249,7 +253,8 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 		}
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
-		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, throttlerApp, send)
+		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs,
+			filter, vse.lvschema, throttlerApp, send, options)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++

@@ -256,7 +256,7 @@ func TestPrepareRollback(t *testing.T) {
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 	err = client.RollbackPrepared("aa", 0)
 	require.NoError(t, err)
@@ -540,7 +540,7 @@ func TestMMCommitFlow(t *testing.T) {
 	info.TimeCreated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
-		State: 2,
+		State: querypb.TransactionState_COMMIT,
 		Participants: []*querypb.Target{{
 			Keyspace:   "test1",
 			Shard:      "0",
@@ -593,7 +593,7 @@ func TestMMRollbackFlow(t *testing.T) {
 	info.TimeCreated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
-		State: 3,
+		State: querypb.TransactionState_ROLLBACK,
 		Participants: []*querypb.Target{{
 			Keyspace:   "test1",
 			Shard:      "0",
@@ -612,7 +612,43 @@ func TestMMRollbackFlow(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestWatchdog(t *testing.T) {
+type AsyncChecker struct {
+	t  *testing.T
+	ch chan bool
+}
+
+func newAsyncChecker(t *testing.T) *AsyncChecker {
+	return &AsyncChecker{
+		t:  t,
+		ch: make(chan bool),
+	}
+}
+
+func (ac *AsyncChecker) check() {
+	ac.ch <- true
+}
+
+func (ac *AsyncChecker) shouldNotify(timeout time.Duration, message string) {
+	select {
+	case <-ac.ch:
+		// notified, all is well
+	case <-time.After(timeout):
+		// timed out waiting for notification
+		ac.t.Error(message)
+	}
+}
+func (ac *AsyncChecker) shouldNotNotify(timeout time.Duration, message string) {
+	select {
+	case <-ac.ch:
+		// notified - not expected
+		ac.t.Error(message)
+	case <-time.After(timeout):
+		// timed out waiting for notification, which is expected
+	}
+}
+
+// TestTransactionWatcherSignal test that unresolved transaction signal is received via health stream.
+func TestTransactionWatcherSignal(t *testing.T) {
 	client := framework.NewClient()
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
@@ -622,44 +658,38 @@ func TestWatchdog(t *testing.T) {
 	_, err = client.Execute(query, nil)
 	require.NoError(t, err)
 
-	start := time.Now()
-	err = client.CreateTransaction("aa", []*querypb.Target{{
-		Keyspace: "test1",
-		Shard:    "0",
-	}, {
-		Keyspace: "test2",
-		Shard:    "1",
-	}})
+	ch := newAsyncChecker(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+			if shr.RealtimeStats.TxUnresolved {
+				ch.check()
+			}
+			return nil
+		})
+		require.NoError(t, err)
+	}()
+
+	err = client.CreateTransaction("aa", []*querypb.Target{
+		{Keyspace: "test1", Shard: "0"},
+		{Keyspace: "test2", Shard: "1"}})
 	require.NoError(t, err)
 
-	// The watchdog should kick in after 1 second.
-	dtid := <-framework.ResolveChan
-	if dtid != "aa" {
-		t.Errorf("dtid: %s, want aa", dtid)
-	}
-	diff := time.Since(start)
-	if diff < 1*time.Second {
-		t.Errorf("diff: %v, want greater than 1s", diff)
-	}
+	// wait for unresolved transaction signal
+	ch.shouldNotify(2*time.Second, "timed out waiting for transaction watcher signal")
 
 	err = client.SetRollback("aa", 0)
 	require.NoError(t, err)
+
+	// still should receive unresolved transaction signal
+	ch.shouldNotify(2*time.Second, "timed out waiting for transaction watcher signal")
+
 	err = client.ConcludeTransaction("aa")
 	require.NoError(t, err)
 
-	// Make sure the watchdog stops sending messages.
-	// Check twice. Sometimes, a race can still cause
-	// a stray message.
-	dtid = ""
-	for i := 0; i < 2; i++ {
-		select {
-		case dtid = <-framework.ResolveChan:
-			continue
-		case <-time.After(2 * time.Second):
-			return
-		}
-	}
-	t.Errorf("Unexpected message: %s", dtid)
+	// transaction watcher should stop sending singal now.
+	ch.shouldNotNotify(2*time.Second, "unexpected signal for resolved transaction")
 }
 
 func TestUnresolvedTracking(t *testing.T) {
@@ -736,4 +766,96 @@ func TestManualTwopcz(t *testing.T) {
 	fmt.Printf("%s/twopcz\n", framework.ServerAddress)
 	fmt.Print("Sleeping for 30 seconds\n")
 	time.Sleep(30 * time.Second)
+}
+
+// TestUnresolvedTransactions tests the UnresolvedTransactions API.
+func TestUnresolvedTransactions(t *testing.T) {
+	client := framework.NewClient()
+
+	participants := []*querypb.Target{
+		{Keyspace: "ks1", Shard: "80-c0", TabletType: topodatapb.TabletType_PRIMARY},
+	}
+	err := client.CreateTransaction("dtid01", participants)
+	require.NoError(t, err)
+	defer client.ConcludeTransaction("dtid01")
+
+	// expected no transaction to show here, as 1 second not passed.
+	transactions, err := client.UnresolvedTransactions()
+	require.NoError(t, err)
+	require.Empty(t, transactions)
+
+	// abandon age is 1 second.
+	time.Sleep(2 * time.Second)
+
+	transactions, err = client.UnresolvedTransactions()
+	require.NoError(t, err)
+	want := []*querypb.TransactionMetadata{{
+		Dtid:         "dtid01",
+		State:        querypb.TransactionState_PREPARE,
+		Participants: participants,
+	}}
+	utils.MustMatch(t, want, transactions)
+}
+
+// TestUnresolvedTransactions tests the UnresolvedTransactions API.
+func TestUnresolvedTransactionsOrdering(t *testing.T) {
+	client := framework.NewClient()
+
+	participants1 := []*querypb.Target{
+		{Keyspace: "ks1", Shard: "c0-", TabletType: topodatapb.TabletType_PRIMARY},
+		{Keyspace: "ks1", Shard: "80-c0", TabletType: topodatapb.TabletType_PRIMARY},
+	}
+	participants2 := []*querypb.Target{
+		{Keyspace: "ks1", Shard: "-40", TabletType: topodatapb.TabletType_PRIMARY},
+		{Keyspace: "ks1", Shard: "80-c0", TabletType: topodatapb.TabletType_PRIMARY},
+	}
+	participants3 := []*querypb.Target{
+		{Keyspace: "ks1", Shard: "c0-", TabletType: topodatapb.TabletType_PRIMARY},
+		{Keyspace: "ks1", Shard: "-40", TabletType: topodatapb.TabletType_PRIMARY},
+	}
+	// prepare state
+	err := client.CreateTransaction("dtid01", participants1)
+	require.NoError(t, err)
+	defer client.ConcludeTransaction("dtid01")
+
+	// commit state
+	err = client.CreateTransaction("dtid02", participants2)
+	require.NoError(t, err)
+	defer client.ConcludeTransaction("dtid02")
+	_, err = client.Execute(
+		fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'dtid02'", querypb.TransactionState_COMMIT.Number()), nil)
+	require.NoError(t, err)
+
+	// rollback state
+	err = client.CreateTransaction("dtid03", participants3)
+	require.NoError(t, err)
+	defer client.ConcludeTransaction("dtid03")
+	_, err = client.Execute(
+		fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'dtid03'", querypb.TransactionState_ROLLBACK.Number()), nil)
+	require.NoError(t, err)
+
+	// expected no transaction to show here, as 1 second not passed.
+	transactions, err := client.UnresolvedTransactions()
+	require.NoError(t, err)
+	require.Empty(t, transactions)
+
+	// abandon age is 1 second.
+	time.Sleep(2 * time.Second)
+
+	transactions, err = client.UnresolvedTransactions()
+	require.NoError(t, err)
+	want := []*querypb.TransactionMetadata{{
+		Dtid:         "dtid02",
+		State:        querypb.TransactionState_COMMIT,
+		Participants: participants2,
+	}, {
+		Dtid:         "dtid03",
+		State:        querypb.TransactionState_ROLLBACK,
+		Participants: participants3,
+	}, {
+		Dtid:         "dtid01",
+		State:        querypb.TransactionState_PREPARE,
+		Participants: participants1,
+	}}
+	utils.MustMatch(t, want, transactions)
 }

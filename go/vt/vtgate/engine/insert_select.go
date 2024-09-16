@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -93,9 +94,6 @@ func (ins *InsertSelect) RouteType() string {
 
 // TryExecute performs a non-streaming exec.
 func (ins *InsertSelect) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, ins.QueryTimeout)
-	defer cancelFunc()
-
 	if ins.Keyspace.Sharded {
 		return ins.execInsertSharded(ctx, vcursor, bindVars)
 	}
@@ -111,8 +109,11 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 		}
 		return callback(res)
 	}
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, ins.QueryTimeout)
-	defer cancelFunc()
+	if ins.QueryTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(ins.QueryTimeout)*time.Millisecond)
+		defer cancel()
+	}
 
 	sharded := ins.Keyspace.Sharded
 	output := &sqltypes.Result{}

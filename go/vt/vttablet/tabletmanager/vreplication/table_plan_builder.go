@@ -161,7 +161,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 		}
 		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser)
 		if err != nil {
-			return nil, err
+			return nil, vterrors.Wrapf(err, "failed to build table replication plan for %s table", tableName)
 		}
 		if tablePlan == nil {
 			// Table was excluded.
@@ -598,7 +598,7 @@ func (tpb *tablePlanBuilder) analyzePK(cols []*ColumnInfo) error {
 			// TODO(shlomi): at some point in the futue we want to make this check stricter.
 			// We could be reading a generated column c1 which in turn selects some other column c2.
 			// We will want t oensure that `c2` is found in select list...
-			return fmt.Errorf("primary key column %v not found in select list", col)
+			return fmt.Errorf("primary key column %v not found in table's select filter or the TableMap event within the GTID", col)
 		}
 		if cexpr.operation != opExpr {
 			return fmt.Errorf("primary key column %v is not allowed to reference an aggregate expression", col)

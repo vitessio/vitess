@@ -87,7 +87,7 @@ func (ast *astCompiler) translateComparisonExpr2(op sqlparser.ComparisonExprOper
 			Negate: op == sqlparser.NotRegexpOp,
 		}, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, op.ToString())
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, op.ToString())
 	}
 }
 

@@ -67,6 +67,7 @@ var querypbTypes = []querypb.Type{querypb.Type_NULL_TYPE,
 	querypb.Type_SET,
 	querypb.Type_GEOMETRY,
 	querypb.Type_JSON,
+	querypb.Type_VECTOR,
 	querypb.Type_EXPRESSION}
 
 // All valid vindexes

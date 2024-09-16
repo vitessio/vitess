@@ -61,6 +61,10 @@ func newEvalText(raw []byte, col collations.TypedCollation) *evalBytes {
 	return newEvalRaw(sqltypes.VarChar, raw, col)
 }
 
+func newEvalVector(raw []byte) *evalBytes {
+	return newEvalRaw(sqltypes.Vector, raw, collationBinary)
+}
+
 func evalToBinary(e eval) *evalBytes {
 	if e, ok := e.(*evalBytes); ok && e.isBinary() && !e.isHexOrBitLiteral() {
 		return e

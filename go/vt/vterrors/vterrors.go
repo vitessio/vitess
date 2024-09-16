@@ -150,10 +150,14 @@ func Errorf(code vtrpcpb.Code, format string, args ...any) error {
 // NewErrorf also records the stack trace at the point it was called.
 // Use this for errors in Vitess that we eventually want to mimic as a MySQL error
 func NewErrorf(code vtrpcpb.Code, state State, format string, args ...any) error {
-	msg := format
-	if len(args) != 0 {
-		msg = fmt.Sprintf(format, args...)
-	}
+	return NewError(code, state, fmt.Sprintf(format, args...))
+}
+
+// NewErrorf formats according to a format specifier and returns the string
+// as a value that satisfies error.
+// NewErrorf also records the stack trace at the point it was called.
+// Use this for errors in Vitess that we eventually want to mimic as a MySQL error
+func NewError(code vtrpcpb.Code, state State, msg string) error {
 	return &fundamental{
 		msg:   msg,
 		code:  code,
@@ -251,14 +255,7 @@ func Wrap(err error, message string) error {
 // at the point Wrapf is call, and the format specifier.
 // If err is nil, Wrapf returns nil.
 func Wrapf(err error, format string, args ...any) error {
-	if err == nil {
-		return nil
-	}
-	return &wrapping{
-		cause: err,
-		msg:   fmt.Sprintf(format, args...),
-		stack: callers(),
-	}
+	return Wrap(err, fmt.Sprintf(format, args...))
 }
 
 // Unwrap attempts to return the Cause of the given error, if it is indeed the result of a vterrors.Wrapf()

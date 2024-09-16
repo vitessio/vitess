@@ -58,16 +58,18 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
-var _ engine.VCursor = (*vcursorImpl)(nil)
-var _ plancontext.VSchema = (*vcursorImpl)(nil)
-var _ iExecute = (*Executor)(nil)
-var _ vindexes.VCursor = (*vcursorImpl)(nil)
+var (
+	_ engine.VCursor      = (*vcursorImpl)(nil)
+	_ plancontext.VSchema = (*vcursorImpl)(nil)
+	_ iExecute            = (*Executor)(nil)
+	_ vindexes.VCursor    = (*vcursorImpl)(nil)
+)
 
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
 	Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-	ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
-	StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error) []error
+	ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver resultsObserver) (qr *sqltypes.Result, errs []error)
+	StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer resultsObserver) []error
 	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 	Commit(ctx context.Context, safeSession *SafeSession) error
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
@@ -86,6 +88,8 @@ type iExecute interface {
 	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
 
 	environment() *vtenv.Environment
+	ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
+	UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error)
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -118,12 +122,15 @@ type vcursorImpl struct {
 	vm                  VSchemaOperator
 	semTable            *semantics.SemTable
 	warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
+	queryTimeout        time.Duration
 
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 	pv       plancontext.PlannerVersion
 
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
+
+	resultsObserver resultsObserver
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -191,6 +198,7 @@ func newVCursorImpl(
 		pv:                  pv,
 		warmingReadsPercent: warmingReadsPct,
 		warmingReadsChannel: warmingReadsChan,
+		resultsObserver:     nullResultsObserver{},
 	}, nil
 }
 
@@ -248,6 +256,27 @@ func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
 // IsShardRoutingEnabled implements the VCursor interface.
 func (vc *vcursorImpl) IsShardRoutingEnabled() bool {
 	return enableShardRouting
+}
+
+func (vc *vcursorImpl) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	return vc.executor.ReadTransaction(ctx, transactionID)
+}
+
+// UnresolvedTransactions gets the unresolved transactions for the given keyspace. If the keyspace is not given,
+// then we use the default keyspace.
+func (vc *vcursorImpl) UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error) {
+	if keyspace == "" {
+		keyspace = vc.GetKeyspace()
+	}
+	rss, _, err := vc.ResolveDestinations(ctx, keyspace, nil, []key.Destination{key.DestinationAllShards{}})
+	if err != nil {
+		return nil, err
+	}
+	var targets []*querypb.Target
+	for _, rs := range rss {
+		targets = append(targets, rs.Target)
+	}
+	return vc.executor.UnresolvedTransactions(ctx, targets)
 }
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
@@ -577,7 +606,7 @@ func (vc *vcursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 		return nil, []error{err}
 	}
 
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, canAutocommit, vc.ignoreMaxMemoryRows)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.resultsObserver)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 
 	return qr, errs
@@ -592,7 +621,7 @@ func (vc *vcursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 		return []error{err}
 	}
 
-	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession, autocommit, callback)
+	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession, autocommit, callback, vc.resultsObserver)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 
 	return errs
@@ -615,7 +644,7 @@ func (vc *vcursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.resultsObserver)
 	return qr, vterrors.Aggregate(errs)
 }
 
@@ -814,7 +843,7 @@ func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sq
 
 // TargetDestination implements the ContextVSchema interface
 func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
-	keyspaceName := vc.keyspace
+	keyspaceName := vc.getActualKeyspace()
 	if vc.destination == nil && qualifier != "" {
 		keyspaceName = qualifier
 	}
@@ -842,22 +871,6 @@ func (vc *vcursorImpl) SetAutocommit(ctx context.Context, autocommit bool) error
 // SetQueryTimeout implements the SessionActions interface
 func (vc *vcursorImpl) SetQueryTimeout(maxExecutionTime int64) {
 	vc.safeSession.QueryTimeout = maxExecutionTime
-}
-
-// GetQueryTimeout implements the SessionActions interface
-// The priority of adding query timeouts -
-// 1. Query timeout comment directive.
-// 2. If the comment directive is unspecified, then we use the session setting.
-// 3. If the comment directive and session settings is unspecified, then we use the global default specified by a flag.
-func (vc *vcursorImpl) GetQueryTimeout(queryTimeoutFromComments int) int {
-	if queryTimeoutFromComments != 0 {
-		return queryTimeoutFromComments
-	}
-	sessionQueryTimeout := int(vc.safeSession.GetQueryTimeout())
-	if sessionQueryTimeout != 0 {
-		return sessionQueryTimeout
-	}
-	return queryTimeout
 }
 
 // SetClientFoundRows implements the SessionActions interface
@@ -899,7 +912,41 @@ func (vc *vcursorImpl) SetPriority(priority string) {
 	} else if vc.safeSession.Options != nil && vc.safeSession.Options.Priority != "" {
 		vc.safeSession.Options.Priority = ""
 	}
+}
 
+func (vc *vcursorImpl) SetExecQueryTimeout(timeout *int) {
+	// Determine the effective timeout: use passed timeout if non-nil, otherwise use session's query timeout if available
+	var execTimeout *int
+	if timeout != nil {
+		execTimeout = timeout
+	} else if sessionTimeout := vc.getQueryTimeout(); sessionTimeout > 0 {
+		execTimeout = &sessionTimeout
+	}
+
+	// If no effective timeout and no session options, return early
+	if execTimeout == nil {
+		if vc.safeSession.GetOptions() == nil {
+			return
+		}
+		vc.safeSession.GetOrCreateOptions().Timeout = nil
+		return
+	}
+
+	vc.queryTimeout = time.Duration(*execTimeout) * time.Millisecond
+	// Set the authoritative timeout using the determined execTimeout
+	vc.safeSession.GetOrCreateOptions().Timeout = &querypb.ExecuteOptions_AuthoritativeTimeout{
+		AuthoritativeTimeout: int64(*execTimeout),
+	}
+}
+
+// getQueryTimeout returns timeout based on the priority
+// session setting > global default specified by a flag.
+func (vc *vcursorImpl) getQueryTimeout() int {
+	sessionQueryTimeout := int(vc.safeSession.GetQueryTimeout())
+	if sessionQueryTimeout != 0 {
+		return sessionQueryTimeout
+	}
+	return queryTimeout
 }
 
 // SetConsolidator implements the SessionActions interface
@@ -1079,6 +1126,23 @@ func (vc *vcursorImpl) GetAggregateUDFs() []string {
 	return vc.vschema.GetAggregateUDFs()
 }
 
+// FindMirrorRule finds the mirror rule for the requested table name and
+// VSchema tablet type.
+func (vc *vcursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	destKeyspace, destTabletType, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	if destKeyspace == "" {
+		destKeyspace = vc.keyspace
+	}
+	mirrorRule, err := vc.vschema.FindMirrorRule(destKeyspace, name.Name.String(), destTabletType)
+	if err != nil {
+		return nil, err
+	}
+	return mirrorRule, err
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
@@ -1139,7 +1203,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	allowed := vschemaacl.Authorized(user)
 	if !allowed {
 		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform vschema operations", user.GetUsername())
-
 	}
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
@@ -1156,7 +1219,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 
 	ks := srvVschema.Keyspaces[ksName]
 	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, vschemaDDL)
-
 	if err != nil {
 		return err
 	}
@@ -1164,7 +1226,6 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	srvVschema.Keyspaces[ksName] = ks
 
 	return vc.vm.UpdateVSchema(ctx, ksName, srvVschema)
-
 }
 
 func (vc *vcursorImpl) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
@@ -1225,7 +1286,16 @@ func (vc *vcursorImpl) ThrottleApp(ctx context.Context, throttledAppRule *topoda
 		if throttlerConfig.ThrottledApps == nil {
 			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
 		}
-		throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			// TODO(shlomi) in v22: replace the following line with the commented out block
+			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// timeNow := time.Now()
+			// if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+			// 	throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// } else {
+			// 	delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			// }
+		}
 		return throttlerConfig
 	}
 
@@ -1278,6 +1348,7 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 		topoServer:      vc.topoServer,
 		warnShardedOnly: vc.warnShardedOnly,
 		pv:              vc.pv,
+		resultsObserver: vc.resultsObserver,
 	}
 }
 
@@ -1288,6 +1359,7 @@ func (vc *vcursorImpl) VExplainLogging() {
 func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
 }
+
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
 }
@@ -1349,9 +1421,42 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
+		resultsObserver:     nullResultsObserver{},
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
+
+	return v
+}
+
+func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
+	callerId := callerid.EffectiveCallerIDFromContext(ctx)
+	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
+
+	clonedCtx := callerid.NewContext(ctx, callerId, immediateCallerId)
+
+	v := &vcursorImpl{
+		safeSession:         NewAutocommitSession(vc.safeSession.Session),
+		keyspace:            vc.keyspace,
+		tabletType:          vc.tabletType,
+		destination:         vc.destination,
+		marginComments:      vc.marginComments,
+		executor:            vc.executor,
+		resolver:            vc.resolver,
+		topoServer:          vc.topoServer,
+		logStats:            &logstats.LogStats{Ctx: clonedCtx},
+		collation:           vc.collation,
+		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
+		vschema:             vc.vschema,
+		vm:                  vc.vm,
+		semTable:            vc.semTable,
+		warnShardedOnly:     vc.warnShardedOnly,
+		warnings:            vc.warnings,
+		pv:                  vc.pv,
+		resultsObserver:     nullResultsObserver{},
+	}
+
+	v.marginComments.Trailing += "/* mirror query */"
 
 	return v
 }

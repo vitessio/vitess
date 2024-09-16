@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/textutil"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -65,14 +66,14 @@ var (
 				}
 				changes = true
 			} else {
-				updateOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}
+				updateOptions.TabletTypes = textutil.SimulatedNullTabletTypeSlice
 			}
 			if cmd.Flags().Lookup("on-ddl").Changed { // Validate the provided value
 				changes = true
 				if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(updateOptions.OnDDL)]; !ok {
 					return fmt.Errorf("invalid on-ddl value: %s", updateOptions.OnDDL)
 				}
-			} // Simulated NULL will need to be handled in command
+			}
 			if !changes {
 				return fmt.Errorf("no configuration options specified to update")
 			}
@@ -85,15 +86,6 @@ var (
 func commandUpdate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	// We've already validated any provided value, if one WAS provided.
-	// Now we need to do the mapping from the string representation to
-	// the enum value.
-	onddl := int32(textutil.SimulatedNullInt) // Simulated NULL when no value provided
-	if val, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(updateOptions.OnDDL)]; ok {
-		onddl = val
-	}
-
-	// Simulated NULL when no value is provided.
 	tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
 	if cmd.Flags().Lookup("tablet-types-in-order").Changed {
 		if updateOptions.TabletTypesInPreferenceOrder {
@@ -109,10 +101,15 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			Workflow:                  baseOptions.Workflow,
 			Cells:                     updateOptions.Cells,
 			TabletTypes:               updateOptions.TabletTypes,
-			TabletSelectionPreference: tsp,
-			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
-			State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt), // We don't allow changing this in the client command
+			TabletSelectionPreference: &tsp,
 		},
+	}
+
+	// We've already validated any provided value, if one WAS provided.
+	// Now we need to do the mapping from the string representation to
+	// the enum value.
+	if val, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(updateOptions.OnDDL)]; ok {
+		req.TabletRequest.OnDdl = ptr.Of(binlogdatapb.OnDDLAction(val))
 	}
 
 	resp, err := common.GetClient().WorkflowUpdate(common.GetCommandCtx(), req)

@@ -54,7 +54,7 @@ func TestThrottlerlogzHandler(t *testing.T) {
 
 	testcases := []struct {
 		desc string
-		r    result
+		r    Result
 		want string
 	}{
 		{
@@ -147,7 +147,9 @@ func TestThrottlerlogzHandler(t *testing.T) {
 		request, _ := http.NewRequest("GET", "/throttlerlogz/t1", nil)
 		response := httptest.NewRecorder()
 
-		f.t1.maxReplicationLagModule.results.add(tc.r)
+		throttler, ok := f.t1.(*ThrottlerImpl)
+		require.True(t, ok)
+		throttler.maxReplicationLagModule.results.add(tc.r)
 		throttlerlogzHandler(response, request, f.m)
 
 		got := response.Body.String()

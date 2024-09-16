@@ -32,6 +32,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -321,8 +322,8 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
 	if tc.testCLIFlagHandling {
+		// This creates and then deletes the vdiff so we don't increment the count.
 		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
-		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
 	}
 
 	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
@@ -378,6 +379,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			UpdateTableStats:      true,
 			TimeoutSeconds:        60,
 			MaxDiffSeconds:        333,
+			AutoStart:             ptr.Of(false),
 		},
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			SourceCell:  "zone1,zone2,zone3,zonefoosource",
@@ -385,8 +387,9 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			TabletTypes: "replica,primary,rdonly",
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			MaxSampleRows: 888,
-			OnlyPks:       true,
+			MaxSampleRows:           888,
+			OnlyPks:                 true,
+			RowDiffColumnTruncateAt: 444,
 		},
 	}
 
@@ -404,6 +407,8 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			fmt.Sprintf("--update-table-stats=%t", expectedOptions.CoreOptions.UpdateTableStats),
 			fmt.Sprintf("--auto-retry=%t", expectedOptions.CoreOptions.AutoRetry),
 			fmt.Sprintf("--only-pks=%t", expectedOptions.ReportOptions.OnlyPks),
+			fmt.Sprintf("--row-diff-column-truncate-at=%d", expectedOptions.ReportOptions.RowDiffColumnTruncateAt),
+			fmt.Sprintf("--auto-start=%t", *expectedOptions.CoreOptions.AutoStart),
 			"--tablet-types-in-preference-order=false", // So tablet_types should not start with "in_order:", which is the default
 			"--format=json") // So we can easily grab the UUID
 		require.NoError(t, err, "vdiff command failed: %s", res)
@@ -428,6 +433,11 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		err = protojson.Unmarshal(bytes, storedOptions)
 		require.NoError(t, err, "failed to unmarshal result %s to a %T: %v", string(bytes), storedOptions, err)
 		require.True(t, proto.Equal(expectedOptions, storedOptions), "stored options %v != expected options %v", storedOptions, expectedOptions)
+
+		// Delete this vdiff as we used --auto-start=false and thus it never starts and
+		// does not provide the normally expected show --verbose --format=json output.
+		_, output := performVDiff2Action(t, false, fmt.Sprintf("%s.%s", targetKs, workflowName), "", "delete", vduuid.String(), false)
+		require.Equal(t, "completed", gjson.Get(output, "Status").String())
 	})
 }
 

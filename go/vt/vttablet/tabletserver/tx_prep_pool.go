@@ -17,14 +17,16 @@ limitations under the License.
 package tabletserver
 
 import (
-	"errors"
 	"fmt"
 	"sync"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	errPrepCommitting = errors.New("committing")
-	errPrepFailed     = errors.New("failed")
+	errPrepCommitting = vterrors.VT09025("locked for committing")
+	errPrepFailed     = vterrors.VT09025("failed to commit")
 )
 
 // TxPreparedPool manages connections for prepared transactions.
@@ -34,20 +36,46 @@ type TxPreparedPool struct {
 	mu       sync.Mutex
 	conns    map[string]*StatefulConnection
 	reserved map[string]error
+	// open tells if the prepared pool is open for accepting transactions.
+	open     bool
 	capacity int
+	// twoPCEnabled is set to true if 2PC is enabled.
+	twoPCEnabled bool
 }
 
 // NewTxPreparedPool creates a new TxPreparedPool.
-func NewTxPreparedPool(capacity int) *TxPreparedPool {
+func NewTxPreparedPool(capacity int, twoPCEnabled bool) *TxPreparedPool {
 	if capacity < 0 {
 		// If capacity is 0 all prepares will fail.
 		capacity = 0
 	}
 	return &TxPreparedPool{
-		conns:    make(map[string]*StatefulConnection, capacity),
-		reserved: make(map[string]error),
-		capacity: capacity,
+		conns:        make(map[string]*StatefulConnection, capacity),
+		reserved:     make(map[string]error),
+		capacity:     capacity,
+		twoPCEnabled: twoPCEnabled,
 	}
+}
+
+// Open marks the prepared pool open for use.
+func (pp *TxPreparedPool) Open() {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	pp.open = true
+}
+
+// Close marks the prepared pool closed.
+func (pp *TxPreparedPool) Close() {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	pp.open = false
+}
+
+// IsOpen checks if the prepared pool is open for use.
+func (pp *TxPreparedPool) IsOpen() bool {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	return pp.open
 }
 
 // Put adds the connection to the pool. It returns an error
@@ -55,14 +83,18 @@ func NewTxPreparedPool(capacity int) *TxPreparedPool {
 func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+	// If the pool is shutdown, we don't accept new prepared transactions.
+	if !pp.open {
+		return vterrors.VT09025("pool is shutdown")
+	}
 	if _, ok := pp.reserved[dtid]; ok {
-		return errors.New("duplicate DTID in Prepare: " + dtid)
+		return vterrors.VT09025("duplicate DTID in Prepare: " + dtid)
 	}
 	if _, ok := pp.conns[dtid]; ok {
-		return errors.New("duplicate DTID in Prepare: " + dtid)
+		return vterrors.VT09025("duplicate DTID in Prepare: " + dtid)
 	}
 	if len(pp.conns) >= pp.capacity {
-		return fmt.Errorf("prepared transactions exceeded limit: %d", pp.capacity)
+		return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, fmt.Sprintf("prepared transactions exceeded limit: %d", pp.capacity))
 	}
 	pp.conns[dtid] = c
 	return nil
@@ -95,6 +127,11 @@ func (pp *TxPreparedPool) FetchForRollback(dtid string) *StatefulConnection {
 func (pp *TxPreparedPool) FetchForCommit(dtid string) (*StatefulConnection, error) {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+	// If the pool is shutdown, we don't have any connections to return.
+	// That however doesn't mean this transaction was committed, it could very well have been rollbacked.
+	if !pp.open {
+		return nil, vterrors.VT09025("pool is shutdown")
+	}
 	if err, ok := pp.reserved[dtid]; ok {
 		return nil, err
 	}
@@ -121,11 +158,12 @@ func (pp *TxPreparedPool) Forget(dtid string) {
 	delete(pp.reserved, dtid)
 }
 
-// FetchAll removes all connections and returns them as a list.
+// FetchAllForRollback removes all connections and returns them as a list.
 // It also forgets all reserved dtids.
-func (pp *TxPreparedPool) FetchAll() []*StatefulConnection {
+func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+	pp.open = false
 	conns := make([]*StatefulConnection, 0, len(pp.conns))
 	for _, c := range pp.conns {
 		conns = append(conns, c)
@@ -133,4 +171,26 @@ func (pp *TxPreparedPool) FetchAll() []*StatefulConnection {
 	pp.conns = make(map[string]*StatefulConnection, pp.capacity)
 	pp.reserved = make(map[string]error)
 	return conns
+}
+
+func (pp *TxPreparedPool) IsEmpty(tableName string) bool {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	if !pp.twoPCEnabled {
+		return true
+	}
+	// If the pool is shutdown, we do not know the correct state of prepared transactions.
+	if !pp.open {
+		return false
+	}
+	for _, connection := range pp.conns {
+		for _, query := range connection.txProps.Queries {
+			for _, table := range query.Tables {
+				if table == tableName {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

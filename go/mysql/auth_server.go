@@ -428,7 +428,7 @@ func (n *mysqlNativePasswordAuthMethod) AllowClearTextWithoutTLS() bool {
 
 func (n *mysqlNativePasswordAuthMethod) HandleAuthPluginData(conn *Conn, user string, serverAuthPluginData []byte, clientAuthPluginData []byte, remoteAddr net.Addr) (Getter, error) {
 	if serverAuthPluginData[len(serverAuthPluginData)-1] != 0x00 {
-		return nil, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return nil, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	salt := serverAuthPluginData[:len(serverAuthPluginData)-1]
@@ -520,7 +520,7 @@ func (n *mysqlCachingSha2AuthMethod) AllowClearTextWithoutTLS() bool {
 
 func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, serverAuthPluginData []byte, clientAuthPluginData []byte, remoteAddr net.Addr) (Getter, error) {
 	if serverAuthPluginData[len(serverAuthPluginData)-1] != 0x00 {
-		return nil, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return nil, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	salt := serverAuthPluginData[:len(serverAuthPluginData)-1]
@@ -532,7 +532,7 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 
 	switch cacheState {
 	case AuthRejected:
-		return nil, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return nil, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	case AuthAccepted:
 		// We need to write a more data packet to indicate the
 		// handshake completed properly. This  will be followed
@@ -547,7 +547,7 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 		return result, nil
 	case AuthNeedMoreData:
 		if !c.TLSEnabled() && !c.IsUnixSocket() {
-			return nil, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+			return nil, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 		}
 
 		data, pos := c.startEphemeralPacketWithHeader(2)
@@ -563,7 +563,7 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 		return n.storage.UserEntryWithPassword(c, user, password, remoteAddr)
 	default:
 		// Somehow someone returned an unknown state, let's error with access denied.
-		return nil, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return nil, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 }
 
@@ -601,7 +601,7 @@ func newSalt() ([]byte, error) {
 	}
 
 	// Salt must be a legal UTF8 string.
-	for i := 0; i < len(salt); i++ {
+	for i := range len(salt) {
 		salt[i] &= 0x7f
 		if salt[i] == '\x00' || salt[i] == '$' {
 			salt[i]++

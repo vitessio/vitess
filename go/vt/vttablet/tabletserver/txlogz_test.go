@@ -60,7 +60,7 @@ func testHandler(req *http.Request, t *testing.T) {
 			ImmediateCaller: callerid.NewImmediateCallerID("immediate-caller"),
 			StartTime:       time.Now(),
 			Conclusion:      "unknown",
-			Queries:         []string{"select * from test"},
+			Queries:         []tx.Query{{Sql: "select * from test"}},
 		},
 	}
 	txConn.txProps.EndTime = txConn.txProps.StartTime

@@ -158,7 +158,7 @@ type flavor interface {
 // flavorFuncs maps flavor names to their implementation.
 // Flavors need to register only if they support being specified in the
 // connection parameters.
-var flavorFuncs = make(map[string]func() flavor)
+var flavorFuncs = make(map[string]func(serverVersion string) flavor)
 
 // GetFlavor fills in c.Flavor. If the params specify the flavor,
 // that is used. Otherwise, we auto-detect.
@@ -172,11 +172,11 @@ var flavorFuncs = make(map[string]func() flavor)
 // Note on such servers, 'select version()' would return 10.0.21-MariaDB-...
 // as well (not matching what c.ServerVersion is, but matching after we remove
 // the prefix).
-func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capableOf capabilities.CapableOf, canonicalVersion string) {
+func GetFlavor(serverVersion string, flavorFunc func(serverVersion string) flavor) (f flavor, capableOf capabilities.CapableOf, canonicalVersion string) {
 	canonicalVersion = serverVersion
 	switch {
 	case flavorFunc != nil:
-		f = flavorFunc()
+		f = flavorFunc(serverVersion)
 	case strings.HasPrefix(serverVersion, mariaDBReplicationHackPrefix):
 		canonicalVersion = serverVersion[len(mariaDBReplicationHackPrefix):]
 		f = mariadbFlavor101{mariadbFlavor{serverVersion: canonicalVersion}}
@@ -282,7 +282,7 @@ func (c *Conn) GetServerUUID() (string, error) {
 
 // PrimaryFilePosition returns the current primary's file based replication position.
 func (c *Conn) PrimaryFilePosition() (replication.Position, error) {
-	filePosFlavor := filePosFlavor{}
+	filePosFlavor := filePosFlavor{serverVersion: c.ServerVersion}
 	gtidSet, err := filePosFlavor.primaryGTIDSet(c)
 	if err != nil {
 		return replication.Position{}, err
@@ -440,7 +440,7 @@ func (c *Conn) CatchupToGTIDCommands(params *ConnParams, pos replication.Positio
 // the context expires for the file position flavor. It returns an error if
 // we did not succeed.
 func (c *Conn) WaitUntilFilePosition(ctx context.Context, pos replication.Position) error {
-	filePosFlavor := filePosFlavor{}
+	filePosFlavor := filePosFlavor{serverVersion: c.ServerVersion}
 	return filePosFlavor.waitUntilPosition(ctx, c, pos)
 }
 

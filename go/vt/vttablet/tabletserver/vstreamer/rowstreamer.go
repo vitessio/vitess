@@ -388,9 +388,9 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		}
 
 		// check throttler.
-		if !rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.RowStreamerName) {
+		if checkResult, ok := rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.RowStreamerName); !ok {
 			throttleResponseRateLimiter.Do(func() error {
-				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true})
+				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true, ThrottledReason: checkResult.Summary()})
 			})
 			logger.Infof("throttled.")
 			continue

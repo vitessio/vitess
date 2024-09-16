@@ -69,6 +69,9 @@ service Query {
   // ReadTransaction returns the 2pc transaction info.
   rpc ReadTransaction(query.ReadTransactionRequest) returns (query.ReadTransactionResponse) {};
 
+  // UnresolvedTransactions returns the 2pc transaction info.
+  rpc UnresolvedTransactions(query.UnresolvedTransactionsRequest) returns (query.UnresolvedTransactionsResponse) {};
+
   // BeginExecute executes a begin and the specified SQL query.
   rpc BeginExecute(query.BeginExecuteRequest) returns (query.BeginExecuteResponse) {};
 

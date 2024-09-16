@@ -18,7 +18,6 @@ package vitessdriver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 
@@ -153,14 +152,6 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 }
 
 func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
-	return nil
-}
-
-// ResolveTransaction is part of the VTGateService interface
-func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
-	if dtid != dtid2 {
-		return errors.New("ResolveTransaction: dtid mismatch")
-	}
 	return nil
 }
 

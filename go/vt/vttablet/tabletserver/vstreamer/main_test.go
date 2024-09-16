@@ -323,7 +323,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 			return io.EOF
 		}
 		return nil
-	})
+	}, nil)
 }
 
 func execStatement(t *testing.T, query string) {

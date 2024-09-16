@@ -197,8 +197,10 @@ func TestQueryPlanCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 
-	initialHits := qe.queryCacheHits.Get()
-	initialMisses := qe.queryCacheMisses.Get()
+	initialHits := qe.queryEnginePlanCacheHits.Get()
+	initialMisses := qe.queryEnginePlanCacheMisses.Get()
+	initialHitsDeprecated := qe.queryCacheHitsDeprecated.Get()
+	initialMissesDeprecated := qe.queryCacheMissesDeprecated.Get()
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
@@ -206,8 +208,11 @@ func TestQueryPlanCache(t *testing.T) {
 
 	assertPlanCacheSize(t, qe, 1)
 
-	require.Equal(t, int64(0), qe.queryCacheHits.Get()-initialHits)
-	require.Equal(t, int64(1), qe.queryCacheMisses.Get()-initialMisses)
+	require.Equal(t, int64(0), qe.queryEnginePlanCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
+
+	require.Equal(t, int64(0), qe.queryCacheHitsDeprecated.Get()-initialHitsDeprecated)
+	require.Equal(t, int64(1), qe.queryCacheMissesDeprecated.Get()-initialMissesDeprecated)
 
 	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
@@ -215,8 +220,11 @@ func TestQueryPlanCache(t *testing.T) {
 
 	assertPlanCacheSize(t, qe, 1)
 
-	require.Equal(t, int64(1), qe.queryCacheHits.Get()-initialHits)
-	require.Equal(t, int64(1), qe.queryCacheMisses.Get()-initialMisses)
+	require.Equal(t, int64(1), qe.queryEnginePlanCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
+
+	require.Equal(t, int64(1), qe.queryCacheHitsDeprecated.Get()-initialHitsDeprecated)
+	require.Equal(t, int64(1), qe.queryCacheMissesDeprecated.Get()-initialMissesDeprecated)
 
 	qe.ClearQueryPlanCache()
 }

@@ -19,7 +19,7 @@ package txthrottler
 import (
 	"context"
 	"math/rand/v2"
-	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -42,7 +41,7 @@ import (
 // and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
 type healthCheckFactoryFunc func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck
-type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
+type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error)
 
 var (
 	healthCheckFactory healthCheckFactoryFunc
@@ -53,7 +52,7 @@ func resetTxThrottlerFactories() {
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return discovery.NewHealthCheck(context.Background(), discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, topoServer, cell, strings.Join(cellsToWatch, ","))
 	}
-	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error) {
 		return throttler.NewThrottlerFromConfig(name, unit, threadCount, maxRate, maxReplicationLagConfig, time.Now)
 	}
 }
@@ -68,21 +67,6 @@ type TxThrottler interface {
 	Open() (err error)
 	Close()
 	Throttle(priority int, workload string) (result bool)
-}
-
-// ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
-// It is only used here to allow mocking out a throttler object.
-type ThrottlerInterface interface {
-	Throttle(threadID int) time.Duration
-	ThreadFinished(threadID int)
-	Close()
-	MaxRate() int64
-	SetMaxRate(rate int64)
-	RecordReplicationLag(time time.Time, th *discovery.TabletHealth)
-	GetConfiguration() *throttlerdatapb.Configuration
-	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
-	ResetConfiguration()
-	MaxLag(tabletType topodatapb.TabletType) uint32
 }
 
 // TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
@@ -159,7 +143,7 @@ type txThrottlerStateImpl struct {
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
 	throttleMu      sync.Mutex
-	throttler       ThrottlerInterface
+	throttler       throttler.Throttler
 	stopHealthCheck context.CancelFunc
 
 	healthCheck      discovery.HealthCheck
@@ -304,6 +288,7 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 	ctx, cancel := context.WithCancel(context.Background())
 	state.stopHealthCheck = cancel
 	state.initHealthCheckStream(txThrottler.topoServer, target)
+	state.healthCheck.RegisterStats()
 	go state.healthChecksProcessor(ctx, txThrottler.topoServer, target)
 	state.waitForTermination.Add(1)
 	go state.updateMaxLag()
@@ -314,7 +299,6 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) {
 	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.healthCheckCells)
 	ts.healthCheckChan = ts.healthCheck.Subscribe()
-
 }
 
 func (ts *txThrottlerStateImpl) closeHealthCheckStream() {
@@ -330,7 +314,7 @@ func (ts *txThrottlerStateImpl) updateHealthCheckCells(ctx context.Context, topo
 	defer cancel()
 
 	knownCells := fetchKnownCells(fetchCtx, topoServer, target)
-	if !reflect.DeepEqual(knownCells, ts.healthCheckCells) {
+	if !slices.Equal(knownCells, ts.healthCheckCells) {
 		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
 		ts.healthCheckCells = knownCells
 		ts.closeHealthCheckStream()

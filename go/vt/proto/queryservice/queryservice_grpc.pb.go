@@ -54,6 +54,8 @@ type QueryClient interface {
 	ConcludeTransaction(ctx context.Context, in *query.ConcludeTransactionRequest, opts ...grpc.CallOption) (*query.ConcludeTransactionResponse, error)
 	// ReadTransaction returns the 2pc transaction info.
 	ReadTransaction(ctx context.Context, in *query.ReadTransactionRequest, opts ...grpc.CallOption) (*query.ReadTransactionResponse, error)
+	// UnresolvedTransactions returns the 2pc transaction info.
+	UnresolvedTransactions(ctx context.Context, in *query.UnresolvedTransactionsRequest, opts ...grpc.CallOption) (*query.UnresolvedTransactionsResponse, error)
 	// BeginExecute executes a begin and the specified SQL query.
 	BeginExecute(ctx context.Context, in *query.BeginExecuteRequest, opts ...grpc.CallOption) (*query.BeginExecuteResponse, error)
 	// BeginStreamExecute executes a begin and the specified SQL query.
@@ -229,6 +231,15 @@ func (c *queryClient) ConcludeTransaction(ctx context.Context, in *query.Conclud
 func (c *queryClient) ReadTransaction(ctx context.Context, in *query.ReadTransactionRequest, opts ...grpc.CallOption) (*query.ReadTransactionResponse, error) {
 	out := new(query.ReadTransactionResponse)
 	err := c.cc.Invoke(ctx, "/queryservice.Query/ReadTransaction", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) UnresolvedTransactions(ctx context.Context, in *query.UnresolvedTransactionsRequest, opts ...grpc.CallOption) (*query.UnresolvedTransactionsResponse, error) {
+	out := new(query.UnresolvedTransactionsResponse)
+	err := c.cc.Invoke(ctx, "/queryservice.Query/UnresolvedTransactions", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -634,6 +645,8 @@ type QueryServer interface {
 	ConcludeTransaction(context.Context, *query.ConcludeTransactionRequest) (*query.ConcludeTransactionResponse, error)
 	// ReadTransaction returns the 2pc transaction info.
 	ReadTransaction(context.Context, *query.ReadTransactionRequest) (*query.ReadTransactionResponse, error)
+	// UnresolvedTransactions returns the 2pc transaction info.
+	UnresolvedTransactions(context.Context, *query.UnresolvedTransactionsRequest) (*query.UnresolvedTransactionsResponse, error)
 	// BeginExecute executes a begin and the specified SQL query.
 	BeginExecute(context.Context, *query.BeginExecuteRequest) (*query.BeginExecuteResponse, error)
 	// BeginStreamExecute executes a begin and the specified SQL query.
@@ -710,6 +723,9 @@ func (UnimplementedQueryServer) ConcludeTransaction(context.Context, *query.Conc
 }
 func (UnimplementedQueryServer) ReadTransaction(context.Context, *query.ReadTransactionRequest) (*query.ReadTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadTransaction not implemented")
+}
+func (UnimplementedQueryServer) UnresolvedTransactions(context.Context, *query.UnresolvedTransactionsRequest) (*query.UnresolvedTransactionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnresolvedTransactions not implemented")
 }
 func (UnimplementedQueryServer) BeginExecute(context.Context, *query.BeginExecuteRequest) (*query.BeginExecuteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BeginExecute not implemented")
@@ -1002,6 +1018,24 @@ func _Query_ReadTransaction_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(QueryServer).ReadTransaction(ctx, req.(*query.ReadTransactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_UnresolvedTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(query.UnresolvedTransactionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).UnresolvedTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/queryservice.Query/UnresolvedTransactions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).UnresolvedTransactions(ctx, req.(*query.UnresolvedTransactionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1360,6 +1394,10 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReadTransaction",
 			Handler:    _Query_ReadTransaction_Handler,
+		},
+		{
+			MethodName: "UnresolvedTransactions",
+			Handler:    _Query_UnresolvedTransactions_Handler,
 		},
 		{
 			MethodName: "BeginExecute",

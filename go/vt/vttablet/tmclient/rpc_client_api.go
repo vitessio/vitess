@@ -146,6 +146,12 @@ type TabletManagerClient interface {
 	// query faster. Close() should close the pool in that case.
 	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error)
 
+	// GetUnresolvedTransactions returns the list of unresolved transactions for the tablet.
+	GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error)
+
+	// ConcludeTransaction conclude the transaction on the tablet.
+	ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error
+
 	//
 	// Replication related methods
 	//
@@ -261,6 +267,7 @@ type TabletManagerClient interface {
 
 	// Throttler
 	CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error)
+	GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error)
 
 	//
 	// Management methods

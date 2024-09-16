@@ -588,15 +588,7 @@ func TestBuildPlanInclude(t *testing.T) {
 	vdenv := newTestVDiffEnv(t)
 	defer vdenv.close()
 
-	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		vdiffTestCols,
-		vdiffTestColTypes,
-	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
-	)
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
-	require.NoError(t, err)
+	ct := vdenv.createController(t, 1)
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{

@@ -346,3 +346,18 @@ func (hs *healthStreamer) reload(created, altered, dropped []*schema.Table, udfs
 	hs.state.RealtimeStats.UdfsChanged = false
 	return nil
 }
+
+// sendUnresolvedTransactionSignal sends broadcast message about unresolved transactions.
+func (hs *healthStreamer) sendUnresolvedTransactionSignal() {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	// send signal only when primary is serving.
+	if !hs.isServingPrimary {
+		return
+	}
+
+	hs.state.RealtimeStats.TxUnresolved = true
+	shr := hs.state.CloneVT()
+	hs.broadCastToClients(shr)
+	hs.state.RealtimeStats.TxUnresolved = false
+}

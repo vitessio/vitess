@@ -750,7 +750,12 @@ func testPartialSwitches(t *testing.T) {
 func testRestOfWorkflow(t *testing.T) {
 	// Relax the throttler so that it does not cause switches to fail because it can block
 	// the catchup for the intra-keyspace materialization.
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, "customer", true, false, throttlerConfig.Threshold*5, throttlerConfig.Query, nil)
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{
+		Enable:      true,
+		Threshold:   throttlerConfig.Threshold * 5,
+		CustomQuery: throttlerConfig.Query,
+	}
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, "customer", req, nil, nil)
 	require.NoError(t, err, res)
 
 	testPartialSwitches(t)

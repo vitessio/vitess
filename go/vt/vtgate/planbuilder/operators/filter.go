@@ -29,7 +29,7 @@ import (
 )
 
 type Filter struct {
-	Source     Operator
+	unaryOperator
 	Predicates []sqlparser.Expr
 
 	// PredicateWithOffsets is the evalengine expression that will finally be used.
@@ -45,28 +45,17 @@ func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
 
 func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 	return &Filter{
-		Source: op, Predicates: expr,
+		unaryOperator: newUnaryOp(op),
+		Predicates:    expr,
 	}
 }
 
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []Operator) Operator {
-	return &Filter{
-		Source:               inputs[0],
-		Predicates:           slices.Clone(f.Predicates),
-		PredicateWithOffsets: f.PredicateWithOffsets,
-		ResultColumns:        f.ResultColumns,
-	}
-}
-
-// Inputs implements the Operator interface
-func (f *Filter) Inputs() []Operator {
-	return []Operator{f.Source}
-}
-
-// SetInputs implements the Operator interface
-func (f *Filter) SetInputs(ops []Operator) {
-	f.Source = ops[0]
+	klon := *f
+	klon.Source = inputs[0]
+	klon.Predicates = slices.Clone(f.Predicates)
+	return &klon
 }
 
 // UnsolvedPredicates implements the unresolved interface

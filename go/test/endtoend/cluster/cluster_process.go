@@ -151,11 +151,12 @@ type Vttablet struct {
 
 // Keyspace : Cluster accepts keyspace to launch it
 type Keyspace struct {
-	Name          string
-	SchemaSQL     string
-	VSchema       string
-	SidecarDBName string
-	Shards        []Shard
+	Name             string
+	SchemaSQL        string
+	VSchema          string
+	SidecarDBName    string
+	DurabilityPolicy string
+	Shards           []Shard
 }
 
 // Shard with associated vttablets
@@ -284,9 +285,10 @@ func (cluster *LocalProcessCluster) startPartialKeyspace(keyspace Keyspace, shar
 
 	cluster.HasPartialKeyspaces = true
 	routedKeyspace := &Keyspace{
-		Name:      fmt.Sprintf("%s_routed", keyspace.Name),
-		SchemaSQL: keyspace.SchemaSQL,
-		VSchema:   keyspace.VSchema,
+		Name:             fmt.Sprintf("%s_routed", keyspace.Name),
+		SchemaSQL:        keyspace.SchemaSQL,
+		VSchema:          keyspace.VSchema,
+		DurabilityPolicy: keyspace.DurabilityPolicy,
 	}
 
 	err = cluster.startKeyspace(*routedKeyspace, shardNames, replicaCount, rdonly, customizers...)
@@ -374,7 +376,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 		keyspace.SidecarDBName = sidecar.DefaultName
 	}
 	// Create the keyspace if it doesn't already exist.
-	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
+	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
 	for _, shardName := range shardNames {
 		shard := &Shard{
 			Name: shardName,
@@ -538,7 +540,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		keyspace.SidecarDBName = sidecar.DefaultName
 	}
 	// Create the keyspace if it doesn't already exist.
-	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
+	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -681,7 +683,7 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 
 	if !cluster.ReusingVTDATAROOT {
 		// Create Keyspace
-		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
+		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
 		if err != nil {
 			log.Error(err)
 			return

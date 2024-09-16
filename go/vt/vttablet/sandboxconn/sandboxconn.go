@@ -26,17 +26,15 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 // SandboxConn satisfies the QueryService interface
@@ -65,22 +63,23 @@ type SandboxConn struct {
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-	ExecCount                atomic.Int64
-	BeginCount               atomic.Int64
-	CommitCount              atomic.Int64
-	RollbackCount            atomic.Int64
-	AsTransactionCount       atomic.Int64
-	PrepareCount             atomic.Int64
-	CommitPreparedCount      atomic.Int64
-	RollbackPreparedCount    atomic.Int64
-	CreateTransactionCount   atomic.Int64
-	StartCommitCount         atomic.Int64
-	SetRollbackCount         atomic.Int64
-	ConcludeTransactionCount atomic.Int64
-	ReadTransactionCount     atomic.Int64
-	ReserveCount             atomic.Int64
-	ReleaseCount             atomic.Int64
-	GetSchemaCount           atomic.Int64
+	ExecCount                   atomic.Int64
+	BeginCount                  atomic.Int64
+	CommitCount                 atomic.Int64
+	RollbackCount               atomic.Int64
+	AsTransactionCount          atomic.Int64
+	PrepareCount                atomic.Int64
+	CommitPreparedCount         atomic.Int64
+	RollbackPreparedCount       atomic.Int64
+	CreateTransactionCount      atomic.Int64
+	StartCommitCount            atomic.Int64
+	SetRollbackCount            atomic.Int64
+	ConcludeTransactionCount    atomic.Int64
+	ReadTransactionCount        atomic.Int64
+	UnresolvedTransactionsCount atomic.Int64
+	ReserveCount                atomic.Int64
+	ReleaseCount                atomic.Int64
+	GetSchemaCount              atomic.Int64
 
 	queriesRequireLocking bool
 	queriesMu             sync.Mutex
@@ -101,6 +100,9 @@ type SandboxConn struct {
 
 	// ReadTransactionResults is used for returning results for ReadTransaction.
 	ReadTransactionResults []*querypb.TransactionMetadata
+
+	// UnresolvedTransactionsResult is used for returning results for UnresolvedTransactions.
+	UnresolvedTransactionsResult []*querypb.TransactionMetadata
 
 	MessageIDs []*querypb.Value
 
@@ -425,6 +427,15 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 		return res, nil
 	}
 	return nil, nil
+}
+
+// UnresolvedTransactions is part of the QueryService interface.
+func (sbc *SandboxConn) UnresolvedTransactions(context.Context, *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	sbc.UnresolvedTransactionsCount.Add(1)
+	if err := sbc.getError(); err != nil {
+		return nil, err
+	}
+	return sbc.UnresolvedTransactionsResult, nil
 }
 
 // BeginExecute is part of the QueryService interface.

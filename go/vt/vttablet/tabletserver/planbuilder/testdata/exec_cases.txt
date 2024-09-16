@@ -140,7 +140,7 @@
   "Permissions": [
     {
       "TableName": "seq",
-      "Role": 0
+      "Role": 1
     }
   ],
   "NextCount": "1"
@@ -154,7 +154,7 @@
   "Permissions": [
     {
       "TableName": "seq",
-      "Role": 0
+      "Role": 1
     }
   ],
   "NextCount": "10"
@@ -169,7 +169,7 @@
   "Permissions": [
     {
       "TableName": "seq",
-      "Role": 0
+      "Role": 1
     }
   ],
   "NextCount": ":a"
@@ -183,7 +183,7 @@
   "Permissions": [
     {
       "TableName": "seq",
-      "Role": 0
+      "Role": 1
     }
   ],
   "NextCount": "12345667852342342342323423423"

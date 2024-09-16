@@ -658,6 +658,36 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 	return response.Result, nil
 }
 
+// GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
+func (client *Client) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	response, err := c.GetUnresolvedTransactions(ctx, &tabletmanagerdatapb.GetUnresolvedTransactionsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return response.Transactions, nil
+}
+
+// ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+
+	_, err = c.ConcludeTransaction(ctx, &tabletmanagerdatapb.ConcludeTransactionRequest{
+		Dtid: dtid,
+		Mm:   mm,
+	})
+	return err
+}
+
 //
 // Replication related methods
 //
@@ -1114,7 +1144,7 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	if err != nil {
 		return nil, err
 	}
-	return &replicationdatapb.StopReplicationStatus{ //nolint
+	return &replicationdatapb.StopReplicationStatus{ // nolint
 		Before: response.Status.Before,
 		After:  response.Status.After,
 	}, nil
@@ -1200,6 +1230,24 @@ func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tab
 		if invalidator != nil {
 			invalidator()
 		}
+		return nil, err
+	}
+	return response, nil
+}
+
+// GetThrottlerStatus is part of the tmclient.TabletManagerClient interface.
+// It always tries to use a cached client via the dialer pool as this is
+// called very frequently between tablets when the throttler is enabled in
+// a keyspace and the overhead of creating a new gRPC connection/channel
+// and dialing the other tablet every time is not practical.
+func (client *Client) GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.GetThrottlerStatus(ctx, req)
+	if err != nil {
 		return nil, err
 	}
 	return response, nil

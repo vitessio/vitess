@@ -49,7 +49,7 @@ func TestTxEngineClose(t *testing.T) {
 	cfg.TxPool.Size = 10
 	cfg.Oltp.TxTimeout = 100 * time.Millisecond
 	cfg.GracePeriods.Shutdown = 0
-	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 
 	// Normal close.
 	te.AcceptReadWrite()
@@ -152,7 +152,7 @@ func TestTxEngineBegin(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 
 	for _, exec := range []func() (int64, string, error){
 		func() (int64, string, error) {
@@ -198,7 +198,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 	te.AcceptReadOnly()
 	options := &querypb.ExecuteOptions{}
 	connID, _, err := te.ReserveBegin(ctx, options, nil, nil)
@@ -536,7 +536,7 @@ func setupTxEngine(db *fakesqldb.DB) *TxEngine {
 	cfg.TxPool.Size = 10
 	cfg.Oltp.TxTimeout = 100 * time.Millisecond
 	cfg.GracePeriods.Shutdown = 0
-	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 	return te
 }
 
@@ -568,7 +568,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 
 	options := &querypb.ExecuteOptions{}
 	_, err := te.Reserve(ctx, options, 0, nil)

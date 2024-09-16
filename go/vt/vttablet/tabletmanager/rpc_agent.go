@@ -83,6 +83,10 @@ type RPCTM interface {
 
 	ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error)
 
+	GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error)
+
+	ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error
+
 	// Replication related methods
 	PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
@@ -156,4 +160,5 @@ type RPCTM interface {
 
 	// Throttler
 	CheckThrottler(ctx context.Context, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error)
+	GetThrottlerStatus(ctx context.Context, request *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error)
 }

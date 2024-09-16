@@ -438,6 +438,26 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 	return response.Metadata, nil
 }
 
+// UnresolvedTransactions returns all unresolved distributed transactions.
+func (conn *gRPCQueryClient) UnresolvedTransactions(ctx context.Context, target *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, tabletconn.ConnClosed
+	}
+
+	req := &querypb.UnresolvedTransactionsRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+	}
+	response, err := conn.c.UnresolvedTransactions(ctx, req)
+	if err != nil {
+		return nil, tabletconn.ErrorFromGRPC(err)
+	}
+	return response.Transactions, nil
+}
+
 // BeginExecute starts a transaction and runs an Execute.
 func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (state queryservice.TransactionState, result *sqltypes.Result, err error) {
 	conn.mu.RLock()
@@ -671,6 +691,7 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, request *binlogdatapb.
 			Position:          request.Position,
 			Filter:            request.Filter,
 			TableLastPKs:      request.TableLastPKs,
+			Options:           request.Options,
 		}
 		stream, err := conn.c.VStream(ctx, req)
 		if err != nil {

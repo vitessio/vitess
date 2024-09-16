@@ -110,7 +110,7 @@ Flags:
       --db_appdebug_password string                                      db appdebug password
       --db_appdebug_use_ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db_appdebug_user string                                          db appdebug user userKey (default "vt_appdebug")
-      --db_charset string                                                Character set used for this tablet. (default "utf8mb4")
+      --db_charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
       --db_conn_query_info                                               enable parsing and processing of QUERY_OK info fields
       --db_connect_timeout_ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
       --db_dba_password string                                           db dba password
@@ -387,7 +387,6 @@ Flags:
       --transaction_limit_by_username                                    Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit. (default true)
       --transaction_limit_per_user float                                 Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap. (default 0.4)
       --twopc_abandon_age float                                          time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.
-      --twopc_coordinator_address string                                 address of the (VTGate) process(es) that will be used to notify of abandoned transactions.
       --twopc_enable                                                     if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.
       --tx-throttler-config string                                       Synonym to -tx_throttler_config (default "target_replication_lag_sec:2 max_replication_lag_sec:10 initial_rate:100 max_increase:1 emergency_decrease:0.5 min_duration_between_increases_sec:40 max_duration_between_increases_sec:62 min_duration_between_decreases_sec:20 spread_backlog_across_sec:20 age_bad_rate_after_sec:180 bad_rate_increase:0.1 max_rate_approach_threshold:0.9")
       --tx-throttler-default-priority int                                Default priority assigned to queries that lack priority information (default 100)
@@ -417,7 +416,6 @@ Flags:
       --vstream-binlog-rotation-threshold int                            Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer) (default 67108864)
       --vstream_dynamic_packet_size                                      Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance. (default true)
       --vstream_packet_size int                                          Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount. (default 250000)
-      --vtgate_protocol string                                           how to talk to vtgate (default "grpc")
       --vttablet_skip_buildinfo_tags string                              comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'. (default "/.*/")
       --wait_for_backup_interval duration                                (init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear
       --watch_replication_stream                                         When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.

@@ -21,9 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -56,8 +54,6 @@ func TestSimpleInsertSelect(t *testing.T) {
 
 // TestInsertOnDup test the insert on duplicate key update feature with argument and list argument.
 func TestInsertOnDup(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
-
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -92,19 +88,10 @@ func TestFailureInsertSelect(t *testing.T) {
 			// primary key same
 			mcmp.AssertContainsError("insert into s_tbl(id, num) select id, num*20 from s_tbl where id = 1", `AlreadyExists desc = Duplicate entry '1' for key`)
 			// lookup key same (does not fail on MySQL as there is no lookup, and we have not put unique constraint on num column)
-			vtgateVersion, err := cluster.GetMajorVersion("vtgate")
-			require.NoError(t, err)
-			if vtgateVersion >= 19 {
-				utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `(errno 1062) (sqlstate 23000)`)
-				// mismatch column count
-				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count with the row`)
-				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count with the row`)
-			} else {
-				utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
-				// mismatch column count
-				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count at row 1`)
-				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count at row 1`)
-			}
+			utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `(errno 1062) (sqlstate 23000)`)
+			// mismatch column count
+			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count with the row`)
+			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count with the row`)
 		})
 	}
 }
@@ -486,9 +473,6 @@ func TestMixedCases(t *testing.T) {
 
 // TestInsertAlias test the alias feature in insert statement.
 func TestInsertAlias(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vttablet")
-
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -506,4 +490,29 @@ func TestInsertAlias(t *testing.T) {
 
 	// this validates the record.
 	mcmp.Exec("select id, region_id, name from user_tbl order by id")
+}
+
+// TestInsertJson tests that selected json values are encoded correctly.
+func TestInsertJson(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) values (1, '{}'), (2, '{"a": 1, "b": 2}')`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) select 3, json_object("k", "a")`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) select 4,JSON_OBJECT(
+        'date', CAST(1629849600 AS UNSIGNED),
+        'keywordSourceId', CAST(930701976723823 AS UNSIGNED),
+        'keywordSourceVersionId', CAST(210825230433 AS UNSIGNED)
+    )`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
+	utils.Exec(t, mcmp.VtConn, `insert into uks.j_utbl(id, jdoc) select * from sks.j_tbl`)
+	utils.AssertMatches(t, mcmp.VtConn, `select * from uks.j_utbl order by id`,
+		`[[INT64(1) JSON("{}")] [INT64(2) JSON("{\"a\": 1, \"b\": 2}")] [INT64(3) JSON("{\"k\": \"a\"}")] [INT64(4) JSON("{\"date\": 1629849600, \"keywordSourceId\": 930701976723823, \"keywordSourceVersionId\": 210825230433}")]]`)
 }

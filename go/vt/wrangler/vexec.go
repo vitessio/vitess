@@ -445,9 +445,9 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 				changes = true
 				dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", topoproto.MakeStringTypeCSV(rpcReq.TabletTypes)))
 			}
-			if !textutil.ValueIsSimulatedNull(rpcReq.OnDdl) {
+			if rpcReq.OnDdl != nil {
 				changes = true
-				dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(rpcReq.OnDdl)]))
+				dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(*rpcReq.OnDdl)]))
 			}
 			if !changes {
 				return nil, fmt.Errorf("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")

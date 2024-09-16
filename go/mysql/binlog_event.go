@@ -91,6 +91,8 @@ type BinlogEvent interface {
 
 	// Timestamp returns the timestamp from the event header.
 	Timestamp() uint32
+	// ServerID returns the server ID from the event header.
+	ServerID() uint32
 
 	// Format returns a BinlogFormat struct based on the event data.
 	// This is only valid if IsFormatDescription() returns true.
@@ -158,7 +160,7 @@ type BinlogFormat struct {
 	HeaderSizes []byte
 
 	// ServerVersion is the name of the MySQL server version.
-	// It starts with something like 5.6.33-xxxx.
+	// It starts with something like 8.0.34-xxxx.
 	ServerVersion string
 
 	// FormatVersion is the version number of the binlog file format.
@@ -328,7 +330,7 @@ func (b *Bitmap) Set(index int, value bool) {
 // hence the non-efficient logic.
 func (b *Bitmap) BitCount() int {
 	sum := 0
-	for i := 0; i < b.count; i++ {
+	for i := range b.count {
 		if b.Bit(i) {
 			sum++
 		}

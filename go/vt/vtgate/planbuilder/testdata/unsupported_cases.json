@@ -20,9 +20,19 @@
     "plan": "VT12001: unsupported: subqueries in GROUP BY"
   },
   {
+    "comment": "user defined functions used in having clause that needs evaluation on vtgate",
+    "query": "select col1, udf_aggr( col2 ) r from user group by col1 having r >= 0.3",
+    "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(col2)' must be pushed down to MySQL"
+  },
+  {
     "comment": "update changes primary vindex column",
     "query": "update user set id = 1 where id = 1",
     "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: user_index"
+  },
+  {
+    "comment": "subquery with an aggregation in order by that cannot be merged into a single route",
+    "query": "select col, trim((select user_name from user where col = 'a')) val from user_extra where user_id = 3 group by col order by val",
+    "plan": "VT12001: unsupported: subquery with aggregation in order by"
   },
   {
     "comment": "update change in multicol vindex column",
@@ -285,6 +295,11 @@
     "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
   },
   {
+    "comment": "Cross keyspace query with subquery",
+    "query": "select 1 from user where id = (select id from t1 where user.foo = t1.bar)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
     "comment": "multi-shard union",
     "query": "select 1 from music union (select id from user union select name from unsharded)",
     "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
@@ -313,11 +328,6 @@
     "comment": "CTEs cant use a table with the same name as the CTE alias",
     "query": "with user as (select aa from user where user.id=1) select ref.col from ref join user",
     "plan": "VT12001: unsupported: do not support CTE that use the CTE alias inside the CTE query"
-  },
-  {
-    "comment": "Recursive WITH",
-    "query": "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
-    "plan": "VT12001: unsupported: recursive common table expression"
   },
   {
     "comment": "Alias cannot clash with base tables",

@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
@@ -402,19 +403,24 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Error: nil,
 					},
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000101": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 				PrimaryPositionResults: map[string]struct {
@@ -519,19 +525,24 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Error: nil,
 					},
 				},
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
 				}{
 					"zone1-0000000200": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000101": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
 					},
 				},
 				PrimaryPositionResults: map[string]struct {
