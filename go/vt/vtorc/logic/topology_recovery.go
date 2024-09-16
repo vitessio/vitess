@@ -21,9 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/slackhq/vitess-addons/go/external"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -81,6 +83,9 @@ var (
 
 	// recoveriesFailureCounter counts the number of failed recoveries that VTOrc has performed
 	recoveriesFailureCounter = stats.NewCountersWithSingleLabel("FailedRecoveries", "Count of the different failed recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+
+	vtopsExec         = external.NewExecVTOps(os.Getenv("VTOPS_PATH"), os.Getenv("VTOPS_HTTP_PROXY"), "vtorc", os.Getenv("HOSTNAME"))
+	vtopsSlackChannel = os.Getenv("SLACK_CHANNEL")
 )
 
 // recoveryFunction is the code of the recovery function to be used
@@ -297,6 +302,7 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		_ = inst.AuditOperation(recoveryName, analysisEntry.AnalyzedInstanceAlias, message)
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%v: successfully promoted %+v", recoveryName, promotedReplica.InstanceAlias))
+		vtopsExec.RaiseProblem(analysisEntry.AnalyzedInstanceHostname, "orc-dead-tablet", true)
 	}
 }
 
@@ -590,7 +596,6 @@ func runEmergentOperations(analysisEntry *inst.ReplicationAnalysis) {
 func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (err error) {
 	countPendingRecoveries.Add(1)
 	defer countPendingRecoveries.Add(-1)
-
 	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
@@ -605,8 +610,11 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 			}
 		}
 
+		vtopsExec.SendSlackMessage(fmt.Sprintf("[VTOrc] No recovery available for %s for problem %s.", analysisEntry.AnalyzedInstanceHostname, analysisEntry.Analysis), vtopsSlackChannel, true)
+
 		return nil
 	}
+
 	// we have a recovery function; its execution still depends on filters if not disabled.
 	if isActionableRecovery || util.ClearToLog("executeCheckAndRecoverFunction: detection", analysisEntry.AnalyzedInstanceAlias) {
 		log.Infof("executeCheckAndRecoverFunction: proceeding with %+v detection on %+v; isActionable?: %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias, isActionableRecovery)
@@ -707,6 +715,11 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	if isActionableRecovery || util.ClearToLog("executeCheckAndRecoverFunction: recovery", analysisEntry.AnalyzedInstanceAlias) {
 		log.Infof("executeCheckAndRecoverFunction: proceeding with %+v recovery on %+v; isRecoverable?: %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias, isActionableRecovery)
 	}
+
+	if !isActionableRecovery {
+		vtopsExec.SendSlackMessage(fmt.Sprintf("No actionable recovery on %s for problem %s.", analysisEntry.AnalyzedInstanceHostname, analysisEntry.Analysis), vtopsSlackChannel, true)
+	}
+
 	recoveryAttempted, topologyRecovery, err := getCheckAndRecoverFunction(checkAndRecoverFunctionCode)(ctx, analysisEntry)
 	if !recoveryAttempted {
 		return err
@@ -714,8 +727,10 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
 	recoveriesCounter.Add(recoveryName, 1)
 	if err != nil {
+		vtopsExec.SendSlackMessage(fmt.Sprintf("Recovery failed on %s for problem %s. Error: %s", analysisEntry.AnalyzedInstanceHostname, analysisEntry.Analysis, err.Error()), vtopsSlackChannel, true)
 		recoveriesFailureCounter.Add(recoveryName, 1)
 	} else {
+		vtopsExec.SendSlackMessage(fmt.Sprintf("Recovery succeeded on %s for problem %s.", analysisEntry.AnalyzedInstanceHostname, analysisEntry.Analysis), vtopsSlackChannel, true)
 		recoveriesSuccessfulCounter.Add(recoveryName, 1)
 	}
 	if topologyRecovery == nil {
@@ -813,6 +828,7 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		_ = inst.AuditOperation(string(analysisEntry.Analysis), analysisEntry.AnalyzedInstanceAlias, message)
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%+v: successfully promoted %+v", analysisEntry.Analysis, promotedReplica.InstanceAlias))
+		vtopsExec.RaiseProblem(analysisEntry.AnalyzedInstanceHostname, "orc-dead-tablet", true)
 	}
 }
 
