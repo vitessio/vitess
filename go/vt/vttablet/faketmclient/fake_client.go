@@ -221,6 +221,11 @@ func (client *FakeTabletManagerClient) GetUnresolvedTransactions(ctx context.Con
 	return nil, nil
 }
 
+// ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	return nil
+}
+
 //
 // Replication related methods
 //

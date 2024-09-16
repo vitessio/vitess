@@ -287,6 +287,18 @@ func (s *server) GetUnresolvedTransactions(ctx context.Context, request *tabletm
 	return &tabletmanagerdatapb.GetUnresolvedTransactionsResponse{Transactions: transactions}, nil
 }
 
+func (s *server) ConcludeTransaction(ctx context.Context, request *tabletmanagerdatapb.ConcludeTransactionRequest) (response *tabletmanagerdatapb.ConcludeTransactionResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ConcludeTransaction", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+
+	err = s.tm.ConcludeTransaction(ctx, request)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+
+	return &tabletmanagerdatapb.ConcludeTransactionResponse{}, nil
+}
+
 //
 // Replication related methods
 //

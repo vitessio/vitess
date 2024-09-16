@@ -88,6 +88,8 @@ service TabletManager {
 
   rpc GetUnresolvedTransactions(tabletmanagerdata.GetUnresolvedTransactionsRequest) returns (tabletmanagerdata.GetUnresolvedTransactionsResponse) {};
 
+  rpc ConcludeTransaction(tabletmanagerdata.ConcludeTransactionRequest) returns (tabletmanagerdata.ConcludeTransactionResponse) {};
+
   //
   // Replication related methods
   //

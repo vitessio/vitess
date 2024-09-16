@@ -150,8 +150,9 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 func TestTabletManager_UnresolvedTransactions(t *testing.T) {
 	ctx := context.Background()
 
+	qsc := tabletservermock.NewController()
 	tm := &TabletManager{
-		QueryServiceControl:    tabletservermock.NewController(),
+		QueryServiceControl:    qsc,
 		Env:                    vtenv.NewTestEnv(),
 		_waitForGrantsComplete: make(chan struct{}),
 		BatchCtx:               ctx,
@@ -161,4 +162,33 @@ func TestTabletManager_UnresolvedTransactions(t *testing.T) {
 
 	_, err := tm.GetUnresolvedTransactions(ctx)
 	require.NoError(t, err)
+	require.True(t, qsc.MethodCalled["UnresolvedTransactions"])
+}
+
+func TestTabletManager_ConcludeTransaction(t *testing.T) {
+	ctx := context.Background()
+
+	qsc := tabletservermock.NewController()
+	tm := &TabletManager{
+		QueryServiceControl:    qsc,
+		Env:                    vtenv.NewTestEnv(),
+		_waitForGrantsComplete: make(chan struct{}),
+		BatchCtx:               ctx,
+	}
+	close(tm._waitForGrantsComplete)
+	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80"))
+
+	err := tm.ConcludeTransaction(ctx, &tabletmanagerdatapb.ConcludeTransactionRequest{
+		Dtid: "dtid01",
+		Mm:   false,
+	})
+	require.NoError(t, err)
+	require.True(t, qsc.MethodCalled["RollbackPrepared"])
+
+	err = tm.ConcludeTransaction(ctx, &tabletmanagerdatapb.ConcludeTransactionRequest{
+		Dtid: "dtid01",
+		Mm:   true,
+	})
+	require.NoError(t, err)
+	require.True(t, qsc.MethodCalled["ConcludeTransaction"])
 }

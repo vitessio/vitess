@@ -85,6 +85,8 @@ type RPCTM interface {
 
 	GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error)
 
+	ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error
+
 	// Replication related methods
 	PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 

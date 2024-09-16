@@ -898,6 +898,10 @@ func (itmc *internalTabletManagerClient) GetUnresolvedTransactions(ctx context.C
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) PrimaryStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }

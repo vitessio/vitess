@@ -673,6 +673,21 @@ func (client *Client) GetUnresolvedTransactions(ctx context.Context, tablet *top
 	return response.Transactions, nil
 }
 
+// ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+
+	_, err = c.ConcludeTransaction(ctx, &tabletmanagerdatapb.ConcludeTransactionRequest{
+		Dtid: dtid,
+		Mm:   mm,
+	})
+	return err
+}
+
 //
 // Replication related methods
 //
