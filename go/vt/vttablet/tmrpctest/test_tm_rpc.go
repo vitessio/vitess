@@ -737,7 +737,7 @@ func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerd
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error) {
+func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

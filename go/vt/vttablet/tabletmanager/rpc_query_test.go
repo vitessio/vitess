@@ -160,7 +160,7 @@ func TestTabletManager_UnresolvedTransactions(t *testing.T) {
 	close(tm._waitForGrantsComplete)
 	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80"))
 
-	_, err := tm.GetUnresolvedTransactions(ctx)
+	_, err := tm.GetUnresolvedTransactions(ctx, 0)
 	require.NoError(t, err)
 	require.True(t, qsc.MethodCalled["UnresolvedTransactions"])
 }

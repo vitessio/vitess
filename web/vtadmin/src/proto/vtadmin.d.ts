@@ -23233,6 +23233,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a GetUnresolvedTransactionsRequest. */
     interface IGetUnresolvedTransactionsRequest {
+
+        /** GetUnresolvedTransactionsRequest abandon_age */
+        abandon_age?: (number|Long|null);
     }
 
     /** Represents a GetUnresolvedTransactionsRequest. */
@@ -23243,6 +23246,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IGetUnresolvedTransactionsRequest);
+
+        /** GetUnresolvedTransactionsRequest abandon_age. */
+        public abandon_age: (number|Long);
 
         /**
          * Creates a new GetUnresolvedTransactionsRequest instance using the specified properties.
@@ -41096,6 +41102,9 @@ export namespace query {
 
         /** UnresolvedTransactionsRequest target */
         target?: (query.ITarget|null);
+
+        /** UnresolvedTransactionsRequest abandon_age */
+        abandon_age?: (number|Long|null);
     }
 
     /** Represents an UnresolvedTransactionsRequest. */
@@ -41115,6 +41124,9 @@ export namespace query {
 
         /** UnresolvedTransactionsRequest target. */
         public target?: (query.ITarget|null);
+
+        /** UnresolvedTransactionsRequest abandon_age. */
+        public abandon_age: (number|Long);
 
         /**
          * Creates a new UnresolvedTransactionsRequest instance using the specified properties.
@@ -60315,6 +60327,9 @@ export namespace vtctldata {
 
         /** GetUnresolvedTransactionsRequest keyspace */
         keyspace?: (string|null);
+
+        /** GetUnresolvedTransactionsRequest min_age */
+        min_age?: (number|Long|null);
     }
 
     /** Represents a GetUnresolvedTransactionsRequest. */
@@ -60328,6 +60343,9 @@ export namespace vtctldata {
 
         /** GetUnresolvedTransactionsRequest keyspace. */
         public keyspace: string;
+
+        /** GetUnresolvedTransactionsRequest min_age. */
+        public min_age: (number|Long);
 
         /**
          * Creates a new GetUnresolvedTransactionsRequest instance using the specified properties.

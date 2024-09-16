@@ -237,7 +237,7 @@ func (tqsc *Controller) SetTwoPCAllowed(bool) {
 }
 
 // UnresolvedTransactions is part of the tabletserver.Controller interface
-func (tqsc *Controller) UnresolvedTransactions(context.Context, *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+func (tqsc *Controller) UnresolvedTransactions(context.Context, *querypb.Target, int64) ([]*querypb.TransactionMetadata, error) {
 	tqsc.MethodCalled["UnresolvedTransactions"] = true
 	return nil, nil
 }

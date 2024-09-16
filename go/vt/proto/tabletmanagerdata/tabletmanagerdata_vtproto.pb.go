@@ -990,6 +990,7 @@ func (m *GetUnresolvedTransactionsRequest) CloneVT() *GetUnresolvedTransactionsR
 		return (*GetUnresolvedTransactionsRequest)(nil)
 	}
 	r := new(GetUnresolvedTransactionsRequest)
+	r.AbandonAge = m.AbandonAge
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -5039,6 +5040,11 @@ func (m *GetUnresolvedTransactionsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.AbandonAge != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.AbandonAge))
+		i--
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -10389,6 +10395,9 @@ func (m *GetUnresolvedTransactionsRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
+	if m.AbandonAge != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.AbandonAge))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -17253,6 +17262,25 @@ func (m *GetUnresolvedTransactionsRequest) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: GetUnresolvedTransactionsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AbandonAge", wireType)
+			}
+			m.AbandonAge = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.AbandonAge |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

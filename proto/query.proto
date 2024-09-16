@@ -653,6 +653,7 @@ message UnresolvedTransactionsRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
+  int64 abandon_age = 4; // Unresolved Transactions older than this (in seconds).
 }
 
 // UnresolvedTransactionsResponse is the returned value from UnresolvedTransactions

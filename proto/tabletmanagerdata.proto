@@ -310,6 +310,7 @@ message ExecuteFetchAsAppResponse {
 }
 
 message GetUnresolvedTransactionsRequest {
+  int64 abandon_age = 1;
 }
 
 message GetUnresolvedTransactionsResponse {

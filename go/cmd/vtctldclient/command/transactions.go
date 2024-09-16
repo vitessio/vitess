@@ -35,9 +35,13 @@ var (
 		DisableFlagsInUseLine: true,
 	}
 
+	unresolvedTransactionsOptions = struct {
+		AbandonAge int64 // in seconds
+	}{}
+
 	// GetUnresolvedTransactions makes an GetUnresolvedTransactions gRPC call to a vtctld.
 	GetUnresolvedTransactions = &cobra.Command{
-		Use:     "list <keyspace>",
+		Use:     "list <keyspace> --abandon-age <abandon_time_seconds>",
 		Short:   "Retrieves unresolved transactions for the given keyspace.",
 		Aliases: []string{"List"},
 		Args:    cobra.ExactArgs(1),
@@ -76,6 +80,7 @@ func commandGetUnresolvedTransactions(cmd *cobra.Command, args []string) error {
 	resp, err := client.GetUnresolvedTransactions(commandCtx,
 		&vtctldatapb.GetUnresolvedTransactionsRequest{
 			Keyspace: keyspace,
+			MinAge:   unresolvedTransactionsOptions.AbandonAge,
 		})
 	if err != nil {
 		return err
@@ -127,6 +132,8 @@ func commandConcludeTransaction(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	DistributedTransaction.Flags().Int64VarP(&unresolvedTransactionsOptions.AbandonAge, "abandon-age", "a", 0, "Returns unresolved transactions list which are older than the specified age in seconds.")
+
 	DistributedTransaction.AddCommand(GetUnresolvedTransactions)
 	DistributedTransaction.AddCommand(ConcludeTransaction)
 

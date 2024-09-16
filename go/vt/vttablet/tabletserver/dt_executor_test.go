@@ -657,7 +657,7 @@ func TestNoTwopc(t *testing.T) {
 	}, {
 		desc: "UnresolvedTransactions",
 		fun: func() error {
-			_, err := txe.UnresolvedTransactions()
+			_, err := txe.UnresolvedTransactions(0 /* requestedAge */)
 			return err
 		},
 	}}

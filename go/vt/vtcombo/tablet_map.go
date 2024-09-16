@@ -563,8 +563,8 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 }
 
 // UnresolvedTransactions is part of queryservice.QueryService
-func (itc *internalTabletConn) UnresolvedTransactions(ctx context.Context, target *querypb.Target) (transactions []*querypb.TransactionMetadata, err error) {
-	transactions, err = itc.tablet.qsc.QueryService().UnresolvedTransactions(ctx, target)
+func (itc *internalTabletConn) UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) (transactions []*querypb.TransactionMetadata, err error) {
+	transactions, err = itc.tablet.qsc.QueryService().UnresolvedTransactions(ctx, target, abandonAgeSeconds)
 	return transactions, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

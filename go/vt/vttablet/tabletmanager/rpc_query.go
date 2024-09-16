@@ -276,14 +276,14 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 }
 
 // GetUnresolvedTransactions returns the unresolved distributed transactions list for the Metadata manager.
-func (tm *TabletManager) GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error) {
+func (tm *TabletManager) GetUnresolvedTransactions(ctx context.Context, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
 
 	tablet := tm.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	return tm.QueryServiceControl.UnresolvedTransactions(ctx, target)
+	return tm.QueryServiceControl.UnresolvedTransactions(ctx, target, abandonAgeSeconds)
 }
 
 // ConcludeTransaction concludes the given distributed transaction.
