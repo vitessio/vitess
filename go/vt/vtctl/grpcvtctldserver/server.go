@@ -2462,7 +2462,8 @@ func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb
 	if len(participants) == 0 {
 		// Read the transaction metadata if participating resource manager list is not provided in the request.
 		transaction, err := s.tmc.ReadTransaction(ctx, primary.Tablet, req.Dtid)
-		if err != nil {
+		if transaction == nil || err != nil {
+			// no transaction record for the given ID. It is already concluded or does not exist.
 			return nil, err
 		}
 		participants = transaction.Participants
