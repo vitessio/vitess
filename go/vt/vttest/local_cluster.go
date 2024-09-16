@@ -609,7 +609,7 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 	}
 
 	for _, cmd := range sql {
-		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
+		//		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
 		_, err := conn.ExecuteFetch(cmd, -1, false)
 		if err != nil {
 			return err
@@ -630,7 +630,7 @@ func (db *LocalCluster) ExecuteFetch(sql string, dbname string) (*sqltypes.Resul
 	}
 	defer conn.Close()
 
-	log.Infof("ExecuteFetch(%s): \"%s\"", dbname, sql)
+	//	log.Infof("ExecuteFetch(%s): \"%s\"", dbname, sql)
 	rs, err := conn.ExecuteFetch(sql, -1, true)
 	return rs, err
 }

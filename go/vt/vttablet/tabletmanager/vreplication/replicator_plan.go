@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -61,6 +63,8 @@ type ReplicatorPlan struct {
 	stats         *binlogplayer.Stats
 	Source        *binlogdatapb.BinlogSource
 	collationEnv  *collations.Environment
+
+	joinPlan *ReplicatorJoinPlan
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -221,6 +225,9 @@ type TablePlan struct {
 	PartialUpdates map[string]*sqlparser.ParsedQuery
 
 	CollationEnv *collations.Environment
+
+	// set for materialized views
+	JoinPlan *TableJoinPlan
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -297,7 +304,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		case !before && after:
 			bindvar = bindvars["a_"+tp.PKReferences[0]]
 		}
-		if bindvar == nil { // should never happen
+		if bindvar == nil { //should never happen
 			return false
 		}
 
@@ -579,6 +586,7 @@ func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Will execute query: %v", query)
 	return executor(query)
 }
 

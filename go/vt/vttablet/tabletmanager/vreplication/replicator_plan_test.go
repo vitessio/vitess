@@ -38,16 +38,121 @@ type TestReplicatorPlan struct {
 	TablePlans    map[string]*TestTablePlan
 }
 
+type TestTableJoinPlan struct {
+	Insert  string
+	Updates map[string]string
+	Deletes map[string]string
+}
 type TestTablePlan struct {
-	TargetName   string
-	SendRule     string
-	InsertFront  string   `json:",omitempty"`
-	InsertValues string   `json:",omitempty"`
-	InsertOnDup  string   `json:",omitempty"`
-	Insert       string   `json:",omitempty"`
-	Update       string   `json:",omitempty"`
-	Delete       string   `json:",omitempty"`
-	PKReferences []string `json:",omitempty"`
+	TargetName    string             `json:",omitempty"`
+	SendRule      string             `json:",omitempty"`
+	InsertFront   string             `json:",omitempty"`
+	InsertValues  string             `json:",omitempty"`
+	InsertOnDup   string             `json:",omitempty"`
+	Insert        string             `json:",omitempty"`
+	Update        string             `json:",omitempty"`
+	Delete        string             `json:",omitempty"`
+	Updates       map[string]string  `json:",omitempty"`
+	Deletes       map[string]string  `json:",omitempty"`
+	PKReferences  []string           `json:",omitempty"`
+	TableJoinPlan *TestTableJoinPlan `json:",omitempty"`
+}
+
+func TestBuildPlayerJoinPlan(t *testing.T) {
+	testcases := []struct {
+		input  *binlogdatapb.Filter
+		tables []string
+		plan   *TestReplicatorPlan
+		planpk *TestReplicatorPlan
+		err    string
+	}{{
+		// Explicit columns
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t12",
+				Filter: "select t1.id t1id, t1.name, t2.id t2id, t2.company from t1 join t2 on t1.id = t2.id",
+			}},
+		},
+		tables: []string{"t1", "t2"},
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t12",
+					Filter: "select t1.id t1id, t1.name, t2.id t2id, t2.company from t1 join t2 on t1.id = t2.id",
+				}},
+			},
+			TablePlans: map[string]*TestTablePlan{
+				"t12": {
+					TargetName:   "t12",
+					SendRule:     "select t1.id t1id, t1.name, t2.id t2id, t2.company from t1 join t2 on t1.id = t2.id",
+					PKReferences: []string{"t1id"},
+					TableJoinPlan: &TestTableJoinPlan{
+						Insert: "insert into t12 (t1id,`name`,t2id,company) select t1.id t1id, t1.name, t2.id t2id, t2.company from t1 join t2 on t1.id = t2.id",
+						Updates: map[string]string{
+							"t1": "update t12 set name = :a_name where t1id = :a_t1id",
+							"t2": "update t12 set company = :a_company where t2id = :a_t2id",
+						}},
+					Deletes: map[string]string{
+						"t1id": "delete from t12 where t1id = :a_t1id",
+						"t2id": "delete from t12 where t2id = :a_t2id",
+					},
+				},
+			},
+		},
+	}}
+
+	PrimaryKeyInfos := map[string][]*ColumnInfo{
+		"t1":  {&ColumnInfo{Name: "id", IsPK: true}},
+		"t2":  {&ColumnInfo{Name: "id", IsPK: true}},
+		"t12": {&ColumnInfo{Name: "t1id", IsPK: true}},
+	}
+
+	copyState := map[string]*sqltypes.Result{
+		"t1": sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"pk1|pk2",
+				"int64|varchar",
+			),
+			"1|aaa",
+		),
+	}
+	_ = copyState
+	dbClient := binlogplayer.NewMockDBClient(t)
+	defer dbClient.Close()
+	vdbClient2 := newVDBClient(dbClient, binlogplayer.NewStats())
+	defer vdbClient2.Close()
+	dbClient.AddInvariant("select * from t12", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"t1id|name|t2id|company",
+			"int64|varchar|int64|varchar",
+		),
+		"1|name1|1|company1",
+	))
+
+	for _, tcase := range testcases {
+		plan, err := buildReplicatorPlanForJoin(getSource(tcase.input), PrimaryKeyInfos, nil,
+			binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser(), vdbClient2, false)
+		gotErr := ""
+		if err != nil {
+			gotErr = err.Error()
+		}
+		require.Equal(t, tcase.err, gotErr, "Filter err(%v): %s, want %v", tcase.input, gotErr, tcase.err)
+		gotTablePlan, ok := plan.TablePlans["t12"]
+		require.True(t, ok, "Table plan not found")
+		wantTablePlan := tcase.plan.TablePlans["t12"]
+		assert.Equal(t, wantTablePlan.TargetName, gotTablePlan.TargetName)
+		assert.Equal(t, wantTablePlan.SendRule, gotTablePlan.SendRule.Filter)
+		assert.Equal(t, wantTablePlan.PKReferences, gotTablePlan.PKReferences)
+		assert.Equal(t, wantTablePlan.TableJoinPlan.Insert, gotTablePlan.JoinPlan.Insert.Query)
+		for k, v := range wantTablePlan.TableJoinPlan.Updates {
+			require.NotNil(t, gotTablePlan.JoinPlan.Updates[k])
+			assert.Equal(t, v, gotTablePlan.JoinPlan.Updates[k].Query)
+		}
+		for k, v := range wantTablePlan.TableJoinPlan.Deletes {
+			require.NotNil(t, gotTablePlan.JoinPlan.Deletes[k])
+			assert.Equal(t, v, gotTablePlan.JoinPlan.Deletes[k].Query)
+		}
+	}
 }
 
 func TestBuildPlayerPlan(t *testing.T) {

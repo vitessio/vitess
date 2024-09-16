@@ -412,7 +412,7 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		if ddl == "" {
 			log.Infof("No changes needed for table %s", tableName)
 		} else {
-			log.Infof("Applying DDL for table %s:\n%s", tableName, ddl)
+			// log.Infof("Applying DDL for table %s:\n%s", tableName, ddl)
 		}
 	}
 
@@ -459,7 +459,7 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 			}
 			return nil
 		}
-		log.Infof("Applied DDL %s for table %s during sidecar database initialization", ddl, table)
+		// log.Infof("Applied DDL %s for table %s during sidecar database initialization", ddl, table)
 		ddlCount.Add(1)
 		return nil
 	}

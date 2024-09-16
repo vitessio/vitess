@@ -62,6 +62,7 @@ type tablePlanBuilder struct {
 	pkIndices         []bool
 
 	collationEnv *collations.Environment
+	viewMode     bool
 }
 
 // colExpr describes the processing to be performed to
@@ -115,22 +116,6 @@ const (
 	insertIgnore
 )
 
-// buildReplicatorPlan builds a ReplicatorPlan for the tables that match the filter.
-// The filter is matched against the target schema. For every table matched,
-// a table-specific rule is built to be sent to the source. We don't send the
-// original rule to the source because it may not match the same tables as the
-// target.
-// colInfoMap specifies the list of primary key columns for each table.
-// copyState is a map of tables that have not been fully copied yet.
-// If a table is not present in copyState, then it has been fully copied. If so,
-// all replication events are applied. The table still has to match a Filter.Rule.
-// If it has a non-nil entry, then the value is the last primary key (lastpk)
-// that was copied.  If so, only replication events < lastpk are applied.
-// If the entry is nil, then copying of the table has not started yet. If so,
-// no events are applied.
-// The TablePlan built is a partial plan. The full plan for a table is built
-// when we receive field information from events or rows sent by the source.
-// buildExecutionPlan is the function that builds the full plan.
 func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
 	filter := source.Filter
 	plan := &ReplicatorPlan{
@@ -375,8 +360,8 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		FieldsToSkip:            fieldsToSkip,
 		HasExtraSourcePkColumns: len(tpb.extraSourcePkCols) > 0,
 		TablePlanBuilder:        tpb,
-		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
-		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
+		PartialInserts:          make(map[string]*sqlparser.ParsedQuery),
+		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery),
 		CollationEnv:            tpb.collationEnv,
 	}
 }
@@ -393,12 +378,10 @@ func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.S
 	if sel.Distinct {
 		return nil, "", fmt.Errorf("unsupported distinct clause")
 	}
-	if len(sel.From) > 1 {
-		return nil, "", fmt.Errorf("unsupported multi-table usage")
-	}
+
 	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, "", fmt.Errorf("unsupported from expression (%T)", sel.From[0])
+		return nil, "", fmt.Errorf("unsupported from expression2 (%T)", sel.From[0])
 	}
 	fromTable := sqlparser.GetTableName(node.Expr)
 	if fromTable.IsEmpty() {
@@ -426,10 +409,10 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	as := aliased.As
 	if as.IsEmpty() {
 		// Require all non-trivial expressions to have an alias.
-		if colAs, ok := aliased.Expr.(*sqlparser.ColName); ok && colAs.Qualifier.IsEmpty() {
+		if colAs, ok := aliased.Expr.(*sqlparser.ColName); ok /* FIXME/Rohit removed for joins? && colAs.Qualifier.IsEmpty() */ {
 			as = colAs.Name
 		} else {
-			return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(aliased))
+			return nil, fmt.Errorf("expression needs an alias: %v, expr %v %q %+v", sqlparser.String(aliased), aliased.Expr, aliased.Expr, aliased.Expr)
 		}
 	}
 	cexpr := &colExpr{
@@ -447,7 +430,9 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			switch node := node.(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() {
-					return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+					_ = 1
+					// FIXME
+					// return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 				}
 				colName = node.Name
 			}
@@ -511,7 +496,9 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !node.Qualifier.IsEmpty() {
-				return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+				_ = 1
+				// FIXME
+				// return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 			}
 			tpb.addCol(node.Name)
 			cexpr.references[node.Name.String()] = true
@@ -526,7 +513,20 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		return nil, err
 	}
 	cexpr.expr = aliased.Expr
+	if tpb.viewMode && !as.IsEmpty() {
+		colName := sqlparser.NewColName(as.String())
+		aliasedExpr := colNameToExpr(colName)
+		aliasedExpr.As = as
+		cexpr.expr = aliasedExpr.Expr
+	}
 	return cexpr, nil
+}
+
+func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
+	return &sqlparser.AliasedExpr{
+		Expr: c,
+		As:   sqlparser.IdentifierCI{},
+	}
 }
 
 // addCol adds the specified column to the send query

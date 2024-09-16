@@ -43,6 +43,87 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
+func TestJoin(t *testing.T) {
+	doNotLogDBQueries = true
+	defer func() { doNotLogDBQueries = false }()
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, name varbinary(128), id2 int, t2id int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, name varbinary(128), id2 int, t2id int, primary key(id))", vrepldb),
+		"create table t2(id int, name varbinary(128), company varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t2(id int, name varbinary(128), company varbinary(128), primary key(id))", vrepldb),
+		"create table t12(t1id int, t2id int, name varbinary(128), name2 varbinary(128), company varbinary(128), primary key(t1id))",
+		fmt.Sprintf("create table %s.t12(t1id int, t2id int, name varbinary(128), name2 varbinary(128), company varbinary(128), primary key(t1id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
+		"drop table t12",
+		fmt.Sprintf("drop table %s.t12", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t12",
+			Filter: "select t1.id t1id, t2.id t2id, t1.name, t2.name name2, t2.company from t1 join t2 on t1.t2id = t2.id",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+	}
+	position := primaryPosition(t)
+	execStatements(t, []string{
+		"insert into t2(id, name, company) values(1, 'name2', 'company1')",
+		fmt.Sprintf("insert into %s.t2(id, name,  company) values(1, 'name2', 'company1')", vrepldb),
+		"insert into t1(id,name,t2id,id2) values (1,'name1',1, 10)",
+		fmt.Sprintf("insert into %s.t1(id,name,t2id,id2) values (1,'name1',1,10)", vrepldb),
+	})
+	cancel, _ := startVReplication(t, bls, position)
+	defer cancel()
+
+	testcases := []struct {
+		input       string
+		output      string
+		table       string
+		data        [][]string
+		query       string
+		queryResult [][]string
+	}{{
+		output: "insert into t12(t1id,t2id,name,name2,company) values (1,1,'name1','name2','company1')",
+		table:  "t12",
+		data: [][]string{
+			{"1", "1", "name1", "name2", "company1"},
+		},
+	}, {
+		input:  "update t1 set name='name1a' where id=1",
+		output: "update t12 set tname='name2' where t1id=1",
+		table:  fmt.Sprintf("%s.t12", vrepldb),
+		data: [][]string{
+			{"1", "1", "name1a", "name2", "company1"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		if len(tcases.input) > 0 {
+			execStatements(t, []string{tcases.input})
+		}
+		// output := qh.Expect(tcases.output)
+		// expectNontxQueries(t, output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+		// if tcases.query != "" {
+		// 	expectQueryResult(t, tcases.query, tcases.queryResult)
+		// }
+	}
+
+}
+
 // TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
 // tables that have a gipk column and those that make it visible.
 func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
@@ -1742,7 +1823,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
 	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) //For debugging only: to check what are the positions when test works and if/when it fails
+		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -161,7 +162,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 			return nil, vr.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
 		}
 		commitFunc = func() error {
-			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
+			return vr.dbClient.CommitTrxQueryBatch()
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
@@ -192,11 +193,18 @@ func (vp *vplayer) play(ctx context.Context) error {
 		}
 		return nil
 	}
-
-	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.source)
+	// buildReplicatorPlanForJoin will revert to buildReplicatorPlan if there are no joined tables.
+	plan, err := buildReplicatorPlanForJoin(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser(), vp.vr.dbClient, false)
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
+	}
+	if plan == nil {
+		return fmt.Errorf("no plan generated for binlogsource filter %v", vp.vr.source.Filter)
+	}
+	for tableName, tablePlan := range plan.TablePlans {
+		vp.tablePlans[tableName] = tablePlan
 	}
 	vp.replicatorPlan = plan
 
@@ -337,7 +345,44 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 	return fmt.Errorf("filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
 }
 
+func (vp *vplayer) applyRowEventForJoin(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
+	tplan := vp.tablePlans[vp.replicatorPlan.joinPlan.ViewTableName]
+	if tplan == nil {
+		return fmt.Errorf("unexpected event on table %s", vp.replicatorPlan.joinPlan.ViewTableName)
+	}
+	applyFunc := func(sql string) (*sqltypes.Result, error) {
+		stats := NewVrLogStats("ROWCHANGE")
+		start := time.Now()
+		log.Infof("Applying row change for table %s, sql is %s", rowEvent.TableName, sql)
+		log.Flush()
+		qr, err := vp.query(ctx, sql)
+		if err != nil {
+			log.Errorf("Error applying row change for table %s, sql is %s: %v", rowEvent.TableName, sql, err)
+		}
+		vp.vr.stats.QueryCount.Add(vp.phase, 1)
+		vp.vr.stats.QueryTimings.Record(vp.phase, start)
+		stats.Send(sql)
+		return qr, err
+	}
+	for _, change := range rowEvent.RowChanges {
+		log.Infof("Applying row change for table %s, table plans are %q", rowEvent.TableName, vp.tablePlans)
+		if _, err := tplan.applyChangeForJoin(rowEvent.TableName, vp.tablePlans[rowEvent.TableName], change, applyFunc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
+	if vp.replicatorPlan.joinPlan != nil {
+		if slices.Contains(vp.replicatorPlan.joinPlan.Tables, rowEvent.TableName) {
+			log.Infof("Join plan detected for joined table %s, base table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.BaseTableName)
+			return vp.applyRowEventForJoin(ctx, rowEvent)
+		}
+		log.Infof("Ignoring row event for table %s, base table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.BaseTableName)
+		return nil
+	}
+
 	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
 		return err
 	}
