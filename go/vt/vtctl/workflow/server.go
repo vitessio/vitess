@@ -4330,7 +4330,7 @@ func (s *Server) validatePrimaryTabletsHaveRequiredVReplicationPermissions(ctx c
 			defer wg.Done()
 			tablet, err := s.ts.GetTablet(ctx, primary)
 			if err != nil {
-				allErrors.RecordError(vterrors.Wrapf(err, "failed to get primary tablet for %s/%s shard", keyspace, shard.ShardName()))
+				allErrors.RecordError(vterrors.Wrapf(err, "failed to get primary tablet for the %s/%s shard", keyspace, shard.ShardName()))
 			}
 			// Ensure the tablet has the minimum privileges required on the sidecar database
 			// table in order to manage the workflow.

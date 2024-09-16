@@ -798,7 +798,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			commit, _ = vc.startQuery(t, openTxQuery)
 		}
 		switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
-		var shardNames []string
+		shardNames := make([]string, 0, len(vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards))
 		for shardName := range maps.Keys(vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards) {
 			shardNames = append(shardNames, shardName)
 		}
@@ -1613,7 +1613,7 @@ func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspac
 	}
 
 	defer func() {
-		// Put global privs back in place.
+		// Put the default global privs back in place.
 		applyPrivileges("grant select,insert,update,delete on *.* to vt_filtered@localhost")
 	}()
 

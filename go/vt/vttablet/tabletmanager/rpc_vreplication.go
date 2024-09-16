@@ -78,7 +78,8 @@ where u.user = %a
       and find_in_set('update', t.table_priv)
       and find_in_set('delete', t.table_priv)
     )
-  ) limit 1
+  )
+limit 1
 `
 )
 
