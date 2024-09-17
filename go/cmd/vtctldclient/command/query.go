@@ -55,13 +55,6 @@ var (
 		RunE:                  commandExecuteMultiFetchAsDBA,
 		Aliases:               []string{"ExecuteMultiFetchAsDba"},
 	}
-	// GetUnresolvedTransactions makes an GetUnresolvedTransactions gRPC call to a vtctld.
-	GetUnresolvedTransactions = &cobra.Command{
-		Use:   "GetUnresolvedTransactions <keyspace>",
-		Short: "Retrieves unresolved transactions for the given keyspace.",
-		Args:  cobra.ExactArgs(1),
-		RunE:  commandGetUnresolvedTransactions,
-	}
 )
 
 var executeFetchAsAppOptions = struct {
@@ -205,26 +198,6 @@ func commandExecuteMultiFetchAsDBA(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func commandGetUnresolvedTransactions(cmd *cobra.Command, args []string) error {
-	cli.FinishedParsing(cmd)
-
-	keyspace := cmd.Flags().Arg(0)
-	resp, err := client.GetUnresolvedTransactions(commandCtx,
-		&vtctldatapb.GetUnresolvedTransactionsRequest{
-			Keyspace: keyspace,
-		})
-	if err != nil {
-		return err
-	}
-
-	data, err := cli.MarshalJSON(resp.Transactions)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%s\n", data)
-	return nil
-}
-
 func init() {
 	ExecuteFetchAsApp.Flags().Int64Var(&executeFetchAsAppOptions.MaxRows, "max-rows", 10_000, "The maximum number of rows to fetch from the remote tablet.")
 	ExecuteFetchAsApp.Flags().BoolVar(&executeFetchAsAppOptions.UsePool, "use-pool", false, "Use the tablet connection pool instead of creating a fresh connection.")
@@ -242,6 +215,4 @@ func init() {
 	ExecuteMultiFetchAsDBA.Flags().BoolVar(&executeMultiFetchAsDBAOptions.ReloadSchema, "reload-schema", false, "Instructs the tablet to reload its schema after executing the query.")
 	ExecuteMultiFetchAsDBA.Flags().BoolVarP(&executeMultiFetchAsDBAOptions.JSON, "json", "j", false, "Output the results in JSON instead of a human-readable table.")
 	Root.AddCommand(ExecuteMultiFetchAsDBA)
-
-	Root.AddCommand(GetUnresolvedTransactions)
 }
