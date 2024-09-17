@@ -1,4 +1,8 @@
 ## v19.0
+* **[19.0.6](19.0.6)**
+	* [Changelog](19.0.6/changelog.md)
+	* [Release Notes](19.0.6/release_notes.md)
+
 * **[19.0.5](19.0.5)**
 	* [Changelog](19.0.5/changelog.md)
 	* [Release Notes](19.0.5/release_notes.md)

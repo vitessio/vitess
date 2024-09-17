@@ -180,7 +180,7 @@ func TestIsPrefix(t *testing.T) {
 		coll := testcollation(t, collName)
 		input := []rune(strings.ToUpper(ExampleStringLong))
 
-		for size := 0; size < len(input); size++ {
+		for size := range len(input) {
 			left := ExampleStringLong
 			right := string(input[:size])
 
@@ -777,7 +777,7 @@ func BenchmarkAllUCAWeightStrings(b *testing.B) {
 
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_ = collation.WeightString(buf, input, 0)
 			}
 		})
@@ -1058,7 +1058,7 @@ func BenchmarkUCA900Collation(b *testing.B) {
 			str2 := []byte(strings.ToUpper(content))
 			for _, collation := range Collations {
 				b.Run(fmt.Sprintf("%s/%d/%s", teststr.Name, length, collation.Name()), func(b *testing.B) {
-					for i := 0; i < b.N; i++ {
+					for range b.N {
 						_ = collation.Collate(str1, str2, false)
 					}
 				})
