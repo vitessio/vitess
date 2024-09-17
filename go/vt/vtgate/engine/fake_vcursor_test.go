@@ -112,6 +112,10 @@ func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
 
+func (t *noopVCursor) StartPrimitiveTrace() func() map[Primitive]RowsReceived {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }

@@ -131,6 +131,10 @@ type (
 
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
 		CloneForReplicaWarming(ctx context.Context) VCursor
+
+		// StartPrimitiveTrace starts a trace for the given primitive,
+		// and returns a function to get the trace logs after the primitive execution.
+		StartPrimitiveTrace() func() map[Primitive]RowsReceived
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
