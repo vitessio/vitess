@@ -34,6 +34,17 @@ func (tm *TabletManager) GetUnresolvedTransactions(ctx context.Context, abandonA
 	return tm.QueryServiceControl.UnresolvedTransactions(ctx, target, abandonAgeSeconds)
 }
 
+// ReadTransaction returns the transaction metadata for the given distributed transaction ID.
+func (tm *TabletManager) ReadTransaction(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionRequest) (*querypb.TransactionMetadata, error) {
+	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
+		return nil, err
+	}
+
+	tablet := tm.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+	return tm.QueryServiceControl.ReadTransaction(ctx, target, req.Dtid)
+}
+
 // ConcludeTransaction concludes the given distributed transaction.
 func (tm *TabletManager) ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
@@ -46,15 +57,4 @@ func (tm *TabletManager) ConcludeTransaction(ctx context.Context, req *tabletman
 		return tm.QueryServiceControl.ConcludeTransaction(ctx, target, req.Dtid)
 	}
 	return tm.QueryServiceControl.RollbackPrepared(ctx, target, req.Dtid, 0)
-}
-
-// ReadTransaction returns the transaction metadata for the given distributed transaction ID.
-func (tm *TabletManager) ReadTransaction(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionRequest) (*querypb.TransactionMetadata, error) {
-	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
-		return nil, err
-	}
-
-	tablet := tm.Tablet()
-	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	return tm.QueryServiceControl.ReadTransaction(ctx, target, req.Dtid)
 }

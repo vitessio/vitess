@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -417,6 +419,62 @@ func TestExecutorSetRollback(t *testing.T) {
 	err = txe.SetRollback("aa", txid)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "could not transition to ROLLBACK: aa")
+}
+
+func TestExecutorUnresolvedTransactions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db := newTestTxExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+
+	pattern := `(?i)select\s+t\.dtid,\s+t\.state,\s+p\.keyspace,\s+p\.shard\s+from\s+_vt\.dt_state\s+t\s+join\s+_vt\.dt_participant\s+p\s+on\s+t\.dtid\s+=\s+p\.dtid\s+where\s+time_created\s+<\s+(\d+)\s+order\s+by\s+t\.state\s+desc,\s+t\.dtid`
+	re := regexp.MustCompile(pattern)
+
+	var executedQuery string
+	db.AddQueryPatternWithCallback(pattern, &sqltypes.Result{}, func(query string) {
+		executedQuery = query
+	})
+
+	tcases := []struct {
+		abandonAge time.Duration
+		expected   time.Time
+	}{
+		{abandonAge: 0, expected: time.Now().Add(-txe.te.abandonAge)},
+		{abandonAge: 100 * time.Second, expected: time.Now().Add(-100 * time.Second)},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("abandonAge=%v", tcase.abandonAge), func(t *testing.T) {
+			_, err := txe.UnresolvedTransactions(tcase.abandonAge)
+			require.NoError(t, err)
+			require.NotEmpty(t, executedQuery)
+
+			// extract the time value
+			matches := re.FindStringSubmatch(executedQuery)
+			require.Len(t, matches, 2)
+			timeCreated := convertNanoStringToTime(t, matches[1])
+
+			// diff should be in microseconds, so we allow 10ms difference
+			require.WithinDuration(t, timeCreated, tcase.expected, 10*time.Millisecond)
+		})
+	}
+
+}
+
+func convertNanoStringToTime(t *testing.T, unixNanoStr string) time.Time {
+	t.Helper()
+
+	// Convert the string to an integer (int64)
+	unixNano, err := strconv.ParseInt(unixNanoStr, 10, 64)
+	require.NoError(t, err)
+
+	// Convert nanoseconds to seconds and nanoseconds
+	seconds := unixNano / int64(time.Second)
+	nanos := unixNano % int64(time.Second)
+
+	// Create a time.Time object
+	return time.Unix(seconds, nanos)
 }
 
 func TestExecutorConcludeTransaction(t *testing.T) {
