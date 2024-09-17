@@ -261,7 +261,7 @@ func (mz *materializer) deploySchema() error {
 	removeAutoInc := false
 	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
-		(mz.ms != nil && mz.ms.GetWorkflowOptions().GetStripShardedAutoIncrement()) {
+		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().StripShardedAutoIncrement) {
 		removeAutoInc = true
 	}
 
