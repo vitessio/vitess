@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
@@ -3009,7 +3010,7 @@ func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards
 }
 
 // refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
-func (s *Server) refreshPrimaryTablets(ctx context.Context, shards []*topo.ShardInfo) error {
+func (s *Server) refreshPrimaryTablets(ctx context.Context, shards []*topo.ShardInfo, force bool) error {
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	for _, si := range shards {
@@ -3023,9 +3024,11 @@ func (s *Server) refreshPrimaryTablets(ctx context.Context, shards []*topo.Shard
 			}
 
 			if err := s.tmc.RefreshState(ctx, ti.Tablet); err != nil {
-				rec.RecordError(err)
-			} else {
-				s.Logger().Infof("%v responded", topoproto.TabletAliasString(si.PrimaryAlias))
+				if !force {
+					rec.RecordError(err)
+					return
+				}
+				s.Logger().Warningf("%v encountered error on tablet refresh: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 			}
 		}(si)
 	}
@@ -3081,6 +3084,16 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 
 // WorkflowSwitchTraffic switches traffic in the direction passed for specified tablet types.
 func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.WorkflowSwitchTraffic")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("tablet-types", req.TabletTypes)
+	span.Annotate("direction", req.Direction)
+	span.Annotate("enable-reverse-replication", req.EnableReverseReplication)
+	span.Annotate("force", req.Force)
+
 	var (
 		dryRunResults                     []string
 		rdDryRunResults, wrDryRunResults  *[]string
@@ -3130,12 +3143,16 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse traffic for multi-tenant migrations")
 		}
 	}
-	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.Shards)
+
+	ts.force = req.GetForce()
+
+	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.GetShards())
 	if err != nil {
 		return nil, err
 	}
 	if reason != "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot switch traffic for workflow %s at this time: %s", startState.Workflow, reason)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot switch traffic for workflow %s at this time: %s",
+			startState.Workflow, reason)
 	}
 	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
 	if err != nil {
@@ -3172,7 +3189,8 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	s.Logger().Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
 	resp := &vtctldatapb.WorkflowSwitchTrafficResponse{}
 	if req.DryRun {
-		resp.Summary = fmt.Sprintf("%s dry run results for workflow %s.%s at %v", cmd, req.Keyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
+		resp.Summary = fmt.Sprintf("%s dry run results for workflow %s.%s at %v",
+			cmd, req.Keyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
 		resp.DryRunResults = dryRunResults
 	} else {
 		s.Logger().Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
@@ -3222,10 +3240,12 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	cellsStr := strings.Join(req.Cells, ",")
 
-	s.Logger().Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, cellsStr, state.String())
+	s.Logger().Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s",
+		ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, cellsStr, state.String())
 	if !switchReplica && !switchRdonly {
 		return defaultErrorHandler(ts.Logger(), "invalid tablet types",
-			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s",
+				roTypesToSwitchStr))
 	}
 	// For partial (shard-by-shard migrations) or multi-tenant migrations, traffic for all tablet types
 	// is expected to be switched at once. For other MoveTables migrations where we use table routing rules
@@ -3245,9 +3265,15 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		if err != nil {
 			return nil, err
 		}
-		if len(req.GetCells()) != 0 && len(req.GetCells()) != len(allCells) {
-			return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"requesting read traffic for multi-tenant migrations must include all cells"))
+
+		if len(req.GetCells()) > 0 {
+			slices.Sort(req.GetCells())
+			slices.Sort(allCells)
+			if !slices.Equal(req.GetCells(), allCells) {
+				return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"requesting switch of read traffic for multi-tenant migrations must include all cells; all cells: %v, requested cells: %v",
+					strings.Join(allCells, ","), strings.Join(req.GetCells(), ",")))
+			}
 		}
 	}
 
@@ -3277,14 +3303,14 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 	}
 
-	// If journals exist notify user and fail.
 	journalsExist, _, err := ts.checkJournals(ctx)
-	if err != nil {
+	if err != nil && !req.GetForce() {
 		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to read journal in the %s keyspace", ts.SourceKeyspaceName()), err)
 	}
 	if journalsExist {
 		s.Logger().Infof("Found a previous journal entry for %d", ts.id)
 	}
+
 	var sw iswitcher
 	if req.DryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -3664,10 +3690,15 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 		defer wg.Done()
 		for _, si := range shards {
 			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
-				m.Lock()
-				refreshErrors.WriteString(fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
-					si.Keyspace(), si.ShardName(), stype, err, partialDetails))
-				m.Unlock()
+				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
+					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
+				if partial && ts.force {
+					log.Warning(msg)
+				} else {
+					m.Lock()
+					refreshErrors.WriteString(msg)
+					m.Unlock()
+				}
 			}
 		}
 	}
