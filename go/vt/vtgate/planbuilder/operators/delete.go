@@ -52,8 +52,8 @@ func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (d *Delete) TablesUsed() []string {
-	return SingleQualifiedIdentifier(d.Target.VTable.Keyspace, d.Target.VTable.Name)
+func (d *Delete) TablesUsed(in []string) []string {
+	return append(in, QualifiedString(d.Target.VTable.Keyspace, d.Target.VTable.Name.String()))
 }
 
 func (d *Delete) ShortDescription() string {
