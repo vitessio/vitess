@@ -1109,6 +1109,14 @@ message GetUnresolvedTransactionsResponse {
   repeated query.TransactionMetadata transactions = 1;
 }
 
+message ConcludeTransactionRequest {
+  string dtid = 1;
+  repeated query.Target participants = 2;
+}
+
+message ConcludeTransactionResponse {
+}
+
 message GetVSchemaRequest {
   string keyspace = 1;
 }

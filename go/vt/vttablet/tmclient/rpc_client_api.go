@@ -149,6 +149,9 @@ type TabletManagerClient interface {
 	// GetUnresolvedTransactions returns the list of unresolved transactions for the tablet.
 	GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error)
 
+	// ConcludeTransaction conclude the transaction on the tablet.
+	ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error
+
 	//
 	// Replication related methods
 	//

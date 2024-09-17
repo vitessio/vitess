@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/dtids"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -52,6 +53,16 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -67,17 +78,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -2400,6 +2400,8 @@ func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctl
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetUnresolvedTransactions")
 	defer span.Finish()
 
+	span.Annotate("keyspace", req.Keyspace)
+
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
@@ -2436,6 +2438,58 @@ func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctl
 	return &vtctldatapb.GetUnresolvedTransactionsResponse{
 		Transactions: transactions,
 	}, nil
+}
+
+// ConcludeTransaction is part of the vtctlservicepb.VtctldServer interface.
+// It concludes the unresolved distributed transaction.
+func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb.ConcludeTransactionRequest) (resp *vtctldatapb.ConcludeTransactionResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ConcludeTransaction")
+	defer span.Finish()
+
+	span.Annotate("dtid", req.Dtid)
+	span.Annotate("participants", req.Participants)
+
+	ss, err := dtids.ShardSession(req.Dtid)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := s.getPrimaryTablet(ctx, ss.Target)
+	if err != nil {
+		return nil, err
+	}
+
+	eg, newCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, rm := range req.Participants {
+		eg.Go(func() error {
+			primary, err := s.getPrimaryTablet(newCtx, rm)
+			if err != nil {
+				return err
+			}
+			return s.tmc.ConcludeTransaction(newCtx, primary.Tablet, req.Dtid, false)
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	if err = s.tmc.ConcludeTransaction(ctx, primary.Tablet, req.Dtid, true); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ConcludeTransactionResponse{}, nil
+}
+
+func (s *VtctldServer) getPrimaryTablet(newCtx context.Context, rm *querypb.Target) (*topo.TabletInfo, error) {
+	si, err := s.ts.GetShard(newCtx, rm.Keyspace, rm.Shard)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := s.ts.GetTablet(newCtx, si.PrimaryAlias)
+	if err != nil {
+		return nil, err
+	}
+	return primary, nil
 }
 
 // GetVersion returns the version of a tablet from its debug vars
