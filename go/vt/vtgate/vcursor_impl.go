@@ -135,7 +135,7 @@ type (
 
 		// this is a map of the number of rows that every primitive has returned
 		// if this field is nil, it means that we are not logging operator traffic
-		primitiveStats map[int]engine.RowsReceived
+		primitiveStats map[engine.Primitive]engine.RowsReceived
 	}
 )
 
@@ -285,9 +285,9 @@ func (vc *vcursorImpl) UnresolvedTransactions(ctx context.Context, keyspace stri
 	return vc.executor.UnresolvedTransactions(ctx, targets)
 }
 
-func (vc *vcursorImpl) StartPrimitiveTrace() func() map[int]engine.RowsReceived {
-	vc.primitiveStats = make(map[int]engine.RowsReceived)
-	return func() map[int]engine.RowsReceived {
+func (vc *vcursorImpl) StartPrimitiveTrace() func() map[engine.Primitive]engine.RowsReceived {
+	vc.primitiveStats = make(map[engine.Primitive]engine.RowsReceived)
+	return func() map[engine.Primitive]engine.RowsReceived {
 		return vc.primitiveStats
 	}
 }
@@ -533,14 +533,13 @@ func (vc *vcursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 
 func (vc *vcursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Result) {
 	if vc.primitiveStats != nil {
-		key := int(primitive.GetID())
-		rows := vc.primitiveStats[key]
+		rows := vc.primitiveStats[primitive]
 		if res == nil {
 			rows = append(rows, 0)
 		} else {
 			rows = append(rows, len(res.Rows))
 		}
-		vc.primitiveStats[key] = rows
+		vc.primitiveStats[primitive] = rows
 	}
 }
 

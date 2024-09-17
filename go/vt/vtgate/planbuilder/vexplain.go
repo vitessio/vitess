@@ -176,6 +176,9 @@ func buildVExplainTracePlan(ctx context.Context, explainStatement sqlparser.Stat
 	}
 
 	// We'll set the trace engine as the root primitive
-	innerInstruction.primitive = &engine.Trace{Inner: innerInstruction.primitive}
+	innerInstruction.primitive = &engine.VExplain{
+		Input: innerInstruction.primitive,
+		Type:  sqlparser.TraceVExplainType,
+	}
 	return innerInstruction, nil
 }
