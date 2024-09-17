@@ -3398,7 +3398,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	if req.EnableReverseReplication {
 		// Does the source keyspace have tablets that are able to manage
 		// the reverse workflow?
-		if err := s.validatePrimaryTabletsHaveRequiredVReplicationPermissions(ctx, ts.SourceKeyspaceName(), ts.SourceShards()); err != nil {
+		if err := s.validateShardsHaveVReplicationPermissions(ctx, ts.SourceKeyspaceName(), ts.SourceShards()); err != nil {
 			return handleError(fmt.Sprintf("primary tablets are not able to fully manage the reverse vreplication workflow in the %s keyspace",
 				ts.SourceKeyspaceName()), err)
 		}
@@ -4314,10 +4314,10 @@ func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMir
 	return nil
 }
 
-// validatePrimaryTabletsHaveRequiredVReplicationPermissions checks that all primary tablets
-// in the given keyspace shards have the required permissions necessary to perform actions on
-// the workflow record.
-func (s *Server) validatePrimaryTabletsHaveRequiredVReplicationPermissions(ctx context.Context, keyspace string, shards []*topo.ShardInfo) error {
+// validateShardsHaveVReplicationPermissions checks that the primary tablets
+// in the given keyspace shards have the required permissions necessary to
+// perform actions on the workflow.
+func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, keyspace string, shards []*topo.ShardInfo) error {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	for _, shard := range shards {
@@ -4333,7 +4333,7 @@ func (s *Server) validatePrimaryTabletsHaveRequiredVReplicationPermissions(ctx c
 				allErrors.RecordError(vterrors.Wrapf(err, "failed to get primary tablet for the %s/%s shard", keyspace, shard.ShardName()))
 			}
 			// Ensure the tablet has the minimum privileges required on the sidecar database
-			// table in order to manage the workflow.
+			// table(s) in order to manage the workflow.
 			res, err := s.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
 			if err != nil {
 				allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s", topoproto.TabletAliasString(tablet.Alias)))
