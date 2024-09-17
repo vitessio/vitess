@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -42,6 +43,8 @@ type (
 		Input Primitive
 		Type  sqlparser.VExplainType
 	}
+
+	RowsReceived []int
 )
 
 var _ Primitive = (*VExplain)(nil)
@@ -62,8 +65,43 @@ func (v *VExplain) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (v *VExplain) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return v.Input.GetFields(ctx, vcursor, bindVars)
+func (v *VExplain) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	var fields []*querypb.Field
+	switch v.Type {
+	case sqlparser.QueriesVExplainType:
+		fields = getVExplainQueriesFields()
+	case sqlparser.AllVExplainType:
+		fields = getVExplainAllFields()
+	case sqlparser.TraceVExplainType:
+		fields = getVExplainTraceFields()
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown type of VExplain plan")
+	}
+	return &sqltypes.Result{Fields: fields}, nil
+}
+
+func getVExplainTraceFields() []*querypb.Field {
+	return []*querypb.Field{{
+		Name:    "Trace",
+		Type:    sqltypes.VarChar,
+		Charset: uint32(collations.SystemCollation.Collation),
+		Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
+	}}
+}
+
+func getVExplainQueriesFields() []*querypb.Field {
+	return []*querypb.Field{
+		{Name: "#", Type: sqltypes.Int32},
+		{Name: "keyspace", Type: sqltypes.VarChar},
+		{Name: "shard", Type: sqltypes.VarChar},
+		{Name: "query", Type: sqltypes.VarChar}}
+
+}
+
+func getVExplainAllFields() []*querypb.Field {
+	return []*querypb.Field{{
+		Name: "VExplain", Type: sqltypes.VarChar,
+	}}
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -73,40 +111,72 @@ func (v *VExplain) NeedsTransaction() bool {
 
 // TryExecute implements the Primitive interface
 func (v *VExplain) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	vcursor.Session().VExplainLogging()
+	var stats func() map[Primitive]RowsReceived
+	if v.Type == sqlparser.TraceVExplainType {
+		stats = vcursor.StartPrimitiveTrace()
+	} else {
+		vcursor.Session().VExplainLogging()
+	}
 	_, err := vcursor.ExecutePrimitive(ctx, v.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
-	return v.convertToResult(ctx, vcursor)
+	return v.convertToResult(ctx, vcursor, stats)
+}
+
+func noOpCallback(*sqltypes.Result) error {
+	return nil
 }
 
 // TryStreamExecute implements the Primitive interface
 func (v *VExplain) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	vcursor.Session().VExplainLogging()
-	err := vcursor.StreamExecutePrimitive(ctx, v.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
-		return nil
-	})
+	var stats func() map[Primitive]RowsReceived
+	if v.Type == sqlparser.TraceVExplainType {
+		stats = vcursor.StartPrimitiveTrace()
+	} else {
+		vcursor.Session().VExplainLogging()
+	}
+
+	err := vcursor.StreamExecutePrimitive(ctx, v.Input, bindVars, wantfields, noOpCallback)
 	if err != nil {
 		return err
 	}
-	result, err := v.convertToResult(ctx, vcursor)
+	result, err := v.convertToResult(ctx, vcursor, stats)
 	if err != nil {
 		return err
 	}
 	return callback(result)
 }
 
-func (v *VExplain) convertToResult(ctx context.Context, vcursor VCursor) (*sqltypes.Result, error) {
+func (v *VExplain) convertToResult(ctx context.Context, vcursor VCursor, stats func() map[Primitive]RowsReceived) (*sqltypes.Result, error) {
 	switch v.Type {
 	case sqlparser.QueriesVExplainType:
 		result := convertToVExplainQueriesResult(vcursor.Session().GetVExplainLogs())
 		return result, nil
 	case sqlparser.AllVExplainType:
 		return v.convertToVExplainAllResult(ctx, vcursor)
+	case sqlparser.TraceVExplainType:
+		return v.getExplainTraceOutput(stats)
+
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown type of VExplain plan")
 	}
+}
+
+func (v *VExplain) getExplainTraceOutput(getOpStats func() map[Primitive]RowsReceived) (*sqltypes.Result, error) {
+	description := PrimitiveToPlanDescription(v.Input, getOpStats())
+
+	output, err := json.MarshalIndent(description, "", "\t")
+	if err != nil {
+		return nil, err
+	}
+
+	return &sqltypes.Result{
+		Fields: getVExplainTraceFields(),
+		Rows: []sqltypes.Row{{
+			sqltypes.NewVarChar(string(output)),
+		}},
+	}, nil
 }
 
 func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCursor) (*sqltypes.Result, error) {
@@ -144,18 +214,14 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 	}
 
 	result := string(resultBytes)
-	fields := []*querypb.Field{
-		{
-			Name: "VExplain", Type: sqltypes.VarChar,
-		},
-	}
+
 	rows := []sqltypes.Row{
 		{
 			sqltypes.NewVarChar(result),
 		},
 	}
 	qr := &sqltypes.Result{
-		Fields: fields,
+		Fields: getVExplainAllFields(),
 		Rows:   rows,
 	}
 	return qr, nil
@@ -193,17 +259,8 @@ func primitiveToPlanDescriptionWithSQLResults(in Primitive, res map[Primitive]st
 }
 
 func convertToVExplainQueriesResult(logs []ExecuteEntry) *sqltypes.Result {
-	fields := []*querypb.Field{{
-		Name: "#", Type: sqltypes.Int32,
-	}, {
-		Name: "keyspace", Type: sqltypes.VarChar,
-	}, {
-		Name: "shard", Type: sqltypes.VarChar,
-	}, {
-		Name: "query", Type: sqltypes.VarChar,
-	}}
 	qr := &sqltypes.Result{
-		Fields: fields,
+		Fields: getVExplainQueriesFields(),
 	}
 	for _, line := range logs {
 		qr.Rows = append(qr.Rows, sqltypes.Row{
