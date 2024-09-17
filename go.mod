@@ -10,7 +10,6 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v0.9.0 // indirect
 	github.com/aquarapid/vaultlib v0.5.1
 	github.com/armon/go-metrics v0.4.1 // indirect
-	github.com/aws/aws-sdk-go v1.55.5
 	github.com/buger/jsonparser v1.1.1
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/corpix/uarand v0.1.1 // indirect
@@ -32,7 +31,6 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/serf v0.10.1 // indirect
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
-	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.17.9
 	github.com/klauspost/pgzip v1.2.6
 	github.com/krishicks/yaml-patch v0.0.10
@@ -92,6 +90,11 @@ require (
 require (
 	github.com/DataDog/datadog-go/v5 v5.5.0
 	github.com/Shopify/toxiproxy/v2 v2.9.0
+	github.com/aws/aws-sdk-go-v2 v1.30.4
+	github.com/aws/aws-sdk-go-v2/config v1.27.31
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.15
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.60.1
+	github.com/aws/smithy-go v1.20.4
 	github.com/bndr/gotabulate v1.1.2
 	github.com/gammazero/deque v0.2.1
 	github.com/google/safehtml v0.1.0
@@ -124,6 +127,20 @@ require (
 	github.com/DataDog/go-tuf v1.1.0-0.5.2 // indirect
 	github.com/DataDog/sketches-go v1.4.6 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.4 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.30 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.12 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.16 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.16 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.1 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.16 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.18 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.18 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.16 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.22.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.26.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.30.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
