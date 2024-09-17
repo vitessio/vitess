@@ -72,7 +72,7 @@ func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, 
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	var instructions *PrimitiveDescription
 	if p.Instructions != nil {
-		description := PrimitiveToPlanDescription(p.Instructions)
+		description := PrimitiveToPlanDescription(p.Instructions, nil)
 		instructions = &description
 	}
 

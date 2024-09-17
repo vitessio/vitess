@@ -711,6 +711,7 @@ var keywords = []keyword{
 	{"tinyint", TINYINT},
 	{"tinytext", TINYTEXT},
 	{"to", TO},
+	{"trace", TRACE},
 	{"trailing", TRAILING},
 	{"transaction", TRANSACTION},
 	{"transactions", TRANSACTIONS},

@@ -31,7 +31,7 @@ import (
 func TestCreateRoutePlanDescription(t *testing.T) {
 	route := createRoute()
 
-	planDescription := PrimitiveToPlanDescription(route)
+	planDescription := PrimitiveToPlanDescription(route, nil)
 
 	expected := PrimitiveDescription{
 		OperatorType:      "Route",
@@ -76,7 +76,7 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 		Input:  route,
 	}
 
-	planDescription := PrimitiveToPlanDescription(limit)
+	planDescription := PrimitiveToPlanDescription(limit, nil)
 
 	expected := PrimitiveDescription{
 		OperatorType: "Limit",
