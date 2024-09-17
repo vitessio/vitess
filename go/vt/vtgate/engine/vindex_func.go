@@ -38,7 +38,6 @@ var _ Primitive = (*VindexFunc)(nil)
 
 // VindexFunc is a primitive that performs vindex functions.
 type VindexFunc struct {
-	identifiablePrimitive
 	// VindexFunc does not take inputs
 	noInputs
 

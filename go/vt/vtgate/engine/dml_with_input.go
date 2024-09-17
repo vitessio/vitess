@@ -33,7 +33,6 @@ const DmlVals = "dml_vals"
 
 // DMLWithInput represents the instructions to perform a DML operation based on the input result.
 type DMLWithInput struct {
-	identifiablePrimitive
 	txNeeded
 
 	Input Primitive

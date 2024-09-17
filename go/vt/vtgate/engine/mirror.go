@@ -30,7 +30,6 @@ type (
 	// authoritative primitive and, based on whether a die-roll exceeds a
 	// percentage, to also execute a target Primitive.
 	percentBasedMirror struct {
-		identifiablePrimitive
 		percent   float32
 		primitive Primitive
 		target    Primitive

@@ -27,7 +27,6 @@ var _ Primitive = (*Rows)(nil)
 
 // Rows simply returns a number or rows
 type Rows struct {
-	identifiablePrimitive
 	noInputs
 	noTxNeeded
 

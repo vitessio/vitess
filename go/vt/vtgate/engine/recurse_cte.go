@@ -30,7 +30,6 @@ import (
 // The values being sent to the Term side are stored in the Vars map -
 // the key is the bindvar name and the value is the index of the column in the recursive result
 type RecurseCTE struct {
-	identifiablePrimitive
 	Seed, Term Primitive
 
 	Vars map[string]int

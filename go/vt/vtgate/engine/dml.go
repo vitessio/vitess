@@ -36,7 +36,6 @@ import (
 
 // DML contains the common elements between Update and Delete plans
 type DML struct {
-	identifiablePrimitive
 	txNeeded
 
 	// Query specifies the query to be executed.

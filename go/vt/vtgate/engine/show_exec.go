@@ -28,7 +28,6 @@ var _ Primitive = (*ShowExec)(nil)
 
 // ShowExec is a primitive to call into executor via vcursor.
 type ShowExec struct {
-	identifiablePrimitive
 	noInputs
 	noTxNeeded
 

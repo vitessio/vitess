@@ -28,7 +28,6 @@ var _ Primitive = (*ScalarAggregate)(nil)
 
 // ScalarAggregate is a primitive used to do aggregations without grouping keys
 type ScalarAggregate struct {
-	identifiablePrimitive
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	Aggregates []*AggregateParams

@@ -39,7 +39,6 @@ type (
 	}
 
 	VExplain struct {
-		identifiablePrimitive
 		Input Primitive
 		Type  sqlparser.VExplainType
 	}

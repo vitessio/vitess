@@ -175,13 +175,6 @@ func buildVExplainTracePlan(ctx context.Context, explainStatement sqlparser.Stat
 		return nil, err
 	}
 
-	// We'll go over the primitive tree and assign unique IDs
-	id := 1
-	engine.PreOrderTraverse(innerInstruction.primitive, func(primitive engine.Primitive) {
-		primitive.SetID(engine.PrimitiveID(id))
-		id++
-	})
-
 	// We'll set the trace engine as the root primitive
 	innerInstruction.primitive = &engine.Trace{Inner: innerInstruction.primitive}
 	return innerInstruction, nil

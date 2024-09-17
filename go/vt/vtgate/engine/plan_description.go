@@ -219,10 +219,10 @@ func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj any) error {
 
 // PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree
 // If stats is not nil, it will be used to populate the stats field of the PlanDescription
-func PrimitiveToPlanDescription(in Primitive, stats map[int]RowsReceived) PrimitiveDescription {
+func PrimitiveToPlanDescription(in Primitive, stats map[Primitive]RowsReceived) PrimitiveDescription {
 	this := in.description()
-	if id := in.GetID(); stats != nil && id > 0 {
-		this.Stats = stats[int(id)]
+	if stats != nil {
+		this.Stats = stats[in]
 	}
 
 	inputs, infos := in.Inputs()

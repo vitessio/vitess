@@ -60,7 +60,6 @@ const dbDDLDefaultTimeout = 500 * time.Millisecond
 // DBDDL is just a container around custom database provisioning plugins
 // The default behaviour is to just return an error
 type DBDDL struct {
-	identifiablePrimitive
 	noInputs
 	noTxNeeded
 

@@ -30,7 +30,6 @@ var _ Primitive = (*AlterVSchema)(nil)
 
 // AlterVSchema operator applies changes to VSchema
 type AlterVSchema struct {
-	identifiablePrimitive
 	noTxNeeded
 	noInputs
 

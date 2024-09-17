@@ -35,7 +35,6 @@ import (
 var _ Primitive = (*VindexLookup)(nil)
 
 type VindexLookup struct {
-	identifiablePrimitive
 	Opcode Opcode
 
 	// The vindex to use to do the Map

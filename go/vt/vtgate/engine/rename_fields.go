@@ -28,7 +28,6 @@ var _ Primitive = (*RenameFields)(nil)
 
 // RenameFields is a primitive that renames the fields
 type RenameFields struct {
-	identifiablePrimitive
 	noTxNeeded
 
 	Cols    []string

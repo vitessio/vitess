@@ -35,7 +35,6 @@ import (
 // returns sendErr. For streaming calls, it sends the field info
 // first and two rows at a time till all rows are sent.
 type fakePrimitive struct {
-	identifiablePrimitive
 	results   []*sqltypes.Result
 	curResult int
 	// sendErr is sent at the end of the stream if it's set.

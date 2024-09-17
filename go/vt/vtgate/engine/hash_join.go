@@ -40,7 +40,6 @@ type (
 	// Then the RHS is fetched, and we can check if the rows from the RHS matches any from the LHS.
 	// When they match by hash code, we double-check that we are not working with a false positive by comparing the values.
 	HashJoin struct {
-		identifiablePrimitive
 		Opcode JoinOpcode
 
 		// Left and Right are the LHS and RHS primitives

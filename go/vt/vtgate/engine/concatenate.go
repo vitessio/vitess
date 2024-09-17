@@ -35,7 +35,6 @@ var _ Primitive = (*Concatenate)(nil)
 
 // Concatenate specified the parameter for concatenate primitive
 type Concatenate struct {
-	identifiablePrimitive
 	Sources []Primitive
 
 	// These column offsets do not need to be typed checked - they usually contain weight_string()

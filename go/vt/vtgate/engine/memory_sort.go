@@ -34,7 +34,6 @@ var _ Primitive = (*MemorySort)(nil)
 
 // MemorySort is a primitive that performs in-memory sorting.
 type MemorySort struct {
-	identifiablePrimitive
 	UpperLimit evalengine.Expr
 	OrderBy    evalengine.Comparison
 	Input      Primitive

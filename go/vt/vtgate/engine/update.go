@@ -42,7 +42,6 @@ type VindexValues struct {
 
 // Update represents the instructions to perform an update.
 type Update struct {
-	identifiablePrimitive
 	// Update does not take inputs
 	noInputs
 

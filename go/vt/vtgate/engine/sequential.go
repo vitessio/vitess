@@ -28,7 +28,6 @@ import (
 // Sequential Primitive is used to execute DML statements in a fixed order.
 // Any failure, stops the execution and returns.
 type Sequential struct {
-	identifiablePrimitive
 	txNeeded
 	Sources []Primitive
 }

@@ -53,7 +53,6 @@ type NonLiteralUpdateInfo struct {
 // FkCascade is a primitive that implements foreign key cascading using Selection as values required to execute the FkChild Primitives.
 // On success, it executes the Parent Primitive.
 type FkCascade struct {
-	identifiablePrimitive
 	txNeeded
 
 	// Selection is the Primitive that is used to find the rows that are going to be modified in the child tables.

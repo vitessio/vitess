@@ -30,7 +30,6 @@ var _ Primitive = (*Filter)(nil)
 
 // Filter is a primitive that performs the FILTER operation.
 type Filter struct {
-	identifiablePrimitive
 	noTxNeeded
 
 	Predicate    evalengine.Expr

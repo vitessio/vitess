@@ -38,7 +38,6 @@ var _ Primitive = (*Insert)(nil)
 
 // Insert represents the instructions to perform an insert operation.
 type Insert struct {
-	identifiablePrimitive
 	noInputs
 	InsertCommon
 

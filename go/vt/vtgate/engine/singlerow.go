@@ -27,7 +27,6 @@ var _ Primitive = (*SingleRow)(nil)
 
 // SingleRow defines an empty result
 type SingleRow struct {
-	identifiablePrimitive
 	noInputs
 	noTxNeeded
 }

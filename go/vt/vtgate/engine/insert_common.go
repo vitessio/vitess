@@ -37,7 +37,6 @@ import (
 
 type (
 	InsertCommon struct {
-		identifiablePrimitive
 		// Insert needs tx handling
 		txNeeded
 

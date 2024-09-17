@@ -29,7 +29,6 @@ import (
 var _ Primitive = (*Trace)(nil)
 
 type Trace struct {
-	identifiablePrimitive
 	Inner Primitive
 }
 
@@ -90,7 +89,7 @@ func (t *Trace) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 	return callback(res)
 }
 
-func (t *Trace) getExplainTraceOutput(getOpStats func() map[int]RowsReceived) (*sqltypes.Result, error) {
+func (t *Trace) getExplainTraceOutput(getOpStats func() map[Primitive]RowsReceived) (*sqltypes.Result, error) {
 	description := PrimitiveToPlanDescription(t.Inner, getOpStats())
 
 	output, err := json.MarshalIndent(description, "", "\t")
