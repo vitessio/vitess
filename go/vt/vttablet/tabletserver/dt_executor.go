@@ -157,8 +157,8 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	ctx := trace.CopySpan(context.Background(), dte.ctx)
 	defer func() {
 		if err != nil {
-			dte.markFailed(ctx, dtid)
 			log.Warningf("failed to commit the prepared transaction '%s' with error: %v", dtid, err)
+			dte.te.checkErrorAndMarkFailed(ctx, dtid, err)
 		}
 		dte.te.txPool.RollbackAndRelease(ctx, conn)
 	}()
@@ -170,33 +170,6 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	}
 	dte.te.preparedPool.Forget(dtid)
 	return nil
-}
-
-// markFailed does the necessary work to mark a CommitPrepared
-// as failed. It marks the dtid as failed in the prepared pool,
-// increments the InternalErros counter, and also changes the
-// state of the transaction in the redo log as failed. If the
-// state change does not succeed, it just logs the event.
-// The function uses the passed in context that has no timeout
-// instead of DTExecutor's context.
-func (dte *DTExecutor) markFailed(ctx context.Context, dtid string) {
-	dte.te.env.Stats().InternalErrors.Add("TwopcCommit", 1)
-	dte.te.preparedPool.SetFailed(dtid)
-	conn, _, _, err := dte.te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
-	if err != nil {
-		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
-		return
-	}
-	defer dte.te.txPool.RollbackAndRelease(ctx, conn)
-
-	if err = dte.te.twoPC.UpdateRedo(ctx, conn, dtid, RedoStateFailed); err != nil {
-		log.Errorf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err)
-		return
-	}
-
-	if _, err = dte.te.txPool.Commit(ctx, conn); err != nil {
-		log.Errorf("markFailed: Commit failed for dtid %s: %v", dtid, err)
-	}
 }
 
 // RollbackPrepared rolls back a prepared transaction. This function handles

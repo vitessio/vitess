@@ -109,8 +109,8 @@ func (tpc *TwoPC) initializeQueries() {
 		"insert into %s.redo_statement(dtid, id, statement) values %a",
 		dbname, ":vals")
 	tpc.updateRedoTx = sqlparser.BuildParsedQuery(
-		"update %s.redo_state set state = %a where dtid = %a",
-		dbname, ":state", ":dtid")
+		"update %s.redo_state set state = %a, message = %a where dtid = %a",
+		dbname, ":state", ":message", ":dtid")
 	tpc.deleteRedoTx = sqlparser.BuildParsedQuery(
 		"delete from %s.redo_state where dtid = %a",
 		dbname, ":dtid")
@@ -200,10 +200,11 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 }
 
 // UpdateRedo changes the state of the redo log for the dtid.
-func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int) error {
+func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int, message string) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":  sqltypes.StringBindVariable(dtid),
-		"state": sqltypes.Int64BindVariable(int64(state)),
+		"dtid":    sqltypes.StringBindVariable(dtid),
+		"state":   sqltypes.Int64BindVariable(int64(state)),
+		"message": sqltypes.StringBindVariable(message),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.updateRedoTx, bindVars)
 	return err
