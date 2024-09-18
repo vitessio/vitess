@@ -36,6 +36,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 var (
@@ -67,6 +68,7 @@ var (
 		MySQLServerVersion           string
 		TruncateUILen                int
 		TruncateErrLen               int
+		ConfigOverrides              []string
 	}{}
 )
 
@@ -145,6 +147,27 @@ func validateOnDDL(cmd *cobra.Command) error {
 		return fmt.Errorf("invalid on-ddl value: %s", CreateOptions.OnDDL)
 	}
 	return nil
+}
+
+// ParseConfigOverrides converts a slice of key=value strings into a map of config overrides. The slice is passed
+// as a flag to the command, and the key=value pairs are used to override the default vreplication config values.
+func ParseConfigOverrides(overrides []string) (map[string]string, error) {
+	configOverrides := make(map[string]string, len(overrides))
+	defaultConfig, err := vttablet.NewVReplicationConfig(nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, kv := range overrides {
+		key, value, ok := strings.Cut(kv, "=")
+		if !ok {
+			return nil, fmt.Errorf("invalid config override format (var=value expected): %s", kv)
+		}
+		if _, ok := defaultConfig.Map()[key]; !ok {
+			return nil, fmt.Errorf("unknown vreplication config flag: %s", key)
+		}
+		configOverrides[key] = value
+	}
+	return configOverrides, nil
 }
 
 // ValidateShards checks if the provided shard names are valid key ranges.
@@ -232,6 +255,7 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&CreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied.")
 	cmd.Flags().BoolVar(&CreateOptions.AutoStart, "auto-start", true, "Start the workflow after creating it.")
 	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
+	cmd.Flags().StringSliceVar(&CreateOptions.ConfigOverrides, "config-overrides", []string{}, "Specify one or more VReplication config flags to override as a comma-separated list of key=value pairs.")
 }
 
 var MirrorTrafficOptions = struct {

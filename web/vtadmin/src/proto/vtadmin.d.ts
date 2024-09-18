@@ -29631,6 +29631,9 @@ export namespace tabletmanagerdata {
 
         /** ReadVReplicationWorkflowResponse options */
         options?: (string|null);
+
+        /** ReadVReplicationWorkflowResponse config_overrides */
+        config_overrides?: ({ [k: string]: string }|null);
     }
 
     /** Represents a ReadVReplicationWorkflowResponse. */
@@ -29674,6 +29677,9 @@ export namespace tabletmanagerdata {
 
         /** ReadVReplicationWorkflowResponse options. */
         public options: string;
+
+        /** ReadVReplicationWorkflowResponse config_overrides. */
+        public config_overrides: { [k: string]: string };
 
         /**
          * Creates a new ReadVReplicationWorkflowResponse instance using the specified properties.
@@ -30680,6 +30686,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state */
         state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest config_overrides */
+        config_overrides?: ({ [k: string]: string }|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -30708,6 +30717,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state. */
         public state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest config_overrides. */
+        public config_overrides: { [k: string]: string };
 
         /** UpdateVReplicationWorkflowRequest _tablet_selection_preference. */
         public _tablet_selection_preference?: "tablet_selection_preference";
@@ -35020,6 +35032,9 @@ export namespace binlogdata {
 
         /** VStreamOptions internal_tables */
         internal_tables?: (string[]|null);
+
+        /** VStreamOptions config_overrides */
+        config_overrides?: ({ [k: string]: string }|null);
     }
 
     /** Represents a VStreamOptions. */
@@ -35033,6 +35048,9 @@ export namespace binlogdata {
 
         /** VStreamOptions internal_tables. */
         public internal_tables: string[];
+
+        /** VStreamOptions config_overrides. */
+        public config_overrides: { [k: string]: string };
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.
@@ -35359,6 +35377,9 @@ export namespace binlogdata {
 
         /** VStreamRowsRequest lastpk */
         lastpk?: (query.IQueryResult|null);
+
+        /** VStreamRowsRequest options */
+        options?: (binlogdata.IVStreamOptions|null);
     }
 
     /** Represents a VStreamRowsRequest. */
@@ -35384,6 +35405,9 @@ export namespace binlogdata {
 
         /** VStreamRowsRequest lastpk. */
         public lastpk?: (query.IQueryResult|null);
+
+        /** VStreamRowsRequest options. */
+        public options?: (binlogdata.IVStreamOptions|null);
 
         /**
          * Creates a new VStreamRowsRequest instance using the specified properties.
@@ -35613,6 +35637,9 @@ export namespace binlogdata {
 
         /** VStreamTablesRequest target */
         target?: (query.ITarget|null);
+
+        /** VStreamTablesRequest options */
+        options?: (binlogdata.IVStreamOptions|null);
     }
 
     /** Represents a VStreamTablesRequest. */
@@ -35632,6 +35659,9 @@ export namespace binlogdata {
 
         /** VStreamTablesRequest target. */
         public target?: (query.ITarget|null);
+
+        /** VStreamTablesRequest options. */
+        public options?: (binlogdata.IVStreamOptions|null);
 
         /**
          * Creates a new VStreamTablesRequest instance using the specified properties.
@@ -48115,6 +48145,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions shards */
         shards?: (string[]|null);
+
+        /** WorkflowOptions config */
+        config?: ({ [k: string]: string }|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -48134,6 +48167,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions shards. */
         public shards: string[];
+
+        /** WorkflowOptions config. */
+        public config: { [k: string]: string };
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.
@@ -66923,6 +66959,9 @@ export namespace vtctldata {
 
         /** ReshardCreateRequest auto_start */
         auto_start?: (boolean|null);
+
+        /** ReshardCreateRequest workflow_options */
+        workflow_options?: (vtctldata.IWorkflowOptions|null);
     }
 
     /** Represents a ReshardCreateRequest. */
@@ -66969,6 +67008,9 @@ export namespace vtctldata {
 
         /** ReshardCreateRequest auto_start. */
         public auto_start: boolean;
+
+        /** ReshardCreateRequest workflow_options. */
+        public workflow_options?: (vtctldata.IWorkflowOptions|null);
 
         /**
          * Creates a new ReshardCreateRequest instance using the specified properties.
