@@ -1284,6 +1284,17 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		cells[i] = strings.TrimSpace(cells[i])
 	}
 
+	switch {
+	case ms.IsReference && len(ms.Tables) == 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables specified for reference table materialization")
+	case len(ms.Tables) > 0 && !ms.IsReference:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tables specified for non-reference table materialization")
+	case !ms.IsReference && len(ms.TableSettings) == 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "either table settings or reference tables must be specified")
+	case ms.IsReference && len(ms.TableSettings) > 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both table settings and reference tables")
+	}
+
 	if ms.IsReference {
 		for _, table := range ms.Tables {
 			ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
