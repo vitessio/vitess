@@ -44,7 +44,13 @@ type (
 		Type  sqlparser.VExplainType
 	}
 
-	RowsReceived []int
+	ShardsQueried int
+	RowsReceived  []int
+
+	Stats struct {
+		InterOpStats map[Primitive]RowsReceived
+		ShardsStats  map[Primitive]ShardsQueried
+	}
 )
 
 var _ Primitive = (*VExplain)(nil)
@@ -111,7 +117,7 @@ func (v *VExplain) NeedsTransaction() bool {
 
 // TryExecute implements the Primitive interface
 func (v *VExplain) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	var stats func() map[Primitive]RowsReceived
+	var stats func() Stats
 	if v.Type == sqlparser.TraceVExplainType {
 		stats = vcursor.StartPrimitiveTrace()
 	} else {
@@ -130,7 +136,7 @@ func noOpCallback(*sqltypes.Result) error {
 
 // TryStreamExecute implements the Primitive interface
 func (v *VExplain) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var stats func() map[Primitive]RowsReceived
+	var stats func() Stats
 	if v.Type == sqlparser.TraceVExplainType {
 		stats = vcursor.StartPrimitiveTrace()
 	} else {
@@ -148,7 +154,7 @@ func (v *VExplain) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	return callback(result)
 }
 
-func (v *VExplain) convertToResult(ctx context.Context, vcursor VCursor, stats func() map[Primitive]RowsReceived) (*sqltypes.Result, error) {
+func (v *VExplain) convertToResult(ctx context.Context, vcursor VCursor, stats func() Stats) (*sqltypes.Result, error) {
 	switch v.Type {
 	case sqlparser.QueriesVExplainType:
 		result := convertToVExplainQueriesResult(vcursor.Session().GetVExplainLogs())
@@ -163,8 +169,9 @@ func (v *VExplain) convertToResult(ctx context.Context, vcursor VCursor, stats f
 	}
 }
 
-func (v *VExplain) getExplainTraceOutput(getOpStats func() map[Primitive]RowsReceived) (*sqltypes.Result, error) {
-	description := PrimitiveToPlanDescription(v.Input, getOpStats())
+func (v *VExplain) getExplainTraceOutput(getOpStats func() Stats) (*sqltypes.Result, error) {
+	stats := getOpStats()
+	description := PrimitiveToPlanDescription(v.Input, &stats)
 
 	output, err := json.MarshalIndent(description, "", "\t")
 	if err != nil {
