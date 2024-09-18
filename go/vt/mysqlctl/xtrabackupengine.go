@@ -942,6 +942,11 @@ func (be *XtrabackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.Backup
 	return false
 }
 
+// ShouldStartMySQLAfterRestore signifies if this backup engine needs to restart MySQL once the restore is completed.
+func (be *XtrabackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
+}
+
 func init() {
 	BackupRestoreEngineMap[xtrabackupEngineName] = &XtrabackupEngine{}
 }
