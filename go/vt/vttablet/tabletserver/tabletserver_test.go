@@ -282,7 +282,10 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
 		Tables: []string{"test_table"}}}
 	utils.MustMatch(t, want, got, "Prepared queries")
-	wantFailed := map[string]error{"a:b:20": errPrepFailed}
+	wantFailed := map[string]error{
+		"bogus":  errPrepFailed, // The query is rejected by database so added to failed list.
+		"a:b:20": errPrepFailed, // The DTID is already in failed state.
+	}
 	utils.MustMatch(t, tsv.te.preparedPool.reserved, wantFailed, fmt.Sprintf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed))
 	// Verify last id got adjusted.
 	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Load(), "tsv.te.txPool.lastID.Get()")
