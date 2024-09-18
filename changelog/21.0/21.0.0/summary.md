@@ -15,6 +15,7 @@
   - **[Support for recursive CTEs](#recursive-cte)**
   - **[VTGate Tablet Balancer](#tablet-balancer)**
   - **[Query Timeout Override](#query-timeout)**
+  - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -130,3 +131,9 @@ A query can also be set to have no timeout by using the `QUERY_TIMEOUT_MS` comme
 
 Example usage:
 `select /*vt+ QUERY_TIMEOUT_MS=30 */ col from tbl`
+
+### <a id="dynamic-vreplication-configuration"/>Dynamic VReplication Configuration
+Currently many of the configuration options for VReplication Workflows are vttablet flags. This means that any change 
+requires restarts of vttablets. We now allow these to be overridden while creating a workflow or dynamically once
+the workflow is in progress. See https://github.com/vitessio/vitess/pull/16583 for details.
+

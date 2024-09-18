@@ -993,7 +993,6 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update cells and options",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
-				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:    []string{"zone2"},
 				ConfigOverrides: map[string]string{
 					"user":     "admin",

@@ -248,10 +248,6 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 			clears: true,
 		},
 		{
-			name:   "no change",
-			config: nil,
-		},
-		{
 			name: "one value",
 			config: map[string]string{
 				"vreplication_heartbeat_update_interval": "10",

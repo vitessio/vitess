@@ -75,6 +75,9 @@ var (
 					return fmt.Errorf("invalid on-ddl value: %s", updateOptions.OnDDL)
 				}
 			}
+			if len(updateOptions.ConfigOverrides) > 0 {
+				changes = true
+			}
 			if !changes {
 				return fmt.Errorf("no configuration options specified to update")
 			}
