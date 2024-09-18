@@ -32,7 +32,7 @@ const (
 )
 
 var (
-	// Default flags.
+	// Default flags: currently VReplicationExperimentalFlagVPlayerBatching is not enabled by default.
 	vreplicationExperimentalFlags   = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
 	vreplicationNetReadTimeout      = 300
 	vreplicationNetWriteTimeout     = 600
@@ -58,18 +58,11 @@ var (
 	VStreamerUseDynamicPacketSize    = true
 )
 
-func GetVReplicationExperimentalFlags() int64 {
-	return vreplicationExperimentalFlags
-}
 func GetVReplicationNetReadTimeout() int {
 	return vreplicationNetReadTimeout
 }
 func GetVReplicationNetWriteTimeout() int {
 	return vreplicationNetWriteTimeout
-}
-
-func GetVReplicationCopyPhaseDuration() time.Duration {
-	return vreplicationCopyPhaseDuration
 }
 
 func init() {
@@ -93,10 +86,10 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no
 	// real events on the source and the source vstream is only sending heartbeats for this long. Keep this low if you
-	//expect high QPS and are monitoring this column to alert about potential outages. Keep this high if
-	// 		* you have too many streams the extra write qps or cpu load due to these updates are unacceptable
-	//		* you have too many streams and/or a large source field (lot of participating tables) which generates
-	//			unacceptable increase in your binlog size
+	// expect high QPS and are monitoring this column to alert about potential outages. Keep this high if
+	// 	 * you have too many streams the extra write qps or cpu load due to these updates are unacceptable
+	//	 * you have too many streams and/or a large source field (lot of participating tables) which generates
+	//     unacceptable increase in your binlog size
 	fs.IntVar(&vreplicationHeartbeatUpdateInterval, "vreplication_heartbeat_update_interval", vreplicationHeartbeatUpdateInterval, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
 	fs.BoolVar(&vreplicationStoreCompressedGTID, "vreplication_store_compressed_gtid", vreplicationStoreCompressedGTID, "Store compressed gtids in the pos column of the sidecar database's vreplication table")
 

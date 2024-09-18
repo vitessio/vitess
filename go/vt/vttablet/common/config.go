@@ -26,7 +26,17 @@ import (
 	"time"
 )
 
+/*
+  This file contains the model for all the configuration parameters for VReplication workflows. It also provides methods to
+  initialize the default configuration and to override the default configuration with user-provided values. The overrides
+  are stored in the `config` sub-document of the `options` attribute in `_vt.vreplication` and merged with the defaults
+  when the workflow is initialized.
+*/
+
+// VReplicationConfig has the all the configuration parameters for VReplication workflows, both applicable on the
+// target (vreplication)and the source (vstreamer) side.
 type VReplicationConfig struct {
+	// Config parameters applicable to the target side (vreplication)
 	ExperimentalFlags       int64
 	NetReadTimeout          int
 	NetWriteTimeout         int
@@ -41,6 +51,9 @@ type VReplicationConfig struct {
 	ParallelInsertWorkers   int
 	TabletTypesStr          string
 
+	// Config parameters applicable to the source side (vstreamer)
+	// The coresponding Override fields are used to determine if the user has provided a value for the parameter so
+	// that they can be sent in the VStreamer API calls to the source.
 	VStreamPacketSize                      int
 	VStreamPacketSizeOverride              bool
 	VStreamDynamicPacketSize               bool
@@ -48,19 +61,26 @@ type VReplicationConfig struct {
 	VStreamBinlogRotationThreshold         int64
 	VStreamBinlogRotationThresholdOverride bool
 
+	// Overrides is a map of user-provided configuration values that override the default configuration.
 	Overrides map[string]string
 }
 
 var configMutex sync.Mutex
-var defaultVReplicationConfig *VReplicationConfig
 
+// DefaultVReplicationConfig has the default values for VReplicationConfig initialized from the vttablet flags
+// when the workflow is initialized.
+var DefaultVReplicationConfig *VReplicationConfig
+
+// GetVReplicationConfigDefaults returns the default VReplicationConfig. If `useCached` is true, it returns the previously
+// loaded configuration. Otherwise it reloads the configuration from the vttablet flags. useCached is set to false
+// when the vttablet flags are updated in unit tests.
 func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 	configMutex.Lock()
 	defer configMutex.Unlock()
-	if useCached && defaultVReplicationConfig != nil {
-		return defaultVReplicationConfig
+	if useCached && DefaultVReplicationConfig != nil {
+		return DefaultVReplicationConfig
 	}
-	defaultVReplicationConfig = &VReplicationConfig{
+	DefaultVReplicationConfig = &VReplicationConfig{
 		ExperimentalFlags:       vreplicationExperimentalFlags,
 		NetReadTimeout:          vreplicationNetReadTimeout,
 		NetWriteTimeout:         vreplicationNetWriteTimeout,
@@ -84,9 +104,10 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 
 		Overrides: make(map[string]string),
 	}
-	return defaultVReplicationConfig
+	return DefaultVReplicationConfig
 }
 
+// InitVReplicationConfigDefaults initializes the default VReplicationConfig in an idempotent way.
 func InitVReplicationConfigDefaults() *VReplicationConfig {
 	return GetVReplicationConfigDefaults(true)
 }
@@ -99,6 +120,8 @@ func GetDefaultVReplicationConfig() *VReplicationConfig {
 	return c
 }
 
+// NewVReplicationConfig creates a new VReplicationConfig by merging the default configuration with the user-provided
+// overrides. It returns an error if the user-provided values are invalid.
 func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, error) {
 	c := GetDefaultVReplicationConfig()
 	c.Overrides = maps.Clone(overrides)
@@ -229,6 +252,9 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 	return c, nil
 }
 
+// Map returns a map of the VReplicationConfig: the keys are the flag names and the values are string representations.
+// Used in tests to compare the expected and actual configuration values and in validations to check if the user-provided
+// keys are one of those that are supported.
 func (c VReplicationConfig) Map() map[string]string {
 	return map[string]string{
 		"vreplication_experimental_flags":         strconv.FormatInt(c.ExperimentalFlags, 10),

@@ -69,7 +69,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 				VStreamPacketSize:                      1024,
 				VStreamDynamicPacketSize:               false,
 				VStreamBinlogRotationThreshold:         2048,
-				TabletTypesStr:                         defaultVReplicationConfig.TabletTypesStr,
+				TabletTypesStr:                         DefaultVReplicationConfig.TabletTypesStr,
 				VStreamPacketSizeOverride:              true,
 				VStreamDynamicPacketSizeOverride:       true,
 				VStreamBinlogRotationThresholdOverride: true,
@@ -101,28 +101,28 @@ func TestNewVReplicationConfig(t *testing.T) {
 			config: map[string]string{
 				"vreplication_experimental_flags":    "5",
 				"vreplication_net_read_timeout":      "150",
-				"vstream_dynamic_packet_size":        strconv.FormatBool(!defaultVReplicationConfig.VStreamDynamicPacketSize),
-				"vreplication_store_compressed_gtid": strconv.FormatBool(!defaultVReplicationConfig.StoreCompressedGTID),
+				"vstream_dynamic_packet_size":        strconv.FormatBool(!DefaultVReplicationConfig.VStreamDynamicPacketSize),
+				"vreplication_store_compressed_gtid": strconv.FormatBool(!DefaultVReplicationConfig.StoreCompressedGTID),
 			},
 			wantErr: 0,
 			want: &VReplicationConfig{
 				ExperimentalFlags:                5,
 				NetReadTimeout:                   150,
-				NetWriteTimeout:                  defaultVReplicationConfig.NetWriteTimeout,
-				CopyPhaseDuration:                defaultVReplicationConfig.CopyPhaseDuration,
-				RetryDelay:                       defaultVReplicationConfig.RetryDelay,
-				MaxTimeToRetryError:              defaultVReplicationConfig.MaxTimeToRetryError,
-				RelayLogMaxSize:                  defaultVReplicationConfig.RelayLogMaxSize,
-				RelayLogMaxItems:                 defaultVReplicationConfig.RelayLogMaxItems,
-				ReplicaLagTolerance:              defaultVReplicationConfig.ReplicaLagTolerance,
-				HeartbeatUpdateInterval:          defaultVReplicationConfig.HeartbeatUpdateInterval,
-				StoreCompressedGTID:              !defaultVReplicationConfig.StoreCompressedGTID,
-				ParallelInsertWorkers:            defaultVReplicationConfig.ParallelInsertWorkers,
-				VStreamPacketSize:                defaultVReplicationConfig.VStreamPacketSize,
-				VStreamDynamicPacketSize:         !defaultVReplicationConfig.VStreamDynamicPacketSize,
-				VStreamBinlogRotationThreshold:   defaultVReplicationConfig.VStreamBinlogRotationThreshold,
+				NetWriteTimeout:                  DefaultVReplicationConfig.NetWriteTimeout,
+				CopyPhaseDuration:                DefaultVReplicationConfig.CopyPhaseDuration,
+				RetryDelay:                       DefaultVReplicationConfig.RetryDelay,
+				MaxTimeToRetryError:              DefaultVReplicationConfig.MaxTimeToRetryError,
+				RelayLogMaxSize:                  DefaultVReplicationConfig.RelayLogMaxSize,
+				RelayLogMaxItems:                 DefaultVReplicationConfig.RelayLogMaxItems,
+				ReplicaLagTolerance:              DefaultVReplicationConfig.ReplicaLagTolerance,
+				HeartbeatUpdateInterval:          DefaultVReplicationConfig.HeartbeatUpdateInterval,
+				StoreCompressedGTID:              !DefaultVReplicationConfig.StoreCompressedGTID,
+				ParallelInsertWorkers:            DefaultVReplicationConfig.ParallelInsertWorkers,
+				VStreamPacketSize:                DefaultVReplicationConfig.VStreamPacketSize,
+				VStreamDynamicPacketSize:         !DefaultVReplicationConfig.VStreamDynamicPacketSize,
+				VStreamBinlogRotationThreshold:   DefaultVReplicationConfig.VStreamBinlogRotationThreshold,
 				VStreamDynamicPacketSizeOverride: true,
-				TabletTypesStr:                   defaultVReplicationConfig.TabletTypesStr,
+				TabletTypesStr:                   DefaultVReplicationConfig.TabletTypesStr,
 			},
 		},
 	}
@@ -146,8 +146,8 @@ func TestNewVReplicationConfig(t *testing.T) {
 				}
 			}
 			if tt.want == nil {
-				require.EqualValuesf(t, defaultVReplicationConfig.Map(), got.Map(),
-					"NewVReplicationConfig() Map got = %v, want %v", got.Map(), defaultVReplicationConfig.Map())
+				require.EqualValuesf(t, DefaultVReplicationConfig.Map(), got.Map(),
+					"NewVReplicationConfig() Map got = %v, want %v", got.Map(), DefaultVReplicationConfig.Map())
 			} else {
 				tt.want.Overrides = tt.config
 				require.EqualValues(t, tt.want.Map(), got.Map(),

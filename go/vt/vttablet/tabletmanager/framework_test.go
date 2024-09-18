@@ -486,7 +486,7 @@ func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 			}
 		}
 	}
-	return nil, fmt.Errorf("****** query %q not found for tablet %d", query, tablet.Alias.Uid)
+	return nil, fmt.Errorf("query %q not found for tablet %d", query, tablet.Alias.Uid)
 }
 
 func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
