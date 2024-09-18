@@ -106,7 +106,7 @@ type streamerPlan struct {
 // filter: the list of filtering rules. If a rule has a select expression for its filter,
 //
 //	the select list can only reference direct columns. No other expressions are allowed.
-//	The select expression is allowed to contain the special 'keyspace_id()' function which
+//	The select expression is allowed to contain the special 'in_keyrange()' function which
 //	will return the keyspace id of the row. Examples:
 //	"select * from t", same as an empty Filter,
 //	"select * from t where in_keyrange('-80')", same as "-80",
