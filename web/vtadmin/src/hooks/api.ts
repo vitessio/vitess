@@ -81,6 +81,8 @@ import {
     ValidateVersionShardParams,
     startWorkflow,
     stopWorkflow,
+    FetchTransactionsParams,
+    fetchTransactions,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -403,6 +405,16 @@ export const useValidateVersionKeyspace = (
  */
 export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions<pb.VSchema, Error> | undefined) => {
     return useQuery(['vschema', params], () => fetchVSchema(params));
+};
+
+/**
+ * useTransactions is a query hook that fetches unresolved transactions for the given keyspace.
+ */
+export const useTransactions = (
+    params: FetchTransactionsParams,
+    options?: UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error> | undefined
+) => {
+    return useQuery(['transactions', params], () => fetchTransactions(params), { ...options });
 };
 
 export const useVTExplain = (
