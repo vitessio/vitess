@@ -381,6 +381,12 @@ func (be *MySQLShellBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.
 	return mysqlShellBackupShouldDrain
 }
 
+// ShouldStartMySQLAfterRestore signifies if this backup engine needs to restart MySQL once the restore is completed.
+// Since MySQL Shell operates on a live MySQL instance, there is no need to start it once the restore is completed
+func (be *MySQLShellBackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return false
+}
+
 func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 	if mysqlShellBackupLocation == "" {
 		return fmt.Errorf("%w: no backup location set via --mysql-shell-backup-location", MySQLShellPreCheckError)
