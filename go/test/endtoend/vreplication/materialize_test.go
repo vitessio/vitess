@@ -284,14 +284,12 @@ const (
 func TestReferenceTableMaterialize(t *testing.T) {
 	vc = NewVitessCluster(t, nil)
 	require.NotNil(t, vc)
-	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
-	defer func() { defaultReplicas = 1 }()
 	shards := []string{"-80", "80-"}
 	defer vc.TearDown()
 	defaultCell := vc.Cells[vc.CellNames[0]]
-	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "ks1", "0", refSourceVSchema, refSchema, defaultReplicas, defaultRdonly, 100, nil)
+	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "ks1", "0", refSourceVSchema, refSchema, 0, 0, 100, nil)
 	require.NoError(t, err)
-	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, "ks2", strings.Join(shards, ","), refTargetVSchema, "", defaultReplicas, defaultRdonly, 200, nil)
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, "ks2", strings.Join(shards, ","), refTargetVSchema, "", 0, 0, 200, nil)
 	require.NoError(t, err)
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
