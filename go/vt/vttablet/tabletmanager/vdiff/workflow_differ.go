@@ -24,8 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/schema"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -33,10 +31,12 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -53,15 +53,18 @@ type workflowDiffer struct {
 	tableDiffers map[string]*tableDiffer // key is table name
 	opts         *tabletmanagerdatapb.VDiffOptions
 
-	collationEnv *collations.Environment
+	collationEnv   *collations.Environment
+	WorkflowConfig **vttablet.VReplicationConfig
 }
 
 func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions, collationEnv *collations.Environment) (*workflowDiffer, error) {
+	vttablet.InitVReplicationConfigDefaults()
 	wd := &workflowDiffer{
-		ct:           ct,
-		opts:         opts,
-		tableDiffers: make(map[string]*tableDiffer, 1),
-		collationEnv: collationEnv,
+		ct:             ct,
+		opts:           opts,
+		tableDiffers:   make(map[string]*tableDiffer, 1),
+		collationEnv:   collationEnv,
+		WorkflowConfig: &vttablet.DefaultVReplicationConfig,
 	}
 	return wd, nil
 }

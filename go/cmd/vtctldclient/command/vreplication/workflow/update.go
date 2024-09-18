@@ -40,6 +40,7 @@ var (
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
 		OnDDL                        string
+		ConfigOverrides              []string
 	}{}
 
 	// update makes a WorkflowUpdate gRPC call to a vtctld.
@@ -74,6 +75,9 @@ var (
 					return fmt.Errorf("invalid on-ddl value: %s", updateOptions.OnDDL)
 				}
 			}
+			if len(updateOptions.ConfigOverrides) > 0 {
+				changes = true
+			}
 			if !changes {
 				return fmt.Errorf("no configuration options specified to update")
 			}
@@ -95,6 +99,11 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	configOverrides, err := common.ParseConfigOverrides(updateOptions.ConfigOverrides)
+	if err != nil {
+		return err
+	}
+
 	req := &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: baseOptions.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
@@ -102,6 +111,7 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			Cells:                     updateOptions.Cells,
 			TabletTypes:               updateOptions.TabletTypes,
 			TabletSelectionPreference: &tsp,
+			ConfigOverrides:           configOverrides,
 		},
 	}
 
