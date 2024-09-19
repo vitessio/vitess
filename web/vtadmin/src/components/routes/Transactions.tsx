@@ -27,7 +27,7 @@ import { Select } from '../inputs/Select';
 import { FetchTransactionsParams } from '../../api/http';
 import { formatTransactionState } from '../../util/transactions';
 import { ShardLink } from '../links/ShardLink';
-import { formatDateTime, formatRelativeTime } from '../../util/time';
+import { formatDateTime, formatRelativeTimeInSeconds } from '../../util/time';
 import { orderBy } from 'lodash-es';
 
 const COLUMNS = ['ID', 'State', 'Participants', 'Time Created'];
@@ -78,7 +78,9 @@ export const Transactions = () => {
                     </DataCell>
                     <DataCell>
                         <div className="font-sans whitespace-nowrap">{formatDateTime(row.time_created)}</div>
-                        <div className="font-sans text-sm text-secondary">{formatRelativeTime(row.time_created)}</div>
+                        <div className="font-sans text-sm text-secondary">
+                            {formatRelativeTimeInSeconds(row.time_created)}
+                        </div>
                     </DataCell>
                 </tr>
             );
