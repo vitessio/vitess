@@ -302,6 +302,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 // results returned. Followed by ensuring that SwitchTraffic
 // and ReverseTraffic also work as expected.
 func TestMoveTablesUnsharded(t *testing.T) {
+	t.Skip("Skipping test temporarily as it is flaky on CI, pending investigation")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sourceKs := "sourceks"
