@@ -27,6 +27,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -84,6 +86,7 @@ type testEnv struct {
 }
 
 func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, sourceShards []string) *testEnv {
+	vttablet.InitVReplicationConfigDefaults()
 	tenv := &testEnv{
 		ctx:       context.Background(),
 		tmc:       newFakeTMClient(),
@@ -127,7 +130,7 @@ func (tenv *testEnv) close() {
 	tenv.mysqld.Close()
 }
 
-//--------------------------------------
+// --------------------------------------
 // Tablets
 
 func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fakeTabletConn {
@@ -369,7 +372,7 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 	})
 }
 
-//----------------------------------------------
+// ----------------------------------------------
 // fakeTMClient
 
 type fakeTMClient struct {

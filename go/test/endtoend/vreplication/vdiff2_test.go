@@ -32,10 +32,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -370,7 +371,6 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 // testCLIFlagHandling tests that the vtctldclient CLI flags are handled correctly
 // from vtctldclient->vtctld->vttablet->mysqld.
 func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell) {
-	false := false
 	expectedOptions := &tabletmanagerdatapb.VDiffOptions{
 		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
 			MaxRows:               999,
@@ -379,7 +379,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			UpdateTableStats:      true,
 			TimeoutSeconds:        60,
 			MaxDiffSeconds:        333,
-			AutoStart:             &false,
+			AutoStart:             ptr.Of(false),
 		},
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			SourceCell:  "zone1,zone2,zone3,zonefoosource",

@@ -25,9 +25,8 @@ import (
 	"testing"
 	"time"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
-
-	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -49,30 +48,30 @@ func commonVcopierTestCases() []vcopierTestCase {
 	return []vcopierTestCase{
 		// Default experimental flags.
 		{
-			vreplicationExperimentalFlags: vttablet.VReplicationExperimentalFlags,
+			vreplicationExperimentalFlags: vttablet.DefaultVReplicationConfig.ExperimentalFlags,
 		},
 		// Parallel bulk inserts enabled with 4 workers.
 		{
-			vreplicationExperimentalFlags:     vttablet.VReplicationExperimentalFlags,
+			vreplicationExperimentalFlags:     vttablet.DefaultVReplicationConfig.ExperimentalFlags,
 			vreplicationParallelInsertWorkers: 4,
 		},
 	}
 }
 
 func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTestCase) {
-	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
-	oldVreplicationParallelInsertWorkers := vreplicationParallelInsertWorkers
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	oldVreplicationParallelInsertWorkers := vttablet.DefaultVReplicationConfig.ParallelInsertWorkers
 	// Extra reset at the end in case we return prematurely.
 	defer func() {
-		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
-		vreplicationParallelInsertWorkers = oldVreplicationParallelInsertWorkers
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.ParallelInsertWorkers = oldVreplicationParallelInsertWorkers
 	}()
 
 	for _, tc := range cases {
 		tc := tc // Avoid export loop bugs.
 		// Set test flags.
-		vttablet.VReplicationExperimentalFlags = tc.vreplicationExperimentalFlags
-		vreplicationParallelInsertWorkers = tc.vreplicationParallelInsertWorkers
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = tc.vreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.ParallelInsertWorkers = tc.vreplicationParallelInsertWorkers
 		// Run test case.
 		t.Run(
 			fmt.Sprintf(
@@ -82,8 +81,8 @@ func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTe
 			test,
 		)
 		// Reset.
-		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
-		vreplicationParallelInsertWorkers = oldVreplicationParallelInsertWorkers
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.ParallelInsertWorkers = oldVreplicationParallelInsertWorkers
 	}
 }
 
@@ -97,10 +96,10 @@ func testPlayerCopyCharPK(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.DefaultVReplicationConfig.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vttablet.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.DefaultVReplicationConfig.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.DefaultVReplicationConfig.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -203,10 +202,10 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.DefaultVReplicationConfig.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vttablet.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.DefaultVReplicationConfig.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.DefaultVReplicationConfig.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -290,7 +289,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		// Back to copy mode.
 		// Inserts can happen out of order.
 		// Updates must happen in order.
-		//upd1 := expect.
+		// upd1 := expect.
 		upd1 := expect.Then(qh.Eventually(
 			"insert into dst(idc,val) values ('B',3)",
 			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"idc" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:"B"}'.*`,
@@ -325,10 +324,10 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.DefaultVReplicationConfig.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vttablet.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.DefaultVReplicationConfig.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.DefaultVReplicationConfig.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -486,7 +485,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// With parallel inserts, new db client connects are created on-the-fly.
-		if vreplicationParallelInsertWorkers > 1 {
+		if vttablet.DefaultVReplicationConfig.ParallelInsertWorkers > 1 {
 			return expect.Then(qh.Eventually("set @@session.foreign_key_checks=0"))
 		}
 		return expect
@@ -508,7 +507,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		"commit",
 	)).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// With parallel inserts, new db client connects are created on-the-fly.
-		if vreplicationParallelInsertWorkers > 1 {
+		if vttablet.DefaultVReplicationConfig.ParallelInsertWorkers > 1 {
 			return expect.Then(qh.Eventually("set @@session.foreign_key_checks=0"))
 		}
 		return expect
@@ -685,10 +684,10 @@ func testPlayerCopyBigTable(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.DefaultVReplicationConfig.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vttablet.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.DefaultVReplicationConfig.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.DefaultVReplicationConfig.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -815,10 +814,10 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.DefaultVReplicationConfig.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vttablet.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.DefaultVReplicationConfig.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.DefaultVReplicationConfig.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -1173,7 +1172,7 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	optimizeInsertsEnabled := vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagOptimizeInserts != 0
+	optimizeInsertsEnabled := vttablet.DefaultVReplicationConfig.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagOptimizeInserts != 0
 
 	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
@@ -1203,14 +1202,18 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 	}
 }
 
+func setExperimentalFlags(flags int64) func() {
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = flags
+	return func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}
+}
+
 // TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
 // enabling the optimize inserts functionality
 func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
-	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
-	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagOptimizeInserts
-	defer func() {
-		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
-	}()
+	defer setExperimentalFlags(vttablet.VReplicationExperimentalFlagOptimizeInserts)()
 
 	defer deleteTablet(addTablet(100))
 
@@ -1525,14 +1528,16 @@ func testPlayerCopyTableCancel(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
 
-	saveTimeout := vttablet.CopyPhaseDuration
-	vttablet.CopyPhaseDuration = 1 * time.Millisecond
-	defer func() { vttablet.CopyPhaseDuration = saveTimeout }()
+	saveTimeout := vttablet.DefaultVReplicationConfig.CopyPhaseDuration
+	vttablet.DefaultVReplicationConfig.CopyPhaseDuration = 1 * time.Millisecond
+	defer func() { vttablet.DefaultVReplicationConfig.CopyPhaseDuration = saveTimeout }()
 
 	// Set a hook to reset the copy timeout after first call.
 	vstreamRowsHook = func(ctx context.Context) {
 		<-ctx.Done()
-		vttablet.CopyPhaseDuration = saveTimeout
+		for _, ct := range playerEngine.controllers {
+			ct.WorkflowConfig.CopyPhaseDuration = saveTimeout
+		}
 		vstreamRowsHook = nil
 	}
 

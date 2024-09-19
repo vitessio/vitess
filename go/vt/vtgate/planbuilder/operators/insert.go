@@ -96,8 +96,12 @@ func (i *Insert) Clone([]Operator) Operator {
 	}
 }
 
-func (i *Insert) TablesUsed() []string {
-	return SingleQualifiedIdentifier(i.VTable.Keyspace, i.VTable.Name)
+func (i *Insert) TablesUsed(in []string) []string {
+	return append(in, i.tableTarget())
+}
+
+func (i *Insert) tableTarget() string {
+	return QualifiedString(i.VTable.Keyspace, i.VTable.Name.String())
 }
 
 func (i *Insert) Statement() sqlparser.Statement {
@@ -423,7 +427,7 @@ func insertSelectPlan(
 	// When the table you are streaming data from and table you are inserting from are same.
 	// Then due to locking of the index range on the table we might not be able to insert into the table.
 	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
-	insertTbl := insOp.TablesUsed()[0]
+	insertTbl := insOp.tableTarget()
 	selTables := TablesUsed(selOp)
 	for _, tbl := range selTables {
 		if insertTbl == tbl {

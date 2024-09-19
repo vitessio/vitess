@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -221,7 +220,7 @@ func newVCopierCopyWorker(
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
+	plan, err := vc.vr.buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -348,7 +347,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	// Wait for catchup.
 	tkr := time.NewTicker(waitRetryTime)
 	defer tkr.Stop()
-	seconds := int64(replicaLagTolerance / time.Second)
+	seconds := int64(vc.vr.workflowConfig.ReplicaLagTolerance / time.Second)
 	for {
 		sbm := vc.vr.stats.ReplicationLagSeconds.Load()
 		if sbm < seconds {
@@ -382,7 +381,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
+	plan, err := vc.vr.buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -392,7 +391,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, vttablet.CopyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, vc.vr.workflowConfig.CopyPhaseDuration)
 	defer cancel()
 
 	var lastpkpb *querypb.QueryResult
@@ -405,7 +404,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	copyStateGCTicker := time.NewTicker(copyStateGCInterval)
 	defer copyStateGCTicker.Stop()
 
-	parallelism := getInsertParallelism()
+	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	copyWorkQueue := vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 	defer copyWorkQueue.close()
@@ -420,6 +419,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	// Use this for task sequencing.
 	var prevCh <-chan *vcopierCopyTaskResult
 
+	vstreamOptions := &binlogdatapb.VStreamOptions{
+		ConfigOverrides: vc.vr.workflowConfig.Overrides,
+	}
 	serr := vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
@@ -593,7 +595,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		}
 
 		return nil
-	})
+	}, vstreamOptions)
 
 	// Close the work queue. This will prevent new tasks from being enqueued,
 	// and will wait until all workers are returned to the worker pool.
@@ -683,7 +685,7 @@ func (vc *vcopier) updatePos(ctx context.Context, gtid string) error {
 	if err != nil {
 		return err
 	}
-	update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
+	update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vc.vr.workflowConfig.StoreCompressedGTID)
 	_, err = vc.vr.dbClient.Execute(update)
 	return err
 }
@@ -699,7 +701,7 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 		return err
 	}
 	if settings.StartPos.IsZero() {
-		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
+		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vc.vr.workflowConfig.StoreCompressedGTID)
 		_, err := vc.vr.dbClient.Execute(update)
 		return err
 	}
@@ -1200,10 +1202,4 @@ func vcopierCopyTaskGetNextState(vts vcopierCopyTaskState) vcopierCopyTaskState 
 		return vcopierCopyTaskComplete
 	}
 	return vts
-}
-
-// getInsertParallelism returns the number of parallel workers to use for inserting batches during the copy phase.
-func getInsertParallelism() int {
-	parallelism := int(math.Max(1, float64(vreplicationParallelInsertWorkers)))
-	return parallelism
 }

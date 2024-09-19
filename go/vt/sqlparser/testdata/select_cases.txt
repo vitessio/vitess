@@ -7238,7 +7238,7 @@ INPUT
 select trace from information_schema.optimizer_trace;
 END
 OUTPUT
-select trace from information_schema.optimizer_trace
+select `trace` from information_schema.optimizer_trace
 END
 INPUT
 select collation(group_concat(a,_koi8r 0xC1C2)) from t1;
