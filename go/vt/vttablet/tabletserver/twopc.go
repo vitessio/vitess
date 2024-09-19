@@ -61,7 +61,7 @@ const (
 	// Resolving COMMIT first is crucial because we need to address transactions where a commit decision has already been made but remains unresolved.
 	// For transactions with a commit decision, applications are already aware of the outcome and are waiting for the resolution.
 	// By addressing these first, we ensure atomic commits and improve user experience. For other transactions, the decision is typically to rollback.
-	readUnresolvedTransactions = `select t.dtid, t.state, p.keyspace, p.shard
+	readUnresolvedTransactions = `select t.dtid, t.state, t.time_created, p.keyspace, p.shard
 	from %s.dt_state t
     join %s.dt_participant p on t.dtid = p.dtid
     where time_created < %a
@@ -506,17 +506,19 @@ func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.T
 
 			// Extract the transaction state and initialize a new TransactionMetadata
 			stateID, _ := row[1].ToInt()
+			timeCreated, _ := row[2].ToCastInt64()
 			currentTx = &querypb.TransactionMetadata{
 				Dtid:         dtid,
 				State:        querypb.TransactionState(stateID),
+				TimeCreated:  timeCreated,
 				Participants: []*querypb.Target{},
 			}
 		}
 
 		// Add the current participant (keyspace and shard) to the transaction
 		currentTx.Participants = append(currentTx.Participants, &querypb.Target{
-			Keyspace:   row[2].ToString(),
-			Shard:      row[3].ToString(),
+			Keyspace:   row[3].ToString(),
+			Shard:      row[4].ToString(),
 			TabletType: topodatapb.TabletType_PRIMARY,
 		})
 	}
