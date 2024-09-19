@@ -61,17 +61,16 @@ export const MultiSelect = <T,>({
         .join(', ')}`;
 
     return (
-        <div className={cx(style.container, className, { [style.disabled]: disabled })}>
+        <div className={cx(style.container, className)}>
             {label && <Label label={label} required={required} />}
             {description && <div className="mt-[-4px] mb-4">{description}</div>}
 
-            <Listbox value={selectedItems} onChange={onChange} multiple>
+            <Listbox value={selectedItems} onChange={onChange} disabled={disabled} multiple>
                 {({ open }) => (
                     <>
                         <Listbox.Button
                             className={cx(style.toggle, inputClassName, {
                                 [style.open]: open,
-                                [style.disabled]: disabled,
                             })}
                         >
                             {selectedItems.length > 0 ? selectedItemsText : placeholder}
