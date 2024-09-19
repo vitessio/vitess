@@ -112,7 +112,7 @@ func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
 
-func (t *noopVCursor) StartPrimitiveTrace() func() map[Primitive]RowsReceived {
+func (t *noopVCursor) StartPrimitiveTrace() func() Stats {
 	panic("implement me")
 }
 

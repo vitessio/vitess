@@ -128,7 +128,8 @@ type (
 
 		// this is a map of the number of rows that every primitive has returned
 		// if this field is nil, it means that we are not logging operator traffic
-		primitiveStats map[engine.Primitive]engine.RowsReceived
+		interOpStats map[engine.Primitive]engine.RowsReceived
+		shardsStats  map[engine.Primitive]engine.ShardsQueried
 	}
 )
 
@@ -256,10 +257,14 @@ func (vc *vcursorImpl) IsShardRoutingEnabled() bool {
 	return enableShardRouting
 }
 
-func (vc *vcursorImpl) StartPrimitiveTrace() func() map[engine.Primitive]engine.RowsReceived {
-	vc.primitiveStats = make(map[engine.Primitive]engine.RowsReceived)
-	return func() map[engine.Primitive]engine.RowsReceived {
-		return vc.primitiveStats
+func (vc *vcursorImpl) StartPrimitiveTrace() func() engine.Stats {
+	vc.interOpStats = make(map[engine.Primitive]engine.RowsReceived)
+	vc.shardsStats = make(map[engine.Primitive]engine.ShardsQueried)
+	return func() engine.Stats {
+		return engine.Stats{
+			InterOpStats: vc.interOpStats,
+			ShardsStats:  vc.shardsStats,
+		}
 	}
 }
 
@@ -503,14 +508,20 @@ func (vc *vcursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 }
 
 func (vc *vcursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Result) {
-	if vc.primitiveStats != nil {
-		rows := vc.primitiveStats[primitive]
+	if vc.interOpStats != nil {
+		rows := vc.interOpStats[primitive]
 		if res == nil {
 			rows = append(rows, 0)
 		} else {
 			rows = append(rows, len(res.Rows))
 		}
-		vc.primitiveStats[primitive] = rows
+		vc.interOpStats[primitive] = rows
+	}
+}
+
+func (vc *vcursorImpl) logShardsQueried(primitive engine.Primitive, shardsNb int) {
+	if vc.shardsStats != nil {
+		vc.shardsStats[primitive] += engine.ShardsQueried(shardsNb)
 	}
 }
 
@@ -529,7 +540,7 @@ func (vc *vcursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive
 }
 
 func (vc *vcursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primitive engine.Primitive) func(*sqltypes.Result) error {
-	if vc.primitiveStats == nil {
+	if vc.interOpStats == nil {
 		return callback
 	}
 
@@ -621,7 +632,7 @@ func (vc *vcursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, canAutocommit, vc.ignoreMaxMemoryRows)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
-	vc.logOpTraffic(primitive, qr)
+	vc.logShardsQueried(primitive, len(rss))
 	return qr, errs
 }
 
@@ -660,7 +671,7 @@ func (vc *vcursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows)
-	vc.logOpTraffic(primitive, qr)
+	vc.logShardsQueried(primitive, len(rss))
 	return qr, vterrors.Aggregate(errs)
 }
 

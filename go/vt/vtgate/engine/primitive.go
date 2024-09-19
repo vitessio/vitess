@@ -134,7 +134,7 @@ type (
 
 		// StartPrimitiveTrace starts a trace for the given primitive,
 		// and returns a function to get the trace logs after the primitive execution.
-		StartPrimitiveTrace() func() map[Primitive]RowsReceived
+		StartPrimitiveTrace() func() Stats
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
