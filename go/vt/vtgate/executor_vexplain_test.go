@@ -94,9 +94,10 @@ func TestSimpleVexplainTrace(t *testing.T) {
 				"Name": "TestExecutor",
 				"Sharded": true
 			},
-			"NoOfCalls": 2,
+			"NoOfCalls": 1,
 			"AvgNumberOfRows": 16,
 			"MedianNumberOfRows": 16,
+			"ShardsQueried": 8,
 			"FieldQuery": "select count(*), col2, weight_string(col2) from music where 1 != 1 group by col2, weight_string(col2)",
 			"OrderBy": "(1|2) ASC",
 			"Query": "select count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc",
