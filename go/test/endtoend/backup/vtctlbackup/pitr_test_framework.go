@@ -68,21 +68,24 @@ type testedBackupTimestampInfo struct {
 	postTimestamp time.Time
 }
 
-func waitForReplica(t *testing.T, replicaIndex int) {
+// waitForReplica waits for the replica to have same row set as on primary.
+func waitForReplica(t *testing.T, replicaIndex int) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 	pMsgs := ReadRowsFromPrimary(t)
 	for {
 		rMsgs := ReadRowsFromReplica(t, replicaIndex)
 		if len(pMsgs) == len(rMsgs) {
 			// success
-			return
+			return len(pMsgs)
 		}
 		select {
 		case <-ctx.Done():
 			assert.FailNow(t, "timeout waiting for replica to catch up")
-			return
-		case <-time.After(time.Second):
+			return 0
+		case <-ticker.C:
 			//
 		}
 	}
@@ -289,6 +292,12 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 					if sampleTestedBackupPos == "" {
 						sampleTestedBackupPos = pos
 					}
+					t.Run("post-pitr, wait for replica to catch up", func(t *testing.T) {
+						// Replica is DRAINED and does not have replication configuration.
+						// We now connect the replica to the primary and validate it's able to catch up.
+						ReconnectReplicaToPrimary(t, 0)
+						waitForReplica(t, 0)
+					})
 				})
 			}
 		}
