@@ -548,6 +548,12 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 						if sampleTestedBackupIndex < 0 {
 							sampleTestedBackupIndex = backupIndex
 						}
+						t.Run("post-pitr, wait for replica to catch up", func(t *testing.T) {
+							// Replica is DRAINED and does not have replication configuration.
+							// We now connect the replica to the primary and validate it's able to catch up.
+							ReconnectReplicaToPrimary(t, 0)
+							waitForReplica(t, 0)
+						})
 					} else {
 						numFailedRestores++
 					}
