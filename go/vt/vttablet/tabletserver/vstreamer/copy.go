@@ -306,7 +306,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		uvs.setCopyState(tableName, qrLastPK)
 		log.V(2).Infof("NewLastPK: %v", qrLastPK)
 		return nil
-	})
+	}, nil)
 	if err != nil {
 		uvs.vse.errorCounts.Add("StreamRows", 1)
 		return err

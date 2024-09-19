@@ -19,6 +19,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -1029,6 +1030,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		name                           string
 		sourceKeyspace, targetKeyspace *testKeyspace
 		req                            *vtctldatapb.WorkflowSwitchTrafficRequest
+		preFunc                        func(env *testEnv)
 		want                           *vtctldatapb.WorkflowSwitchTrafficResponse
 		wantErr                        bool
 	}{
@@ -1076,6 +1078,55 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				CurrentState: "Reads Not Switched. Writes Not Switched",
 			},
 		},
+		{
+			name: "forward with tablet refresh error",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionForward),
+				TabletTypes: tabletTypes,
+			},
+			preFunc: func(env *testEnv) {
+				env.tmc.SetRefreshStateError(env.tablets[sourceKeyspaceName][startingSourceTabletUID], errors.New("tablet refresh error"))
+				env.tmc.SetRefreshStateError(env.tablets[targetKeyspaceName][startingTargetTabletUID], errors.New("tablet refresh error"))
+			},
+			wantErr: true,
+		},
+		{
+			name: "forward with tablet refresh error and force",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionForward),
+				TabletTypes: tabletTypes,
+				Force:       true,
+			},
+			preFunc: func(env *testEnv) {
+				env.tmc.SetRefreshStateError(env.tablets[sourceKeyspaceName][startingSourceTabletUID], errors.New("tablet refresh error"))
+				env.tmc.SetRefreshStateError(env.tablets[targetKeyspaceName][startingTargetTabletUID], errors.New("tablet refresh error"))
+			},
+			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
+				StartState:   "Reads Not Switched. Writes Not Switched",
+				CurrentState: "All Reads Switched. Writes Switched",
+			},
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1119,11 +1170,15 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createJournalQR)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, freezeReverseWFQR)
 			}
+			if tc.preFunc != nil {
+				tc.preFunc(env)
+			}
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
-			if (err != nil) != tc.wantErr {
-				require.Fail(t, "unexpected error value", "Server.WorkflowSwitchTraffic() error = %v, wantErr %v", err, tc.wantErr)
+			if tc.wantErr {
+				require.Error(t, err)
 				return
 			}
+			require.NoError(t, err)
 			require.Equal(t, tc.want.String(), got.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
 
 			// Confirm that we have the expected routing rules.
@@ -1138,7 +1193,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 					require.Equal(t, to, tt)
 				}
 			}
-			// Confirm that we have the expected denied tables entires.
+			// Confirm that we have the expected denied tables entries.
 			for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
 				for _, shardName := range keyspace.ShardNames {
 					si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)

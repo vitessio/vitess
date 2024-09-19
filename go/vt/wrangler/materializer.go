@@ -1443,7 +1443,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, tabletTypeStr,
 			workflowType,
 			workflowSubType,
-			mz.ms.DeferSecondaryKeys,
+			mz.ms.DeferSecondaryKeys, "",
 		)
 	}
 	return ig.String(), nil

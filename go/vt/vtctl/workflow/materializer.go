@@ -127,7 +127,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 	req.WorkflowSubType = workflowSubType
-	optionsJSON, err := mz.getOptionsJSON()
+	optionsJSON, err := getOptionsJSON(mz.ms.GetWorkflowOptions())
 	if err != nil {
 		return err
 	}
@@ -261,7 +261,7 @@ func (mz *materializer) deploySchema() error {
 	removeAutoInc := false
 	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
-		(mz.ms != nil && mz.ms.GetWorkflowOptions().GetStripShardedAutoIncrement()) {
+		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().StripShardedAutoIncrement) {
 		removeAutoInc = true
 	}
 
