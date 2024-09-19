@@ -4215,6 +4215,13 @@ var (
 			input:  "select * from (values row(date '2020-10-01', time '12:34:56', timestamp '2001-02-03 12:34:56')) t;",
 			output: "select * from (values row('2020-10-01', '12:34:56', '2001-02-03 12:34:56')) as t",
 		},
+		{
+			input:  "set @@global.validate_password.length = 1",
+			output: "set global validate_password.length = 1",
+		},
+		{
+			input:  "set @@session.validate_password.length = 1",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -7775,10 +7782,7 @@ var (
 		output: "syntax error at position 16 near '@@session.'",
 	}, {
 		input:  "set xyz.@autocommit = true",
-		output: "invalid user variable declaration `@autocommit` at position 27 near 'true'",
-	}, {
-		input:  "set @@session.validate_password.length = 1",
-		output: "invalid system variable declaration `length` at position 43 near '1'",
+		output: "invalid system variable declaration `@autocommit` at position 27 near 'true'",
 	}, {
 		input:  "set session.@@validate_password.length = 1",
 		output: "invalid system variable declaration `@@validate_password.length` at position 43 near '1'",
@@ -7808,7 +7812,7 @@ var (
 		output: "invalid system variable declaration `@@autocommit` at position 38 near 'true'",
 	}, {
 		input:  "set session other.@autocommit = true",
-		output: "invalid user variable declaration `@autocommit` at position 37 near 'true'",
+		output: "invalid system variable declaration `@autocommit` at position 37 near 'true'",
 	}, {
 		input:  "select * from foo limit -100",
 		output: "syntax error at position 26 near 'limit'",

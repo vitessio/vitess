@@ -6852,6 +6852,22 @@ func VarScopeForColName(colName *ColName) (*ColName, SetScope, string, error) {
 	}
 }
 
+func isUserVar(part string) bool {
+	return len(part) >= 2 && part[0] == '@' && part[1] != '@'
+}
+
+// hasValidVarParts checks that `@`, `'`, and `"` does not prefix any name part
+func hasValidVarParts(parts ...string) bool {
+	for _, part := range parts {
+		if strings.HasPrefix(part, `@`) ||
+			strings.HasPrefix(part, `'`) ||
+			strings.HasPrefix(part, `"`) {
+			return false
+		}
+	}
+	return true
+}
+
 // VarScope returns the SetScope of the given name, broken into parts. For example, `@@GLOBAL.sys_var` would become
 // `[]string{"@@GLOBAL", "sys_var"}`. Returns the variable name without any scope specifiers, so the aforementioned
 // variable would simply return "sys_var". `[]string{"@@other_var"}` would return "other_var". If a scope is not
@@ -6867,63 +6883,51 @@ func VarScope(nameParts ...string) (string, SetScope, string, error) {
 		// First case covers `@@@`, `@@@@`, etc.
 		if strings.HasPrefix(nameParts[0], "@@@") {
 			return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[0])
-		} else if strings.HasPrefix(nameParts[0], "@@") {
+		}
+		if strings.HasPrefix(nameParts[0], "@@") {
 			dotIdx := strings.Index(nameParts[0], ".")
 			if dotIdx != -1 {
 				return VarScope(nameParts[0][:dotIdx], nameParts[0][dotIdx+1:])
 			}
 			// Session scope is inferred here, but not explicitly requested
 			return trimQuotes(nameParts[0][2:]), SetScope_Session, "", nil
-		} else if strings.HasPrefix(nameParts[0], "@") {
+		}
+		if strings.HasPrefix(nameParts[0], "@") {
 			varName := nameParts[0][1:]
 			if len(varName) > 0 {
 				varName = trimQuotes(varName)
 			}
 			return varName, SetScope_User, "", nil
-		} else {
-			return nameParts[0], SetScope_None, "", nil
 		}
+		return nameParts[0], SetScope_None, "", nil
 	case 2:
 		// `@user.var` is valid, so we check for it here.
-		if len(nameParts[0]) >= 2  &&
-			nameParts[0][0] == '@' &&
-			nameParts[0][1] != '@' &&
-			!strings.HasPrefix(nameParts[1], "@") { // `@user.@var` is invalid though.
+		if isUserVar(nameParts[0]) {
+			if !hasValidVarParts(nameParts[1]) {
+				// Last value is column name, so we return that in the error
+				return "", SetScope_None, "", fmt.Errorf("invalid user variable declaration `%s`", nameParts[1])
+			}
+			// Last value is column name, so we return that in the error
 			return fmt.Sprintf("%s.%s", nameParts[0][1:], nameParts[1]), SetScope_User, "", nil
 		}
-		// We don't support variables such as `@@validate_password.length` right now, only `@@GLOBAL.sys_var`, etc.
-		// The `@` symbols are only valid on the first name_part. First case also catches `@@@`, etc.
-		if strings.HasPrefix(nameParts[1], "@@") {
+		if !hasValidVarParts(nameParts[1]) {
+			// Last value is column name, so we return that in the error
 			return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
-		} else if strings.HasPrefix(nameParts[1], "@") {
-			return "", SetScope_None, "", fmt.Errorf("invalid user variable declaration `%s`", nameParts[1])
 		}
+		var setScope SetScope
 		switch strings.ToLower(nameParts[0]) {
 		case "@@global":
-			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
-			}
-			return trimQuotes(nameParts[1]), SetScope_Global, nameParts[0][2:], nil
+			setScope = SetScope_Global
 		case "@@persist":
-			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
-			}
-			return trimQuotes(nameParts[1]), SetScope_Persist, nameParts[0][2:], nil
+			setScope = SetScope_Persist
 		case "@@persist_only":
-			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
-			}
-			return trimQuotes(nameParts[1]), SetScope_PersistOnly, nameParts[0][2:], nil
+			setScope = SetScope_PersistOnly
 		case "@@session":
-			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
-			}
-			return trimQuotes(nameParts[1]), SetScope_Session, nameParts[0][2:], nil
+			setScope = SetScope_Session
 		case "@@local":
-			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
-			}
-			return trimQuotes(nameParts[1]), SetScope_Session, nameParts[0][2:], nil
+			setScope = SetScope_Session
+		case "@@validate_password":
+			return trimQuotes(fmt.Sprintf("%s.%s", nameParts[0][2:], nameParts[1])), SetScope_Global, "global", nil
 		default:
 			// This catches `@@@GLOBAL.sys_var`. Due to the earlier check, this does not error on `@user.var`.
 			if strings.HasPrefix(nameParts[0], "@") {
@@ -6932,25 +6936,36 @@ func VarScope(nameParts ...string) (string, SetScope, string, error) {
 			}
 			return nameParts[1], SetScope_None, "", nil
 		}
-	default:
+		return trimQuotes(nameParts[1]), setScope, nameParts[0][2:], nil
+	case 3:
 		// `@user.var.name` is valid, so we check for it here.
-		if len(nameParts[0]) >= 2 && nameParts[0][0] == '@' && nameParts[0][1] != '@' {
-			// `@` may only appear in the first name part for user variables
-			for i := 1; i < len(nameParts); i++ {
-				if strings.HasPrefix(nameParts[i], "@") {
-					// Last value is column name, so we return that in the error
-					return "", SetScope_None, "", fmt.Errorf("invalid user variable declaration `%s`", nameParts[len(nameParts)-1])
-				}
+		if isUserVar(nameParts[0]) {
+			if !hasValidVarParts(nameParts[1:]...) {
+				// Last value is column name, so we return that in the error
+				return "", SetScope_None, "", fmt.Errorf("invalid user variable declaration `%s`", nameParts[len(nameParts)-1])
+			}
+			return fmt.Sprintf("%s.%s.%s", nameParts[0][1:], nameParts[1], nameParts[2]), SetScope_User, "", nil
+		}
+		if !hasValidVarParts(nameParts[1:]...) {
+			// Last value is column name, so we return that in the error
+			return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[len(nameParts)-1])
+		}
+		if strings.EqualFold(nameParts[0], "@@global") && strings.EqualFold(nameParts[1], "validate_password") {
+			return trimQuotes(fmt.Sprintf("%s.%s", nameParts[1], nameParts[2])), SetScope_Global, "global", nil
+		}
+		return nameParts[len(nameParts)-1], SetScope_None, "", nil
+	default:
+		// `@user.var.name.xyz...` is valid, so we check for it here.
+		if isUserVar(nameParts[0]) {
+			if !hasValidVarParts(nameParts[1:]...) {
+				// Last value is column name, so we return that in the error
+				return "", SetScope_None, "", fmt.Errorf("invalid user variable declaration `%s`", nameParts[len(nameParts)-1])
 			}
 			return strings.Join(append([]string{nameParts[0][1:]}, nameParts[1:]...), "."), SetScope_User, "", nil
 		}
-		// As we don't support `@@GLOBAL.validate_password.length` or anything potentially longer, we error if any part
-		// starts with either `@@` or `@`. We can just check for `@` though.
-		for _, namePart := range nameParts {
-			if strings.HasPrefix(namePart, "@") {
-				// Last value is column name, so we return that in the error
-				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[len(nameParts)-1])
-			}
+		if !hasValidVarParts(nameParts[1:]...) {
+			// Last value is column name, so we return that in the error
+			return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[len(nameParts)-1])
 		}
 		return nameParts[len(nameParts)-1], SetScope_None, "", nil
 	}
