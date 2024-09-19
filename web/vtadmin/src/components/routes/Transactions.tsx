@@ -28,6 +28,7 @@ import { FetchTransactionsParams } from '../../api/http';
 import { formatTransactionState } from '../../util/transactions';
 import { ShardLink } from '../links/ShardLink';
 import { formatDateTime, formatRelativeTime } from '../../util/time';
+import { orderBy } from 'lodash-es';
 
 const COLUMNS = ['ID', 'State', 'Participants', 'Time Created'];
 
@@ -48,7 +49,8 @@ export const Transactions = () => {
         enabled: !!params.keyspace,
     });
 
-    const transactions = (transactionsQuery.data && transactionsQuery.data.transactions) || [];
+    const transactions =
+        (transactionsQuery.data && orderBy(transactionsQuery.data.transactions, ['time_created'], 'asc')) || [];
 
     const renderRows = (rows: query.ITransactionMetadata[]) => {
         return rows.map((row) => {
