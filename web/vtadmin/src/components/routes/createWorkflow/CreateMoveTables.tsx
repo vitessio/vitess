@@ -231,7 +231,7 @@ export const CreateMoveTables = () => {
                             />
                             <Label label="All Tables" />
                         </div>
-                        If enabled, the move will copy all the tables from source keyspace.
+                        If enabled, the workflow will copy all the tables from source keyspace.
                     </div>
 
                     <h3 className="mt-8 mb-2">Advanced</h3>
@@ -291,7 +291,7 @@ export const CreateMoveTables = () => {
                             />
                             <Label label="Auto Start" />
                         </div>
-                        If enabled, the move will be started automatically.
+                        If enabled, the workflow will be started automatically.
                     </div>
 
                     {clustersQuery.isError && (

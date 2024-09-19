@@ -111,7 +111,7 @@ export const App = () => {
                         </Route>
 
                         {!isReadOnlyMode() && (
-                            <Route exact path="/workflows/move_tables/create">
+                            <Route exact path="/workflows/movetables/create">
                                 <CreateMoveTables />
                             </Route>
                         )}

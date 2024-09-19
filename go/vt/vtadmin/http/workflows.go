@@ -125,7 +125,7 @@ func StopWorkflow(ctx context.Context, r Request, api *API) *JSONResponse {
 // MoveTablesCreate implements the http wrapper for the VTAdminServer.MoveTablesCreate
 // method.
 //
-// Its route is /workflow/{cluster_id}/move_tables
+// Its route is /workflow/{cluster_id}/movetables
 func MoveTablesCreate(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 	decoder := json.NewDecoder(r.Body)

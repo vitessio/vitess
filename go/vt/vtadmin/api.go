@@ -423,7 +423,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/status", httpAPI.Adapt(vtadminhttp.GetWorkflowStatus)).Name("API.GetWorkflowStatus")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow")
-	router.HandleFunc("/workflow/{cluster_id}/move_tables", httpAPI.Adapt(vtadminhttp.MoveTablesCreate)).Name("API.MoveTablesCreate").Methods("POST")
+	router.HandleFunc("/workflow/{cluster_id}/movetables", httpAPI.Adapt(vtadminhttp.MoveTablesCreate)).Name("API.MoveTablesCreate").Methods("POST")
 
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")

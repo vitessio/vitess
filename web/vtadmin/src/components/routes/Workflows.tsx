@@ -216,7 +216,7 @@ export const Workflows = () => {
                                 title="Create Workflow"
                                 className="!text-[32px] w-16 h-16"
                             >
-                                <Link to="/workflows/move_tables/create">
+                                <Link to="/workflows/movetables/create">
                                     <MenuItem>MoveTables</MenuItem>
                                 </Link>
                                 <MenuItem disabled>Reshard</MenuItem>

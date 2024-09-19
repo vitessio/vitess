@@ -454,7 +454,7 @@ export interface CreateMoveTablesParams {
 }
 
 export const createMoveTables = async ({ clusterID, request }: CreateMoveTablesParams) => {
-    const { result } = await vtfetch(`/api/workflow/${clusterID}/move_tables`, {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/movetables`, {
         body: JSON.stringify(request),
         method: 'post',
     });
