@@ -464,10 +464,10 @@ func (tpc *TwoPC) read(ctx context.Context, conn *connpool.Conn, pq *sqlparser.P
 
 // UnresolvedTransactions returns the list of unresolved transactions
 // the list from database is retrieved as
-// dtid | state   | keyspace | shard
-// 1    | PREPARE | ks       | 40-80
-// 1    | PREPARE | ks       | 80-c0
-// 2    | COMMIT  | ks       | -40
+// dtid | state   | time_created | keyspace | shard
+// 1    | PREPARE | 1726748387   | ks       | 40-80
+// 1    | PREPARE | 1726748387   | ks       | 80-c0
+// 2    | COMMIT  | 1726748387   | ks       | -40
 // Here there are 2 dtids with 2 participants for dtid:1 and 1 participant for dtid:2.
 func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.Time) ([]*querypb.TransactionMetadata, error) {
 	conn, err := tpc.readPool.Get(ctx, nil)

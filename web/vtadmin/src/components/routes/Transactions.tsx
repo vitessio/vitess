@@ -26,13 +26,13 @@ import { query } from '../../proto/vtadmin';
 import { Select } from '../inputs/Select';
 import { FetchTransactionsParams } from '../../api/http';
 import { formatTransactionState } from '../../util/transactions';
-import { TABLET_TYPES } from '../../util/tablets';
 import { ShardLink } from '../links/ShardLink';
+import { formatDateTime, formatRelativeTime } from '../../util/time';
 
-const COLUMNS = ['ID', 'State', 'Participants'];
+const COLUMNS = ['ID', 'State', 'Participants', 'Time Created'];
 
 export const Transactions = () => {
-    useDocumentTitle('Transactions');
+    useDocumentTitle('In Flight Distributed Transactions');
 
     const keyspacesQuery = useKeyspaces();
 
@@ -63,20 +63,20 @@ export const Transactions = () => {
                     <DataCell>
                         {row.participants?.map((participant) => {
                             const shard = `${participant.keyspace}/${participant.shard}`;
-                            const tabletType = TABLET_TYPES[participant.tablet_type!];
                             return (
-                                <div>
-                                    <ShardLink
-                                        clusterID={params.clusterID}
-                                        keyspace={participant.keyspace}
-                                        shard={participant.shard}
-                                    >
-                                        {shard}
-                                    </ShardLink>
-                                    <span className="ml-2 text-sm">{tabletType}</span>
-                                </div>
+                                <ShardLink
+                                    clusterID={params.clusterID}
+                                    keyspace={participant.keyspace}
+                                    shard={participant.shard}
+                                >
+                                    {shard}
+                                </ShardLink>
                             );
                         })}
+                    </DataCell>
+                    <DataCell>
+                        <div className="font-sans whitespace-nowrap">{formatDateTime(row.time_created)}</div>
+                        <div className="font-sans text-sm text-secondary">{formatRelativeTime(row.time_created)}</div>
                     </DataCell>
                 </tr>
             );
@@ -86,12 +86,12 @@ export const Transactions = () => {
     return (
         <div>
             <WorkspaceHeader className="mb-0">
-                <WorkspaceTitle>Transactions</WorkspaceTitle>
+                <WorkspaceTitle>In Flight Distributed Transactions</WorkspaceTitle>
             </WorkspaceHeader>
 
             <ContentContainer>
                 <Select
-                    className="block w-[740px]"
+                    className="block w-full max-w-[740px]"
                     disabled={keyspacesQuery.isLoading}
                     inputClassName="block w-full"
                     items={keyspaces}
