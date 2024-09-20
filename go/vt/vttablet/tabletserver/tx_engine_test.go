@@ -610,7 +610,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 func TestCheckReceivedError(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	db.AddQueryPattern(".*", &sqltypes.Result{})
+	// db.AddQueryPattern(".*", &sqltypes.Result{})
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
@@ -622,15 +622,18 @@ func TestCheckReceivedError(t *testing.T) {
 	tcases := []struct {
 		receivedErr  error
 		nonRetryable bool
+		expQuery     string
 	}{{
 		receivedErr:  vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
 		nonRetryable: false,
 	}, {
 		receivedErr:  vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid argument"),
 		nonRetryable: true,
+		expQuery:     `update _vt.redo_state set state = 0, message = 'invalid argument' where dtid = 'aa'`,
 	}, {
 		receivedErr:  sqlerror.NewSQLError(sqlerror.ERLockDeadlock, sqlerror.SSLockDeadlock, "Deadlock found when trying to get lock; try restarting transaction"),
 		nonRetryable: true,
+		expQuery:     `update _vt.redo_state set state = 0, message = 'Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)' where dtid = 'aa'`,
 	}, {
 		receivedErr:  context.DeadlineExceeded,
 		nonRetryable: false,
@@ -643,12 +646,14 @@ func TestCheckReceivedError(t *testing.T) {
 	}, {
 		receivedErr:  sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "Malformed packet"),
 		nonRetryable: true,
+		expQuery:     `update _vt.redo_state set state = 0, message = 'Malformed packet (errno 2027) (sqlstate HY000)' where dtid = 'aa'`,
 	}, {
 		receivedErr:  sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "Server has gone away"),
 		nonRetryable: false,
 	}, {
 		receivedErr:  vterrors.New(vtrpcpb.Code_ABORTED, "Row count exceeded"),
 		nonRetryable: true,
+		expQuery:     `update _vt.redo_state set state = 0, message = 'Row count exceeded' where dtid = 'aa'`,
 	}, {
 		receivedErr:  errors.New("(errno 2013) (sqlstate HY000) lost connection"),
 		nonRetryable: false,
@@ -656,6 +661,9 @@ func TestCheckReceivedError(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Run(tc.receivedErr.Error(), func(t *testing.T) {
+			if tc.expQuery != "" {
+				db.AddQuery(tc.expQuery, &sqltypes.Result{})
+			}
 			nonRetryable := te.checkErrorAndMarkFailed(context.Background(), "aa", tc.receivedErr)
 			require.Equal(t, tc.nonRetryable, nonRetryable)
 			if tc.nonRetryable {
