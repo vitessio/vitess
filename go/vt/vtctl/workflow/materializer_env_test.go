@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
@@ -120,16 +121,33 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		if err == nil {
 			tableName = table.Name.String()
 		}
+		stmt, err := env.venv.Parser().ParseStrictDDL(ts.CreateDdl)
+		require.NoError(t, err)
+		ddl, ok := stmt.(*sqlparser.CreateTable)
+		require.True(t, ok)
+		cols := make([]string, len(ddl.TableSpec.Columns))
+		fields := make([]*querypb.Field, len(ddl.TableSpec.Columns))
+		for i, col := range ddl.TableSpec.Columns {
+			cols[i] = col.Name.String()
+			fields[i] = &querypb.Field{
+				Name: col.Name.String(),
+				Type: col.Type.SQLType(),
+			}
+		}
 		env.tmc.schema[ms.SourceKeyspace+"."+tableName] = &tabletmanagerdatapb.SchemaDefinition{
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-				Name:   tableName,
-				Schema: fmt.Sprintf("%s_schema", tableName),
+				Name:    tableName,
+				Schema:  ts.CreateDdl,
+				Columns: cols,
+				Fields:  fields,
 			}},
 		}
 		env.tmc.schema[ms.TargetKeyspace+"."+ts.TargetTable] = &tabletmanagerdatapb.SchemaDefinition{
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-				Name:   ts.TargetTable,
-				Schema: fmt.Sprintf("%s_schema", ts.TargetTable),
+				Name:    ts.TargetTable,
+				Schema:  ts.CreateDdl,
+				Columns: cols,
+				Fields:  fields,
 			}},
 		}
 	}
@@ -199,7 +217,7 @@ type testMaterializerTMClient struct {
 
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
-	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
+	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
 
 	// Used to confirm the number of times WorkflowDelete was called.
 	workflowDeleteCalls int
@@ -215,14 +233,17 @@ func newTestMaterializerTMClient(keyspace string, sourceShards []string, tableSe
 		sourceShards:                       sourceShards,
 		tableSettings:                      tableSettings,
 		vrQueries:                          make(map[int][]*queryResult),
-		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
+		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
 	}
 }
 
 func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
-		if !proto.Equal(expect, request) {
+		if expect.req != nil && !proto.Equal(expect.req, request) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", request, expect)
+		}
+		if expect.res != nil {
+			return expect.res, expect.err
 		}
 	}
 	res := sqltypes.MakeTestResult(sqltypes.MakeTestFields("rowsaffected", "int64"), "1")
@@ -315,7 +336,7 @@ func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, r
 	})
 }
 
-func (tmc *testMaterializerTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) {
+func (tmc *testMaterializerTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *createVReplicationWorkflowRequestResponse) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
@@ -344,7 +365,7 @@ func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, table
 
 	qrs := tmc.vrQueries[int(tablet.Alias.Uid)]
 	if len(qrs) == 0 {
-		return nil, fmt.Errorf("tablet %v does not expect any more queries: %s", tablet, query)
+		return nil, fmt.Errorf("tablet %v does not expect any more queries: %q", tablet, query)
 	}
 	matched := false
 	if qrs[0].query[0] == '/' {

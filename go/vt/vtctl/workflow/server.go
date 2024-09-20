@@ -3967,8 +3967,8 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	// Validate input table and vindex consistency.
 	if sourceTable == nil || len(sourceTable.ColumnVindexes) != 1 {
 		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No ColumnVindex found for the owner table in the %s keyspace",
-				keyspace)
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No ColumnVindex found for the owner table (%s) in the %s keyspace",
+				sourceTable, keyspace)
 	}
 	if sourceTable.ColumnVindexes[0].Name != vindexName {
 		return nil, nil, nil, nil,
@@ -4146,9 +4146,10 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 	materializeQuery = buf.String()
 
+	tc := targetVSchema.CloneVT()
 	cancelFunc = func() error {
 		// Restore the original target vschema.
-		return s.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema)
+		return s.ts.SaveVSchema(ctx, targetKeyspace, tc)
 	}
 
 	// Update targetVSchema.
