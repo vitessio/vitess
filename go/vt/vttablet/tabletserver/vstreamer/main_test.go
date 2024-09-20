@@ -22,10 +22,13 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	"github.com/stretchr/testify/require"
 
@@ -309,6 +312,14 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 			}},
 		}
 	}
+
+	// Some unit tests currently change the packet size options for the scope of those tests. We want to pass those
+	// values to the VStreamer for the duration of this test.
+	var options binlogdatapb.VStreamOptions
+	options.ConfigOverrides = make(map[string]string)
+	options.ConfigOverrides["vstream_dynamic_packet_size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
+	options.ConfigOverrides["vstream_packet_size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
+
 	return engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
 		timer := time.NewTimer(2 * time.Second)
 		defer timer.Stop()
@@ -323,7 +334,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 			return io.EOF
 		}
 		return nil
-	}, nil)
+	}, &options)
 }
 
 func execStatement(t *testing.T, query string) {

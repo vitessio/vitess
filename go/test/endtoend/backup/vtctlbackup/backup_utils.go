@@ -1148,6 +1148,17 @@ func GetReplicaGtidPurged(t *testing.T, replicaIndex int) string {
 	return row.AsString("gtid_purged", "")
 }
 
+func ReconnectReplicaToPrimary(t *testing.T, replicaIndex int) {
+	query := fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", primary.MySQLPort)
+	replica := getReplica(t, replicaIndex)
+	_, err := replica.VttabletProcess.QueryTablet("stop replica", keyspaceName, true)
+	require.NoError(t, err)
+	_, err = replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	require.NoError(t, err)
+	_, err = replica.VttabletProcess.QueryTablet("start replica", keyspaceName, true)
+	require.NoError(t, err)
+}
+
 func InsertRowOnPrimary(t *testing.T, hint string) {
 	if hint == "" {
 		hint = textutil.RandomHash()[:12]

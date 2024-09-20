@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -55,7 +56,7 @@ const (
 	// Retrieve the current configuration values for a workflow's vreplication stream(s).
 	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
-	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
+	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a %s where id = %a"
 	// Update field values for multiple workflows. The final format specifier is
 	// used to optionally add any additional predicates to the query.
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
@@ -438,13 +439,11 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		source := row.AsBytes("source", []byte{})
 		state := row.AsString("state", "")
 		message := row.AsString("message", "")
-		if req.State == binlogdatapb.VReplicationWorkflowState_Running && strings.ToUpper(message) == workflow.Frozen {
+		if req.State != nil && *req.State == binlogdatapb.VReplicationWorkflowState_Running &&
+			strings.ToUpper(message) == workflow.Frozen {
 			return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil},
 				vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start a workflow when it is frozen")
 		}
-		// For the string based values, we use NULL to differentiate
-		// from an empty string. The NULL value indicates that we
-		// should keep the existing value.
 		if !textutil.ValueIsSimulatedNull(req.Cells) {
 			cells = req.Cells
 		}
@@ -452,24 +451,27 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			tabletTypes = req.TabletTypes
 		}
 		tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
-		if (inorder && req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN) ||
-			(req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER) {
+		if req.TabletSelectionPreference != nil &&
+			((inorder && *req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN) ||
+				(*req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER)) {
 			tabletTypesStr = discovery.InOrderHint + tabletTypesStr
 		}
 		if err = prototext.Unmarshal(source, bls); err != nil {
 			return nil, err
 		}
-		// If we don't want to update the existing value then pass
-		// the simulated NULL value of -1.
-		if !textutil.ValueIsSimulatedNull(req.OnDdl) {
-			bls.OnDdl = req.OnDdl
+		// We also need to check for a SimulatedNull here to support older clients and
+		// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+		if req.OnDdl != nil && *req.OnDdl != binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) {
+			bls.OnDdl = *req.OnDdl
 		}
 		source, err = prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
 		}
-		if !textutil.ValueIsSimulatedNull(req.State) {
-			state = binlogdatapb.VReplicationWorkflowState_name[int32(req.State)]
+		// We also need to check for a SimulatedNull here to support older clients and
+		// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+		if req.State != nil && *req.State != binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt) {
+			state = binlogdatapb.VReplicationWorkflowState_name[int32(*req.State)]
 		}
 		if state == binlogdatapb.VReplicationWorkflowState_Running.String() {
 			// `Workflow Start` sets the new state to Running. However, if stream is still copying tables, we should set
@@ -482,6 +484,8 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 				state = binlogdatapb.VReplicationWorkflowState_Copying.String()
 			}
 		}
+		options := getOptionSetString(req.ConfigOverrides)
+
 		bindVars = map[string]*querypb.BindVariable{
 			"st": sqltypes.StringBindVariable(state),
 			"sc": sqltypes.StringBindVariable(string(source)),
@@ -489,7 +493,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			"tt": sqltypes.StringBindVariable(tabletTypesStr),
 			"id": sqltypes.Int64BindVariable(id),
 		}
-		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
+		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", options, ":id")
 		stmt, err = parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
 			return nil, err
@@ -506,6 +510,51 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			RowsAffected: rowsAffected,
 		},
 	}, nil
+}
+
+// getOptionSetString takes the option keys passed in and creates a sql clause to update the existing options
+// field in the vreplication table. The clause is built using the json_set() for new and updated options
+// and json_remove() for deleted options, denoted by an empty value.
+func getOptionSetString(config map[string]string) string {
+	if len(config) == 0 {
+		return ""
+	}
+
+	var (
+		options     string
+		deletedKeys []string
+		keys        []string
+	)
+	for k, v := range config {
+		if strings.TrimSpace(v) == "" {
+			deletedKeys = append(deletedKeys, k)
+		} else {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	sort.Strings(deletedKeys)
+	clause := "options"
+	if len(deletedKeys) > 0 {
+		// We need to quote the key in the json functions because flag names can contain hyphens.
+		clause = fmt.Sprintf("json_remove(options, '$.config.\"%s\"'", deletedKeys[0])
+		for _, k := range deletedKeys[1:] {
+			clause += fmt.Sprintf(", '$.config.\"%s\"'", k)
+		}
+		clause += ")"
+	}
+	if len(keys) > 0 {
+		clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
+		for i, k := range keys {
+			if i > 0 {
+				clause += ", "
+			}
+			clause += fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k]))
+		}
+		clause += ")"
+	}
+	options = fmt.Sprintf(", options = %s", clause)
+	return options
 }
 
 // UpdateVReplicationWorkflows operates in much the same way that
@@ -623,14 +672,16 @@ func (tm *TabletManager) buildUpdateVReplicationWorkflowsQuery(req *tabletmanage
 	if req.GetAllWorkflows() && (len(req.GetIncludeWorkflows()) > 0 || len(req.GetExcludeWorkflows()) > 0) {
 		return "", errAllWithIncludeExcludeWorkflows
 	}
-	if textutil.ValueIsSimulatedNull(req.GetState()) && textutil.ValueIsSimulatedNull(req.GetMessage()) && textutil.ValueIsSimulatedNull(req.GetStopPosition()) {
+	if req.State == nil && req.Message == nil && req.StopPosition == nil {
 		return "", errNoFieldsToUpdate
 	}
 	sets := strings.Builder{}
 	predicates := strings.Builder{}
 
 	// First add the SET clauses.
-	if !textutil.ValueIsSimulatedNull(req.GetState()) {
+	// We also need to check for a SimulatedNull here to support older clients and
+	// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+	if req.State != nil && *req.State != binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt) {
 		state, ok := binlogdatapb.VReplicationWorkflowState_name[int32(req.GetState())]
 		if !ok {
 			return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid state value: %v", req.GetState())
@@ -638,14 +689,18 @@ func (tm *TabletManager) buildUpdateVReplicationWorkflowsQuery(req *tabletmanage
 		sets.WriteString(" state = ")
 		sets.WriteString(sqltypes.EncodeStringSQL(state))
 	}
-	if !textutil.ValueIsSimulatedNull(req.GetMessage()) {
+	// We also need to check for a SimulatedNull here to support older clients and
+	// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+	if req.Message != nil && *req.Message != sqltypes.Null.String() {
 		if sets.Len() > 0 {
 			sets.WriteByte(',')
 		}
 		sets.WriteString(" message = ")
 		sets.WriteString(sqltypes.EncodeStringSQL(req.GetMessage()))
 	}
-	if !textutil.ValueIsSimulatedNull(req.GetStopPosition()) {
+	// We also need to check for a SimulatedNull here to support older clients and
+	// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
+	if req.StopPosition != nil && *req.StopPosition != sqltypes.Null.String() {
 		if sets.Len() > 0 {
 			sets.WriteByte(',')
 		}

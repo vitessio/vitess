@@ -97,7 +97,6 @@ var (
 	maxConcurrentOnlineDDLs = 256
 
 	migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
-	maxConstraintNameLength     = 64
 	cutoverIntervals            = []time.Duration{0, 1 * time.Minute, 5 * time.Minute, 10 * time.Minute, 30 * time.Minute}
 )
 
@@ -136,31 +135,6 @@ var (
 	onlineDDLUser            = "vt-online-ddl-internal"
 	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
 )
-
-type ConstraintType int
-
-const (
-	UnknownConstraintType ConstraintType = iota
-	CheckConstraintType
-	ForeignKeyConstraintType
-)
-
-var (
-	constraintIndicatorMap = map[int]string{
-		int(CheckConstraintType):      "chk",
-		int(ForeignKeyConstraintType): "fk",
-	}
-)
-
-func GetConstraintType(constraintInfo sqlparser.ConstraintInfo) ConstraintType {
-	if _, ok := constraintInfo.(*sqlparser.CheckConstraintDefinition); ok {
-		return CheckConstraintType
-	}
-	if _, ok := constraintInfo.(*sqlparser.ForeignKeyDefinition); ok {
-		return ForeignKeyConstraintType
-	}
-	return UnknownConstraintType
-}
 
 type mysqlVariables struct {
 	host           string
@@ -1304,185 +1278,6 @@ func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *conn
 	return deferFunc, nil
 }
 
-// newConstraintName generates a new, unique name for a constraint. Our problem is that a MySQL
-// constraint's name is unique in the schema (!). And so as we duplicate the original table, we must
-// create completely new names for all constraints.
-// Moreover, we really want this name to be consistent across all shards. We therefore use a deterministic
-// UUIDv5 (SHA) function over the migration UUID, table name, and constraint's _contents_.
-// We _also_ include the original constraint name as prefix, as room allows
-// for example, if the original constraint name is "check_1",
-// we might generate "check_1_cps1okb4uafunfqusi2lp22u3".
-// If we then again migrate a table whose constraint name is "check_1_cps1okb4uafunfqusi2lp22u3	" we
-// get for example "check_1_19l09s37kbhj4axnzmi10e18k" (hash changes, and we still try to preserve original name)
-//
-// Furthermore, per bug report https://bugs.mysql.com/bug.php?id=107772, if the user doesn't provide a name for
-// their CHECK constraint, then MySQL picks a name in this format <tablename>_chk_<number>.
-// Example: sometable_chk_1
-// Next, when MySQL is asked to RENAME TABLE and sees a constraint with this format, it attempts to rename
-// the constraint with the new table's name. This is problematic for Vitess, because we often rename tables to
-// very long names, such as _vt_HOLD_394f9e6dfc3d11eca0390a43f95f28a3_20220706091048.
-// As we rename the constraint to e.g. `sometable_chk_1_cps1okb4uafunfqusi2lp22u3`, this makes MySQL want to
-// call the new constraint something like _vt_HOLD_394f9e6dfc3d11eca0390a43f95f28a3_20220706091048_chk_1_cps1okb4uafunfqusi2lp22u3,
-// which exceeds the 64 character limit for table names. Long story short, we also trim down <tablename> if the constraint seems
-// to be auto-generated.
-func (e *Executor) newConstraintName(onlineDDL *schema.OnlineDDL, constraintType ConstraintType, hashExists map[string]bool, seed string, oldName string) string {
-	constraintIndicator := constraintIndicatorMap[int(constraintType)]
-	oldName = schemadiff.ExtractConstraintOriginalName(onlineDDL.Table, oldName)
-	hash := textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed)
-	for i := 1; hashExists[hash]; i++ {
-		hash = textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed, fmt.Sprintf("%d", i))
-	}
-	hashExists[hash] = true
-	suffix := "_" + hash
-	maxAllowedNameLength := maxConstraintNameLength - len(suffix)
-	newName := oldName
-	if newName == "" {
-		newName = constraintIndicator // start with something that looks consistent with MySQL's naming
-	}
-	if len(newName) > maxAllowedNameLength {
-		newName = newName[0:maxAllowedNameLength]
-	}
-	newName = newName + suffix
-	return newName
-}
-
-// validateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
-// - extra validation (no FKs for now...)
-// - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
-func (e *Executor) validateAndEditCreateTableStatement(onlineDDL *schema.OnlineDDL, createTable *sqlparser.CreateTable) (constraintMap map[string]string, err error) {
-	constraintMap = map[string]string{}
-	hashExists := map[string]bool{}
-
-	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.ForeignKeyDefinition:
-			if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
-				return false, schema.ErrForeignKeyFound
-			}
-		case *sqlparser.ConstraintDefinition:
-			oldName := node.Name.String()
-			newName := e.newConstraintName(onlineDDL, GetConstraintType(node.Details), hashExists, sqlparser.CanonicalString(node.Details), oldName)
-			node.Name = sqlparser.NewIdentifierCI(newName)
-			constraintMap[oldName] = newName
-		}
-		return true, nil
-	}
-	if err := sqlparser.Walk(validateWalk, createTable); err != nil {
-		return constraintMap, err
-	}
-	return constraintMap, nil
-}
-
-// validateAndEditAlterTableStatement inspects the AlterTable statement and:
-// - modifies any CONSTRAINT name according to given name mapping
-// - explode ADD FULLTEXT KEY into multiple statements
-func (e *Executor) validateAndEditAlterTableStatement(capableOf capabilities.CapableOf, onlineDDL *schema.OnlineDDL, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
-	capableOfInstantDDLXtrabackup, err := capableOf(capabilities.InstantDDLXtrabackupCapability)
-	if err != nil {
-		return nil, err
-	}
-
-	hashExists := map[string]bool{}
-	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.DropKey:
-			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType {
-				// drop a check or a foreign key constraint
-				mappedName, ok := constraintMap[node.Name.String()]
-				if !ok {
-					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
-				}
-				node.Name = sqlparser.NewIdentifierCI(mappedName)
-			}
-		case *sqlparser.AddConstraintDefinition:
-			oldName := node.ConstraintDefinition.Name.String()
-			newName := e.newConstraintName(onlineDDL, GetConstraintType(node.ConstraintDefinition.Details), hashExists, sqlparser.CanonicalString(node.ConstraintDefinition.Details), oldName)
-			node.ConstraintDefinition.Name = sqlparser.NewIdentifierCI(newName)
-			constraintMap[oldName] = newName
-		}
-		return true, nil
-	}
-	if err := sqlparser.Walk(validateWalk, alterTable); err != nil {
-		return alters, err
-	}
-	alters = append(alters, alterTable)
-	// Handle ADD FULLTEXT KEY statements
-	countAddFullTextStatements := 0
-	redactedOptions := make([]sqlparser.AlterOption, 0, len(alterTable.AlterOptions))
-	for i := range alterTable.AlterOptions {
-		opt := alterTable.AlterOptions[i]
-		switch opt := opt.(type) {
-		case sqlparser.AlgorithmValue:
-			if !capableOfInstantDDLXtrabackup {
-				// we do not pass ALGORITHM. We choose our own ALGORITHM.
-				continue
-			}
-		case *sqlparser.AddIndexDefinition:
-			if opt.IndexDefinition.Info.Type == sqlparser.IndexTypeFullText {
-				countAddFullTextStatements++
-				if countAddFullTextStatements > 1 {
-					// We've already got one ADD FULLTEXT KEY. We can't have another
-					// in the same statement
-					extraAlterTable := &sqlparser.AlterTable{
-						Table:        alterTable.Table,
-						AlterOptions: []sqlparser.AlterOption{opt},
-					}
-					if !capableOfInstantDDLXtrabackup {
-						extraAlterTable.AlterOptions = append(extraAlterTable.AlterOptions, copyAlgorithm)
-					}
-					alters = append(alters, extraAlterTable)
-					continue
-				}
-			}
-		}
-		redactedOptions = append(redactedOptions, opt)
-	}
-	alterTable.AlterOptions = redactedOptions
-	if !capableOfInstantDDLXtrabackup {
-		alterTable.AlterOptions = append(alterTable.AlterOptions, copyAlgorithm)
-	}
-	return alters, nil
-}
-
-// duplicateCreateTable parses the given `CREATE TABLE` statement, and returns:
-// - The format CreateTable AST
-// - A new CreateTable AST, with the table renamed as `newTableName`, and with constraints renamed deterministically
-// - Map of renamed constraints
-func (e *Executor) duplicateCreateTable(ctx context.Context, onlineDDL *schema.OnlineDDL, originalCreateTable *sqlparser.CreateTable, newTableName string) (
-	newCreateTable *sqlparser.CreateTable,
-	constraintMap map[string]string,
-	err error,
-) {
-	newCreateTable = sqlparser.Clone(originalCreateTable)
-	newCreateTable.SetTable(newCreateTable.GetTable().Qualifier.CompliantName(), newTableName)
-
-	// If this table has a self-referencing foreign key constraint, ensure the referenced table gets renamed:
-	renameSelfFK := func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.ConstraintDefinition:
-			fk, ok := node.Details.(*sqlparser.ForeignKeyDefinition)
-			if !ok {
-				return true, nil
-			}
-			if referencedTableName := fk.ReferenceDefinition.ReferencedTable.Name.String(); referencedTableName == originalCreateTable.Table.Name.String() {
-				// This is a self-referencing foreign key
-				// We need to rename the referenced table as well
-				fk.ReferenceDefinition.ReferencedTable.Name = sqlparser.NewIdentifierCS(newTableName)
-			}
-		}
-		return true, nil
-	}
-	_ = sqlparser.Walk(renameSelfFK, newCreateTable)
-
-	// manipulate CreateTable statement: take care of constraints names which have to be
-	// unique across the schema
-	constraintMap, err = e.validateAndEditCreateTableStatement(onlineDDL, newCreateTable)
-	if err != nil {
-		return nil, nil, err
-	}
-	return newCreateTable, constraintMap, nil
-}
-
 // createDuplicateTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
 // This function emulates MySQL's `CREATE TABLE LIKE ...` statement. The difference is that this function takes control over the generated CONSTRAINT names,
 // if any, such that they are deterministic across shards, as well as preserve original names where possible.
@@ -1495,7 +1290,7 @@ func (e *Executor) createDuplicateTableLike(ctx context.Context, newTableName st
 	if err != nil {
 		return nil, nil, err
 	}
-	vreplCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, originalCreateTable, newTableName)
+	vreplCreateTable, constraintMap, err := schemadiff.DuplicateCreateTable(originalCreateTable, onlineDDL.UUID, newTableName, onlineDDL.StrategySetting().IsAllowForeignKeysFlag())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1546,7 +1341,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	// Also, change any constraint names:
 
 	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
-	alters, err := e.validateAndEditAlterTableStatement(capableOf, onlineDDL, alterTable, constraintMap)
+	alters, err := schemadiff.ValidateAndEditAlterTableStatement(onlineDDL.Table, onlineDDL.UUID, capableOf, alterTable, constraintMap)
 	if err != nil {
 		return v, err
 	}
@@ -3014,7 +2809,7 @@ func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL 
 		// Analyze foreign keys:
 
 		for _, constraint := range createTable.TableSpec.Constraints {
-			if GetConstraintType(constraint.Details) == ForeignKeyConstraintType {
+			if schemadiff.GetConstraintType(constraint.Details) == schemadiff.ForeignKeyConstraintType {
 				removedForeignKeyNames = append(removedForeignKeyNames, constraint.Name.String())
 			}
 		}
@@ -3116,7 +2911,7 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 		newCreateTable := sqlparser.Clone(originalCreateTable)
 		// Rewrite this CREATE TABLE statement such that CONSTRAINT names are edited,
 		// specifically removing any <tablename> prefix.
-		if _, err := e.validateAndEditCreateTableStatement(onlineDDL, newCreateTable); err != nil {
+		if _, err := schemadiff.ValidateAndEditCreateTableStatement(onlineDDL.Table, onlineDDL.UUID, newCreateTable, onlineDDL.StrategySetting().IsAllowForeignKeysFlag()); err != nil {
 			return failMigration(err)
 		}
 		ddlStmt = newCreateTable
@@ -3243,20 +3038,6 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	return nil
 }
 
-// addInstantAlgorithm adds or modifies the AlterTable's ALGORITHM to INSTANT
-func (e *Executor) addInstantAlgorithm(alterTable *sqlparser.AlterTable) {
-	instantOpt := sqlparser.AlgorithmValue("INSTANT")
-	for i, opt := range alterTable.AlterOptions {
-		if _, ok := opt.(sqlparser.AlgorithmValue); ok {
-			// replace an existing algorithm
-			alterTable.AlterOptions[i] = instantOpt
-			return
-		}
-	}
-	// append an algorithm
-	alterTable.AlterOptions = append(alterTable.AlterOptions, instantOpt)
-}
-
 // executeSpecialAlterDDLActionMigrationIfApplicable sees if the given migration can be executed via special execution path, that isn't a full blown online schema change process.
 func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL) (specialMigrationExecuted bool, err error) {
 	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
@@ -3278,7 +3059,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 
 	switch specialPlan.operation {
 	case instantDDLSpecialOperation:
-		e.addInstantAlgorithm(specialPlan.alterTable)
+		schemadiff.AddInstantAlgorithm(specialPlan.alterTable)
 		onlineDDL.SQL = sqlparser.CanonicalString(specialPlan.alterTable)
 		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 			return false, err

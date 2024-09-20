@@ -191,6 +191,11 @@ func (client *localVtctldClient) CompleteSchemaMigration(ctx context.Context, in
 	return client.s.CompleteSchemaMigration(ctx, in)
 }
 
+// ConcludeTransaction is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ConcludeTransaction(ctx context.Context, in *vtctldatapb.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldatapb.ConcludeTransactionResponse, error) {
+	return client.s.ConcludeTransaction(ctx, in)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	return client.s.CreateKeyspace(ctx, in)
