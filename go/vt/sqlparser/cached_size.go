@@ -177,6 +177,8 @@ func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field DBName vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.DBName.CachedSize(false)
 	// field AlterOptions []vitess.io/vitess/go/vt/sqlparser.DatabaseOption
@@ -834,7 +836,7 @@ func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field ID vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.ID.CachedSize(false)
@@ -845,8 +847,10 @@ func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field Subquery *vitess.io/vitess/go/vt/sqlparser.Subquery
-	size += cached.Subquery.CachedSize(true)
+	// field Subquery vitess.io/vitess/go/vt/sqlparser.SelectStatement
+	if cc, ok := cached.Subquery.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {

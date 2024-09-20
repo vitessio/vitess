@@ -75,6 +75,21 @@ func TestTabletCommands(t *testing.T) {
 		require.Nil(t, err)
 		assertExecuteMultiFetch(t, result)
 	})
+
+	t.Run("GetUnresolvedTransactions", func(t *testing.T) {
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "list", keyspaceName)
+		require.NoError(t, err)
+	})
+	t.Run("ConcludeTransaction", func(t *testing.T) {
+		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "conclude", "ks:0:1234")
+		assert.NoError(t, err)
+		assert.Contains(t, output, "Successfully concluded the distributed transaction")
+	})
+	t.Run("ConcludeTransaction with participants", func(t *testing.T) {
+		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "conclude", "ks:0:1234", "ks/0")
+		assert.NoError(t, err)
+		assert.Contains(t, output, "Successfully concluded the distributed transaction")
+	})
 	// check Ping / RefreshState / RefreshStateByShard
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")

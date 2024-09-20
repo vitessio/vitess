@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -355,7 +356,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 				migrationID, strings.Join(tablets, ","))
 			msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
 				workflow, targetKeyspace)
-			return fmt.Errorf(msg)
+			return errors.New(msg)
 		}
 	}
 	if autoStart {
@@ -1442,7 +1443,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, tabletTypeStr,
 			workflowType,
 			workflowSubType,
-			mz.ms.DeferSecondaryKeys,
+			mz.ms.DeferSecondaryKeys, "",
 		)
 	}
 	return ig.String(), nil

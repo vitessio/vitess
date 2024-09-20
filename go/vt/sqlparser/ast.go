@@ -161,7 +161,7 @@ type (
 	CommonTableExpr struct {
 		ID       IdentifierCS
 		Columns  Columns
-		Subquery *Subquery
+		Subquery SelectStatement
 	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
@@ -417,6 +417,7 @@ type (
 
 	// AlterDatabase represents a ALTER database statement.
 	AlterDatabase struct {
+		Comments            *ParsedComments
 		DBName              IdentifierCS
 		UpdateDataDirectory bool
 		AlterOptions        []DatabaseOption

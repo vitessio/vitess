@@ -27,10 +27,6 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(96)
 	}
-	// field unknownFields []byte
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
-	}
 	// field Value []byte
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Value)))
@@ -51,10 +47,6 @@ func (cached *Field) CachedSize(alloc bool) int64 {
 	size := int64(0)
 	if alloc {
 		size += int64(160)
-	}
-	// field unknownFields []byte
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -78,10 +70,6 @@ func (cached *QueryWarning) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
-	// field unknownFields []byte
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
-	}
 	// field Message string
 	size += hack.RuntimeAllocSize(int64(len(cached.Message)))
 	return size
@@ -93,10 +81,6 @@ func (cached *Target) CachedSize(alloc bool) int64 {
 	size := int64(0)
 	if alloc {
 		size += int64(96)
-	}
-	// field unknownFields []byte
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
 	}
 	// field Keyspace string
 	size += hack.RuntimeAllocSize(int64(len(cached.Keyspace)))
@@ -113,10 +97,6 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 	size := int64(0)
 	if alloc {
 		size += int64(80)
-	}
-	// field unknownFields []byte
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
 	}
 	// field Value []byte
 	{

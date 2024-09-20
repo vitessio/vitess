@@ -386,7 +386,7 @@ func (mysqlFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	}
 	switch result[0] {
 	case EOFPacket:
-		return nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", io.EOF)
+		return nil, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", io.EOF)
 	case ErrPacket:
 		return nil, ParseErrorPacket(result)
 	}

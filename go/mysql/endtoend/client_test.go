@@ -204,7 +204,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	require.NoError(t, err)
 	assert.Zero(t, result.RowsAffected, "create table RowsAffected ")
 
-	for i := 0; i < 255; i++ {
+	for i := range 255 {
 		result, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
 		require.NoError(t, err)
 		assert.EqualValues(t, 1, result.RowsAffected, "insert into returned RowsAffected")

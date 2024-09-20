@@ -19,6 +19,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -26,17 +27,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -208,6 +212,200 @@ func TestVDiffCreate(t *testing.T) {
 	}
 }
 
+func TestVDiffResume(t *testing.T) {
+	ctx := context.Background()
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	workflow := "testwf"
+	uuid := uuid.New().String()
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+
+	env.tmc.strict = true
+	action := string(vdiff.ResumeAction)
+
+	tests := []struct {
+		name                  string
+		req                   *vtctldatapb.VDiffResumeRequest              // vtctld requests
+		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse // tablet requests
+		wantErr               string
+	}{
+		{
+			name: "basic resume", // Both target shards
+			req: &vtctldatapb.VDiffResumeRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+			},
+		},
+		{
+			name: "resume on first shard",
+			req: &vtctldatapb.VDiffResumeRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				TargetShards:   targetKeyspace.ShardNames[:1],
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+			},
+		},
+		{
+			name: "resume on invalid shard",
+			req: &vtctldatapb.VDiffResumeRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				TargetShards:   []string{"0"},
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			wantErr: fmt.Sprintf("specified target shard 0 not a valid target for workflow %s", workflow),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for tab, vdr := range tt.expectedVDiffRequests {
+				env.tmc.expectVDiffRequest(tab, vdr)
+			}
+			got, err := env.ws.VDiffResume(ctx, tt.req)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, got)
+			}
+			env.tmc.confirmVDiffRequests(t)
+		})
+	}
+}
+
+func TestVDiffStop(t *testing.T) {
+	ctx := context.Background()
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	workflow := "testwf"
+	uuid := uuid.New().String()
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+
+	env.tmc.strict = true
+	action := string(vdiff.StopAction)
+
+	tests := []struct {
+		name                  string
+		req                   *vtctldatapb.VDiffStopRequest                // vtctld requests
+		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse // tablet requests
+		wantErr               string
+	}{
+		{
+			name: "basic stop", // Both target shards
+			req: &vtctldatapb.VDiffStopRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+			},
+		},
+		{
+			name: "stop on first shard",
+			req: &vtctldatapb.VDiffStopRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				TargetShards:   targetKeyspace.ShardNames[:1],
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: uuid,
+					},
+				},
+			},
+		},
+		{
+			name: "stop on invalid shard",
+			req: &vtctldatapb.VDiffStopRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				TargetShards:   []string{"0"},
+				Workflow:       workflow,
+				Uuid:           uuid,
+			},
+			wantErr: fmt.Sprintf("specified target shard 0 not a valid target for workflow %s", workflow),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for tab, vdr := range tt.expectedVDiffRequests {
+				env.tmc.expectVDiffRequest(tab, vdr)
+			}
+			got, err := env.ws.VDiffStop(ctx, tt.req)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, got)
+			}
+			env.tmc.confirmVDiffRequests(t)
+		})
+	}
+}
+
 func TestMoveTablesComplete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -219,11 +417,6 @@ func TestMoveTablesComplete(t *testing.T) {
 	tableTemplate := "CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))"
 	sourceKeyspaceName := "sourceks"
 	targetKeyspaceName := "targetks"
-	tabletTypes := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
-	}
 	lockName := fmt.Sprintf("%s/%s", targetKeyspaceName, workflowName)
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
 		table1Name: {
@@ -443,7 +636,8 @@ func TestMoveTablesComplete(t *testing.T) {
 				tc.preFunc(t, env)
 			}
 			// Setup the routing rules as they would be after having previously done SwitchTraffic.
-			env.addTableRoutingRules(t, ctx, tabletTypes, []string{table1Name, table2Name, table3Name})
+			env.updateTableRoutingRules(t, ctx, nil, []string{table1Name, table2Name, table3Name},
+				tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
 			got, err := env.ws.MoveTablesComplete(ctx, tc.req)
 			if tc.wantErr != "" {
 				require.EqualError(t, err, tc.wantErr)
@@ -520,6 +714,7 @@ func TestWorkflowDelete(t *testing.T) {
 		want                           *vtctldatapb.WorkflowDeleteResponse
 		wantErr                        string
 		postFunc                       func(t *testing.T, env *testEnv)
+		expectedLogs                   []string
 	}{
 		{
 			name: "missing table",
@@ -561,6 +756,9 @@ func TestWorkflowDelete(t *testing.T) {
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
+			},
+			expectedLogs: []string{ // Confirm that the custom logger is working as expected
+				fmt.Sprintf("Table `%s` did not exist when attempting to remove it", table2Name),
 			},
 			want: &vtctldatapb.WorkflowDeleteResponse{
 				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
@@ -685,6 +883,9 @@ func TestWorkflowDelete(t *testing.T) {
 			require.NotNil(t, tc.req)
 			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
 			defer env.close()
+			memlogger := logutil.NewMemoryLogger()
+			defer memlogger.Clear()
+			env.ws.options.logger = memlogger
 			env.tmc.schema = schema
 			if tc.expectedSourceQueries != nil {
 				require.NotNil(t, env.tablets[tc.sourceKeyspace.KeyspaceName])
@@ -723,6 +924,16 @@ func TestWorkflowDelete(t *testing.T) {
 						checkDenyList(t, env.ts, keyspace.KeyspaceName, shardName, nil)
 					}
 				}
+			}
+			logs := memlogger.String()
+			// Confirm that the custom logger was passed on to the trafficSwitcher
+			// if we didn't expect/want an error as otherwise we may not have made
+			// it into the trafficSwitcher.
+			if tc.wantErr == "" {
+				require.Contains(t, logs, "traffic_switcher.go")
+			}
+			for _, expectedLog := range tc.expectedLogs {
+				require.Contains(t, logs, expectedLog)
 			}
 		})
 	}
@@ -815,6 +1026,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		name                           string
 		sourceKeyspace, targetKeyspace *testKeyspace
 		req                            *vtctldatapb.WorkflowSwitchTrafficRequest
+		preFunc                        func(env *testEnv)
 		want                           *vtctldatapb.WorkflowSwitchTrafficResponse
 		wantErr                        bool
 	}{
@@ -862,6 +1074,55 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				CurrentState: "Reads Not Switched. Writes Not Switched",
 			},
 		},
+		{
+			name: "forward with tablet refresh error",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionForward),
+				TabletTypes: tabletTypes,
+			},
+			preFunc: func(env *testEnv) {
+				env.tmc.SetRefreshStateError(env.tablets[sourceKeyspaceName][startingSourceTabletUID], errors.New("tablet refresh error"))
+				env.tmc.SetRefreshStateError(env.tablets[targetKeyspaceName][startingTargetTabletUID], errors.New("tablet refresh error"))
+			},
+			wantErr: true,
+		},
+		{
+			name: "forward with tablet refresh error and force",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionForward),
+				TabletTypes: tabletTypes,
+				Force:       true,
+			},
+			preFunc: func(env *testEnv) {
+				env.tmc.SetRefreshStateError(env.tablets[sourceKeyspaceName][startingSourceTabletUID], errors.New("tablet refresh error"))
+				env.tmc.SetRefreshStateError(env.tablets[targetKeyspaceName][startingTargetTabletUID], errors.New("tablet refresh error"))
+			},
+			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
+				StartState:   "Reads Not Switched. Writes Not Switched",
+				CurrentState: "All Reads Switched. Writes Switched",
+			},
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -889,7 +1150,8 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.addTableRoutingRules(t, ctx, tabletTypes, []string{tableName})
+				env.updateTableRoutingRules(t, ctx, tabletTypes, []string{tableName},
+					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
@@ -905,11 +1167,15 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createJournalQR)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, freezeReverseWFQR)
 			}
+			if tc.preFunc != nil {
+				tc.preFunc(env)
+			}
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
-			if (err != nil) != tc.wantErr {
-				require.Fail(t, "unexpected error value", "Server.WorkflowSwitchTraffic() error = %v, wantErr %v", err, tc.wantErr)
+			if tc.wantErr {
+				require.Error(t, err)
 				return
 			}
+			require.NoError(t, err)
 			require.Equal(t, tc.want.String(), got.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
 
 			// Confirm that we have the expected routing rules.
@@ -924,7 +1190,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 					require.Equal(t, to, tt)
 				}
 			}
-			// Confirm that we have the expected denied tables entires.
+			// Confirm that we have the expected denied tables entries.
 			for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
 				for _, shardName := range keyspace.ShardNames {
 					si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
@@ -1103,7 +1369,8 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.addTableRoutingRules(t, ctx, tabletTypes, tables)
+				env.updateTableRoutingRules(t, ctx, tabletTypes, tables,
+					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
@@ -1140,6 +1407,15 @@ func TestMirrorTraffic(t *testing.T) {
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
+	}
+
+	initialRoutingRules := map[string][]string{
+		fmt.Sprintf("%s.%s", sourceKs, table1):         {fmt.Sprintf("%s.%s", sourceKs, table1)},
+		fmt.Sprintf("%s.%s", sourceKs, table2):         {fmt.Sprintf("%s.%s", sourceKs, table2)},
+		fmt.Sprintf("%s.%s@replica", sourceKs, table1): {fmt.Sprintf("%s.%s@replica", sourceKs, table1)},
+		fmt.Sprintf("%s.%s@replica", sourceKs, table2): {fmt.Sprintf("%s.%s@replica", sourceKs, table2)},
+		fmt.Sprintf("%s.%s@rdonly", sourceKs, table1):  {fmt.Sprintf("%s.%s@rdonly", sourceKs, table1)},
+		fmt.Sprintf("%s.%s@rdonly", sourceKs, table2):  {fmt.Sprintf("%s.%s@rdonly", sourceKs, table2)},
 	}
 
 	tests := []struct {
@@ -1229,8 +1505,8 @@ func TestMirrorTraffic(t *testing.T) {
 				Percent:     50.0,
 			},
 			routingRules: map[string][]string{
-				fmt.Sprintf("%s.%s@rdonly", targetKs, table1): {fmt.Sprintf("%s.%s@rdonly", targetKs, table1)},
-				fmt.Sprintf("%s.%s@rdonly", targetKs, table2): {fmt.Sprintf("%s.%s@rdonly", targetKs, table2)},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {fmt.Sprintf("%s.%s@rdonly", targetKs, table1)},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {fmt.Sprintf("%s.%s@rdonly", targetKs, table2)},
 			},
 			wantErr:         "cannot mirror [rdonly] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
@@ -1244,8 +1520,8 @@ func TestMirrorTraffic(t *testing.T) {
 				Percent:     50.0,
 			},
 			routingRules: map[string][]string{
-				fmt.Sprintf("%s.%s@replica", targetKs, table1): {fmt.Sprintf("%s.%s@replica", targetKs, table1)},
-				fmt.Sprintf("%s.%s@replica", targetKs, table2): {fmt.Sprintf("%s.%s@replica", targetKs, table2)},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table1): {fmt.Sprintf("%s.%s@replica", targetKs, table1)},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table2): {fmt.Sprintf("%s.%s@replica", targetKs, table2)},
 			},
 			wantErr:         "cannot mirror [replica] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
@@ -1259,8 +1535,8 @@ func TestMirrorTraffic(t *testing.T) {
 				Percent:     50.0,
 			},
 			routingRules: map[string][]string{
-				table1: {fmt.Sprintf("%s.%s", targetKs, table1)},
-				table2: {fmt.Sprintf("%s.%s", targetKs, table2)},
+				fmt.Sprintf("%s.%s", sourceKs, table1): {fmt.Sprintf("%s.%s", targetKs, table1)},
+				fmt.Sprintf("%s.%s", sourceKs, table2): {fmt.Sprintf("%s.%s", targetKs, table2)},
 			},
 			wantErr:         "cannot mirror [primary] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
@@ -1341,6 +1617,7 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
+			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {
 					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
@@ -1375,6 +1652,7 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
+			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {
 					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
@@ -1412,6 +1690,7 @@ func TestMirrorTraffic(t *testing.T) {
 					fmt.Sprintf("%s.%s", targetKs, table1): 25.0,
 				},
 			},
+			routingRules: initialRoutingRules,
 			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
 				Keyspace:    targetKs,
 				Workflow:    workflow,

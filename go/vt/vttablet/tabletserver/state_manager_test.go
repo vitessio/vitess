@@ -379,6 +379,9 @@ func (te *delayedTxEngine) Close() {
 	time.Sleep(50 * time.Millisecond)
 }
 
+func (te *delayedTxEngine) RollbackPrepared() {
+}
+
 type killableConn struct {
 	id     int64
 	killed atomic.Bool
@@ -902,6 +905,8 @@ func (te *testTxEngine) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }
+
+func (te *testTxEngine) RollbackPrepared() {}
 
 type testSubcomponent struct {
 	testOrderState

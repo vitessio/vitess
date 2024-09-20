@@ -191,6 +191,11 @@ func (client *localVtctldClient) CompleteSchemaMigration(ctx context.Context, in
 	return client.s.CompleteSchemaMigration(ctx, in)
 }
 
+// ConcludeTransaction is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ConcludeTransaction(ctx context.Context, in *vtctldatapb.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldatapb.ConcludeTransactionResponse, error) {
+	return client.s.ConcludeTransaction(ctx, in)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	return client.s.CreateKeyspace(ctx, in)
@@ -384,6 +389,11 @@ func (client *localVtctldClient) GetThrottlerStatus(ctx context.Context, in *vtc
 // GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetTopologyPath(ctx context.Context, in *vtctldatapb.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTopologyPathResponse, error) {
 	return client.s.GetTopologyPath(ctx, in)
+}
+
+// GetUnresolvedTransactions is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetUnresolvedTransactions(ctx context.Context, in *vtctldatapb.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	return client.s.GetUnresolvedTransactions(ctx, in)
 }
 
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.

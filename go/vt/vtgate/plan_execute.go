@@ -24,14 +24,13 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
@@ -90,6 +89,7 @@ func (e *Executor) newExecute(
 		lastVSchemaCreated = vs.GetCreated()
 		result             *sqltypes.Result
 		plan               *engine.Plan
+		cancel             context.CancelFunc
 	)
 
 	for try := 0; try < MaxBufferingRetries; try++ {
@@ -138,6 +138,12 @@ func (e *Executor) newExecute(
 		// Add any warnings that the planner wants to add.
 		for _, warning := range plan.Warnings {
 			safeSession.RecordWarning(warning)
+		}
+
+		// set the overall query timeout if it is not already set
+		if vcursor.queryTimeout > 0 && cancel == nil {
+			ctx, cancel = context.WithTimeout(ctx, vcursor.queryTimeout)
+			defer cancel()
 		}
 
 		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)

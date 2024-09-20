@@ -277,7 +277,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	if err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFileName)
 	}
-	if _, err := mwc.Write([]byte(data)); err != nil {
+	if _, err := mwc.Write(data); err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 

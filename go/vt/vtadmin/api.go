@@ -32,10 +32,10 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
 
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/vtenv"
-
+	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -53,9 +53,12 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtexplain"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -411,12 +414,16 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/externally_promoted", httpAPI.Adapt(vtadminhttp.TabletExternallyPromoted)).Name("API.TabletExternallyPromoted").Methods("POST")
+	router.HandleFunc("/transactions/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetUnresolvedTransactions)).Name("API.GetUnresolvedTransactions").Methods("GET")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
 	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
 	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/status", httpAPI.Adapt(vtadminhttp.GetWorkflowStatus)).Name("API.GetWorkflowStatus")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow")
 
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
@@ -1476,6 +1483,27 @@ func (api *API) GetTopologyPath(ctx context.Context, req *vtadminpb.GetTopologyP
 	return c.Vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{Path: req.Path})
 }
 
+// GetUnresolvedTransactions is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetUnresolvedTransactions(ctx context.Context, req *vtadminpb.GetUnresolvedTransactionsRequest) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetUnresolvedTransactions")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetUnresolvedTransactions(ctx, &vtctldatapb.GetUnresolvedTransactionsRequest{
+		Keyspace: req.Keyspace,
+	})
+}
+
 // GetVSchema is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest) (*vtadminpb.VSchema, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetVSchema")
@@ -1659,6 +1687,91 @@ func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowReque
 
 	return c.GetWorkflow(ctx, req.Keyspace, req.Name, cluster.GetWorkflowOptions{
 		ActiveOnly: req.ActiveOnly,
+	})
+}
+
+// GetWorkflowStatus is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetWorkflowStatus(ctx context.Context, req *vtadminpb.GetWorkflowStatusRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetWorkflowStatus")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow_name", req.Name)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
+		Keyspace: req.Keyspace,
+		Workflow: req.Name,
+	})
+}
+
+// StartWorkflow is part of the vtadminpb.VTAdminServer interface.
+func (api *API) StartWorkflow(ctx context.Context, req *vtadminpb.StartWorkflowRequest) (*vtctldatapb.WorkflowUpdateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.StartWorkflow")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow_name", req.Workflow)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	vreplcommon.SetClient(c.Vtctld)
+	vreplcommon.SetCommandCtx(ctx)
+
+	if err := vreplcommon.CanRestartWorkflow(req.Keyspace, req.Workflow); err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
+		Keyspace: req.Keyspace,
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: req.Workflow,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
+		},
+	})
+}
+
+// StopWorkflow is part of the vtadminpb.VTAdminServer interface.
+func (api *API) StopWorkflow(ctx context.Context, req *vtadminpb.StopWorkflowRequest) (*vtctldatapb.WorkflowUpdateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.StopWorkflow")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow_name", req.Workflow)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
+		Keyspace: req.Keyspace,
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: req.Workflow,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+		},
 	})
 }
 

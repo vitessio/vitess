@@ -69,7 +69,7 @@ func TestTableStreamer(t *testing.T) {
 		}
 		gotStream = append(gotStream, fmt.Sprintf("%v", response))
 		return nil
-	})
+	}, nil)
 	require.NoError(t, err)
 	require.EqualValues(t, wantStream, gotStream)
 	require.Equal(t, int64(4), engine.tableStreamerNumTables.Get())

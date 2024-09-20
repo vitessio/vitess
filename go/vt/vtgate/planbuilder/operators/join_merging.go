@@ -111,7 +111,6 @@ func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Ro
 	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
 
 	a, b := getRoutingType(routingA), getRoutingType(routingB)
-
 	return lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace
 }
 
@@ -237,8 +236,8 @@ func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *R
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route {
 	return &Route{
-		Source:     jm.getApplyJoin(ctx, op1, op2),
-		MergedWith: []*Route{op2},
-		Routing:    r,
+		unaryOperator: newUnaryOp(jm.getApplyJoin(ctx, op1, op2)),
+		MergedWith:    []*Route{op2},
+		Routing:       r,
 	}
 }

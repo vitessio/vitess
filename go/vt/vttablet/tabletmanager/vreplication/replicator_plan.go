@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -54,13 +54,14 @@ import (
 // of the members, leaving the original plan unchanged.
 // The constructor is buildReplicatorPlan in table_plan_builder.go
 type ReplicatorPlan struct {
-	VStreamFilter *binlogdatapb.Filter
-	TargetTables  map[string]*TablePlan
-	TablePlans    map[string]*TablePlan
-	ColInfoMap    map[string][]*ColumnInfo
-	stats         *binlogplayer.Stats
-	Source        *binlogdatapb.BinlogSource
-	collationEnv  *collations.Environment
+	VStreamFilter  *binlogdatapb.Filter
+	TargetTables   map[string]*TablePlan
+	TablePlans     map[string]*TablePlan
+	ColInfoMap     map[string][]*ColumnInfo
+	stats          *binlogplayer.Stats
+	Source         *binlogdatapb.BinlogSource
+	collationEnv   *collations.Environment
+	workflowConfig *vttablet.VReplicationConfig
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -89,7 +90,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	// select * construct was used. We need to use the field names.
 	tplan, err := rp.buildFromFields(prelim.TargetName, prelim.Lastpk, fieldEvent.Fields)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "failed to build replication plan for %s table", fieldEvent.TableName)
 	}
 	tplan.Fields = fieldEvent.Fields
 	return tplan, nil
@@ -100,12 +101,13 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:         sqlparser.NewIdentifierCS(tableName),
-		lastpk:       lastpk,
-		colInfos:     rp.ColInfoMap[tableName],
-		stats:        rp.stats,
-		source:       rp.Source,
-		collationEnv: rp.collationEnv,
+		name:           sqlparser.NewIdentifierCS(tableName),
+		lastpk:         lastpk,
+		colInfos:       rp.ColInfoMap[tableName],
+		stats:          rp.stats,
+		source:         rp.Source,
+		collationEnv:   rp.collationEnv,
+		workflowConfig: rp.workflowConfig,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewIdentifierCI(field.Name)
@@ -220,7 +222,8 @@ type TablePlan struct {
 	// PartialUpdates are same as PartialInserts, but for update statements
 	PartialUpdates map[string]*sqlparser.ParsedQuery
 
-	CollationEnv *collations.Environment
+	CollationEnv   *collations.Environment
+	WorkflowConfig *vttablet.VReplicationConfig
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -286,7 +289,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 // now and punt on the others.
 func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable, before, after bool, stmtType string) bool {
 	// added empty comments below, otherwise gofmt removes the spaces between the bitwise & and obfuscates this check!
-	if vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagOptimizeInserts == 0 {
+	if tp.WorkflowConfig.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagOptimizeInserts == 0 {
 		return false
 	}
 	// Ensure there is one and only one value in lastpk and pkrefs.
@@ -297,7 +300,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		case !before && after:
 			bindvar = bindvars["a_"+tp.PKReferences[0]]
 		}
-		if bindvar == nil { //should never happen
+		if bindvar == nil { // should never happen
 			return false
 		}
 
@@ -332,7 +335,7 @@ func (tp *TablePlan) convertStringCharset(raw []byte, conversion *binlogdatapb.C
 
 	out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), raw, colldata.Lookup(fromCollation).Charset())
 	if err != nil {
-		return nil, sqlerror.NewSQLError(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, "Incorrect string value: %s", err.Error())
+		return nil, sqlerror.NewSQLErrorf(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, "Incorrect string value: %s", err.Error())
 	}
 	return out, nil
 }

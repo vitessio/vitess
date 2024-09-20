@@ -187,8 +187,6 @@ func (client *QueryClient) UnresolvedTransactions() ([]*querypb.TransactionMetad
 // It currently supports only primary->replica and back.
 func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) error {
 	err := client.server.SetServingType(tabletType, time.Time{}, true /* serving */, "" /* reason */)
-	// Wait for TwoPC transition, if necessary
-	client.server.TwoPCEngineWait()
 	return err
 }
 

@@ -254,7 +254,11 @@ func DeleteKs(
 			tablet.tm.Stop()
 			tablet.tm.Close()
 			tablet.qsc.SchemaEngine().Close()
-			err := ts.DeleteTablet(ctx, tablet.alias)
+			err := tablet.qsc.QueryService().Close(ctx)
+			if err != nil {
+				return err
+			}
+			err = ts.DeleteTablet(ctx, tablet.alias)
 			if err != nil {
 				return err
 			}
@@ -888,6 +892,14 @@ func (itmc *internalTabletManagerClient) ExecuteFetchAsAllPrivs(context.Context,
 
 func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(context.Context, *topodatapb.Tablet, bool, *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	return fmt.Errorf("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) PrimaryStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {

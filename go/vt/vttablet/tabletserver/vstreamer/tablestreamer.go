@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -60,10 +60,17 @@ type tableStreamer struct {
 	snapshotConn *snapshotConn
 	tables       []string
 	gtid         string
+	options      *binlogdatapb.VStreamOptions
+	config       *vttablet.VReplicationConfig
 }
 
 func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
-	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine) *tableStreamer {
+	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions) *tableStreamer {
+
+	config, err := GetVReplicationConfig(options)
+	if err != nil {
+		return nil
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &tableStreamer{
 		ctx:     ctx,
@@ -73,6 +80,8 @@ func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.En
 		send:    send,
 		vschema: vschema,
 		vse:     vse,
+		options: options,
+		config:  config,
 	}
 }
 
@@ -103,10 +112,10 @@ func (ts *tableStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
 		return err
 	}
-	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 1, false); err != nil {
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", ts.config.NetReadTimeout), 1, false); err != nil {
 		return err
 	}
-	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 1, false); err != nil {
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", ts.config.NetWriteTimeout), 1, false); err != nil {
 		return err
 	}
 
@@ -149,7 +158,7 @@ func (ts *tableStreamer) newRowStreamer(ctx context.Context, query string, lastp
 	defer vse.mu.Unlock()
 
 	rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema,
-		send, vse, RowStreamerModeAllTables, ts.snapshotConn)
+		send, vse, RowStreamerModeAllTables, ts.snapshotConn, ts.options)
 
 	idx := vse.streamIdx
 	vse.rowStreamers[idx] = rowStreamer

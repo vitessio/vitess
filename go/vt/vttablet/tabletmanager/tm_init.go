@@ -50,6 +50,7 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -749,6 +750,24 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 		tm.tmState.SetMysqlPort(mport)
 		return
 	}
+}
+
+// redoPreparedTransactionsAndSetReadWrite redoes prepared transactions in read-only mode.
+// We turn off super read only mode, and then redo the transactions. Finally, we turn off read-only mode to allow for further traffic.
+func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Context) error {
+	_, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false)
+	if err != nil {
+		// Ignore the error if the sever doesn't support super read only variable.
+		// We should just redo the preapred transactions before we set it to read-write.
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			log.Warningf("server does not know about super_read_only, continuing anyway...")
+		} else {
+			return err
+		}
+	}
+	tm.QueryServiceControl.RedoPreparedTransactions()
+	err = tm.MysqlDaemon.SetReadOnly(ctx, false)
+	return err
 }
 
 func (tm *TabletManager) initTablet(ctx context.Context) error {

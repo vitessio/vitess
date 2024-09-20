@@ -1763,6 +1763,7 @@ func (cmp *Comparator) RefOfAlterDatabase(a, b *AlterDatabase) bool {
 	}
 	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
 		a.FullyParsed == b.FullyParsed &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCS(a.DBName, b.DBName) &&
 		cmp.SliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
 }
@@ -2193,7 +2194,7 @@ func (cmp *Comparator) RefOfCommonTableExpr(a, b *CommonTableExpr) bool {
 	}
 	return cmp.IdentifierCS(a.ID, b.ID) &&
 		cmp.Columns(a.Columns, b.Columns) &&
-		cmp.RefOfSubquery(a.Subquery, b.Subquery)
+		cmp.SelectStatement(a.Subquery, b.Subquery)
 }
 
 // RefOfComparisonExpr does deep equals between the two objects.

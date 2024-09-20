@@ -257,7 +257,8 @@ func CheckForceMigrationCutOver(t *testing.T, vtParams *mysql.ConnParams, shards
 
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	ksName := shards[0].PrimaryTablet().VttabletProcess.Keyspace
+	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)

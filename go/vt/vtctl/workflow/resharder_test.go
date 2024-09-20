@@ -84,7 +84,7 @@ func TestReshardCreate(t *testing.T) {
 							{
 								Id:          1,
 								Tablet:      &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
-								SourceShard: "targetks/0", Position: position, Status: "Running", Info: "VStream Lag: 0s",
+								SourceShard: "targetks/0", Position: gtid(position), Status: "Running", Info: "VStream Lag: 0s",
 							},
 						},
 					},
@@ -93,7 +93,7 @@ func TestReshardCreate(t *testing.T) {
 							{
 								Id:          1,
 								Tablet:      &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
-								SourceShard: "targetks/0", Position: position, Status: "Running", Info: "VStream Lag: 0s",
+								SourceShard: "targetks/0", Position: gtid(position), Status: "Running", Info: "VStream Lag: 0s",
 							},
 						},
 					},

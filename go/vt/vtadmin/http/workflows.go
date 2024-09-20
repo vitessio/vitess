@@ -69,3 +69,51 @@ func GetWorkflows(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(workflows, err)
 }
+
+// GetWorkflowStatus implements the http wrapper for the VTAdminServer.GetWorkflowStatus
+// method.
+//
+// Its route is /workflow/{cluster_id}/{keyspace}/{name}/status
+func GetWorkflowStatus(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	workflowStatus, err := api.server.GetWorkflowStatus(ctx, &vtadminpb.GetWorkflowStatusRequest{
+		ClusterId: vars["cluster_id"],
+		Keyspace:  vars["keyspace"],
+		Name:      vars["name"],
+	})
+
+	return NewJSONResponse(workflowStatus, err)
+}
+
+// StartWorkflow implements the http wrapper for the VTAdminServer.StartWorkflow
+// method.
+//
+// Its route is /workflow/{cluster_id}/{keyspace}/{name}/start
+func StartWorkflow(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	res, err := api.server.StartWorkflow(ctx, &vtadminpb.StartWorkflowRequest{
+		ClusterId: vars["cluster_id"],
+		Keyspace:  vars["keyspace"],
+		Workflow:  vars["name"],
+	})
+
+	return NewJSONResponse(res, err)
+}
+
+// StopWorkflow implements the http wrapper for the VTAdminServer.StopWorkflow
+// method.
+//
+// Its route is /workflow/{cluster_id}/{keyspace}/{name}/stop
+func StopWorkflow(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	res, err := api.server.StopWorkflow(ctx, &vtadminpb.StopWorkflowRequest{
+		ClusterId: vars["cluster_id"],
+		Keyspace:  vars["keyspace"],
+		Workflow:  vars["name"],
+	})
+
+	return NewJSONResponse(res, err)
+}

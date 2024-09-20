@@ -831,6 +831,11 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 			return true
 		}
 	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterDatabase).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
 	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*AlterDatabase).DBName = newNode.(IdentifierCS)
 	}) {
@@ -1964,8 +1969,8 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
-		parent.(*CommonTableExpr).Subquery = newNode.(*Subquery)
+	if !a.rewriteSelectStatement(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).Subquery = newNode.(SelectStatement)
 	}) {
 		return false
 	}

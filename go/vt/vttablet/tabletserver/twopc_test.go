@@ -422,13 +422,14 @@ func TestUnresolvedTransactions(t *testing.T) {
 	}, {
 		name: "one unresolved transaction",
 		unresolvedTx: sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("dtid|state|keyspace|shard",
-				"VARBINARY|INT64|VARCHAR|VARCHAR"),
-			"dtid0|1|ks01|shard01",
-			"dtid0|1|ks01|shard02"),
+			sqltypes.MakeTestFields("dtid|state|time_created|keyspace|shard",
+				"VARBINARY|INT64|INT64|VARCHAR|VARCHAR"),
+			"dtid0|1|2|ks01|shard01",
+			"dtid0|1|2|ks01|shard02"),
 		expectedTx: []*querypb.TransactionMetadata{{
-			Dtid:  "dtid0",
-			State: querypb.TransactionState_PREPARE,
+			Dtid:        "dtid0",
+			State:       querypb.TransactionState_PREPARE,
+			TimeCreated: 2,
 			Participants: []*querypb.Target{
 				{Keyspace: "ks01", Shard: "shard01", TabletType: topodatapb.TabletType_PRIMARY},
 				{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
@@ -436,21 +437,23 @@ func TestUnresolvedTransactions(t *testing.T) {
 	}, {
 		name: "two unresolved transaction",
 		unresolvedTx: sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("dtid|state|keyspace|shard",
-				"VARBINARY|INT64|VARCHAR|VARCHAR"),
-			"dtid0|3|ks01|shard01",
-			"dtid0|3|ks01|shard02",
-			"dtid1|2|ks02|shard03",
-			"dtid1|2|ks01|shard02"),
+			sqltypes.MakeTestFields("dtid|state|time_created|keyspace|shard",
+				"VARBINARY|INT64|INT64|VARCHAR|VARCHAR"),
+			"dtid0|3|1|ks01|shard01",
+			"dtid0|3|1|ks01|shard02",
+			"dtid1|2|2|ks02|shard03",
+			"dtid1|2|2|ks01|shard02"),
 		expectedTx: []*querypb.TransactionMetadata{{
-			Dtid:  "dtid0",
-			State: querypb.TransactionState_COMMIT,
+			Dtid:        "dtid0",
+			State:       querypb.TransactionState_COMMIT,
+			TimeCreated: 1,
 			Participants: []*querypb.Target{
 				{Keyspace: "ks01", Shard: "shard01", TabletType: topodatapb.TabletType_PRIMARY},
 				{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},
 			}}, {
-			Dtid:  "dtid1",
-			State: querypb.TransactionState_ROLLBACK,
+			Dtid:        "dtid1",
+			TimeCreated: 2,
+			State:       querypb.TransactionState_ROLLBACK,
 			Participants: []*querypb.Target{
 				{Keyspace: "ks02", Shard: "shard03", TabletType: topodatapb.TabletType_PRIMARY},
 				{Keyspace: "ks01", Shard: "shard02", TabletType: topodatapb.TabletType_PRIMARY},

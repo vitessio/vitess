@@ -611,6 +611,7 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
 func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
+	t.Helper()
 	if sidecarDBName == "" {
 		sidecarDBName = sidecar.DefaultName
 	}
@@ -636,7 +637,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 	for ind, query := range queries {
 		waitDuration := 500 * time.Millisecond
 		for duration > 0 {
-			log.Infof("Executing query %s on %s", query, vttablet.Name)
+			log.Infof("Executing query %s on %s", query, vttablet.TabletPath)
 			lastChecked = time.Now()
 			qr, err := executeQuery(conn, query)
 			if err != nil {

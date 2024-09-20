@@ -12,6 +12,10 @@
   - **[New VTGate Shutdown Behavior](#new-vtgate-shutdown-behavior)**
   - **[Tablet Throttler: Multi-Metric support](#tablet-throttler)**
   - **[Allow Cross Cell Promotion in PRS](#allow-cross-cell)**
+  - **[Support for recursive CTEs](#recursive-cte)**
+  - **[VTGate Tablet Balancer](#tablet-balancer)**
+  - **[Query Timeout Override](#query-timeout)**
+  - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -102,3 +106,34 @@ Metrics are assigned a default _scope_, which could be `self` (isolated to the t
 Up until now if the users wanted to promote a replica in a different cell than the current primary using `PlannedReparentShard`, they had to specify the new primary with the `--new-primary` flag.
 
 We have now added a new flag `--allow-cross-cell-promotion` that lets `PlannedReparentShard` choose a primary in a different cell even if no new primary is provided explicitly.
+
+### <a id="recursive-cte"/>Experimental support for recursive CTEs
+We have added experimental support for recursive CTEs in Vitess. We are marking it as experimental because it is not yet fully tested and may have some limitations. We are looking for feedback from the community to improve this feature.
+
+### <a id="tablet-balancer"/>VTGate Tablet Balancer
+When a VTGate routes a query and has multiple available tablets for a given shard / tablet type (e.g. REPLICA), the current default behavior routes the query with local cell affinity and round robin policy. The VTGate Tablet Balancer provides an alternate mechanism that routes queries to maintain an even distribution of query load to each tablet, while preferentially routing to tablets in the same cell as the VTGate.
+
+The tablet balancer is enabled by a new flag `--enable-balancer` and configured by `--balancer-vtgate-cells` and `--balancer-keyspaces`.
+
+See [RFC for details](https://github.com/vitessio/vitess/issues/12241).
+
+### <a id="query-timeout"/>Query Timeout Override
+VTGate sends an authoritative query timeout to VTTablet when the `QUERY_TIMEOUT_MS` comment directive, 
+`query_timeout` session system variable, or `query-timeout` flag is set. 
+The order of precedence is: `QUERY_TIMEOUT_MS` > `query_timeout` > `query-timeout`. 
+VTTablet overrides its default query timeout with the value received from VTGate. 
+All timeouts are specified in milliseconds.
+
+When a query is executed inside a transaction, this behavior does not apply; instead, 
+the smaller of the transaction timeout or the query timeout from VTGate is used.
+
+A query can also be set to have no timeout by using the `QUERY_TIMEOUT_MS` comment directive with a value of `0`.
+
+Example usage:
+`select /*vt+ QUERY_TIMEOUT_MS=30 */ col from tbl`
+
+### <a id="dynamic-vreplication-configuration"/>Dynamic VReplication Configuration
+Currently many of the configuration options for VReplication Workflows are vttablet flags. This means that any change 
+requires restarts of vttablets. We now allow these to be overridden while creating a workflow or dynamically once
+the workflow is in progress. See https://github.com/vitessio/vitess/pull/16583 for details.
+

@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/test/utils"
@@ -154,9 +155,10 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t, ctx)
 	// This is required because the test is verifying that we rollback transactions on changing serving type,
-	// but that only happens immediately if the shut down grace period is not specified.
-	tsv.te.shutdownGracePeriod = 0
-	tsv.sm.shutdownGracePeriod = 0
+	// but that only happens when we have a shutdown grace period, otherwise we wait for transactions to be resolved
+	// indefinitely.
+	tsv.te.shutdownGracePeriod = 1
+	tsv.sm.shutdownGracePeriod = 1
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -200,14 +202,20 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t, ctx)
 	defer tsv.StopService()
 	defer db.Close()
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
+	// This is required because the test is verifying that we rollback transactions on changing serving type,
+	// but that only happens when we have a shutdown grace period, otherwise we wait for transactions to be resolved
+	// indefinitely.
+	tsv.te.shutdownGracePeriod = 1
+	tsv.sm.shutdownGracePeriod = 1
+	tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, false, "")
 
 	turnOnTxEngine := func() {
 		tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, true, "")
-		tsv.TwoPCEngineWait()
 	}
 	turnOffTxEngine := func() {
-		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
+		// We can use a transition to PRIMARY non-serving or REPLICA serving to turn off the transaction engine.
+		// With primary serving, the shutdown of prepared transactions is synchronous, but for the latter its asynchronous.
+		tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, false, "")
 	}
 
 	tpc := tsv.te.twoPC
@@ -234,7 +242,9 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOnTxEngine()
 	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
 	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
-	want := []string{"update test_table set `name` = 2 where pk = 1 limit 10001"}
+	want := []tx.Query{{
+		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
+		Tables: []string{"test_table"}}}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	turnOffTxEngine()
 	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
@@ -268,7 +278,9 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOnTxEngine()
 	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
 	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
-	want = []string{"update test_table set `name` = 2 where pk = 1 limit 10001"}
+	want = []tx.Query{{
+		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
+		Tables: []string{"test_table"}}}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	wantFailed := map[string]error{"a:b:20": errPrepFailed}
 	utils.MustMatch(t, tsv.te.preparedPool.reserved, wantFailed, fmt.Sprintf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed))
@@ -668,6 +680,80 @@ func TestSmallerTimeout(t *testing.T) {
 	for _, tcase := range testcases {
 		got := smallerTimeout(tcase.t1, tcase.t2)
 		assert.Equal(t, tcase.want, got, tcase.t1, tcase.t2)
+	}
+}
+
+func TestLoadQueryTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	testcases := []struct {
+		name          string
+		txID          int64
+		setOptions    bool
+		optionTimeout int64
+
+		want time.Duration
+	}{{
+		name: "no options and no transaction",
+		want: 30 * time.Second,
+	}, {
+		name: "only transaction",
+		txID: 1234,
+		want: 30 * time.Second,
+	}, {
+		name:          "only option - infinite time",
+		setOptions:    true,
+		optionTimeout: 0,
+		want:          0 * time.Millisecond,
+	}, {
+		name:          "only option - lower time",
+		setOptions:    true,
+		optionTimeout: 3, // 3ms
+		want:          3 * time.Millisecond,
+	}, {
+		name:          "only option - higher time",
+		setOptions:    true,
+		optionTimeout: 40000, // 40s
+		want:          40 * time.Second,
+	}, {
+		name:          "transaction and option - infinite time",
+		txID:          1234,
+		setOptions:    true,
+		optionTimeout: 0,
+		want:          30 * time.Second,
+	}, {
+		name:          "transaction and option - lower time",
+		txID:          1234,
+		setOptions:    true,
+		optionTimeout: 3, // 3ms
+		want:          3 * time.Millisecond,
+	}, {
+		name:          "transaction and option - higher time",
+		txID:          1234,
+		setOptions:    true,
+		optionTimeout: 40000, // 40s
+		want:          30 * time.Second,
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var options *querypb.ExecuteOptions
+			if tcase.setOptions {
+				options = &querypb.ExecuteOptions{
+					Timeout: &querypb.ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: tcase.optionTimeout},
+				}
+			}
+			var got time.Duration
+			if tcase.txID != 0 {
+				got = tsv.loadQueryTimeoutWithTxAndOptions(tcase.txID, options)
+			} else {
+				got = tsv.loadQueryTimeoutWithOptions(options)
+			}
+			assert.Equal(t, tcase.want, got)
+		})
 	}
 }
 

@@ -69,7 +69,7 @@ func loadCharNames() {
 		algCount := b.Uint32()
 		charNames.algNames = make([]algorithmicRange, 0, algCount)
 
-		for i := uint32(0); i < algCount; i++ {
+		for range uint32(algCount) {
 			ar := algorithmicRange{
 				start:   b.Uint32(),
 				end:     b.Uint32(),

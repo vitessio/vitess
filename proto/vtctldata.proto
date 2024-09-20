@@ -214,6 +214,8 @@ message WorkflowOptions {
   // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
   // from the source will be vreplicated.
   repeated string shards = 3;
+  map<string, string> config = 4;
+
 }
 
 // TODO: comment the hell out of this.
@@ -1103,6 +1105,22 @@ message TopologyCell {
   int64 version = 5;
 }
 
+message GetUnresolvedTransactionsRequest {
+  string keyspace = 1;
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
+message ConcludeTransactionRequest {
+  string dtid = 1;
+  repeated query.Target participants = 2;
+}
+
+message ConcludeTransactionResponse {
+}
+
 message GetVSchemaRequest {
   string keyspace = 1;
 }
@@ -1527,6 +1545,8 @@ message ReshardCreateRequest {
   bool defer_secondary_keys = 11;
   // Start the workflow after creating it.
   bool auto_start = 12;
+  WorkflowOptions workflow_options = 13;
+
 }
 
 message RestoreFromBackupRequest {
@@ -1866,6 +1886,8 @@ message VDiffCreateRequest {
   bool verbose = 18;
   int64 max_report_sample_rows = 19;
   vttime.Duration max_diff_duration = 20;
+  int64 row_diff_column_truncate_at = 21;
+  optional bool auto_start = 22;
 }
 
 message VDiffCreateResponse {
@@ -1888,6 +1910,7 @@ message VDiffResumeRequest {
   string workflow = 1;
   string target_keyspace = 2;
   string uuid = 3;
+  repeated string target_shards = 4;
 }
 
 message VDiffResumeResponse {
@@ -1909,6 +1932,7 @@ message VDiffStopRequest {
   string workflow = 1;
   string target_keyspace = 2;
   string uuid = 3;
+  repeated string target_shards = 4;
 }
 
 message VDiffStopResponse {
@@ -1976,6 +2000,7 @@ message WorkflowSwitchTrafficRequest {
   bool dry_run = 9;
   bool initialize_target_sequences = 10;
   repeated string shards = 11;
+  bool force = 12;
 }
 
 message WorkflowSwitchTrafficResponse {
