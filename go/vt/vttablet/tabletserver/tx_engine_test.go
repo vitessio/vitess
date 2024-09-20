@@ -658,6 +658,10 @@ func TestCheckReceivedError(t *testing.T) {
 		t.Run(tc.receivedErr.Error(), func(t *testing.T) {
 			nonRetryable := te.checkErrorAndMarkFailed(context.Background(), "aa", tc.receivedErr)
 			require.Equal(t, tc.nonRetryable, nonRetryable)
+			if tc.nonRetryable {
+				require.Equal(t, errPrepFailed, te.preparedPool.reserved["aa"])
+			}
+			delete(te.preparedPool.reserved, "aa")
 		})
 	}
 }

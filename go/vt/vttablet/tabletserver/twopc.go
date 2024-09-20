@@ -47,7 +47,7 @@ const (
 	// DTStateRollback represents the ROLLBACK state for dt_state.
 	DTStateRollback = querypb.TransactionState_ROLLBACK
 
-	readAllRedo = `select t.dtid, t.state, t.time_created, s.statement
+	readAllRedo = `select t.dtid, t.state, t.time_created, s.statement, t.message
 	from %s.redo_state t
     join %s.redo_statement s on t.dtid = s.dtid
 	order by t.dtid, s.id`
@@ -245,8 +245,9 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 			// which is harmless.
 			tm, _ := row[2].ToCastInt64()
 			curTx = &tx.PreparedTx{
-				Dtid: dtid,
-				Time: time.Unix(0, tm),
+				Dtid:    dtid,
+				Time:    time.Unix(0, tm),
+				Message: row[4].ToString(),
 			}
 			st, err := row[1].ToCastInt64()
 			if err != nil {
