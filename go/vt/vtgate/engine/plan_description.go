@@ -48,7 +48,8 @@ type PrimitiveDescription struct {
 	InputName string
 	Inputs    []PrimitiveDescription
 
-	Stats RowsReceived
+	RowsReceived  RowsReceived
+	ShardsQueried *ShardsQueried
 }
 
 // MarshalJSON serializes the PlanDescription into a JSON representation.
@@ -92,15 +93,20 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 	}
-	if len(pd.Stats) > 0 {
-		if err := marshalAdd(prepend, buf, "NoOfCalls", len(pd.Stats)); err != nil {
+	if len(pd.RowsReceived) > 0 {
+		if err := marshalAdd(prepend, buf, "NoOfCalls", len(pd.RowsReceived)); err != nil {
 			return nil, err
 		}
 
-		if err := marshalAdd(prepend, buf, "AvgNumberOfRows", average(pd.Stats)); err != nil {
+		if err := marshalAdd(prepend, buf, "AvgNumberOfRows", average(pd.RowsReceived)); err != nil {
 			return nil, err
 		}
-		if err := marshalAdd(prepend, buf, "MedianNumberOfRows", median(pd.Stats)); err != nil {
+		if err := marshalAdd(prepend, buf, "MedianNumberOfRows", median(pd.RowsReceived)); err != nil {
+			return nil, err
+		}
+	}
+	if pd.ShardsQueried != nil {
+		if err := marshalAdd(prepend, buf, "ShardsQueried", pd.ShardsQueried); err != nil {
 			return nil, err
 		}
 	}
@@ -219,10 +225,16 @@ func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj any) error {
 
 // PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree
 // If stats is not nil, it will be used to populate the stats field of the PlanDescription
-func PrimitiveToPlanDescription(in Primitive, stats map[Primitive]RowsReceived) PrimitiveDescription {
+func PrimitiveToPlanDescription(in Primitive, stats *Stats) PrimitiveDescription {
 	this := in.description()
 	if stats != nil {
-		this.Stats = stats[in]
+		this.RowsReceived = stats.InterOpStats[in]
+
+		// Only applies to Route primitive
+		v, ok := stats.ShardsStats[in]
+		if ok {
+			this.ShardsQueried = &v
+		}
 	}
 
 	inputs, infos := in.Inputs()

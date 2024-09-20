@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 // isBitSet returns true if the bit at index is set
@@ -37,7 +37,7 @@ func isBitSet(data []byte, index int) bool {
 }
 
 func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
-	if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
+	if (tp.WorkflowConfig.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
 		rowChange.DataColumns == nil ||
 		rowChange.DataColumns.Count == 0 {
 
