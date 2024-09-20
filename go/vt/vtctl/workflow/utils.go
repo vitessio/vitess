@@ -960,6 +960,18 @@ func IsTableDidNotExistError(err error) bool {
 	return false
 }
 
+func getOptionsJSON(workflowOptions *vtctldatapb.WorkflowOptions) (string, error) {
+	defaultJSON := "{}"
+	if workflowOptions == nil {
+		return defaultJSON, nil
+	}
+	optionsJSON, err := json.Marshal(workflowOptions)
+	if err != nil || optionsJSON == nil {
+		return defaultJSON, err
+	}
+	return string(optionsJSON), nil
+}
+
 // defaultErrorHandler provides a way to consistently handle errors by logging and
 // returning them.
 func defaultErrorHandler(logger logutil.Logger, message string, err error) (*[]string, error) {

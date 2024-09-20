@@ -417,11 +417,6 @@ func TestMoveTablesComplete(t *testing.T) {
 	tableTemplate := "CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))"
 	sourceKeyspaceName := "sourceks"
 	targetKeyspaceName := "targetks"
-	tabletTypes := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
-	}
 	lockName := fmt.Sprintf("%s/%s", targetKeyspaceName, workflowName)
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
 		table1Name: {
@@ -641,7 +636,8 @@ func TestMoveTablesComplete(t *testing.T) {
 				tc.preFunc(t, env)
 			}
 			// Setup the routing rules as they would be after having previously done SwitchTraffic.
-			env.addTableRoutingRules(t, ctx, tabletTypes, []string{table1Name, table2Name, table3Name})
+			env.updateTableRoutingRules(t, ctx, nil, []string{table1Name, table2Name, table3Name},
+				tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
 			got, err := env.ws.MoveTablesComplete(ctx, tc.req)
 			if tc.wantErr != "" {
 				require.EqualError(t, err, tc.wantErr)
@@ -1154,7 +1150,8 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.addTableRoutingRules(t, ctx, tabletTypes, []string{tableName})
+				env.updateTableRoutingRules(t, ctx, tabletTypes, []string{tableName},
+					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
@@ -1372,7 +1369,8 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.addTableRoutingRules(t, ctx, tabletTypes, tables)
+				env.updateTableRoutingRules(t, ctx, tabletTypes, tables,
+					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
@@ -1409,6 +1407,15 @@ func TestMirrorTraffic(t *testing.T) {
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
+	}
+
+	initialRoutingRules := map[string][]string{
+		fmt.Sprintf("%s.%s", sourceKs, table1):         {fmt.Sprintf("%s.%s", sourceKs, table1)},
+		fmt.Sprintf("%s.%s", sourceKs, table2):         {fmt.Sprintf("%s.%s", sourceKs, table2)},
+		fmt.Sprintf("%s.%s@replica", sourceKs, table1): {fmt.Sprintf("%s.%s@replica", sourceKs, table1)},
+		fmt.Sprintf("%s.%s@replica", sourceKs, table2): {fmt.Sprintf("%s.%s@replica", sourceKs, table2)},
+		fmt.Sprintf("%s.%s@rdonly", sourceKs, table1):  {fmt.Sprintf("%s.%s@rdonly", sourceKs, table1)},
+		fmt.Sprintf("%s.%s@rdonly", sourceKs, table2):  {fmt.Sprintf("%s.%s@rdonly", sourceKs, table2)},
 	}
 
 	tests := []struct {
@@ -1498,8 +1505,8 @@ func TestMirrorTraffic(t *testing.T) {
 				Percent:     50.0,
 			},
 			routingRules: map[string][]string{
-				fmt.Sprintf("%s.%s@rdonly", targetKs, table1): {fmt.Sprintf("%s.%s@rdonly", targetKs, table1)},
-				fmt.Sprintf("%s.%s@rdonly", targetKs, table2): {fmt.Sprintf("%s.%s@rdonly", targetKs, table2)},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table1): {fmt.Sprintf("%s.%s@rdonly", targetKs, table1)},
+				fmt.Sprintf("%s.%s@rdonly", sourceKs, table2): {fmt.Sprintf("%s.%s@rdonly", targetKs, table2)},
 			},
 			wantErr:         "cannot mirror [rdonly] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
@@ -1513,8 +1520,8 @@ func TestMirrorTraffic(t *testing.T) {
 				Percent:     50.0,
 			},
 			routingRules: map[string][]string{
-				fmt.Sprintf("%s.%s@replica", targetKs, table1): {fmt.Sprintf("%s.%s@replica", targetKs, table1)},
-				fmt.Sprintf("%s.%s@replica", targetKs, table2): {fmt.Sprintf("%s.%s@replica", targetKs, table2)},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table1): {fmt.Sprintf("%s.%s@replica", targetKs, table1)},
+				fmt.Sprintf("%s.%s@replica", sourceKs, table2): {fmt.Sprintf("%s.%s@replica", targetKs, table2)},
 			},
 			wantErr:         "cannot mirror [replica] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
@@ -1528,8 +1535,8 @@ func TestMirrorTraffic(t *testing.T) {
 				Percent:     50.0,
 			},
 			routingRules: map[string][]string{
-				table1: {fmt.Sprintf("%s.%s", targetKs, table1)},
-				table2: {fmt.Sprintf("%s.%s", targetKs, table2)},
+				fmt.Sprintf("%s.%s", sourceKs, table1): {fmt.Sprintf("%s.%s", targetKs, table1)},
+				fmt.Sprintf("%s.%s", sourceKs, table2): {fmt.Sprintf("%s.%s", targetKs, table2)},
 			},
 			wantErr:         "cannot mirror [primary] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
@@ -1610,6 +1617,7 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
+			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {
 					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
@@ -1644,6 +1652,7 @@ func TestMirrorTraffic(t *testing.T) {
 				TabletTypes: tabletTypes,
 				Percent:     50.0,
 			},
+			routingRules: initialRoutingRules,
 			wantMirrorRules: map[string]map[string]float32{
 				fmt.Sprintf("%s.%s", sourceKs, table1): {
 					fmt.Sprintf("%s.%s", targetKs, table1): 50.0,
@@ -1681,6 +1690,7 @@ func TestMirrorTraffic(t *testing.T) {
 					fmt.Sprintf("%s.%s", targetKs, table1): 25.0,
 				},
 			},
+			routingRules: initialRoutingRules,
 			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
 				Keyspace:    targetKs,
 				Workflow:    workflow,

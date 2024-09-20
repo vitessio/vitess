@@ -132,7 +132,7 @@ func (t *noopVCursor) UnresolvedTransactions(ctx context.Context, keyspace strin
 	panic("implement me")
 }
 
-func (t *noopVCursor) StartPrimitiveTrace() func() map[Primitive]RowsReceived {
+func (t *noopVCursor) StartPrimitiveTrace() func() Stats {
 	panic("implement me")
 }
 

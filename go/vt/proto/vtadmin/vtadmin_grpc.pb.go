@@ -104,6 +104,8 @@ type VTAdminClient interface {
 	GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error)
 	// GetTopologyPath returns the cell located at the specified path in the topology server.
 	GetTopologyPath(ctx context.Context, in *GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
+	// GetUnresolvedTransactions returns the unresolved transactions for the request.
+	GetUnresolvedTransactions(ctx context.Context, in *GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
 	// cluster.
 	GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error)
@@ -476,6 +478,15 @@ func (c *vTAdminClient) GetTopologyPath(ctx context.Context, in *GetTopologyPath
 	return out, nil
 }
 
+func (c *vTAdminClient) GetUnresolvedTransactions(ctx context.Context, in *GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
+	out := new(vtctldata.GetUnresolvedTransactionsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetUnresolvedTransactions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error) {
 	out := new(VSchema)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetVSchema", in, out, opts...)
@@ -840,6 +851,8 @@ type VTAdminServer interface {
 	GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error)
 	// GetTopologyPath returns the cell located at the specified path in the topology server.
 	GetTopologyPath(context.Context, *GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
+	// GetUnresolvedTransactions returns the unresolved transactions for the request.
+	GetUnresolvedTransactions(context.Context, *GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
 	// cluster.
 	GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error)
@@ -1028,6 +1041,9 @@ func (UnimplementedVTAdminServer) GetTablets(context.Context, *GetTabletsRequest
 }
 func (UnimplementedVTAdminServer) GetTopologyPath(context.Context, *GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
+}
+func (UnimplementedVTAdminServer) GetUnresolvedTransactions(context.Context, *GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUnresolvedTransactions not implemented")
 }
 func (UnimplementedVTAdminServer) GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVSchema not implemented")
@@ -1671,6 +1687,24 @@ func _VTAdmin_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetTopologyPath(ctx, req.(*GetTopologyPathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetUnresolvedTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUnresolvedTransactionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetUnresolvedTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetUnresolvedTransactions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetUnresolvedTransactions(ctx, req.(*GetUnresolvedTransactionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2359,6 +2393,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTopologyPath",
 			Handler:    _VTAdmin_GetTopologyPath_Handler,
+		},
+		{
+			MethodName: "GetUnresolvedTransactions",
+			Handler:    _VTAdmin_GetUnresolvedTransactions_Handler,
 		},
 		{
 			MethodName: "GetVSchema",
