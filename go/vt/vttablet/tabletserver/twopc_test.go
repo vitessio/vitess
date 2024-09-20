@@ -66,12 +66,14 @@ func TestReadAllRedo(t *testing.T) {
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Text},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt01"),
+			sqltypes.NULL,
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
@@ -96,17 +98,20 @@ func TestReadAllRedo(t *testing.T) {
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Text},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt01"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt02"),
+			sqltypes.NULL,
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
@@ -131,22 +136,26 @@ func TestReadAllRedo(t *testing.T) {
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Text},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt01"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt02"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewVarBinary("dtid1"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt11"),
+			sqltypes.NULL,
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
@@ -175,37 +184,44 @@ func TestReadAllRedo(t *testing.T) {
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Text},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt01"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt02"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewVarBinary("dtid1"),
-			sqltypes.NewVarBinary("Failed"),
+			sqltypes.NewInt64(RedoStateFailed),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt11"),
+			sqltypes.TestValue(sqltypes.Text, "error1"),
 		}, {
 			sqltypes.NewVarBinary("dtid2"),
-			sqltypes.NewVarBinary("Failed"),
+			sqltypes.NewInt64(RedoStateFailed),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt21"),
+			sqltypes.TestValue(sqltypes.Text, "error2"),
 		}, {
 			sqltypes.NewVarBinary("dtid2"),
-			sqltypes.NewVarBinary("Failed"),
+			sqltypes.NewInt64(RedoStateFailed),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt22"),
+			sqltypes.TestValue(sqltypes.Text, "error2"),
 		}, {
 			sqltypes.NewVarBinary("dtid3"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary("1"),
 			sqltypes.NewVarBinary("stmt31"),
+			sqltypes.NULL,
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
@@ -221,21 +237,19 @@ func TestReadAllRedo(t *testing.T) {
 		Queries: []string{"stmt31"},
 		Time:    time.Unix(0, 1),
 	}}
-	if !reflect.DeepEqual(prepared, want) {
-		t.Errorf("ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
-	}
+	utils.MustMatch(t, want, prepared)
 	wantFailed := []*tx.PreparedTx{{
 		Dtid:    "dtid1",
 		Queries: []string{"stmt11"},
 		Time:    time.Unix(0, 1),
+		Message: "error1",
 	}, {
 		Dtid:    "dtid2",
 		Queries: []string{"stmt21", "stmt22"},
 		Time:    time.Unix(0, 1),
+		Message: "error2",
 	}}
-	if !reflect.DeepEqual(failed, wantFailed) {
-		t.Errorf("ReadAllRedo failed): %s, want %s", jsonStr(failed), jsonStr(wantFailed))
-	}
+	utils.MustMatch(t, wantFailed, failed)
 }
 
 func TestReadAllTransactions(t *testing.T) {
