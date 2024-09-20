@@ -47,6 +47,8 @@ import (
 	"github.com/aws/smithy-go/middleware"
 	"github.com/spf13/pflag"
 
+	smithyendpoints "github.com/aws/smithy-go/endpoints"
+
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -109,6 +111,23 @@ type logNameToLogLevel map[string]aws.ClientLogMode
 var logNameMap logNameToLogLevel
 
 const sseCustomerPrefix = "sse_c:"
+
+type endpointResolver struct {
+	r        s3.EndpointResolverV2
+	endpoint *string
+}
+
+func (er *endpointResolver) ResolveEndpoint(ctx context.Context, params s3.EndpointParameters) (smithyendpoints.Endpoint, error) {
+	params.Endpoint = er.endpoint
+	return er.r.ResolveEndpoint(ctx, params)
+}
+
+func newEndpointResolver() *endpointResolver {
+	return &endpointResolver{
+		r:        s3.NewDefaultEndpointResolverV2(),
+		endpoint: &endpoint,
+	}
+}
 
 type iClient interface {
 	manager.UploadAPIClient
@@ -493,7 +512,7 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 				o.RetryMaxAttempts = retryCount
 				o.Retryer = &ClosedConnectionRetryer{}
 			}
-		})
+		}, s3.WithEndpointResolverV2(newEndpointResolver()))
 
 		if len(bucket) == 0 {
 			return nil, fmt.Errorf("--s3_backup_storage_bucket required")
