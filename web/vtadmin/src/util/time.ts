@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import localizedFormat from 'dayjs/plugin/localizedFormat';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -43,4 +43,12 @@ export const formatRelativeTime = (timestamp: number | Long | null | undefined):
 
 export const formatDateTimeShort = (timestamp: number | Long | null | undefined): string | null => {
     return format(timestamp, 'MM/DD/YY HH:mm:ss Z');
+};
+
+export const formatRelativeTimeInSeconds = (timestamp: number | Long | null | undefined): string | null => {
+    const u = parse(timestamp);
+    if (!u) return null;
+    const currentTime = dayjs();
+    const secondsElapsed = currentTime.diff(u, 'second');
+    return `${secondsElapsed} seconds ago`;
 };
