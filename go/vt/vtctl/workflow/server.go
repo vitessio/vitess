@@ -300,7 +300,8 @@ func (s *Server) GetCellsWithShardReadsSwitched(
 // keyspace.
 func (s *Server) GetCellsWithTableReadsSwitched(
 	ctx context.Context,
-	keyspace string,
+	sourceKeyspace string,
+	targetKeyspace string,
 	table string,
 	tabletType topodatapb.TabletType,
 ) (cellsSwitched []string, cellsNotSwitched []string, err error) {
@@ -330,7 +331,7 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 		)
 
 		for _, rule := range srvVSchema.RoutingRules.Rules {
-			ruleName := fmt.Sprintf("%s.%s@%s", keyspace, table, strings.ToLower(tabletType.String()))
+			ruleName := fmt.Sprintf("%s.%s@%s", sourceKeyspace, table, strings.ToLower(tabletType.String()))
 			if rule.FromTable == ruleName {
 				found = true
 
@@ -341,7 +342,7 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 						return nil, nil, err
 					}
 
-					if ks == keyspace {
+					if ks != sourceKeyspace {
 						switched = true
 						break // if one table in the workflow switched, we are done.
 					}
@@ -945,6 +946,10 @@ ORDER BY
 	}, nil
 }
 
+func (s *Server) GetWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *State, error) {
+	return s.getWorkflowState(ctx, targetKeyspace, workflowName)
+}
+
 func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *State, error) {
 	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 	if err != nil {
@@ -1014,12 +1019,12 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 				}
 			}
 		} else {
-			state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = s.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, topodatapb.TabletType_RDONLY)
+			state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = s.GetCellsWithTableReadsSwitched(ctx, sourceKeyspace, targetKeyspace, table, topodatapb.TabletType_RDONLY)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = s.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, topodatapb.TabletType_REPLICA)
+			state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = s.GetCellsWithTableReadsSwitched(ctx, sourceKeyspace, targetKeyspace, table, topodatapb.TabletType_REPLICA)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1028,10 +1033,11 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 				return nil, nil, err
 			}
 			for _, table := range ts.Tables() {
-				rr := globalRules[table]
-				// If a rule exists for the table and points to the target keyspace, then
-				// writes have been switched.
-				if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", targetKeyspace, table) {
+				// If a rule for the primary tablet type exists for any table and points to the target keyspace,
+				// then writes have been switched.
+				ruleKey := fmt.Sprintf("%s.%s", sourceKeyspace, table)
+				rr := globalRules[ruleKey]
+				if len(rr) > 0 && rr[0] != ruleKey {
 					state.WritesSwitched = true
 					break
 				}
