@@ -428,7 +428,7 @@ func TestExecutorUnresolvedTransactions(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 
-	pattern := `(?i)select\s+t\.dtid,\s+t\.state,\s+p\.keyspace,\s+p\.shard\s+from\s+_vt\.dt_state\s+t\s+join\s+_vt\.dt_participant\s+p\s+on\s+t\.dtid\s+=\s+p\.dtid\s+where\s+time_created\s+<\s+(\d+)\s+order\s+by\s+t\.state\s+desc,\s+t\.dtid`
+	pattern := `(?i)select\s+t\.dtid,\s+t\.state,\s+t\.time_created,\s+p\.keyspace,\s+p\.shard\s+from\s+_vt\.dt_state\s+t\s+join\s+_vt\.dt_participant\s+p\s+on\s+t\.dtid\s+=\s+p\.dtid\s+where\s+time_created\s+<\s+(\d+)\s+order\s+by\s+t\.state\s+desc,\s+t\.dtid`
 	re := regexp.MustCompile(pattern)
 
 	var executedQuery string
