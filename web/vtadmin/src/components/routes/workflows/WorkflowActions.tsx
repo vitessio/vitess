@@ -3,26 +3,75 @@ import Dropdown from '../../dropdown/Dropdown';
 import MenuItem from '../../dropdown/MenuItem';
 import { Icons } from '../../Icon';
 import WorkflowAction from './WorkflowAction';
-import { useStartWorkflow, useStopWorkflow } from '../../../hooks/api';
+import { useCompleteMoveTables, useStartWorkflow, useStopWorkflow } from '../../../hooks/api';
+import Toggle from '../../toggle/Toggle';
+import { success } from '../../Snackbar';
 
 interface WorkflowActionsProps {
     refetchWorkflows: Function;
     keyspace: string;
     clusterID: string;
     name: string;
+    workflowType: string;
 }
 
-const WorkflowActions: React.FC<WorkflowActionsProps> = ({ refetchWorkflows, keyspace, clusterID, name }) => {
+interface CompleteMoveTablesOptions {
+    keepData: boolean;
+    keepRoutingRoules: boolean;
+    renameTables: boolean;
+}
+
+const DefaultCompleteMoveTablesOptions: CompleteMoveTablesOptions = {
+    keepData: false,
+    keepRoutingRoules: false,
+    renameTables: false,
+};
+
+const WorkflowActions: React.FC<WorkflowActionsProps> = ({
+    refetchWorkflows,
+    keyspace,
+    clusterID,
+    name,
+    workflowType,
+}) => {
     const [currentDialog, setCurrentDialog] = useState<string>('');
+
+    const [completeMoveTablesOptions, SetCompleteMoveTablesOptions] = useState<CompleteMoveTablesOptions>(
+        DefaultCompleteMoveTablesOptions
+    );
+
     const closeDialog = () => setCurrentDialog('');
 
     const startWorkflowMutation = useStartWorkflow({ keyspace, clusterID, name });
 
     const stopWorkflowMutation = useStopWorkflow({ keyspace, clusterID, name });
 
+    const completeMoveTablesMutation = useCompleteMoveTables(
+        {
+            clusterID,
+            request: {
+                workflow: name,
+                target_keyspace: keyspace,
+                keep_data: completeMoveTablesOptions.keepData,
+                keep_routing_rules: completeMoveTablesOptions.keepRoutingRoules,
+                rename_tables: completeMoveTablesOptions.renameTables,
+            },
+        },
+        {
+            onSuccess: (data) => {
+                success(data.summary, { autoClose: 1600 });
+            },
+        }
+    );
+
+    const isMoveTablesWorkflow = workflowType === 'MoveTables';
+
     return (
         <div className="w-min inline-block">
             <Dropdown dropdownButton={Icons.info} position="bottom-right">
+                {isMoveTablesWorkflow && (
+                    <MenuItem onClick={() => setCurrentDialog('Complete MoveTables')}>Complete MoveTables</MenuItem>
+                )}
                 <MenuItem onClick={() => setCurrentDialog('Start Workflow')}>Start Workflow</MenuItem>
                 <MenuItem onClick={() => setCurrentDialog('Stop Workflow')}>Stop Workflow</MenuItem>
             </Dropdown>
@@ -69,6 +118,78 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({ refetchWorkflows, key
                 body={
                     <div className="text-sm mt-3">
                         Stop the <span className="font-mono bg-gray-300">{name}</span> workflow.
+                    </div>
+                }
+            />
+            <WorkflowAction
+                className="sm:max-w-xl"
+                title="Complete MoveTables"
+                description={`Complete the ${name} workflow.`}
+                confirmText="Complete"
+                loadingText="Completing"
+                hideSuccessDialog={true}
+                mutation={completeMoveTablesMutation}
+                errorText={`Error occured while completing workflow ${name}`}
+                errorDescription={completeMoveTablesMutation.error ? completeMoveTablesMutation.error.message : ''}
+                closeDialog={closeDialog}
+                isOpen={currentDialog === 'Complete MoveTables'}
+                refetchWorkflows={refetchWorkflows}
+                body={
+                    <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center w-full p-4 border border-vtblue rounded-md">
+                            <div className="mr-2">
+                                <h5 className="font-medium m-0 mb-2">Keep Data</h5>
+                                <p className="m-0 text-sm">
+                                    Keep the original source table data that was copied by the MoveTables workflow.
+                                </p>
+                            </div>
+                            <Toggle
+                                enabled={completeMoveTablesOptions.keepData}
+                                onChange={() =>
+                                    SetCompleteMoveTablesOptions((prevOptions) => ({
+                                        ...prevOptions,
+                                        keepData: !prevOptions.keepData,
+                                    }))
+                                }
+                            />
+                        </div>
+                        <div className="flex justify-between items-center w-full p-4 border border-vtblue rounded-md">
+                            <div className="mr-2">
+                                <h5 className="font-medium m-0 mb-2">Keep Routing Rules</h5>
+                                <p className="m-0 text-sm">
+                                    Keep the routing rules in place that direct table traffic from the source keyspace
+                                    to the target keyspace of the MoveTables workflow.
+                                </p>
+                            </div>
+                            <Toggle
+                                enabled={completeMoveTablesOptions.keepRoutingRoules}
+                                onChange={() =>
+                                    SetCompleteMoveTablesOptions((prevOptions) => ({
+                                        ...prevOptions,
+                                        keepRoutingRoules: !prevOptions.keepRoutingRoules,
+                                    }))
+                                }
+                            />
+                        </div>
+                        <div className="flex justify-between items-center w-full p-4 border border-vtblue rounded-md">
+                            <div className="mr-2">
+                                <h5 className="font-medium m-0 mb-2">Rename Tables</h5>
+                                <p className="m-0 text-sm">
+                                    Keep the original source table data that was copied by the MoveTables workflow, but
+                                    rename each table to{' '}
+                                    <span className="font-mono bg-gray-300">{'_<tablename>_old'}</span>.
+                                </p>
+                            </div>
+                            <Toggle
+                                enabled={completeMoveTablesOptions.renameTables}
+                                onChange={() =>
+                                    SetCompleteMoveTablesOptions((prevOptions) => ({
+                                        ...prevOptions,
+                                        renameTables: !prevOptions.renameTables,
+                                    }))
+                                }
+                            />
+                        </div>
                     </div>
                 }
             />

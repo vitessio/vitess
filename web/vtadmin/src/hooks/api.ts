@@ -83,6 +83,7 @@ import {
     stopWorkflow,
     FetchTransactionsParams,
     fetchTransactions,
+    completeMoveTables,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -495,6 +496,18 @@ export const useStopWorkflow = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof stopWorkflow>>, Error>(() => {
         return stopWorkflow(params);
+    }, options);
+};
+
+/**
+ * useCompleteMoveTables is a mutate hook that completes a MoveTables workflow.
+ */
+export const useCompleteMoveTables = (
+    params: Parameters<typeof completeMoveTables>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof completeMoveTables>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof completeMoveTables>>, Error>(() => {
+        return completeMoveTables(params);
     }, options);
 };
 
