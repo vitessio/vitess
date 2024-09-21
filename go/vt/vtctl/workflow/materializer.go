@@ -45,6 +45,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -113,11 +114,9 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
 	}
+
 	err := mz.buildMaterializer()
 	if err != nil {
-		return err
-	}
-	if err := mz.deploySchema(); err != nil {
 		return err
 	}
 
@@ -132,6 +131,10 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 	req.Options = optionsJSON
+
+	if err := mz.deploySchema(); err != nil {
+		return err
+	}
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
@@ -268,15 +271,15 @@ func (mz *materializer) deploySchema() error {
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
 
-		hasTargetTable := map[string]bool{}
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
 		targetSchema, err := schematools.GetSchema(mz.ctx, mz.ts, mz.tmc, target.PrimaryAlias, req)
 		if err != nil {
 			return err
 		}
 
+		hasTargetTable := make(map[string]*tabletmanagerdatapb.TableDefinition, len(targetSchema.TableDefinitions))
 		for _, td := range targetSchema.TableDefinitions {
-			hasTargetTable[td.Name] = true
+			hasTargetTable[td.Name] = td
 		}
 
 		targetTablet, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
@@ -286,12 +289,16 @@ func (mz *materializer) deploySchema() error {
 
 		var applyDDLs []string
 		for _, ts := range mz.ms.TableSettings {
-			if hasTargetTable[ts.TargetTable] {
-				// Table already exists.
+			if td := hasTargetTable[ts.TargetTable]; td != nil {
+				// Table already exists. Let's be sure that it doesn't already have data.
+				if td.RowCount > 0 {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+						"target table %s exists in the %s keyspace and is not empty", td.Name, target.Keyspace())
+				}
 				continue
 			}
 			if ts.CreateDdl == "" {
-				return fmt.Errorf("target table %v does not exist and there is no create ddl defined", ts.TargetTable)
+				return fmt.Errorf("target table %s does not exist and there is no create ddl defined", ts.TargetTable)
 			}
 
 			var err error

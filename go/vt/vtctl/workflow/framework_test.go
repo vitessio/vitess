@@ -304,7 +304,7 @@ func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 	defer tmc.mu.Unlock()
 
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
-		if !proto.Equal(expect.req, req) {
+		if expect.req != nil && !proto.Equal(expect.req, req) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", req, expect)
 		}
 		if expect.res != nil {
@@ -443,7 +443,7 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 
 	qrs := tmc.vrQueries[int(tablet.Alias.Uid)]
 	if len(qrs) == 0 {
-		return nil, fmt.Errorf("tablet %v does not expect any more queries: %s", tablet, query)
+		return nil, fmt.Errorf("tablet %v does not expect any more queries: %q", tablet, query)
 	}
 	matched := false
 	if qrs[0].query[0] == '/' {

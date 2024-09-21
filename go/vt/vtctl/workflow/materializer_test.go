@@ -1655,7 +1655,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, _, got, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, specs, false)
+		_, _, got, cancelFunc, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, specs, false)
 		if tcase.err != "" {
 			if err == nil || !strings.Contains(err.Error(), tcase.err) {
 				t.Errorf("prepareCreateLookup(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
@@ -1663,6 +1663,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			continue
 		}
 		require.NoError(t, err)
+		require.NotNil(t, cancelFunc)
 		utils.MustMatch(t, tcase.out, got, tcase.description)
 	}
 }
@@ -2177,10 +2178,11 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	require.NoError(t, err)
 
 	testcases := []struct {
-		description   string
-		input         *vschemapb.Keyspace
-		createRequest *createVReplicationWorkflowRequestResponse
-		err           string
+		description     string
+		input           *vschemapb.Keyspace
+		createRequest   *createVReplicationWorkflowRequestResponse
+		vrepExecQueries []string
+		err             string
 	}{
 		{
 			description: "dup vindex",
@@ -2431,7 +2433,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			err: fmt.Sprintf("table other not found in the %s keyspace", ms.TargetKeyspace),
 		},
 		{
-			description: "workflow name already exists",
+			description: "workflow creation error",
 			input: &vschemapb.Keyspace{
 				Vindexes: map[string]*vschemapb.Vindex{
 					"v2": {
@@ -2452,7 +2454,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			//vrQuery: "CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)",
+			vrepExecQueries: []string{"CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)"},
 			createRequest: &createVReplicationWorkflowRequestResponse{
 				req: nil,
 				res: &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{},
@@ -2468,10 +2470,12 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				Keyspace: ms.TargetKeyspace,
 				Vindex:   tcase.input,
 			}
-			if tcase.createRequest != nil {
-				for _, tablet := range env.tablets {
-					if tablet.Keyspace == ms.TargetKeyspace {
-						env.tmc.expectVRQuery(int(tablet.Alias.Uid), "CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)", &sqltypes.Result{})
+			for _, tablet := range env.tablets {
+				if tablet.Keyspace == ms.TargetKeyspace {
+					for _, vrq := range tcase.vrepExecQueries {
+						env.tmc.expectVRQuery(int(tablet.Alias.Uid), vrq, &sqltypes.Result{})
+					}
+					if tcase.createRequest != nil {
 						env.tmc.expectCreateVReplicationWorkflowRequest(tablet.Alias.Uid, tcase.createRequest)
 					}
 				}
