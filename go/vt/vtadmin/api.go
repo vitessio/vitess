@@ -384,6 +384,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/launch", httpAPI.Adapt(vtadminhttp.LaunchSchemaMigration)).Name("API.LaunchSchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/retry", httpAPI.Adapt(vtadminhttp.RetrySchemaMigration)).Name("API.RetrySchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migrations/", httpAPI.Adapt(vtadminhttp.GetSchemaMigrations)).Name("API.GetSchemaMigrations")
+	router.HandleFunc("/movetables/{cluster_id}/complete", httpAPI.Adapt(vtadminhttp.MoveTablesComplete)).Name("API.MoveTablesComplete")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
@@ -1843,6 +1844,25 @@ func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.Launch
 	}
 
 	return c.LaunchSchemaMigration(ctx, req.Request)
+}
+
+// MoveTablesComplete is part of the vtadminpb.VTAdminServer interface.
+func (api *API) MoveTablesComplete(ctx context.Context, req *vtadminpb.MoveTablesCompleteRequest) (*vtctldatapb.MoveTablesCompleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.MoveTablesComplete")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CompleteAction) {
+		return nil, fmt.Errorf("%w: cannot complete workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.MoveTablesComplete(ctx, req.Request)
 }
 
 // PingTablet is part of the vtadminpb.VTAdminServer interface.

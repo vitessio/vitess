@@ -584,6 +584,20 @@ export namespace vtadmin {
         public launchSchemaMigration(request: vtadmin.ILaunchSchemaMigrationRequest): Promise<vtctldata.LaunchSchemaMigrationResponse>;
 
         /**
+         * Calls MoveTablesComplete.
+         * @param request MoveTablesCompleteRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and MoveTablesCompleteResponse
+         */
+        public moveTablesComplete(request: vtadmin.IMoveTablesCompleteRequest, callback: vtadmin.VTAdmin.MoveTablesCompleteCallback): void;
+
+        /**
+         * Calls MoveTablesComplete.
+         * @param request MoveTablesCompleteRequest message or plain object
+         * @returns Promise
+         */
+        public moveTablesComplete(request: vtadmin.IMoveTablesCompleteRequest): Promise<vtctldata.MoveTablesCompleteResponse>;
+
+        /**
          * Calls PingTablet.
          * @param request PingTabletRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and PingTabletResponse
@@ -1173,6 +1187,13 @@ export namespace vtadmin {
          * @param [response] LaunchSchemaMigrationResponse
          */
         type LaunchSchemaMigrationCallback = (error: (Error|null), response?: vtctldata.LaunchSchemaMigrationResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#moveTablesComplete}.
+         * @param error Error, if any
+         * @param [response] MoveTablesCompleteResponse
+         */
+        type MoveTablesCompleteCallback = (error: (Error|null), response?: vtctldata.MoveTablesCompleteResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#pingTablet}.
@@ -9439,6 +9460,109 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for LaunchSchemaMigrationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MoveTablesCompleteRequest. */
+    interface IMoveTablesCompleteRequest {
+
+        /** MoveTablesCompleteRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** MoveTablesCompleteRequest request */
+        request?: (vtctldata.IMoveTablesCompleteRequest|null);
+    }
+
+    /** Represents a MoveTablesCompleteRequest. */
+    class MoveTablesCompleteRequest implements IMoveTablesCompleteRequest {
+
+        /**
+         * Constructs a new MoveTablesCompleteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IMoveTablesCompleteRequest);
+
+        /** MoveTablesCompleteRequest cluster_id. */
+        public cluster_id: string;
+
+        /** MoveTablesCompleteRequest request. */
+        public request?: (vtctldata.IMoveTablesCompleteRequest|null);
+
+        /**
+         * Creates a new MoveTablesCompleteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MoveTablesCompleteRequest instance
+         */
+        public static create(properties?: vtadmin.IMoveTablesCompleteRequest): vtadmin.MoveTablesCompleteRequest;
+
+        /**
+         * Encodes the specified MoveTablesCompleteRequest message. Does not implicitly {@link vtadmin.MoveTablesCompleteRequest.verify|verify} messages.
+         * @param message MoveTablesCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IMoveTablesCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MoveTablesCompleteRequest message, length delimited. Does not implicitly {@link vtadmin.MoveTablesCompleteRequest.verify|verify} messages.
+         * @param message MoveTablesCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IMoveTablesCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MoveTablesCompleteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MoveTablesCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.MoveTablesCompleteRequest;
+
+        /**
+         * Decodes a MoveTablesCompleteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MoveTablesCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.MoveTablesCompleteRequest;
+
+        /**
+         * Verifies a MoveTablesCompleteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MoveTablesCompleteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MoveTablesCompleteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.MoveTablesCompleteRequest;
+
+        /**
+         * Creates a plain object from a MoveTablesCompleteRequest message. Also converts values to other types if specified.
+         * @param message MoveTablesCompleteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.MoveTablesCompleteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MoveTablesCompleteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MoveTablesCompleteRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
