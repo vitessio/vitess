@@ -227,7 +227,20 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 				for _, mappedCol := range mappedCols {
 					subExprs = append(subExprs, mappedCol)
 				}
-				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+				var vindexName string
+				if mz.workflowType == binlogdatapb.VReplicationWorkflowType_Migrate {
+					// For a Migrate, if the TargetKeyspace name is different from the SourceKeyspace name, we need to use the
+					// SourceKeyspace name to determine the vindex since the TargetKeyspace name is not known to the source.
+					// Note: it is expected that the source and target keyspaces have the same vindex name and data type.
+					keyspace := mz.ms.TargetKeyspace
+					if mz.ms.ExternalCluster != "" {
+						keyspace = mz.ms.SourceKeyspace
+					}
+					vindexName = fmt.Sprintf("%s.%s", keyspace, cv.Name)
+				} else {
+					vindexName = fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+				}
+
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange)))
 				inKeyRange := &sqlparser.FuncExpr{
