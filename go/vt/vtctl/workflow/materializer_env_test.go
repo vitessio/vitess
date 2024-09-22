@@ -244,6 +244,8 @@ func newTestMaterializerTMClient(keyspace string, sourceShards []string, tableSe
 }
 
 func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if expect.req != nil && !proto.Equal(expect.req, request) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", request, expect)
@@ -257,6 +259,9 @@ func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Cont
 }
 
 func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	if tmc.readVReplicationWorkflow != nil {
 		return tmc.readVReplicationWorkflow(ctx, tablet, request)
 	}
@@ -310,6 +315,9 @@ func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Cont
 }
 
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range request.Tables {
 		if table == "/.*/" {
@@ -430,6 +438,9 @@ func (tmc *testMaterializerTMClient) HasVReplicationWorkflows(ctx context.Contex
 }
 
 func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
 	if len(req.IncludeWorkflows) > 0 {
 		for _, wf := range req.IncludeWorkflows {

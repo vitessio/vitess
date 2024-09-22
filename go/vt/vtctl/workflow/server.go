@@ -1139,7 +1139,8 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	}
 
 	if err := s.ts.SaveVSchema(ctx, ms.TargetKeyspace, targetVSchema); err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "failed to save updated vschema '%v' in the %s keyspace",
+			targetVSchema, ms.TargetKeyspace)
 	}
 	ms.TabletTypes = topoproto.MakeStringTypeCSV(req.TabletTypes)
 	ms.TabletSelectionPreference = req.TabletSelectionPreference
@@ -4146,6 +4147,8 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 	materializeQuery = buf.String()
 
+	// Save a copy of the original vschema if we modify it and need to provide
+	// a cancelFunc.
 	ogTargetVSchema := targetVSchema.CloneVT()
 	targetChanged := false
 

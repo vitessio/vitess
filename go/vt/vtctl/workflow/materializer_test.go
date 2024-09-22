@@ -1667,7 +1667,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		}
 		require.NoError(t, err)
 		// withTable is a vschema that already contains the table and thus
-		// we make not vschema changes and there's nothing to cancel.
+		// we don't make any vschema changes and there's nothing to cancel.
 		require.True(t, (cancelFunc != nil) == (tcase.targetVSchema != withTable))
 		utils.MustMatch(t, tcase.out, got, tcase.description)
 	}
@@ -2463,7 +2463,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 			vrepExecQueries: []string{"CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)"},
 			createRequest: &createVReplicationWorkflowRequestResponse{
-				req: nil,
+				req: nil, // We don't care about defining it in this case
 				res: &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{},
 				err: errors.New("we gots us an error"),
 			},
