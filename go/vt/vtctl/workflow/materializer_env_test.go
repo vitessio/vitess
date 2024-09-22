@@ -121,17 +121,23 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		if err == nil {
 			tableName = table.Name.String()
 		}
-		stmt, err := env.venv.Parser().ParseStrictDDL(ts.CreateDdl)
-		require.NoError(t, err)
-		ddl, ok := stmt.(*sqlparser.CreateTable)
-		require.True(t, ok)
-		cols := make([]string, len(ddl.TableSpec.Columns))
-		fields := make([]*querypb.Field, len(ddl.TableSpec.Columns))
-		for i, col := range ddl.TableSpec.Columns {
-			cols[i] = col.Name.String()
-			fields[i] = &querypb.Field{
-				Name: col.Name.String(),
-				Type: col.Type.SQLType(),
+		var (
+			cols   []string
+			fields []*querypb.Field
+		)
+		if ts.CreateDdl != "" {
+			stmt, err := env.venv.Parser().ParseStrictDDL(ts.CreateDdl)
+			require.NoError(t, err)
+			ddl, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+			cols = make([]string, len(ddl.TableSpec.Columns))
+			fields = make([]*querypb.Field, len(ddl.TableSpec.Columns))
+			for i, col := range ddl.TableSpec.Columns {
+				cols[i] = col.Name.String()
+				fields[i] = &querypb.Field{
+					Name: col.Name.String(),
+					Type: col.Type.SQLType(),
+				}
 			}
 		}
 		env.tmc.schema[ms.SourceKeyspace+"."+tableName] = &tabletmanagerdatapb.SchemaDefinition{
