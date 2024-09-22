@@ -2109,9 +2109,8 @@ func TestStopAfterCopyFlag(t *testing.T) {
 
 func TestCreateLookupVindexFailures(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
-		// Keyspace where the vindex is created.
-		SourceKeyspace: "sourceks",
-		// Keyspace where the lookup table and VReplication workflow is created.
+		SourceKeyspace: "sourceks", // Not used
+		// Keyspace where the lookup table, vindex, and VReplication workflow is created.
 		TargetKeyspace: "targetks",
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{
 			{
@@ -2121,6 +2120,10 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			{
 				TargetTable: "t2",
 				CreateDdl:   "CREATE TABLE `t2` (\n`c2` INT,\n PRIMARY KEY(`c2`)\n)",
+			},
+			{
+				TargetTable: "t3",
+				CreateDdl:   "CREATE TABLE `t3` (\n`c3` INT,\n PRIMARY KEY(`c3`)\n)",
 			},
 		},
 	}
@@ -2172,9 +2175,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 		},
 	}
-	err := env.topoServ.SaveVSchema(ctx, ms.SourceKeyspace, vs)
-	require.NoError(t, err)
-	err = env.topoServ.SaveVSchema(ctx, ms.TargetKeyspace, vs)
+	err := env.topoServ.SaveVSchema(ctx, ms.TargetKeyspace, vs)
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -2182,6 +2183,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		input           *vschemapb.Keyspace
 		createRequest   *createVReplicationWorkflowRequestResponse
 		vrepExecQueries []string
+		schemaAdditions []*tabletmanagerdatapb.TableDefinition
 		err             string
 	}{
 		{
@@ -2462,6 +2464,46 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 			err: "we gots us an error",
 		},
+		{
+			description: "table exists and has data",
+			input: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"v2": {
+						Type: "consistent_lookup_unique",
+						Params: map[string]string{
+							"table": fmt.Sprintf("%s.t1_lkp", ms.TargetKeyspace),
+							"from":  "c1",
+							"to":    "keyspace_id",
+						},
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:   "v2",
+							Column: "c2",
+						}},
+					},
+				},
+			},
+			schemaAdditions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:    "t1_lkp",
+				Schema:  "CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)",
+				Columns: []string{"c1", "keyspace_id"},
+				Fields: []*querypb.Field{
+					{
+						Name: "c1",
+						Type: sqltypes.Int32,
+					},
+					{
+						Name: "keyspace_id",
+						Type: sqltypes.VarBinary,
+					},
+				},
+				RowCount: 1,
+			}},
+			err: fmt.Sprintf("target table t1_lkp exists in the %s keyspace and is not empty", ms.TargetKeyspace),
+		},
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.description, func(t *testing.T) {
@@ -2469,6 +2511,18 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				Workflow: "lookup",
 				Keyspace: ms.TargetKeyspace,
 				Vindex:   tcase.input,
+			}
+			if len(tcase.schemaAdditions) > 0 {
+				ogs := env.tmc.schema
+				defer func() {
+					env.tmc.schema = ogs
+				}()
+				// The tables are created in the target keyspace.
+				for _, tbl := range tcase.schemaAdditions {
+					env.tmc.schema[ms.TargetKeyspace+"."+tbl.Name] = &tabletmanagerdatapb.SchemaDefinition{
+						TableDefinitions: []*tabletmanagerdatapb.TableDefinition{tbl},
+					}
+				}
 			}
 			for _, tablet := range env.tablets {
 				if tablet.Keyspace == ms.TargetKeyspace {
@@ -2487,7 +2541,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			// Confirm that the original vschema where the vindex would
 			// be created is still in place -- since the workflow
 			// creation failed in each test case. That vindex is created
-			// in the source keyspace based on the MaterializeSettings
+			// in the target keyspace based on the MaterializeSettings
 			// definition.
 			cvs, err := env.ws.ts.GetVSchema(ctx, ms.TargetKeyspace)
 			require.NoError(t, err)
