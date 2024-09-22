@@ -1175,13 +1175,16 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 					setStartingVschema()
 				}()
 			}
-			outms, _, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, tcase.specs, false)
+			outms, _, _, cancelFunc, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, tcase.specs, false)
 			if tcase.err != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.err, "prepareCreateLookup(%s) err: %v, does not contain %v", tcase.description, err, tcase.err)
 				return
 			}
 			require.NoError(t, err)
+			// All of these test cases create a table and thus change the target
+			// vschema.
+			require.NotNil(t, cancelFunc)
 			want := strings.Split(tcase.out, "\n")
 			got := strings.Split(outms.TableSettings[0].CreateDdl, "\n")
 			require.Equal(t, want, got, tcase.description)
@@ -1663,7 +1666,9 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			continue
 		}
 		require.NoError(t, err)
-		require.NotNil(t, cancelFunc)
+		// withTable is a vschema that already contains the table and thus
+		// we make not vschema changes and there's nothing to cancel.
+		require.True(t, (cancelFunc != nil) == (tcase.targetVSchema != withTable))
 		utils.MustMatch(t, tcase.out, got, tcase.description)
 	}
 }

@@ -291,8 +291,8 @@ func (mz *materializer) deploySchema() error {
 		for _, ts := range mz.ms.TableSettings {
 			if td := hasTargetTable[ts.TargetTable]; td != nil {
 				// Table already exists. Let's be sure that it doesn't already have data.
-				// We exclude multi-tenant migrations as the target tables are expected
-				// to frequently have data from previously migrated tenants.
+				// We exclude multi-tenant migrations from this check as the target tables
+				// are expected to frequently have data from previously migrated tenants.
 				if !mz.IsMultiTenantMigration() && td.RowCount > 0 {
 					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 						"target table %s exists in the %s keyspace and is not empty", td.Name, target.Keyspace())
