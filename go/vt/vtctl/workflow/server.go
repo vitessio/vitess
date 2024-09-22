@@ -4146,11 +4146,8 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 	materializeQuery = buf.String()
 
-	tc := targetVSchema.CloneVT()
-	cancelFunc = func() error {
-		// Restore the original target vschema.
-		return s.ts.SaveVSchema(ctx, targetKeyspace, tc)
-	}
+	ogTargetVSchema := targetVSchema.CloneVT()
+	targetChanged := false
 
 	// Update targetVSchema.
 	targetTable := specs.Tables[targetTableName]
@@ -4190,6 +4187,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 			}
 		} else {
 			targetVSchema.Vindexes[targetVindexType] = targetVindex
+			targetChanged = true
 		}
 
 		targetTable = &vschemapb.Table{
@@ -4209,6 +4207,14 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		}
 	} else {
 		targetVSchema.Tables[targetTableName] = targetTable
+		targetChanged = true
+	}
+
+	if targetChanged {
+		cancelFunc = func() error {
+			// Restore the original target vschema.
+			return s.ts.SaveVSchema(ctx, targetKeyspace, ogTargetVSchema)
+		}
 	}
 
 	ms = &vtctldatapb.MaterializeSettings{
