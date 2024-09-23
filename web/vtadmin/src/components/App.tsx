@@ -40,6 +40,7 @@ import { isReadOnlyMode } from '../util/env';
 import { CreateKeyspace } from './routes/createKeyspace/CreateKeyspace';
 import { Topology } from './routes/topology/Topology';
 import { ClusterTopology } from './routes/topology/ClusterTopology';
+import { CreateMoveTables } from './routes/createWorkflow/CreateMoveTables';
 import { Transactions } from './routes/Transactions';
 
 export const App = () => {
@@ -106,9 +107,15 @@ export const App = () => {
                             <VTExplain />
                         </Route>
 
-                        <Route path="/workflows">
+                        <Route exact path="/workflows">
                             <Workflows />
                         </Route>
+
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/workflows/movetables/create">
+                                <CreateMoveTables />
+                            </Route>
+                        )}
 
                         <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
                             <Stream />
