@@ -584,6 +584,20 @@ export namespace vtadmin {
         public launchSchemaMigration(request: vtadmin.ILaunchSchemaMigrationRequest): Promise<vtctldata.LaunchSchemaMigrationResponse>;
 
         /**
+         * Calls MoveTablesCreate.
+         * @param request MoveTablesCreateRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and WorkflowStatusResponse
+         */
+        public moveTablesCreate(request: vtadmin.IMoveTablesCreateRequest, callback: vtadmin.VTAdmin.MoveTablesCreateCallback): void;
+
+        /**
+         * Calls MoveTablesCreate.
+         * @param request MoveTablesCreateRequest message or plain object
+         * @returns Promise
+         */
+        public moveTablesCreate(request: vtadmin.IMoveTablesCreateRequest): Promise<vtctldata.WorkflowStatusResponse>;
+
+        /**
          * Calls PingTablet.
          * @param request PingTabletRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and PingTabletResponse
@@ -1173,6 +1187,13 @@ export namespace vtadmin {
          * @param [response] LaunchSchemaMigrationResponse
          */
         type LaunchSchemaMigrationCallback = (error: (Error|null), response?: vtctldata.LaunchSchemaMigrationResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#moveTablesCreate}.
+         * @param error Error, if any
+         * @param [response] WorkflowStatusResponse
+         */
+        type MoveTablesCreateCallback = (error: (Error|null), response?: vtctldata.WorkflowStatusResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#pingTablet}.
@@ -9439,6 +9460,109 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for LaunchSchemaMigrationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MoveTablesCreateRequest. */
+    interface IMoveTablesCreateRequest {
+
+        /** MoveTablesCreateRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** MoveTablesCreateRequest request */
+        request?: (vtctldata.IMoveTablesCreateRequest|null);
+    }
+
+    /** Represents a MoveTablesCreateRequest. */
+    class MoveTablesCreateRequest implements IMoveTablesCreateRequest {
+
+        /**
+         * Constructs a new MoveTablesCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IMoveTablesCreateRequest);
+
+        /** MoveTablesCreateRequest cluster_id. */
+        public cluster_id: string;
+
+        /** MoveTablesCreateRequest request. */
+        public request?: (vtctldata.IMoveTablesCreateRequest|null);
+
+        /**
+         * Creates a new MoveTablesCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MoveTablesCreateRequest instance
+         */
+        public static create(properties?: vtadmin.IMoveTablesCreateRequest): vtadmin.MoveTablesCreateRequest;
+
+        /**
+         * Encodes the specified MoveTablesCreateRequest message. Does not implicitly {@link vtadmin.MoveTablesCreateRequest.verify|verify} messages.
+         * @param message MoveTablesCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IMoveTablesCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MoveTablesCreateRequest message, length delimited. Does not implicitly {@link vtadmin.MoveTablesCreateRequest.verify|verify} messages.
+         * @param message MoveTablesCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IMoveTablesCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MoveTablesCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MoveTablesCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.MoveTablesCreateRequest;
+
+        /**
+         * Decodes a MoveTablesCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MoveTablesCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.MoveTablesCreateRequest;
+
+        /**
+         * Verifies a MoveTablesCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MoveTablesCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MoveTablesCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.MoveTablesCreateRequest;
+
+        /**
+         * Creates a plain object from a MoveTablesCreateRequest message. Also converts values to other types if specified.
+         * @param message MoveTablesCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.MoveTablesCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MoveTablesCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MoveTablesCreateRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

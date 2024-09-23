@@ -30,6 +30,7 @@ $iconPositionHorizontalLarge: 1.6rem;
     &:disabled {
         background: var(--backgroundSecondary);
         border-color: var(--backgroundSecondaryHighlight);
+        color: var(--colorDisabled);
         cursor: not-allowed;
     }
 
