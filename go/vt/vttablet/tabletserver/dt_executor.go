@@ -158,7 +158,7 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	defer func() {
 		if err != nil {
 			log.Warningf("failed to commit the prepared transaction '%s' with error: %v", dtid, err)
-			dte.te.checkErrorAndMarkFailed(ctx, dtid, err)
+			dte.te.checkErrorAndMarkFailed(ctx, dtid, err, "TwopcCommit")
 		}
 		dte.te.txPool.RollbackAndRelease(ctx, conn)
 	}()

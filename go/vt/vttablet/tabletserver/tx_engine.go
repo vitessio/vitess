@@ -426,6 +426,15 @@ func (te *TxEngine) prepareFromRedo() error {
 		allErrs         []error
 	)
 
+	checkErr := func(dtid string, err error) {
+		if err != nil {
+			allErrs = append(allErrs, vterrors.Wrapf(err, "dtid - %v", dtid))
+			if te.checkErrorAndMarkFailed(ctx, dtid, err, "TwopcPrepareRedo") {
+				failedCounter++
+			}
+		}
+	}
+
 outer:
 	for _, preparedTx := range prepared {
 		var conn *StatefulConnection
@@ -436,12 +445,7 @@ outer:
 		}
 
 		// check last error to record failure.
-		if lastErr != nil {
-			allErrs = append(allErrs, vterrors.Wrapf(lastErr, "dtid - %v", lastDtid))
-			if te.checkErrorAndMarkFailed(ctx, lastDtid, lastErr) {
-				failedCounter++
-			}
-		}
+		checkErr(lastDtid, lastErr)
 
 		lastDtid = preparedTx.Dtid
 
@@ -466,12 +470,7 @@ outer:
 	}
 
 	// check last error to record failure.
-	if lastErr != nil {
-		allErrs = append(allErrs, vterrors.Wrapf(lastErr, "dtid - %v", lastDtid))
-		if te.checkErrorAndMarkFailed(ctx, lastDtid, lastErr) {
-			failedCounter++
-		}
-	}
+	checkErr(lastDtid, lastErr)
 
 	for _, preparedTx := range failed {
 		txID, _ := dtids.TransactionID(preparedTx.Dtid)
@@ -487,16 +486,21 @@ outer:
 
 // checkErrorAndMarkFailed check that the error is retryable or non-retryable error.
 // If it is a non-retryable error than it marks the dtid as failed in the prepared pool,
-// increments the InternalErrors counter, and  also changes the state of the transaction in the redo log as failed.
-func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, receivedErr error) (fail bool) {
+// increments the InternalErrors counter, and also changes the state of the transaction in the redo log as failed.
+func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, receivedErr error, metricName string) (fail bool) {
+	state := RedoStateFailed
 	if isRetryableError(receivedErr) {
 		log.Infof("retryable error for dtid: %s", dtid)
-		return
+		state = RedoStatePrepared
+	} else {
+		fail = true
+		te.env.Stats().InternalErrors.Add(metricName, 1)
+		te.preparedPool.SetFailed(dtid)
 	}
 
-	fail = true
-	te.env.Stats().InternalErrors.Add("TwopcCommit", 1)
-	te.preparedPool.SetFailed(dtid)
+	// Update the state of the transaction in the redo log.
+	// Retryable Error: Update the message with error message.
+	// Non-retryable Error: Along with message, update the state as RedoStateFailed.
 	conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	if err != nil {
 		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
@@ -504,7 +508,7 @@ func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, re
 	}
 	defer te.txPool.RollbackAndRelease(ctx, conn)
 
-	if err = te.twoPC.UpdateRedo(ctx, conn, dtid, RedoStateFailed, receivedErr.Error()); err != nil {
+	if err = te.twoPC.UpdateRedo(ctx, conn, dtid, state, receivedErr.Error()); err != nil {
 		log.Errorf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err)
 		return
 	}

@@ -610,7 +610,6 @@ func TestTxEngineFailReserve(t *testing.T) {
 func TestCheckReceivedError(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	// db.AddQueryPattern(".*", &sqltypes.Result{})
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
@@ -626,6 +625,7 @@ func TestCheckReceivedError(t *testing.T) {
 	}{{
 		receivedErr:  vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
 		nonRetryable: false,
+		expQuery:     `update _vt.redo_state set state = 1, message = 'deadline exceeded' where dtid = 'aa'`,
 	}, {
 		receivedErr:  vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid argument"),
 		nonRetryable: true,
@@ -637,12 +637,15 @@ func TestCheckReceivedError(t *testing.T) {
 	}, {
 		receivedErr:  context.DeadlineExceeded,
 		nonRetryable: false,
+		expQuery:     `update _vt.redo_state set state = 1, message = 'context deadline exceeded' where dtid = 'aa'`,
 	}, {
 		receivedErr:  context.Canceled,
 		nonRetryable: false,
+		expQuery:     `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = 'aa'`,
 	}, {
 		receivedErr:  sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"),
 		nonRetryable: false,
+		expQuery:     `update _vt.redo_state set state = 1, message = 'Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)' where dtid = 'aa'`,
 	}, {
 		receivedErr:  sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "Malformed packet"),
 		nonRetryable: true,
@@ -650,6 +653,7 @@ func TestCheckReceivedError(t *testing.T) {
 	}, {
 		receivedErr:  sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "Server has gone away"),
 		nonRetryable: false,
+		expQuery:     `update _vt.redo_state set state = 1, message = 'Server has gone away (errno 2006) (sqlstate HY000)' where dtid = 'aa'`,
 	}, {
 		receivedErr:  vterrors.New(vtrpcpb.Code_ABORTED, "Row count exceeded"),
 		nonRetryable: true,
@@ -657,6 +661,7 @@ func TestCheckReceivedError(t *testing.T) {
 	}, {
 		receivedErr:  errors.New("(errno 2013) (sqlstate HY000) lost connection"),
 		nonRetryable: false,
+		expQuery:     `update _vt.redo_state set state = 1, message = '(errno 2013) (sqlstate HY000) lost connection' where dtid = 'aa'`,
 	}}
 
 	for _, tc := range tcases {
@@ -664,7 +669,7 @@ func TestCheckReceivedError(t *testing.T) {
 			if tc.expQuery != "" {
 				db.AddQuery(tc.expQuery, &sqltypes.Result{})
 			}
-			nonRetryable := te.checkErrorAndMarkFailed(context.Background(), "aa", tc.receivedErr)
+			nonRetryable := te.checkErrorAndMarkFailed(context.Background(), "aa", tc.receivedErr, "")
 			require.Equal(t, tc.nonRetryable, nonRetryable)
 			if tc.nonRetryable {
 				require.Equal(t, errPrepFailed, te.preparedPool.reserved["aa"])
