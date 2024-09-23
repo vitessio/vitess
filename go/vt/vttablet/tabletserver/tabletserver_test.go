@@ -153,14 +153,13 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Reuse code from tx_executor_test.
-	_, tsv, db := newTestTxExecutor(t, ctx)
+	_, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	// This is required because the test is verifying that we rollback transactions on changing serving type,
 	// but that only happens when we have a shutdown grace period, otherwise we wait for transactions to be resolved
 	// indefinitely.
 	tsv.te.shutdownGracePeriod = 1
 	tsv.sm.shutdownGracePeriod = 1
-	defer tsv.StopService()
-	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	state1, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
@@ -199,9 +198,8 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Reuse code from tx_executor_test.
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer tsv.StopService()
-	defer db.Close()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	// This is required because the test is verifying that we rollback transactions on changing serving type,
 	// but that only happens when we have a shutdown grace period, otherwise we wait for transactions to be resolved
 	// indefinitely.
@@ -293,9 +291,8 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 func TestTabletServerCreateTransaction(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer tsv.StopService()
-	defer db.Close()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
@@ -310,9 +307,8 @@ func TestTabletServerCreateTransaction(t *testing.T) {
 func TestTabletServerStartCommit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer tsv.StopService()
-	defer db.Close()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
@@ -330,9 +326,8 @@ func TestTabletServerStartCommit(t *testing.T) {
 func TestTabletserverSetRollback(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer tsv.StopService()
-	defer db.Close()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
@@ -350,9 +345,8 @@ func TestTabletserverSetRollback(t *testing.T) {
 func TestTabletServerReadTransaction(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer tsv.StopService()
-	defer db.Close()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
@@ -445,9 +439,8 @@ func TestTabletServerReadTransaction(t *testing.T) {
 func TestTabletServerConcludeTransaction(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer tsv.StopService()
-	defer db.Close()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	db.AddQuery("delete from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
@@ -549,9 +542,8 @@ func TestTabletServerPrepare(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Reuse code from tx_executor_test.
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer tsv.StopService()
-	defer db.Close()
+	_, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	state, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
@@ -566,9 +558,8 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Reuse code from tx_executor_test.
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer tsv.StopService()
-	defer db.Close()
+	_, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	state, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
@@ -887,9 +878,8 @@ func TestTabletServerRollbackPrepared(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Reuse code from tx_executor_test.
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer tsv.StopService()
-	defer db.Close()
+	_, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	state, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
@@ -1521,9 +1511,8 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 func TestMessageStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	_, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	err := tsv.MessageStream(ctx, &target, "nomsg", func(qr *sqltypes.Result) error {
@@ -1549,9 +1538,8 @@ func TestMessageStream(t *testing.T) {
 func TestCheckMySQLGauge(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	_, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 
 	// Check that initially checkMySQLGauge has 0 value
 	assert.EqualValues(t, 0, tsv.checkMysqlGaugeFunc.Get())
@@ -1579,9 +1567,8 @@ func TestCheckMySQLGauge(t *testing.T) {
 func TestMessageAck(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	ids := []*querypb.Value{{
@@ -1610,9 +1597,8 @@ func TestMessageAck(t *testing.T) {
 func TestRescheduleMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	_, err := tsv.messager.GetGenerator("nonmsg")
@@ -1636,9 +1622,8 @@ func TestRescheduleMessages(t *testing.T) {
 func TestPurgeMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	_, err := tsv.messager.GetGenerator("nonmsg")
