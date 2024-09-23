@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -31,12 +32,14 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -68,15 +71,36 @@ type controller struct {
 	sourceTablet atomic.Value
 
 	lastWorkflowError *vterrors.LastError
+	WorkflowConfig    *vttablet.VReplicationConfig
+}
+
+func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationConfig, error) {
+	options, ok := params["options"]
+	if !ok {
+		options = "{}"
+	}
+	var workflowOptions vtctldata.WorkflowOptions
+	if err := json.Unmarshal([]byte(options), &workflowOptions); err != nil {
+		return nil, fmt.Errorf("failed to parse options column: %v", err)
+	}
+	workflowConfig, err := vttablet.NewVReplicationConfig(workflowOptions.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process config options: %v", err)
+	}
+	return workflowConfig, nil
 }
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
 // this function launches a goroutine to perform continuous vreplication.
-func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats, vre *Engine, tpo discovery.TabletPickerOptions) (*controller, error) {
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell string, blpStats *binlogplayer.Stats, vre *Engine, tpo discovery.TabletPickerOptions) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
-
+	workflowConfig, err := processWorkflowOptions(params)
+	if err != nil {
+		return nil, err
+	}
+	tabletTypesStr := workflowConfig.TabletTypesStr
 	ct := &controller{
 		vre:             vre,
 		dbClientFactory: dbClientFactory,
@@ -84,7 +108,9 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		blpStats:        blpStats,
 		done:            make(chan struct{}),
 		source:          &binlogdatapb.BinlogSource{},
+		WorkflowConfig:  workflowConfig,
 	}
+	blpStats.WorkflowConfig = workflowConfig.String()
 	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
@@ -94,7 +120,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
-	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
+	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), workflowConfig.MaxTimeToRetryError)
 
 	state := params["state"]
 	blpStats.State.Store(state)
@@ -164,8 +190,8 @@ func (ct *controller) run(ctx context.Context) {
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		binlogplayer.LogError(fmt.Sprintf("error in stream %v, will retry after %v", ct.id, retryDelay), err)
-		timer := time.NewTimer(retryDelay)
+		binlogplayer.LogError(fmt.Sprintf("error in stream %v, will retry after %v", ct.id, ct.WorkflowConfig.RetryDelay), err)
+		timer := time.NewTimer(ct.WorkflowConfig.RetryDelay)
 		select {
 		case <-ctx.Done():
 			log.Warningf("context canceled: %s", err.Error())
@@ -174,6 +200,38 @@ func (ct *controller) run(ctx context.Context) {
 		case <-timer.C:
 		}
 	}
+}
+
+func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttablet.VReplicationConfig) error {
+	if workflowConfig == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vreplication controller: workflowConfig is nil")
+	}
+	const maxRows = 10000
+	// Timestamp fields from binlogs are always sent as UTC.
+	// So, we should set the timezone to be UTC for those values to be correctly inserted.
+	if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", maxRows); err != nil {
+		return err
+	}
+	// Tables may have varying character sets. To ship the bits without interpreting them
+	// we set the character set to be binary.
+	if _, err := dbClient.ExecuteFetch("set names 'binary'", maxRows); err != nil {
+		return err
+	}
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v",
+		workflowConfig.NetReadTimeout), maxRows); err != nil {
+		return err
+	}
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v",
+		workflowConfig.NetWriteTimeout), maxRows); err != nil {
+		return err
+	}
+	// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is
+	// not recommended in AUTO_INCREMENT, and yet is valid.
+	if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')",
+		maxRows); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (ct *controller) runBlp(ctx context.Context) (err error) {
@@ -217,27 +275,9 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
 		return player.ApplyBinlogEvents(ctx)
 	case ct.source.Filter != nil:
-		// Timestamp fields from binlogs are always sent as UTC.
-		// So, we should set the timezone to be UTC for those values to be correctly inserted.
-		if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
+		if err := setDBClientSettings(dbClient, ct.WorkflowConfig); err != nil {
 			return err
 		}
-		// Tables may have varying character sets. To ship the bits without interpreting them
-		// we set the character set to be binary.
-		if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
-			return err
-		}
-		if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 10000); err != nil {
-			return err
-		}
-		if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 10000); err != nil {
-			return err
-		}
-		// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is not recommended in AUTO_INCREMENT, and yet is valid.
-		if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')", 10000); err != nil {
-			return err
-		}
-
 		var vsClient VStreamerClient
 		var err error
 		if name := ct.source.GetExternalMysql(); name != "" {
@@ -253,7 +293,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		defer vsClient.Close(ctx)
 
-		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
+		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.WorkflowConfig)
 		err = vr.Replicate(ctx)
 		ct.lastWorkflowError.Record(err)
 

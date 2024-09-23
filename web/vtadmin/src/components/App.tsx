@@ -41,6 +41,7 @@ import { CreateKeyspace } from './routes/createKeyspace/CreateKeyspace';
 import { Topology } from './routes/topology/Topology';
 import { ClusterTopology } from './routes/topology/ClusterTopology';
 import { CreateMoveTables } from './routes/createWorkflow/CreateMoveTables';
+import { Transactions } from './routes/Transactions';
 
 export const App = () => {
     return (
@@ -122,6 +123,10 @@ export const App = () => {
 
                         <Route path="/workflow/:clusterID/:keyspace/:name">
                             <Workflow />
+                        </Route>
+
+                        <Route path="/transactions">
+                            <Transactions />
                         </Route>
 
                         <Route path="/topology/:clusterID">

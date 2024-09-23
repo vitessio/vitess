@@ -47,7 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -140,7 +140,8 @@ func setup(ctx context.Context) (func(), int) {
 	globalDBQueries = make(chan string, 1000)
 	resetBinlogClient()
 
-	vttablet.VReplicationExperimentalFlags = 0
+	vttablet.InitVReplicationConfigDefaults()
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = 0
 
 	// Engines cannot be initialized in testenv because it introduces circular dependencies.
 	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
@@ -341,12 +342,15 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 		}
 		row = r.Rows[0]
 	}
+	vstreamOptions := &binlogdatapb.VStreamOptions{
+		ConfigOverrides: vttablet.GetVReplicationConfigDefaults(false).Map(),
+	}
 	return streamerEngine.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}
 		return send(rows)
-	})
+	}, vstreamOptions)
 }
 
 // --------------------------------------
@@ -684,7 +688,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 			}
 
 			result := validator.AcceptQuery(got)
-
+			require.NotNil(t, result)
 			require.True(t, result.Accepted, fmt.Sprintf(
 				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
 				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),

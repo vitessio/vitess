@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -281,7 +282,8 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 
 // StreamRows streams rows.
 // This streams the table data rows (so we can copy the table data snapshot)
-func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltypes.Value,
+	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
@@ -296,7 +298,8 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 
-		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse, RowStreamerModeSingleTable, nil)
+		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema,
+			send, vse, RowStreamerModeSingleTable, nil, options)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++
@@ -322,7 +325,9 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 }
 
 // StreamTables streams all tables.
-func (vse *Engine) StreamTables(ctx context.Context, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+func (vse *Engine) StreamTables(ctx context.Context,
+	send func(*binlogdatapb.VStreamTablesResponse) error, options *binlogdatapb.VStreamOptions) error {
+
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher is delayed till the first call to StreamTables
 	// so that this overhead is incurred only if someone uses this feature.
@@ -337,7 +342,7 @@ func (vse *Engine) StreamTables(ctx context.Context, send func(*binlogdatapb.VSt
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 
-		tableStreamer := newTableStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, vse.lvschema, send, vse)
+		tableStreamer := newTableStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, vse.lvschema, send, vse, options)
 		idx := vse.streamIdx
 		vse.tableStreamers[idx] = tableStreamer
 		vse.streamIdx++
@@ -363,7 +368,9 @@ func (vse *Engine) StreamTables(ctx context.Context, send func(*binlogdatapb.VSt
 }
 
 // StreamResults streams results of the query with the gtid.
-func (vse *Engine) StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+func (vse *Engine) StreamResults(ctx context.Context, query string,
+	send func(*binlogdatapb.VStreamResultsResponse) error) error {
+
 	// Create stream and add it to the map.
 	resultStreamer, idx, err := func() (*resultStreamer, int, error) {
 		if atomic.LoadInt32(&vse.isOpen) == 0 {
@@ -469,7 +476,7 @@ func (vse *Engine) setWatch() {
 }
 
 func getPacketSize() int64 {
-	return int64(defaultPacketSize)
+	return int64(vttablet.VStreamerDefaultPacketSize)
 }
 
 // waitForMySQL ensures that the source is able to stay within defined bounds for

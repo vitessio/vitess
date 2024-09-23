@@ -36,7 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -193,14 +193,18 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 }
 
 func TestHeartbeatFrequencyFlag(t *testing.T) {
-	origVReplicationHeartbeatUpdateInterval := vreplicationHeartbeatUpdateInterval
+	origVReplicationHeartbeatUpdateInterval := vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval
 	defer func() {
-		vreplicationHeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
+		vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
 	}()
 
 	stats := binlogplayer.NewStats()
 	defer stats.Stop()
-	vp := &vplayer{vr: &vreplicator{dbClient: newVDBClient(realDBClientFactory(), stats), stats: stats}}
+	vp := &vplayer{vr: &vreplicator{
+		dbClient:       newVDBClient(realDBClientFactory(), stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
+		stats:          stats,
+		workflowConfig: vttablet.DefaultVReplicationConfig,
+	}}
 
 	type testcount struct {
 		count      int
@@ -218,7 +222,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			vreplicationHeartbeatUpdateInterval = tcase.interval
+			vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval = tcase.interval
 			for _, tcount := range tcase.counts {
 				vp.numAccumulatedHeartbeats = tcount.count
 				require.Equal(t, tcount.mustUpdate, vp.mustUpdateHeartbeat())
@@ -334,7 +338,7 @@ func TestCharPK(t *testing.T) {
 		output string
 		table  string
 		data   [][]string
-	}{{ //binary(2)
+	}{{ // binary(2)
 		input:  "insert into t1 values(1, 'a')",
 		output: "insert into t1(id,val) values (1,'a\\0')",
 		table:  "t1",
@@ -348,7 +352,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a\000"},
 		},
-	}, { //char(2)
+	}, { // char(2)
 		input:  "insert into t2 values(1, 'a')",
 		output: "insert into t2(id,val) values (1,'a')",
 		table:  "t2",
@@ -362,7 +366,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varbinary(2)
+	}, { // varbinary(2)
 		input:  "insert into t3 values(1, 'a')",
 		output: "insert into t3(id,val) values (1,'a')",
 		table:  "t3",
@@ -376,7 +380,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varchar(2)
+	}, { // varchar(2)
 		input:  "insert into t4 values(1, 'a')",
 		output: "insert into t4(id,val) values (1,'a')",
 		table:  "t4",
@@ -1728,7 +1732,7 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) //For debugging only
+	pos0 := primaryPosition(t) // For debugging only
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	pos1 := primaryPosition(t)
 	// The stop position must be the GTID of the first DDL
@@ -1742,7 +1746,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
 	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) //For debugging only: to check what are the positions when test works and if/when it fails
+		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
@@ -1865,9 +1869,9 @@ func TestGTIDCompress(t *testing.T) {
 
 func TestPlayerStopPos(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-	vreplicationStoreCompressedGTID = true
+	vttablet.DefaultVReplicationConfig.StoreCompressedGTID = true
 	defer func() {
-		vreplicationStoreCompressedGTID = false
+		vttablet.DefaultVReplicationConfig.StoreCompressedGTID = false
 	}()
 	execStatements(t, []string{
 		"create table yes(id int, val varbinary(128), primary key(id))",
@@ -2427,13 +2431,13 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 		func() {
 			switch i {
 			case 0:
-				savedSize := relayLogMaxSize
-				defer func() { relayLogMaxSize = savedSize }()
-				relayLogMaxSize = 10
+				savedSize := vttablet.DefaultVReplicationConfig.RelayLogMaxSize
+				defer func() { vttablet.DefaultVReplicationConfig.RelayLogMaxSize = savedSize }()
+				vttablet.DefaultVReplicationConfig.RelayLogMaxSize = 10
 			case 1:
-				savedLen := relayLogMaxItems
-				defer func() { relayLogMaxItems = savedLen }()
-				relayLogMaxItems = 2
+				savedLen := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+				defer func() { vttablet.DefaultVReplicationConfig.RelayLogMaxItems = savedLen }()
+				vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 2
 			}
 
 			execStatements(t, []string{
@@ -2526,9 +2530,9 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 func TestRestartOnVStreamEnd(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedDelay := retryDelay
-	defer func() { retryDelay = savedDelay }()
-	retryDelay = 1 * time.Millisecond
+	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+	vttablet.DefaultVReplicationConfig.RetryDelay = 1 * time.Millisecond
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -2774,7 +2778,7 @@ func TestVReplicationLogs(t *testing.T) {
 	err := dbClient.Connect()
 	require.NoError(t, err)
 	defer dbClient.Close()
-	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+	vdbc := newVDBClient(dbClient, binlogplayer.NewStats(), vttablet.DefaultVReplicationConfig.RelayLogMaxItems)
 	query := "select vrepl_id, state, message, count from _vt.vreplication_log order by id desc limit 1"
 
 	expected := []string{
@@ -2950,10 +2954,10 @@ func TestPlayerNoBlob(t *testing.T) {
 	if !runNoBlobTest {
 		t.Skip()
 	}
-	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
-	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
 	defer func() {
-		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
@@ -3090,10 +3094,10 @@ func TestPlayerNoBlob(t *testing.T) {
 func TestPlayerBatchMode(t *testing.T) {
 	// To test trx batch splitting at 1024-64 bytes.
 	maxAllowedPacket := 1024
-	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
-	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
 	defer func() {
-		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
@@ -3348,16 +3352,16 @@ func TestPlayerStalls(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	log.Errorf = logger.Errorf
 
-	ovmhu := vreplicationMinimumHeartbeatUpdateInterval
-	ogvpt := vplayerProgressDeadline
-	orlmi := relayLogMaxItems
-	ord := retryDelay
+	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
+	oldProgressDeadline := vplayerProgressDeadline
+	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	defer func() {
 		log.Errorf = ole
-		vreplicationMinimumHeartbeatUpdateInterval = ovmhu
-		vplayerProgressDeadline = ogvpt
-		relayLogMaxItems = orlmi
-		retryDelay = ord
+		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
+		vplayerProgressDeadline = oldProgressDeadline
+		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
+		vttablet.DefaultVReplicationConfig.RetryDelay = oldRetryDelay
 	}()
 
 	// Shorten the deadline for the test.
@@ -3365,11 +3369,11 @@ func TestPlayerStalls(t *testing.T) {
 	// Shorten the time for a required heartbeat recording for the test.
 	vreplicationMinimumHeartbeatUpdateInterval = 5
 	// So each relay log batch will be a single statement transaction.
-	relayLogMaxItems = 1
+	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
 
 	// Don't retry the workflow if it goes into the error state.
-	retryDelay = 10 * time.Minute
-	maxTimeToRetryError = 1 * time.Second
+	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Minute
+	vttablet.DefaultVReplicationConfig.MaxTimeToRetryError = 1 * time.Second
 
 	// A channel to communicate across goroutines.
 	done := make(chan struct{})

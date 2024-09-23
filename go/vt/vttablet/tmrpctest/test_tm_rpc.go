@@ -744,6 +744,13 @@ func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context) ([]*querypb
 	return nil, nil
 }
 
+func (fra *fakeRPCTM) ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return nil
+}
+
 func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
 	qr, err := client.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{

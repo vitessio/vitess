@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -40,7 +42,7 @@ func TestInsertLogTruncation(t *testing.T) {
 	dbClient.RemoveInvariant("insert into _vt.vreplication_log") // Otherwise the insert will be ignored
 	stats := binlogplayer.NewStats()
 	defer stats.Stop()
-	vdbClient := newVDBClient(dbClient, stats)
+	vdbClient := newVDBClient(dbClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems)
 	defer vdbClient.Close()
 	vrID := int32(1)
 	typ := "Testing"

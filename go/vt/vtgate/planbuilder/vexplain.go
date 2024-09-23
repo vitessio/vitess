@@ -38,6 +38,8 @@ func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt
 		return buildVExplainLoggingPlan(ctx, vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case sqlparser.PlanVExplainType:
 		return buildVExplainVtgatePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case sqlparser.TraceVExplainType:
+		return buildVExplainTracePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vexplainStmt.Type.ToString())
 }
@@ -87,7 +89,7 @@ func buildVExplainVtgatePlan(ctx context.Context, explainStatement sqlparser.Sta
 	if err != nil {
 		return nil, err
 	}
-	description := engine.PrimitiveToPlanDescription(innerInstruction.primitive)
+	description := engine.PrimitiveToPlanDescription(innerInstruction.primitive, nil)
 	output, err := json.MarshalIndent(description, "", "\t")
 	if err != nil {
 		return nil, err
@@ -165,4 +167,18 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
 	}, tables...), nil
+}
+
+func buildVExplainTracePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll set the trace engine as the root primitive
+	innerInstruction.primitive = &engine.VExplain{
+		Input: innerInstruction.primitive,
+		Type:  sqlparser.TraceVExplainType,
+	}
+	return innerInstruction, nil
 }

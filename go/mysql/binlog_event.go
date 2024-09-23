@@ -91,6 +91,8 @@ type BinlogEvent interface {
 
 	// Timestamp returns the timestamp from the event header.
 	Timestamp() uint32
+	// ServerID returns the server ID from the event header.
+	ServerID() uint32
 
 	// Format returns a BinlogFormat struct based on the event data.
 	// This is only valid if IsFormatDescription() returns true.

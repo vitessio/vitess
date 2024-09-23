@@ -421,6 +421,20 @@ export const fetchVSchema = async ({ clusterID, keyspace }: FetchVSchemaParams) 
     return pb.VSchema.create(result);
 };
 
+export interface FetchTransactionsParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const fetchTransactions = async ({ clusterID, keyspace }: FetchTransactionsParams) => {
+    const { result } = await vtfetch(`/api/transactions/${clusterID}/${keyspace}`);
+
+    const err = vtctldata.GetUnresolvedTransactionsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetUnresolvedTransactionsResponse.create(result);
+};
+
 export const fetchWorkflows = async () => {
     const { result } = await vtfetch(`/api/workflows`);
 

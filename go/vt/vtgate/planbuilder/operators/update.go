@@ -86,8 +86,8 @@ func (u *Update) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (u *Update) TablesUsed() []string {
-	return SingleQualifiedIdentifier(u.Target.VTable.Keyspace, u.Target.VTable.Name)
+func (u *Update) TablesUsed(in []string) []string {
+	return append(in, QualifiedString(u.Target.VTable.Keyspace, u.Target.VTable.Name.String()))
 }
 
 func (u *Update) ShortDescription() string {
