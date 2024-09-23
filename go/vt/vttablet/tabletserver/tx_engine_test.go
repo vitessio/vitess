@@ -619,49 +619,49 @@ func TestCheckReceivedError(t *testing.T) {
 	te.AcceptReadWrite()
 
 	tcases := []struct {
-		receivedErr  error
-		nonRetryable bool
-		expQuery     string
+		receivedErr error
+		retryable   bool
+		expQuery    string
 	}{{
-		receivedErr:  vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
-		nonRetryable: false,
-		expQuery:     `update _vt.redo_state set state = 1, message = 'deadline exceeded' where dtid = 'aa'`,
+		receivedErr: vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'deadline exceeded' where dtid = 'aa'`,
 	}, {
-		receivedErr:  vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid argument"),
-		nonRetryable: true,
-		expQuery:     `update _vt.redo_state set state = 0, message = 'invalid argument' where dtid = 'aa'`,
+		receivedErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid argument"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'invalid argument' where dtid = 'aa'`,
 	}, {
-		receivedErr:  sqlerror.NewSQLError(sqlerror.ERLockDeadlock, sqlerror.SSLockDeadlock, "Deadlock found when trying to get lock; try restarting transaction"),
-		nonRetryable: true,
-		expQuery:     `update _vt.redo_state set state = 0, message = 'Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)' where dtid = 'aa'`,
+		receivedErr: sqlerror.NewSQLError(sqlerror.ERLockDeadlock, sqlerror.SSLockDeadlock, "Deadlock found when trying to get lock; try restarting transaction"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)' where dtid = 'aa'`,
 	}, {
-		receivedErr:  context.DeadlineExceeded,
-		nonRetryable: false,
-		expQuery:     `update _vt.redo_state set state = 1, message = 'context deadline exceeded' where dtid = 'aa'`,
+		receivedErr: context.DeadlineExceeded,
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'context deadline exceeded' where dtid = 'aa'`,
 	}, {
-		receivedErr:  context.Canceled,
-		nonRetryable: false,
-		expQuery:     `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = 'aa'`,
+		receivedErr: context.Canceled,
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = 'aa'`,
 	}, {
-		receivedErr:  sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"),
-		nonRetryable: false,
-		expQuery:     `update _vt.redo_state set state = 1, message = 'Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)' where dtid = 'aa'`,
+		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)' where dtid = 'aa'`,
 	}, {
-		receivedErr:  sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "Malformed packet"),
-		nonRetryable: true,
-		expQuery:     `update _vt.redo_state set state = 0, message = 'Malformed packet (errno 2027) (sqlstate HY000)' where dtid = 'aa'`,
+		receivedErr: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "Malformed packet"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Malformed packet (errno 2027) (sqlstate HY000)' where dtid = 'aa'`,
 	}, {
-		receivedErr:  sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "Server has gone away"),
-		nonRetryable: false,
-		expQuery:     `update _vt.redo_state set state = 1, message = 'Server has gone away (errno 2006) (sqlstate HY000)' where dtid = 'aa'`,
+		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "Server has gone away"),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'Server has gone away (errno 2006) (sqlstate HY000)' where dtid = 'aa'`,
 	}, {
-		receivedErr:  vterrors.New(vtrpcpb.Code_ABORTED, "Row count exceeded"),
-		nonRetryable: true,
-		expQuery:     `update _vt.redo_state set state = 0, message = 'Row count exceeded' where dtid = 'aa'`,
+		receivedErr: vterrors.New(vtrpcpb.Code_ABORTED, "Row count exceeded"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Row count exceeded' where dtid = 'aa'`,
 	}, {
-		receivedErr:  errors.New("(errno 2013) (sqlstate HY000) lost connection"),
-		nonRetryable: false,
-		expQuery:     `update _vt.redo_state set state = 1, message = '(errno 2013) (sqlstate HY000) lost connection' where dtid = 'aa'`,
+		receivedErr: errors.New("(errno 2013) (sqlstate HY000) lost connection"),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = '(errno 2013) (sqlstate HY000) lost connection' where dtid = 'aa'`,
 	}}
 
 	for _, tc := range tcases {
@@ -670,8 +670,8 @@ func TestCheckReceivedError(t *testing.T) {
 				db.AddQuery(tc.expQuery, &sqltypes.Result{})
 			}
 			nonRetryable := te.checkErrorAndMarkFailed(context.Background(), "aa", tc.receivedErr, "")
-			require.Equal(t, tc.nonRetryable, nonRetryable)
-			if tc.nonRetryable {
+			require.NotEqual(t, tc.retryable, nonRetryable)
+			if !tc.retryable {
 				require.Equal(t, errPrepFailed, te.preparedPool.reserved["aa"])
 			}
 			delete(te.preparedPool.reserved, "aa")
