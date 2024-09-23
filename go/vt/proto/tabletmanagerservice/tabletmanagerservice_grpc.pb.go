@@ -54,6 +54,7 @@ type TabletManagerClient interface {
 	ExecuteFetchAsAllPrivs(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error)
 	ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	GetUnresolvedTransactions(ctx context.Context, in *tabletmanagerdata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error)
+	ReadTransaction(ctx context.Context, in *tabletmanagerdata.ReadTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadTransactionResponse, error)
 	ConcludeTransaction(ctx context.Context, in *tabletmanagerdata.ConcludeTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ConcludeTransactionResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(ctx context.Context, in *tabletmanagerdata.ReplicationStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicationStatusResponse, error)
@@ -334,6 +335,15 @@ func (c *tabletManagerClient) ExecuteFetchAsApp(ctx context.Context, in *tabletm
 func (c *tabletManagerClient) GetUnresolvedTransactions(ctx context.Context, in *tabletmanagerdata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error) {
 	out := new(tabletmanagerdata.GetUnresolvedTransactionsResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetUnresolvedTransactions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ReadTransaction(ctx context.Context, in *tabletmanagerdata.ReadTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadTransactionResponse, error) {
+	out := new(tabletmanagerdata.ReadTransactionResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReadTransaction", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -763,6 +773,7 @@ type TabletManagerServer interface {
 	ExecuteFetchAsAllPrivs(context.Context, *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error)
 	ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	GetUnresolvedTransactions(context.Context, *tabletmanagerdata.GetUnresolvedTransactionsRequest) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error)
+	ReadTransaction(context.Context, *tabletmanagerdata.ReadTransactionRequest) (*tabletmanagerdata.ReadTransactionResponse, error)
 	ConcludeTransaction(context.Context, *tabletmanagerdata.ConcludeTransactionRequest) (*tabletmanagerdata.ConcludeTransactionResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error)
@@ -907,6 +918,9 @@ func (UnimplementedTabletManagerServer) ExecuteFetchAsApp(context.Context, *tabl
 }
 func (UnimplementedTabletManagerServer) GetUnresolvedTransactions(context.Context, *tabletmanagerdata.GetUnresolvedTransactionsRequest) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUnresolvedTransactions not implemented")
+}
+func (UnimplementedTabletManagerServer) ReadTransaction(context.Context, *tabletmanagerdata.ReadTransactionRequest) (*tabletmanagerdata.ReadTransactionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadTransaction not implemented")
 }
 func (UnimplementedTabletManagerServer) ConcludeTransaction(context.Context, *tabletmanagerdata.ConcludeTransactionRequest) (*tabletmanagerdata.ConcludeTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConcludeTransaction not implemented")
@@ -1445,6 +1459,24 @@ func _TabletManager_GetUnresolvedTransactions_Handler(srv interface{}, ctx conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).GetUnresolvedTransactions(ctx, req.(*tabletmanagerdata.GetUnresolvedTransactionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_ReadTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReadTransactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ReadTransaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ReadTransaction",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ReadTransaction(ctx, req.(*tabletmanagerdata.ReadTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2237,6 +2269,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUnresolvedTransactions",
 			Handler:    _TabletManager_GetUnresolvedTransactions_Handler,
+		},
+		{
+			MethodName: "ReadTransaction",
+			Handler:    _TabletManager_ReadTransaction_Handler,
 		},
 		{
 			MethodName: "ConcludeTransaction",

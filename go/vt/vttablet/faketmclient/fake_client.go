@@ -226,6 +226,11 @@ func (client *FakeTabletManagerClient) ConcludeTransaction(ctx context.Context, 
 	return nil
 }
 
+// ReadTransaction is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	return nil, nil
+}
+
 //
 // Replication related methods
 //

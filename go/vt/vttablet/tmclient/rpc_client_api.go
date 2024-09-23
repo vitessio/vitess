@@ -146,8 +146,15 @@ type TabletManagerClient interface {
 	// query faster. Close() should close the pool in that case.
 	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error)
 
+	//
+	// Distributed Transaction related methods
+	//
+
 	// GetUnresolvedTransactions returns the list of unresolved transactions for the tablet.
 	GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error)
+
+	// ReadTransaction returns the metadata for the specified distributed transaction ID.
+	ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error)
 
 	// ConcludeTransaction conclude the transaction on the tablet.
 	ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error

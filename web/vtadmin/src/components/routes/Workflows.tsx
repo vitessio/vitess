@@ -36,6 +36,9 @@ import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { UseQueryResult } from 'react-query';
 import { ReadOnlyGate } from '../ReadOnlyGate';
+import Dropdown from '../dropdown/Dropdown';
+import MenuItem from '../dropdown/MenuItem';
+import { Icons } from '../Icon';
 import WorkflowActions from './workflows/WorkflowActions';
 import { isReadOnlyMode } from '../../util/env';
 
@@ -204,7 +207,24 @@ export const Workflows = () => {
     return (
         <div>
             <WorkspaceHeader>
-                <WorkspaceTitle>Workflows</WorkspaceTitle>
+                <div className="flex items-top justify-between">
+                    <WorkspaceTitle>Workflows</WorkspaceTitle>
+                    <ReadOnlyGate>
+                        <div>
+                            <Dropdown
+                                dropdownButton={Icons.circleAdd}
+                                title="Create Workflow"
+                                className="!text-[32px] w-16 h-16"
+                            >
+                                <Link to="/workflows/movetables/create">
+                                    <MenuItem>MoveTables</MenuItem>
+                                </Link>
+                                <MenuItem disabled>Reshard</MenuItem>
+                                <MenuItem disabled>Materialize</MenuItem>
+                            </Dropdown>
+                        </div>
+                    </ReadOnlyGate>
+                </div>
             </WorkspaceHeader>
             <ContentContainer>
                 <DataFilter

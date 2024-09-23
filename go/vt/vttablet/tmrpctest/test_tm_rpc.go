@@ -420,6 +420,16 @@ func tmRPCTestGetUnresolvedTransactionsPanic(ctx context.Context, t *testing.T, 
 	expectHandleRPCPanic(t, "GetUnresolvedTransactions", false /*verbose*/, err)
 }
 
+func tmRPCTestReadTransaction(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ReadTransaction(ctx, tablet, "aa")
+	require.NoError(t, err)
+}
+
+func tmRPCTestReadTransactionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ReadTransaction(ctx, tablet, "aa")
+	expectHandleRPCPanic(t, "ReadTransaction", false /*verbose*/, err)
+}
+
 //
 // Various read-write methods
 //
@@ -742,7 +752,14 @@ func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerd
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error) {
+func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return nil, nil
+}
+
+func (fra *fakeRPCTM) ReadTransaction(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionRequest) (*querypb.TransactionMetadata, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1455,6 +1472,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestGetPermissions(ctx, t, client, tablet)
 	tmRPCTestGetGlobalStatusVars(ctx, t, client, tablet)
 	tmRPCTestGetUnresolvedTransactions(ctx, t, client, tablet)
+	tmRPCTestReadTransaction(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnly(ctx, t, client, tablet)
@@ -1517,6 +1535,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestGetPermissionsPanic(ctx, t, client, tablet)
 	tmRPCTestGetGlobalStatusVarsPanic(ctx, t, client, tablet)
 	tmRPCTestGetUnresolvedTransactionsPanic(ctx, t, client, tablet)
+	tmRPCTestReadTransactionPanic(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnlyPanic(ctx, t, client, tablet)

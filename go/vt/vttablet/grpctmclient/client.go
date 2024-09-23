@@ -688,6 +688,23 @@ func (client *Client) ConcludeTransaction(ctx context.Context, tablet *topodatap
 	return err
 }
 
+// ReadTransaction is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	resp, err := c.ReadTransaction(ctx, &tabletmanagerdatapb.ReadTransactionRequest{
+		Dtid: dtid,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Transaction, nil
+}
+
 //
 // Replication related methods
 //
