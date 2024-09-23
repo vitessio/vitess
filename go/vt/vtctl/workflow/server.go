@@ -4380,6 +4380,7 @@ func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, 
 			// table(s) in order to manage the workflow.
 			res, err := s.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
 			if err != nil {
+				// This older tablet handling can be removed in v22 or later.
 				if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
 					// This is a pre v21 tablet, so don't return an error since the permissions
 					// not being there should be very rare.
