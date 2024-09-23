@@ -4265,7 +4265,9 @@ func (s *Server) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 	}
 	if len(cannotSwitchTabletTypes) > 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot mirror [%s] traffic for workflow %s at this time: traffic for those tablet types is switched", strings.Join(cannotSwitchTabletTypes, ","), startState.Workflow)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"cannot mirror [%s] traffic for workflow %s at this time: traffic for those tablet types is switched",
+			strings.Join(cannotSwitchTabletTypes, ","), startState.Workflow)
 	}
 
 	if err := s.mirrorTraffic(ctx, req, ts, startState); err != nil {
@@ -4336,7 +4338,8 @@ func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, 
 			// table(s) in order to manage the workflow.
 			res, err := s.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
 			if err != nil {
-				allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s", topoproto.TabletAliasString(tablet.Alias)))
+				allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s",
+					topoproto.TabletAliasString(tablet.Alias)))
 			}
 			if !res.GetOk() {
 				allErrors.RecordError(fmt.Errorf("user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
