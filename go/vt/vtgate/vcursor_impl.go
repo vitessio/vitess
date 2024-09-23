@@ -25,6 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/google/uuid"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -230,7 +233,36 @@ func (vc *vcursorImpl) Environment() *vtenv.Environment {
 }
 
 func (vc *vcursorImpl) TimeZone() *time.Location {
-	return vc.safeSession.TimeZone()
+	zone := vc.safeSession.TimeZone()
+	if zone == "" {
+		return nil
+	}
+
+	ast, err := vc.Environment().Parser().ParseExpr(zone)
+	if err != nil {
+		return nil
+	}
+
+	cfg := &evalengine.Config{
+		NoConstantFolding: true,
+		NoCompilation:     true,
+	}
+
+	expr, err := evalengine.Translate(ast, cfg)
+	if err != nil {
+		return nil
+	}
+
+	env := evalengine.EmptyExpressionEnv(vc.Environment())
+	result, err := env.Evaluate(expr)
+	if err != nil {
+		return nil
+	}
+
+	loc, _ := datetime.ParseTimeZone(result.Value(vc.collation).ToString())
+	// it's safe to ignore the error - if we get an error, loc will be nil,
+	// and this is exactly the behaviour we want anyway
+	return loc
 }
 
 func (vc *vcursorImpl) SQLMode() string {

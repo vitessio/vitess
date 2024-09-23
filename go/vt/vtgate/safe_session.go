@@ -25,8 +25,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql/datetime"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -561,16 +559,10 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 	return
 }
 
-func (session *SafeSession) TimeZone() *time.Location {
+func (session *SafeSession) TimeZone() string {
 	session.mu.Lock()
-	tz, ok := session.SystemVariables["time_zone"]
-	session.mu.Unlock()
-
-	if !ok {
-		return nil
-	}
-	loc, _ := datetime.ParseTimeZone(tz)
-	return loc
+	defer session.mu.Unlock()
+	return session.SystemVariables["time_zone"]
 }
 
 // ForeignKeyChecks returns the foreign_key_checks stored in system_variables map in the session.
