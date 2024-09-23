@@ -300,7 +300,7 @@ func TestReferenceTableMaterialize(t *testing.T) {
 	require.NoError(t, err)
 
 	err = vc.VtctldClient.ExecuteCommand("Materialize", "--target-keyspace", "ks2", "--workflow", "wf1", "create",
-		"--source-keyspace", "ks1", "--reference", "--tables", "ref1,ref2")
+		"--source-keyspace", "ks1", "--reference-tables", "ref1,ref2")
 	require.NoError(t, err, "Materialize")
 	for _, shard := range shards {
 		tab := vc.getPrimaryTablet(t, "ks2", shard)
