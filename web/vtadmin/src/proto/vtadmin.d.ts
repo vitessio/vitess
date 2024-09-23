@@ -28575,8 +28575,8 @@ export namespace tabletmanagerdata {
         /** RestoreFromBackupRequest restore_to_timestamp */
         restore_to_timestamp?: (vttime.ITime|null);
 
-        /** RestoreFromBackupRequest ignored_backup_engines */
-        ignored_backup_engines?: (string[]|null);
+        /** RestoreFromBackupRequest allowed_backup_engines */
+        allowed_backup_engines?: (string[]|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -28600,8 +28600,8 @@ export namespace tabletmanagerdata {
         /** RestoreFromBackupRequest restore_to_timestamp. */
         public restore_to_timestamp?: (vttime.ITime|null);
 
-        /** RestoreFromBackupRequest ignored_backup_engines. */
-        public ignored_backup_engines: string[];
+        /** RestoreFromBackupRequest allowed_backup_engines. */
+        public allowed_backup_engines: string[];
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
@@ -67256,8 +67256,8 @@ export namespace vtctldata {
         /** RestoreFromBackupRequest restore_to_timestamp */
         restore_to_timestamp?: (vttime.ITime|null);
 
-        /** RestoreFromBackupRequest ignored_backup_engines */
-        ignored_backup_engines?: (string[]|null);
+        /** RestoreFromBackupRequest allowed_backup_engines */
+        allowed_backup_engines?: (string[]|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -67284,8 +67284,8 @@ export namespace vtctldata {
         /** RestoreFromBackupRequest restore_to_timestamp. */
         public restore_to_timestamp?: (vttime.ITime|null);
 
-        /** RestoreFromBackupRequest ignored_backup_engines. */
-        public ignored_backup_engines: string[];
+        /** RestoreFromBackupRequest allowed_backup_engines. */
+        public allowed_backup_engines: string[];
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.

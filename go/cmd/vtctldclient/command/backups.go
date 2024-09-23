@@ -70,7 +70,7 @@ If no replica-type tablet can be found, the backup can be taken on the primary i
 	}
 	// RestoreFromBackup makes a RestoreFromBackup gRPC call to a vtctld.
 	RestoreFromBackup = &cobra.Command{
-		Use:                   "RestoreFromBackup [--backup-timestamp|-t <YYYY-mm-DD.HHMMSS>] [--restore-to-pos <pos>] [--ignored-backup-engines=enginename,] [--dry-run] <tablet_alias>",
+		Use:                   "RestoreFromBackup [--backup-timestamp|-t <YYYY-mm-DD.HHMMSS>] [--restore-to-pos <pos>] [--allowed-backup-engines=enginename,] [--dry-run] <tablet_alias>",
 		Short:                 "Stops mysqld on the specified tablet and restores the data from either the latest backup or closest before `backup-timestamp`.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -226,7 +226,7 @@ func commandRemoveBackup(cmd *cobra.Command, args []string) error {
 
 var restoreFromBackupOptions = struct {
 	BackupTimestamp      string
-	IgnoredBackupEngines string
+	AllowedBackupEngines []string
 	RestoreToPos         string
 	RestoreToTimestamp   string
 	DryRun               bool
@@ -251,10 +251,11 @@ func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
 	}
 
 	req := &vtctldatapb.RestoreFromBackupRequest{
-		TabletAlias:        alias,
-		RestoreToPos:       restoreFromBackupOptions.RestoreToPos,
-		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimestamp),
-		DryRun:             restoreFromBackupOptions.DryRun,
+		TabletAlias:          alias,
+		RestoreToPos:         restoreFromBackupOptions.RestoreToPos,
+		RestoreToTimestamp:   protoutil.TimeToProto(restoreToTimestamp),
+		DryRun:               restoreFromBackupOptions.DryRun,
+		AllowedBackupEngines: restoreFromBackupOptions.AllowedBackupEngines,
 	}
 
 	if restoreFromBackupOptions.BackupTimestamp != "" {
@@ -264,10 +265,6 @@ func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
 		}
 
 		req.BackupTime = protoutil.TimeToProto(t)
-	}
-
-	if restoreFromBackupOptions.IgnoredBackupEngines != "" {
-		req.IgnoredBackupEngines = strings.Split(restoreFromBackupOptions.IgnoredBackupEngines, ",")
 	}
 
 	cli.FinishedParsing(cmd)
@@ -312,7 +309,7 @@ func init() {
 	Root.AddCommand(RemoveBackup)
 
 	RestoreFromBackup.Flags().StringVarP(&restoreFromBackupOptions.BackupTimestamp, "backup-timestamp", "t", "", "Use the backup taken at, or closest before, this timestamp. Omit to use the latest backup. Timestamp format is \"YYYY-mm-DD.HHMMSS\".")
-	RestoreFromBackup.Flags().StringVar(&restoreFromBackupOptions.IgnoredBackupEngines, "ignored-backup-engines", "", "Ignore backups created with this list of backup engines, sepparated by a comma")
+	RestoreFromBackup.Flags().StringSliceVar(&restoreFromBackupOptions.AllowedBackupEngines, "allowed-backup-engines", restoreFromBackupOptions.AllowedBackupEngines, "if present will filter out any backups taken with engines not included in the list")
 	RestoreFromBackup.Flags().StringVar(&restoreFromBackupOptions.RestoreToPos, "restore-to-pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
 	RestoreFromBackup.Flags().StringVar(&restoreFromBackupOptions.RestoreToTimestamp, "restore-to-timestamp", "", "Run a point in time recovery that restores up to, and excluding, given timestamp in RFC3339 format (`2006-01-02T15:04:05Z07:00`). This will attempt to use one full backup followed by zero or more incremental backups")
 	RestoreFromBackup.Flags().BoolVar(&restoreFromBackupOptions.DryRun, "dry-run", false, "Only validate restore steps, do not actually restore data")

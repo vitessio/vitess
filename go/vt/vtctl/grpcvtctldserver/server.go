@@ -3521,7 +3521,7 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 		RestoreToPos:         req.RestoreToPos,
 		RestoreToTimestamp:   req.RestoreToTimestamp,
 		DryRun:               req.DryRun,
-		IgnoredBackupEngines: req.IgnoredBackupEngines,
+		AllowedBackupEngines: req.AllowedBackupEngines,
 	}
 	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {

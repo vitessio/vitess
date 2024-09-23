@@ -90,7 +90,7 @@ type BackupParams struct {
 	// MysqlShutdownTimeout defines how long we wait during MySQL shutdown if that is part of the backup process.
 	MysqlShutdownTimeout time.Duration
 	// BackupEngine allows us to override which backup engine should be used for a request
-	BackupEngine *string
+	BackupEngine string
 }
 
 func (b *BackupParams) Copy() BackupParams {
@@ -147,8 +147,8 @@ type RestoreParams struct {
 	Stats backupstats.Stats
 	// MysqlShutdownTimeout defines how long we wait during MySQL shutdown if that is part of the backup process.
 	MysqlShutdownTimeout time.Duration
-	// IgnoredBackupEngines will hold any backup engines we should ignore when restoring backups
-	IgnoredBackupEngines []string
+	// AllowedBackupEngines if present will filter out any backups taken with engines not included in the list
+	AllowedBackupEngines []string
 }
 
 func (p *RestoreParams) Copy() RestoreParams {
@@ -219,12 +219,10 @@ func registerBackupEngineFlags(fs *pflag.FlagSet) {
 // a particular backup by calling GetRestoreEngine().
 //
 // This must only be called after flags have been parsed.
-func GetBackupEngine(backupEngine *string) (BackupEngine, error) {
-	var name string
-	if backupEngine == nil || *backupEngine == "" {
-		name = backupEngineImplementation
-	} else {
-		name = *backupEngine
+func GetBackupEngine(backupEngine string) (BackupEngine, error) {
+	name := backupEngineImplementation
+	if backupEngine != "" {
+		name = backupEngine
 	}
 
 	be, ok := BackupRestoreEngineMap[name]
@@ -527,7 +525,8 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 			continue
 		}
 
-		if slices.Contains(params.IgnoredBackupEngines, bm.BackupMethod) {
+		// if allowed backup engine is not empty, we only try to restore from backups taken with the specified backup engines
+		if len(params.AllowedBackupEngines) > 0 && !slices.Contains(params.AllowedBackupEngines, bm.BackupMethod) {
 			params.Logger.Warningf("Ignoring backup %v because it is using %q backup engine", bh.Name(), bm.BackupMethod)
 			continue
 		}

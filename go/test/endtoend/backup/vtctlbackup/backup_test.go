@@ -174,7 +174,6 @@ func TestRestoreIgnoreBackups(t *testing.T) {
 	// lets take two backups, each using a different backup engine
 	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=builtin", primary.Alias)
 	require.NoError(t, err)
-	// firstBackup := getLastBackup(t)
 
 	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=xtrabackup", primary.Alias)
 	require.NoError(t, err)
@@ -202,7 +201,7 @@ func TestRestoreIgnoreBackups(t *testing.T) {
 	require.Error(t, err) // this should fail
 
 	// now we retry but trying the earlier backup
-	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", "--ignored-backup-engines=xtrabackup", replica2.Alias)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", "--allowed-backup-engines=builtin", replica2.Alias)
 	require.NoError(t, err) // this should succeed
 
 	// make sure we are replicating after the restore is done

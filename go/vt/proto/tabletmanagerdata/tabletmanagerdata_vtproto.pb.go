@@ -1919,10 +1919,10 @@ func (m *RestoreFromBackupRequest) CloneVT() *RestoreFromBackupRequest {
 	r.RestoreToPos = m.RestoreToPos
 	r.DryRun = m.DryRun
 	r.RestoreToTimestamp = m.RestoreToTimestamp.CloneVT()
-	if rhs := m.IgnoredBackupEngines; rhs != nil {
+	if rhs := m.AllowedBackupEngines; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
-		r.IgnoredBackupEngines = tmpContainer
+		r.AllowedBackupEngines = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -7234,11 +7234,11 @@ func (m *RestoreFromBackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.IgnoredBackupEngines) > 0 {
-		for iNdEx := len(m.IgnoredBackupEngines) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.IgnoredBackupEngines[iNdEx])
-			copy(dAtA[i:], m.IgnoredBackupEngines[iNdEx])
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.IgnoredBackupEngines[iNdEx])))
+	if len(m.AllowedBackupEngines) > 0 {
+		for iNdEx := len(m.AllowedBackupEngines) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.AllowedBackupEngines[iNdEx])
+			copy(dAtA[i:], m.AllowedBackupEngines[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.AllowedBackupEngines[iNdEx])))
 			i--
 			dAtA[i] = 0x2a
 		}
@@ -11198,8 +11198,8 @@ func (m *RestoreFromBackupRequest) SizeVT() (n int) {
 		l = m.RestoreToTimestamp.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if len(m.IgnoredBackupEngines) > 0 {
-		for _, s := range m.IgnoredBackupEngines {
+	if len(m.AllowedBackupEngines) > 0 {
+		for _, s := range m.AllowedBackupEngines {
 			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
@@ -21574,7 +21574,7 @@ func (m *RestoreFromBackupRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IgnoredBackupEngines", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowedBackupEngines", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -21602,7 +21602,7 @@ func (m *RestoreFromBackupRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.IgnoredBackupEngines = append(m.IgnoredBackupEngines, string(dAtA[iNdEx:postIndex]))
+			m.AllowedBackupEngines = append(m.AllowedBackupEngines, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
