@@ -135,10 +135,10 @@ Example usage:
 
 ### <a id="new-backup-engine"/>New Backup Engine (EXPERIMENTAL)
 
-We are introducing a the backup engine supporting logical backups starting on v21 to support use cases that require something else besides physical backups. This is experimental and is based on the 
+We are introducing a backup engine supporting logical backups starting on v21 to support use cases that require something else besides physical backups. This is experimental and is based on the 
 [MySQL Shell](https://dev.mysql.com/doc/mysql-shell/8.0/en/).
 
-The new engine is enabled by using `--backup_engine_implementation=mysqlshell`. There are other options that are required, so check the docs on which options are required and how to use it.
+The new engine is enabled by using `--backup_engine_implementation=mysqlshell`. There are other options that are required, so [check the docs](https://vitess.io/docs/21.0/user-guides/operating-vitess/backup-and-restore/creating-a-backup/) on which options are required and how to use it.
 
 ### <a id="dynamic-vreplication-configuration"/>Dynamic VReplication Configuration
 Currently many of the configuration options for VReplication Workflows are vttablet flags. This means that any change 

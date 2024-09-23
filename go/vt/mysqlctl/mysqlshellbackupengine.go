@@ -85,6 +85,8 @@ type MySQLShellBackupManifest struct {
 }
 
 func init() {
+	BackupRestoreEngineMap[mysqlShellBackupEngineName] = &MySQLShellBackupEngine{}
+
 	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerMysqlShellBackupEngineFlags)
 	}
@@ -577,8 +579,4 @@ func cleanupMySQL(ctx context.Context, params RestoreParams, shouldDeleteUsers b
 	}
 
 	return err
-}
-
-func init() {
-	BackupRestoreEngineMap[mysqlShellBackupEngineName] = &MySQLShellBackupEngine{}
 }
