@@ -217,6 +217,7 @@ export const CreateMoveTables = () => {
                             selectedItems={formData.tables}
                             disabled={formData.allTables || !formData.sourceKeyspace}
                             label="Tables"
+                            helpText={'Source tables to copy'}
                             onChange={(tables) => setFormData({ ...formData, tables })}
                             placeholder="Select tables"
                         />
@@ -237,7 +238,11 @@ export const CreateMoveTables = () => {
                     <h3 className="mt-8 mb-2">Advanced</h3>
 
                     <div className="flex flex-row gap-4 flex-wrap">
-                        <Label className="block grow min-w-[300px]" label="Cells">
+                        <Label
+                            className="block grow min-w-[300px]"
+                            label="Cells"
+                            helpText={'Cells and/or CellAliases to copy table data from'}
+                        >
                             <TextInput
                                 onChange={(e) => setFormData({ ...formData, cells: e.target.value })}
                                 value={formData.cells || ''}
@@ -248,6 +253,7 @@ export const CreateMoveTables = () => {
                             inputClassName="block w-full"
                             items={onDDLOptions}
                             label="OnDDL Strategy"
+                            helpText={'What to do when DDL is encountered in the VReplication stream'}
                             onChange={(option) => setFormData({ ...formData, onDDL: option || '' })}
                             placeholder={'Select the OnDDL strategy'}
                             selectedItem={formData.onDDL}
@@ -271,10 +277,17 @@ export const CreateMoveTables = () => {
                             itemToString={(tt) => TABLET_TYPES[tt]}
                             selectedItems={formData.tabletTypes}
                             label="Tablet Types"
+                            helpText={'Source tablet types to replicate table data from'}
                             onChange={(types) => setFormData({ ...formData, tabletTypes: types })}
                             placeholder="Select tablet types"
                         />
-                        <Label className="block grow min-w-[300px]" label="Source Time Zone">
+                        <Label
+                            className="block grow min-w-[300px]"
+                            label="Source Time Zone"
+                            helpText={
+                                'Specifying this causes any DATETIME fields to be converted from the given time zone into UTC'
+                            }
+                        >
                             <TextInput
                                 onChange={(e) => setFormData({ ...formData, sourceTimeZone: e.target.value })}
                                 value={formData.sourceTimeZone || ''}

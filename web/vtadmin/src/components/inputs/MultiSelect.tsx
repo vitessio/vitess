@@ -27,6 +27,7 @@ interface Props<T> {
     items: T[];
     itemToString?: (item: T) => string;
     label: string;
+    helpText?: string | JSX.Element;
     onChange: (selectedItems: T[]) => void;
     placeholder: string;
     renderItem?: (item: T) => JSX.Element | string;
@@ -42,6 +43,7 @@ export const MultiSelect = <T,>({
     items,
     itemToString = (item) => String(item),
     label,
+    helpText,
     placeholder,
     renderItem,
     selectedItems,
@@ -62,7 +64,7 @@ export const MultiSelect = <T,>({
 
     return (
         <div className={cx(style.container, className)}>
-            {label && <Label label={label} required={required} />}
+            <Label label={label} required={required} helpText={helpText} />
             {description && <div className="mt-[-4px] mb-4">{description}</div>}
 
             <Listbox value={selectedItems} onChange={onChange} disabled={disabled} multiple>
