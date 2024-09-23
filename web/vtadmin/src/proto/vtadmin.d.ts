@@ -15666,6 +15666,306 @@ export namespace mysqlctl {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ThrottlerMetricsRequest. */
+    interface IThrottlerMetricsRequest {
+    }
+
+    /** Represents a ThrottlerMetricsRequest. */
+    class ThrottlerMetricsRequest implements IThrottlerMetricsRequest {
+
+        /**
+         * Constructs a new ThrottlerMetricsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IThrottlerMetricsRequest);
+
+        /**
+         * Creates a new ThrottlerMetricsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottlerMetricsRequest instance
+         */
+        public static create(properties?: mysqlctl.IThrottlerMetricsRequest): mysqlctl.ThrottlerMetricsRequest;
+
+        /**
+         * Encodes the specified ThrottlerMetricsRequest message. Does not implicitly {@link mysqlctl.ThrottlerMetricsRequest.verify|verify} messages.
+         * @param message ThrottlerMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IThrottlerMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottlerMetricsRequest message, length delimited. Does not implicitly {@link mysqlctl.ThrottlerMetricsRequest.verify|verify} messages.
+         * @param message ThrottlerMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IThrottlerMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottlerMetricsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottlerMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ThrottlerMetricsRequest;
+
+        /**
+         * Decodes a ThrottlerMetricsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottlerMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ThrottlerMetricsRequest;
+
+        /**
+         * Verifies a ThrottlerMetricsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottlerMetricsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottlerMetricsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ThrottlerMetricsRequest;
+
+        /**
+         * Creates a plain object from a ThrottlerMetricsRequest message. Also converts values to other types if specified.
+         * @param message ThrottlerMetricsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ThrottlerMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottlerMetricsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottlerMetricsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ThrottlerMetricsResponse. */
+    interface IThrottlerMetricsResponse {
+
+        /** ThrottlerMetricsResponse metrics */
+        metrics?: ({ [k: string]: mysqlctl.ThrottlerMetricsResponse.IMetric }|null);
+    }
+
+    /** Represents a ThrottlerMetricsResponse. */
+    class ThrottlerMetricsResponse implements IThrottlerMetricsResponse {
+
+        /**
+         * Constructs a new ThrottlerMetricsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IThrottlerMetricsResponse);
+
+        /** ThrottlerMetricsResponse metrics. */
+        public metrics: { [k: string]: mysqlctl.ThrottlerMetricsResponse.IMetric };
+
+        /**
+         * Creates a new ThrottlerMetricsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottlerMetricsResponse instance
+         */
+        public static create(properties?: mysqlctl.IThrottlerMetricsResponse): mysqlctl.ThrottlerMetricsResponse;
+
+        /**
+         * Encodes the specified ThrottlerMetricsResponse message. Does not implicitly {@link mysqlctl.ThrottlerMetricsResponse.verify|verify} messages.
+         * @param message ThrottlerMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IThrottlerMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottlerMetricsResponse message, length delimited. Does not implicitly {@link mysqlctl.ThrottlerMetricsResponse.verify|verify} messages.
+         * @param message ThrottlerMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IThrottlerMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottlerMetricsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottlerMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ThrottlerMetricsResponse;
+
+        /**
+         * Decodes a ThrottlerMetricsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottlerMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ThrottlerMetricsResponse;
+
+        /**
+         * Verifies a ThrottlerMetricsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottlerMetricsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottlerMetricsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ThrottlerMetricsResponse;
+
+        /**
+         * Creates a plain object from a ThrottlerMetricsResponse message. Also converts values to other types if specified.
+         * @param message ThrottlerMetricsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ThrottlerMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottlerMetricsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottlerMetricsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace ThrottlerMetricsResponse {
+
+        /** Properties of a Metric. */
+        interface IMetric {
+
+            /** Metric name */
+            name?: (string|null);
+
+            /** Metric value */
+            value?: (number|null);
+
+            /** Metric error */
+            error?: (string|null);
+        }
+
+        /** Represents a Metric. */
+        class Metric implements IMetric {
+
+            /**
+             * Constructs a new Metric.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: mysqlctl.ThrottlerMetricsResponse.IMetric);
+
+            /** Metric name. */
+            public name: string;
+
+            /** Metric value. */
+            public value: number;
+
+            /** Metric error. */
+            public error: string;
+
+            /**
+             * Creates a new Metric instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Metric instance
+             */
+            public static create(properties?: mysqlctl.ThrottlerMetricsResponse.IMetric): mysqlctl.ThrottlerMetricsResponse.Metric;
+
+            /**
+             * Encodes the specified Metric message. Does not implicitly {@link mysqlctl.ThrottlerMetricsResponse.Metric.verify|verify} messages.
+             * @param message Metric message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: mysqlctl.ThrottlerMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Metric message, length delimited. Does not implicitly {@link mysqlctl.ThrottlerMetricsResponse.Metric.verify|verify} messages.
+             * @param message Metric message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: mysqlctl.ThrottlerMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Metric message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Metric
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ThrottlerMetricsResponse.Metric;
+
+            /**
+             * Decodes a Metric message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Metric
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ThrottlerMetricsResponse.Metric;
+
+            /**
+             * Verifies a Metric message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Metric message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Metric
+             */
+            public static fromObject(object: { [k: string]: any }): mysqlctl.ThrottlerMetricsResponse.Metric;
+
+            /**
+             * Creates a plain object from a Metric message. Also converts values to other types if specified.
+             * @param message Metric
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: mysqlctl.ThrottlerMetricsResponse.Metric, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Metric to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Metric
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
     /** Represents a MysqlCtl */
     class MysqlCtl extends $protobuf.rpc.Service {
 
@@ -15797,6 +16097,20 @@ export namespace mysqlctl {
          * @returns Promise
          */
         public versionString(request: mysqlctl.IVersionStringRequest): Promise<mysqlctl.VersionStringResponse>;
+
+        /**
+         * Calls ThrottlerMetrics.
+         * @param request ThrottlerMetricsRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ThrottlerMetricsResponse
+         */
+        public throttlerMetrics(request: mysqlctl.IThrottlerMetricsRequest, callback: mysqlctl.MysqlCtl.ThrottlerMetricsCallback): void;
+
+        /**
+         * Calls ThrottlerMetrics.
+         * @param request ThrottlerMetricsRequest message or plain object
+         * @returns Promise
+         */
+        public throttlerMetrics(request: mysqlctl.IThrottlerMetricsRequest): Promise<mysqlctl.ThrottlerMetricsResponse>;
     }
 
     namespace MysqlCtl {
@@ -15856,6 +16170,13 @@ export namespace mysqlctl {
          * @param [response] VersionStringResponse
          */
         type VersionStringCallback = (error: (Error|null), response?: mysqlctl.VersionStringResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#throttlerMetrics}.
+         * @param error Error, if any
+         * @param [response] ThrottlerMetricsResponse
+         */
+        type ThrottlerMetricsCallback = (error: (Error|null), response?: mysqlctl.ThrottlerMetricsResponse) => void;
     }
 
     /** Properties of a BackupInfo. */

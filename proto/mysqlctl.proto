@@ -79,6 +79,22 @@ message VersionStringResponse{
   string version = 1;
 }
 
+message ThrottlerMetricsRequest{}
+
+message ThrottlerMetricsResponse{
+  message Metric {
+    // Name of the metric
+    string name = 1;
+    // Value is the metric value
+    double value = 2;
+    // Error indicates an error retrieving the value
+    string error = 3;
+  }
+  // Metrics is a map (metric name -> metric value/error) so that the client has as much
+  // information as possible about all the checked metrics.
+  map<string, Metric> metrics = 1;
+}
+
 // MysqlCtl is the service definition
 service MysqlCtl {
   rpc Start(StartRequest) returns (StartResponse) {};
@@ -89,6 +105,7 @@ service MysqlCtl {
   rpc ReinitConfig(ReinitConfigRequest) returns (ReinitConfigResponse) {};
   rpc RefreshConfig(RefreshConfigRequest) returns (RefreshConfigResponse) {};
   rpc VersionString(VersionStringRequest) returns (VersionStringResponse) {};
+  rpc ThrottlerMetrics(ThrottlerMetricsRequest) returns (ThrottlerMetricsResponse) {};
 }
 
 // BackupInfo is the read-only attributes of a mysqlctl/backupstorage.BackupHandle.
