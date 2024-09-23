@@ -99,9 +99,8 @@ message MaterializeSettings {
   bool atomic_copy = 16;
   WorkflowOptions workflow_options = 17;
 
-  // IsReference and Tables are set if the materialization is for reference tables.
-  bool is_reference = 18;
-  repeated string tables = 19;
+  // ReferenceTables is set to a csv list of tables, if the materialization is for reference tables.
+  repeated string reference_tables = 18;
 }
 
 /* Data types for VtctldServer */

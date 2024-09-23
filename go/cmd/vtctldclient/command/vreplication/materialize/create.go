@@ -34,7 +34,7 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-const missingCreateParams = "either --table-settings (for a regular Materialize workflow) or (--reference and --tables, if materializing reference tables) must be specified"
+const missingCreateParams = "either --table-settings or --reference-tables must be specified"
 
 var (
 	createOptions = struct {
@@ -87,7 +87,7 @@ should be copied as-is from the source keyspace. Here's an example value for tab
 			if createOptions.TableSettings.val != nil {
 				hasTableSettings = true
 			}
-			if common.CreateOptions.IsReference && len(common.CreateOptions.Tables) > 0 {
+			if len(common.CreateOptions.ReferenceTables) > 0 {
 				isReference = true
 			}
 			switch {
@@ -95,10 +95,6 @@ should be copied as-is from the source keyspace. Here's an example value for tab
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, missingCreateParams)
 			case hasTableSettings && isReference:
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference/--tables")
-			case common.CreateOptions.IsReference && len(common.CreateOptions.Tables) == 0:
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify --reference without --tables")
-			case !common.CreateOptions.IsReference && len(common.CreateOptions.Tables) > 0:
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify --tables without --reference")
 			}
 			return nil
 		},
@@ -132,8 +128,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		Cell:                      strings.Join(common.CreateOptions.Cells, ","),
 		TabletTypes:               topoproto.MakeStringTypeCSV(common.CreateOptions.TabletTypes),
 		TabletSelectionPreference: tsp,
-		IsReference:               common.CreateOptions.IsReference,
-		Tables:                    common.CreateOptions.Tables,
+		ReferenceTables:           common.CreateOptions.ReferenceTables,
 		WorkflowOptions:           workflowOptions,
 	}
 

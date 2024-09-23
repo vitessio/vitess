@@ -51,8 +51,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringVar(&common.CreateOptions.MySQLServerVersion, "mysql_server_version", fmt.Sprintf("%s-Vitess", config.DefaultMySQLVersion), "Configure the MySQL version to use for example for the parser.")
 	create.Flags().IntVar(&common.CreateOptions.TruncateUILen, "sql-max-length-ui", 512, "truncate queries in debug UIs to the given length (default 512)")
 	create.Flags().IntVar(&common.CreateOptions.TruncateErrLen, "sql-max-length-errors", 0, "truncate queries in error logs to the given length (default unlimited)")
-	create.Flags().BoolVar(&common.CreateOptions.IsReference, "reference", false, "Specify this when materializing reference tables: tables that exist in full on every target shard.")
-	create.Flags().StringSliceVarP(&common.CreateOptions.Tables, "tables", "t", nil, "Used with --reference to specify the reference tables to materialize on every target shard.")
+	create.Flags().StringSliceVarP(&common.CreateOptions.ReferenceTables, "reference-tables", "r", nil, "Used to specify the reference tables to materialize on every target shard.")
 	base.AddCommand(create)
 
 	// Generic workflow commands.
