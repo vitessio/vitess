@@ -2643,6 +2643,7 @@ func (m *GetUnresolvedTransactionsRequest) CloneVT() *GetUnresolvedTransactionsR
 	}
 	r := new(GetUnresolvedTransactionsRequest)
 	r.Keyspace = m.Keyspace
+	r.AbandonAge = m.AbandonAge
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -12979,6 +12980,11 @@ func (m *GetUnresolvedTransactionsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.AbandonAge != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.AbandonAge))
+		i--
+		dAtA[i] = 0x10
 	}
 	if len(m.Keyspace) > 0 {
 		i -= len(m.Keyspace)
@@ -23806,6 +23812,9 @@ func (m *GetUnresolvedTransactionsRequest) SizeVT() (n int) {
 	l = len(m.Keyspace)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.AbandonAge != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.AbandonAge))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -44977,6 +44986,25 @@ func (m *GetUnresolvedTransactionsRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Keyspace = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AbandonAge", wireType)
+			}
+			m.AbandonAge = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.AbandonAge |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -5257,34 +5257,47 @@ func TestConcludeTransaction(t *testing.T) {
 		dtid        string
 		expErr      string
 		participant []*querypb.Target
-	}{
-		{
-			name:   "invalid dtid",
-			tmc:    &testutil.TabletManagerClient{},
-			dtid:   "dtid01",
-			expErr: "invalid parts in dtid: dtid01",
-		}, {
-			name:   "invalid transaction id",
-			tmc:    &testutil.TabletManagerClient{},
-			dtid:   "ks:80-:013c",
-			expErr: "invalid transaction id in dtid: ks:80-:013c",
-		}, {
-			name: "only dtid",
-			tmc:  &testutil.TabletManagerClient{},
-			dtid: "testkeyspace:80-:1234",
-		}, {
-			name:        "with participant",
-			tmc:         &testutil.TabletManagerClient{},
-			dtid:        "testkeyspace:80-:1234",
-			participant: []*querypb.Target{{Keyspace: ks, Shard: "-80"}},
-		}, {
-			name:        "call error",
-			tmc:         &testutil.TabletManagerClient{CallError: true},
-			dtid:        "testkeyspace:80-:1234",
-			participant: []*querypb.Target{{Keyspace: ks, Shard: "-80"}},
-			expErr:      "blocked call for ConcludeTransaction on fake TabletManagerClient",
+	}{{
+		name:   "invalid dtid",
+		tmc:    &testutil.TabletManagerClient{},
+		dtid:   "dtid01",
+		expErr: "invalid parts in dtid: dtid01",
+	}, {
+		name:   "invalid transaction id",
+		tmc:    &testutil.TabletManagerClient{},
+		dtid:   "ks:80-:013c",
+		expErr: "invalid transaction id in dtid: ks:80-:013c",
+	}, {
+		name: "only dtid",
+		tmc: &testutil.TabletManagerClient{
+			ReadTransactionResult: map[string]*querypb.TransactionMetadata{
+				"80-": {Dtid: "bb"},
+			},
 		},
-	}
+		dtid: "testkeyspace:80-:1234",
+	}, {
+		name: "only dtid - empty metadata",
+		tmc: &testutil.TabletManagerClient{
+			ReadTransactionResult: map[string]*querypb.TransactionMetadata{},
+		},
+		dtid: "testkeyspace:80-:1234",
+	}, {
+		name:   "only dtid - fail",
+		tmc:    &testutil.TabletManagerClient{},
+		dtid:   "testkeyspace:80-:1234",
+		expErr: "no ReadTransaction result on fake TabletManagerClient",
+	}, {
+		name:        "with participant",
+		tmc:         &testutil.TabletManagerClient{},
+		dtid:        "testkeyspace:80-:1234",
+		participant: []*querypb.Target{{Keyspace: ks, Shard: "-80"}},
+	}, {
+		name:        "call error",
+		tmc:         &testutil.TabletManagerClient{CallError: true},
+		dtid:        "testkeyspace:80-:1234",
+		participant: []*querypb.Target{{Keyspace: ks, Shard: "-80"}},
+		expErr:      "blocked call for ConcludeTransaction on fake TabletManagerClient",
+	}}
 
 	tablets := []*topodatapb.Tablet{{
 		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
