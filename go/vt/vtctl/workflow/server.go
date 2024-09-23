@@ -1395,6 +1395,29 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 	s.Logger().Infof("Found tables to move: %s", strings.Join(tables, ","))
 
+	// Check if any table being moved is already non-empty in the target keyspace.
+	// Skip this check for multi-tenant migrations.
+	if req.GetWorkflowOptions().GetTenantId() == "" {
+		targetKeyspaceTables, err := getTablesInKeyspace(ctx, sourceTopo, s.tmc, targetKeyspace)
+		if err != nil {
+			return nil, err
+		}
+
+		var alreadyExistingTables []string
+		for _, t := range targetKeyspaceTables {
+			if slices.Contains(tables, t) {
+				alreadyExistingTables = append(alreadyExistingTables, t)
+			}
+		}
+
+		if len(alreadyExistingTables) > 0 {
+			err = validateEmptyTables(ctx, sourceTopo, s.tmc, targetKeyspace, alreadyExistingTables)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	if !vschema.Sharded {
 		// Save the original in case we need to restore it for a late failure
 		// in the defer().
