@@ -132,6 +132,10 @@ func (t *noopVCursor) UnresolvedTransactions(ctx context.Context, keyspace strin
 	panic("implement me")
 }
 
+func (t *noopVCursor) StartPrimitiveTrace() func() Stats {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }

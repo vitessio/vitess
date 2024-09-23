@@ -20,21 +20,19 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"time"
-
-	"vitess.io/vitess/go/vt/vttablet"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 /*
@@ -54,7 +52,7 @@ func newCopyAllState(vc *vcopier) (*copyAllState, error) {
 	state := &copyAllState{
 		vc: vc,
 	}
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
+	plan, err := vc.vr.buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -79,13 +77,13 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, vttablet.CopyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, vc.vr.workflowConfig.CopyPhaseDuration)
 	defer cancel()
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
 
-	parallelism := getInsertParallelism()
+	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	var copyWorkQueue *vcopierCopyWorkQueue
 
@@ -102,6 +100,9 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	var prevCh <-chan *vcopierCopyTaskResult
 	var gtid string
 
+	vstreamOptions := &binlogdatapb.VStreamOptions{
+		ConfigOverrides: vc.vr.workflowConfig.Overrides,
+	}
 	serr := vc.vr.sourceVStreamer.VStreamTables(ctx, func(resp *binlogdatapb.VStreamTablesResponse) error {
 		defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())
 		defer vc.vr.stats.CopyLoopCount.Add(1)
@@ -274,7 +275,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		default:
 		}
 		return nil
-	})
+	}, vstreamOptions)
 	if serr != nil {
 		log.Infof("VStreamTables failed: %v", serr)
 		return serr

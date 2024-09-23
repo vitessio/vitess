@@ -2574,6 +2574,9 @@ var (
 		input:  "vexplain select * from t",
 		output: "vexplain plan select * from t",
 	}, {
+		input:  "vexplain trace select * from t",
+		output: "vexplain trace select * from t",
+	}, {
 		input: "explain analyze select * from t",
 	}, {
 		input: "explain format = tree select * from t",

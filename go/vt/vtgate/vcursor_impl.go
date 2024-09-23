@@ -65,73 +65,80 @@ var (
 	_ vindexes.VCursor    = (*vcursorImpl)(nil)
 )
 
-// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
-type iExecute interface {
-	Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-	ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver resultsObserver) (qr *sqltypes.Result, errs []error)
-	StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer resultsObserver) []error
-	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
-	Commit(ctx context.Context, safeSession *SafeSession) error
-	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
-	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
-	ReleaseLock(ctx context.Context, session *SafeSession) error
+type (
+	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
+	iExecute interface {
+		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver resultsObserver) (qr *sqltypes.Result, errs []error)
+		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer resultsObserver) []error
+		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
+		Commit(ctx context.Context, safeSession *SafeSession) error
+		ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
+		ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
+		ReleaseLock(ctx context.Context, session *SafeSession) error
 
-	showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
-	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
-	showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
-	showVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
-	setVitessMetadata(ctx context.Context, name, value string) error
+		showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+		showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
+		showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+		showVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+		setVitessMetadata(ctx context.Context, name, value string) error
 
-	// TODO: remove when resolver is gone
-	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
-	VSchema() *vindexes.VSchema
-	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
+		// TODO: remove when resolver is gone
+		ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
+		VSchema() *vindexes.VSchema
+		planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
 
-	environment() *vtenv.Environment
-	ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
-	UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error)
-}
+		environment() *vtenv.Environment
+		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
+		UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error)
+	}
 
-// VSchemaOperator is an interface to Vschema Operations
-type VSchemaOperator interface {
-	GetCurrentSrvVschema() *vschemapb.SrvVSchema
-	UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error
-}
+	// VSchemaOperator is an interface to Vschema Operations
+	VSchemaOperator interface {
+		GetCurrentSrvVschema() *vschemapb.SrvVSchema
+		UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error
+	}
 
-// vcursorImpl implements the VCursor functionality used by dependent
-// packages to call back into VTGate.
-type vcursorImpl struct {
-	safeSession    *SafeSession
-	keyspace       string
-	tabletType     topodatapb.TabletType
-	destination    key.Destination
-	marginComments sqlparser.MarginComments
-	executor       iExecute
-	resolver       *srvtopo.Resolver
-	topoServer     *topo.Server
-	logStats       *logstats.LogStats
-	collation      collations.ID
+	// vcursorImpl implements the VCursor functionality used by dependent
+	// packages to call back into VTGate.
+	vcursorImpl struct {
+		safeSession    *SafeSession
+		keyspace       string
+		tabletType     topodatapb.TabletType
+		destination    key.Destination
+		marginComments sqlparser.MarginComments
+		executor       iExecute
+		resolver       *srvtopo.Resolver
+		topoServer     *topo.Server
+		logStats       *logstats.LogStats
+		collation      collations.ID
 
-	// fkChecksState stores the state of foreign key checks variable.
-	// This state is meant to be the final fk checks state after consulting the
-	// session state, and the given query's comments for `SET_VAR` optimizer hints.
-	// A nil value represents that no foreign_key_checks value was provided.
-	fkChecksState       *bool
-	ignoreMaxMemoryRows bool
-	vschema             *vindexes.VSchema
-	vm                  VSchemaOperator
-	semTable            *semantics.SemTable
-	warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
-	queryTimeout        time.Duration
+		// fkChecksState stores the state of foreign key checks variable.
+		// This state is meant to be the final fk checks state after consulting the
+		// session state, and the given query's comments for `SET_VAR` optimizer hints.
+		// A nil value represents that no foreign_key_checks value was provided.
+		fkChecksState       *bool
+		ignoreMaxMemoryRows bool
+		vschema             *vindexes.VSchema
+		vm                  VSchemaOperator
+		semTable            *semantics.SemTable
+		warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
+		queryTimeout        time.Duration
 
-	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
-	pv       plancontext.PlannerVersion
+		warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
+		pv       plancontext.PlannerVersion
 
-	warmingReadsPercent int
-	warmingReadsChannel chan bool
+		warmingReadsPercent int
+		warmingReadsChannel chan bool
 
-	resultsObserver resultsObserver
-}
+		resultsObserver resultsObserver
+
+		// this is a map of the number of rows that every primitive has returned
+		// if this field is nil, it means that we are not logging operator traffic
+		interOpStats map[engine.Primitive]engine.RowsReceived
+		shardsStats  map[engine.Primitive]engine.ShardsQueried
+	}
+)
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
@@ -277,6 +284,17 @@ func (vc *vcursorImpl) UnresolvedTransactions(ctx context.Context, keyspace stri
 		targets = append(targets, rs.Target)
 	}
 	return vc.executor.UnresolvedTransactions(ctx, targets)
+}
+
+func (vc *vcursorImpl) StartPrimitiveTrace() func() engine.Stats {
+	vc.interOpStats = make(map[engine.Primitive]engine.RowsReceived)
+	vc.shardsStats = make(map[engine.Primitive]engine.ShardsQueried)
+	return func() engine.Stats {
+		return engine.Stats{
+			InterOpStats: vc.interOpStats,
+			ShardsStats:  vc.shardsStats,
+		}
+	}
 }
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
@@ -512,9 +530,28 @@ func (vc *vcursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}
+		vc.logOpTraffic(primitive, res)
 		return res, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
+}
+
+func (vc *vcursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Result) {
+	if vc.interOpStats != nil {
+		rows := vc.interOpStats[primitive]
+		if res == nil {
+			rows = append(rows, 0)
+		} else {
+			rows = append(rows, len(res.Rows))
+		}
+		vc.interOpStats[primitive] = rows
+	}
+}
+
+func (vc *vcursorImpl) logShardsQueried(primitive engine.Primitive, shardsNb int) {
+	if vc.shardsStats != nil {
+		vc.shardsStats[primitive] += engine.ShardsQueried(shardsNb)
+	}
 }
 
 func (vc *vcursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -525,12 +562,26 @@ func (vc *vcursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}
+		vc.logOpTraffic(primitive, res)
 		return res, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
+func (vc *vcursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primitive engine.Primitive) func(*sqltypes.Result) error {
+	if vc.interOpStats == nil {
+		return callback
+	}
+
+	return func(result *sqltypes.Result) error {
+		vc.logOpTraffic(primitive, result)
+		return callback(result)
+	}
+}
+
 func (vc *vcursorImpl) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	callback = vc.wrapCallback(callback, primitive)
+
 	for try := 0; try < MaxBufferingRetries; try++ {
 		err := primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
@@ -542,6 +593,8 @@ func (vc *vcursorImpl) StreamExecutePrimitive(ctx context.Context, primitive eng
 }
 
 func (vc *vcursorImpl) StreamExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
+	callback = vc.wrapCallback(callback, primitive)
+
 	// clone the vcursorImpl with a new session.
 	newVC := vc.cloneWithAutocommitSession()
 	for try := 0; try < MaxBufferingRetries; try++ {
@@ -608,12 +661,14 @@ func (vc *vcursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.resultsObserver)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
-
+	vc.logShardsQueried(primitive, len(rss))
 	return qr, errs
 }
 
 // StreamExecuteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
+	callback = vc.wrapCallback(callback, primitive)
+
 	noOfShards := len(rss)
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
 	err := vc.markSavepoint(ctx, rollbackOnError && (noOfShards > 1), map[string]*querypb.BindVariable{})
@@ -645,6 +700,7 @@ func (vc *vcursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.resultsObserver)
+	vc.logShardsQueried(primitive, len(rss))
 	return qr, vterrors.Aggregate(errs)
 }
 

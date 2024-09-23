@@ -214,6 +214,8 @@ message WorkflowOptions {
   // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
   // from the source will be vreplicated.
   repeated string shards = 3;
+  map<string, string> config = 4;
+
 }
 
 // TODO: comment the hell out of this.
@@ -1541,6 +1543,8 @@ message ReshardCreateRequest {
   bool defer_secondary_keys = 11;
   // Start the workflow after creating it.
   bool auto_start = 12;
+  WorkflowOptions workflow_options = 13;
+
 }
 
 message RestoreFromBackupRequest {
@@ -1992,6 +1996,7 @@ message WorkflowSwitchTrafficRequest {
   bool dry_run = 9;
   bool initialize_target_sequences = 10;
   repeated string shards = 11;
+  bool force = 12;
 }
 
 message WorkflowSwitchTrafficResponse {

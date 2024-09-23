@@ -127,7 +127,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 	req.WorkflowSubType = workflowSubType
-	optionsJSON, err := mz.getOptionsJSON()
+	optionsJSON, err := getOptionsJSON(mz.ms.GetWorkflowOptions())
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,20 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 				for _, mappedCol := range mappedCols {
 					subExprs = append(subExprs, mappedCol)
 				}
-				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+				var vindexName string
+				if mz.workflowType == binlogdatapb.VReplicationWorkflowType_Migrate {
+					// For a Migrate, if the TargetKeyspace name is different from the SourceKeyspace name, we need to use the
+					// SourceKeyspace name to determine the vindex since the TargetKeyspace name is not known to the source.
+					// Note: it is expected that the source and target keyspaces have the same vindex name and data type.
+					keyspace := mz.ms.TargetKeyspace
+					if mz.ms.ExternalCluster != "" {
+						keyspace = mz.ms.SourceKeyspace
+					}
+					vindexName = fmt.Sprintf("%s.%s", keyspace, cv.Name)
+				} else {
+					vindexName = fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+				}
+
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange)))
 				inKeyRange := &sqlparser.FuncExpr{
@@ -261,7 +274,7 @@ func (mz *materializer) deploySchema() error {
 	removeAutoInc := false
 	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
-		(mz.ms != nil && mz.ms.GetWorkflowOptions().GetStripShardedAutoIncrement()) {
+		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().StripShardedAutoIncrement) {
 		removeAutoInc = true
 	}
 

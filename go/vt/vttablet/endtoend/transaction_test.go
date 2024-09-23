@@ -794,7 +794,14 @@ func TestUnresolvedTransactions(t *testing.T) {
 		State:        querypb.TransactionState_PREPARE,
 		Participants: participants,
 	}}
-	utils.MustMatch(t, want, transactions)
+
+	require.Len(t, want, len(transactions))
+	for i, transaction := range transactions {
+		// Skipping check for TimeCreated
+		assert.Equal(t, want[i].Dtid, transaction.Dtid)
+		assert.Equal(t, want[i].State, transaction.State)
+		assert.Equal(t, want[i].Participants, transaction.Participants)
+	}
 }
 
 // TestUnresolvedTransactions tests the UnresolvedTransactions API.
@@ -857,5 +864,12 @@ func TestUnresolvedTransactionsOrdering(t *testing.T) {
 		State:        querypb.TransactionState_PREPARE,
 		Participants: participants1,
 	}}
-	utils.MustMatch(t, want, transactions)
+
+	require.Len(t, want, len(transactions))
+	for i, transaction := range transactions {
+		// Skipping check for TimeCreated
+		assert.Equal(t, want[i].Dtid, transaction.Dtid)
+		assert.Equal(t, want[i].State, transaction.State)
+		assert.Equal(t, want[i].Participants, transaction.Participants)
+	}
 }

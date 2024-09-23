@@ -24,7 +24,7 @@ The following is the full list, alphabetically ordered.
 deepthi, mattlord, derekperkins
 
 ### Builds
-dkhenry, shlomi-noach, ajm188, vmg, GuptaManan100, frouioui
+shlomi-noach, ajm188, vmg, GuptaManan100, frouioui
 
 ### Resharding
 rohit-nayak-ps, deepthi, mattlord
@@ -54,7 +54,7 @@ deepthi, ajm188, GuptaManan100, dbussink
 harshit-gangal
 
 ### Kubernetes
-derekperkins, dkhenry, GuptaManan100, frouioui
+derekperkins, GuptaManan100, frouioui
 
 ### VTAdmin
 ajm188, notfelineit

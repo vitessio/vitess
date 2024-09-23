@@ -276,6 +276,7 @@ const (
 	QueriesStr     = "queries"
 	AllVExplainStr = "all"
 	PlanStr        = "plan"
+	TraceStr       = "trace"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -846,6 +847,7 @@ const (
 	QueriesVExplainType VExplainType = iota
 	PlanVExplainType
 	AllVExplainType
+	TraceVExplainType
 )
 
 // Constant for Enum Type - SelectIntoType

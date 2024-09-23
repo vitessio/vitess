@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -82,20 +83,21 @@ func TableID(op Operator) (result semantics.TableSet) {
 
 // TableUser is used to signal that this operator directly interacts with one or more tables
 type TableUser interface {
-	TablesUsed() []string
+	TablesUsed([]string) []string
 }
 
 func TablesUsed(op Operator) []string {
-	addString, collect := collectSortedUniqueStrings()
+	var in []string
 	_ = Visit(op, func(this Operator) error {
 		if tbl, ok := this.(TableUser); ok {
-			for _, u := range tbl.TablesUsed() {
-				addString(u)
-			}
+			in = tbl.TablesUsed(in)
 		}
 		return nil
 	})
-	return collect()
+
+	slices.Sort(in)
+	compacted := slices.Compact(in)
+	return compacted
 }
 
 func CostOf(op Operator) (cost int) {

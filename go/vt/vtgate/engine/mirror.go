@@ -46,7 +46,7 @@ var _ Primitive = (*percentBasedMirror)(nil)
 
 // NewPercentBasedMirror creates a Mirror.
 func NewPercentBasedMirror(percentage float32, primitive Primitive, target Primitive) Primitive {
-	return &percentBasedMirror{percentage, primitive, target}
+	return &percentBasedMirror{percent: percentage, primitive: primitive, target: target}
 }
 
 func (m *percentBasedMirror) RouteType() string {

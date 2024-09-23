@@ -282,9 +282,9 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 
 func (vre *Engine) initControllers(rows []map[string]string) {
 	for _, row := range rows {
-		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre, discovery.TabletPickerOptions{})
+		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
-			log.Errorf("Controller could not be initialized for stream: %v", row)
+			log.Errorf("Controller could not be initialized for stream: %v: %v", row, err)
 			continue
 		}
 		vre.controllers[ct.id] = ct
@@ -405,8 +405,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return nil, fmt.Errorf("insert id %v out of range", qr.InsertID)
 		}
 
-		vdbc := newVDBClient(dbClient, stats)
-
 		// If we are creating multiple streams, for example in a
 		// merge workflow going from 2 shards to 1 shard, we
 		// will be inserting multiple rows. To get the ids of
@@ -430,11 +428,12 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			if err != nil {
 				return nil, err
 			}
-			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre, plan.tabletPickerOptions)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, nil, vre, plan.tabletPickerOptions)
 			if err != nil {
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			vdbc := newVDBClient(dbClient, stats, ct.WorkflowConfig.RelayLogMaxSize)
 			insertLogWithParams(vdbc, LogStreamCreate, id, params)
 		}
 		return qr, nil
@@ -462,7 +461,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		vdbc := newVDBClient(dbClient, stats)
 		for _, id := range ids {
 			params, err := readRow(dbClient, id)
 			if err != nil {
@@ -470,11 +468,12 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			}
 			// Create a new controller in place of the old one.
 			// For continuity, the new controller inherits the previous stats.
-			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, blpStats[id], vre, plan.tabletPickerOptions)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, blpStats[id], vre, plan.tabletPickerOptions)
 			if err != nil {
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			vdbc := newVDBClient(dbClient, stats, ct.WorkflowConfig.RelayLogMaxSize)
 			insertLog(vdbc, LogStateChange, id, params["state"], "")
 		}
 		return qr, nil
@@ -487,13 +486,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return &sqltypes.Result{}, nil
 		}
 		// Stop and delete the current controllers.
-		vdbc := newVDBClient(dbClient, stats)
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
+				vdbc := newVDBClient(dbClient, stats, ct.WorkflowConfig.RelayLogMaxSize)
 				ct.Stop()
 				delete(vre.controllers, id)
+				insertLogWithParams(vdbc, LogStreamDelete, id, nil)
 			}
-			insertLogWithParams(vdbc, LogStreamDelete, id, nil)
 		}
 		if err := dbClient.Begin(); err != nil {
 			return nil, err
@@ -640,7 +639,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 
 	log.Infof("Transitioning for journal:workload %v", je)
 
-	//sort both participants and shardgtids
+	// sort both participants and shardgtids
 	participants := make([]string, 0)
 	for ks := range je.participants {
 		participants = append(participants, ks)
@@ -691,7 +690,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
 		ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Running, vre.dbName)
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
-			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys)
+			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys, "")
 		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
@@ -730,7 +729,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 			log.Errorf("transitionJournal: %v", err)
 			return
 		}
-		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre, discovery.TabletPickerOptions{})
+		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return

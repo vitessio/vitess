@@ -1197,7 +1197,7 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.
 		}
 		row = r.Rows[0]
 	}
-	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send)
+	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send, request.Options)
 }
 
 // VStreamTables streams all tables.
@@ -1205,7 +1205,7 @@ func (tsv *TabletServer) VStreamTables(ctx context.Context, request *binlogdatap
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.StreamTables(ctx, send)
+	return tsv.vstreamer.StreamTables(ctx, send, request.Options)
 }
 
 // VStreamResults streams rows from the specified starting point.
