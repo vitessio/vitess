@@ -32,6 +32,8 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -4378,6 +4380,11 @@ func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, 
 			// table(s) in order to manage the workflow.
 			res, err := s.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
 			if err != nil {
+				if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
+					// This is a pre v21 tablet, so don't return an error since the permissions
+					// not being there should be very rare.
+					return
+				}
 				allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s",
 					topoproto.TabletAliasString(tablet.Alias)))
 			}
