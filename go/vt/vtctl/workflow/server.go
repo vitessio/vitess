@@ -1285,24 +1285,18 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 	}
 
 	switch {
-	case ms.IsReference && len(ms.Tables) == 0:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables specified for reference table materialization")
-	case len(ms.Tables) > 0 && !ms.IsReference:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tables specified for non-reference table materialization")
-	case !ms.IsReference && len(ms.TableSettings) == 0:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "either table settings or reference tables must be specified")
-	case ms.IsReference && len(ms.TableSettings) > 0:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both table settings and reference tables")
+	case len(ms.ReferenceTables) == 0 && len(ms.TableSettings) == 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "either --table-settings or --reference-tables must be specified")
+	case len(ms.ReferenceTables) > 0 && len(ms.TableSettings) > 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference-tables")
 	}
 
-	if ms.IsReference {
-		for _, table := range ms.Tables {
-			ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
-				TargetTable:      table,
-				SourceExpression: fmt.Sprintf("select * from %s", table),
-				CreateDdl:        createDDLAsCopyDropForeignKeys,
-			})
-		}
+	for _, table := range ms.ReferenceTables {
+		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
+			TargetTable:      table,
+			SourceExpression: fmt.Sprintf("select * from %s", table),
+			CreateDdl:        createDDLAsCopyDropForeignKeys,
+		})
 	}
 
 	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
