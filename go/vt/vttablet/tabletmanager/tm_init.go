@@ -264,11 +264,6 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		charset = collationEnv.DefaultConnectionCharset()
 	}
 
-	tags := mergeTags(buildTags, initTags)
-	for k, v := range tags {
-		statsTabletTags.Set([]string{k, v}, 1)
-	}
-
 	return &topodatapb.Tablet{
 		Alias:    alias,
 		Hostname: hostname,
@@ -281,7 +276,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		KeyRange:             keyRange,
 		Type:                 tabletType,
 		DbNameOverride:       initDbNameOverride,
-		Tags:                 tags,
+		Tags:                 mergeTags(buildTags, initTags),
 		DefaultConnCollation: uint32(charset),
 	}, nil
 }
@@ -898,6 +893,9 @@ func (tm *TabletManager) exportStats() {
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}
 	statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
+	for k, v := range tablet.Tags {
+		statsTabletTags.Set([]string{k, v}, 1)
+	}
 }
 
 // withRetry will exponentially back off and retry a function upon
