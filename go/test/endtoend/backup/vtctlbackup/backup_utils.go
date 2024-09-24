@@ -54,19 +54,20 @@ const (
 	XtraBackup = iota
 	BuiltinBackup
 	Mysqlctld
+	MySQLShell
 	timeout                = time.Duration(60 * time.Second)
 	topoConsistencyTimeout = 20 * time.Second
 )
 
 var (
-	primary       *cluster.Vttablet
-	replica1      *cluster.Vttablet
-	replica2      *cluster.Vttablet
-	replica3      *cluster.Vttablet
-	localCluster  *cluster.LocalProcessCluster
-	newInitDBFile string
-	useXtrabackup bool
-	cell          = cluster.DefaultCell
+	primary          *cluster.Vttablet
+	replica1         *cluster.Vttablet
+	replica2         *cluster.Vttablet
+	replica3         *cluster.Vttablet
+	localCluster     *cluster.LocalProcessCluster
+	newInitDBFile    string
+	currentSetupType int
+	cell             = cluster.DefaultCell
 
 	hostname         = "localhost"
 	keyspaceName     = "ks"
@@ -103,6 +104,7 @@ type CompressionDetails struct {
 
 // LaunchCluster : starts the cluster as per given params.
 func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
+	currentSetupType = setupType
 	localCluster = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
@@ -144,10 +146,9 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
 
-	// Update arguments for xtrabackup
-	if setupType == XtraBackup {
-		useXtrabackup = true
-
+	// Update arguments for different backup engines
+	switch setupType {
+	case XtraBackup:
 		xtrabackupArgs := []string{
 			"--backup_engine_implementation", "xtrabackup",
 			fmt.Sprintf("--xtrabackup_stream_mode=%s", streamMode),
@@ -162,6 +163,18 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		}
 
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
+	case MySQLShell:
+		mysqlShellBackupLocation := path.Join(localCluster.CurrentVTDATAROOT, "backups-mysqlshell")
+		err = os.MkdirAll(mysqlShellBackupLocation, 0o777)
+		if err != nil {
+			return 0, err
+		}
+
+		mysqlShellArgs := []string{
+			"--backup_engine_implementation", "mysqlshell",
+			"--mysql-shell-backup-location", mysqlShellBackupLocation,
+		}
+		commonTabletArg = append(commonTabletArg, mysqlShellArgs...)
 	}
 
 	commonTabletArg = append(commonTabletArg, getCompressorArgs(cDetails)...)
@@ -178,8 +191,18 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
 		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 		tablet.VttabletProcess.DbPassword = dbPassword
-		tablet.VttabletProcess.ExtraArgs = commonTabletArg
 		tablet.VttabletProcess.SupportsBackup = true
+
+		// since we spin different mysqld processes, we need to pass exactly the socket of the this particular
+		// one when running mysql shell dump/loads
+		if setupType == MySQLShell {
+			commonTabletArg = append(commonTabletArg,
+				"--mysql-shell-flags", fmt.Sprintf("--js -u vt_dba -p%s -S %s", dbPassword,
+					path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "mysql.sock"),
+				),
+			)
+		}
+		tablet.VttabletProcess.ExtraArgs = commonTabletArg
 
 		if setupType == Mysqlctld {
 			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
@@ -1033,12 +1056,8 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 
 func terminateBackup(t *testing.T, alias string) {
 	stopBackupMsg := "Completed backing up"
-	if useXtrabackup {
+	if currentSetupType == XtraBackup {
 		stopBackupMsg = "Starting backup with"
-		useXtrabackup = false
-		defer func() {
-			useXtrabackup = true
-		}()
 	}
 
 	args := append([]string{"--server", localCluster.VtctldClientProcess.Server, "--alsologtostderr"}, "Backup", alias)
@@ -1067,12 +1086,8 @@ func terminateBackup(t *testing.T, alias string) {
 
 func terminateRestore(t *testing.T) {
 	stopRestoreMsg := "Copying file 10"
-	if useXtrabackup {
+	if currentSetupType == XtraBackup {
 		stopRestoreMsg = "Restore: Preparing"
-		useXtrabackup = false
-		defer func() {
-			useXtrabackup = true
-		}()
 	}
 
 	args := append([]string{"--server", localCluster.VtctldClientProcess.Server, "--alsologtostderr"}, "RestoreFromBackup", primary.Alias)
@@ -1131,6 +1146,17 @@ func GetReplicaGtidPurged(t *testing.T, replicaIndex int) string {
 	row := rs.Named().Row()
 	require.NotNil(t, row)
 	return row.AsString("gtid_purged", "")
+}
+
+func ReconnectReplicaToPrimary(t *testing.T, replicaIndex int) {
+	query := fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", primary.MySQLPort)
+	replica := getReplica(t, replicaIndex)
+	_, err := replica.VttabletProcess.QueryTablet("stop replica", keyspaceName, true)
+	require.NoError(t, err)
+	_, err = replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	require.NoError(t, err)
+	_, err = replica.VttabletProcess.QueryTablet("start replica", keyspaceName, true)
+	require.NoError(t, err)
 }
 
 func InsertRowOnPrimary(t *testing.T, hint string) {
@@ -1345,9 +1371,9 @@ func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, e
 }
 
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
-	// Currently only the builtin backup engine instruments bytes-processed
-	// counts.
-	if !useXtrabackup {
+	switch currentSetupType {
+	// Currently only the builtin backup engine instruments bytes-processed counts.
+	case BuiltinBackup:
 		require.Contains(t, vars, "BackupBytes")
 		bb := vars["BackupBytes"].(map[string]any)
 		require.Contains(t, bb, "BackupEngine.Builtin.Compressor:Write")
@@ -1361,8 +1387,10 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	require.Contains(t, vars, "BackupCount")
 	bc := vars["BackupCount"].(map[string]any)
 	require.Contains(t, bc, "-.-.Backup")
-	// Currently only the builtin backup engine implements operation counts.
-	if !useXtrabackup {
+
+	switch currentSetupType {
+	// Currently only the builtin backup engine instruments bytes-processed counts.
+	case BuiltinBackup:
 		require.Contains(t, bc, "BackupEngine.Builtin.Compressor:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
@@ -1373,8 +1401,10 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	require.Contains(t, vars, "BackupDurationNanoseconds")
 	bd := vars["BackupDurationNanoseconds"]
 	require.Contains(t, bd, "-.-.Backup")
+
+	switch currentSetupType {
 	// Currently only the builtin backup engine emits timings.
-	if !useXtrabackup {
+	case BuiltinBackup:
 		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Close")
 		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Write")
 		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
@@ -1384,6 +1414,7 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
 	}
+
 	if backupstorage.BackupStorageImplementation == "file" {
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
 	}
@@ -1408,7 +1439,8 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 
 	verifyRestorePositionAndTimeStats(t, vars)
 
-	if !useXtrabackup {
+	switch currentSetupType {
+	case BuiltinBackup:
 		require.Contains(t, vars, "RestoreBytes")
 		bb := vars["RestoreBytes"].(map[string]any)
 		require.Contains(t, bb, "BackupEngine.Builtin.Decompressor:Read")
@@ -1420,8 +1452,10 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 	require.Contains(t, vars, "RestoreCount")
 	bc := vars["RestoreCount"].(map[string]any)
 	require.Contains(t, bc, "-.-.Restore")
+
+	switch currentSetupType {
 	// Currently only the builtin backup engine emits operation counts.
-	if !useXtrabackup {
+	case BuiltinBackup:
 		require.Contains(t, bc, "BackupEngine.Builtin.Decompressor:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
@@ -1432,8 +1466,10 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 	require.Contains(t, vars, "RestoreDurationNanoseconds")
 	bd := vars["RestoreDurationNanoseconds"]
 	require.Contains(t, bd, "-.-.Restore")
+
+	switch currentSetupType {
 	// Currently only the builtin backup engine emits timings.
-	if !useXtrabackup {
+	case BuiltinBackup:
 		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Close")
 		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Read")
 		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
@@ -1443,5 +1479,6 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
 	}
+
 	require.Contains(t, bd, "BackupStorage.File.File:Read")
 }

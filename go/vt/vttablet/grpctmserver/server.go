@@ -275,16 +275,32 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerda
 	return response, nil
 }
 
+//
+// Distributed Transaction related methods
+//
+
 func (s *server) GetUnresolvedTransactions(ctx context.Context, request *tabletmanagerdatapb.GetUnresolvedTransactionsRequest) (response *tabletmanagerdatapb.GetUnresolvedTransactionsResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "GetUnresolvedTransactions", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 
-	transactions, err := s.tm.GetUnresolvedTransactions(ctx)
+	transactions, err := s.tm.GetUnresolvedTransactions(ctx, request.AbandonAge)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &tabletmanagerdatapb.GetUnresolvedTransactionsResponse{Transactions: transactions}, nil
+}
+
+func (s *server) ReadTransaction(ctx context.Context, request *tabletmanagerdatapb.ReadTransactionRequest) (response *tabletmanagerdatapb.ReadTransactionResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ReadTransaction", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+
+	transaction, err := s.tm.ReadTransaction(ctx, request)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+
+	return &tabletmanagerdatapb.ReadTransactionResponse{Transaction: transaction}, nil
 }
 
 func (s *server) ConcludeTransaction(ctx context.Context, request *tabletmanagerdatapb.ConcludeTransactionRequest) (response *tabletmanagerdatapb.ConcludeTransactionResponse, err error) {
@@ -434,6 +450,14 @@ func (s *server) ReadVReplicationWorkflow(ctx context.Context, request *tabletma
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{}
 	return s.tm.ReadVReplicationWorkflow(ctx, request)
+}
+
+func (s *server) ValidateVReplicationPermissions(ctx context.Context, request *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (response *tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ValidateVReplicationPermissions", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{}
+	response, err = s.tm.ValidateVReplicationPermissions(ctx, request)
+	return response, err
 }
 
 func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {

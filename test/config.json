@@ -109,6 +109,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"backup_pitr_mysqlshell": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/pitr_mysqlshell", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "backup_pitr_mysqlshell",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"backup": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "30m"],
@@ -1051,7 +1060,7 @@
 		},
 		"vreplication_materialize": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMaterialize"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "Materialize"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",

@@ -891,6 +891,7 @@ func (m *UnresolvedTransactionsRequest) CloneVT() *UnresolvedTransactionsRequest
 	r.EffectiveCallerId = m.EffectiveCallerId.CloneVT()
 	r.ImmediateCallerId = m.ImmediateCallerId.CloneVT()
 	r.Target = m.Target.CloneVT()
+	r.AbandonAge = m.AbandonAge
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -3984,6 +3985,11 @@ func (m *UnresolvedTransactionsRequest) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.AbandonAge != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.AbandonAge))
+		i--
+		dAtA[i] = 0x20
+	}
 	if m.Target != nil {
 		size, err := m.Target.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -6914,6 +6920,9 @@ func (m *UnresolvedTransactionsRequest) SizeVT() (n int) {
 	if m.Target != nil {
 		l = m.Target.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.AbandonAge != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.AbandonAge))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -13950,6 +13959,25 @@ func (m *UnresolvedTransactionsRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AbandonAge", wireType)
+			}
+			m.AbandonAge = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.AbandonAge |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

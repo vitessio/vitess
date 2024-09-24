@@ -68,7 +68,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
 
     return (
         <div className="w-min inline-block">
-            <Dropdown dropdownButton={Icons.info} position="bottom-right">
+            <Dropdown dropdownButton={Icons.info}>
                 {isMoveTablesWorkflow && (
                     <MenuItem onClick={() => setCurrentDialog('Complete MoveTables')}>Complete MoveTables</MenuItem>
                 )}

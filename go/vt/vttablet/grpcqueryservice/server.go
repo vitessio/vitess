@@ -240,7 +240,7 @@ func (q *query) UnresolvedTransactions(ctx context.Context, request *querypb.Unr
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactions, err := q.server.UnresolvedTransactions(ctx, request.Target)
+	transactions, err := q.server.UnresolvedTransactions(ctx, request.Target, request.AbandonAge)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}

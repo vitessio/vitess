@@ -130,6 +130,9 @@ type VTAdminClient interface {
 	// MoveTablesComplete completes the move and cleans up the workflow and
 	// its related artifacts.
 	MoveTablesComplete(ctx context.Context, in *MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error)
+	// MoveTablesCreate creates a workflow which moves one or more tables from a
+	// source keyspace to a target keyspace.
+	MoveTablesCreate(ctx context.Context, in *MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
@@ -580,6 +583,15 @@ func (c *vTAdminClient) MoveTablesComplete(ctx context.Context, in *MoveTablesCo
 	return out, nil
 }
 
+func (c *vTAdminClient) MoveTablesCreate(ctx context.Context, in *MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/MoveTablesCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error) {
 	out := new(PingTabletResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/PingTablet", in, out, opts...)
@@ -889,6 +901,9 @@ type VTAdminServer interface {
 	// MoveTablesComplete completes the move and cleans up the workflow and
 	// its related artifacts.
 	MoveTablesComplete(context.Context, *MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error)
+	// MoveTablesCreate creates a workflow which moves one or more tables from a
+	// source keyspace to a target keyspace.
+	MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
@@ -1089,6 +1104,9 @@ func (UnimplementedVTAdminServer) LaunchSchemaMigration(context.Context, *Launch
 }
 func (UnimplementedVTAdminServer) MoveTablesComplete(context.Context, *MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesComplete not implemented")
+}
+func (UnimplementedVTAdminServer) MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
 }
 func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
@@ -1907,6 +1925,24 @@ func _VTAdmin_MoveTablesComplete_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveTablesCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).MoveTablesCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/MoveTablesCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).MoveTablesCreate(ctx, req.(*MoveTablesCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PingTabletRequest)
 	if err := dec(in); err != nil {
@@ -2473,6 +2509,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MoveTablesComplete",
 			Handler:    _VTAdmin_MoveTablesComplete_Handler,
+		},
+		{
+			MethodName: "MoveTablesCreate",
+			Handler:    _VTAdmin_MoveTablesCreate_Handler,
 		},
 		{
 			MethodName: "PingTablet",

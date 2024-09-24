@@ -462,6 +462,23 @@ export const fetchWorkflowStatus = async (params: { clusterID: string; keyspace:
     return vtctldata.WorkflowStatusResponse.create(result);
 };
 
+export interface CreateMoveTablesParams {
+    clusterID: string;
+    request: vtctldata.IMoveTablesCreateRequest;
+}
+
+export const createMoveTables = async ({ clusterID, request }: CreateMoveTablesParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/movetables`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtctldata.WorkflowStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowStatusResponse.create(result);
+};
+
 export interface WorkflowActionParams {
     clusterID: string;
     keyspace: string;
