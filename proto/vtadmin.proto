@@ -634,6 +634,7 @@ message GetTopologyPathRequest {
 message GetUnresolvedTransactionsRequest {
     string cluster_id = 1;
     string keyspace = 2;
+    int64 abandon_age = 3;
 }
 
 message GetVSchemaRequest {

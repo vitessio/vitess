@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useKeyspaces, useTransactions } from '../../hooks/api';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
@@ -36,6 +36,33 @@ import { isReadOnlyMode } from '../../util/env';
 const COLUMNS = ['ID', 'State', 'Participants', 'Time Created', 'Actions'];
 const READ_ONLY_COLUMNS = ['ID', 'State', 'Participants', 'Time Created'];
 
+const ABANDON_AGE_OPTIONS = [
+    {
+        displayText: '5sec',
+        abandonAge: '5',
+    },
+    {
+        displayText: '30sec',
+        abandonAge: '30',
+    },
+    {
+        displayText: '1min',
+        abandonAge: '60',
+    },
+    {
+        displayText: '5min',
+        abandonAge: '300',
+    },
+    {
+        displayText: '15min',
+        abandonAge: '900',
+    },
+    {
+        displayText: '1hr',
+        abandonAge: '3600',
+    },
+];
+
 export const Transactions = () => {
     useDocumentTitle('In Flight Distributed Transactions');
 
@@ -49,12 +76,20 @@ export const Transactions = () => {
         (ks) => ks.keyspace?.name === params.keyspace && ks.cluster?.id === params.clusterID
     );
 
+    const selectedAbandonAge = ABANDON_AGE_OPTIONS.find((option) => option.abandonAge === params.abandonAge);
+
     const transactionsQuery = useTransactions(params, {
         enabled: !!params.keyspace,
     });
 
     const transactions =
         (transactionsQuery.data && orderBy(transactionsQuery.data.transactions, ['time_created'], 'asc')) || [];
+
+    useEffect(() => {
+        if (params.clusterID && params.keyspace) {
+            transactionsQuery.refetch();
+        }
+    }, [params.abandonAge]);
 
     const renderRows = (rows: query.ITransactionMetadata[]) => {
         return rows.map((row) => {
@@ -107,39 +142,49 @@ export const Transactions = () => {
             </WorkspaceHeader>
 
             <ContentContainer>
-                <div className='flex flex-row gap-1 max-w-[740px]'>
-                <Select
-                    className="block grow-1 min-w-[300px]"
-                    disabled={keyspacesQuery.isLoading}
-                    inputClassName="block w-full"
-                    items={keyspaces}
-                    label="Keyspace"
-                    onChange={(ks) => setParams({ clusterID: ks?.cluster?.id!, keyspace: ks?.keyspace?.name! })}
-                    placeholder={
-                        keyspacesQuery.isLoading
-                            ? 'Loading keyspaces...'
-                            : 'Select a keyspace to view unresolved transactions'
-                    }
-                    renderItem={(ks) => `${ks?.keyspace?.name} (${ks?.cluster?.id})`}
-                    selectedItem={selectedKeyspace}
-                />
-                <Select
-                    className="block grow-1 min-w-[300px]"
-                    disabled={keyspacesQuery.isLoading}
-                    inputClassName="block w-full"
-                    items={keyspaces}
-                    label="Keyspace"
-                    onChange={(ks) => setParams({ clusterID: ks?.cluster?.id!, keyspace: ks?.keyspace?.name! })}
-                    placeholder={
-                        keyspacesQuery.isLoading
-                            ? 'Loading keyspaces...'
-                            : 'Select a keyspace to view unresolved transactions'
-                    }
-                    renderItem={(ks) => `${ks?.keyspace?.name} (${ks?.cluster?.id})`}
-                    selectedItem={selectedKeyspace}
-                />
+                <div className="flex flex-row flex-wrap gap-4 max-w-[740px]">
+                    <Select
+                        className="block grow-1 min-w-[400px]"
+                        disabled={keyspacesQuery.isLoading}
+                        inputClassName="block w-full"
+                        items={keyspaces}
+                        label="Keyspace"
+                        onChange={(ks) =>
+                            setParams((prevParams) => ({
+                                ...prevParams,
+                                clusterID: ks?.cluster?.id!,
+                                keyspace: ks?.keyspace?.name!,
+                            }))
+                        }
+                        placeholder={
+                            keyspacesQuery.isLoading
+                                ? 'Loading keyspaces...'
+                                : 'Select a keyspace to view unresolved transactions'
+                        }
+                        renderItem={(ks) => `${ks?.keyspace?.name} (${ks?.cluster?.id})`}
+                        selectedItem={selectedKeyspace}
+                    />
+                    <Select
+                        className="block grow-1 min-w-[300px]"
+                        inputClassName="block w-full"
+                        items={ABANDON_AGE_OPTIONS}
+                        label="Abandon Age"
+                        helpText={
+                            'List unresolved transactions which are older than the specified age (Leave empty for default abandon age)'
+                        }
+                        onChange={(option) =>
+                            setParams((prevParams) => ({ ...prevParams, abandonAge: option?.abandonAge }))
+                        }
+                        placeholder={'Select abandon age'}
+                        renderItem={(option) => `${option?.displayText}`}
+                        selectedItem={selectedAbandonAge}
+                    />
                 </div>
-                <DataTable columns={isReadOnlyMode() ? READ_ONLY_COLUMNS : COLUMNS} data={transactions} renderRows={renderRows} />
+                <DataTable
+                    columns={isReadOnlyMode() ? READ_ONLY_COLUMNS : COLUMNS}
+                    data={transactions}
+                    renderRows={renderRows}
+                />
                 <QueryLoadingPlaceholder query={transactionsQuery} />
             </ContentContainer>
         </div>

@@ -8247,6 +8247,9 @@ export namespace vtadmin {
 
         /** GetUnresolvedTransactionsRequest keyspace */
         keyspace?: (string|null);
+
+        /** GetUnresolvedTransactionsRequest abandon_age */
+        abandon_age?: (number|Long|null);
     }
 
     /** Represents a GetUnresolvedTransactionsRequest. */
@@ -8263,6 +8266,9 @@ export namespace vtadmin {
 
         /** GetUnresolvedTransactionsRequest keyspace. */
         public keyspace: string;
+
+        /** GetUnresolvedTransactionsRequest abandon_age. */
+        public abandon_age: (number|Long);
 
         /**
          * Creates a new GetUnresolvedTransactionsRequest instance using the specified properties.

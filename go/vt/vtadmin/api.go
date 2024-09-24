@@ -1523,7 +1523,8 @@ func (api *API) GetUnresolvedTransactions(ctx context.Context, req *vtadminpb.Ge
 	}
 
 	return c.Vtctld.GetUnresolvedTransactions(ctx, &vtctldatapb.GetUnresolvedTransactionsRequest{
-		Keyspace: req.Keyspace,
+		Keyspace:   req.Keyspace,
+		AbandonAge: req.AbandonAge,
 	})
 }
 
