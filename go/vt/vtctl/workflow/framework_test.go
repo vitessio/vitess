@@ -595,6 +595,13 @@ func (tmc *testTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet 
 	}, nil
 }
 
+func (tmc *testTMClient) ValidateVReplicationPermissions(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+		User: "vt_filtered",
+		Ok:   true,
+	}, nil
+}
+
 func (tmc *testTMClient) setPrimaryPosition(tablet *topodatapb.Tablet, position string) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()

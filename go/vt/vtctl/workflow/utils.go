@@ -640,7 +640,7 @@ func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonl
 func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, keyspace string, shards []*topo.ShardInfo) error {
 	// We use the value from the workflow for the TabletPicker.
 	tabletTypesStr := ts.optTabletTypes
-	cells := req.Cells
+	cells := req.GetCells()
 	// If no cells were provided in the command then use the value from the workflow.
 	if len(cells) == 0 && ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
@@ -670,7 +670,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 
 	wg.Wait()
 	if allErrors.HasErrors() {
-		ts.Logger().Errorf("%s", allErrors.Error())
+		ts.Logger().Error(allErrors.Error())
 		return allErrors.Error()
 	}
 	return nil

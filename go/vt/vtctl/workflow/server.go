@@ -32,9 +32,12 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
@@ -3135,7 +3138,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	// a seconds value so you'd get unexpected behavior if you e.g. set the timeout to
 	// 500ms as Etcd would get a value of 0 or a never-ending TTL.
 	if timeout.Seconds() < 1 {
-		return nil, vterrors.Wrap(err, "Timeout must be at least 1 second")
+		return nil, vterrors.Wrap(err, "timeout must be at least 1 second")
 	}
 	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
@@ -3445,8 +3448,16 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 
 	if req.EnableReverseReplication {
+		// Does the source keyspace have tablets that are able to manage
+		// the reverse workflow?
+		if err := s.validateShardsHaveVReplicationPermissions(ctx, ts.SourceKeyspaceName(), ts.SourceShards()); err != nil {
+			return handleError(fmt.Sprintf("primary tablets are not able to fully manage the reverse vreplication workflow in the %s keyspace",
+				ts.SourceKeyspaceName()), err)
+		}
+		// Does the target keyspace have tablets available to stream from
+		// for the reverse workflow?
 		if err := areTabletsAvailableToStreamFrom(ctx, req, ts, ts.TargetKeyspaceName(), ts.TargetShards()); err != nil {
-			return handleError(fmt.Sprintf("no tablets were available to stream from in the %s keyspace", ts.SourceKeyspaceName()), err)
+			return handleError(fmt.Sprintf("no tablets were available to stream from in the %s keyspace", ts.TargetKeyspaceName()), err)
 		}
 	}
 
@@ -4311,7 +4322,9 @@ func (s *Server) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 	}
 	if len(cannotSwitchTabletTypes) > 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot mirror [%s] traffic for workflow %s at this time: traffic for those tablet types is switched", strings.Join(cannotSwitchTabletTypes, ","), startState.Workflow)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"cannot mirror [%s] traffic for workflow %s at this time: traffic for those tablet types is switched",
+			strings.Join(cannotSwitchTabletTypes, ","), startState.Workflow)
 	}
 
 	if err := s.mirrorTraffic(ctx, req, ts, startState); err != nil {
@@ -4357,6 +4370,50 @@ func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMir
 		return handleError("failed to mirror traffic for the tables", err)
 	}
 
+	return nil
+}
+
+// validateShardsHaveVReplicationPermissions checks that the primary tablets
+// in the given keyspace shards have the required permissions necessary to
+// perform actions on the workflow.
+func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, keyspace string, shards []*topo.ShardInfo) error {
+	validateEg, validateCtx := errgroup.WithContext(ctx)
+	for _, shard := range shards {
+		primary := shard.PrimaryAlias
+		if primary == nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s/%s shard does not have a primary tablet",
+				keyspace, shard.ShardName())
+		}
+		validateEg.Go(func() error {
+			tablet, err := s.ts.GetTablet(validateCtx, primary)
+			if err != nil {
+				return vterrors.Wrapf(err, "failed to get primary tablet for the %s/%s shard", keyspace, shard.ShardName())
+			}
+			// Ensure the tablet has the minimum privileges required on the sidecar database
+			// table(s) in order to manage the workflow.
+			req := &tabletmanagerdatapb.ValidateVReplicationPermissionsRequest{}
+			res, err := s.tmc.ValidateVReplicationPermissions(validateCtx, tablet.Tablet, req)
+			if err != nil {
+				// This older tablet handling can be removed in v22 or later.
+				if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
+					// This is a pre v21 tablet, so don't return an error since the
+					// permissions not being there should be very rare.
+					return nil
+				}
+				return vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s",
+					topoproto.TabletAliasString(tablet.Alias))
+			}
+			if !res.GetOk() {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
+					res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias))
+			}
+			return nil
+		})
+	}
+	if err := validateEg.Wait(); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -654,6 +654,17 @@ message ReadVReplicationWorkflowResponse {
   map<string, string> config_overrides = 13;
 }
 
+message ValidateVReplicationPermissionsRequest {
+}
+
+message ValidateVReplicationPermissionsResponse {
+  // The --db_filtered_user on the tablet.
+  string user = 1;
+  // Does the user have the minimum privileges needed to manage
+  // vreplication metadata.
+  bool ok = 2;
+}
+
 message VDiffRequest {
   string keyspace = 1;
   string workflow = 2;
