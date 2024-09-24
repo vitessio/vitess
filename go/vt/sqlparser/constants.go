@@ -277,6 +277,7 @@ const (
 	AllVExplainStr = "all"
 	PlanStr        = "plan"
 	TraceStr       = "trace"
+	KeysStr        = "keys"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -848,6 +849,7 @@ const (
 	PlanVExplainType
 	AllVExplainType
 	TraceVExplainType
+	KeysVExplainType
 )
 
 // Constant for Enum Type - SelectIntoType
