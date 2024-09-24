@@ -16,6 +16,8 @@
   - **[VTGate Tablet Balancer](#tablet-balancer)**
   - **[Query Timeout Override](#query-timeout)**
   - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
+  - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
+
 
 ## <a id="major-changes"/>Major Changes
 
@@ -137,3 +139,27 @@ Currently many of the configuration options for VReplication Workflows are vttab
 requires restarts of vttablets. We now allow these to be overridden while creating a workflow or dynamically once
 the workflow is in progress. See https://github.com/vitessio/vitess/pull/16583 for details.
 
+### <a id="new-vexplain-modes"/>New VEXPLAIN Modes: TRACE and KEYS
+
+#### VEXPLAIN TRACE
+
+The new TRACE mode for VEXPLAIN provides a detailed execution trace of queries, showing how they're processed through various operators and interactions with tablets. This mode is particularly useful for:
+
+- Identifying performance bottlenecks
+- Understanding query execution patterns
+- Optimizing complex queries
+- Debugging unexpected query behavior
+
+TRACE mode runs the query and logs all interactions, returning a JSON representation of the query execution plan with additional statistics like number of calls, average rows processed, and number of shards queried.
+
+#### VEXPLAIN KEYS
+
+The KEYS mode for VEXPLAIN offers a concise summary of query structure, highlighting columns used in joins, filters, and grouping operations. This information is crucial for:
+
+- Identifying potential sharding key candidates
+- Optimizing query performance
+- Analyzing query patterns to inform database design decisions
+
+KEYS mode analyzes the query structure without executing it, providing JSON output that includes grouping columns, join columns, filter columns (potential candidates for indexes, primary keys, or sharding keys), and the statement type.
+
+These new VEXPLAIN modes enhance Vitess's query analysis capabilities, allowing for more informed decisions about sharding strategies and query optimization.
