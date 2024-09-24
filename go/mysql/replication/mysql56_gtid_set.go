@@ -467,6 +467,40 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 	return buf.Bytes()
 }
 
+// ErrantGTIDsOnReplica gets the errant GTIDs on the replica by comparing against the primary position and UUID.
+func ErrantGTIDsOnReplica(replicaPosition Position, primaryPositionStr string, primaryUUID SID) (string, error) {
+	primaryPosition, err := DecodePosition(primaryPositionStr)
+	if err != nil {
+		return "", err
+	}
+	replicaGTIDSet, replicaOk := replicaPosition.GTIDSet.(Mysql56GTIDSet)
+	primaryGTIDSet, primaryOk := primaryPosition.GTIDSet.(Mysql56GTIDSet)
+
+	// Currently we only support errant GTID detection for MySQL 56 flavour.
+	if !replicaOk || !primaryOk {
+		return "", nil
+	}
+
+	// Remove the primary UUID from the replica GTID set.
+	replicaGTIDSet = replicaGTIDSet.RemoveUUID(primaryUUID)
+
+	// Calculate the difference between the replica and primary GTID sets.
+	diffSet := replicaGTIDSet.Difference(primaryGTIDSet)
+	return diffSet.String(), nil
+}
+
+// RemoveUUID removes a specific UUID from the gtid set.
+func (set Mysql56GTIDSet) RemoveUUID(uuid SID) Mysql56GTIDSet {
+	newSet := make(Mysql56GTIDSet)
+	for sid, intervals := range set {
+		if sid == uuid {
+			continue
+		}
+		newSet[sid] = intervals
+	}
+	return newSet
+}
+
 // Difference will supply the difference between the receiver and supplied Mysql56GTIDSets, and supply the result
 // as a Mysql56GTIDSet.
 func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
