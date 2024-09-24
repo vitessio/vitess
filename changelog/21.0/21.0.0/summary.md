@@ -160,5 +160,7 @@ the workflow is in progress. See https://github.com/vitessio/vitess/pull/16583 f
 
 ### <a id="reference-table-materialization"/>Reference Table Materialization
 
-There is a new option in `Materialize` workflows to keep a synced copy of reference tables from the unsharded keyspace
-which holds the source of truth for the reference table, to all shards in a sharded keyspace.
+There is a new option in [`Materialize` workflows](https://vitess.io/docs/reference/vreplication/materialize/) to keep 
+a synced copy of [reference or lookup tables](https://vitess.io/docs/reference/vreplication/reference_tables/) 
+(countries, states, zip_codes, etc) from an unsharded keyspace, which holds the source of truth for the reference 
+table, to all shards in a sharded keyspace.
