@@ -4366,7 +4366,8 @@ func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, 
 	for _, shard := range shards {
 		primary := shard.PrimaryAlias
 		if primary == nil {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s/%s shard does not have a primary tablet", keyspace, shard.ShardName())
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s/%s shard does not have a primary tablet",
+				keyspace, shard.ShardName())
 		}
 		validateEg.Go(func() error {
 			tablet, err := s.ts.GetTablet(validateCtx, primary)
@@ -4375,19 +4376,21 @@ func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, 
 			}
 			// Ensure the tablet has the minimum privileges required on the sidecar database
 			// table(s) in order to manage the workflow.
-			res, err := s.tmc.ValidateVReplicationPermissions(validateCtx, tablet.Tablet, nil)
+			req := &tabletmanagerdatapb.ValidateVReplicationPermissionsRequest{}
+			res, err := s.tmc.ValidateVReplicationPermissions(validateCtx, tablet.Tablet, req)
 			if err != nil {
 				// This older tablet handling can be removed in v22 or later.
 				if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
-					// This is a pre v21 tablet, so don't return an error since the permissions
-					// not being there should be very rare.
+					// This is a pre v21 tablet, so don't return an error since the
+					// permissions not being there should be very rare.
 					return nil
 				}
 				return vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s",
 					topoproto.TabletAliasString(tablet.Alias))
 			}
 			if !res.GetOk() {
-				return fmt.Errorf("user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
 					res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias))
 			}
 			return nil
