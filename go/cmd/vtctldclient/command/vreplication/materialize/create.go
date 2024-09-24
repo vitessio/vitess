@@ -109,6 +109,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		Cell:                      strings.Join(common.CreateOptions.Cells, ","),
 		TabletTypes:               topoproto.MakeStringTypeCSV(common.CreateOptions.TabletTypes),
 		TabletSelectionPreference: tsp,
+		ReferenceTables:           common.CreateOptions.ReferenceTables,
 		WorkflowOptions:           workflowOptions,
 	}
 

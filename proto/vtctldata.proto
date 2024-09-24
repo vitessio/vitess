@@ -98,6 +98,9 @@ message MaterializeSettings {
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
   WorkflowOptions workflow_options = 17;
+
+  // ReferenceTables is set to a csv list of tables, if the materialization is for reference tables.
+  repeated string reference_tables = 18;
 }
 
 /* Data types for VtctldServer */
@@ -1107,6 +1110,7 @@ message TopologyCell {
 
 message GetUnresolvedTransactionsRequest {
   string keyspace = 1;
+  int64 abandon_age = 2; // in seconds
 }
 
 message GetUnresolvedTransactionsResponse {

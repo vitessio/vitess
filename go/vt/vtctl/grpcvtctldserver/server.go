@@ -2460,9 +2460,20 @@ func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb
 		return nil, err
 	}
 
+	participants := req.Participants
+	if len(participants) == 0 {
+		// Read the transaction metadata if participating resource manager list is not provided in the request.
+		transaction, err := s.tmc.ReadTransaction(ctx, primary.Tablet, req.Dtid)
+		if transaction == nil || err != nil {
+			// no transaction record for the given ID. It is already concluded or does not exist.
+			return nil, err
+		}
+		participants = transaction.Participants
+	}
+
 	eg, newCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(10)
-	for _, rm := range req.Participants {
+	for _, rm := range participants {
 		eg.Go(func() error {
 			primary, err := s.getPrimaryTablet(newCtx, rm)
 			if err != nil {

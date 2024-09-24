@@ -1284,6 +1284,21 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		cells[i] = strings.TrimSpace(cells[i])
 	}
 
+	switch {
+	case len(ms.ReferenceTables) == 0 && len(ms.TableSettings) == 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "either --table-settings or --reference-tables must be specified")
+	case len(ms.ReferenceTables) > 0 && len(ms.TableSettings) > 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference-tables")
+	}
+
+	for _, table := range ms.ReferenceTables {
+		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
+			TargetTable:      table,
+			SourceExpression: fmt.Sprintf("select * from %s", table),
+			CreateDdl:        createDDLAsCopyDropForeignKeys,
+		})
+	}
+
 	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 		Workflow:                  ms.Workflow,
 		Cells:                     strings.Split(ms.Cell, ","),
@@ -2168,7 +2183,6 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 	if err != nil {
 		return nil, err
 	}
-
 	// The stream key is target keyspace/tablet alias, e.g. 0/test-0000000100.
 	// We sort the keys for intuitive and consistent output.
 	streamKeys := make([]string, 0, len(workflow.ShardStreams))
@@ -2224,9 +2238,13 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 	return resp, nil
 }
 
-// GetCopyProgress returns the progress of all tables being copied in the
-// workflow.
+// GetCopyProgress returns the progress of all tables being copied in the workflow.
 func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state *State) (*copyProgress, error) {
+	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_Migrate {
+		// The logic below expects the source primaries to be in the same cluster as the target.
+		// For now we don't report progress for Migrate workflows.
+		return nil, nil
+	}
 	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
 	tables := make(map[string]bool)
