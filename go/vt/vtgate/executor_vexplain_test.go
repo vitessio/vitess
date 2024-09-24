@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -104,6 +105,22 @@ func TestSimpleVexplainTrace(t *testing.T) {
 			"Table": "music"
 		}
 	]
+}`
+
+	gotRowString := gotResult.Rows[0][0].ToString()
+	require.Equal(t, expectedRowString, gotRowString)
+}
+
+func TestVExplainKeys(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	query := "vexplain keys select count(*), col2 from music group by col2"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	gotResult, err := executor.Execute(context.Background(), nil, "Execute", session, query, nil)
+	require.NoError(t, err)
+
+	expectedRowString := `{
+	"StatementType": "SELECT"
 }`
 
 	gotRowString := gotResult.Rows[0][0].ToString()
