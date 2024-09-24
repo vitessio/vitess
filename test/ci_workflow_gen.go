@@ -136,7 +136,6 @@ var (
 		"xb_backup",
 		"xb_recovery",
 		"backup_pitr_xtrabackup",
-		"vtctlbackup_sharded_clustertest_heavy",
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
