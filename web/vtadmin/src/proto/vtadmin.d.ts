@@ -47789,6 +47789,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings workflow_options */
         workflow_options?: (vtctldata.IWorkflowOptions|null);
+
+        /** MaterializeSettings reference_tables */
+        reference_tables?: (string[]|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -47850,6 +47853,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings workflow_options. */
         public workflow_options?: (vtctldata.IWorkflowOptions|null);
+
+        /** MaterializeSettings reference_tables. */
+        public reference_tables: string[];
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.

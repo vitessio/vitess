@@ -1284,6 +1284,21 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		cells[i] = strings.TrimSpace(cells[i])
 	}
 
+	switch {
+	case len(ms.ReferenceTables) == 0 && len(ms.TableSettings) == 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "either --table-settings or --reference-tables must be specified")
+	case len(ms.ReferenceTables) > 0 && len(ms.TableSettings) > 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference-tables")
+	}
+
+	for _, table := range ms.ReferenceTables {
+		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
+			TargetTable:      table,
+			SourceExpression: fmt.Sprintf("select * from %s", table),
+			CreateDdl:        createDDLAsCopyDropForeignKeys,
+		})
+	}
+
 	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 		Workflow:                  ms.Workflow,
 		Cells:                     strings.Split(ms.Cell, ","),
