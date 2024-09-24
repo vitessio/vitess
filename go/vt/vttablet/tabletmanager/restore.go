@@ -36,18 +36,15 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
-	"vitess.io/vitess/go/vt/proto/vttime"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -584,35 +581,16 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
-	primary, err := tm.initializeReplication(ctx, tabletType)
+	primaryPosStr, err := tm.initializeReplication(ctx, tabletType)
 	// If we ran into an error while initializing replication, then there is no point in waiting for catch-up.
 	// Also, if there is no primary tablet in the shard, we don't need to proceed further.
-	if err != nil || primary == nil {
+	if err != nil || primaryPosStr == "" {
 		return err
 	}
 
-	// wait for reliable replication_lag_seconds
-	// we have pos where we want to resume from
-	// if PrimaryPosition is the same, that means no writes
-	// have happened to primary, so we are up-to-date
-	// otherwise, wait for replica's Position to change from
-	// the initial pos before proceeding
-	tmc := tmclient.NewTabletManagerClient()
-	defer tmc.Close()
-	remoteCtx, remoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer remoteCancel()
-	posStr, err := tmc.PrimaryPosition(remoteCtx, primary.Tablet)
+	primaryPos, err := replication.DecodePosition(primaryPosStr)
 	if err != nil {
-		// It is possible that though PrimaryAlias is set, the primary tablet is unreachable
-		// Log a warning and let tablet restore in that case
-		// If we had instead considered this fatal, all tablets would crash-loop
-		// until a primary appears, which would make it impossible to elect a primary.
-		log.Warningf("Can't get primary replication position after restore: %v", err)
-		return nil
-	}
-	primaryPos, err := replication.DecodePosition(posStr)
-	if err != nil {
-		return vterrors.Wrapf(err, "can't decode primary replication position: %q", posStr)
+		return vterrors.Wrapf(err, "can't decode primary replication position: %q", primaryPos)
 	}
 
 	if !pos.Equal(primaryPos) {
