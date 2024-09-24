@@ -18,7 +18,10 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
@@ -112,17 +115,129 @@ func TestSimpleVexplainTrace(t *testing.T) {
 }
 
 func TestVExplainKeys(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
-
-	query := "vexplain keys select count(*), col2 from music group by col2"
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
-	gotResult, err := executor.Execute(context.Background(), nil, "Execute", session, query, nil)
-	require.NoError(t, err)
-
-	expectedRowString := `{
+	tests := []struct {
+		query             string
+		expectedRowString string
+	}{
+		{
+			query: "select count(*), col2 from music group by col2",
+			expectedRowString: `{
+	"Grouping Columns": [
+		"music.col2"
+	],
 	"StatementType": "SELECT"
-}`
+}`,
+		}, {
+			query: "select * from user u join user_extra ue on u.id = ue.user_id where u.col1 > 100 and ue.noLimit = 'foo'",
+			expectedRowString: `{
+	"JoinColumns": [
+		"user.id",
+		"user_extra.user_id"
+	],
+	"FilterColumns": [
+		"user.col1",
+		"user_extra.noLimit"
+	],
+	"StatementType": "SELECT"
+}`,
+		}, {
+			// same as above, but written differently
+			query: "select * from user_extra ue, user u where ue.noLimit = 'foo' and u.col1 > 100 and ue.user_id = u.id",
+			expectedRowString: `{
+	"JoinColumns": [
+		"user.id",
+		"user_extra.user_id"
+	],
+	"FilterColumns": [
+		"user.col1",
+		"user_extra.noLimit"
+	],
+	"StatementType": "SELECT"
+}`,
+		},
+		{
+			query: "select u.foo, ue.bar, count(*) from user u join user_extra ue on u.id = ue.user_id where u.name = 'John Doe' group by 1, 2",
+			expectedRowString: `{
+	"Grouping Columns": [
+		"user.foo",
+		"user_extra.bar"
+	],
+	"JoinColumns": [
+		"user.id",
+		"user_extra.user_id"
+	],
+	"FilterColumns": [
+		"user.name"
+	],
+	"StatementType": "SELECT"
+}`,
+		},
+		{
+			query: "select * from (select * from user) as derived where derived.amount > 1000",
+			expectedRowString: `{
+	"StatementType": "SELECT"
+}`,
+		},
+		{
+			query: "select name, sum(amount) from user group by name",
+			expectedRowString: `{
+	"Grouping Columns": [
+		"user.name"
+	],
+	"StatementType": "SELECT"
+}`,
+		},
+		{
+			query: "select name from user where age > 30",
+			expectedRowString: `{
+	"FilterColumns": [
+		"user.age"
+	],
+	"StatementType": "SELECT"
+}`,
+		},
+		{
+			query: "select * from user where name = 'apa' union select * from user_extra where name = 'monkey'",
+			expectedRowString: `{
+	"FilterColumns": [
+		"user.name",
+		"user_extra.name"
+	],
+	"StatementType": "SELECT"
+}`,
+		},
+		{
+			query: "update user set name = 'Jane Doe' where id = 1",
+			expectedRowString: `{
+	"FilterColumns": [
+		"user.id"
+	],
+	"StatementType": "UPDATE"
+}`,
+		},
+		{
+			query: "delete from user where order_date < '2023-01-01'",
+			expectedRowString: `{
+	"FilterColumns": [
+		"user.order_date"
+	],
+	"StatementType": "DELETE"
+}`,
+		},
+	}
 
-	gotRowString := gotResult.Rows[0][0].ToString()
-	require.Equal(t, expectedRowString, gotRowString)
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			executor, _, _, _, _ := createExecutorEnv(t)
+			session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+			gotResult, err := executor.Execute(context.Background(), nil, "Execute", session, "vexplain keys "+tt.query, nil)
+			require.NoError(t, err)
+
+			gotRowString := gotResult.Rows[0][0].ToString()
+			assert.Equal(t, tt.expectedRowString, gotRowString)
+			if t.Failed() {
+				fmt.Println(gotRowString)
+			}
+		})
+	}
 }
