@@ -14,6 +14,7 @@
     - **[Support for recursive CTEs](#recursive-cte)**
     - **[VTGate Tablet Balancer](#tablet-balancer)**
     - **[Query Timeout Override](#query-timeout)**
+    - **[New Backup Engine](#new-backup-engine)**
     - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
     - **[Reference Table Materialization](#reference-table-materialization)**
 
@@ -151,6 +152,13 @@ A query can also be set to have no timeout by using the `QUERY_TIMEOUT_MS` comme
 
 Example usage:
 `select /*vt+ QUERY_TIMEOUT_MS=30 */ col from tbl`
+
+### <a id="new-backup-engine"/>New Backup Engine (EXPERIMENTAL)
+
+We are introducing a backup engine supporting logical backups starting on v21 to support use cases that require something else besides physical backups. This is experimental and is based on the 
+[MySQL Shell](https://dev.mysql.com/doc/mysql-shell/8.0/en/).
+
+The new engine is enabled by using `--backup_engine_implementation=mysqlshell`. There are other options that are required, so [check the docs](https://vitess.io/docs/21.0/user-guides/operating-vitess/backup-and-restore/creating-a-backup/) on which options are required and how to use it.
 
 ### <a id="dynamic-vreplication-configuration"/>Dynamic VReplication Configuration
 
