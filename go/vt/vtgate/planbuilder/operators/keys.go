@@ -91,7 +91,7 @@ func getUniqueColNames(ctx *plancontext.PlanningContext, columns []*sqlparser.Co
 	for _, col := range columns {
 		tableInfo, err := ctx.SemTable.TableInfoForExpr(col)
 		if err != nil {
-			panic(err.Error()) // WIP this should not be left before merging
+			continue
 		}
 		table := tableInfo.GetVindexTable()
 		if table == nil {
