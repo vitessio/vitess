@@ -66,7 +66,7 @@ const (
 	// This is a simple check for a matching user rather than any specific user@host
 	// combination.
 	sqlValidateVReplicationPermissions = `
-select if(count(*)>0, 1, 0) as good from mysql.user as u
+select count(*)>0 as good from mysql.user as u
   left join mysql.db as d on (u.user = d.user)
   left join mysql.tables_priv as t on (u.user = t.user)
 where u.user = %a
@@ -621,7 +621,7 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 	if err != nil {
 		return nil, err
 	}
-	if qr == nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 { // Should never happen
+	if len(qr.Rows) != 1 { // Should never happen
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected response to query %s: expected 1 row with 1 column, got: %+v",
 			query, qr)
 	}
