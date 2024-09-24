@@ -18,6 +18,7 @@ package misc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -197,13 +198,18 @@ func TestOverallQueryTimeout(t *testing.T) {
 	// take 2 and 3 seconds each to run. If we have an overall timeout for 4 seconds, then it should fail.
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=4000 */ sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
 	assert.Error(t, err)
-	assert.ErrorContains(t, err, "DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100)")
+	// We can get two different error messages based on whether it is coming from vttablet or vtgate
+	if !strings.Contains(err.Error(), "Query execution was interrupted, maximum statement execution time exceeded") {
+		assert.ErrorContains(t, err, "DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100)")
+	}
 
 	// Let's also check that setting the session variable also works.
 	utils.Exec(t, mcmp.VtConn, "set query_timeout=4000")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
 	assert.Error(t, err)
-	assert.ErrorContains(t, err, "DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100)")
+	if !strings.Contains(err.Error(), "Query execution was interrupted, maximum statement execution time exceeded") {
+		assert.ErrorContains(t, err, "DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100)")
+	}
 
 	// Increasing the timeout should pass the query.
 	utils.Exec(t, mcmp.VtConn, "set query_timeout=10000")
