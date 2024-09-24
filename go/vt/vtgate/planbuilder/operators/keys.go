@@ -25,11 +25,11 @@ import (
 )
 
 type VExplainKeys struct {
-	GroupingColumns []string `json:"Grouping Columns,omitempty"`
-	TableName       []string `json:"TableName,omitempty"`
-	JoinColumns     []string `json:"JoinColumns,omitempty"`
-	FilterColumns   []string `json:"FilterColumns,omitempty"`
-	StatementType   string   `json:"StatementType"`
+	GroupingColumns []string `json:"groupingColumns,omitempty"`
+	TableName       []string `json:"tableName,omitempty"`
+	JoinColumns     []string `json:"joinColumns,omitempty"`
+	FilterColumns   []string `json:"filterColumns,omitempty"`
+	StatementType   string   `json:"statementType"`
 }
 
 func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result VExplainKeys) {
