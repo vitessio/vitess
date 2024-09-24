@@ -21,6 +21,8 @@ package wrangler
 import (
 	"context"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -53,6 +55,9 @@ type Wrangler struct {
 	// VExecFunc is a test-only fixture that allows us to short circuit vexec commands.
 	// DO NOT USE in production code.
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
+	// Limt the number of concurrent background goroutines if needed.
+	// nolint:ignore U1000
+	sem *semaphore.Weighted
 }
 
 // New creates a new Wrangler object.
