@@ -1776,6 +1776,7 @@ func (m *SetReplicationSourceRequest) CloneVT() *SetReplicationSourceRequest {
 	r.WaitPosition = m.WaitPosition
 	r.SemiSync = m.SemiSync
 	r.HeartbeatInterval = m.HeartbeatInterval
+	r.PrimaryPosition = m.PrimaryPosition
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -6879,6 +6880,13 @@ func (m *SetReplicationSourceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.PrimaryPosition) > 0 {
+		i -= len(m.PrimaryPosition)
+		copy(dAtA[i:], m.PrimaryPosition)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.PrimaryPosition)))
+		i--
+		dAtA[i] = 0x3a
+	}
 	if m.HeartbeatInterval != 0 {
 		i -= 8
 		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.HeartbeatInterval))))
@@ -11172,6 +11180,10 @@ func (m *SetReplicationSourceRequest) SizeVT() (n int) {
 	}
 	if m.HeartbeatInterval != 0 {
 		n += 9
+	}
+	l = len(m.PrimaryPosition)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -20943,6 +20955,38 @@ func (m *SetReplicationSourceRequest) UnmarshalVT(dAtA []byte) error {
 			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
 			m.HeartbeatInterval = float64(math.Float64frombits(v))
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryPosition", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PrimaryPosition = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

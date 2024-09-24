@@ -1105,6 +1105,7 @@ func tmRPCTestInitPrimaryPanic(ctx context.Context, t *testing.T, client tmclien
 var testPopulateReparentJournalCalled = false
 var testTimeCreatedNS int64 = 4569900
 var testWaitPosition = "test wait position"
+var testPrimaryPosition = "test primary position"
 var testActionName = "TestActionName"
 var testPrimaryAlias = &topodatapb.TabletAlias{
 	Cell: "ce",
@@ -1244,13 +1245,14 @@ var testSetReplicationSourceCalled = false
 var testForceStartReplica = true
 var testHeartbeatInterval float64 = 4.2
 
-func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplica bool, semiSync bool, heartbeatInterval float64) error {
+func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, primaryPosition string, forceStartReplica bool, semiSync bool, heartbeatInterval float64) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "SetReplicationSource parent", parent, testPrimaryAlias)
 	compare(fra.t, "SetReplicationSource timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
 	compare(fra.t, "SetReplicationSource waitPosition", waitPosition, testWaitPosition)
+	compare(fra.t, "SetReplicationSource waitPosition", primaryPosition, testPrimaryPosition)
 	compare(fra.t, "SetReplicationSource forceStartReplica", forceStartReplica, testForceStartReplica)
 	compare(fra.t, "SetReplicationSource heartbeatInterval", heartbeatInterval, testHeartbeatInterval)
 	testSetReplicationSourceCalled = true
@@ -1258,12 +1260,12 @@ func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodata
 }
 
 func tmRPCTestSetReplicationSource(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false, testHeartbeatInterval)
+	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testPrimaryPosition, testForceStartReplica, false, testHeartbeatInterval)
 	compareError(t, "SetReplicationSource", err, true, testSetReplicationSourceCalled)
 }
 
 func tmRPCTestSetReplicationSourcePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false, 0)
+	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testPrimaryPosition, testForceStartReplica, false, 0)
 	expectHandleRPCPanic(t, "SetReplicationSource", true /*verbose*/, err)
 }
 

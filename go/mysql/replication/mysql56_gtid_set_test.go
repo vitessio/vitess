@@ -710,7 +710,6 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 		name               string
 		replicaPosition    string
 		primaryPositionStr string
-		primaryUUID        string
 		errantGtidWanted   string
 		wantErr            string
 	}{
@@ -718,37 +717,31 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 			name:               "Empty replica position",
 			replicaPosition:    "MySQL56/",
 			primaryPositionStr: "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			primaryUUID:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
 			errantGtidWanted:   "",
 		}, {
 			name:               "Empty primary position",
 			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
 			primaryPositionStr: "MySQL56/",
-			primaryUUID:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
-			errantGtidWanted:   "",
+			errantGtidWanted:   "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
 		}, {
-			name:               "Empty primary position - with errant gtid",
+			name:               "Empty primary position - with multiple errant gtids",
 			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 			primaryPositionStr: "MySQL56/",
-			primaryUUID:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
-			errantGtidWanted:   "8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+			errantGtidWanted:   "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 		}, {
 			name:               "Primary position parse error",
 			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 			primaryPositionStr: "incorrect position",
-			primaryUUID:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
 			wantErr:            "unknown GTIDSet flavor",
 		}, {
 			name:               "Single errant GTID",
 			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
 			primaryPositionStr: "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-50,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-30",
-			primaryUUID:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
 			errantGtidWanted:   "8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
 		}, {
 			name:               "Multiple errant GTID",
 			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-32,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-35",
 			primaryPositionStr: "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-50,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-30,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
-			primaryUUID:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
 			errantGtidWanted:   "8bc65cca-3fe4-11ed-bbfb-091034d48b3e:31-32,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-33:35",
 		},
 	}
@@ -756,9 +749,7 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			replPos, err := DecodePosition(tt.replicaPosition)
 			require.NoError(t, err)
-			sid, err := ParseSID(tt.primaryUUID)
-			require.NoError(t, err)
-			errantGTIDs, err := ErrantGTIDsOnReplica(replPos, tt.primaryPositionStr, sid)
+			errantGTIDs, err := ErrantGTIDsOnReplica(replPos, tt.primaryPositionStr)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 			} else {
@@ -766,6 +757,38 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 				require.EqualValues(t, tt.errantGtidWanted, errantGTIDs)
 			}
 
+		})
+	}
+}
+
+func TestMysql56GTIDSet_RemoveUUID(t *testing.T) {
+	tests := []struct {
+		name       string
+		initialSet string
+		uuid       string
+		wantSet    string
+	}{
+		{
+			name:       "Remove unknown UUID",
+			initialSet: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1:4-24",
+			uuid:       "8bc65c84-3fe4-11ed-a912-257f0fcde6c9",
+			wantSet:    "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1:4-24",
+		},
+		{
+			name:       "Remove a single UUID",
+			initialSet: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1:4-24",
+			uuid:       "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
+			wantSet:    "8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1:4-24",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gtidSet, err := ParseMysql56GTIDSet(tt.initialSet)
+			require.NoError(t, err)
+			sid, err := ParseSID(tt.uuid)
+			require.NoError(t, err)
+			gtidSet = gtidSet.RemoveUUID(sid)
+			require.EqualValues(t, tt.wantSet, gtidSet.String())
 		})
 	}
 }

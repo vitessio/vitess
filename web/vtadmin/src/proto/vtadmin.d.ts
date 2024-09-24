@@ -27889,6 +27889,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest heartbeat_interval */
         heartbeat_interval?: (number|null);
+
+        /** SetReplicationSourceRequest primary_position */
+        primary_position?: (string|null);
     }
 
     /** Represents a SetReplicationSourceRequest. */
@@ -27917,6 +27920,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest heartbeat_interval. */
         public heartbeat_interval: number;
+
+        /** SetReplicationSourceRequest primary_position. */
+        public primary_position: string;
 
         /**
          * Creates a new SetReplicationSourceRequest instance using the specified properties.

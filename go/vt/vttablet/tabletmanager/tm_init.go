@@ -75,6 +75,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 const (
@@ -157,6 +158,9 @@ type TabletManager struct {
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
 	Env                 *vtenv.Environment
+
+	// tmc is used to run an RPC against other vttablets.
+	tmc tmclient.TabletManagerClient
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -352,6 +356,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	log.Infof("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
+	tm.tmc = tmclient.NewTabletManagerClient()
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)
 	tm._waitForGrantsComplete = make(chan struct{})

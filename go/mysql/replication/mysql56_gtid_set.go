@@ -468,7 +468,7 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 }
 
 // ErrantGTIDsOnReplica gets the errant GTIDs on the replica by comparing against the primary position and UUID.
-func ErrantGTIDsOnReplica(replicaPosition Position, primaryPositionStr string, primaryUUID SID) (string, error) {
+func ErrantGTIDsOnReplica(replicaPosition Position, primaryPositionStr string) (string, error) {
 	primaryPosition, err := DecodePosition(primaryPositionStr)
 	if err != nil {
 		return "", err
@@ -480,9 +480,6 @@ func ErrantGTIDsOnReplica(replicaPosition Position, primaryPositionStr string, p
 	if !replicaOk || !primaryOk {
 		return "", nil
 	}
-
-	// Remove the primary UUID from the replica GTID set.
-	replicaGTIDSet = replicaGTIDSet.RemoveUUID(primaryUUID)
 
 	// Calculate the difference between the replica and primary GTID sets.
 	diffSet := replicaGTIDSet.Difference(primaryGTIDSet)

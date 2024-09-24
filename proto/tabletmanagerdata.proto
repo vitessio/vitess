@@ -493,6 +493,7 @@ message SetReplicationSourceRequest {
   string wait_position = 4;
   bool semiSync = 5;
   double heartbeat_interval = 6;
+  string primary_position = 7;
 }
 
 message SetReplicationSourceResponse {

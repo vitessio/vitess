@@ -142,7 +142,7 @@ type RPCTM interface {
 
 	ResetReplicationParameters(ctx context.Context) error
 
-	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error
+	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition, primaryPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error
 
 	StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error)
 

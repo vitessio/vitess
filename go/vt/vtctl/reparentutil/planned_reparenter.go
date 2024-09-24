@@ -255,7 +255,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	setSourceCtx, setSourceCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer setSourceCancel()
 
-	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, IsReplicaSemiSync(opts.durability, currentPrimary.Tablet, primaryElect), 0); err != nil {
+	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, snapshotPos, true, IsReplicaSemiSync(opts.durability, currentPrimary.Tablet, primaryElect), 0); err != nil {
 		return vterrors.Wrapf(err, "replication on primary-elect %v did not catch up in time; replication must be healthy to perform PlannedReparent", primaryElectAliasStr)
 	}
 
@@ -660,6 +660,10 @@ func (pr *PlannedReparenter) reparentTablets(
 	primaryElectAliasStr := topoproto.TabletAliasString(ev.NewPrimary.Alias)
 	replicasWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
+	latestPos, err := pr.tmc.PrimaryPosition(ctx, ev.NewPrimary)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed PrimaryPosition(primary=%v): %v", primaryElectAliasStr, err)
+	}
 
 	// Point all replicas at the new primary and check that they receive the
 	// reparent journal entry, proving that they are replicating from the new
@@ -685,7 +689,7 @@ func (pr *PlannedReparenter) reparentTablets(
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet), 0); err != nil {
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", latestPos, forceStartReplication, IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet), 0); err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)
