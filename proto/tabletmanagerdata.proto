@@ -310,10 +310,19 @@ message ExecuteFetchAsAppResponse {
 }
 
 message GetUnresolvedTransactionsRequest {
+  int64 abandon_age = 1;
 }
 
 message GetUnresolvedTransactionsResponse {
   repeated query.TransactionMetadata transactions = 1;
+}
+
+message ReadTransactionRequest {
+  string dtid = 1;
+}
+
+message ReadTransactionResponse {
+  query.TransactionMetadata transaction = 1;
 }
 
 message ConcludeTransactionRequest {

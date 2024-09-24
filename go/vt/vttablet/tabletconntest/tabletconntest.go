@@ -403,7 +403,7 @@ func testUnresolvedTransactions(t *testing.T, conn queryservice.QueryService, f 
 	t.Log("testUnresolvedTransactions")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	transactions, err := conn.UnresolvedTransactions(ctx, TestTarget)
+	transactions, err := conn.UnresolvedTransactions(ctx, TestTarget, 0 /* abandonAgeSeconds */)
 	require.NoError(t, err)
 	require.True(t, proto.Equal(transactions[0], Metadata))
 }
@@ -412,7 +412,7 @@ func testUnresolvedTransactionsError(t *testing.T, conn queryservice.QueryServic
 	t.Log("testUnresolvedTransactionsError")
 	f.HasError = true
 	testErrorHelper(t, f, "UnresolvedTransactions", func(ctx context.Context) error {
-		_, err := conn.UnresolvedTransactions(ctx, TestTarget)
+		_, err := conn.UnresolvedTransactions(ctx, TestTarget, 0 /* abandonAgeSeconds */)
 		return err
 	})
 	f.HasError = false
@@ -421,7 +421,7 @@ func testUnresolvedTransactionsError(t *testing.T, conn queryservice.QueryServic
 func testUnresolvedTransactionsPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testUnresolvedTransactionsPanics")
 	testPanicHelper(t, f, "UnresolvedTransactions", func(ctx context.Context) error {
-		_, err := conn.UnresolvedTransactions(ctx, TestTarget)
+		_, err := conn.UnresolvedTransactions(ctx, TestTarget, 0 /* abandonAgeSeconds */)
 		return err
 	})
 }

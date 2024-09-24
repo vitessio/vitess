@@ -17,3 +17,12 @@
     font-weight: 700;
     line-height: 3.2rem;
 }
+
+.icon {
+    display: inline-block;
+    fill: var(--textColorSecondary);
+    height: 2rem;
+    margin-left: 0.5rem;
+    vertical-align: text-top;
+    width: auto;
+}
