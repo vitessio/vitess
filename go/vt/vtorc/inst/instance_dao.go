@@ -61,6 +61,7 @@ var forgetAliases *cache.Cache
 var (
 	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
 	readInstanceCounter         = stats.NewCounter("InstanceRead", "Number of times an instance was read")
+	errantGTIDCounts            = stats.NewGaugesWithSingleLabel("ErrantGTIDCounts", "Number of errant GTIDs in a vttablet", "TabletAlias")
 	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
 	writeBufferLatency          = stopwatch.NewNamedStopwatch()
 )
@@ -378,6 +379,11 @@ Cleanup:
 				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
 				instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
+				if err == nil {
+					var gtidCount int64
+					gtidCount, err = replication.GTIDCount(instance.GtidErrant)
+					errantGTIDCounts.Set(tabletAlias, gtidCount)
+				}
 			}
 		}
 	}
@@ -1035,6 +1041,9 @@ func ForgetInstance(tabletAlias string) error {
 	}
 	forgetAliases.Set(tabletAlias, true, cache.DefaultExpiration)
 	log.Infof("Forgetting: %v", tabletAlias)
+
+	// Remove this tablet from errant GTID count metric.
+	errantGTIDCounts.Reset(tabletAlias)
 
 	// Delete from the 'vitess_tablet' table.
 	_, err := db.ExecVTOrc(`
