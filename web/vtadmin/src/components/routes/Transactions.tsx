@@ -29,8 +29,12 @@ import { formatTransactionState } from '../../util/transactions';
 import { ShardLink } from '../links/ShardLink';
 import { formatDateTime, formatRelativeTimeInSeconds } from '../../util/time';
 import { orderBy } from 'lodash-es';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import TransactionActions from './transactions/TransactionActions';
+import { isReadOnlyMode } from '../../util/env';
 
-const COLUMNS = ['ID', 'State', 'Participants', 'Time Created'];
+const COLUMNS = ['ID', 'State', 'Participants', 'Time Created', 'Actions'];
+const READ_ONLY_COLUMNS = ['ID', 'State', 'Participants', 'Time Created'];
 
 export const Transactions = () => {
     useDocumentTitle('In Flight Distributed Transactions');
@@ -82,6 +86,15 @@ export const Transactions = () => {
                             {formatRelativeTimeInSeconds(row.time_created)}
                         </div>
                     </DataCell>
+                    <ReadOnlyGate>
+                        <DataCell>
+                            <TransactionActions
+                                refetchTransactions={transactionsQuery.refetch}
+                                clusterID={params.clusterID as string}
+                                dtid={row.dtid as string}
+                            />
+                        </DataCell>
+                    </ReadOnlyGate>
                 </tr>
             );
         });
@@ -94,8 +107,9 @@ export const Transactions = () => {
             </WorkspaceHeader>
 
             <ContentContainer>
+                <div className='flex flex-row gap-1 max-w-[740px]'>
                 <Select
-                    className="block w-full max-w-[740px]"
+                    className="block grow-1 min-w-[300px]"
                     disabled={keyspacesQuery.isLoading}
                     inputClassName="block w-full"
                     items={keyspaces}
@@ -109,7 +123,23 @@ export const Transactions = () => {
                     renderItem={(ks) => `${ks?.keyspace?.name} (${ks?.cluster?.id})`}
                     selectedItem={selectedKeyspace}
                 />
-                <DataTable columns={COLUMNS} data={transactions} renderRows={renderRows} />
+                <Select
+                    className="block grow-1 min-w-[300px]"
+                    disabled={keyspacesQuery.isLoading}
+                    inputClassName="block w-full"
+                    items={keyspaces}
+                    label="Keyspace"
+                    onChange={(ks) => setParams({ clusterID: ks?.cluster?.id!, keyspace: ks?.keyspace?.name! })}
+                    placeholder={
+                        keyspacesQuery.isLoading
+                            ? 'Loading keyspaces...'
+                            : 'Select a keyspace to view unresolved transactions'
+                    }
+                    renderItem={(ks) => `${ks?.keyspace?.name} (${ks?.cluster?.id})`}
+                    selectedItem={selectedKeyspace}
+                />
+                </div>
+                <DataTable columns={isReadOnlyMode() ? READ_ONLY_COLUMNS : COLUMNS} data={transactions} renderRows={renderRows} />
                 <QueryLoadingPlaceholder query={transactionsQuery} />
             </ContentContainer>
         </div>

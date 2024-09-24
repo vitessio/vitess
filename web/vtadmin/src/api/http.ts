@@ -435,6 +435,19 @@ export const fetchTransactions = async ({ clusterID, keyspace }: FetchTransactio
     return vtctldata.GetUnresolvedTransactionsResponse.create(result);
 };
 
+export interface ConcludeTransactionParams {
+    clusterID: string;
+    dtid: string;
+}
+
+export const concludeTransaction = async ({ clusterID, dtid }: ConcludeTransactionParams) => {
+    const { result } = await vtfetch(`/api/transaction/${clusterID}/${dtid}/conclude`);
+    const err = vtctldata.ConcludeTransactionResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ConcludeTransactionResponse.create(result);
+};
+
 export const fetchWorkflows = async () => {
     const { result } = await vtfetch(`/api/workflows`);
 

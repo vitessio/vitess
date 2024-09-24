@@ -34,3 +34,14 @@ func GetUnresolvedTransactions(ctx context.Context, r Request, api *API) *JSONRe
 
 	return NewJSONResponse(res, err)
 }
+
+func ConcludeTransaction(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	res, err := api.server.ConcludeTransaction(ctx, &vtadminpb.ConcludeTransactionRequest{
+		ClusterId: vars["cluster_id"],
+		Dtid:      vars["dtid"],
+	})
+
+	return NewJSONResponse(res, err)
+}
