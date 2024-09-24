@@ -44,10 +44,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	transport "github.com/aws/smithy-go/endpoints"
 	"github.com/aws/smithy-go/middleware"
 	"github.com/spf13/pflag"
-
-	smithyendpoints "github.com/aws/smithy-go/endpoints"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -117,7 +116,7 @@ type endpointResolver struct {
 	endpoint *string
 }
 
-func (er *endpointResolver) ResolveEndpoint(ctx context.Context, params s3.EndpointParameters) (smithyendpoints.Endpoint, error) {
+func (er *endpointResolver) ResolveEndpoint(ctx context.Context, params s3.EndpointParameters) (transport.Endpoint, error) {
 	params.Endpoint = er.endpoint
 	return er.r.ResolveEndpoint(ctx, params)
 }
