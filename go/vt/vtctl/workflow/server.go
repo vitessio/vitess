@@ -4362,42 +4362,39 @@ func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMir
 // in the given keyspace shards have the required permissions necessary to
 // perform actions on the workflow.
 func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, keyspace string, shards []*topo.ShardInfo) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
+	validateEg, validateCtx := errgroup.WithContext(ctx)
 	for _, shard := range shards {
 		primary := shard.PrimaryAlias
 		if primary == nil {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s/%s shard does not have a primary tablet", keyspace, shard.ShardName())
 		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			tablet, err := s.ts.GetTablet(ctx, primary)
+		validateEg.Go(func() error {
+			tablet, err := s.ts.GetTablet(validateCtx, primary)
 			if err != nil {
-				allErrors.RecordError(vterrors.Wrapf(err, "failed to get primary tablet for the %s/%s shard", keyspace, shard.ShardName()))
+				return vterrors.Wrapf(err, "failed to get primary tablet for the %s/%s shard", keyspace, shard.ShardName())
 			}
 			// Ensure the tablet has the minimum privileges required on the sidecar database
 			// table(s) in order to manage the workflow.
-			res, err := s.tmc.ValidateVReplicationPermissions(ctx, tablet.Tablet, nil)
+			res, err := s.tmc.ValidateVReplicationPermissions(validateCtx, tablet.Tablet, nil)
 			if err != nil {
 				// This older tablet handling can be removed in v22 or later.
 				if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
 					// This is a pre v21 tablet, so don't return an error since the permissions
 					// not being there should be very rare.
-					return
+					return nil
 				}
-				allErrors.RecordError(vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s",
-					topoproto.TabletAliasString(tablet.Alias)))
+				return vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s",
+					topoproto.TabletAliasString(tablet.Alias))
 			}
 			if !res.GetOk() {
-				allErrors.RecordError(fmt.Errorf("user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
-					res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias)))
+				return fmt.Errorf("user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
+					res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias))
 			}
-		}()
+			return nil
+		})
 	}
-	wg.Wait()
-	if allErrors.HasErrors() {
-		return allErrors.Error()
+	if err := validateEg.Wait(); err != nil {
+		return err
 	}
 	return nil
 }
