@@ -653,10 +653,9 @@ func TestStartExportStats(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 
-	tags := map[string]string{
+	_ = newTestTM(t, ts, 1, "ks", "0", map[string]string{
 		"test": t.Name(),
-	}
-	_ = newTestTM(t, ts, 1, "ks", "0", tags)
+	})
 
 	assert.Equal(t, "ks", statsKeyspace.Get())
 	assert.Equal(t, "0", statsShard.Get())
