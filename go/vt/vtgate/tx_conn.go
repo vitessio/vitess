@@ -191,6 +191,14 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 		_ = txc.Rollback(ctx, session)
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "pre or post actions not allowed for 2PC commits")
 	}
+	if len(session.GetSavepoints()) != 0 {
+		_ = txc.Rollback(ctx, session)
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "savepoints not allowed for 2PC commits")
+	}
+	if session.GetInReservedConn() {
+		_ = txc.Rollback(ctx, session)
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "system settings/temporary table are not allowed for 2PC commits")
+	}
 
 	// If the number of participants is one or less, then it's a normal commit.
 	if len(session.ShardSessions) <= 1 {
