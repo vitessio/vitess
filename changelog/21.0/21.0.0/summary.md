@@ -16,6 +16,7 @@
   - **[VTGate Tablet Balancer](#tablet-balancer)**
   - **[Query Timeout Override](#query-timeout)**
   - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
+  - **[Errant GTIDs Count Metric](#errant-gtid-metric)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -137,3 +138,6 @@ Currently many of the configuration options for VReplication Workflows are vttab
 requires restarts of vttablets. We now allow these to be overridden while creating a workflow or dynamically once
 the workflow is in progress. See https://github.com/vitessio/vitess/pull/16583 for details.
 
+### <a id="errant-gtid-metric"/>Errant GTIDs Count Metric
+A new metric called `ErrantGTIDCounts` has been added to the `VTOrc` component. 
+This metric shows the count of the errant GTIDs in the tablets.
