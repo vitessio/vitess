@@ -77,9 +77,11 @@ type TxEngine struct {
 
 	// twopcEnabled is the flag value of whether the user has enabled twopc or not.
 	twopcEnabled bool
-	// twopcAllowed is wether it is safe to allow two pc transactions or not.
-	// If the primary tablet doesn't run with semi-sync we set this to false, and disallow any prepared calls.
-	twopcAllowed        bool
+	// twopcAllowed is whether it is safe to allow two pc transactions or not.
+	// There are multiple reasons to disallow TwoPC:
+	//  1. If the primary tablet doesn't run with semi-sync we set this to false, and disallow any prepared calls.
+	//  2. TabletControls have been set in the tablet record, and Query service is going to be disabled.
+	twopcAllowed        []bool
 	shutdownGracePeriod time.Duration
 	coordinatorAddress  string
 	abandonAge          time.Duration
@@ -94,6 +96,11 @@ type TxEngine struct {
 	dxNotify     func()
 }
 
+const (
+	TwoPCAllowed_SemiSync = iota
+	TwoPCAllowed_TabletControls
+)
+
 // NewTxEngine creates a new TxEngine.
 func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	config := env.Config()
@@ -106,7 +113,7 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	te.txPool = NewTxPool(env, limiter)
 	// We initially allow twoPC (handles vttablet restarts).
 	// We will disallow them, when a new tablet is promoted if semi-sync is turned off.
-	te.twopcAllowed = true
+	te.twopcAllowed = []bool{true, true}
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
 		if config.TwoPCAbandonAge <= 0 {
@@ -707,4 +714,14 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context) (*StatefulConnect
 
 	_, _, err = te.txPool.begin(ctx, nil, false, sc, nil)
 	return sc, err
+}
+
+// IsTwoPCAllowed checks if TwoPC is allowed.
+func (te *TxEngine) IsTwoPCAllowed() bool {
+	for _, allowed := range te.twopcAllowed {
+		if !allowed {
+			return false
+		}
+	}
+	return true
 }

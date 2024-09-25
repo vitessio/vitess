@@ -545,13 +545,17 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		return nil, err
 	}
 
-	tm.tmState.RefreshFromTopoInfo(ctx, shardInfo, nil)
+	if err := tm.tmState.RefreshFromTopoInfo(ctx, shardInfo, nil); err != nil {
+		return nil, err
+	}
 
 	// Rebuild keyspace if this the first tablet in this keyspace/cell
 	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, tablet.Keyspace)
 	switch {
 	case err == nil:
-		tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+		if err := tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace); err != nil {
+			return nil, err
+		}
 	case topo.IsErrType(err, topo.NoNode):
 		var rebuildKsCtx context.Context
 		rebuildKsCtx, tm._rebuildKeyspaceCancel = context.WithCancel(tm.BatchCtx)
@@ -603,7 +607,7 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 	defer func() {
 		log.Infof("Keyspace rebuilt: %v", keyspace)
 		if ctx.Err() == nil {
-			tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
+			_ = tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
 		}
 		close(done)
 	}()

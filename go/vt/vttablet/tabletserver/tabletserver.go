@@ -186,7 +186,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tsv.lagThrottler)
-	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks, tsv.te.preparedPool.IsEmpty)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks, tsv.te.preparedPool.IsEmptyForTable)
 
 	tsv.sm = &stateManager{
 		statelessql: tsv.statelessql,
@@ -698,6 +698,24 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 			return txe.RollbackPrepared(dtid, originalID)
 		},
 	)
+}
+
+// WaitForPreparedTwoPCTransactions waits for all the prepared transactions to complete.
+func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) error {
+	if tsv.te.preparedPool.IsEmpty() {
+		return nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			// Return an error if we run out of time.
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Prepared transactions have not been resolved yet")
+		case <-time.After(100 * time.Millisecond):
+			if tsv.te.preparedPool.IsEmpty() {
+				return nil
+			}
+		}
+	}
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
@@ -1700,8 +1718,8 @@ func (tsv *TabletServer) RedoPreparedTransactions() {
 }
 
 // SetTwoPCAllowed sets whether TwoPC is allowed or not.
-func (tsv *TabletServer) SetTwoPCAllowed(allowed bool) {
-	tsv.te.twopcAllowed = allowed
+func (tsv *TabletServer) SetTwoPCAllowed(twoPCAllowedPosition int, allowed bool) {
+	tsv.te.twopcAllowed[twoPCAllowedPosition] = allowed
 }
 
 // HandlePanic is part of the queryservice.QueryService interface

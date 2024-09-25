@@ -233,7 +233,7 @@ func (tqsc *Controller) GetThrottlerStatus(ctx context.Context) *throttle.Thrott
 func (tqsc *Controller) RedoPreparedTransactions() {}
 
 // SetTwoPCAllowed sets whether TwoPC is allowed or not.
-func (tqsc *Controller) SetTwoPCAllowed(bool) {
+func (tqsc *Controller) SetTwoPCAllowed(int, bool) {
 }
 
 // UnresolvedTransactions is part of the tabletserver.Controller interface
@@ -257,6 +257,12 @@ func (tqsc *Controller) ConcludeTransaction(context.Context, *querypb.Target, st
 // RollbackPrepared is part of the tabletserver.Controller interface
 func (tqsc *Controller) RollbackPrepared(context.Context, *querypb.Target, string, int64) error {
 	tqsc.MethodCalled["RollbackPrepared"] = true
+	return nil
+}
+
+// WaitForPreparedTwoPCTransactions is part of the tabletserver.Controller interface
+func (tqsc *Controller) WaitForPreparedTwoPCTransactions(context.Context) error {
+	tqsc.MethodCalled["WaitForPreparedTwoPCTransactions"] = true
 	return nil
 }
 
