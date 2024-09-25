@@ -45,7 +45,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -284,15 +283,15 @@ func (mz *materializer) deploySchema() error {
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
 
+		hasTargetTable := map[string]bool{}
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
 		targetSchema, err := schematools.GetSchema(mz.ctx, mz.ts, mz.tmc, target.PrimaryAlias, req)
 		if err != nil {
 			return err
 		}
 
-		hasTargetTable := make(map[string]*tabletmanagerdatapb.TableDefinition, len(targetSchema.TableDefinitions))
 		for _, td := range targetSchema.TableDefinitions {
-			hasTargetTable[td.Name] = td
+			hasTargetTable[td.Name] = true
 		}
 
 		targetTablet, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
@@ -302,14 +301,8 @@ func (mz *materializer) deploySchema() error {
 
 		var applyDDLs []string
 		for _, ts := range mz.ms.TableSettings {
-			if td := hasTargetTable[ts.TargetTable]; td != nil {
-				// Table already exists. Let's be sure that it doesn't already have data.
-				// We exclude multi-tenant migrations from this check as the target tables
-				// are expected to frequently have data from previously migrated tenants.
-				if !mz.IsMultiTenantMigration() && td.RowCount > 0 {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-						"target table %s exists in the %s keyspace and is not empty", td.Name, target.Keyspace())
-				}
+			if hasTargetTable[ts.TargetTable] {
+				// Table already exists.
 				continue
 			}
 			if ts.CreateDdl == "" {

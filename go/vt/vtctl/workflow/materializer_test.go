@@ -2469,46 +2469,6 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 			err: "we gots us an error",
 		},
-		{
-			description: "table exists and has data",
-			input: &vschemapb.Keyspace{
-				Vindexes: map[string]*vschemapb.Vindex{
-					"v2": {
-						Type: "consistent_lookup_unique",
-						Params: map[string]string{
-							"table": fmt.Sprintf("%s.t1_lkp", ms.TargetKeyspace),
-							"from":  "c1",
-							"to":    "keyspace_id",
-						},
-					},
-				},
-				Tables: map[string]*vschemapb.Table{
-					"t2": {
-						ColumnVindexes: []*vschemapb.ColumnVindex{{
-							Name:   "v2",
-							Column: "c2",
-						}},
-					},
-				},
-			},
-			schemaAdditions: []*tabletmanagerdatapb.TableDefinition{{
-				Name:    "t1_lkp",
-				Schema:  "CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)",
-				Columns: []string{"c1", "keyspace_id"},
-				Fields: []*querypb.Field{
-					{
-						Name: "c1",
-						Type: sqltypes.Int32,
-					},
-					{
-						Name: "keyspace_id",
-						Type: sqltypes.VarBinary,
-					},
-				},
-				RowCount: 1,
-			}},
-			err: fmt.Sprintf("target table t1_lkp exists in the %s keyspace and is not empty", ms.TargetKeyspace),
-		},
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.description, func(t *testing.T) {
