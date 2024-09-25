@@ -38,7 +38,7 @@ func TestTabletManager_UnresolvedTransactions(t *testing.T) {
 		BatchCtx:               ctx,
 	}
 	close(tm._waitForGrantsComplete)
-	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80"))
+	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80", nil))
 
 	_, err := tm.GetUnresolvedTransactions(ctx, 0)
 	require.NoError(t, err)
@@ -56,7 +56,7 @@ func TestTabletManager_ReadTransaction(t *testing.T) {
 		BatchCtx:               ctx,
 	}
 	close(tm._waitForGrantsComplete)
-	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80"))
+	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80", nil))
 
 	_, err := tm.ReadTransaction(ctx, &tabletmanagerdatapb.ReadTransactionRequest{
 		Dtid: "dtid01",
@@ -76,7 +76,7 @@ func TestTabletManager_ConcludeTransaction(t *testing.T) {
 		BatchCtx:               ctx,
 	}
 	close(tm._waitForGrantsComplete)
-	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80"))
+	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80", nil))
 
 	err := tm.ConcludeTransaction(ctx, &tabletmanagerdatapb.ConcludeTransactionRequest{
 		Dtid: "dtid01",
