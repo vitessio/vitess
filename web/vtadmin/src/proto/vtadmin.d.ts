@@ -24058,6 +24058,194 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a MysqlSystemMetricsRequest. */
+    interface IMysqlSystemMetricsRequest {
+    }
+
+    /** Represents a MysqlSystemMetricsRequest. */
+    class MysqlSystemMetricsRequest implements IMysqlSystemMetricsRequest {
+
+        /**
+         * Constructs a new MysqlSystemMetricsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IMysqlSystemMetricsRequest);
+
+        /**
+         * Creates a new MysqlSystemMetricsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MysqlSystemMetricsRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IMysqlSystemMetricsRequest): tabletmanagerdata.MysqlSystemMetricsRequest;
+
+        /**
+         * Encodes the specified MysqlSystemMetricsRequest message. Does not implicitly {@link tabletmanagerdata.MysqlSystemMetricsRequest.verify|verify} messages.
+         * @param message MysqlSystemMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IMysqlSystemMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MysqlSystemMetricsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.MysqlSystemMetricsRequest.verify|verify} messages.
+         * @param message MysqlSystemMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IMysqlSystemMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MysqlSystemMetricsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MysqlSystemMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MysqlSystemMetricsRequest;
+
+        /**
+         * Decodes a MysqlSystemMetricsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MysqlSystemMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MysqlSystemMetricsRequest;
+
+        /**
+         * Verifies a MysqlSystemMetricsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MysqlSystemMetricsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MysqlSystemMetricsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MysqlSystemMetricsRequest;
+
+        /**
+         * Creates a plain object from a MysqlSystemMetricsRequest message. Also converts values to other types if specified.
+         * @param message MysqlSystemMetricsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.MysqlSystemMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MysqlSystemMetricsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MysqlSystemMetricsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MysqlSystemMetricsResponse. */
+    interface IMysqlSystemMetricsResponse {
+
+        /** MysqlSystemMetricsResponse SystemMetrics */
+        SystemMetrics?: (mysqlctl.ISystemMetricsResponse|null);
+    }
+
+    /** Represents a MysqlSystemMetricsResponse. */
+    class MysqlSystemMetricsResponse implements IMysqlSystemMetricsResponse {
+
+        /**
+         * Constructs a new MysqlSystemMetricsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IMysqlSystemMetricsResponse);
+
+        /** MysqlSystemMetricsResponse SystemMetrics. */
+        public SystemMetrics?: (mysqlctl.ISystemMetricsResponse|null);
+
+        /**
+         * Creates a new MysqlSystemMetricsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MysqlSystemMetricsResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IMysqlSystemMetricsResponse): tabletmanagerdata.MysqlSystemMetricsResponse;
+
+        /**
+         * Encodes the specified MysqlSystemMetricsResponse message. Does not implicitly {@link tabletmanagerdata.MysqlSystemMetricsResponse.verify|verify} messages.
+         * @param message MysqlSystemMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IMysqlSystemMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MysqlSystemMetricsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.MysqlSystemMetricsResponse.verify|verify} messages.
+         * @param message MysqlSystemMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IMysqlSystemMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MysqlSystemMetricsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MysqlSystemMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MysqlSystemMetricsResponse;
+
+        /**
+         * Decodes a MysqlSystemMetricsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MysqlSystemMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MysqlSystemMetricsResponse;
+
+        /**
+         * Verifies a MysqlSystemMetricsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MysqlSystemMetricsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MysqlSystemMetricsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MysqlSystemMetricsResponse;
+
+        /**
+         * Creates a plain object from a MysqlSystemMetricsResponse message. Also converts values to other types if specified.
+         * @param message MysqlSystemMetricsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.MysqlSystemMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MysqlSystemMetricsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MysqlSystemMetricsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ReplicationStatusRequest. */
     interface IReplicationStatusRequest {
     }

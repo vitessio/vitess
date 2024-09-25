@@ -29,6 +29,7 @@ import "replicationdata.proto";
 import "logutil.proto";
 import "vttime.proto";
 import "vtrpc.proto";
+import "mysqlctl.proto";
 
 //
 // Data structures
@@ -323,6 +324,15 @@ message ConcludeTransactionRequest {
 
 message ConcludeTransactionResponse {
 }
+
+
+message MysqlSystemMetricsRequest {
+}
+
+message MysqlSystemMetricsResponse {
+  mysqlctl.SystemMetricsResponse SystemMetrics = 1;
+}
+
 
 message ReplicationStatusRequest {
 }
