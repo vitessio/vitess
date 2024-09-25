@@ -89,6 +89,7 @@ export const Transactions = () => {
         if (params.clusterID && params.keyspace) {
             transactionsQuery.refetch();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params.abandonAge]);
 
     const renderRows = (rows: query.ITransactionMetadata[]) => {
