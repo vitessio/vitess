@@ -286,6 +286,18 @@ func (tm *TabletManager) GetUnresolvedTransactions(ctx context.Context) ([]*quer
 	return tm.QueryServiceControl.UnresolvedTransactions(ctx, target)
 }
 
+// ExecuteMultiFetchAsDba will execute the given queries, possibly disabling binlogs and reload schema.
+func (tm *TabletManager) MysqlSystemMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error) {
+	mysqlResp, err := tm.MysqlDaemon.SystemMetrics(ctx, tm.Cnf)
+	if err != nil {
+		return nil, err
+	}
+	resp := &tabletmanagerdatapb.MysqlSystemMetricsResponse{
+		SystemMetrics: mysqlResp,
+	}
+	return resp, nil
+}
+
 // ConcludeTransaction concludes the given distributed transaction.
 func (tm *TabletManager) ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {

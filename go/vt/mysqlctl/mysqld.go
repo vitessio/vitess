@@ -1314,6 +1314,7 @@ func (mysqld *Mysqld) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlp
 
 	func() error {
 		metric := newMetric("datadir-used")
+		// 0.0 for empty mount, 1.0 for completely full mount
 		var st syscall.Statfs_t
 		if err := syscall.Statfs(cnf.DataDir, &st); err != nil {
 			return withError(metric, err)

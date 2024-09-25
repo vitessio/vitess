@@ -109,6 +109,11 @@ func (fra *fakeRPCTM) UnlockTables(ctx context.Context) error {
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) MysqlSystemMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) setSlow(slow bool) {
 	fra.mu.Lock()
 	fra.slow = slow

@@ -119,6 +119,9 @@ type MysqlDaemon interface {
 	// GetVersionComment returns the version comment
 	GetVersionComment(ctx context.Context) (string, error)
 
+	// SystemMetrics returns some OS metrics
+	SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsResponse, error)
+
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
 

@@ -737,3 +737,16 @@ func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error
 func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
 	return "", nil
 }
+
+func (fmd *FakeMysqlDaemon) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsResponse, error) {
+	return &mysqlctlpb.SystemMetricsResponse{
+		Metrics: map[string]*mysqlctlpb.SystemMetricsResponse_Metric{
+			"loadavg": {
+				Value: 1.0,
+			},
+			"datadir-used": {
+				Value: 0.2,
+			},
+		},
+	}, nil
+}
