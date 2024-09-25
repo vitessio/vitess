@@ -543,7 +543,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		return nil
 	}
 
-	latestPosStr := latestPosition.String()
+	latestPosStr := replication.EncodePosition(latestPosition)
 	handleReplica := func(alias string, ti *topo.TabletInfo) {
 		defer replWg.Done()
 		erp.logger.Infof("setting new primary on replica %v", alias)
