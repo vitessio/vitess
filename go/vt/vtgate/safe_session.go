@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/datetime"
@@ -563,13 +565,21 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 
 func (session *SafeSession) TimeZone() *time.Location {
 	session.mu.Lock()
-	tz, ok := session.SystemVariables["time_zone"]
+	zoneSQL, ok := session.SystemVariables["time_zone"]
 	session.mu.Unlock()
 
 	if !ok {
 		return nil
 	}
+
+	tz, err := sqltypes.DecodeStringSQL(zoneSQL)
+	if err != nil {
+		return nil
+	}
+
 	loc, _ := datetime.ParseTimeZone(tz)
+	// it's safe to ignore the error - if we get an error, loc will be nil,
+	// and this is exactly the behaviour we want anyway
 	return loc
 }
 

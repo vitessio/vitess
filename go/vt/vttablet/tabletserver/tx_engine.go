@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -411,58 +411,129 @@ func (te *TxEngine) shutdownLocked() {
 // to ensure there are no future collisions.
 func (te *TxEngine) prepareFromRedo() error {
 	ctx := tabletenv.LocalContext()
-	var allErr concurrency.AllErrorRecorder
-	prepared, failed, err := te.twoPC.ReadAllRedo(ctx)
-	if err != nil {
-		return err
+
+	prepared, failed, readErr := te.twoPC.ReadAllRedo(ctx)
+	if readErr != nil {
+		return readErr
 	}
 
-	maxid := int64(0)
-outer:
+	var (
+		maxID           = int64(0)
+		preparedCounter = 0
+		failedCounter   = len(failed)
+		allErrs         []error
+	)
+
+	// While going through the prepared transaction.
+	// We will extract the transaction ID from the dtid and
+	// update the last transaction ID to max value to avoid any collision with the new transactions.
+
 	for _, preparedTx := range prepared {
-		txid, err := dtids.TransactionID(preparedTx.Dtid)
+		txID, _ := dtids.TransactionID(preparedTx.Dtid)
+		if txID > maxID {
+			maxID = txID
+		}
+
+		prepFailed, err := te.prepareTx(ctx, preparedTx)
 		if err != nil {
-			log.Errorf("Error extracting transaction ID from dtid: %v", err)
-		}
-		if txid > maxid {
-			maxid = txid
-		}
-		// We need to redo the prepared transactions using a dba user because MySQL might still be in read only mode.
-		conn, err := te.beginNewDbaConnection(ctx)
-		if err != nil {
-			allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
-			continue
-		}
-		for _, stmt := range preparedTx.Queries {
-			conn.TxProperties().RecordQuery(stmt, te.env.Environment().Parser())
-			_, err := conn.Exec(ctx, stmt, 1, false)
-			if err != nil {
-				allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
-				te.txPool.RollbackAndRelease(ctx, conn)
-				continue outer
+			allErrs = append(allErrs, vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
+			if prepFailed {
+				failedCounter++
 			}
-		}
-		// We should not use the external Prepare because
-		// we don't want to write again to the redo log.
-		err = te.preparedPool.Put(conn, preparedTx.Dtid)
-		if err != nil {
-			allErr.RecordError(vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
-			continue
+		} else {
+			preparedCounter++
 		}
 	}
+
 	for _, preparedTx := range failed {
-		txid, err := dtids.TransactionID(preparedTx.Dtid)
-		if err != nil {
-			log.Errorf("Error extracting transaction ID from dtid: %v", err)
-		}
-		if txid > maxid {
-			maxid = txid
+		txID, _ := dtids.TransactionID(preparedTx.Dtid)
+		if txID > maxID {
+			maxID = txID
 		}
 		te.preparedPool.SetFailed(preparedTx.Dtid)
 	}
-	te.txPool.AdjustLastID(maxid)
-	log.Infof("TwoPC: Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
-	return allErr.Error()
+
+	te.txPool.AdjustLastID(maxID)
+	log.Infof("TwoPC: Prepared %d transactions, and registered %d failures.", preparedCounter, failedCounter)
+	return vterrors.Aggregate(allErrs)
+}
+
+func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (failed bool, err error) {
+	defer func() {
+		if err != nil {
+			failed = te.checkErrorAndMarkFailed(ctx, preparedTx.Dtid, err, "TwopcPrepareRedo")
+		}
+	}()
+
+	// We need to redo the prepared transactions using a dba user because MySQL might still be in read only mode.
+	var conn *StatefulConnection
+	if conn, err = te.beginNewDbaConnection(ctx); err != nil {
+		return
+	}
+
+	for _, stmt := range preparedTx.Queries {
+		conn.TxProperties().RecordQuery(stmt, te.env.Environment().Parser())
+		if _, err = conn.Exec(ctx, stmt, 1, false); err != nil {
+			te.txPool.RollbackAndRelease(ctx, conn)
+			return
+		}
+	}
+	// We should not use the external Prepare because
+	// we don't want to write again to the redo log.
+	err = te.preparedPool.Put(conn, preparedTx.Dtid)
+	return
+}
+
+// checkErrorAndMarkFailed check that the error is retryable or non-retryable error.
+// If it is a non-retryable error than it marks the dtid as failed in the prepared pool,
+// increments the InternalErrors counter, and also changes the state of the transaction in the redo log as failed.
+func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, receivedErr error, metricName string) (fail bool) {
+	state := RedoStateFailed
+	if isRetryableError(receivedErr) {
+		log.Infof("retryable error for dtid: %s", dtid)
+		state = RedoStatePrepared
+	} else {
+		fail = true
+		te.env.Stats().InternalErrors.Add(metricName, 1)
+		te.preparedPool.SetFailed(dtid)
+	}
+
+	// Update the state of the transaction in the redo log.
+	// Retryable Error: Update the message with error message.
+	// Non-retryable Error: Along with message, update the state as RedoStateFailed.
+	conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	if err != nil {
+		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
+		return
+	}
+	defer te.txPool.RollbackAndRelease(ctx, conn)
+
+	if err = te.twoPC.UpdateRedo(ctx, conn, dtid, state, receivedErr.Error()); err != nil {
+		log.Errorf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err)
+		return
+	}
+
+	if _, err = te.txPool.Commit(ctx, conn); err != nil {
+		log.Errorf("markFailed: Commit failed for dtid %s: %v", dtid, err)
+	}
+	return
+}
+
+func isRetryableError(err error) bool {
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_OK,
+		vtrpcpb.Code_DEADLINE_EXCEEDED,
+		vtrpcpb.Code_CANCELED,
+		vtrpcpb.Code_UNAVAILABLE:
+		return true
+	case vtrpcpb.Code_UNKNOWN:
+		// If the error is unknown, convert to SQL Error.
+		sqlErr := sqlerror.NewSQLErrorFromError(err)
+		// Connection errors are retryable
+		return sqlerror.IsConnErr(sqlErr)
+	default:
+		return false
+	}
 }
 
 // shutdownTransactions rolls back all open transactions that are idol.

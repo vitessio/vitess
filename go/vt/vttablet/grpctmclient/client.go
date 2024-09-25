@@ -935,6 +935,19 @@ func (client *Client) ReadVReplicationWorkflow(ctx context.Context, tablet *topo
 	return response, nil
 }
 
+func (client *Client) ValidateVReplicationPermissions(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.ValidateVReplicationPermissions(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)

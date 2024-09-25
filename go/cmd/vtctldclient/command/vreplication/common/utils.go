@@ -68,6 +68,7 @@ var (
 		MySQLServerVersion           string
 		TruncateUILen                int
 		TruncateErrLen               int
+		ReferenceTables              []string
 		ConfigOverrides              []string
 	}{}
 )
