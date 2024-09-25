@@ -79,9 +79,9 @@ message VersionStringResponse{
   string version = 1;
 }
 
-message ThrottlerMetricsRequest{}
+message SystemMetricsRequest{}
 
-message ThrottlerMetricsResponse{
+message SystemMetricsResponse{
   message Metric {
     // Name of the metric
     string name = 1;
@@ -105,7 +105,7 @@ service MysqlCtl {
   rpc ReinitConfig(ReinitConfigRequest) returns (ReinitConfigResponse) {};
   rpc RefreshConfig(RefreshConfigRequest) returns (RefreshConfigResponse) {};
   rpc VersionString(VersionStringRequest) returns (VersionStringResponse) {};
-  rpc ThrottlerMetrics(ThrottlerMetricsRequest) returns (ThrottlerMetricsResponse) {};
+  rpc SystemMetrics(SystemMetricsRequest) returns (SystemMetricsResponse) {};
 }
 
 // BackupInfo is the read-only attributes of a mysqlctl/backupstorage.BackupHandle.

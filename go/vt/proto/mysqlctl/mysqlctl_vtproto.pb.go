@@ -299,11 +299,11 @@ func (m *VersionStringResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ThrottlerMetricsRequest) CloneVT() *ThrottlerMetricsRequest {
+func (m *SystemMetricsRequest) CloneVT() *SystemMetricsRequest {
 	if m == nil {
-		return (*ThrottlerMetricsRequest)(nil)
+		return (*SystemMetricsRequest)(nil)
 	}
-	r := new(ThrottlerMetricsRequest)
+	r := new(SystemMetricsRequest)
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -311,15 +311,15 @@ func (m *ThrottlerMetricsRequest) CloneVT() *ThrottlerMetricsRequest {
 	return r
 }
 
-func (m *ThrottlerMetricsRequest) CloneMessageVT() proto.Message {
+func (m *SystemMetricsRequest) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ThrottlerMetricsResponse_Metric) CloneVT() *ThrottlerMetricsResponse_Metric {
+func (m *SystemMetricsResponse_Metric) CloneVT() *SystemMetricsResponse_Metric {
 	if m == nil {
-		return (*ThrottlerMetricsResponse_Metric)(nil)
+		return (*SystemMetricsResponse_Metric)(nil)
 	}
-	r := new(ThrottlerMetricsResponse_Metric)
+	r := new(SystemMetricsResponse_Metric)
 	r.Name = m.Name
 	r.Value = m.Value
 	r.Error = m.Error
@@ -330,17 +330,17 @@ func (m *ThrottlerMetricsResponse_Metric) CloneVT() *ThrottlerMetricsResponse_Me
 	return r
 }
 
-func (m *ThrottlerMetricsResponse_Metric) CloneMessageVT() proto.Message {
+func (m *SystemMetricsResponse_Metric) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ThrottlerMetricsResponse) CloneVT() *ThrottlerMetricsResponse {
+func (m *SystemMetricsResponse) CloneVT() *SystemMetricsResponse {
 	if m == nil {
-		return (*ThrottlerMetricsResponse)(nil)
+		return (*SystemMetricsResponse)(nil)
 	}
-	r := new(ThrottlerMetricsResponse)
+	r := new(SystemMetricsResponse)
 	if rhs := m.Metrics; rhs != nil {
-		tmpContainer := make(map[string]*ThrottlerMetricsResponse_Metric, len(rhs))
+		tmpContainer := make(map[string]*SystemMetricsResponse_Metric, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -353,7 +353,7 @@ func (m *ThrottlerMetricsResponse) CloneVT() *ThrottlerMetricsResponse {
 	return r
 }
 
-func (m *ThrottlerMetricsResponse) CloneMessageVT() proto.Message {
+func (m *SystemMetricsResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -1012,7 +1012,7 @@ func (m *VersionStringResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	return len(dAtA) - i, nil
 }
 
-func (m *ThrottlerMetricsRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *SystemMetricsRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1025,12 +1025,12 @@ func (m *ThrottlerMetricsRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ThrottlerMetricsRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *SystemMetricsRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ThrottlerMetricsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *SystemMetricsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1045,7 +1045,7 @@ func (m *ThrottlerMetricsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 	return len(dAtA) - i, nil
 }
 
-func (m *ThrottlerMetricsResponse_Metric) MarshalVT() (dAtA []byte, err error) {
+func (m *SystemMetricsResponse_Metric) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1058,12 +1058,12 @@ func (m *ThrottlerMetricsResponse_Metric) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ThrottlerMetricsResponse_Metric) MarshalToVT(dAtA []byte) (int, error) {
+func (m *SystemMetricsResponse_Metric) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ThrottlerMetricsResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *SystemMetricsResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1098,7 +1098,7 @@ func (m *ThrottlerMetricsResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (i
 	return len(dAtA) - i, nil
 }
 
-func (m *ThrottlerMetricsResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *SystemMetricsResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1111,12 +1111,12 @@ func (m *ThrottlerMetricsResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ThrottlerMetricsResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *SystemMetricsResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ThrottlerMetricsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *SystemMetricsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1457,7 +1457,7 @@ func (m *VersionStringResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *ThrottlerMetricsRequest) SizeVT() (n int) {
+func (m *SystemMetricsRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1467,7 +1467,7 @@ func (m *ThrottlerMetricsRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *ThrottlerMetricsResponse_Metric) SizeVT() (n int) {
+func (m *SystemMetricsResponse_Metric) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1488,7 +1488,7 @@ func (m *ThrottlerMetricsResponse_Metric) SizeVT() (n int) {
 	return n
 }
 
-func (m *ThrottlerMetricsResponse) SizeVT() (n int) {
+func (m *SystemMetricsResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -2756,7 +2756,7 @@ func (m *VersionStringResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ThrottlerMetricsRequest) UnmarshalVT(dAtA []byte) error {
+func (m *SystemMetricsRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2779,10 +2779,10 @@ func (m *ThrottlerMetricsRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ThrottlerMetricsRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: SystemMetricsRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ThrottlerMetricsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: SystemMetricsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
@@ -2807,7 +2807,7 @@ func (m *ThrottlerMetricsRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ThrottlerMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
+func (m *SystemMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2830,10 +2830,10 @@ func (m *ThrottlerMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ThrottlerMetricsResponse_Metric: wiretype end group for non-group")
+			return fmt.Errorf("proto: SystemMetricsResponse_Metric: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ThrottlerMetricsResponse_Metric: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: SystemMetricsResponse_Metric: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -2933,7 +2933,7 @@ func (m *ThrottlerMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ThrottlerMetricsResponse) UnmarshalVT(dAtA []byte) error {
+func (m *SystemMetricsResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2956,10 +2956,10 @@ func (m *ThrottlerMetricsResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ThrottlerMetricsResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: SystemMetricsResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ThrottlerMetricsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: SystemMetricsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -2992,10 +2992,10 @@ func (m *ThrottlerMetricsResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Metrics == nil {
-				m.Metrics = make(map[string]*ThrottlerMetricsResponse_Metric)
+				m.Metrics = make(map[string]*SystemMetricsResponse_Metric)
 			}
 			var mapkey string
-			var mapvalue *ThrottlerMetricsResponse_Metric
+			var mapvalue *SystemMetricsResponse_Metric
 			for iNdEx < postIndex {
 				entryPreIndex := iNdEx
 				var wire uint64
@@ -3069,7 +3069,7 @@ func (m *ThrottlerMetricsResponse) UnmarshalVT(dAtA []byte) error {
 					if postmsgIndex > l {
 						return io.ErrUnexpectedEOF
 					}
-					mapvalue = &ThrottlerMetricsResponse_Metric{}
+					mapvalue = &SystemMetricsResponse_Metric{}
 					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
 						return err
 					}
