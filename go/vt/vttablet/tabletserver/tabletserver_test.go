@@ -229,12 +229,14 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 			{Type: sqltypes.Uint64},
 			{Type: sqltypes.Uint64},
 			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Text},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary(""),
 			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
+			sqltypes.NULL,
 		}},
 	})
 	turnOnTxEngine()
@@ -255,22 +257,26 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 			{Type: sqltypes.Uint64},
 			{Type: sqltypes.Uint64},
 			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Text},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarBinary("bogus"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary(""),
 			sqltypes.NewVarBinary("bogus"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewVarBinary("a:b:10"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary(""),
 			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewVarBinary("a:b:20"),
 			sqltypes.NewInt64(RedoStateFailed),
 			sqltypes.NewVarBinary(""),
 			sqltypes.NewVarBinary("unused"),
+			sqltypes.TestValue(sqltypes.Text, "deadlock detected, transaction rolled back"),
 		}},
 	})
 	turnOnTxEngine()
@@ -280,7 +286,10 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		Sql:    "update test_table set `name` = 2 where pk = 1 limit 10001",
 		Tables: []string{"test_table"}}}
 	utils.MustMatch(t, want, got, "Prepared queries")
-	wantFailed := map[string]error{"a:b:20": errPrepFailed}
+	wantFailed := map[string]error{
+		"bogus":  errPrepFailed, // The query is rejected by database so added to failed list.
+		"a:b:20": errPrepFailed, // The DTID is already in failed state.
+	}
 	utils.MustMatch(t, tsv.te.preparedPool.reserved, wantFailed, fmt.Sprintf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed))
 	// Verify last id got adjusted.
 	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Load(), "tsv.te.txPool.lastID.Get()")

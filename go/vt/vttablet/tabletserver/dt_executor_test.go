@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/event/syslogger"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -718,6 +719,7 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv 
 	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
+	db.AddRejectedQuery("bogus", sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "bogus query"))
 	return &DTExecutor{
 			ctx:      ctx,
 			logStats: logStats,

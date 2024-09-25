@@ -95,3 +95,7 @@ func (be *FakeBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.Backup
 }
 
 func (be *FakeBackupEngine) Name() string { return fakeBackupEngineName }
+
+func (be *FakeBackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
+}
