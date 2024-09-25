@@ -649,6 +649,9 @@ func TestGetBuildTags(t *testing.T) {
 }
 
 func TestStartExportStats(t *testing.T) {
+	statsTabletTags.ResetAll()
+	statsTabletTypeCount.ResetAll()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
