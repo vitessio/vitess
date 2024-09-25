@@ -649,9 +649,6 @@ func TestGetBuildTags(t *testing.T) {
 }
 
 func TestStartExportStats(t *testing.T) {
-	statsTabletTags.ResetAll()
-	statsTabletTypeCount.ResetAll()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -687,6 +684,10 @@ func newTestMysqlDaemon(t *testing.T, port int32) *mysqlctl.FakeMysqlDaemon {
 }
 
 func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, tags map[string]string) *TabletManager {
+	// reset stats
+	statsTabletTags.ResetAll()
+	statsTabletTypeCount.ResetAll()
+
 	t.Helper()
 	ctx := context.Background()
 	tablet := newTestTablet(t, uid, keyspace, shard, tags)
