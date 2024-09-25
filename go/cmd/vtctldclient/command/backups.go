@@ -309,7 +309,7 @@ func init() {
 	Root.AddCommand(RemoveBackup)
 
 	RestoreFromBackup.Flags().StringVarP(&restoreFromBackupOptions.BackupTimestamp, "backup-timestamp", "t", "", "Use the backup taken at, or closest before, this timestamp. Omit to use the latest backup. Timestamp format is \"YYYY-mm-DD.HHMMSS\".")
-	RestoreFromBackup.Flags().StringSliceVar(&restoreFromBackupOptions.AllowedBackupEngines, "allowed-backup-engines", restoreFromBackupOptions.AllowedBackupEngines, "if present will filter out any backups taken with engines not included in the list")
+	RestoreFromBackup.Flags().StringSliceVar(&restoreFromBackupOptions.AllowedBackupEngines, "allowed-backup-engines", restoreFromBackupOptions.AllowedBackupEngines, "if set, only backups taken with the specified engines are eligible to be restored")
 	RestoreFromBackup.Flags().StringVar(&restoreFromBackupOptions.RestoreToPos, "restore-to-pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
 	RestoreFromBackup.Flags().StringVar(&restoreFromBackupOptions.RestoreToTimestamp, "restore-to-timestamp", "", "Run a point in time recovery that restores up to, and excluding, given timestamp in RFC3339 format (`2006-01-02T15:04:05Z07:00`). This will attempt to use one full backup followed by zero or more incremental backups")
 	RestoreFromBackup.Flags().BoolVar(&restoreFromBackupOptions.DryRun, "dry-run", false, "Only validate restore steps, do not actually restore data")

@@ -1521,23 +1521,29 @@ func TestBackupEngineSelector(t *testing.T) {
 	}()
 	verifyInitialReplication(t)
 
-	// first try to backup with an alternative engine (builtin)
-	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=builtin", primary.Alias)
-	require.NoError(t, err)
-	engineUsed := getBackupEngineOfLastBackup(t)
-	require.Equal(t, "builtin", engineUsed)
+	t.Run("backup with backup-engine=builtin", func(t *testing.T) {
+		// first try to backup with an alternative engine (builtin)
+		err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=builtin", primary.Alias)
+		require.NoError(t, err)
+		engineUsed := getBackupEngineOfLastBackup(t)
+		require.Equal(t, "builtin", engineUsed)
+	})
 
-	// then try to backup specifying the xtrabackup engine
-	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=xtrabackup", primary.Alias)
-	require.NoError(t, err)
-	engineUsed = getBackupEngineOfLastBackup(t)
-	require.Equal(t, "xtrabackup", engineUsed)
+	t.Run("backup with backup-engine=xtrabackup", func(t *testing.T) {
+		// then try to backup specifying the xtrabackup engine
+		err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=xtrabackup", primary.Alias)
+		require.NoError(t, err)
+		engineUsed := getBackupEngineOfLastBackup(t)
+		require.Equal(t, "xtrabackup", engineUsed)
+	})
 
-	// check that by default we still use the xtrabackup engine if not specified
-	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
-	require.NoError(t, err)
-	engineUsed = getBackupEngineOfLastBackup(t)
-	require.Equal(t, "xtrabackup", engineUsed)
+	t.Run("backup without specifying backup-engine", func(t *testing.T) {
+		// check that by default we still use the xtrabackup engine if not specified
+		err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
+		require.NoError(t, err)
+		engineUsed := getBackupEngineOfLastBackup(t)
+		require.Equal(t, "xtrabackup", engineUsed)
+	})
 }
 
 func TestRestoreAllowedBackupEngines(t *testing.T) {
