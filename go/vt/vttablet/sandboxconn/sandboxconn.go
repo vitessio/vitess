@@ -430,7 +430,7 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 }
 
 // UnresolvedTransactions is part of the QueryService interface.
-func (sbc *SandboxConn) UnresolvedTransactions(context.Context, *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+func (sbc *SandboxConn) UnresolvedTransactions(context.Context, *querypb.Target, int64) ([]*querypb.TransactionMetadata, error) {
 	sbc.UnresolvedTransactionsCount.Add(1)
 	if err := sbc.getError(); err != nil {
 		return nil, err

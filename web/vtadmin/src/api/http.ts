@@ -421,6 +421,20 @@ export const fetchVSchema = async ({ clusterID, keyspace }: FetchVSchemaParams) 
     return pb.VSchema.create(result);
 };
 
+export interface FetchTransactionsParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const fetchTransactions = async ({ clusterID, keyspace }: FetchTransactionsParams) => {
+    const { result } = await vtfetch(`/api/transactions/${clusterID}/${keyspace}`);
+
+    const err = vtctldata.GetUnresolvedTransactionsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetUnresolvedTransactionsResponse.create(result);
+};
+
 export const fetchWorkflows = async () => {
     const { result } = await vtfetch(`/api/workflows`);
 
@@ -446,6 +460,45 @@ export const fetchWorkflowStatus = async (params: { clusterID: string; keyspace:
     if (err) throw Error(err);
 
     return vtctldata.WorkflowStatusResponse.create(result);
+};
+
+export interface CreateMoveTablesParams {
+    clusterID: string;
+    request: vtctldata.IMoveTablesCreateRequest;
+}
+
+export const createMoveTables = async ({ clusterID, request }: CreateMoveTablesParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/movetables`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtctldata.WorkflowStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowStatusResponse.create(result);
+};
+
+export interface WorkflowActionParams {
+    clusterID: string;
+    keyspace: string;
+    name: string;
+}
+
+export const startWorkflow = async ({ clusterID, keyspace, name }: WorkflowActionParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/start`);
+    const err = vtctldata.WorkflowUpdateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowUpdateResponse.create(result);
+};
+
+export const stopWorkflow = async ({ clusterID, keyspace, name }: WorkflowActionParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/stop`);
+    const err = vtctldata.WorkflowUpdateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowUpdateResponse.create(result);
 };
 
 export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {

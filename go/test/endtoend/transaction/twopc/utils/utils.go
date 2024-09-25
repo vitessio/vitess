@@ -27,6 +27,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 )
 
 const (
@@ -37,17 +42,25 @@ const (
 // ClearOutTable deletes everything from a table. Sometimes the table might have more rows than allowed in a single delete query,
 // so we have to do the deletions iteratively.
 func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout out waiting for table to be cleared - %v", tableName)
+			return
+		default:
+		}
 		conn, err := mysql.Connect(ctx, &vtParams)
 		if err != nil {
-			fmt.Printf("Error in connection - %v\n", err)
+			log.Errorf("Error in connection - %v\n", err)
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
 		res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT count(*) FROM %v", tableName), 1, false)
 		if err != nil {
-			fmt.Printf("Error in selecting - %v\n", err)
+			log.Errorf("Error in selecting - %v\n", err)
 			conn.Close()
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -63,7 +76,7 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 		_, err = conn.ExecuteFetch(fmt.Sprintf("DELETE FROM %v LIMIT 10000", tableName), 10000, false)
 		conn.Close()
 		if err != nil {
-			fmt.Printf("Error in cleanup deletion - %v\n", err)
+			log.Errorf("Error in cleanup deletion - %v\n", err)
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -80,4 +93,80 @@ func WriteTestCommunicationFile(t *testing.T, fileName string, content string) {
 // DeleteFile deletes the file specified.
 func DeleteFile(fileName string) {
 	_ = os.Remove(path.Join(os.Getenv("VTDATAROOT"), fileName))
+}
+
+// WaitForResults waits for the results of the query to be as expected.
+func WaitForResults(t *testing.T, vtParams *mysql.ConnParams, query string, resultExpected string, waitTime time.Duration) {
+	timeout := time.After(waitTime)
+	var prevRes []sqltypes.Row
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("didn't reach expected results for %s. Last results - %v", query, prevRes)
+		default:
+			ctx := context.Background()
+			conn, err := mysql.Connect(ctx, vtParams)
+			if err == nil {
+				res, _ := utils.ExecAllowError(t, conn, query)
+				conn.Close()
+				if res != nil {
+					prevRes = res.Rows
+					if fmt.Sprintf("%v", res.Rows) == resultExpected {
+						return
+					}
+				}
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, ks string, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	shardNames := map[string]bool{}
+	for _, shard := range shards {
+		shardNames[shard.Name] = true
+	}
+	query := fmt.Sprintf("show vitess_migrations from %s like '%s'", ks, uuid)
+
+	statusesMap := map[string]bool{}
+	for _, status := range expectStatuses {
+		statusesMap[string(status)] = true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	lastKnownStatus := ""
+	for {
+		select {
+		case <-ctx.Done():
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		case <-ticker.C:
+		}
+		countMatchedShards := 0
+		conn, err := mysql.Connect(ctx, vtParams)
+		if err != nil {
+			continue
+		}
+		r, err := utils.ExecAllowError(t, conn, query)
+		conn.Close()
+		if err != nil {
+			continue
+		}
+		for _, row := range r.Named().Rows {
+			shardName := row["shard"].ToString()
+			if !shardNames[shardName] {
+				// irrelevant shard
+				continue
+			}
+			lastKnownStatus = row["migration_status"].ToString()
+			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
+				countMatchedShards++
+			}
+		}
+		if countMatchedShards == len(shards) {
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		}
+	}
 }

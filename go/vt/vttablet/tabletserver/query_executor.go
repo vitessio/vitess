@@ -29,12 +29,14 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -45,10 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	eschema "vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
 // QueryExecutor is used for executing a query request.
@@ -192,8 +191,10 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qr, nil
 	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execOther()
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanDDL, p.PlanLoad:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
+	case p.PlanDDL:
+		return qre.execDDL(nil)
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
 	case p.PlanCallProc:
@@ -538,7 +539,7 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	return nil
 }
 
-func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Result, err error) {
 	// Let's see if this is a normal DDL statement or an Online DDL statement.
 	// An Online DDL statement is identified by /*vt+ .. */ comment with expected directives, like uuid etc.
 	if onlineDDL, err := schema.OnlineDDLFromCommentedStatement(qre.plan.FullStmt); err == nil {
@@ -547,6 +548,21 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 			// This is an online DDL.
 			return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
 		}
+	}
+
+	if conn == nil {
+		conn, err = qre.tsv.te.txPool.createConn(qre.ctx, qre.options, qre.setting)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Release(tx.ConnRelease)
+	}
+
+	// A DDL statement should commit the current transaction in the VTGate.
+	// The change was made in PR: https://github.com/vitessio/vitess/pull/14110 in v18.
+	// DDL statement received by vttablet will be outside of a transaction.
+	if conn.txProps != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL statement executed inside a transaction")
 	}
 
 	isTemporaryTable := false
@@ -580,19 +596,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 			return nil, err
 		}
 	}
-	result, err := qre.execStatefulConn(conn, sql, true)
-	if err != nil {
-		return nil, err
-	}
-	// Only perform this operation when the connection has transaction open.
-	// TODO: This actually does not retain the old transaction. We should see how to provide correct behaviour to client.
-	if conn.txProps != nil {
-		err = qre.BeginAgain(qre.ctx, conn)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return result, nil
+	return qre.execStatefulConn(conn, sql, true)
 }
 
 func (qre *QueryExecutor) execLoad(conn *StatefulConnection) (*sqltypes.Result, error) {
@@ -601,20 +605,6 @@ func (qre *QueryExecutor) execLoad(conn *StatefulConnection) (*sqltypes.Result, 
 		return nil, err
 	}
 	return result, nil
-}
-
-// BeginAgain commits the existing transaction and begins a new one
-func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) error {
-	if dc.IsClosed() || dc.TxProperties().Autocommit {
-		return nil
-	}
-	if _, err := dc.Exec(ctx, "commit", 1, false); err != nil {
-		return err
-	}
-	if _, err := dc.Exec(ctx, "begin", 1, false); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {

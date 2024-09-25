@@ -86,6 +86,7 @@ mysql57)
         /tmp/mysql-client_${VERSION}-1debian10_amd64.deb
         /tmp/mysql-community-server_${VERSION}-1debian10_amd64.deb
         /tmp/mysql-server_${VERSION}-1debian10_amd64.deb
+        mysql-shell
         percona-xtrabackup-24
     )
     ;;
@@ -112,6 +113,7 @@ mysql80)
         /tmp/mysql-community-server-core_${VERSION}-1debian11_amd64.deb
         /tmp/mysql-community-server_${VERSION}-1debian11_amd64.deb
         /tmp/mysql-server_${VERSION}-1debian11_amd64.deb
+        mysql-shell
         percona-xtrabackup-80
     )
     ;;

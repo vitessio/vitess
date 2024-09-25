@@ -18,6 +18,7 @@ package sqlparser
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -211,7 +212,32 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 				}
 			}
 		case 'd':
-			buf.WriteString(fmt.Sprintf("%d", values[fieldnum]))
+			switch v := values[fieldnum].(type) {
+			case int:
+				buf.WriteInt(int64(v))
+			case int8:
+				buf.WriteInt(int64(v))
+			case int16:
+				buf.WriteInt(int64(v))
+			case int32:
+				buf.WriteInt(int64(v))
+			case int64:
+				buf.WriteInt(v)
+			case uint:
+				buf.WriteUint(uint64(v))
+			case uint8:
+				buf.WriteUint(uint64(v))
+			case uint16:
+				buf.WriteUint(uint64(v))
+			case uint32:
+				buf.WriteUint(uint64(v))
+			case uint64:
+				buf.WriteUint(v)
+			case uintptr:
+				buf.WriteUint(uint64(v))
+			default:
+				panic(fmt.Sprintf("unexepcted TrackedBuffer type %T", v))
+			}
 		case 'a':
 			buf.WriteArg("", values[fieldnum].(string))
 		default:
@@ -288,12 +314,24 @@ func areBothISExpr(op Expr, val Expr) bool {
 // WriteArg writes a value argument into the buffer along with
 // tracking information for future substitutions.
 func (buf *TrackedBuffer) WriteArg(prefix, arg string) {
+	length := len(prefix) + len(arg)
 	buf.bindLocations = append(buf.bindLocations, BindLocation{
 		Offset: buf.Len(),
-		Length: len(prefix) + len(arg),
+		Length: length,
 	})
+	buf.Grow(length)
 	buf.WriteString(prefix)
 	buf.WriteString(arg)
+}
+
+// WriteInt writes a signed integer into the buffer.
+func (buf *TrackedBuffer) WriteInt(v int64) {
+	buf.WriteString(strconv.FormatInt(v, 10))
+}
+
+// WriteUint writes an unsigned integer into the buffer.
+func (buf *TrackedBuffer) WriteUint(v uint64) {
+	buf.WriteString(strconv.FormatUint(v, 10))
 }
 
 // ParsedQuery returns a ParsedQuery that contains bind
@@ -335,7 +373,6 @@ func UnescapedString(node SQLNode) string {
 	buf.SetEscapeNoIdentifier()
 	node.Format(buf)
 	return buf.String()
-
 }
 
 // CanonicalString returns a canonical string representation of an SQLNode where all identifiers

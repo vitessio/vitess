@@ -91,6 +91,14 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 	tsp := common.GetTabletSelectionPreference(cmd)
 	cli.FinishedParsing(cmd)
 
+	configOverrides, err := common.ParseConfigOverrides(common.CreateOptions.ConfigOverrides)
+	if err != nil {
+		return err
+	}
+	workflowOptions := &vtctldatapb.WorkflowOptions{
+		Config: configOverrides,
+	}
+
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:                  common.BaseOptions.Workflow,
 		MaterializationIntent:     vtctldatapb.MaterializationIntent_CUSTOM,
@@ -101,6 +109,8 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		Cell:                      strings.Join(common.CreateOptions.Cells, ","),
 		TabletTypes:               topoproto.MakeStringTypeCSV(common.CreateOptions.TabletTypes),
 		TabletSelectionPreference: tsp,
+		ReferenceTables:           common.CreateOptions.ReferenceTables,
+		WorkflowOptions:           workflowOptions,
 	}
 
 	createOptions.TableSettings.parser, err = sqlparser.New(sqlparser.Options{

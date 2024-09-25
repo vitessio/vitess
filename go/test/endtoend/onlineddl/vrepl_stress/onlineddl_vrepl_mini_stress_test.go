@@ -38,7 +38,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 type WriteMetrics struct {
@@ -229,7 +229,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
+func TestVreplMiniStressSchemaChanges(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	ctx := context.Background()

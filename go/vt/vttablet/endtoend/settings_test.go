@@ -138,16 +138,9 @@ func TestDDLNoConnectionReservationOnSettings(t *testing.T) {
 	query := "create table temp(c_date datetime default '0000-00-00')"
 	setting := "set sql_mode='TRADITIONAL'"
 
-	for _, withTx := range []bool{false, true} {
-		if withTx {
-			err := client.Begin(false)
-			require.NoError(t, err)
-		}
-		_, err := client.ReserveExecute(query, []string{setting}, nil)
-		require.Error(t, err, "create table should have failed with TRADITIONAL mode")
-		require.Contains(t, err.Error(), "Invalid default value")
-		assert.Zero(t, client.ReservedID())
-	}
+	_, err := client.ReserveExecute(query, []string{setting}, nil)
+	assert.ErrorContains(t, err, "Invalid default value for 'c_date'", "create table should have failed with TRADITIONAL mode")
+	assert.Zero(t, client.ReservedID())
 }
 
 func TestDMLNoConnectionReservationOnSettings(t *testing.T) {
@@ -156,7 +149,10 @@ func TestDMLNoConnectionReservationOnSettings(t *testing.T) {
 
 	_, err := client.Execute("create table temp(c_date datetime)", nil)
 	require.NoError(t, err)
-	defer client.Execute("drop table temp", nil)
+	defer func() {
+		client.Rollback()
+		client.Execute("drop table temp", nil)
+	}()
 
 	_, err = client.Execute("insert into temp values ('2022-08-25')", nil)
 	require.NoError(t, err)
@@ -211,9 +207,8 @@ func TestDDLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
 	query := "create table temp(c_date datetime default '0000-00-00')"
 	setting := "set sql_mode='TRADITIONAL'"
 
-	_, err := client.ReserveBeginExecute(query, []string{setting}, nil, nil)
-	require.Error(t, err, "create table should have failed with TRADITIONAL mode")
-	require.Contains(t, err.Error(), "Invalid default value")
+	_, err := client.ReserveExecute(query, []string{setting}, nil)
+	require.ErrorContains(t, err, "Invalid default value for 'c_date'", "create table should have failed with TRADITIONAL mode")
 	assert.Zero(t, client.ReservedID())
 }
 
@@ -297,12 +292,6 @@ func TestTempTableOnReserveExecute(t *testing.T) {
 	require.NoError(t,
 		client.Release())
 
-	_, err = client.ReserveBeginExecute(tempTblQuery, nil, nil, nil)
-	require.NoError(t, err)
-	assert.NotZero(t, client.ReservedID())
-	require.NoError(t,
-		client.Release())
-
 	// drop the table
 	_, err = client.Execute("drop table if exists temp", nil)
 	require.NoError(t, err)
@@ -313,13 +302,6 @@ func TestTempTableOnReserveExecute(t *testing.T) {
 	setting := "set sql_mode='TRADITIONAL'"
 
 	_, err = client.ReserveExecute(tempTblQuery, []string{setting}, nil)
-	require.Error(t, err, "create table should have failed with TRADITIONAL mode")
-	require.Contains(t, err.Error(), "Invalid default value")
-	assert.NotZero(t, client.ReservedID(), "as this goes through fallback path of reserving a connection due to temporary tables")
-	require.NoError(t,
-		client.Release())
-
-	_, err = client.ReserveBeginExecute(tempTblQuery, []string{setting}, nil, nil)
 	require.Error(t, err, "create table should have failed with TRADITIONAL mode")
 	require.Contains(t, err.Error(), "Invalid default value")
 	assert.NotZero(t, client.ReservedID(), "as this goes through fallback path of reserving a connection due to temporary tables")

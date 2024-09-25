@@ -164,6 +164,16 @@ func TopDown(
 
 // Swap takes a tree like a->b->c and swaps `a` and `b`, so we end up with b->a->c
 func Swap(parent, child Operator, message string) (Operator, *ApplyResult) {
+	unaryParent, isUnary := parent.(*unaryOperator)
+	if isUnary {
+		unaryChild, isUnary := child.(*unaryOperator)
+		if isUnary {
+			// If both the parent and child are unary operators, we can just swap the sources
+			unaryParent.Source, unaryChild.Source = unaryChild.Source, unaryParent.Source
+			return parent, Rewrote(message)
+		}
+	}
+
 	c := child.Inputs()
 	if len(c) != 1 {
 		panic(vterrors.VT13001("Swap can only be used on single input operators"))
@@ -200,34 +210,60 @@ func bottomUp(
 		return root, NoRewrite
 	}
 
-	oldInputs := root.Inputs()
 	var anythingChanged *ApplyResult
-	newInputs := make([]Operator, len(oldInputs))
-	childID := rootID
 
-	// noLHSTableSet is used to mark which operators that do not send data from the LHS to the RHS
-	// It's only UNION at this moment, but this package can't depend on the actual operators, so
-	// we use this interface to avoid direct dependencies
-	type noLHSTableSet interface{ NoLHSTableSet() }
-
-	for i, operator := range oldInputs {
-		// We merge the table set of all the LHS above the current root so that we can
-		// send it down to the current RHS.
-		// We don't want to send the LHS table set to the RHS if the root is a UNION.
-		// Some operators, like SubQuery, can have multiple child operators on the RHS
-		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
-			childID = childID.Merge(resolveID(oldInputs[0]))
-		}
-		in, changed := bottomUp(operator, childID, resolveID, rewriter, shouldVisit, false)
+	switch root := root.(type) {
+	case nullaryOperator:
+		// no inputs, nothing to do
+	case *unaryOperator:
+		newSource, changed := bottomUp(root.Source, rootID, resolveID, rewriter, shouldVisit, false)
 		if DebugOperatorTree && changed.Changed() {
-			fmt.Println(ToTree(in))
+			fmt.Println(ToTree(newSource))
 		}
 		anythingChanged = anythingChanged.Merge(changed)
-		newInputs[i] = in
-	}
+		root.Source = newSource
+	case *binaryOperator:
+		newLHS, changed := bottomUp(root.LHS, rootID, resolveID, rewriter, shouldVisit, false)
+		if DebugOperatorTree && changed.Changed() {
+			fmt.Println(ToTree(newLHS))
+		}
+		anythingChanged = anythingChanged.Merge(changed)
+		root.LHS = newLHS
+		newRHS, changed := bottomUp(root.RHS, rootID, resolveID, rewriter, shouldVisit, false)
+		if DebugOperatorTree && changed.Changed() {
+			fmt.Println(ToTree(newRHS))
+		}
+		anythingChanged = anythingChanged.Merge(changed)
+		root.RHS = newRHS
+	default:
+		oldInputs := root.Inputs()
+		newInputs := make([]Operator, len(oldInputs))
+		childID := rootID
 
-	if anythingChanged.Changed() {
-		root.SetInputs(newInputs)
+		// noLHSTableSet is used to mark which operators that do not send data from the LHS to the RHS
+		// It's only UNION at this moment, but this package can't depend on the actual operators, so
+		// we use this interface to avoid direct dependencies
+		type noLHSTableSet interface{ NoLHSTableSet() }
+
+		for i, operator := range oldInputs {
+			// We merge the table set of all the LHS above the current root so that we can
+			// send it down to the current RHS.
+			// We don't want to send the LHS table set to the RHS if the root is a UNION.
+			// Some operators, like SubQuery, can have multiple child operators on the RHS
+			if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
+				childID = childID.Merge(resolveID(oldInputs[0]))
+			}
+			in, changed := bottomUp(operator, childID, resolveID, rewriter, shouldVisit, false)
+			if DebugOperatorTree && changed.Changed() {
+				fmt.Println(ToTree(in))
+			}
+			anythingChanged = anythingChanged.Merge(changed)
+			newInputs[i] = in
+		}
+
+		if anythingChanged.Changed() {
+			root.SetInputs(newInputs)
+		}
 	}
 
 	newOp, treeIdentity := rewriter(root, rootID, isRoot)
@@ -247,13 +283,38 @@ func breakableTopDown(
 
 	var anythingChanged *ApplyResult
 
-	oldInputs := newOp.Inputs()
-	newInputs := make([]Operator, len(oldInputs))
-	for i, oldInput := range oldInputs {
-		newInputs[i], identity, err = breakableTopDown(oldInput, rewriter)
-		anythingChanged = anythingChanged.Merge(identity)
+	switch newOp := newOp.(type) {
+	case nullaryOperator:
+		// no inputs, nothing to do
+	case *unaryOperator:
+		newSource, identity, err := breakableTopDown(newOp.Source, rewriter)
 		if err != nil {
 			return nil, NoRewrite, err
+		}
+		anythingChanged = anythingChanged.Merge(identity)
+		newOp.Source = newSource
+	case *binaryOperator:
+		newLHS, identity, err := breakableTopDown(newOp.LHS, rewriter)
+		if err != nil {
+			return nil, NoRewrite, err
+		}
+		anythingChanged = anythingChanged.Merge(identity)
+		newRHS, identity, err := breakableTopDown(newOp.RHS, rewriter)
+		if err != nil {
+			return nil, NoRewrite, err
+		}
+		anythingChanged = anythingChanged.Merge(identity)
+		newOp.LHS = newLHS
+		newOp.RHS = newRHS
+	default:
+		oldInputs := newOp.Inputs()
+		newInputs := make([]Operator, len(oldInputs))
+		for i, oldInput := range oldInputs {
+			newInputs[i], identity, err = breakableTopDown(oldInput, rewriter)
+			if err != nil {
+				return nil, NoRewrite, err
+			}
+			anythingChanged = anythingChanged.Merge(identity)
 		}
 	}
 
@@ -281,25 +342,39 @@ func topDown(
 		root = newOp
 	}
 
-	oldInputs := root.Inputs()
-	newInputs := make([]Operator, len(oldInputs))
-	childID := rootID
-
-	type noLHSTableSet interface{ NoLHSTableSet() }
-
-	for i, operator := range oldInputs {
-		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
-			childID = childID.Merge(resolveID(oldInputs[0]))
-		}
-		in, changed := topDown(operator, childID, resolveID, rewriter, shouldVisit, false)
+	switch newOp := newOp.(type) {
+	case nullaryOperator:
+		// no inputs, nothing to do
+	case *unaryOperator:
+		newSource, changed := topDown(newOp.Source, rootID, resolveID, rewriter, shouldVisit, false)
 		anythingChanged = anythingChanged.Merge(changed)
-		newInputs[i] = in
+		newOp.Source = newSource
+	case *binaryOperator:
+		newLHS, changed := topDown(newOp.LHS, rootID, resolveID, rewriter, shouldVisit, false)
+		anythingChanged = anythingChanged.Merge(changed)
+		newRHS, changed := topDown(newOp.RHS, rootID, resolveID, rewriter, shouldVisit, false)
+		anythingChanged = anythingChanged.Merge(changed)
+		newOp.LHS, newOp.RHS = newLHS, newRHS
+	default:
+		oldInputs := root.Inputs()
+		newInputs := make([]Operator, len(oldInputs))
+		childID := rootID
+
+		type noLHSTableSet interface{ NoLHSTableSet() }
+
+		for i, operator := range oldInputs {
+			if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
+				childID = childID.Merge(resolveID(oldInputs[0]))
+			}
+			in, changed := topDown(operator, childID, resolveID, rewriter, shouldVisit, false)
+			anythingChanged = anythingChanged.Merge(changed)
+			newInputs[i] = in
+		}
+
+		if anythingChanged != NoRewrite {
+			root.SetInputs(newInputs)
+		}
 	}
 
-	if anythingChanged != NoRewrite {
-		root.SetInputs(newInputs)
-		return root, anythingChanged
-	}
-
-	return root, NoRewrite
+	return root, anythingChanged
 }

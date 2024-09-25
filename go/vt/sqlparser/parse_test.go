@@ -1786,6 +1786,12 @@ var (
 		input:  `create index Indexes on b (col1)`,
 		output: "alter table b add key `Indexes` (col1)",
 	}, {
+		input:  `create /*vt+ foo=1 */ index Indexes on b (col1)`,
+		output: "alter /*vt+ foo=1 */ table b add key `Indexes` (col1)",
+	}, {
+		input:  `alter /*vt+ foo=1 */ table b add key Indexes (col1)`,
+		output: "alter /*vt+ foo=1 */ table b add key `Indexes` (col1)",
+	}, {
 		input:  `create fulltext index Indexes on b (col1)`,
 		output: "alter table b add fulltext key `Indexes` (col1)",
 	}, {
@@ -2568,6 +2574,9 @@ var (
 		input:  "vexplain select * from t",
 		output: "vexplain plan select * from t",
 	}, {
+		input:  "vexplain trace select * from t",
+		output: "vexplain trace select * from t",
+	}, {
 		input: "explain analyze select * from t",
 	}, {
 		input: "explain format = tree select * from t",
@@ -2797,12 +2806,12 @@ var (
 	}, {
 		input: "rollback",
 	}, {
-		input: "create database /* simple */ test_db",
+		input: "create /* simple */ database test_db",
 	}, {
 		input:  "create schema test_db",
 		output: "create database test_db",
 	}, {
-		input: "create database /* simple */ if not exists test_db",
+		input: "create /* simple */ database if not exists test_db",
 	}, {
 		input:  "create schema if not exists test_db",
 		output: "create database if not exists test_db",

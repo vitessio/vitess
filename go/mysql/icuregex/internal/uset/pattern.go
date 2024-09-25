@@ -69,7 +69,7 @@ func (u *UnicodeSet) ToPattern(w *strings.Builder, escapeUnprintable bool) {
 		}
 	} else {
 		// Default; emit the ranges as pairs
-		for i := 0; i < count; i++ {
+		for i := range count {
 			start := u.RangeStart(i)
 			end := u.RangeEnd(i)
 			u.appendToPattern(w, start, escapeUnprintable)

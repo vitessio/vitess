@@ -130,7 +130,7 @@ func (ar *algorithmicRange) findAlgName(otherName string) rune {
 			}
 
 			t := otherName
-			for i = 0; i < len(factors); i++ {
+			for i = range len(factors) {
 				s = elements[i]
 
 				for s[0] != 0 && len(t) > 0 {
@@ -153,7 +153,7 @@ func (ar *algorithmicRange) findAlgName(otherName string) rune {
 
 func (ar *algorithmicRange) writeFactorSuffix0(factors []uint16, s []uint8, buf *strings.Builder, elements, elementBases *[8][]byte) {
 	/* write each element */
-	for i := 0; i < len(factors); i++ {
+	for i := range len(factors) {
 		(*elements)[i] = s
 		(*elementBases)[i] = s
 

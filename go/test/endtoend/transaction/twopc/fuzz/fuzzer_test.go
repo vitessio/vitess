@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package stress
+package fuzz
 
 import (
 	"context"
@@ -29,13 +29,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 )
 
@@ -102,12 +105,12 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			timeForTesting: 5 * time.Second,
 		},
 		{
-			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL disruptions",
-			threads:               15,
-			updateSets:            15,
+			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL, MoveTables disruptions",
+			threads:               4,
+			updateSets:            4,
 			timeForTesting:        5 * time.Second,
-			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer},
-			disruptionProbability: []int{5, 5, 5, 5, 5},
+			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer, moveTablesFuzzer},
+			disruptionProbability: []int{5, 5, 5, 5, 5, 5},
 		},
 	}
 
@@ -129,7 +132,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			fz.stop()
 
 			// Wait for all transactions to be resolved.
-			waitForResults(t, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 30*time.Second)
+			twopcutil.WaitForResults(t, &vtParams, fmt.Sprintf(`show unresolved transactions for %v`, keyspaceName), "[]", 30*time.Second)
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
 			fz.verifyTransactionsWereAtomic(t)
 
@@ -426,12 +429,16 @@ func vttabletRestarts(t *testing.T) {
 	}
 }
 
-var orderedDDLFuzzer = []string{
-	"alter table twopc_fuzzer_insert add column extra_col1 varchar(20)",
-	"alter table twopc_fuzzer_insert add column extra_col2 varchar(20)",
-	"alter table twopc_fuzzer_insert drop column extra_col1",
-	"alter table twopc_fuzzer_insert drop column extra_col2",
-}
+var (
+	count = 0
+
+	orderedDDLFuzzer = []string{
+		"alter table twopc_fuzzer_insert add column extra_col1 varchar(20)",
+		"alter table twopc_fuzzer_insert add column extra_col2 varchar(20)",
+		"alter table twopc_fuzzer_insert drop column extra_col1",
+		"alter table twopc_fuzzer_insert drop column extra_col2",
+	}
+)
 
 // onlineDDLFuzzer runs an online DDL statement while ignoring any errors for the fuzzer.
 func onlineDDLFuzzer(t *testing.T) {
@@ -443,7 +450,40 @@ func onlineDDLFuzzer(t *testing.T) {
 		return
 	}
 	fmt.Println("Running online DDL with uuid: ", output)
-	WaitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	twopcutil.WaitForMigrationStatus(t, &vtParams, keyspaceName, clusterInstance.Keyspaces[0].Shards,
+		strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+}
+
+var moveTablesCount int
+
+// moveTablesFuzzer runs a MoveTables workflow.
+func moveTablesFuzzer(t *testing.T) {
+	workflow := "TestTwoPCFuzzTest"
+	srcKeyspace := keyspaceName
+	targetKeyspace := unshardedKeyspaceName
+	if moveTablesCount%2 == 1 {
+		srcKeyspace = unshardedKeyspaceName
+		targetKeyspace = keyspaceName
+		// We apply the vschema again because previous move tables would have removed the entry for `twopc_fuzzer_update`.
+		err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
+		require.NoError(t, err)
+	}
+	log.Errorf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace)
+	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update", []string{topodatapb.TabletType_REPLICA.String()})
+	// Initiate MoveTables for twopc_fuzzer_update.
+	output, err := mtw.Create()
+	if err != nil {
+		log.Errorf("error creating MoveTables - %v, output - %v", err, output)
+		return
+	}
+	moveTablesCount++
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	mtw.WaitForVreplCatchup(1 * time.Minute)
+	// SwitchTraffic
+	output, err = mtw.SwitchReadsAndWrites()
+	assert.NoError(t, err, output)
+	output, err = mtw.Complete()
+	assert.NoError(t, err, output)
 }
 
 func mysqlRestarts(t *testing.T) {

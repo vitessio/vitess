@@ -47,7 +47,7 @@ const (
 	// DTStateRollback represents the ROLLBACK state for dt_state.
 	DTStateRollback = querypb.TransactionState_ROLLBACK
 
-	readAllRedo = `select t.dtid, t.state, t.time_created, s.statement
+	readAllRedo = `select t.dtid, t.state, t.time_created, s.statement, t.message
 	from %s.redo_state t
     join %s.redo_statement s on t.dtid = s.dtid
 	order by t.dtid, s.id`
@@ -61,7 +61,7 @@ const (
 	// Resolving COMMIT first is crucial because we need to address transactions where a commit decision has already been made but remains unresolved.
 	// For transactions with a commit decision, applications are already aware of the outcome and are waiting for the resolution.
 	// By addressing these first, we ensure atomic commits and improve user experience. For other transactions, the decision is typically to rollback.
-	readUnresolvedTransactions = `select t.dtid, t.state, p.keyspace, p.shard
+	readUnresolvedTransactions = `select t.dtid, t.state, t.time_created, p.keyspace, p.shard
 	from %s.dt_state t
     join %s.dt_participant p on t.dtid = p.dtid
     where time_created < %a
@@ -109,8 +109,8 @@ func (tpc *TwoPC) initializeQueries() {
 		"insert into %s.redo_statement(dtid, id, statement) values %a",
 		dbname, ":vals")
 	tpc.updateRedoTx = sqlparser.BuildParsedQuery(
-		"update %s.redo_state set state = %a where dtid = %a",
-		dbname, ":state", ":dtid")
+		"update %s.redo_state set state = %a, message = %a where dtid = %a",
+		dbname, ":state", ":message", ":dtid")
 	tpc.deleteRedoTx = sqlparser.BuildParsedQuery(
 		"delete from %s.redo_state where dtid = %a",
 		dbname, ":dtid")
@@ -200,10 +200,11 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 }
 
 // UpdateRedo changes the state of the redo log for the dtid.
-func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int) error {
+func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int, message string) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":  sqltypes.StringBindVariable(dtid),
-		"state": sqltypes.Int64BindVariable(int64(state)),
+		"dtid":    sqltypes.StringBindVariable(dtid),
+		"state":   sqltypes.Int64BindVariable(int64(state)),
+		"message": sqltypes.StringBindVariable(message),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.updateRedoTx, bindVars)
 	return err
@@ -244,8 +245,9 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 			// which is harmless.
 			tm, _ := row[2].ToCastInt64()
 			curTx = &tx.PreparedTx{
-				Dtid: dtid,
-				Time: time.Unix(0, tm),
+				Dtid:    dtid,
+				Time:    time.Unix(0, tm),
+				Message: row[4].ToString(),
 			}
 			st, err := row[1].ToCastInt64()
 			if err != nil {
@@ -464,10 +466,10 @@ func (tpc *TwoPC) read(ctx context.Context, conn *connpool.Conn, pq *sqlparser.P
 
 // UnresolvedTransactions returns the list of unresolved transactions
 // the list from database is retrieved as
-// dtid | state   | keyspace | shard
-// 1    | PREPARE | ks       | 40-80
-// 1    | PREPARE | ks       | 80-c0
-// 2    | COMMIT  | ks       | -40
+// dtid | state   | time_created | keyspace | shard
+// 1    | PREPARE | 1726748387   | ks       | 40-80
+// 1    | PREPARE | 1726748387   | ks       | 80-c0
+// 2    | COMMIT  | 1726748387   | ks       | -40
 // Here there are 2 dtids with 2 participants for dtid:1 and 1 participant for dtid:2.
 func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.Time) ([]*querypb.TransactionMetadata, error) {
 	conn, err := tpc.readPool.Get(ctx, nil)
@@ -506,17 +508,19 @@ func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.T
 
 			// Extract the transaction state and initialize a new TransactionMetadata
 			stateID, _ := row[1].ToInt()
+			timeCreated, _ := row[2].ToCastInt64()
 			currentTx = &querypb.TransactionMetadata{
 				Dtid:         dtid,
 				State:        querypb.TransactionState(stateID),
+				TimeCreated:  timeCreated,
 				Participants: []*querypb.Target{},
 			}
 		}
 
 		// Add the current participant (keyspace and shard) to the transaction
 		currentTx.Participants = append(currentTx.Participants, &querypb.Target{
-			Keyspace:   row[2].ToString(),
-			Shard:      row[3].ToString(),
+			Keyspace:   row[3].ToString(),
+			Shard:      row[4].ToString(),
 			TabletType: topodatapb.TabletType_PRIMARY,
 		})
 	}

@@ -87,12 +87,12 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 }
 
 func transformPercentBasedMirror(ctx *plancontext.PlanningContext, op *operators.PercentBasedMirror) (engine.Primitive, error) {
-	primitive, err := transformToPrimitive(ctx, op.Operator)
+	primitive, err := transformToPrimitive(ctx, op.Operator())
 	if err != nil {
 		return nil, err
 	}
 
-	target, err := transformToPrimitive(ctx.UseMirror(), op.Target)
+	target, err := transformToPrimitive(ctx.UseMirror(), op.Target())
 	// Mirroring is best-effort. If we encounter an error while building the
 	// mirror target primitive, proceed without mirroring.
 	if err != nil {
@@ -169,7 +169,7 @@ func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequent
 }
 
 func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (engine.Primitive, error) {
-	rb, isRoute := op.Insert.(*operators.Route)
+	rb, isRoute := op.Insert().(*operators.Route)
 	if !isRoute {
 		return nil, vterrors.VT13001(fmt.Sprintf("Incorrect type encountered: %T (transformInsertionSelection)", op.Insert))
 	}
@@ -198,7 +198,7 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 
 	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
-	selectionPlan, err := transformToPrimitive(ctx, op.Select)
+	selectionPlan, err := transformToPrimitive(ctx, op.Select())
 	if err != nil {
 		return nil, err
 	}
@@ -1000,11 +1000,11 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 }
 
 func transformRecurseCTE(ctx *plancontext.PlanningContext, op *operators.RecurseCTE) (engine.Primitive, error) {
-	seed, err := transformToPrimitive(ctx, op.Seed)
+	seed, err := transformToPrimitive(ctx, op.Seed())
 	if err != nil {
 		return nil, err
 	}
-	term, err := transformToPrimitive(ctx, op.Term)
+	term, err := transformToPrimitive(ctx, op.Term())
 	if err != nil {
 		return nil, err
 	}

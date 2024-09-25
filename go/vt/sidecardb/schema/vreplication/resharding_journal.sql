@@ -20,4 +20,4 @@ CREATE TABLE IF NOT EXISTS resharding_journal
     `db_name` varbinary(255) DEFAULT NULL,
     `val`     blob,
     PRIMARY KEY (`id`)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

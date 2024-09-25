@@ -94,6 +94,10 @@ func (client *FakeTabletManagerClient) UpdateVReplicationWorkflows(ctx context.C
 	return nil, nil
 }
 
+func (client *FakeTabletManagerClient) ValidateVReplicationPermissions(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	return nil, nil
+}
+
 func (client *FakeTabletManagerClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	return nil, nil
 }
@@ -210,6 +214,21 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsAllPrivs(ctx context.Contex
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{}, nil
+}
+
+// GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+	return nil, nil
+}
+
+// ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	return nil
+}
+
+// ReadTransaction is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	return nil, nil
 }
 
 //
