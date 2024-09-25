@@ -651,8 +651,8 @@ func TestGetBuildTags(t *testing.T) {
 func TestStartExportStats(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ts := memorytopo.NewServer(ctx, "cell1")
 
+	ts := memorytopo.NewServer(ctx, "cell1")
 	_ = newTestTM(t, ts, 1, "ks", "0", map[string]string{
 		"test": t.Name(),
 	})
@@ -667,7 +667,6 @@ func TestStartExportStats(t *testing.T) {
 	assert.Equal(t, map[string]int64{
 		"test." + t.Name(): 1,
 	}, statsTabletTags.Counts())
-
 }
 
 func newTestMysqlDaemon(t *testing.T, port int32) *mysqlctl.FakeMysqlDaemon {
