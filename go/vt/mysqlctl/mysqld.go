@@ -35,6 +35,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1290,6 +1291,62 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) (string, error) {
 	}
 	res := qr.Named().Row()
 	return res.ToString("@@global.version_comment")
+}
+
+// ThrottlerMetrics returns several OS metrics to be used by the tablet throttler.
+func (mysqld *Mysqld) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsResponse, error) {
+	resp := &mysqlctlpb.SystemMetricsResponse{
+		Metrics: make(map[string]*mysqlctlpb.SystemMetricsResponse_Metric),
+	}
+	newMetric := func(name string) *mysqlctlpb.SystemMetricsResponse_Metric {
+		metric := &mysqlctlpb.SystemMetricsResponse_Metric{
+			Name: name,
+		}
+		resp.Metrics[name] = metric
+		return metric
+	}
+	withError := func(metric *mysqlctlpb.SystemMetricsResponse_Metric, err error) error {
+		if err != nil {
+			metric.Error = err.Error()
+		}
+		return err
+	}
+
+	func() error {
+		metric := newMetric("datadir-used")
+		var st syscall.Statfs_t
+		if err := syscall.Statfs(cnf.DataDir, &st); err != nil {
+			return withError(metric, err)
+		}
+		if st.Blocks == 0 {
+			return withError(metric, fmt.Errorf("unexpected zero blocks in %s", cnf.DataDir))
+		}
+		metric.Value = float64(st.Blocks-st.Bfree) / float64(st.Blocks)
+		return nil
+	}()
+
+	func() error {
+		metric := newMetric("loadavg")
+		if runtime.GOOS != "linux" {
+			return withError(metric, fmt.Errorf("loadavg metric is only available on Linux"))
+		}
+		content, err := os.ReadFile("/proc/loadavg")
+		if err != nil {
+			return withError(metric, err)
+		}
+		fields := strings.Fields(string(content))
+		if len(fields) == 0 {
+			return withError(metric, fmt.Errorf("unexpected /proc/loadavg content"))
+		}
+		loadAvg, err := strconv.ParseFloat(fields[0], 64)
+		if err != nil {
+			return withError(metric, err)
+		}
+		metric.Value = loadAvg / float64(runtime.NumCPU())
+		return nil
+	}()
+
+	return resp, nil
 }
 
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
