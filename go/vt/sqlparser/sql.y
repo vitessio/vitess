@@ -4504,6 +4504,10 @@ vexplain_type_opt:
   {
     $$ = TraceVExplainType
   }
+| KEYS
+  {
+    $$ = KeysVExplainType
+  }
 
 explain_synonyms:
   EXPLAIN
