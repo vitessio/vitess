@@ -187,22 +187,14 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 
 // commit2PC will not used the pinned tablets - to make sure we use the current source, we need to use the gateway's queryservice
 func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err error) {
-	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
-		_ = txc.Rollback(ctx, session)
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "pre or post actions not allowed for 2PC commits")
-	}
-	if len(session.GetSavepoints()) != 0 {
-		_ = txc.Rollback(ctx, session)
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "savepoints not allowed for 2PC commits")
-	}
-	if session.GetInReservedConn() {
-		_ = txc.Rollback(ctx, session)
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "system settings/temporary table are not allowed for 2PC commits")
-	}
-
 	// If the number of participants is one or less, then it's a normal commit.
 	if len(session.ShardSessions) <= 1 {
 		return txc.commitNormal(ctx, session)
+	}
+
+	if err := txc.checkValidCondition(session); err != nil {
+		_ = txc.Rollback(ctx, session)
+		return err
 	}
 
 	mmShard := session.ShardSessions[0]
@@ -281,6 +273,19 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 	// This step is to clean up the transaction metadata.
 	txPhase = Commit2pcConclude
 	_ = txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+	return nil
+}
+
+func (txc *TxConn) checkValidCondition(session *SafeSession) error {
+	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
+		return vterrors.VT12001("atomic distributed transaction commit with consistent lookup vindex")
+	}
+	if len(session.GetSavepoints()) != 0 {
+		return vterrors.VT12001("atomic distributed transaction commit with savepoint")
+	}
+	if session.GetInReservedConn() {
+		return vterrors.VT12001("atomic distributed transaction commit with system settings")
+	}
 	return nil
 }
 
