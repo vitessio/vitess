@@ -274,6 +274,19 @@ type TabletFilter interface {
 	IsIncluded(tablet *topodata.Tablet) bool
 }
 
+// TabletFilters contains filters for tablets.
+type TabletFilters []TabletFilter
+
+// IsIncluded returns true if a tablet passes all filters.
+func (tf TabletFilters) IsIncluded(tablet *topodata.Tablet) bool {
+	for _, filter := range tf {
+		if !filter.IsIncluded(tablet) {
+			return false
+		}
+	}
+	return true
+}
+
 // FilterByShard is a filter that filters tablets by
 // keyspace/shard.
 type FilterByShard struct {
