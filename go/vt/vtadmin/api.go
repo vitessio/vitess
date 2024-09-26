@@ -537,16 +537,16 @@ func (api *API) ConcludeTransaction(ctx context.Context, req *vtadminpb.Conclude
 	span, ctx := trace.NewSpan(ctx, "API.ConcludeTransaction")
 	defer span.Finish()
 
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
-
-	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
-		return nil, nil
-	}
 
 	return c.Vtctld.ConcludeTransaction(ctx, &vtctldatapb.ConcludeTransactionRequest{
 		Dtid: req.Dtid,

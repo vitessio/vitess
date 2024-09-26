@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useKeyspaces, useTransactions } from '../../hooks/api';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
@@ -84,13 +84,6 @@ export const Transactions = () => {
 
     const transactions =
         (transactionsQuery.data && orderBy(transactionsQuery.data.transactions, ['time_created'], 'asc')) || [];
-
-    useEffect(() => {
-        if (params.clusterID && params.keyspace) {
-            transactionsQuery.refetch();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [params.abandonAge]);
 
     const renderRows = (rows: query.ITransactionMetadata[]) => {
         return rows.map((row) => {
