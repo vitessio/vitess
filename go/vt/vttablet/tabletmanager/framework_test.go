@@ -480,8 +480,8 @@ func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 	}
 	for qry, res := range tmc.vreQueries[int(tablet.Alias.Uid)] {
 		if strings.HasPrefix(qry, "/") {
-			re := regexp.MustCompile(qry)
-			if re.MatchString(qry) {
+			re := regexp.MustCompile(qry[1:])
+			if re.MatchString(query) {
 				return res, nil
 			}
 		}
