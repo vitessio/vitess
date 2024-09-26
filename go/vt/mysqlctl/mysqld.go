@@ -1312,7 +1312,7 @@ func (mysqld *Mysqld) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlp
 		return err
 	}
 
-	func() error {
+	_ = func() error {
 		metric := newMetric("datadir-used")
 		// 0.0 for empty mount, 1.0 for completely full mount
 		var st syscall.Statfs_t
@@ -1326,7 +1326,7 @@ func (mysqld *Mysqld) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlp
 		return nil
 	}()
 
-	func() error {
+	_ = func() error {
 		metric := newMetric("loadavg")
 		if runtime.GOOS != "linux" {
 			return withError(metric, fmt.Errorf("loadavg metric is only available on Linux"))
