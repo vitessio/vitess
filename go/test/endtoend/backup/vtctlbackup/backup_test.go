@@ -29,6 +29,7 @@ func TestBuiltinBackup(t *testing.T) {
 
 func TestBuiltinBackupWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	defer setDefaultCommonArgs()
 	cDetails := &CompressionDetails{
 		CompressorEngineName:    "zstd",
 		ExternalCompressorCmd:   "zstd",
@@ -41,6 +42,7 @@ func TestBuiltinBackupWithZstdCompression(t *testing.T) {
 
 func TestBuiltinBackupWithExternalZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	defer setDefaultCommonArgs()
 	cDetails := &CompressionDetails{
 		CompressorEngineName:    "external",
 		ExternalCompressorCmd:   "zstd",
@@ -53,6 +55,7 @@ func TestBuiltinBackupWithExternalZstdCompression(t *testing.T) {
 
 func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	defer setDefaultCommonArgs()
 	cDetails := &CompressionDetails{
 		CompressorEngineName:            "external",
 		ExternalCompressorCmd:           "zstd",
