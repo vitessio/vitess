@@ -399,8 +399,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	superReadOnly := true //nolint
-	readOnly := true      //nolint
+	superReadOnly := true // nolint
+	readOnly := true      // nolint
 	var replicationPosition replication.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled(ctx)
 
@@ -602,39 +602,52 @@ func (be *BuiltinBackupEngine) backupFiles(
 	// Backup with the provided concurrency.
 	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	wg := sync.WaitGroup{}
+
+	ctxCancel, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	for i := range fes {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			fe := &fes[i]
 			// Wait until we are ready to go, return if we encounter an error
-			acqErr := sema.Acquire(ctx, 1)
+			acqErr := sema.Acquire(ctxCancel, 1)
 			if acqErr != nil {
 				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
 				bh.RecordError(acqErr)
+				cancel()
 				return
 			}
 			defer sema.Release(1)
+
+			// First check if we have any error, if we have, there is no point trying to restore this file.
+			// We check for errors before checking if the context is canceled on purpose, if there was an
+			// error, the context would have been canceled already.
+			if bh.HasErrors() {
+				params.Logger.Infof("Failed to restore files due to error.")
+				return
+			}
+
 			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
 			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
 			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
-			case <-ctx.Done():
+			case <-ctxCancel.Done():
 				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
 				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
 
-			if bh.HasErrors() {
-				params.Logger.Infof("failed to backup files due to error.")
-				return
-			}
-
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			bh.RecordError(be.backupFile(ctx, params, bh, fe, name))
+			err = be.backupFile(ctxCancel, params, bh, fe, name)
+			if err != nil {
+				bh.RecordError(acqErr)
+				cancel()
+			}
 		}(i)
 	}
 
