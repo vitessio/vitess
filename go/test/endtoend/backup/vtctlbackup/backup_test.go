@@ -24,11 +24,12 @@ import (
 
 // TestBackupMain - main tests backup using vtctl commands
 func TestBackupMain(t *testing.T) {
-	TestBackup(t, Backup, "xbstream", 0, nil, nil)
+	TestBackup(t, BuiltinBackup, "xbstream", 0, nil, nil)
 }
 
 func TestBackupMainWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	defer setDefaultCommonArgs()
 	cDetails := &CompressionDetails{
 		CompressorEngineName:    "zstd",
 		ExternalCompressorCmd:   "zstd",
@@ -36,7 +37,7 @@ func TestBackupMainWithZstdCompression(t *testing.T) {
 		ExternalDecompressorCmd: "zstd -d",
 	}
 
-	TestBackup(t, Backup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 }
 
 func setDefaultCompressionFlag() {

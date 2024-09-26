@@ -474,6 +474,9 @@ message PromoteReplicaResponse {
 message BackupRequest {
   int64 concurrency = 1;
   bool allow_primary = 2;
+
+  // BackupEngine specifies if we want to use a particular backup engine for this backup request
+  optional string backup_engine = 5;
 }
 
 message BackupResponse {
@@ -482,6 +485,9 @@ message BackupResponse {
 
 message RestoreFromBackupRequest {
   vttime.Time backup_time = 1;
+  
+  // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
+  repeated string allowed_backup_engines = 5;
 }
 
 message RestoreFromBackupResponse {

@@ -382,6 +382,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("backup_engine", req.BackupEngine)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -455,8 +456,13 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, req *vtctldatapb.BackupRequest, stream interface {
 	Send(resp *vtctldatapb.BackupResponse) error
-}) error {
-	r := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(req.Concurrency), AllowPrimary: req.AllowPrimary}
+},
+) error {
+	r := &tabletmanagerdatapb.BackupRequest{
+		Concurrency:  int64(req.Concurrency),
+		AllowPrimary: req.AllowPrimary,
+		BackupEngine: req.BackupEngine,
+	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
 		return err
@@ -2663,7 +2669,7 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("keyspace", ti.Keyspace)
 	span.Annotate("shard", ti.Shard)
 
-	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, protoutil.TimeFromProto(req.BackupTime))
+	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, protoutil.TimeFromProto(req.BackupTime), req.AllowedBackupEngines)
 	if err != nil {
 		return err
 	}

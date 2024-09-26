@@ -96,6 +96,8 @@ var (
 
 	backupDuration  = stats.NewGauge("backup_duration_seconds", "How long it took to complete the last backup operation (in seconds)")
 	restoreDuration = stats.NewGauge("restore_duration_seconds", "How long it took to complete the last restore operation (in seconds)")
+
+	EmptyBackupMessage = "no new data to backup, skipping it"
 )
 
 func init() {
@@ -131,10 +133,12 @@ func Backup(ctx context.Context, params BackupParams) error {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
 
-	be, err := GetBackupEngine()
+	be, err := GetBackupEngine(params.BackupEngine)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
+
+	params.Logger.Infof("Using backup engine %q", be.Name())
 
 	// Take the backup, and either AbortBackup or EndBackup.
 	usable, err := be.ExecuteBackup(ctx, params, bh)
