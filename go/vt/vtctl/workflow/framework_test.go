@@ -267,7 +267,7 @@ type testTMClient struct {
 
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
-	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
+	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
 	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
 	primaryPositions                   map[uint32]string
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
@@ -289,7 +289,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 	return &testTMClient{
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
-		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
+		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
 		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
@@ -304,8 +304,11 @@ func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 	defer tmc.mu.Unlock()
 
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
-		if !proto.Equal(expect, req) {
+		if expect.req != nil && !proto.Equal(expect.req, req) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", req, expect)
+		}
+		if expect.res != nil {
+			return expect.res, expect.err
 		}
 	}
 	res := sqltypes.MakeTestResult(sqltypes.MakeTestFields("rowsaffected", "int64"), "1")
@@ -418,11 +421,20 @@ func (tmc *testTMClient) expectVRQueryResultOnKeyspaceTablets(keyspace string, q
 	}
 }
 
-func (tmc *testTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) {
+func (tmc *testTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *createVReplicationWorkflowRequestResponse) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
 	tmc.createVReplicationWorkflowRequests[tabletID] = req
+}
+
+func (tmc *testTMClient) expectCreateVReplicationWorkflowRequestOnTargetTablets(req *createVReplicationWorkflowRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	for _, tablet := range tmc.env.tablets[tmc.env.targetKeyspace.KeyspaceName] {
+		tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid] = req
+	}
 }
 
 func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
@@ -431,7 +443,7 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 
 	qrs := tmc.vrQueries[int(tablet.Alias.Uid)]
 	if len(qrs) == 0 {
-		return nil, fmt.Errorf("tablet %v does not expect any more queries: %s", tablet, query)
+		return nil, fmt.Errorf("tablet %v does not expect any more queries: %q", tablet, query)
 	}
 	matched := false
 	if qrs[0].query[0] == '/' {
@@ -476,6 +488,12 @@ func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tab
 type vdiffRequestResponse struct {
 	req *tabletmanagerdatapb.VDiffRequest
 	res *tabletmanagerdatapb.VDiffResponse
+	err error
+}
+
+type createVReplicationWorkflowRequestResponse struct {
+	req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest
+	res *tabletmanagerdatapb.CreateVReplicationWorkflowResponse
 	err error
 }
 
