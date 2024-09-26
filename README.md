@@ -5,7 +5,7 @@
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1724/badge)](https://bestpractices.coreinfrastructure.org/projects/1724)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/vitessio/vitess/badge)](https://scorecard.dev/viewer/?uri=github.com/vitessio/vitess)
 
-# Vitess 
+# Vitess toto
 
 Vitess is a database clustering system for horizontal scaling of MySQL
 through generalized sharding.
