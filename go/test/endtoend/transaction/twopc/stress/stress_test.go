@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,6 +48,7 @@ func TestDisruptions(t *testing.T) {
 	testcases := []struct {
 		disruptionName  string
 		commitDelayTime string
+		setupFunc       func(t *testing.T)
 		disruption      func(t *testing.T) error
 		resetFunc       func(t *testing.T)
 	}{
@@ -89,6 +91,13 @@ func TestDisruptions(t *testing.T) {
 			disruption:      moveTablesCancel,
 		},
 		{
+			disruptionName:  "Resharding",
+			commitDelayTime: "20",
+			setupFunc:       createShard,
+			disruption:      mergeShards,
+			resetFunc:       splitShardsBack,
+		},
+		{
 			disruptionName:  "EmergencyReparentShard",
 			commitDelayTime: "5",
 			disruption:      ersShard3,
@@ -98,6 +107,9 @@ func TestDisruptions(t *testing.T) {
 		t.Run(fmt.Sprintf("%s-%ss delay", tt.disruptionName, tt.commitDelayTime), func(t *testing.T) {
 			// Reparent all the shards to first tablet being the primary.
 			reparentToFirstTablet(t)
+			if tt.setupFunc != nil {
+				tt.setupFunc(t)
+			}
 			// cleanup all the old data.
 			conn, closer := start(t)
 			defer closer()
@@ -154,6 +166,68 @@ func TestDisruptions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func runReshard(t *testing.T, sourceShards, targetShards string) error {
+	workflow := "TestDisruptions"
+	rw := cluster.NewReshard(t, clusterInstance, workflow, keyspaceName, targetShards, sourceShards)
+	// Initiate Reshard.
+	output, err := rw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	rw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = rw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = rw.Complete()
+	require.NoError(t, err, output)
+
+	// When Reshard completes, it has already deleted the source shards from the topo server.
+	// We just need to shutdown the vttablets, and remove them from the cluster.
+	removeShards(t, sourceShards)
+	return nil
+}
+
+func removeShards(t *testing.T, shards string) {
+	sourceShardsList := strings.Split(shards, ",")
+	var remainingShards []cluster.Shard
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		if slices.Contains(sourceShardsList, shard.Name) {
+			for _, vttablet := range shard.Vttablets {
+				err := vttablet.VttabletProcess.TearDown()
+				require.NoError(t, err)
+			}
+			continue
+		}
+		remainingShards = append(remainingShards, shard)
+	}
+	clusterInstance.Keyspaces[0].Shards = remainingShards
+}
+
+func mergeShards(t *testing.T) error {
+	return runReshard(t, "40-80,80-", "40-")
+}
+
+func addShards(t *testing.T, shardNames []string) {
+	for _, shardName := range shardNames {
+		t.Helper()
+		shard, err := clusterInstance.AddShard(keyspaceName, shardName, 3, false, nil)
+		require.NoError(t, err)
+		clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, *shard)
+	}
+}
+
+func splitShardsBack(t *testing.T) {
+	t.Helper()
+	addShards(t, []string{"40-80", "80-"})
+	err := runReshard(t, "40-", "40-80,80-")
+	require.NoError(t, err)
+}
+
+// createShard creates a new shard in the keyspace that we'll use for Resharding.
+func createShard(t *testing.T) {
+	t.Helper()
+	addShards(t, []string{"40-"})
 }
 
 // threadToWrite is a helper function to write to the database in a loop.
