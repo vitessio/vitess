@@ -167,7 +167,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	ev.ShardInfo = *shardInfo
 
 	if opts.ExpectedPrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.ExpectedPrimaryAlias, shardInfo.PrimaryAlias) {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %s is not equal to expected alias %s", shardInfo.PrimaryAlias, opts.ExpectedPrimaryAlias)
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %s is not equal to expected alias %s",
+			topoproto.TabletAliasString(shardInfo.PrimaryAlias),
+			topoproto.TabletAliasString(opts.ExpectedPrimaryAlias),
+		)
 	}
 
 	keyspaceDurability, err := erp.ts.GetKeyspaceDurability(ctx, keyspace)
