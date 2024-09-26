@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -264,6 +263,41 @@ func (mz *materializer) deploySchema() error {
 	var sourceDDLs map[string]string
 	var mu sync.Mutex
 
+	targetKeyspaceTables, err := getTablesInKeyspace(mz.ctx, mz.sourceTs, mz.tmc, mz.ms.TargetKeyspace)
+	if err != nil {
+		return err
+	}
+
+	tables := map[string]struct{}{}
+	for _, t := range mz.ms.TableSettings {
+		tables[t.TargetTable] = struct{}{}
+	}
+
+	hasTargetTable := map[string]bool{}
+	for _, t := range targetKeyspaceTables {
+		if _, ok := tables[t]; ok {
+			hasTargetTable[t] = true
+		}
+	}
+
+	// Check if any table being moved is already non-empty in the target keyspace.
+	// Skip this check for multi-tenant migrations.
+	if !mz.IsMultiTenantMigration() {
+		alreadyExistingTables := make([]string, len(hasTargetTable))
+		i := 0
+		for t := range hasTargetTable {
+			alreadyExistingTables[i] = t
+			i++
+		}
+
+		if len(alreadyExistingTables) > 0 {
+			err = validateEmptyTables(mz.ctx, mz.sourceTs, mz.tmc, mz.ms.TargetKeyspace, alreadyExistingTables)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	// Auto-increment columns are typically used with unsharded MySQL tables
 	// but should not generally be used with sharded ones. Because it's common
 	// to use MoveTables to move table(s) from an unsharded keyspace to a
@@ -279,19 +313,6 @@ func (mz *materializer) deploySchema() error {
 	}
 
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
-		allTables := []string{"/.*/"}
-
-		hasTargetTable := map[string]bool{}
-		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
-		targetSchema, err := schematools.GetSchema(mz.ctx, mz.ts, mz.tmc, target.PrimaryAlias, req)
-		if err != nil {
-			return err
-		}
-
-		for _, td := range targetSchema.TableDefinitions {
-			hasTargetTable[td.Name] = true
-		}
-
 		targetTablet, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
 		if err != nil {
 			return err

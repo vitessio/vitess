@@ -44,6 +44,7 @@ import (
 )
 
 const (
+	getNonEmptyTable     = "(select 't1' from t1 limit 1)"
 	position             = "MySQL56/9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97"
 	mzSelectFrozenQuery  = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
 	mzCheckJournal       = "/select val from _vt.resharding_journal where id="
@@ -518,6 +519,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
+	env.tmc.expectVRQuery(200, getNonEmptyTable, &sqltypes.Result{})
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
@@ -576,6 +578,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			// TabletManager. Importing the tabletmanager package, however, causes
 			// a circular dependency.
 			// The TabletManager portion is tested in rpc_vreplication_test.go.
+			env.tmc.expectVRQuery(200, getNonEmptyTable, &sqltypes.Result{})
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
@@ -625,6 +628,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	// TabletManager. Importing the tabletmanager package, however, causes
 	// a circular dependency.
 	// The TabletManager portion is tested in rpc_vreplication_test.go.
+	env.tmc.expectVRQuery(200, getNonEmptyTable, &sqltypes.Result{})
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
@@ -2691,6 +2695,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				if tablet.Keyspace != targetKs || tablet.Type != topodatapb.TabletType_PRIMARY {
 					continue
 				}
+				env.tmc.expectVRQuery(int(tablet.Alias.Uid), getNonEmptyTable, &sqltypes.Result{})
 				// If we are doing a partial MoveTables, we will only perform the workflow
 				// stream creation / INSERT statment on the shard(s) we're migrating.
 				if len(tc.moveTablesReq.SourceShards) > 0 && !slices.Contains(tc.moveTablesReq.SourceShards, tablet.Shard) {
