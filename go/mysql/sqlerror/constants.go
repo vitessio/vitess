@@ -42,7 +42,8 @@ const (
 	ERUnknownError = ErrorCode(1105)
 
 	// internal
-	ERInternalError = ErrorCode(1815)
+	ERInternalError      = ErrorCode(1815)
+	ERInnodbIndexCorrupt = ErrorCode(1817)
 
 	// unimplemented
 	ERNotSupportedYet = ErrorCode(1235)
