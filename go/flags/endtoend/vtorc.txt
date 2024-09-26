@@ -113,4 +113,6 @@ Flags:
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
       --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
+      --vtops-exec-timeout duration                                 execution timeout for the slack vtops binary (default 15s)
+      --vtops-max-concurrency int                                   max concurrency for executing the slack vtops binary (default 16)
       --wait-replicas-timeout duration                              Duration for which to wait for replica's to respond when issuing RPCs (default 30s)
