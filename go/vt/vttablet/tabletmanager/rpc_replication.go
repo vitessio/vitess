@@ -717,6 +717,8 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// Since we continue in the case of this error, make sure 'status' is
 		// in a known, empty state.
 		status = replication.ReplicationStatus{}
+		// The replica position we use for the errant GTID detection should be the executed
+		// GTID set since this tablet is not running replication at all.
 		replicaPosition, err = tm.MysqlDaemon.PrimaryPosition(ctx)
 		if err != nil {
 			return err
@@ -754,6 +756,10 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 	// Errant GTID detection.
 	{
+		// Find the executed GTID set of the tablet that we are reparenting to.
+		// We will then compare our own position against it to verify that we don't
+		// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
+		// we will not enter the replication graph and instead fail replication.
 		var primaryPosition string
 		primaryPosition, err = tm.tmc.PrimaryPosition(ctx, parent.Tablet)
 		if err != nil {

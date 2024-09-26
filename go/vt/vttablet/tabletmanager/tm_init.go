@@ -1015,6 +1015,11 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", nil
 	}
 
+	// Find our own executed GTID set and,
+	// the executed GTID set of the tablet that we are reparenting to.
+	// We will then compare our own position against it to verify that we don't
+	// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
+	// we will not enter the replication graph and instead fail replication.
 	primaryPosStr, err = tm.tmc.PrimaryPosition(ctx, currentPrimary.Tablet)
 	if err != nil {
 		return "", err
