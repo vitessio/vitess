@@ -94,6 +94,10 @@ func (client *FakeTabletManagerClient) UpdateVReplicationWorkflows(ctx context.C
 	return nil, nil
 }
 
+func (client *FakeTabletManagerClient) ValidateVReplicationPermissions(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	return nil, nil
+}
+
 func (client *FakeTabletManagerClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	return nil, nil
 }
@@ -224,6 +228,11 @@ func (client *FakeTabletManagerClient) ConcludeTransaction(ctx context.Context, 
 
 // ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) MysqlSystemMetrics(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error) {
+	return nil, nil
+}
+
+// ReadTransaction is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
 	return nil, nil
 }
 

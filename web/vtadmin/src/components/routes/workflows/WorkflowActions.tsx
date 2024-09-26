@@ -22,7 +22,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({ refetchWorkflows, key
 
     return (
         <div className="w-min inline-block">
-            <Dropdown dropdownButton={Icons.info} position="bottom-right">
+            <Dropdown dropdownButton={Icons.info}>
                 <MenuItem onClick={() => setCurrentDialog('Start Workflow')}>Start Workflow</MenuItem>
                 <MenuItem onClick={() => setCurrentDialog('Stop Workflow')}>Stop Workflow</MenuItem>
             </Dropdown>

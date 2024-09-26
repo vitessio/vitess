@@ -73,10 +73,12 @@ services:
         --grpc_port $GRPC_PORT
         "]
     depends_on:
-      - consul1
-      - consul2
-      - consul3
-    depends_on:
+      consul1:
+        condition: service_started
+      consul2:
+        condition: service_started
+      consul3:
+        condition: service_started
       external_db_host:
         condition: service_healthy
 
@@ -105,8 +107,8 @@ services:
       - KEYSPACE
       - DB
     depends_on:
-      - vtctld
-    depends_on:
+      vtctld:
+        condition: service_started
       vttablet101:
         condition: service_healthy
 

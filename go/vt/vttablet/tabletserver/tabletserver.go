@@ -771,14 +771,14 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 }
 
 // UnresolvedTransactions returns the unresolved distributed transaction record.
-func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *querypb.Target) (transactions []*querypb.TransactionMetadata, err error) {
+func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) (transactions []*querypb.TransactionMetadata, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.loadQueryTimeout(),
 		"UnresolvedTransactions", "unresolved_transaction", nil,
 		target, nil, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
-			transactions, err = txe.UnresolvedTransactions()
+			transactions, err = txe.UnresolvedTransactions(time.Duration(abandonAgeSeconds) * time.Second)
 			return err
 		},
 	)

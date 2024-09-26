@@ -75,6 +75,7 @@ var (
 		"xb_backup",
 		"backup_pitr",
 		"backup_pitr_xtrabackup",
+		"backup_pitr_mysqlshell",
 		"21",
 		"mysql_server_vault",
 		"vstream",

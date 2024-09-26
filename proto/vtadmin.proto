@@ -137,6 +137,9 @@ service VTAdmin {
     // LaunchSchemaMigration launches one or all migrations in the given
     // cluster executed with --postpone-launch.
     rpc LaunchSchemaMigration(LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
+    // MoveTablesCreate creates a workflow which moves one or more tables from a
+    // source keyspace to a target keyspace.
+    rpc MoveTablesCreate(MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
     // PingTablet checks that the specified tablet is awake and responding to
     // RPCs. This command can be blocked by other in-flight operations.
     rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
@@ -701,6 +704,11 @@ message GetWorkflowsResponse {
 message LaunchSchemaMigrationRequest {
     string cluster_id = 1;
     vtctldata.LaunchSchemaMigrationRequest request = 2;
+}
+
+message MoveTablesCreateRequest {
+    string cluster_id = 1;
+    vtctldata.MoveTablesCreateRequest request = 2;
 }
 
 message PingTabletRequest {

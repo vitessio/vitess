@@ -67,7 +67,7 @@ vitess/examples/compose$ docker-compose up -d
 ### Check cluster status
 Check the status of the cluster.
 ```
-vitess/examples/compose$ docker-compose ps
+vitess/examples/compose$ docker-compose ps -a
            Name                         Command                  State                                                                     Ports
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 compose_consul1_1                          docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp,

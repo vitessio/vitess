@@ -625,3 +625,22 @@ func TestExecutorSetAndSelect(t *testing.T) {
 		})
 	}
 }
+
+// TestTimeZone verifies that setting different time zones in the session
+// results in different outputs for the `now()` function.
+func TestExecutorTimeZone(t *testing.T) {
+	e, _, _, _, ctx := createExecutorEnv(t)
+
+	session := NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
+	session.SetSystemVariable("time_zone", "'+08:00'")
+
+	qr, err := e.Execute(ctx, nil, "TestExecutorSetAndSelect", session, "select now()", nil)
+
+	require.NoError(t, err)
+	session.SetSystemVariable("time_zone", "'+02:00'")
+
+	qrWith, err := e.Execute(ctx, nil, "TestExecutorSetAndSelect", session, "select now()", nil)
+	require.NoError(t, err)
+
+	assert.False(t, qr.Rows[0][0].Equal(qrWith.Rows[0][0]), "%v vs %v", qr.Rows[0][0].ToString(), qrWith.Rows[0][0].ToString())
+}
