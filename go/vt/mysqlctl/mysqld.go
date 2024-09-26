@@ -1293,8 +1293,8 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) (string, error) {
 	return res.ToString("@@global.version_comment")
 }
 
-// ThrottlerMetrics returns several OS metrics to be used by the tablet throttler.
-func (mysqld *Mysqld) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsResponse, error) {
+// systemMetrics returns several OS metrics to be used by the tablet throttler.
+func systemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsResponse, error) {
 	resp := &mysqlctlpb.SystemMetricsResponse{
 		Metrics: make(map[string]*mysqlctlpb.SystemMetricsResponse_Metric),
 	}
@@ -1348,6 +1348,11 @@ func (mysqld *Mysqld) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlp
 	}()
 
 	return resp, nil
+}
+
+// SystemMetrics returns several OS metrics to be used by the tablet throttler.
+func (mysqld *Mysqld) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsResponse, error) {
+	return systemMetrics(ctx, cnf)
 }
 
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:

@@ -307,3 +307,18 @@ func TestGetVersionComment(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, ver, str)
 }
+
+func TestSystemMetrics(t *testing.T) {
+	ctx := context.Background()
+	cnf := &Mycnf{
+		DataDir: os.TempDir(),
+	}
+	resp, err := systemMetrics(ctx, cnf)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.Metrics)
+	assert.Contains(t, resp.Metrics, "loadavg")
+	assert.Contains(t, resp.Metrics, "datadir-used")
+	metric := resp.Metrics["datadir-used"]
+	assert.Equal(t, "datadir-used", metric.Name)
+	assert.Empty(t, metric.Error)
+}
