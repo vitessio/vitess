@@ -152,6 +152,9 @@ type TabletManagerClient interface {
 	// ConcludeTransaction conclude the transaction on the tablet.
 	ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error
 
+	// MysqlSystemMetrics returns mysql system metrics
+	MysqlSystemMetrics(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error)
+
 	//
 	// Replication related methods
 	//

@@ -222,6 +222,11 @@ func (client *FakeTabletManagerClient) ConcludeTransaction(ctx context.Context, 
 	return nil
 }
 
+// ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) MysqlSystemMetrics(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error) {
+	return nil, nil
+}
+
 //
 // Replication related methods
 //

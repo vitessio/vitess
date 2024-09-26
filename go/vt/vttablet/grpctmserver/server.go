@@ -299,6 +299,17 @@ func (s *server) ConcludeTransaction(ctx context.Context, request *tabletmanager
 	return &tabletmanagerdatapb.ConcludeTransactionResponse{}, nil
 }
 
+func (s *server) MysqlSystemMetrics(ctx context.Context, request *tabletmanagerdatapb.MysqlSystemMetricsRequest) (response *tabletmanagerdatapb.MysqlSystemMetricsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "MysqlSystemMetrics", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+
+	resp, err := s.tm.MysqlSystemMetrics(ctx, request)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+	return resp, nil
+}
+
 //
 // Replication related methods
 //

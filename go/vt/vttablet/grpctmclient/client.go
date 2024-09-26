@@ -688,6 +688,20 @@ func (client *Client) ConcludeTransaction(ctx context.Context, tablet *topodatap
 	return err
 }
 
+func (client *Client) MysqlSystemMetrics(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	resp, err := c.MysqlSystemMetrics(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 //
 // Replication related methods
 //
