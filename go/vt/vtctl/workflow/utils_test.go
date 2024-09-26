@@ -16,11 +16,84 @@ import (
 
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
 )
+
+// TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
+// and unsharded keyspaces.
+func TestCreateDefaultShardRoutingRules(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ks1 := &testKeyspace{
+		KeyspaceName: "sourceks",
+	}
+	ks2 := &testKeyspace{
+		KeyspaceName: "targetks",
+	}
+
+	type testCase struct {
+		name           string
+		sourceKeyspace *testKeyspace
+		targetKeyspace *testKeyspace
+		shards         []string
+		want           map[string]string
+	}
+	getExpectedRules := func(sourceKeyspace, targetKeyspace *testKeyspace) map[string]string {
+		rules := make(map[string]string)
+		for _, targetShard := range targetKeyspace.ShardNames {
+			rules[fmt.Sprintf("%s.%s", targetKeyspace.KeyspaceName, targetShard)] = sourceKeyspace.KeyspaceName
+		}
+		return rules
+
+	}
+	testCases := []testCase{
+		{
+			name:           "unsharded",
+			sourceKeyspace: ks1,
+			targetKeyspace: ks2,
+			shards:         []string{"0"},
+		},
+		{
+			name:           "sharded",
+			sourceKeyspace: ks2,
+			targetKeyspace: ks1,
+			shards:         []string{"-80", "80-"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.sourceKeyspace.ShardNames = tc.shards
+			tc.targetKeyspace.ShardNames = tc.shards
+			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
+			defer env.close()
+			ms := &vtctldata.MaterializeSettings{
+				Workflow:       "wf1",
+				SourceKeyspace: tc.sourceKeyspace.KeyspaceName,
+				TargetKeyspace: tc.targetKeyspace.KeyspaceName,
+				TableSettings: []*vtctldata.TableMaterializeSettings{
+					{
+						TargetTable:      "t1",
+						SourceExpression: "select * from t1",
+					},
+				},
+				Cell:         "zone1",
+				SourceShards: tc.sourceKeyspace.ShardNames,
+			}
+			err := createDefaultShardRoutingRules(ctx, ms, env.ts)
+			require.NoError(t, err)
+			rules, err := topotools.GetShardRoutingRules(ctx, env.ts)
+			require.NoError(t, err)
+			require.Len(t, rules, len(tc.shards))
+			want := getExpectedRules(tc.sourceKeyspace, tc.targetKeyspace)
+			require.EqualValues(t, want, rules)
+		})
+	}
+}
 
 // TestUpdateKeyspaceRoutingRule confirms that the keyspace routing rules are updated correctly.
 func TestUpdateKeyspaceRoutingRule(t *testing.T) {

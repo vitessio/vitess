@@ -93,6 +93,24 @@ type Controller interface {
 	// CheckThrottler
 	CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult
 	GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus
+
+	// RedoPreparedTransactions recreates the transactions with stored prepared transaction log.
+	RedoPreparedTransactions()
+
+	// SetTwoPCAllowed sets whether TwoPC is allowed or not.
+	SetTwoPCAllowed(bool)
+
+	// UnresolvedTransactions returns all unresolved transactions list
+	UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error)
+
+	// ReadTransaction returns all unresolved transactions list
+	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error)
+
+	// ConcludeTransaction deletes the distributed transaction metadata
+	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error
+
+	// RollbackPrepared rolls back the prepared transaction and removes the transaction log.
+	RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) error
 }
 
 // Ensure TabletServer satisfies Controller interface.

@@ -21,4 +21,4 @@ CREATE TABLE IF NOT EXISTS dt_state
   time_created bigint NOT NULL,
   primary key(dtid),
   key (time_created)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

@@ -150,7 +150,7 @@ func (sc *StatefulConnection) unlock(updateTime bool) {
 		return
 	}
 	if sc.dbConn.Conn.IsClosed() {
-		sc.Releasef("unlocked closed connection")
+		sc.ReleaseString("unlocked closed connection")
 	} else {
 		sc.pool.markAsNotInUse(sc, updateTime)
 	}
@@ -159,16 +159,24 @@ func (sc *StatefulConnection) unlock(updateTime bool) {
 // Release is used when the connection will not be used ever again.
 // The underlying dbConn is removed so that this connection cannot be used by mistake.
 func (sc *StatefulConnection) Release(reason tx.ReleaseReason) {
-	sc.Releasef(reason.String())
+	sc.ReleaseString(reason.String())
 }
 
 // Releasef is used when the connection will not be used ever again.
 // The underlying dbConn is removed so that this connection cannot be used by mistake.
 func (sc *StatefulConnection) Releasef(reasonFormat string, a ...any) {
+	sc.ReleaseString(fmt.Sprintf(reasonFormat, a...))
+}
+
+// ReleaseString is used when the connection will not be used ever again.
+// The underlying dbConn is removed so that this connection cannot be used by mistake.
+func (sc *StatefulConnection) ReleaseString(reason string) {
 	if sc.dbConn == nil {
 		return
 	}
-	sc.pool.unregister(sc.ConnID, fmt.Sprintf(reasonFormat, a...))
+	if sc.pool != nil {
+		sc.pool.unregister(sc.ConnID, reason)
+	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
 	sc.logReservedConn()
@@ -264,7 +272,7 @@ func (sc *StatefulConnection) IsTainted() bool {
 // LogTransaction logs transaction related stats
 func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	if sc.txProps == nil {
-		return //Nothing to log as no transaction exists on this connection.
+		return // Nothing to log as no transaction exists on this connection.
 	}
 	sc.txProps.Conclusion = reason.Name()
 	sc.txProps.EndTime = time.Now()
@@ -288,7 +296,7 @@ func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
 // logReservedConn logs reserved connection related stats.
 func (sc *StatefulConnection) logReservedConn() {
 	if sc.reservedProps == nil {
-		return //Nothing to log as this connection is not reserved.
+		return // Nothing to log as this connection is not reserved.
 	}
 	duration := time.Since(sc.reservedProps.StartTime)
 	username := sc.getUsername()
@@ -314,4 +322,9 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 
 func (sc *StatefulConnection) resetExpiryTime() {
 	sc.expiryTime = time.Now().Add(sc.timeout)
+}
+
+// IsUnixSocket returns true if the connection is using a unix socket
+func (sc *StatefulConnection) IsUnixSocket() bool {
+	return sc.dbConn.Conn.IsUnixSocket()
 }

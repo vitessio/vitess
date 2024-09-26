@@ -309,6 +309,30 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
+message GetUnresolvedTransactionsRequest {
+  int64 abandon_age = 1;
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
+message ReadTransactionRequest {
+  string dtid = 1;
+}
+
+message ReadTransactionResponse {
+  query.TransactionMetadata transaction = 1;
+}
+
+message ConcludeTransactionRequest {
+  string dtid = 1;
+  bool mm = 2;
+}
+
+message ConcludeTransactionResponse {
+}
+
 message ReplicationStatusRequest {
 }
 
@@ -627,6 +651,18 @@ message ReadVReplicationWorkflowResponse {
   }
   repeated Stream streams = 11;
   string options = 12;
+  map<string, string> config_overrides = 13;
+}
+
+message ValidateVReplicationPermissionsRequest {
+}
+
+message ValidateVReplicationPermissionsResponse {
+  // The --db_filtered_user on the tablet.
+  string user = 1;
+  // Does the user have the minimum privileges needed to manage
+  // vreplication metadata.
+  bool ok = 2;
 }
 
 message VDiffRequest {
@@ -657,6 +693,7 @@ message VDiffReportOptions {
   bool debug_query = 2;
   string format = 3;
   int64 max_sample_rows = 4;
+  int64 row_diff_column_truncate_at = 5;
 }
 
 message VDiffCoreOptions {
@@ -669,6 +706,7 @@ message VDiffCoreOptions {
   int64 max_extra_rows_to_compare = 7;
   bool update_table_stats = 8;
   int64 max_diff_seconds = 9;
+  optional bool auto_start = 10;
 }
 
 message VDiffOptions {
@@ -676,6 +714,7 @@ message VDiffOptions {
   VDiffCoreOptions core_options = 2;
   VDiffReportOptions report_options = 3;
 }
+
 
 // UpdateVReplicationWorkflowRequest is used to update an existing VReplication
 // workflow. Note that the following fields MUST have an explicit value provided
@@ -687,10 +726,11 @@ message UpdateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
   repeated topodata.TabletType tablet_types = 3;
-  TabletSelectionPreference tablet_selection_preference = 4;
-  binlogdata.OnDDLAction on_ddl = 5;
-  binlogdata.VReplicationWorkflowState state = 6;
+  optional TabletSelectionPreference tablet_selection_preference = 4;
+  optional binlogdata.OnDDLAction on_ddl = 5;
+  optional binlogdata.VReplicationWorkflowState state = 6;
   reserved 7; // unused, was: repeated string shards
+  map<string, string> config_overrides = 8;
 }
 
 message UpdateVReplicationWorkflowResponse {
@@ -707,9 +747,9 @@ message UpdateVReplicationWorkflowsRequest {
   bool all_workflows = 1;
   repeated string include_workflows = 2;
   repeated string exclude_workflows = 3;
-  binlogdata.VReplicationWorkflowState state = 4;
-  string message = 5;
-  string stop_position = 6;
+  optional binlogdata.VReplicationWorkflowState state = 4;
+  optional string message = 5;
+  optional string stop_position = 6;
 }
 
 message UpdateVReplicationWorkflowsResponse {

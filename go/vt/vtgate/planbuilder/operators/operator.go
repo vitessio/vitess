@@ -54,7 +54,8 @@ type (
 		// Inputs returns the inputs for this operator
 		Inputs() []Operator
 
-		// SetInputs changes the inputs for this op
+		// SetInputs changes the inputs for this op.
+		// We don't need to check the size of the inputs, as the planner will ensure that the inputs are correct
 		SetInputs([]Operator)
 
 		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
@@ -85,7 +86,45 @@ type (
 		// See GroupBy#SimplifiedExpr for more details about this
 		SimplifiedExpr sqlparser.Expr
 	}
+
+	unaryOperator struct {
+		Operator
+		Source Operator
+	}
+
+	binaryOperator struct {
+		Operator
+		LHS, RHS Operator
+	}
 )
+
+func newUnaryOp(source Operator) unaryOperator {
+	return unaryOperator{Source: source}
+}
+
+func newBinaryOp(l, r Operator) binaryOperator {
+	return binaryOperator{
+		LHS: l,
+		RHS: r,
+	}
+}
+
+func (s *unaryOperator) Inputs() []Operator {
+	return []Operator{s.Source}
+}
+
+func (s *unaryOperator) SetInputs(operators []Operator) {
+	s.Source = operators[0]
+}
+
+func (b *binaryOperator) Inputs() []Operator {
+	return []Operator{b.LHS, b.RHS}
+}
+
+func (b *binaryOperator) SetInputs(operators []Operator) {
+	b.LHS = operators[0]
+	b.RHS = operators[1]
+}
 
 // Map takes in a mapping function and applies it to both the expression in OrderBy.
 func (ob OrderBy) Map(mappingFunc func(sqlparser.Expr) sqlparser.Expr) OrderBy {

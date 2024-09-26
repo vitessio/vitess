@@ -211,6 +211,10 @@ func (ev filePosFakeEvent) Timestamp() uint32 {
 	return ev.timestamp
 }
 
+func (ev filePosFakeEvent) ServerID() uint32 {
+	return 1
+}
+
 func (ev filePosFakeEvent) Format() (BinlogFormat, error) {
 	return BinlogFormat{}, nil
 }

@@ -28,6 +28,7 @@ Available Commands:
   DeleteShards                Deletes the specified shards from the topology.
   DeleteSrvVSchema            Deletes the SrvVSchema object in the given cell.
   DeleteTablets               Deletes tablet(s) from the topology.
+  DistributedTransaction      Perform commands on distributed transaction
   EmergencyReparentShard      Reparents the shard to the new primary. Assumes the old primary is dead and not responding.
   ExecuteFetchAsApp           Executes the given query as the App user on the remote tablet.
   ExecuteFetchAsDBA           Executes the given query as the DBA user on the remote tablet.

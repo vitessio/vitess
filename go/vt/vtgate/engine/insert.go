@@ -112,9 +112,6 @@ func (ins *Insert) RouteType() string {
 
 // TryExecute performs a non-streaming exec.
 func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, ins.QueryTimeout)
-	defer cancelFunc()
-
 	switch ins.Opcode {
 	case InsertUnsharded:
 		return ins.insertIntoUnshardedTable(ctx, vcursor, bindVars)

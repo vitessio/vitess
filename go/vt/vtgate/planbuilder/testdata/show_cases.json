@@ -850,5 +850,28 @@
         "TransactionID": "ks:-80:v24s7843sf78934l3"
       }
     }
+  },
+  {
+    "comment": "show unresolved transactions for default keyspace",
+    "query": "show unresolved transactions",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show unresolved transactions",
+      "Instructions": {
+        "OperatorType": "TransactionStatus"
+      }
+    }
+  },
+  {
+    "comment": "show unresolved transactions for explicitly provided keyspace",
+    "query": "show unresolved transactions for ks",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show unresolved transactions for ks",
+      "Instructions": {
+        "OperatorType": "TransactionStatus",
+        "Keyspace": "ks"
+      }
+    }
   }
 ]

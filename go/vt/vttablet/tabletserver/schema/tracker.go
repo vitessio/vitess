@@ -39,7 +39,8 @@ import (
 // VStreamer defines the functions of VStreamer
 // that the replicationWatcher needs.
 type VStreamer interface {
-	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error
+	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter,
+		throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error
 }
 
 // Tracker watches the replication and saves the latest schema into the schema_version table when a DDL is encountered.
@@ -144,7 +145,7 @@ func (tr *Tracker) process(ctx context.Context) {
 				}
 			}
 			return nil
-		})
+		}, nil)
 		select {
 		case <-ctx.Done():
 			return

@@ -195,6 +195,59 @@ func TestBindingMultiTablePositive(t *testing.T) {
 	}
 }
 
+func TestBindingRecursiveCTEs(t *testing.T) {
+	type testCase struct {
+		query string
+		rdeps TableSet
+		ddeps TableSet
+	}
+	queries := []testCase{{
+		query: "with recursive x as (select id from user union select x.id + 1 from x where x.id < 15) select t.id from x join x t;",
+		rdeps: TS3,
+		ddeps: TS3,
+	}, {
+		query: "WITH RECURSIVE user_cte AS (SELECT id, name FROM user WHERE id = 42 UNION ALL SELECT u.id, u.name FROM user u JOIN user_cte cte ON u.id = cte.id + 1 WHERE u.id = 42) SELECT id FROM user_cte",
+		rdeps: TS3,
+		ddeps: TS3,
+	}}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyzeStrict(t, query.query, "user")
+			sel := stmt.(*sqlparser.Select)
+			assert.Equal(t, query.rdeps, semTable.RecursiveDeps(extract(sel, 0)), "recursive")
+			assert.Equal(t, query.ddeps, semTable.DirectDeps(extract(sel, 0)), "direct")
+		})
+	}
+}
+
+func TestRecursiveCTEChecking(t *testing.T) {
+	type testCase struct {
+		name, query, err string
+	}
+	queries := []testCase{{
+		name:  "recursive CTE using aggregation",
+		query: "with recursive x as (select id from user union select count(*) from x) select t.id from x join x t",
+		err:   "VT09027: Recursive Common Table Expression 'x' can contain neither aggregation nor window functions in recursive query block",
+	}, {
+		name:  "recursive CTE using grouping",
+		query: "with recursive x as (select id from user union select id+1 from x where id < 10 group by 1) select t.id from x join x t",
+		err:   "VT09027: Recursive Common Table Expression 'x' can contain neither aggregation nor window functions in recursive query block",
+	}, {
+		name:  "use the same recursive cte twice in definition",
+		query: "with recursive x as (select 1 union select id+1 from x where id < 10 union select id+2 from x where id < 20) select t.id from x",
+		err:   "VT09029: In recursive query block of Recursive Common Table Expression x, the recursive table must be referenced only once, and not in any subquery",
+	}}
+	for _, tc := range queries {
+		t.Run(tc.query, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(tc.query)
+			require.NoError(t, err)
+
+			_, err = AnalyzeStrict(parse, "user", fakeSchemaInfo())
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
 func TestBindingMultiAliasedTablePositive(t *testing.T) {
 	type testCase struct {
 		query          string
@@ -888,9 +941,6 @@ func TestInvalidQueries(t *testing.T) {
 		sql:  "select 1 from t1 where (id, id) in (select 1, 2, 3)",
 		serr: "Operand should contain 2 column(s)",
 	}, {
-		sql:  "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
-		serr: "VT12001: unsupported: recursive common table expression",
-	}, {
 		sql:  "with x as (select 1), x as (select 1) select * from x",
 		serr: "VT03013: not unique table/alias: 'x'",
 	}, {
@@ -956,7 +1006,7 @@ func TestScopingWithWITH(t *testing.T) {
 		}, {
 			query:     "with c as (select x as foo from user), t as (select foo as id from c) select id from t",
 			recursive: TS0,
-			direct:    TS3,
+			direct:    TS2,
 		}, {
 			query:     "with t as (select foo as id from user) select t.id from t",
 			recursive: TS0,

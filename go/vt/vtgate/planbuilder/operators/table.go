@@ -33,7 +33,7 @@ type (
 		VTable  *vindexes.Table
 		Columns []*sqlparser.ColName
 
-		noInputs
+		nullaryOperator
 	}
 	ColNameColumns interface {
 		GetColNames() []*sqlparser.ColName
@@ -107,11 +107,11 @@ func (to *Table) AddCol(col *sqlparser.ColName) {
 	to.Columns = append(to.Columns, col)
 }
 
-func (to *Table) TablesUsed() []string {
+func (to *Table) TablesUsed(in []string) []string {
 	if sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
-		return nil
+		return in
 	}
-	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
+	return append(in, QualifiedString(to.VTable.Keyspace, to.VTable.Name.String()))
 }
 
 func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) int {

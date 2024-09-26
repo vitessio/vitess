@@ -100,16 +100,24 @@ func NewMockDbaClient(t *testing.T) *MockDBClient {
 	}
 }
 
+func (dc *MockDBClient) Reset() {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+	dc.currentResult = 0
+	dc.expect = nil
+	dc.done = make(chan struct{})
+}
+
 // ExpectRequest adds an expected result to the mock.
 // This function should not be called conncurrently with other commands.
 func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err error) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	select {
 	case <-dc.done:
 		dc.done = make(chan struct{})
 	default:
 	}
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  query,
 		result: result,
@@ -121,13 +129,13 @@ func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err
 // queryRE is a regular expression.
 // This function should not be called conncurrently with other commands.
 func (dc *MockDBClient) ExpectRequestRE(queryRE string, result *sqltypes.Result, err error) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	select {
 	case <-dc.done:
 		dc.done = make(chan struct{})
 	default:
 	}
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  queryRE,
 		re:     regexp.MustCompile(queryRE),
@@ -210,7 +218,7 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	result := dc.expect[dc.currentResult]
 	if result.re == nil {
 		if query != result.query {
-			msg := "DBClientMock: query: %s, want %s"
+			msg := "DBClientMock: query: \n%s, want \n%s"
 			if dc.Tag != "" {
 				msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
 			}
@@ -260,6 +268,15 @@ func (dc *MockDBClient) RemoveInvariant(query string) {
 	dc.expectMu.Lock()
 	defer dc.expectMu.Unlock()
 	delete(dc.invariants, query)
+}
+
+// RemoveInvariant can be used to customize the behavior of the mock client.
+func (dc *MockDBClient) RemoveInvariants(queries ...string) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+	for _, query := range queries {
+		delete(dc.invariants, query)
+	}
 }
 
 func (dc *MockDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {

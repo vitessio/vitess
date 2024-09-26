@@ -243,9 +243,9 @@ func (node *With) FormatFast(buf *TrackedBuffer) {
 func (node *CommonTableExpr) FormatFast(buf *TrackedBuffer) {
 	node.ID.FormatFast(buf)
 	node.Columns.FormatFast(buf)
-	buf.WriteString(" as ")
+	buf.WriteString(" as (")
 	node.Subquery.FormatFast(buf)
-	buf.WriteByte(' ')
+	buf.WriteString(") ")
 }
 
 // FormatFast formats the node.
@@ -2832,6 +2832,14 @@ func (node *ShowBasic) FormatFast(buf *TrackedBuffer) {
 }
 
 func (node *ShowTransactionStatus) FormatFast(buf *TrackedBuffer) {
+	if node.TransactionID == "" {
+		buf.WriteString("show unresolved transactions")
+		if node.Keyspace != "" {
+			buf.WriteString(" for ")
+			buf.WriteString(node.Keyspace)
+		}
+		return
+	}
 	buf.WriteString("show transaction status for '")
 	buf.WriteString(node.TransactionID)
 	buf.WriteByte('\'')
@@ -2870,8 +2878,9 @@ func (node *SelectInto) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *CreateDatabase) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("create database ")
+	buf.WriteString("create ")
 	node.Comments.FormatFast(buf)
+	buf.WriteString("database ")
 	if node.IfNotExists {
 		buf.WriteString("if not exists ")
 	}
@@ -2890,7 +2899,9 @@ func (node *CreateDatabase) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *AlterDatabase) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("alter database")
+	buf.WriteString("alter ")
+	node.Comments.FormatFast(buf)
+	buf.WriteString("database")
 	if node.DBName.NotEmpty() {
 		buf.WriteByte(' ')
 		node.DBName.FormatFast(buf)

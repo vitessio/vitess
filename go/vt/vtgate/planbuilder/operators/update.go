@@ -66,9 +66,6 @@ func (u *Update) Inputs() []Operator {
 }
 
 func (u *Update) SetInputs(inputs []Operator) {
-	if len(inputs) != 1 {
-		panic(vterrors.VT13001("unexpected number of inputs for Update operator"))
-	}
 	u.Source = inputs[0]
 }
 
@@ -89,8 +86,8 @@ func (u *Update) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (u *Update) TablesUsed() []string {
-	return SingleQualifiedIdentifier(u.Target.VTable.Keyspace, u.Target.VTable.Name)
+func (u *Update) TablesUsed(in []string) []string {
+	return append(in, QualifiedString(u.Target.VTable.Keyspace, u.Target.VTable.Name.String()))
 }
 
 func (u *Update) ShortDescription() string {
@@ -113,11 +110,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	var targetTbl TargetTable
 	op, targetTbl, updClone = createUpdateOperator(ctx, updStmt)
 
-	op = &LockAndComment{
-		Source:   op,
-		Comments: updStmt.Comments,
-		Lock:     sqlparser.ShareModeLock,
-	}
+	op = newLockAndComment(op, updStmt.Comments, sqlparser.ShareModeLock)
 
 	parentFks = ctx.SemTable.GetParentForeignKeysForTableSet(targetTbl.ID)
 	childFks = ctx.SemTable.GetChildForeignKeysForTableSet(targetTbl.ID)
@@ -206,10 +199,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	}
 
 	if upd.Comments != nil {
-		op = &LockAndComment{
-			Source:   op,
-			Comments: upd.Comments,
-		}
+		op = newLockAndComment(op, upd.Comments, sqlparser.NoLock)
 	}
 	return op
 }
@@ -388,7 +378,6 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 			Ignore:           updStmt.Ignore,
 			Target:           targetTbl,
 			OwnedVindexQuery: ovq,
-			Source:           op,
 		},
 		Assignments:                  assignments,
 		ChangedVindexValues:          cvv,
@@ -397,14 +386,13 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	if len(updStmt.OrderBy) > 0 {
-		addOrdering(ctx, updStmt.OrderBy, updOp)
+		updOp.Source = addOrdering(ctx, op, updStmt.OrderBy)
+	} else {
+		updOp.Source = op
 	}
 
 	if updStmt.Limit != nil {
-		updOp.Source = &Limit{
-			Source: updOp.Source,
-			AST:    updStmt.Limit,
-		}
+		updOp.Source = newLimit(updOp.Source, updStmt.Limit, false)
 	}
 
 	return sqc.getRootOperator(updOp, nil), targetTbl, updClone

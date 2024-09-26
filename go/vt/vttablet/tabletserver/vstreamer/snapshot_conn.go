@@ -25,22 +25,16 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
-
-// If the current binary log is greater than this byte size, we
-// will attempt to rotate it before starting a GTID snapshot
-// based stream.
-// Default is 64MiB.
-var binlogRotationThreshold = int64(64 * 1024 * 1024) // 64MiB
 
 // snapshotConn is wrapper on mysql.Conn capable of
 // reading a table along with a GTID snapshot.
@@ -55,7 +49,7 @@ func init() {
 }
 
 func registerSnapshotConnFlags(fs *pflag.FlagSet) {
-	fs.Int64Var(&binlogRotationThreshold, "vstream-binlog-rotation-threshold", binlogRotationThreshold, "Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer)")
+	fs.Int64Var(&vttablet.VStreamerBinlogRotationThreshold, "vstream-binlog-rotation-threshold", vttablet.VStreamerBinlogRotationThreshold, "Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer)")
 }
 
 func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn, error) {
@@ -189,7 +183,7 @@ func (conn *snapshotConn) limitOpenBinlogSize() (bool, error) {
 	if err != nil {
 		return rotatedLog, err
 	}
-	if curLogSize > atomic.LoadInt64(&binlogRotationThreshold) {
+	if curLogSize > atomic.LoadInt64(&vttablet.VStreamerBinlogRotationThreshold) {
 		if _, err = conn.ExecuteFetch("FLUSH BINARY LOGS", 0, false); err != nil {
 			return rotatedLog, err
 		}
@@ -202,14 +196,14 @@ func (conn *snapshotConn) limitOpenBinlogSize() (bool, error) {
 // will attempt to rotate the binary log before starting a GTID snapshot based
 // stream (e.g. a ResultStreamer or RowStreamer).
 func GetBinlogRotationThreshold() int64 {
-	return atomic.LoadInt64(&binlogRotationThreshold)
+	return atomic.LoadInt64(&vttablet.VStreamerBinlogRotationThreshold)
 }
 
 // SetBinlogRotationThreshold sets the byte size at which a VStreamer will
 // attempt to rotate the binary log before starting a GTID snapshot based
 // stream (e.g. a ResultStreamer or RowStreamer).
 func SetBinlogRotationThreshold(threshold int64) {
-	atomic.StoreInt64(&binlogRotationThreshold, threshold)
+	atomic.StoreInt64(&vttablet.VStreamerBinlogRotationThreshold, threshold)
 }
 
 // startSnapshotAllTables starts a streaming query with a snapshot view of all tables, returning the

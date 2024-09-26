@@ -23,6 +23,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -132,39 +134,24 @@ func TestValueIsSimulatedNull(t *testing.T) {
 			isNull: false,
 		},
 		{
-			name:   "case string true",
-			val:    SimulatedNullString,
-			isNull: true,
-		},
-		{
 			name:   "case []string true",
-			val:    []string{SimulatedNullString},
+			val:    []string{sqltypes.NULL.String()},
 			isNull: true,
 		},
 		{
 			name:   "case []string false",
-			val:    []string{SimulatedNullString, SimulatedNullString},
+			val:    []string{sqltypes.NULL.String(), sqltypes.NULL.String()},
 			isNull: false,
 		},
 		{
-			name:   "case binlogdatapb.OnDDLAction true",
-			val:    binlogdatapb.OnDDLAction(SimulatedNullInt),
-			isNull: true,
+			name:   "case binlogdatapb.OnDDLAction exec",
+			val:    binlogdatapb.OnDDLAction_EXEC,
+			isNull: false,
 		},
 		{
-			name:   "case int true",
-			val:    SimulatedNullInt,
-			isNull: true,
-		},
-		{
-			name:   "case int32 true",
-			val:    int32(SimulatedNullInt),
-			isNull: true,
-		},
-		{
-			name:   "case int64 true",
-			val:    int64(SimulatedNullInt),
-			isNull: true,
+			name:   "case int false",
+			val:    1,
+			isNull: false,
 		},
 		{
 			name:   "case []topodatapb.TabletType true",
@@ -172,12 +159,12 @@ func TestValueIsSimulatedNull(t *testing.T) {
 			isNull: true,
 		},
 		{
-			name:   "case binlogdatapb.VReplicationWorkflowState true",
-			val:    binlogdatapb.VReplicationWorkflowState(SimulatedNullInt),
-			isNull: true,
+			name:   "case binlogdatapb.VReplicationWorkflowState running",
+			val:    binlogdatapb.VReplicationWorkflowState_Running,
+			isNull: false,
 		},
 		{
-			name:   "case default",
+			name:   "case float false",
 			val:    float64(1),
 			isNull: false,
 		},

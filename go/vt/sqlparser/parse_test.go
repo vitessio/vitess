@@ -1786,6 +1786,12 @@ var (
 		input:  `create index Indexes on b (col1)`,
 		output: "alter table b add key `Indexes` (col1)",
 	}, {
+		input:  `create /*vt+ foo=1 */ index Indexes on b (col1)`,
+		output: "alter /*vt+ foo=1 */ table b add key `Indexes` (col1)",
+	}, {
+		input:  `alter /*vt+ foo=1 */ table b add key Indexes (col1)`,
+		output: "alter /*vt+ foo=1 */ table b add key `Indexes` (col1)",
+	}, {
 		input:  `create fulltext index Indexes on b (col1)`,
 		output: "alter table b add fulltext key `Indexes` (col1)",
 	}, {
@@ -2443,6 +2449,10 @@ var (
 		input:  "show transaction status \"ks:-80:232323238342\"",
 		output: "show transaction status for 'ks:-80:232323238342'",
 	}, {
+		input: "show unresolved transactions",
+	}, {
+		input: "show unresolved transactions for ks",
+	}, {
 		input: "revert vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
 		input: "revert /*vt+ uuid=123 */ vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
@@ -2563,6 +2573,10 @@ var (
 	}, {
 		input:  "vexplain select * from t",
 		output: "vexplain plan select * from t",
+	}, {
+		input: "vexplain trace select * from t",
+	}, {
+		input: "vexplain keys select * from t",
 	}, {
 		input: "explain analyze select * from t",
 	}, {
@@ -2793,12 +2807,12 @@ var (
 	}, {
 		input: "rollback",
 	}, {
-		input: "create database /* simple */ test_db",
+		input: "create /* simple */ database test_db",
 	}, {
 		input:  "create schema test_db",
 		output: "create database test_db",
 	}, {
-		input: "create database /* simple */ if not exists test_db",
+		input: "create /* simple */ database if not exists test_db",
 	}, {
 		input:  "create schema if not exists test_db",
 		output: "create database if not exists test_db",

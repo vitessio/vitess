@@ -41,10 +41,9 @@ func TestJoinPredicates(t *testing.T) {
 	lhs := &fakeOp{id: lid}
 	rhs := &fakeOp{id: rid}
 	hj := &HashJoin{
-		LHS:      lhs,
-		RHS:      rhs,
-		LeftJoin: false,
-		columns:  &hashJoinColumns{},
+		binaryOperator: newBinaryOp(lhs, rhs),
+		LeftJoin:       false,
+		columns:        &hashJoinColumns{},
 	}
 
 	cmp := &sqlparser.ComparisonExpr{
@@ -99,10 +98,9 @@ func TestOffsetPlanning(t *testing.T) {
 	for _, test := range tests {
 		t.Run(sqlparser.String(test.expr), func(t *testing.T) {
 			hj := &HashJoin{
-				LHS:      lhs,
-				RHS:      rhs,
-				LeftJoin: false,
-				columns:  &hashJoinColumns{},
+				binaryOperator: newBinaryOp(lhs, rhs),
+				LeftJoin:       false,
+				columns:        &hashJoinColumns{},
 			}
 			hj.AddColumn(ctx, true, false, aeWrap(test.expr))
 			hj.planOffsets(ctx)

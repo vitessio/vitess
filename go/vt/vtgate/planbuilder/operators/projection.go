@@ -32,7 +32,7 @@ import (
 // Projection is used when we need to evaluate expressions on the vtgate
 // It uses the evalengine to accomplish its goal
 type Projection struct {
-	Source Operator
+	unaryOperator
 
 	// Columns contain the expressions as viewed from the outside of this operator
 	Columns ProjCols
@@ -87,7 +87,7 @@ type (
 
 	ProjExpr struct {
 		Original *sqlparser.AliasedExpr // this is the expression the user asked for. should only be used to decide on the column alias
-		EvalExpr sqlparser.Expr         // EvalExpr is the expression that will be evaluated at runtime
+		EvalExpr sqlparser.Expr         // EvalExpr represents the expression evaluated at runtime or used when the ProjExpr is pushed under a route
 		ColExpr  sqlparser.Expr         // ColExpr is used during planning to figure out which column this ProjExpr is representing
 		Info     ExprInfo               // Here we store information about evalengine, offsets or subqueries
 	}
@@ -127,8 +127,8 @@ func newProjExprWithInner(ae *sqlparser.AliasedExpr, in sqlparser.Expr) *ProjExp
 
 func newAliasedProjection(src Operator) *Projection {
 	return &Projection{
-		Source:  src,
-		Columns: AliasedProjections{},
+		unaryOperator: newUnaryOp(src),
+		Columns:       AliasedProjections{},
 	}
 }
 
@@ -383,8 +383,18 @@ func (p *Projection) addColumn(
 		return p.addProjExpr(pe)
 	}
 
-	// we need to push down this column to our input
-	inputOffset := p.Source.AddColumn(ctx, true, addToGroupBy, ae)
+	var inputOffset int
+	if nothingNeedsFetching(ctx, expr) {
+		// if we don't need to fetch anything, we could just evaluate it in the projection
+		// we still check if it's there - if it is, we can, we should use it
+		inputOffset = p.Source.FindCol(ctx, expr, false)
+		if inputOffset < 0 {
+			return p.addProjExpr(pe)
+		}
+	} else {
+		// we need to push down this column to our input
+		inputOffset = p.Source.AddColumn(ctx, true, addToGroupBy, ae)
+	}
 
 	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
 	return p.addProjExpr(pe)
@@ -395,20 +405,9 @@ func (po *EvalEngine) expr()        {}
 func (po SubQueryExpression) expr() {}
 
 func (p *Projection) Clone(inputs []Operator) Operator {
-	return &Projection{
-		Source:   inputs[0],
-		Columns:  p.Columns, // TODO don't think we need to deep clone here
-		DT:       p.DT,
-		FromAggr: p.FromAggr,
-	}
-}
-
-func (p *Projection) Inputs() []Operator {
-	return []Operator{p.Source}
-}
-
-func (p *Projection) SetInputs(operators []Operator) {
-	p.Source = operators[0]
+	klone := *p
+	klone.Source = inputs[0]
+	return &klone
 }
 
 func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {

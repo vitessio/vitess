@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -55,7 +56,7 @@ func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string
 		query:   query,
 		send:    send,
 		vse:     vse,
-		pktsize: DefaultPacketSizer(),
+		pktsize: DefaultPacketSizer(vttablet.VStreamerUseDynamicPacketSize, vttablet.VStreamerDefaultPacketSize),
 	}
 }
 

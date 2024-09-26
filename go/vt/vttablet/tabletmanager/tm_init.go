@@ -50,6 +50,7 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -122,6 +123,9 @@ var (
 	// statsIsInSrvKeyspace is set to 1 (true), 0 (false) whether the tablet is in the serving keyspace
 	statsIsInSrvKeyspace *stats.Gauge
 
+	// statsTabletTags is set to 1 (true) if a tablet tag exists.
+	statsTabletTags *stats.GaugesWithMultiLabels
+
 	statsKeyspace      = stats.NewString("TabletKeyspace")
 	statsShard         = stats.NewString("TabletShard")
 	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
@@ -141,6 +145,7 @@ func init() {
 	statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 	statsIsInSrvKeyspace = stats.NewGauge("IsInSrvKeyspace", "Whether the vttablet is in the serving keyspace (1 = true / 0 = false)")
+	statsTabletTags = stats.NewGaugesWithMultiLabels("TabletTags", "Tablet tags key/values", []string{"key", "value"})
 }
 
 // TabletManager is the main class for the tablet manager.
@@ -751,6 +756,24 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 	}
 }
 
+// redoPreparedTransactionsAndSetReadWrite redoes prepared transactions in read-only mode.
+// We turn off super read only mode, and then redo the transactions. Finally, we turn off read-only mode to allow for further traffic.
+func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Context) error {
+	_, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false)
+	if err != nil {
+		// Ignore the error if the sever doesn't support super read only variable.
+		// We should just redo the preapred transactions before we set it to read-write.
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			log.Warningf("server does not know about super_read_only, continuing anyway...")
+		} else {
+			return err
+		}
+	}
+	tm.QueryServiceControl.RedoPreparedTransactions()
+	err = tm.MysqlDaemon.SetReadOnly(ctx, false)
+	return err
+}
+
 func (tm *TabletManager) initTablet(ctx context.Context) error {
 	tablet := tm.Tablet()
 	err := tm.TopoServer.CreateTablet(ctx, tablet)
@@ -870,6 +893,9 @@ func (tm *TabletManager) exportStats() {
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}
 	statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
+	for k, v := range tablet.Tags {
+		statsTabletTags.Set([]string{k, v}, 1)
+	}
 }
 
 // withRetry will exponentially back off and retry a function upon

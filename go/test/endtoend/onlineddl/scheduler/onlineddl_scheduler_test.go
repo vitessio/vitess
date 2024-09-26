@@ -304,7 +304,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
+func TestSchedulerSchemaChanges(t *testing.T) {
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
@@ -455,6 +455,19 @@ func testScheduler(t *testing.T) {
 		})
 	}
 
+	var originalLockWaitTimeout int64
+	t.Run("set low lock_wait_timeout", func(t *testing.T) {
+		rs, err := primaryTablet.VttabletProcess.QueryTablet("select @@lock_wait_timeout as lock_wait_timeout", keyspaceName, false)
+		require.NoError(t, err)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		originalLockWaitTimeout = row.AsInt64("lock_wait_timeout", 0)
+		require.NotZero(t, originalLockWaitTimeout)
+
+		_, err = primaryTablet.VttabletProcess.QueryTablet("set global lock_wait_timeout=1", keyspaceName, false)
+		require.NoError(t, err)
+	})
+
 	// CREATE
 	t.Run("CREATE TABLEs t1, t2", func(t *testing.T) {
 		{ // The table does not exist
@@ -576,6 +589,16 @@ func testScheduler(t *testing.T) {
 		// The function validates there is no error
 		rs := onlineddl.VtgateExecQueryInTransaction(t, &vtParams, "show vitess_migrations", "")
 		assert.NotEmpty(t, rs.Rows)
+	})
+
+	t.Run("low @@lock_wait_timeout", func(t *testing.T) {
+		defer primaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf("set global lock_wait_timeout=%d", originalLockWaitTimeout), keyspaceName, false)
+
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", false)) // wait
+		t.Run("trivial t1 migration", func(t *testing.T) {
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, t1Name, true)
+		})
 	})
 
 	forceCutoverCapable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability) // 8.0
@@ -1297,6 +1320,7 @@ func testScheduler(t *testing.T) {
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
 			require.Contains(t, message, "errno 1146")
+			require.False(t, row["message_timestamp"].IsNull())
 		}
 	})
 
@@ -1440,6 +1464,7 @@ func testScheduler(t *testing.T) {
 				for _, row := range rs.Named().Rows {
 					message := row["message"].ToString()
 					require.Contains(t, message, vuuids[2]) // Indicating this migration failed due to vuuids[2] failure
+					require.False(t, row["message_timestamp"].IsNull())
 				}
 			}
 		})

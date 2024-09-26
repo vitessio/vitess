@@ -1001,7 +1001,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 			}
 
 			ig.AddRow(vrs.Workflow, vrs.BinlogSource, replication.EncodePosition(vrs.Position), "", "",
-				vrs.WorkflowType, vrs.WorkflowSubType, vrs.DeferSecondaryKeys)
+				vrs.WorkflowType, vrs.WorkflowSubType, vrs.DeferSecondaryKeys, "")
 			return nil
 		}
 

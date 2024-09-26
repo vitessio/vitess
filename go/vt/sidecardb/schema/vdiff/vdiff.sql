@@ -33,4 +33,4 @@ CREATE TABLE IF NOT EXISTS vdiff
     UNIQUE KEY `uuid_idx` (`vdiff_uuid`),
     KEY `state` (`state`),
     KEY `ks_wf_idx` (`keyspace`(64), `workflow`(64))
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4
