@@ -761,9 +761,11 @@ func (c *cow) copyOnRewriteRefOfAlterDatabase(n *AlterDatabase, parent SQLNode) 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		_DBName, changedDBName := c.copyOnRewriteIdentifierCS(n.DBName, n)
-		if changedDBName {
+		if changedComments || changedDBName {
 			res := *n
+			res.Comments, _ = _Comments.(*ParsedComments)
 			res.DBName, _ = _DBName.(IdentifierCS)
 			out = &res
 			if c.cloned != nil {

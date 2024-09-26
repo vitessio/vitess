@@ -151,7 +151,7 @@ func (p *page) weights900Fast(level int) (w []uint32) {
 	if p.entryCount == 0 {
 		return nil
 	}
-	for i := 0; i < 128; i++ {
+	for i := range 128 {
 		entry := &p.entries[i]
 		if len(entry.weights) > 3 {
 			panic("trying to dump fast weights for codepoint with >3 weights")
@@ -165,7 +165,7 @@ func (p *page) weights900Fast(level int) (w []uint32) {
 		}
 		w = append(w, weight)
 	}
-	for i := 0; i < 128; i++ {
+	for range 128 {
 		w = append(w, 0x0)
 	}
 	return
@@ -179,7 +179,7 @@ func (p *page) weights900() (w []uint16) {
 	for _, entry := range p.entries {
 		w = append(w, uint16(len(entry.weights)/3))
 	}
-	for level := 0; level < maxCollations; level++ {
+	for level := range maxCollations {
 		for _, entry := range p.entries {
 			var weight uint16
 			if level < len(entry.weights) {

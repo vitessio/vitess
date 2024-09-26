@@ -6,7 +6,7 @@ permissions: read-all
 jobs:
   build:
     name: Check Make vtadmin_authz_testgen
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
     - name: Skip CI
       run: |
@@ -50,7 +50,7 @@ jobs:
       uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
       with:
-        go-version: 1.23.0
+        go-version-file: go.mod
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'

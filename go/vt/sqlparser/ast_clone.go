@@ -662,6 +662,7 @@ func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 		return nil
 	}
 	out := *n
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.DBName = CloneIdentifierCS(n.DBName)
 	out.AlterOptions = CloneSliceOfDatabaseOption(n.AlterOptions)
 	return &out

@@ -1597,6 +1597,24 @@ func (cached *VitessMetadata) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
 	return size
 }
+func (cached *percentBasedMirror) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field primitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.primitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field target vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.target.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 
 //go:nocheckptr
 func (cached *shardRoute) CachedSize(alloc bool) int64 {

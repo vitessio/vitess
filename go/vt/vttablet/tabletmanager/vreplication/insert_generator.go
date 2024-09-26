@@ -51,7 +51,10 @@ func NewInsertGenerator(state binlogdatapb.VReplicationWorkflowState, dbname str
 
 // AddRow adds a row to the insert statement.
 func (ig *InsertGenerator) AddRow(workflow string, bls *binlogdatapb.BinlogSource, pos, cell, tabletTypes string,
-	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) {
+	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool, options string) {
+	if options == "" {
+		options = "'{}'"
+	}
 	protoutil.SortBinlogSourceTables(bls)
 	fmt.Fprintf(ig.buf, "%s(%v, %v, %v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v, %v)",
 		ig.prefix,
@@ -68,7 +71,7 @@ func (ig *InsertGenerator) AddRow(workflow string, bls *binlogdatapb.BinlogSourc
 		workflowType,
 		workflowSubType,
 		deferSecondaryKeys,
-		"'{}'",
+		options,
 	)
 	ig.prefix = ", "
 }

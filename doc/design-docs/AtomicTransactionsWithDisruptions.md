@@ -35,3 +35,27 @@ Therefore, the safest option was to always check if we need to redo the prepared
 
 When Vttabet restarts, all the previous connections are dropped. It starts in a non-serving state, and then after reading the shard and tablet records from the topo, it transitions to a serving state. 
 As part of this transition we need to ensure that we redo the prepared transactions before we start accepting any writes. This is done as part of the `TxEngine.transition` function when we transition to an `AcceptingReadWrite` state. We call the same code for redoing the prepared transactions that we called for MySQL restarts, PRS and ERS.
+
+## Online DDL
+
+During an Online DDL cutover, we need to ensure that all the prepared transactions on the online DDL table needs to be completed before we can proceed with the cutover. 
+This is because the cutover involves a schema change and we cannot have any prepared transactions that are dependent on the old schema.
+
+As part of the cut-over process, Online DDL adds query rules to buffer new queries on the table.
+It then checks for any open prepared transaction on the table and waits for up to 100ms if found, then checks again.
+If it finds no prepared transaction of the table, it moves forward with the cut-over, otherwise it fails. The Online DDL mechanism will later retry the cut-over.
+
+In the Prepare code, we check the query rules before adding the transaction to the prepared list and re-check the rules before storing the transaction logs in the transaction redo table.
+Any transaction that went past the first check will fail the second check if the cutover proceeds.
+
+The check on both sides prevents either the cutover from proceeding or the transaction from being prepared.
+
+## MoveTables
+
+The only step of a `MoveTables` workflow that needs to synchronize with atomic transactions is `SwitchTraffic` for writes. As part of this step, we want to disallow writes to only the tables involved. We use `DeniedTables` in `ShardInfo` to accomplish this. After we update the topo server with the new `DeniedTables`, we make all the vttablets refresh their topo to ensure that they've registered the change.
+
+On vttablet, the `DeniedTables` are used to add query rules very similar to the ones in Online DDL. The only difference is that in Online DDL, we buffer the queries, but for `SwitchTraffic` we fail them altogether. Addition of these query rules, prevents any new atomic transactions from being prepared.
+
+Next, we try locking the tables to ensure no existing write is pending. This step blocks until all open prepared transactions have succeeded.
+
+After this step, `SwitchTraffic` can proceed without any issues, since we are guaranteed to reject any new atomic transactions until the `DeniedTables` has been reset, and having acquired the table lock, we know no write is currently in progress.

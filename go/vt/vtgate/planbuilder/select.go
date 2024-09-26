@@ -205,7 +205,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	if ks, _ := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
+	if ks, ok := ctx.SemTable.CanTakeSelectUnshardedShortcut(); ok {
 		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
 			return nil, nil, err
@@ -214,7 +214,6 @@ func newBuildSelectPlan(
 		return plan, tablesUsed, err
 	}
 
-	// From this point on, we know it is not an unsharded query and return the NotUnshardedErr if there is any
 	if ctx.SemTable.NotUnshardedErr != nil {
 		return nil, nil, ctx.SemTable.NotUnshardedErr
 	}

@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -133,20 +133,20 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		return vr.dbClient.Commit()
 	}
 	batchMode := false
-	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
+	if vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
 		batchMode = true
 	}
 	if batchMode {
 		// relayLogMaxSize is effectively the limit used when not batching.
-		maxAllowedPacket := int64(relayLogMaxSize)
+		maxAllowedPacket := int64(vr.workflowConfig.RelayLogMaxSize)
 		// We explicitly do NOT want to batch this, we want to send it down the wire
 		// immediately so we use ExecuteFetch directly.
 		res, err := vr.dbClient.ExecuteFetch("select @@session.max_allowed_packet as max_allowed_packet", 1)
 		if err != nil {
-			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", relayLogMaxSize, err)
+			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err)
 		} else {
 			if maxAllowedPacket, err = res.Rows[0][0].ToInt64(); err != nil {
-				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", relayLogMaxSize, err)
+				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err)
 			}
 		}
 		// Leave 64 bytes of room for the commit to be sure that we have a more than
@@ -193,7 +193,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return nil
 	}
 
-	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
+	plan, err := vp.vr.buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
@@ -269,13 +269,17 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
+	relay := newRelayLog(ctx, vp.vr.workflowConfig.RelayLogMaxItems, vp.vr.workflowConfig.RelayLogMaxSize)
 
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
-			return relay.Send(events)
-		})
+		vstreamOptions := &binlogdatapb.VStreamOptions{
+			ConfigOverrides: vp.vr.workflowConfig.Overrides,
+		}
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil,
+			vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+				return relay.Send(events)
+			}, vstreamOptions)
 	}()
 
 	applyErr := make(chan error, 1)
@@ -382,7 +386,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
 	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
@@ -403,7 +407,7 @@ func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, er
 }
 
 func (vp *vplayer) mustUpdateHeartbeat() bool {
-	return vp.numAccumulatedHeartbeats >= vreplicationHeartbeatUpdateInterval ||
+	return vp.numAccumulatedHeartbeats >= vp.vr.workflowConfig.HeartbeatUpdateInterval ||
 		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
 }
 

@@ -21,13 +21,15 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
@@ -58,6 +60,7 @@ type resharder struct {
 	stopAfterCopy      bool
 	onDDL              string
 	deferSecondaryKeys bool
+	workflowOptions    *vtctldata.WorkflowOptions
 }
 
 type refStream struct {
@@ -69,7 +72,14 @@ type refStream struct {
 	workflowSubType binlogdatapb.VReplicationWorkflowSubType
 }
 
-func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, sources, targets []string, cell, tabletTypes string) (*resharder, error) {
+func (s *Server) buildResharder(ctx context.Context, req *vtctldata.ReshardCreateRequest) (*resharder, error) {
+	keyspace := req.GetKeyspace()
+	workflow := req.GetWorkflow()
+	cell := strings.Join(req.GetCells(), ",")
+	tabletTypes := discovery.BuildTabletTypesString(req.GetTabletTypes(), req.GetTabletSelectionPreference())
+	sources := req.GetSourceShards()
+	targets := req.GetTargetShards()
+
 	rs := &resharder{
 		s:               s,
 		keyspace:        keyspace,
@@ -78,6 +88,7 @@ func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, 
 		targetPrimaries: make(map[string]*topo.TabletInfo),
 		cell:            cell,
 		tabletTypes:     tabletTypes,
+		workflowOptions: req.GetWorkflowOptions(),
 	}
 	for _, shard := range sources {
 		si, err := s.ts.GetShard(ctx, keyspace, shard)
@@ -283,6 +294,11 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 
 		// Clone excludeRules to prevent data races.
 		copyExcludeRules := slices.Clone(excludeRules)
+		optionsJSON, err := getOptionsJSON(rs.workflowOptions)
+		if err != nil {
+			return err
+		}
+		optionsJSON = fmt.Sprintf("'%s'", optionsJSON)
 		for _, source := range rs.sourceShards {
 			if !key.KeyRangeIntersect(target.KeyRange, source.KeyRange) {
 				continue
@@ -303,14 +319,14 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes,
 				binlogdatapb.VReplicationWorkflowType_Reshard,
 				binlogdatapb.VReplicationWorkflowSubType_None,
-				rs.deferSecondaryKeys)
+				rs.deferSecondaryKeys, optionsJSON)
 		}
 
 		for _, rstream := range rs.refStreams {
 			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes,
 				rstream.workflowType,
 				rstream.workflowSubType,
-				rs.deferSecondaryKeys)
+				rs.deferSecondaryKeys, optionsJSON)
 		}
 		query := ig.String()
 		if _, err := rs.s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
@@ -331,10 +347,7 @@ func (rs *resharder) startStreams(ctx context.Context) error {
 		// that we've created on the new shards as we're migrating them.
 		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 			AllWorkflows: true,
-			State:        binlogdatapb.VReplicationWorkflowState_Running,
-			// We don't want to update anything else so use simulated NULLs.
-			Message:      textutil.SimulatedNullString,
-			StopPosition: textutil.SimulatedNullString,
+			State:        ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
 		}
 		if _, err := rs.s.tmc.UpdateVReplicationWorkflows(ctx, targetPrimary.Tablet, req); err != nil {
 			return vterrors.Wrapf(err, "UpdateVReplicationWorkflows(%v, 'state='%s')",

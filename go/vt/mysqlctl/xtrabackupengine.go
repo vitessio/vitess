@@ -277,7 +277,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	if err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFileName)
 	}
-	if _, err := mwc.Write([]byte(data)); err != nil {
+	if _, err := mwc.Write(data); err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 
@@ -779,23 +779,6 @@ func findReplicationPosition(input, flavor string, logger logutil.Logger) (repli
 	return replicationPosition, nil
 }
 
-// scanLinesToLogger scans full lines from the given Reader and sends them to
-// the given Logger until EOF.
-func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, doneFunc func()) {
-	defer doneFunc()
-
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		logger.Infof("%s: %s", prefix, line)
-	}
-	if err := scanner.Err(); err != nil {
-		// This is usually run in a background goroutine, so there's no point
-		// returning an error. Just log it.
-		logger.Warningf("error scanning lines from %s: %v", prefix, err)
-	}
-}
-
 func stripeFileName(baseFileName string, index int) string {
 	return fmt.Sprintf("%s-%03d", baseFileName, index)
 }
@@ -957,6 +940,11 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 // xtrabackup can run while tablet is serving, hence false
 func (be *XtrabackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool {
 	return false
+}
+
+// ShouldStartMySQLAfterRestore signifies if this backup engine needs to restart MySQL once the restore is completed.
+func (be *XtrabackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
 }
 
 func init() {

@@ -274,7 +274,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 		result = make([]sqltypes.Value, 0, colNumber)
 	}
 	pos := 0
-	for i := 0; i < colNumber; i++ {
+	for i := range colNumber {
 		if data[pos] == NullValue {
 			result = append(result, sqltypes.Value{})
 			pos++
@@ -417,7 +417,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 
 	// Read column headers. One packet per column.
 	// Build the fields.
-	for i := 0; i < colNumber; i++ {
+	for i := range colNumber {
 		result.Fields[i] = &fields[i]
 
 		if wantfields {
@@ -627,7 +627,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	newParamsBoundFlag, pos, ok := readByte(payload, pos)
 	if ok && newParamsBoundFlag == 0x01 {
 		var mysqlType, flags byte
-		for i := uint16(0); i < prepare.ParamsCount; i++ {
+		for i := range uint16(prepare.ParamsCount) {
 			mysqlType, pos, ok = readByte(payload, pos)
 			if !ok {
 				return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "reading parameter type failed")
@@ -648,7 +648,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 		}
 	}
 
-	for i := 0; i < len(prepare.ParamsType); i++ {
+	for i := range len(prepare.ParamsType) {
 		var val sqltypes.Value
 		parameterID := fmt.Sprintf("v%d", i+1)
 		if v, ok := prepare.BindVars[parameterID]; ok {
@@ -1114,7 +1114,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	}
 
 	if paramsCount > 0 {
-		for i := uint16(0); i < paramsCount; i++ {
+		for range uint16(paramsCount) {
 			if err := c.writeColumnDefinition(&querypb.Field{
 				Name:    "?",
 				Type:    sqltypes.VarBinary,
@@ -1174,7 +1174,7 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 
 	pos = writeByte(data, pos, 0x00)
 
-	for i := 0; i < nullBitMapLen; i++ {
+	for range nullBitMapLen {
 		pos = writeByte(data, pos, 0x00)
 	}
 
@@ -1315,7 +1315,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			}
 			val := make([]byte, 6)
 			count := copy(val, v.Raw()[20:])
-			for i := 0; i < (6 - count); i++ {
+			for i := range 6 - count {
 				val[count+i] = 0x30
 			}
 			microSecond, err := strconv.ParseUint(string(val), 10, 32)
@@ -1444,7 +1444,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 
 			val := make([]byte, 6)
 			count := copy(val, microSecond)
-			for i := 0; i < (6 - count); i++ {
+			for i := range 6 - count {
 				val[count+i] = 0x30
 			}
 			microSeconds, err := strconv.ParseUint(string(val), 10, 32)

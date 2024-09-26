@@ -91,3 +91,7 @@ func (be *FakeBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.Backup
 	be.ShouldDrainForBackupCalls = be.ShouldDrainForBackupCalls + 1
 	return be.ShouldDrainForBackupReturn
 }
+
+func (be *FakeBackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
+}

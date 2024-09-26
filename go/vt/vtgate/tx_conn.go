@@ -427,7 +427,7 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 
 // ResolveTransactions fetches all unresolved transactions and resolves them.
 func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Target) error {
-	transactions, err := txc.tabletGateway.UnresolvedTransactions(ctx, target)
+	transactions, err := txc.tabletGateway.UnresolvedTransactions(ctx, target, 0 /* abandonAgeSeconds */)
 	if err != nil {
 		return err
 	}
@@ -579,7 +579,7 @@ func (txc *TxConn) UnresolvedTransactions(ctx context.Context, targets []*queryp
 	var tmList []*querypb.TransactionMetadata
 	var mu sync.Mutex
 	err := txc.runTargets(targets, func(target *querypb.Target) error {
-		res, err := txc.tabletGateway.UnresolvedTransactions(ctx, target)
+		res, err := txc.tabletGateway.UnresolvedTransactions(ctx, target, 0 /* abandonAgeSeconds */)
 		if err != nil {
 			return err
 		}

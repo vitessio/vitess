@@ -73,11 +73,11 @@ func TestTimeZone(t *testing.T) {
 		want string
 	}{
 		{
-			tz:   "Europe/Amsterdam",
+			tz:   "'Europe/Amsterdam'",
 			want: "Europe/Amsterdam",
 		},
 		{
-			tz:   "+02:00",
+			tz:   "'+02:00'",
 			want: "UTC+02:00",
 		},
 		{

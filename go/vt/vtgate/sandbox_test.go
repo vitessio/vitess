@@ -48,6 +48,7 @@ const (
 
 func init() {
 	ksToSandbox = make(map[string]*sandbox)
+	sandboxMirrorRules = `{"rules":[]}`
 	createSandbox(KsTestSharded)
 	createSandbox(KsTestUnsharded)
 	createSandbox(KsTestBadVSchema)
@@ -57,6 +58,7 @@ func init() {
 
 var sandboxMu sync.Mutex
 var ksToSandbox map[string]*sandbox
+var sandboxMirrorRules string
 
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
@@ -86,7 +88,18 @@ func getSandboxSrvVSchema() *vschemapb.SrvVSchema {
 		}
 		result.Keyspaces[keyspace] = &vs
 	}
+	var mrs vschemapb.MirrorRules
+	if err := json2.Unmarshal([]byte(sandboxMirrorRules), &mrs); err != nil {
+		panic(err)
+	}
+	result.MirrorRules = &mrs
 	return result
+}
+
+func setSandboxMirrorRules(mirrorRules string) {
+	sandboxMu.Lock()
+	defer sandboxMu.Unlock()
+	sandboxMirrorRules = mirrorRules
 }
 
 type sandbox struct {

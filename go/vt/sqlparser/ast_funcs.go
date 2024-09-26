@@ -1923,6 +1923,10 @@ func (ty VExplainType) ToString() string {
 		return QueriesStr
 	case AllVExplainType:
 		return AllVExplainStr
+	case TraceVExplainType:
+		return TraceStr
+	case KeysVExplainType:
+		return KeysStr
 	default:
 		return "Unknown VExplainType"
 	}
@@ -2817,4 +2821,25 @@ func (lock Lock) GetHighestOrderLock(newLock Lock) Lock {
 // Clone returns a deep copy of the SQLNode, typed as the original type
 func Clone[K SQLNode](x K) K {
 	return CloneSQLNode(x).(K)
+}
+
+// ExtractAllTables returns all the table names in the SQLNode as slice of string
+func ExtractAllTables(stmt Statement) []string {
+	var tables []string
+	tableMap := make(map[string]any)
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *AliasedTableExpr:
+			if tblName, ok := node.Expr.(TableName); ok {
+				name := String(tblName)
+				if _, exists := tableMap[name]; !exists {
+					tableMap[name] = nil
+					tables = append(tables, name)
+				}
+				return false, nil
+			}
+		}
+		return true, nil
+	}, stmt)
+	return tables
 }
