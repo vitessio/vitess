@@ -754,6 +754,13 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if err != nil {
 		return err
 	}
+
+	host := parent.Tablet.MysqlHostname
+	port := parent.Tablet.MysqlPort
+	// If host is empty, then we shouldn't even attempt the reparent. That tablet has already shutdown.
+	if host == "" {
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
+	}
 	// Errant GTID detection.
 	{
 		// Find the executed GTID set of the tablet that we are reparenting to.
@@ -772,13 +779,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if errantGtid != "" {
 			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
 		}
-	}
-
-	host := parent.Tablet.MysqlHostname
-	port := parent.Tablet.MysqlPort
-	// If host is empty, then we shouldn't even attempt the reparent. That tablet has already shutdown.
-	if host == "" {
-		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
 	}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
