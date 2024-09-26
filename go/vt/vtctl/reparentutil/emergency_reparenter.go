@@ -153,7 +153,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		tabletMap                  map[string]*topo.TabletInfo
 		validCandidates            map[string]replication.Position
 		intermediateSource         *topodatapb.Tablet
-		latestPosition             replication.Position
 		validCandidateTablets      []*topodatapb.Tablet
 		validReplacementCandidates []*topodatapb.Tablet
 		betterCandidate            *topodatapb.Tablet
@@ -231,7 +230,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
-	intermediateSource, latestPosition, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
@@ -267,7 +266,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
 		// it also returns the list of the tablets that started replication successfully including itself part of the validCandidateTablets list.
 		// These are the candidates that we can use to find a replacement.
-		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, latestPosition, tabletMap, stoppedReplicationSnapshot.statusMap, validCandidateTablets, opts)
+		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, stoppedReplicationSnapshot.statusMap, validCandidateTablets, opts)
 		if err != nil {
 			return err
 		}
@@ -303,7 +302,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, latestPosition, tabletMap, stoppedReplicationSnapshot.statusMap, opts, false /* intermediateReparent */)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, false /* intermediateReparent */)
 	if err != nil {
 		return err
 	}
@@ -382,18 +381,18 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	validCandidates map[string]replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
-) (*topodatapb.Tablet, replication.Position, []*topodatapb.Tablet, error) {
+) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
 	// convert the valid candidates into a list so that we can use it for sorting
 	validTablets, tabletPositions, err := getValidCandidatesAndPositionsAsList(validCandidates, tabletMap)
 	if err != nil {
-		return nil, replication.Position{}, nil, err
+		return nil, nil, err
 	}
 
 	// sort the tablets for finding the best intermediate source in ERS
 	err = sortTabletsForReparent(validTablets, tabletPositions, nil, opts.durability)
 	if err != nil {
-		return nil, replication.Position{}, nil, err
+		return nil, nil, err
 	}
 	for _, tablet := range validTablets {
 		erp.logger.Infof("finding intermediate source - sorted replica: %v", tablet.Alias)
@@ -407,7 +406,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should cancel the ERS
 	for i, position := range tabletPositions {
 		if !winningPosition.AtLeast(position) {
-			return nil, replication.Position{}, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
 		}
 	}
 
@@ -417,20 +416,20 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 		pos, ok := validCandidates[requestedPrimaryAlias]
 		if !ok {
-			return nil, replication.Position{}, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
 		}
 		// if the requested tablet is as advanced as the most advanced tablet, then we can just use it for promotion.
 		// otherwise, we should let it catchup to the most advanced tablet and not change the intermediate source
 		if pos.AtLeast(winningPosition) {
 			requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
 			if !isFound {
-				return nil, replication.Position{}, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
+				return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
 			}
 			winningPrimaryTablet = requestedPrimaryInfo.Tablet
 		}
 	}
 
-	return winningPrimaryTablet, winningPosition, validTablets, nil
+	return winningPrimaryTablet, validTablets, nil
 }
 
 // promoteIntermediateSource reparents all the other tablets to start replicating from the intermediate source.
@@ -439,7 +438,6 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	ctx context.Context,
 	ev *events.Reparent,
 	source *topodatapb.Tablet,
-	latestPosition replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	validCandidateTablets []*topodatapb.Tablet,
@@ -454,7 +452,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 
 	// we reparent all the other valid tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, latestPosition, validTabletMap, statusMap, opts, true /* intermediateReparent */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, true /* intermediateReparent */)
 	if err != nil {
 		return nil, err
 	}
@@ -480,7 +478,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	ctx context.Context,
 	ev *events.Reparent,
 	newPrimaryTablet *topodatapb.Tablet,
-	latestPosition replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	opts EmergencyReparentOptions,
@@ -543,7 +540,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		return nil
 	}
 
-	latestPosStr := replication.EncodePosition(latestPosition)
 	handleReplica := func(alias string, ti *topo.TabletInfo) {
 		defer replWg.Done()
 		erp.logger.Infof("setting new primary on replica %v", alias)
@@ -561,7 +557,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", latestPosStr, forceStart, IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet), 0)
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet), 0)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)

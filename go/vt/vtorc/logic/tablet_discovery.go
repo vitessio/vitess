@@ -315,7 +315,7 @@ func resetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) 
 func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool, heartbeatInterval float64) error {
 	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer tmcCancel()
-	return tmc.SetReplicationSource(tmcCtx, replica, primary.Alias, 0, "", "", true, semiSync, heartbeatInterval)
+	return tmc.SetReplicationSource(tmcCtx, replica, primary.Alias, 0, "", true, semiSync, heartbeatInterval)
 }
 
 // shardPrimary finds the primary of the given keyspace-shard by reading the vtorc backend

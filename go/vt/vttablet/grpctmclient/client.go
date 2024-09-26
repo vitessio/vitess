@@ -1130,7 +1130,7 @@ func (client *Client) ResetReplicationParameters(ctx context.Context, tablet *to
 }
 
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition, primaryPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
+func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -1141,7 +1141,6 @@ func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodata
 		Parent:                parent,
 		TimeCreatedNs:         timeCreatedNS,
 		WaitPosition:          waitPosition,
-		PrimaryPosition:       primaryPosition,
 		ForceStartReplication: forceStartReplication,
 		SemiSync:              semiSync,
 		HeartbeatInterval:     heartbeatInterval,
