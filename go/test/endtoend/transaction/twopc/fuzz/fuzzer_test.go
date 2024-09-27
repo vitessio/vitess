@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -105,12 +106,12 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			timeForTesting: 5 * time.Second,
 		},
 		{
-			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL, MoveTables disruptions",
+			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL, MoveTables, Reshard disruptions",
 			threads:               4,
 			updateSets:            4,
 			timeForTesting:        5 * time.Second,
-			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer, moveTablesFuzzer},
-			disruptionProbability: []int{5, 5, 5, 5, 5, 5},
+			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer, moveTablesFuzzer, reshardFuzzer},
+			disruptionProbability: []int{5, 5, 5, 5, 5, 5, 5},
 		},
 	}
 
@@ -484,6 +485,68 @@ func moveTablesFuzzer(t *testing.T) {
 	assert.NoError(t, err, output)
 	output, err = mtw.Complete()
 	assert.NoError(t, err, output)
+}
+
+// reshardFuzzer runs a Reshard workflow.
+func reshardFuzzer(t *testing.T) {
+	var srcShards, targetShards string
+	shardCount := len(clusterInstance.Keyspaces[0].Shards)
+	if shardCount == 2 {
+		srcShards = "40-"
+		targetShards = "40-80,80-"
+	} else {
+		srcShards = "40-80,80-"
+		targetShards = "40-"
+	}
+	log.Errorf("Reshard from - \"%v\" to \"%v\"", srcShards, targetShards)
+	addShards(t, strings.Split(targetShards, ","))
+	err := runReshard(t, srcShards, targetShards)
+	require.NoError(t, err)
+}
+
+func runReshard(t *testing.T, sourceShards, targetShards string) error {
+	workflow := "TestTwoPCFuzzTest"
+	rw := cluster.NewReshard(t, clusterInstance, workflow, keyspaceName, targetShards, sourceShards)
+	// Initiate Reshard.
+	output, err := rw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	rw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = rw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = rw.Complete()
+	require.NoError(t, err, output)
+
+	// When Reshard completes, it has already deleted the source shards from the topo server.
+	// We just need to shutdown the vttablets, and remove them from the cluster.
+	removeShards(t, sourceShards)
+	return nil
+}
+
+func removeShards(t *testing.T, shards string) {
+	sourceShardsList := strings.Split(shards, ",")
+	var remainingShards []cluster.Shard
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		if slices.Contains(sourceShardsList, shard.Name) {
+			for _, vttablet := range shard.Vttablets {
+				err := vttablet.VttabletProcess.TearDown()
+				require.NoError(t, err)
+			}
+			continue
+		}
+		remainingShards = append(remainingShards, shard)
+	}
+	clusterInstance.Keyspaces[0].Shards = remainingShards
+}
+
+func addShards(t *testing.T, shardNames []string) {
+	for _, shardName := range shardNames {
+		t.Helper()
+		shard, err := clusterInstance.AddShard(keyspaceName, shardName, 3, false, nil)
+		require.NoError(t, err)
+		clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, *shard)
+	}
 }
 
 func mysqlRestarts(t *testing.T) {
