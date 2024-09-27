@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
 func TestEmptyPrep(t *testing.T) {
@@ -115,4 +117,136 @@ func createAndOpenPreparedPool(capacity int) *TxPreparedPool {
 	pp := NewTxPreparedPool(capacity, true)
 	pp.Open()
 	return pp
+}
+
+func TestTxPreparedPoolIsEmptyForTable(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupFunc   func(pp *TxPreparedPool)
+		wantIsEmpty bool
+	}{
+		{
+			name: "Closed prepared pool",
+			setupFunc: func(pp *TxPreparedPool) {
+				pp.mu.Lock()
+				defer pp.mu.Unlock()
+				pp.open = false
+			},
+			wantIsEmpty: false,
+		},
+		{
+			name: "Two PC Disabled",
+			setupFunc: func(pp *TxPreparedPool) {
+				pp.mu.Lock()
+				defer pp.mu.Unlock()
+				pp.twoPCEnabled = false
+			},
+			wantIsEmpty: true,
+		},
+		{
+			name: "No prepared transactions",
+			setupFunc: func(pp *TxPreparedPool) {
+				pp.mu.Lock()
+				defer pp.mu.Unlock()
+				pp.open = true
+			},
+			wantIsEmpty: true,
+		},
+		{
+			name: "Prepared transactions for table t1",
+			setupFunc: func(pp *TxPreparedPool) {
+				pp.mu.Lock()
+				pp.open = true
+				pp.mu.Unlock()
+				pp.Put(&StatefulConnection{
+					txProps: &tx.Properties{
+						Queries: []tx.Query{
+							{
+								Tables: []string{"t1", "t2"},
+							},
+						},
+					},
+				}, "dtid1")
+			},
+			wantIsEmpty: false,
+		},
+		{
+			name: "Prepared transactions for other tables",
+			setupFunc: func(pp *TxPreparedPool) {
+				pp.mu.Lock()
+				pp.open = true
+				pp.mu.Unlock()
+				pp.Put(&StatefulConnection{
+					txProps: &tx.Properties{
+						Queries: []tx.Query{
+							{
+								Tables: []string{"t3", "t2"},
+							},
+						},
+					},
+				}, "dtid1")
+			},
+			wantIsEmpty: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pp := NewTxPreparedPool(1, true)
+			tt.setupFunc(pp)
+			assert.Equalf(t, tt.wantIsEmpty, pp.IsEmptyForTable("t1"), "IsEmptyForTable()")
+		})
+	}
+}
+
+func TestTxPreparedPoolIsEmpty(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupFunc   func(pp *TxPreparedPool)
+		wantIsEmpty bool
+	}{
+		{
+			name: "Closed prepared pool",
+			setupFunc: func(pp *TxPreparedPool) {
+				pp.mu.Lock()
+				defer pp.mu.Unlock()
+				pp.open = false
+			},
+			wantIsEmpty: false,
+		},
+		{
+			name: "Two PC Disabled",
+			setupFunc: func(pp *TxPreparedPool) {
+				pp.mu.Lock()
+				defer pp.mu.Unlock()
+				pp.twoPCEnabled = false
+			},
+			wantIsEmpty: true,
+		},
+		{
+			name: "No prepared transactions",
+			setupFunc: func(pp *TxPreparedPool) {
+				pp.mu.Lock()
+				defer pp.mu.Unlock()
+				pp.open = true
+			},
+			wantIsEmpty: true,
+		},
+		{
+			name: "Prepared transactions exist",
+			setupFunc: func(pp *TxPreparedPool) {
+				pp.mu.Lock()
+				pp.open = true
+				pp.mu.Unlock()
+				pp.Put(&StatefulConnection{}, "dtid1")
+			},
+			wantIsEmpty: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pp := NewTxPreparedPool(1, true)
+			tt.setupFunc(pp)
+			assert.Equalf(t, tt.wantIsEmpty, pp.IsEmpty(), "IsEmpty()")
+		})
+	}
 }
