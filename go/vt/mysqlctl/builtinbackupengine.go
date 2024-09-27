@@ -399,8 +399,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	superReadOnly := true //nolint
-	readOnly := true      //nolint
+	superReadOnly := true // nolint
+	readOnly := true      // nolint
 	var replicationPosition replication.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled(ctx)
 
@@ -793,7 +793,11 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	defer func() {
+		if finalErr != nil {
+			cancel()
+		}
+	}()
 	// Open the source file for reading.
 	openSourceAt := time.Now()
 	source, err := fe.open(params.Cnf, true)
