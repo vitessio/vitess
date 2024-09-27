@@ -60,6 +60,13 @@ func TestDisruptions(t *testing.T) {
 			},
 		},
 		{
+			disruptionName:  "Resharding",
+			commitDelayTime: "20",
+			setupFunc:       createShard,
+			disruption:      mergeShards,
+			resetFunc:       splitShardsBack,
+		},
+		{
 			disruptionName:  "PlannedReparentShard",
 			commitDelayTime: "5",
 			disruption:      prsShard3,
@@ -89,13 +96,6 @@ func TestDisruptions(t *testing.T) {
 			disruptionName:  "MoveTables - Cancel",
 			commitDelayTime: "10",
 			disruption:      moveTablesCancel,
-		},
-		{
-			disruptionName:  "Resharding",
-			commitDelayTime: "20",
-			setupFunc:       createShard,
-			disruption:      mergeShards,
-			resetFunc:       splitShardsBack,
 		},
 		{
 			disruptionName:  "EmergencyReparentShard",
