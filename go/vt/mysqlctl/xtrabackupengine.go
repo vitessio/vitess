@@ -316,8 +316,15 @@ func (be *XtrabackupEngine) backupFiles(
 	// would impose a timeout that starts counting right now, so it would
 	// include the time spent uploading the file content. We only want to impose
 	// a timeout on the final Close() step.
+	// This context also allows us to immediately abort AddFiles if we encountered
+	// an error in this function.
 	addFilesCtx, cancelAddFiles := context.WithCancel(ctx)
-	defer cancelAddFiles()
+	defer func() {
+		if finalErr != nil {
+			cancelAddFiles()
+		}
+	}()
+
 	destFiles, err := addStripeFiles(addFilesCtx, params, bh, backupFileName, numStripes)
 	if err != nil {
 		return replicationPosition, vterrors.Wrapf(err, "cannot create backup file %v", backupFileName)
