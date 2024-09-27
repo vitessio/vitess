@@ -1431,6 +1431,9 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
+		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+			return nil, err
+		}
 	}
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:                  req.Workflow,
@@ -1539,11 +1542,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	// routing rules and denied tables entries in place.
 	if externalTopo == nil {
 		if err := s.setupInitialRoutingRules(ctx, req, mz, tables); err != nil {
-			return nil, err
-		}
-
-		// We added to the vschema.
-		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
 			return nil, err
 		}
 	}

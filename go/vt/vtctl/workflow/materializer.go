@@ -274,13 +274,20 @@ func (mz *materializer) deploySchema() error {
 	// to remove them.
 	// We do, however, allow the user to override this behavior and retain them.
 	removeAutoInc := false
+	updatedVSchema := false
+	var targetVSchema *vschemapb.Keyspace
 	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
 		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().StripShardedAutoIncrement) {
 		removeAutoInc = true
+		var err error
+		targetVSchema, err = mz.ts.GetVSchema(mz.ctx, mz.ms.TargetKeyspace)
+		if err != nil {
+			return err
+		}
 	}
 
-	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
+	err := forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
@@ -362,7 +369,25 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if removeAutoInc {
-					ddl, err = stripAutoIncrement(ddl, mz.env.Parser())
+					replaceFunc := func(columnName string) {
+						mu.Lock()
+						defer mu.Unlock()
+						// At this point we've already confirmed that the table exists in the target
+						// vschema.
+						table := targetVSchema.Tables[ts.TargetTable]
+						// Don't override or redo anything that already exists.
+						if table != nil && table.AutoIncrement == nil {
+							seqTableName := fmt.Sprintf("%s_seq", ts.TargetTable)
+							// Create a Vitess AutoIncrement definition -- which uses a sequence -- to
+							// replace the MySQL auto_increment definition that we removed.
+							table.AutoIncrement = &vschemapb.AutoIncrement{
+								Column:   columnName,
+								Sequence: seqTableName,
+							}
+							updatedVSchema = true
+						}
+					}
+					ddl, err = stripAutoIncrement(ddl, mz.env.Parser(), replaceFunc)
 					if err != nil {
 						return err
 					}
@@ -407,6 +432,15 @@ func (mz *materializer) deploySchema() error {
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	if updatedVSchema {
+		return mz.ts.SaveVSchema(mz.ctx, mz.ms.TargetKeyspace, targetVSchema)
+	}
+
+	return nil
 }
 
 func (mz *materializer) buildMaterializer() error {

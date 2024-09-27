@@ -48817,6 +48817,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions config */
         config?: ({ [k: string]: string }|null);
+
+        /** WorkflowOptions global_keyspace */
+        global_keyspace?: (string|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -48839,6 +48842,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions config. */
         public config: { [k: string]: string };
+
+        /** WorkflowOptions global_keyspace. */
+        public global_keyspace: string;
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.

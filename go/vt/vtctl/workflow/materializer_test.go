@@ -286,7 +286,7 @@ func TestStripAutoIncrement(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		strippedDDL, err := stripAutoIncrement(tc.ddl, parser)
+		strippedDDL, err := stripAutoIncrement(tc.ddl, parser, nil)
 		require.Equal(t, tc.expectErr, (err != nil), "unexpected error result", "expected error %t, got: %v", tc.expectErr, err)
 		require.Equal(t, tc.want, strippedDDL, fmt.Sprintf("stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want))
 	}
