@@ -1570,8 +1570,10 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 				err             error
 			)
 			if len(seqTable.ColumnVindexes[i].Columns) > 0 {
-				unescapedColumn, err = sqlescape.UnescapeID(seqTable.ColumnVindexes[i].Columns[0]) // AutoIncrement definitions can only be on a single column
-				seqTable.ColumnVindexes[i].Columns[0] = unescapedColumn
+				for n := range seqTable.ColumnVindexes[i].Columns {
+					unescapedColumn, err = sqlescape.UnescapeID(seqTable.ColumnVindexes[i].Columns[n])
+					seqTable.ColumnVindexes[i].Columns[n] = unescapedColumn
+				}
 			} else {
 				// This is the legacy vschema definition.
 				unescapedColumn, err = sqlescape.UnescapeID(seqTable.ColumnVindexes[i].Column)

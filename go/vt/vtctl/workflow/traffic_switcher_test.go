@@ -285,6 +285,55 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			},
 		},
 		{
+			name: "sequence with table having mult-col vindex",
+			sourceVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					"seq1": {
+						Type: "sequence",
+					},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					table: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:    "xxhash",
+								Columns: []string{"col3", "col4"},
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "col1",
+							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"seq1": {
+					backingTableName:     "seq1",
+					backingTableKeyspace: "source-ks",
+					backingTableDBName:   "vt_source-ks",
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Columns: []string{"col3", "col4"},
+								Name:    "xxhash",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "col1",
+							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "invalid table name",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
