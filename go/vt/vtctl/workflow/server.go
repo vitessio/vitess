@@ -1440,8 +1440,8 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	s.Logger().Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 	if !vschema.Sharded {
-		// Save the original in case we need to restore it for a late failure
-		// in the defer().
+		// Save the original in case we need to restore it for a late failure in
+		// the defer().
 		origVSchema = vschema.CloneVT()
 		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
 			return nil, err

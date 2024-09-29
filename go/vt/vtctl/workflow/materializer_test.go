@@ -601,6 +601,289 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 	}
 }
 
+func TestShardedAutoIncHandling(t *testing.T) {
+	t1DDL := "create table t1 (id int not null auto_increment primary key, c1 varchar(10))"
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			CreateDdl:        t1DDL,
+			SourceExpression: "select * from t1",
+		}},
+		WorkflowOptions: &vtctldatapb.WorkflowOptions{},
+	}
+
+	type testcase struct {
+		name              string
+		value             vtctldatapb.ShardedAutoIncrementHandling
+		globalKeyspace    string
+		targetShards      []string
+		targetVSchema     *vschemapb.Keyspace
+		wantTargetVSchema *vschemapb.Keyspace
+		expectQueries     []string
+		expectErr         string
+	}
+	testcases := []testcase{
+		{
+			name:           "global-keyspace does not exist",
+			globalKeyspace: "foo",
+			expectErr:      "global-keyspace foo does not exist",
+		},
+		{
+			name:           "leave",
+			globalKeyspace: "sourceks",
+			targetShards:   []string{"-80", "80-"},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "id",
+							},
+						},
+					},
+				},
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+			},
+			value: vtctldatapb.ShardedAutoIncrementHandling_LEAVE,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "id",
+							},
+						},
+					},
+				},
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+			},
+			expectQueries: []string{
+				t1DDL, // Unchanged
+			},
+		},
+		{
+			name:           "remove",
+			globalKeyspace: "sourceks",
+			targetShards:   []string{"-80", "80-"},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "id",
+							},
+						},
+					},
+				},
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+			},
+			value: vtctldatapb.ShardedAutoIncrementHandling_REMOVE,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "id",
+							},
+						},
+					},
+				},
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+			},
+			expectQueries: []string{ // auto_increment clause removed
+				`create table t1 (
+	id int not null primary key,
+	c1 varchar(10)
+)`,
+			},
+		},
+		{
+			name:           "replace, but vschema AutoIncrement already in place",
+			globalKeyspace: "sourceks",
+			targetShards:   []string{"-80", "80-"},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "id",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition exists
+							Column:   "id",
+							Sequence: "t1_non_default_seq_name",
+						},
+					},
+				},
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+			},
+			value: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "id",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition left alone
+							Column:   "id",
+							Sequence: "t1_non_default_seq_name",
+						},
+					},
+				},
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+			},
+			expectQueries: []string{ // auto_increment clause removed
+				`create table t1 (
+	id int not null primary key,
+	c1 varchar(10)
+)`,
+			},
+		},
+		{
+			name:           "replace",
+			globalKeyspace: "sourceks",
+			targetShards:   []string{"-80", "80-"},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "id",
+							},
+						},
+					},
+				},
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+			},
+			value: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "id",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition added
+							Column:   "id",
+							Sequence: "t1_seq",
+						},
+					},
+				},
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+			},
+			expectQueries: []string{ // auto_increment clause removed
+				`create table t1 (
+	id int not null primary key,
+	c1 varchar(10)
+)`,
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.targetShards == nil {
+				tc.targetShards = []string{"0"}
+			}
+			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, tc.targetShards)
+			defer env.close()
+
+			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+			for i := range tc.targetShards {
+				uid := startingTargetTabletUID + (i * tabletUIDStep)
+				for _, query := range tc.expectQueries {
+					env.tmc.expectVRQuery(uid, query, &sqltypes.Result{})
+				}
+				env.tmc.expectVRQuery(uid, mzGetCopyState, &sqltypes.Result{})
+				env.tmc.expectVRQuery(uid, mzGetLatestCopyState, &sqltypes.Result{})
+				env.tmc.SetGetSchemaResponse(uid, &tabletmanagerdatapb.SchemaDefinition{}) // So that the schema is copied from the source
+			}
+
+			if tc.targetVSchema != nil {
+				err := env.ws.ts.SaveVSchema(ctx, ms.TargetKeyspace, tc.targetVSchema)
+				require.NoError(t, err)
+			}
+
+			_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       ms.Workflow,
+				SourceKeyspace: ms.SourceKeyspace,
+				TargetKeyspace: ms.TargetKeyspace,
+				IncludeTables:  []string{"t1"},
+				WorkflowOptions: &vtctldatapb.WorkflowOptions{
+					StripShardedAutoIncrement: tc.value,
+					GlobalKeyspace:            tc.globalKeyspace,
+				},
+			})
+			if tc.expectErr != "" {
+				require.EqualError(t, err, tc.expectErr)
+			} else {
+				require.NoError(t, err)
+				if tc.wantTargetVSchema != nil {
+					targetVSchema, err := env.ws.ts.GetVSchema(ctx, ms.TargetKeyspace)
+					require.NoError(t, err)
+					require.True(t, proto.Equal(targetVSchema, tc.wantTargetVSchema))
+				}
+			}
+		})
+	}
+}
+
 // TestMoveTablesNoRoutingRules confirms that MoveTables does not create routing rules if --no-routing-rules is specified.
 func TestMoveTablesNoRoutingRules(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
