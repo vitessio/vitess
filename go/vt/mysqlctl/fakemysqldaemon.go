@@ -750,7 +750,7 @@ func (fmd *FakeMysqlDaemon) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysql
 			"loadavg": {
 				Value: 1.0,
 			},
-			"datadir-used": {
+			"datadir-used-ratio": {
 				Value: 0.2,
 			},
 		},

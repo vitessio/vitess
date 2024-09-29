@@ -317,8 +317,8 @@ func TestHostMetrics(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Metrics)
 	assert.Contains(t, resp.Metrics, "loadavg")
-	assert.Contains(t, resp.Metrics, "datadir-used")
-	metric := resp.Metrics["datadir-used"]
-	assert.Equal(t, "datadir-used", metric.Name)
+	assert.Contains(t, resp.Metrics, "datadir-used-ratio")
+	metric := resp.Metrics["datadir-used-ratio"]
+	assert.Equal(t, "datadir-used-ratio", metric.Name)
 	assert.Empty(t, metric.Error)
 }

@@ -1317,7 +1317,7 @@ func hostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsRespon
 	}
 
 	_ = func() error {
-		metric := newMetric("datadir-used")
+		metric := newMetric("datadir-used-ratio")
 		// 0.0 for empty mount, 1.0 for completely full mount
 		var st syscall.Statfs_t
 		if err := syscall.Statfs(cnf.DataDir, &st); err != nil {
