@@ -24,6 +24,7 @@ package mysqlctl;
 
 import "topodata.proto";
 import "vttime.proto";
+import "vtrpc.proto";
 
 message StartRequest{
   repeated string mysqld_args = 1;
@@ -88,7 +89,7 @@ message HostMetricsResponse{
     // Value is the metric value
     double value = 2;
     // Error indicates an error retrieving the value
-    string error = 3;
+    vtrpc.RPCError error = 3;
   }
   // Metrics is a map (metric name -> metric value/error) so that the client has as much
   // information as possible about all the checked metrics.

@@ -1308,7 +1308,10 @@ func hostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsRespon
 	}
 	withError := func(metric *mysqlctlpb.HostMetricsResponse_Metric, err error) error {
 		if err != nil {
-			metric.Error = err.Error()
+			metric.Error = &vtrpcpb.RPCError{
+				Message: err.Error(),
+				Code:    vtrpcpb.Code_FAILED_PRECONDITION,
+			}
 		}
 		return err
 	}

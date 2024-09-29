@@ -13,6 +13,7 @@ import (
 	io "io"
 	math "math"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 
@@ -322,7 +323,7 @@ func (m *HostMetricsResponse_Metric) CloneVT() *HostMetricsResponse_Metric {
 	r := new(HostMetricsResponse_Metric)
 	r.Name = m.Name
 	r.Value = m.Value
-	r.Error = m.Error
+	r.Error = m.Error.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1075,10 +1076,13 @@ func (m *HostMetricsResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Error) > 0 {
-		i -= len(m.Error)
-		copy(dAtA[i:], m.Error)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Error)))
+	if m.Error != nil {
+		size, err := m.Error.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -1480,8 +1484,8 @@ func (m *HostMetricsResponse_Metric) SizeVT() (n int) {
 	if m.Value != 0 {
 		n += 9
 	}
-	l = len(m.Error)
-	if l > 0 {
+	if m.Error != nil {
+		l = m.Error.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -2883,7 +2887,7 @@ func (m *HostMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Error", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -2893,23 +2897,27 @@ func (m *HostMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return protohelpers.ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Error = string(dAtA[iNdEx:postIndex])
+			if m.Error == nil {
+				m.Error = &vtrpc.RPCError{}
+			}
+			if err := m.Error.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
