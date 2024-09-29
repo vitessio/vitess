@@ -275,7 +275,7 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	return sqltypes.ResultToProto3(result), err
 }
 
-// MysqlHostMetrics gets system metrics from the MySQL deamon
+// MysqlHostMetrics gets system metrics from mysqlctl[d]
 func (tm *TabletManager) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
 	mysqlResp, err := tm.MysqlDaemon.HostMetrics(ctx, tm.Cnf)
 	if err != nil {
