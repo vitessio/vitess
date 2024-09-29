@@ -308,12 +308,12 @@ func TestGetVersionComment(t *testing.T) {
 	assert.Equal(t, ver, str)
 }
 
-func TestSystemMetrics(t *testing.T) {
+func TestHostMetrics(t *testing.T) {
 	ctx := context.Background()
 	cnf := &Mycnf{
 		DataDir: os.TempDir(),
 	}
-	resp, err := systemMetrics(ctx, cnf)
+	resp, err := hostMetrics(ctx, cnf)
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Metrics)
 	assert.Contains(t, resp.Metrics, "loadavg")

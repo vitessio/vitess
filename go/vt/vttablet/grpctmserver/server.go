@@ -315,11 +315,11 @@ func (s *server) ConcludeTransaction(ctx context.Context, request *tabletmanager
 	return &tabletmanagerdatapb.ConcludeTransactionResponse{}, nil
 }
 
-func (s *server) MysqlSystemMetrics(ctx context.Context, request *tabletmanagerdatapb.MysqlSystemMetricsRequest) (response *tabletmanagerdatapb.MysqlSystemMetricsResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "MysqlSystemMetrics", request, response, false /*verbose*/, &err)
+func (s *server) MysqlHostMetrics(ctx context.Context, request *tabletmanagerdatapb.MysqlHostMetricsRequest) (response *tabletmanagerdatapb.MysqlHostMetricsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "MysqlHostMetrics", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 
-	resp, err := s.tm.MysqlSystemMetrics(ctx, request)
+	resp, err := s.tm.MysqlHostMetrics(ctx, request)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}

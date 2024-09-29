@@ -275,14 +275,14 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	return sqltypes.ResultToProto3(result), err
 }
 
-// MysqlSystemMetrics gets system metrics from the MySQL deamon
-func (tm *TabletManager) MysqlSystemMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error) {
-	mysqlResp, err := tm.MysqlDaemon.SystemMetrics(ctx, tm.Cnf)
+// MysqlHostMetrics gets system metrics from the MySQL deamon
+func (tm *TabletManager) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	mysqlResp, err := tm.MysqlDaemon.HostMetrics(ctx, tm.Cnf)
 	if err != nil {
 		return nil, err
 	}
-	resp := &tabletmanagerdatapb.MysqlSystemMetricsResponse{
-		SystemMetrics: mysqlResp,
+	resp := &tabletmanagerdatapb.MysqlHostMetricsResponse{
+		HostMetrics: mysqlResp,
 	}
 	return resp, nil
 }

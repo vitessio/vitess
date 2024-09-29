@@ -56,7 +56,7 @@ type TabletManagerClient interface {
 	GetUnresolvedTransactions(ctx context.Context, in *tabletmanagerdata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error)
 	ReadTransaction(ctx context.Context, in *tabletmanagerdata.ReadTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadTransactionResponse, error)
 	ConcludeTransaction(ctx context.Context, in *tabletmanagerdata.ConcludeTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ConcludeTransactionResponse, error)
-	MysqlSystemMetrics(ctx context.Context, in *tabletmanagerdata.MysqlSystemMetricsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MysqlSystemMetricsResponse, error)
+	MysqlHostMetrics(ctx context.Context, in *tabletmanagerdata.MysqlHostMetricsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MysqlHostMetricsResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(ctx context.Context, in *tabletmanagerdata.ReplicationStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicationStatusResponse, error)
 	// PrimaryStatus returns the current primary status.
@@ -360,9 +360,9 @@ func (c *tabletManagerClient) ConcludeTransaction(ctx context.Context, in *table
 	return out, nil
 }
 
-func (c *tabletManagerClient) MysqlSystemMetrics(ctx context.Context, in *tabletmanagerdata.MysqlSystemMetricsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MysqlSystemMetricsResponse, error) {
-	out := new(tabletmanagerdata.MysqlSystemMetricsResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/MysqlSystemMetrics", in, out, opts...)
+func (c *tabletManagerClient) MysqlHostMetrics(ctx context.Context, in *tabletmanagerdata.MysqlHostMetricsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MysqlHostMetricsResponse, error) {
+	out := new(tabletmanagerdata.MysqlHostMetricsResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/MysqlHostMetrics", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -785,7 +785,7 @@ type TabletManagerServer interface {
 	GetUnresolvedTransactions(context.Context, *tabletmanagerdata.GetUnresolvedTransactionsRequest) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error)
 	ReadTransaction(context.Context, *tabletmanagerdata.ReadTransactionRequest) (*tabletmanagerdata.ReadTransactionResponse, error)
 	ConcludeTransaction(context.Context, *tabletmanagerdata.ConcludeTransactionRequest) (*tabletmanagerdata.ConcludeTransactionResponse, error)
-	MysqlSystemMetrics(context.Context, *tabletmanagerdata.MysqlSystemMetricsRequest) (*tabletmanagerdata.MysqlSystemMetricsResponse, error)
+	MysqlHostMetrics(context.Context, *tabletmanagerdata.MysqlHostMetricsRequest) (*tabletmanagerdata.MysqlHostMetricsResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error)
 	// PrimaryStatus returns the current primary status.
@@ -936,8 +936,8 @@ func (UnimplementedTabletManagerServer) ReadTransaction(context.Context, *tablet
 func (UnimplementedTabletManagerServer) ConcludeTransaction(context.Context, *tabletmanagerdata.ConcludeTransactionRequest) (*tabletmanagerdata.ConcludeTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConcludeTransaction not implemented")
 }
-func (UnimplementedTabletManagerServer) MysqlSystemMetrics(context.Context, *tabletmanagerdata.MysqlSystemMetricsRequest) (*tabletmanagerdata.MysqlSystemMetricsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method MysqlSystemMetrics not implemented")
+func (UnimplementedTabletManagerServer) MysqlHostMetrics(context.Context, *tabletmanagerdata.MysqlHostMetricsRequest) (*tabletmanagerdata.MysqlHostMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MysqlHostMetrics not implemented")
 }
 func (UnimplementedTabletManagerServer) ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReplicationStatus not implemented")
@@ -1513,20 +1513,20 @@ func _TabletManager_ConcludeTransaction_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_MysqlSystemMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.MysqlSystemMetricsRequest)
+func _TabletManager_MysqlHostMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.MysqlHostMetricsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).MysqlSystemMetrics(ctx, in)
+		return srv.(TabletManagerServer).MysqlHostMetrics(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/MysqlSystemMetrics",
+		FullMethod: "/tabletmanagerservice.TabletManager/MysqlHostMetrics",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).MysqlSystemMetrics(ctx, req.(*tabletmanagerdata.MysqlSystemMetricsRequest))
+		return srv.(TabletManagerServer).MysqlHostMetrics(ctx, req.(*tabletmanagerdata.MysqlHostMetricsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2311,8 +2311,8 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_ConcludeTransaction_Handler,
 		},
 		{
-			MethodName: "MysqlSystemMetrics",
-			Handler:    _TabletManager_MysqlSystemMetrics_Handler,
+			MethodName: "MysqlHostMetrics",
+			Handler:    _TabletManager_MysqlHostMetrics_Handler,
 		},
 		{
 			MethodName: "ReplicationStatus",

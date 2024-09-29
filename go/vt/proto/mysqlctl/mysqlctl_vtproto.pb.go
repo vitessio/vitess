@@ -299,11 +299,11 @@ func (m *VersionStringResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *SystemMetricsRequest) CloneVT() *SystemMetricsRequest {
+func (m *HostMetricsRequest) CloneVT() *HostMetricsRequest {
 	if m == nil {
-		return (*SystemMetricsRequest)(nil)
+		return (*HostMetricsRequest)(nil)
 	}
-	r := new(SystemMetricsRequest)
+	r := new(HostMetricsRequest)
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -311,15 +311,15 @@ func (m *SystemMetricsRequest) CloneVT() *SystemMetricsRequest {
 	return r
 }
 
-func (m *SystemMetricsRequest) CloneMessageVT() proto.Message {
+func (m *HostMetricsRequest) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *SystemMetricsResponse_Metric) CloneVT() *SystemMetricsResponse_Metric {
+func (m *HostMetricsResponse_Metric) CloneVT() *HostMetricsResponse_Metric {
 	if m == nil {
-		return (*SystemMetricsResponse_Metric)(nil)
+		return (*HostMetricsResponse_Metric)(nil)
 	}
-	r := new(SystemMetricsResponse_Metric)
+	r := new(HostMetricsResponse_Metric)
 	r.Name = m.Name
 	r.Value = m.Value
 	r.Error = m.Error
@@ -330,17 +330,17 @@ func (m *SystemMetricsResponse_Metric) CloneVT() *SystemMetricsResponse_Metric {
 	return r
 }
 
-func (m *SystemMetricsResponse_Metric) CloneMessageVT() proto.Message {
+func (m *HostMetricsResponse_Metric) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *SystemMetricsResponse) CloneVT() *SystemMetricsResponse {
+func (m *HostMetricsResponse) CloneVT() *HostMetricsResponse {
 	if m == nil {
-		return (*SystemMetricsResponse)(nil)
+		return (*HostMetricsResponse)(nil)
 	}
-	r := new(SystemMetricsResponse)
+	r := new(HostMetricsResponse)
 	if rhs := m.Metrics; rhs != nil {
-		tmpContainer := make(map[string]*SystemMetricsResponse_Metric, len(rhs))
+		tmpContainer := make(map[string]*HostMetricsResponse_Metric, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -353,7 +353,7 @@ func (m *SystemMetricsResponse) CloneVT() *SystemMetricsResponse {
 	return r
 }
 
-func (m *SystemMetricsResponse) CloneMessageVT() proto.Message {
+func (m *HostMetricsResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -1012,7 +1012,7 @@ func (m *VersionStringResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	return len(dAtA) - i, nil
 }
 
-func (m *SystemMetricsRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *HostMetricsRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1025,12 +1025,12 @@ func (m *SystemMetricsRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *SystemMetricsRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *HostMetricsRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *SystemMetricsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *HostMetricsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1045,7 +1045,7 @@ func (m *SystemMetricsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 	return len(dAtA) - i, nil
 }
 
-func (m *SystemMetricsResponse_Metric) MarshalVT() (dAtA []byte, err error) {
+func (m *HostMetricsResponse_Metric) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1058,12 +1058,12 @@ func (m *SystemMetricsResponse_Metric) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *SystemMetricsResponse_Metric) MarshalToVT(dAtA []byte) (int, error) {
+func (m *HostMetricsResponse_Metric) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *SystemMetricsResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *HostMetricsResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1098,7 +1098,7 @@ func (m *SystemMetricsResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (int,
 	return len(dAtA) - i, nil
 }
 
-func (m *SystemMetricsResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *HostMetricsResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1111,12 +1111,12 @@ func (m *SystemMetricsResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *SystemMetricsResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *HostMetricsResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *SystemMetricsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *HostMetricsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1457,7 +1457,7 @@ func (m *VersionStringResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *SystemMetricsRequest) SizeVT() (n int) {
+func (m *HostMetricsRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1467,7 +1467,7 @@ func (m *SystemMetricsRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *SystemMetricsResponse_Metric) SizeVT() (n int) {
+func (m *HostMetricsResponse_Metric) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1488,7 +1488,7 @@ func (m *SystemMetricsResponse_Metric) SizeVT() (n int) {
 	return n
 }
 
-func (m *SystemMetricsResponse) SizeVT() (n int) {
+func (m *HostMetricsResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -2756,7 +2756,7 @@ func (m *VersionStringResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *SystemMetricsRequest) UnmarshalVT(dAtA []byte) error {
+func (m *HostMetricsRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2779,10 +2779,10 @@ func (m *SystemMetricsRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: SystemMetricsRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: HostMetricsRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: SystemMetricsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: HostMetricsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
@@ -2807,7 +2807,7 @@ func (m *SystemMetricsRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *SystemMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
+func (m *HostMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2830,10 +2830,10 @@ func (m *SystemMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: SystemMetricsResponse_Metric: wiretype end group for non-group")
+			return fmt.Errorf("proto: HostMetricsResponse_Metric: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: SystemMetricsResponse_Metric: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: HostMetricsResponse_Metric: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -2933,7 +2933,7 @@ func (m *SystemMetricsResponse_Metric) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *SystemMetricsResponse) UnmarshalVT(dAtA []byte) error {
+func (m *HostMetricsResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2956,10 +2956,10 @@ func (m *SystemMetricsResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: SystemMetricsResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: HostMetricsResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: SystemMetricsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: HostMetricsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -2992,10 +2992,10 @@ func (m *SystemMetricsResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Metrics == nil {
-				m.Metrics = make(map[string]*SystemMetricsResponse_Metric)
+				m.Metrics = make(map[string]*HostMetricsResponse_Metric)
 			}
 			var mapkey string
-			var mapvalue *SystemMetricsResponse_Metric
+			var mapvalue *HostMetricsResponse_Metric
 			for iNdEx < postIndex {
 				entryPreIndex := iNdEx
 				var wire uint64
@@ -3069,7 +3069,7 @@ func (m *SystemMetricsResponse) UnmarshalVT(dAtA []byte) error {
 					if postmsgIndex > l {
 						return io.ErrUnexpectedEOF
 					}
-					mapvalue = &SystemMetricsResponse_Metric{}
+					mapvalue = &HostMetricsResponse_Metric{}
 					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
 						return err
 					}

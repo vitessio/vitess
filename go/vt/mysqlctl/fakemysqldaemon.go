@@ -744,9 +744,9 @@ func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, erro
 	return "", nil
 }
 
-func (fmd *FakeMysqlDaemon) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsResponse, error) {
-	return &mysqlctlpb.SystemMetricsResponse{
-		Metrics: map[string]*mysqlctlpb.SystemMetricsResponse_Metric{
+func (fmd *FakeMysqlDaemon) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
+	return &mysqlctlpb.HostMetricsResponse{
+		Metrics: map[string]*mysqlctlpb.HostMetricsResponse_Metric{
 			"loadavg": {
 				Value: 1.0,
 			},

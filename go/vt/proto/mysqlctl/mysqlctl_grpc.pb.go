@@ -30,7 +30,7 @@ type MysqlCtlClient interface {
 	ReinitConfig(ctx context.Context, in *ReinitConfigRequest, opts ...grpc.CallOption) (*ReinitConfigResponse, error)
 	RefreshConfig(ctx context.Context, in *RefreshConfigRequest, opts ...grpc.CallOption) (*RefreshConfigResponse, error)
 	VersionString(ctx context.Context, in *VersionStringRequest, opts ...grpc.CallOption) (*VersionStringResponse, error)
-	SystemMetrics(ctx context.Context, in *SystemMetricsRequest, opts ...grpc.CallOption) (*SystemMetricsResponse, error)
+	HostMetrics(ctx context.Context, in *HostMetricsRequest, opts ...grpc.CallOption) (*HostMetricsResponse, error)
 }
 
 type mysqlCtlClient struct {
@@ -113,9 +113,9 @@ func (c *mysqlCtlClient) VersionString(ctx context.Context, in *VersionStringReq
 	return out, nil
 }
 
-func (c *mysqlCtlClient) SystemMetrics(ctx context.Context, in *SystemMetricsRequest, opts ...grpc.CallOption) (*SystemMetricsResponse, error) {
-	out := new(SystemMetricsResponse)
-	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/SystemMetrics", in, out, opts...)
+func (c *mysqlCtlClient) HostMetrics(ctx context.Context, in *HostMetricsRequest, opts ...grpc.CallOption) (*HostMetricsResponse, error) {
+	out := new(HostMetricsResponse)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/HostMetrics", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ type MysqlCtlServer interface {
 	ReinitConfig(context.Context, *ReinitConfigRequest) (*ReinitConfigResponse, error)
 	RefreshConfig(context.Context, *RefreshConfigRequest) (*RefreshConfigResponse, error)
 	VersionString(context.Context, *VersionStringRequest) (*VersionStringResponse, error)
-	SystemMetrics(context.Context, *SystemMetricsRequest) (*SystemMetricsResponse, error)
+	HostMetrics(context.Context, *HostMetricsRequest) (*HostMetricsResponse, error)
 	mustEmbedUnimplementedMysqlCtlServer()
 }
 
@@ -166,8 +166,8 @@ func (UnimplementedMysqlCtlServer) RefreshConfig(context.Context, *RefreshConfig
 func (UnimplementedMysqlCtlServer) VersionString(context.Context, *VersionStringRequest) (*VersionStringResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VersionString not implemented")
 }
-func (UnimplementedMysqlCtlServer) SystemMetrics(context.Context, *SystemMetricsRequest) (*SystemMetricsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SystemMetrics not implemented")
+func (UnimplementedMysqlCtlServer) HostMetrics(context.Context, *HostMetricsRequest) (*HostMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HostMetrics not implemented")
 }
 func (UnimplementedMysqlCtlServer) mustEmbedUnimplementedMysqlCtlServer() {}
 
@@ -326,20 +326,20 @@ func _MysqlCtl_VersionString_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MysqlCtl_SystemMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SystemMetricsRequest)
+func _MysqlCtl_HostMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HostMetricsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MysqlCtlServer).SystemMetrics(ctx, in)
+		return srv.(MysqlCtlServer).HostMetrics(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/mysqlctl.MysqlCtl/SystemMetrics",
+		FullMethod: "/mysqlctl.MysqlCtl/HostMetrics",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MysqlCtlServer).SystemMetrics(ctx, req.(*SystemMetricsRequest))
+		return srv.(MysqlCtlServer).HostMetrics(ctx, req.(*HostMetricsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -384,8 +384,8 @@ var MysqlCtl_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MysqlCtl_VersionString_Handler,
 		},
 		{
-			MethodName: "SystemMetrics",
-			Handler:    _MysqlCtl_SystemMetrics_Handler,
+			MethodName: "HostMetrics",
+			Handler:    _MysqlCtl_HostMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

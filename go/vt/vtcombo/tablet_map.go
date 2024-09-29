@@ -902,7 +902,7 @@ func (itmc *internalTabletManagerClient) ConcludeTransaction(ctx context.Context
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) MysqlSystemMetrics(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error) {
+func (itmc *internalTabletManagerClient) MysqlHostMetrics(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

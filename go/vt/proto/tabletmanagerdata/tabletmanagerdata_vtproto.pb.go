@@ -1094,11 +1094,11 @@ func (m *ConcludeTransactionResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *MysqlSystemMetricsRequest) CloneVT() *MysqlSystemMetricsRequest {
+func (m *MysqlHostMetricsRequest) CloneVT() *MysqlHostMetricsRequest {
 	if m == nil {
-		return (*MysqlSystemMetricsRequest)(nil)
+		return (*MysqlHostMetricsRequest)(nil)
 	}
-	r := new(MysqlSystemMetricsRequest)
+	r := new(MysqlHostMetricsRequest)
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1106,16 +1106,16 @@ func (m *MysqlSystemMetricsRequest) CloneVT() *MysqlSystemMetricsRequest {
 	return r
 }
 
-func (m *MysqlSystemMetricsRequest) CloneMessageVT() proto.Message {
+func (m *MysqlHostMetricsRequest) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *MysqlSystemMetricsResponse) CloneVT() *MysqlSystemMetricsResponse {
+func (m *MysqlHostMetricsResponse) CloneVT() *MysqlHostMetricsResponse {
 	if m == nil {
-		return (*MysqlSystemMetricsResponse)(nil)
+		return (*MysqlHostMetricsResponse)(nil)
 	}
-	r := new(MysqlSystemMetricsResponse)
-	r.SystemMetrics = m.SystemMetrics.CloneVT()
+	r := new(MysqlHostMetricsResponse)
+	r.HostMetrics = m.HostMetrics.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1123,7 +1123,7 @@ func (m *MysqlSystemMetricsResponse) CloneVT() *MysqlSystemMetricsResponse {
 	return r
 }
 
-func (m *MysqlSystemMetricsResponse) CloneMessageVT() proto.Message {
+func (m *MysqlHostMetricsResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -5385,7 +5385,7 @@ func (m *ConcludeTransactionResponse) MarshalToSizedBufferVT(dAtA []byte) (int, 
 	return len(dAtA) - i, nil
 }
 
-func (m *MysqlSystemMetricsRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *MysqlHostMetricsRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -5398,12 +5398,12 @@ func (m *MysqlSystemMetricsRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *MysqlSystemMetricsRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *MysqlHostMetricsRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *MysqlSystemMetricsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *MysqlHostMetricsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -5418,7 +5418,7 @@ func (m *MysqlSystemMetricsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 	return len(dAtA) - i, nil
 }
 
-func (m *MysqlSystemMetricsResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *MysqlHostMetricsResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -5431,12 +5431,12 @@ func (m *MysqlSystemMetricsResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *MysqlSystemMetricsResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *MysqlHostMetricsResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *MysqlSystemMetricsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *MysqlHostMetricsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -5448,8 +5448,8 @@ func (m *MysqlSystemMetricsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.SystemMetrics != nil {
-		size, err := m.SystemMetrics.MarshalToSizedBufferVT(dAtA[:i])
+	if m.HostMetrics != nil {
+		size, err := m.HostMetrics.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -10894,7 +10894,7 @@ func (m *ConcludeTransactionResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *MysqlSystemMetricsRequest) SizeVT() (n int) {
+func (m *MysqlHostMetricsRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -10904,14 +10904,14 @@ func (m *MysqlSystemMetricsRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *MysqlSystemMetricsResponse) SizeVT() (n int) {
+func (m *MysqlHostMetricsResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if m.SystemMetrics != nil {
-		l = m.SystemMetrics.SizeVT()
+	if m.HostMetrics != nil {
+		l = m.HostMetrics.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -18238,7 +18238,7 @@ func (m *ConcludeTransactionResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *MysqlSystemMetricsRequest) UnmarshalVT(dAtA []byte) error {
+func (m *MysqlHostMetricsRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -18261,10 +18261,10 @@ func (m *MysqlSystemMetricsRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: MysqlSystemMetricsRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: MysqlHostMetricsRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: MysqlSystemMetricsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: MysqlHostMetricsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
@@ -18289,7 +18289,7 @@ func (m *MysqlSystemMetricsRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *MysqlSystemMetricsResponse) UnmarshalVT(dAtA []byte) error {
+func (m *MysqlHostMetricsResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -18312,15 +18312,15 @@ func (m *MysqlSystemMetricsResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: MysqlSystemMetricsResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: MysqlHostMetricsResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: MysqlSystemMetricsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: MysqlHostMetricsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SystemMetrics", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field HostMetrics", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -18347,10 +18347,10 @@ func (m *MysqlSystemMetricsResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.SystemMetrics == nil {
-				m.SystemMetrics = &mysqlctl.SystemMetricsResponse{}
+			if m.HostMetrics == nil {
+				m.HostMetrics = &mysqlctl.HostMetricsResponse{}
 			}
-			if err := m.SystemMetrics.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.HostMetrics.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

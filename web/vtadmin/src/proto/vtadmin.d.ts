@@ -15790,195 +15790,195 @@ export namespace mysqlctl {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a SystemMetricsRequest. */
-    interface ISystemMetricsRequest {
+    /** Properties of a HostMetricsRequest. */
+    interface IHostMetricsRequest {
     }
 
-    /** Represents a SystemMetricsRequest. */
-    class SystemMetricsRequest implements ISystemMetricsRequest {
+    /** Represents a HostMetricsRequest. */
+    class HostMetricsRequest implements IHostMetricsRequest {
 
         /**
-         * Constructs a new SystemMetricsRequest.
+         * Constructs a new HostMetricsRequest.
          * @param [properties] Properties to set
          */
-        constructor(properties?: mysqlctl.ISystemMetricsRequest);
+        constructor(properties?: mysqlctl.IHostMetricsRequest);
 
         /**
-         * Creates a new SystemMetricsRequest instance using the specified properties.
+         * Creates a new HostMetricsRequest instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns SystemMetricsRequest instance
+         * @returns HostMetricsRequest instance
          */
-        public static create(properties?: mysqlctl.ISystemMetricsRequest): mysqlctl.SystemMetricsRequest;
+        public static create(properties?: mysqlctl.IHostMetricsRequest): mysqlctl.HostMetricsRequest;
 
         /**
-         * Encodes the specified SystemMetricsRequest message. Does not implicitly {@link mysqlctl.SystemMetricsRequest.verify|verify} messages.
-         * @param message SystemMetricsRequest message or plain object to encode
+         * Encodes the specified HostMetricsRequest message. Does not implicitly {@link mysqlctl.HostMetricsRequest.verify|verify} messages.
+         * @param message HostMetricsRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: mysqlctl.ISystemMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: mysqlctl.IHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified SystemMetricsRequest message, length delimited. Does not implicitly {@link mysqlctl.SystemMetricsRequest.verify|verify} messages.
-         * @param message SystemMetricsRequest message or plain object to encode
+         * Encodes the specified HostMetricsRequest message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsRequest.verify|verify} messages.
+         * @param message HostMetricsRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: mysqlctl.ISystemMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: mysqlctl.IHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a SystemMetricsRequest message from the specified reader or buffer.
+         * Decodes a HostMetricsRequest message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns SystemMetricsRequest
+         * @returns HostMetricsRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.SystemMetricsRequest;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsRequest;
 
         /**
-         * Decodes a SystemMetricsRequest message from the specified reader or buffer, length delimited.
+         * Decodes a HostMetricsRequest message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns SystemMetricsRequest
+         * @returns HostMetricsRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.SystemMetricsRequest;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsRequest;
 
         /**
-         * Verifies a SystemMetricsRequest message.
+         * Verifies a HostMetricsRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a SystemMetricsRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates a HostMetricsRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns SystemMetricsRequest
+         * @returns HostMetricsRequest
          */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.SystemMetricsRequest;
+        public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsRequest;
 
         /**
-         * Creates a plain object from a SystemMetricsRequest message. Also converts values to other types if specified.
-         * @param message SystemMetricsRequest
+         * Creates a plain object from a HostMetricsRequest message. Also converts values to other types if specified.
+         * @param message HostMetricsRequest
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: mysqlctl.SystemMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: mysqlctl.HostMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this SystemMetricsRequest to JSON.
+         * Converts this HostMetricsRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for SystemMetricsRequest
+         * Gets the default type url for HostMetricsRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a SystemMetricsResponse. */
-    interface ISystemMetricsResponse {
+    /** Properties of a HostMetricsResponse. */
+    interface IHostMetricsResponse {
 
-        /** SystemMetricsResponse metrics */
-        metrics?: ({ [k: string]: mysqlctl.SystemMetricsResponse.IMetric }|null);
+        /** HostMetricsResponse metrics */
+        metrics?: ({ [k: string]: mysqlctl.HostMetricsResponse.IMetric }|null);
     }
 
-    /** Represents a SystemMetricsResponse. */
-    class SystemMetricsResponse implements ISystemMetricsResponse {
+    /** Represents a HostMetricsResponse. */
+    class HostMetricsResponse implements IHostMetricsResponse {
 
         /**
-         * Constructs a new SystemMetricsResponse.
+         * Constructs a new HostMetricsResponse.
          * @param [properties] Properties to set
          */
-        constructor(properties?: mysqlctl.ISystemMetricsResponse);
+        constructor(properties?: mysqlctl.IHostMetricsResponse);
 
-        /** SystemMetricsResponse metrics. */
-        public metrics: { [k: string]: mysqlctl.SystemMetricsResponse.IMetric };
+        /** HostMetricsResponse metrics. */
+        public metrics: { [k: string]: mysqlctl.HostMetricsResponse.IMetric };
 
         /**
-         * Creates a new SystemMetricsResponse instance using the specified properties.
+         * Creates a new HostMetricsResponse instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns SystemMetricsResponse instance
+         * @returns HostMetricsResponse instance
          */
-        public static create(properties?: mysqlctl.ISystemMetricsResponse): mysqlctl.SystemMetricsResponse;
+        public static create(properties?: mysqlctl.IHostMetricsResponse): mysqlctl.HostMetricsResponse;
 
         /**
-         * Encodes the specified SystemMetricsResponse message. Does not implicitly {@link mysqlctl.SystemMetricsResponse.verify|verify} messages.
-         * @param message SystemMetricsResponse message or plain object to encode
+         * Encodes the specified HostMetricsResponse message. Does not implicitly {@link mysqlctl.HostMetricsResponse.verify|verify} messages.
+         * @param message HostMetricsResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: mysqlctl.ISystemMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: mysqlctl.IHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified SystemMetricsResponse message, length delimited. Does not implicitly {@link mysqlctl.SystemMetricsResponse.verify|verify} messages.
-         * @param message SystemMetricsResponse message or plain object to encode
+         * Encodes the specified HostMetricsResponse message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsResponse.verify|verify} messages.
+         * @param message HostMetricsResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: mysqlctl.ISystemMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: mysqlctl.IHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a SystemMetricsResponse message from the specified reader or buffer.
+         * Decodes a HostMetricsResponse message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns SystemMetricsResponse
+         * @returns HostMetricsResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.SystemMetricsResponse;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsResponse;
 
         /**
-         * Decodes a SystemMetricsResponse message from the specified reader or buffer, length delimited.
+         * Decodes a HostMetricsResponse message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns SystemMetricsResponse
+         * @returns HostMetricsResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.SystemMetricsResponse;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsResponse;
 
         /**
-         * Verifies a SystemMetricsResponse message.
+         * Verifies a HostMetricsResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a SystemMetricsResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates a HostMetricsResponse message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns SystemMetricsResponse
+         * @returns HostMetricsResponse
          */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.SystemMetricsResponse;
+        public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsResponse;
 
         /**
-         * Creates a plain object from a SystemMetricsResponse message. Also converts values to other types if specified.
-         * @param message SystemMetricsResponse
+         * Creates a plain object from a HostMetricsResponse message. Also converts values to other types if specified.
+         * @param message HostMetricsResponse
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: mysqlctl.SystemMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: mysqlctl.HostMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this SystemMetricsResponse to JSON.
+         * Converts this HostMetricsResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for SystemMetricsResponse
+         * Gets the default type url for HostMetricsResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    namespace SystemMetricsResponse {
+    namespace HostMetricsResponse {
 
         /** Properties of a Metric. */
         interface IMetric {
@@ -16000,7 +16000,7 @@ export namespace mysqlctl {
              * Constructs a new Metric.
              * @param [properties] Properties to set
              */
-            constructor(properties?: mysqlctl.SystemMetricsResponse.IMetric);
+            constructor(properties?: mysqlctl.HostMetricsResponse.IMetric);
 
             /** Metric name. */
             public name: string;
@@ -16016,23 +16016,23 @@ export namespace mysqlctl {
              * @param [properties] Properties to set
              * @returns Metric instance
              */
-            public static create(properties?: mysqlctl.SystemMetricsResponse.IMetric): mysqlctl.SystemMetricsResponse.Metric;
+            public static create(properties?: mysqlctl.HostMetricsResponse.IMetric): mysqlctl.HostMetricsResponse.Metric;
 
             /**
-             * Encodes the specified Metric message. Does not implicitly {@link mysqlctl.SystemMetricsResponse.Metric.verify|verify} messages.
+             * Encodes the specified Metric message. Does not implicitly {@link mysqlctl.HostMetricsResponse.Metric.verify|verify} messages.
              * @param message Metric message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: mysqlctl.SystemMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: mysqlctl.HostMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified Metric message, length delimited. Does not implicitly {@link mysqlctl.SystemMetricsResponse.Metric.verify|verify} messages.
+             * Encodes the specified Metric message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsResponse.Metric.verify|verify} messages.
              * @param message Metric message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: mysqlctl.SystemMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: mysqlctl.HostMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
              * Decodes a Metric message from the specified reader or buffer.
@@ -16042,7 +16042,7 @@ export namespace mysqlctl {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.SystemMetricsResponse.Metric;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsResponse.Metric;
 
             /**
              * Decodes a Metric message from the specified reader or buffer, length delimited.
@@ -16051,7 +16051,7 @@ export namespace mysqlctl {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.SystemMetricsResponse.Metric;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsResponse.Metric;
 
             /**
              * Verifies a Metric message.
@@ -16065,7 +16065,7 @@ export namespace mysqlctl {
              * @param object Plain object
              * @returns Metric
              */
-            public static fromObject(object: { [k: string]: any }): mysqlctl.SystemMetricsResponse.Metric;
+            public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsResponse.Metric;
 
             /**
              * Creates a plain object from a Metric message. Also converts values to other types if specified.
@@ -16073,7 +16073,7 @@ export namespace mysqlctl {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: mysqlctl.SystemMetricsResponse.Metric, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: mysqlctl.HostMetricsResponse.Metric, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
              * Converts this Metric to JSON.
@@ -16223,18 +16223,18 @@ export namespace mysqlctl {
         public versionString(request: mysqlctl.IVersionStringRequest): Promise<mysqlctl.VersionStringResponse>;
 
         /**
-         * Calls SystemMetrics.
-         * @param request SystemMetricsRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and SystemMetricsResponse
+         * Calls HostMetrics.
+         * @param request HostMetricsRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and HostMetricsResponse
          */
-        public systemMetrics(request: mysqlctl.ISystemMetricsRequest, callback: mysqlctl.MysqlCtl.SystemMetricsCallback): void;
+        public hostMetrics(request: mysqlctl.IHostMetricsRequest, callback: mysqlctl.MysqlCtl.HostMetricsCallback): void;
 
         /**
-         * Calls SystemMetrics.
-         * @param request SystemMetricsRequest message or plain object
+         * Calls HostMetrics.
+         * @param request HostMetricsRequest message or plain object
          * @returns Promise
          */
-        public systemMetrics(request: mysqlctl.ISystemMetricsRequest): Promise<mysqlctl.SystemMetricsResponse>;
+        public hostMetrics(request: mysqlctl.IHostMetricsRequest): Promise<mysqlctl.HostMetricsResponse>;
     }
 
     namespace MysqlCtl {
@@ -16296,11 +16296,11 @@ export namespace mysqlctl {
         type VersionStringCallback = (error: (Error|null), response?: mysqlctl.VersionStringResponse) => void;
 
         /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#systemMetrics}.
+         * Callback as used by {@link mysqlctl.MysqlCtl#hostMetrics}.
          * @param error Error, if any
-         * @param [response] SystemMetricsResponse
+         * @param [response] HostMetricsResponse
          */
-        type SystemMetricsCallback = (error: (Error|null), response?: mysqlctl.SystemMetricsResponse) => void;
+        type HostMetricsCallback = (error: (Error|null), response?: mysqlctl.HostMetricsResponse) => void;
     }
 
     /** Properties of a BackupInfo. */
@@ -24382,188 +24382,188 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a MysqlSystemMetricsRequest. */
-    interface IMysqlSystemMetricsRequest {
+    /** Properties of a MysqlHostMetricsRequest. */
+    interface IMysqlHostMetricsRequest {
     }
 
-    /** Represents a MysqlSystemMetricsRequest. */
-    class MysqlSystemMetricsRequest implements IMysqlSystemMetricsRequest {
+    /** Represents a MysqlHostMetricsRequest. */
+    class MysqlHostMetricsRequest implements IMysqlHostMetricsRequest {
 
         /**
-         * Constructs a new MysqlSystemMetricsRequest.
+         * Constructs a new MysqlHostMetricsRequest.
          * @param [properties] Properties to set
          */
-        constructor(properties?: tabletmanagerdata.IMysqlSystemMetricsRequest);
+        constructor(properties?: tabletmanagerdata.IMysqlHostMetricsRequest);
 
         /**
-         * Creates a new MysqlSystemMetricsRequest instance using the specified properties.
+         * Creates a new MysqlHostMetricsRequest instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns MysqlSystemMetricsRequest instance
+         * @returns MysqlHostMetricsRequest instance
          */
-        public static create(properties?: tabletmanagerdata.IMysqlSystemMetricsRequest): tabletmanagerdata.MysqlSystemMetricsRequest;
+        public static create(properties?: tabletmanagerdata.IMysqlHostMetricsRequest): tabletmanagerdata.MysqlHostMetricsRequest;
 
         /**
-         * Encodes the specified MysqlSystemMetricsRequest message. Does not implicitly {@link tabletmanagerdata.MysqlSystemMetricsRequest.verify|verify} messages.
-         * @param message MysqlSystemMetricsRequest message or plain object to encode
+         * Encodes the specified MysqlHostMetricsRequest message. Does not implicitly {@link tabletmanagerdata.MysqlHostMetricsRequest.verify|verify} messages.
+         * @param message MysqlHostMetricsRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: tabletmanagerdata.IMysqlSystemMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: tabletmanagerdata.IMysqlHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified MysqlSystemMetricsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.MysqlSystemMetricsRequest.verify|verify} messages.
-         * @param message MysqlSystemMetricsRequest message or plain object to encode
+         * Encodes the specified MysqlHostMetricsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.MysqlHostMetricsRequest.verify|verify} messages.
+         * @param message MysqlHostMetricsRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: tabletmanagerdata.IMysqlSystemMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: tabletmanagerdata.IMysqlHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a MysqlSystemMetricsRequest message from the specified reader or buffer.
+         * Decodes a MysqlHostMetricsRequest message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns MysqlSystemMetricsRequest
+         * @returns MysqlHostMetricsRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MysqlSystemMetricsRequest;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MysqlHostMetricsRequest;
 
         /**
-         * Decodes a MysqlSystemMetricsRequest message from the specified reader or buffer, length delimited.
+         * Decodes a MysqlHostMetricsRequest message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns MysqlSystemMetricsRequest
+         * @returns MysqlHostMetricsRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MysqlSystemMetricsRequest;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MysqlHostMetricsRequest;
 
         /**
-         * Verifies a MysqlSystemMetricsRequest message.
+         * Verifies a MysqlHostMetricsRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a MysqlSystemMetricsRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates a MysqlHostMetricsRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns MysqlSystemMetricsRequest
+         * @returns MysqlHostMetricsRequest
          */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MysqlSystemMetricsRequest;
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MysqlHostMetricsRequest;
 
         /**
-         * Creates a plain object from a MysqlSystemMetricsRequest message. Also converts values to other types if specified.
-         * @param message MysqlSystemMetricsRequest
+         * Creates a plain object from a MysqlHostMetricsRequest message. Also converts values to other types if specified.
+         * @param message MysqlHostMetricsRequest
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: tabletmanagerdata.MysqlSystemMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: tabletmanagerdata.MysqlHostMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this MysqlSystemMetricsRequest to JSON.
+         * Converts this MysqlHostMetricsRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for MysqlSystemMetricsRequest
+         * Gets the default type url for MysqlHostMetricsRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a MysqlSystemMetricsResponse. */
-    interface IMysqlSystemMetricsResponse {
+    /** Properties of a MysqlHostMetricsResponse. */
+    interface IMysqlHostMetricsResponse {
 
-        /** MysqlSystemMetricsResponse SystemMetrics */
-        SystemMetrics?: (mysqlctl.ISystemMetricsResponse|null);
+        /** MysqlHostMetricsResponse HostMetrics */
+        HostMetrics?: (mysqlctl.IHostMetricsResponse|null);
     }
 
-    /** Represents a MysqlSystemMetricsResponse. */
-    class MysqlSystemMetricsResponse implements IMysqlSystemMetricsResponse {
+    /** Represents a MysqlHostMetricsResponse. */
+    class MysqlHostMetricsResponse implements IMysqlHostMetricsResponse {
 
         /**
-         * Constructs a new MysqlSystemMetricsResponse.
+         * Constructs a new MysqlHostMetricsResponse.
          * @param [properties] Properties to set
          */
-        constructor(properties?: tabletmanagerdata.IMysqlSystemMetricsResponse);
+        constructor(properties?: tabletmanagerdata.IMysqlHostMetricsResponse);
 
-        /** MysqlSystemMetricsResponse SystemMetrics. */
-        public SystemMetrics?: (mysqlctl.ISystemMetricsResponse|null);
+        /** MysqlHostMetricsResponse HostMetrics. */
+        public HostMetrics?: (mysqlctl.IHostMetricsResponse|null);
 
         /**
-         * Creates a new MysqlSystemMetricsResponse instance using the specified properties.
+         * Creates a new MysqlHostMetricsResponse instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns MysqlSystemMetricsResponse instance
+         * @returns MysqlHostMetricsResponse instance
          */
-        public static create(properties?: tabletmanagerdata.IMysqlSystemMetricsResponse): tabletmanagerdata.MysqlSystemMetricsResponse;
+        public static create(properties?: tabletmanagerdata.IMysqlHostMetricsResponse): tabletmanagerdata.MysqlHostMetricsResponse;
 
         /**
-         * Encodes the specified MysqlSystemMetricsResponse message. Does not implicitly {@link tabletmanagerdata.MysqlSystemMetricsResponse.verify|verify} messages.
-         * @param message MysqlSystemMetricsResponse message or plain object to encode
+         * Encodes the specified MysqlHostMetricsResponse message. Does not implicitly {@link tabletmanagerdata.MysqlHostMetricsResponse.verify|verify} messages.
+         * @param message MysqlHostMetricsResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: tabletmanagerdata.IMysqlSystemMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: tabletmanagerdata.IMysqlHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified MysqlSystemMetricsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.MysqlSystemMetricsResponse.verify|verify} messages.
-         * @param message MysqlSystemMetricsResponse message or plain object to encode
+         * Encodes the specified MysqlHostMetricsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.MysqlHostMetricsResponse.verify|verify} messages.
+         * @param message MysqlHostMetricsResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: tabletmanagerdata.IMysqlSystemMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: tabletmanagerdata.IMysqlHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a MysqlSystemMetricsResponse message from the specified reader or buffer.
+         * Decodes a MysqlHostMetricsResponse message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns MysqlSystemMetricsResponse
+         * @returns MysqlHostMetricsResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MysqlSystemMetricsResponse;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MysqlHostMetricsResponse;
 
         /**
-         * Decodes a MysqlSystemMetricsResponse message from the specified reader or buffer, length delimited.
+         * Decodes a MysqlHostMetricsResponse message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns MysqlSystemMetricsResponse
+         * @returns MysqlHostMetricsResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MysqlSystemMetricsResponse;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MysqlHostMetricsResponse;
 
         /**
-         * Verifies a MysqlSystemMetricsResponse message.
+         * Verifies a MysqlHostMetricsResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a MysqlSystemMetricsResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates a MysqlHostMetricsResponse message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns MysqlSystemMetricsResponse
+         * @returns MysqlHostMetricsResponse
          */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MysqlSystemMetricsResponse;
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MysqlHostMetricsResponse;
 
         /**
-         * Creates a plain object from a MysqlSystemMetricsResponse message. Also converts values to other types if specified.
-         * @param message MysqlSystemMetricsResponse
+         * Creates a plain object from a MysqlHostMetricsResponse message. Also converts values to other types if specified.
+         * @param message MysqlHostMetricsResponse
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: tabletmanagerdata.MysqlSystemMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: tabletmanagerdata.MysqlHostMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this MysqlSystemMetricsResponse to JSON.
+         * Converts this MysqlHostMetricsResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for MysqlSystemMetricsResponse
+         * Gets the default type url for MysqlHostMetricsResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

@@ -1294,19 +1294,19 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) (string, error) {
 	return res.ToString("@@global.version_comment")
 }
 
-// systemMetrics returns several OS metrics to be used by the tablet throttler.
-func systemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsResponse, error) {
-	resp := &mysqlctlpb.SystemMetricsResponse{
-		Metrics: make(map[string]*mysqlctlpb.SystemMetricsResponse_Metric),
+// hostMetrics returns several OS metrics to be used by the tablet throttler.
+func hostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
+	resp := &mysqlctlpb.HostMetricsResponse{
+		Metrics: make(map[string]*mysqlctlpb.HostMetricsResponse_Metric),
 	}
-	newMetric := func(name string) *mysqlctlpb.SystemMetricsResponse_Metric {
-		metric := &mysqlctlpb.SystemMetricsResponse_Metric{
+	newMetric := func(name string) *mysqlctlpb.HostMetricsResponse_Metric {
+		metric := &mysqlctlpb.HostMetricsResponse_Metric{
 			Name: name,
 		}
 		resp.Metrics[name] = metric
 		return metric
 	}
-	withError := func(metric *mysqlctlpb.SystemMetricsResponse_Metric, err error) error {
+	withError := func(metric *mysqlctlpb.HostMetricsResponse_Metric, err error) error {
 		if err != nil {
 			metric.Error = err.Error()
 		}
@@ -1351,9 +1351,9 @@ func systemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsRe
 	return resp, nil
 }
 
-// SystemMetrics returns several OS metrics to be used by the tablet throttler.
-func (mysqld *Mysqld) SystemMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.SystemMetricsResponse, error) {
-	return systemMetrics(ctx, cnf)
+// HostMetrics returns several OS metrics to be used by the tablet throttler.
+func (mysqld *Mysqld) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
+	return hostMetrics(ctx, cnf)
 }
 
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:

@@ -335,11 +335,11 @@ message ConcludeTransactionResponse {
 }
 
 
-message MysqlSystemMetricsRequest {
+message MysqlHostMetricsRequest {
 }
 
-message MysqlSystemMetricsResponse {
-  mysqlctl.SystemMetricsResponse SystemMetrics = 1;
+message MysqlHostMetricsResponse {
+  mysqlctl.HostMetricsResponse HostMetrics = 1;
 }
 
 

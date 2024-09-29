@@ -114,7 +114,7 @@ func (fra *fakeRPCTM) UnlockTables(ctx context.Context) error {
 	panic("implement me")
 }
 
-func (fra *fakeRPCTM) MysqlSystemMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error) {
+func (fra *fakeRPCTM) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }

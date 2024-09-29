@@ -688,14 +688,14 @@ func (client *Client) ConcludeTransaction(ctx context.Context, tablet *topodatap
 	return err
 }
 
-func (client *Client) MysqlSystemMetrics(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error) {
+func (client *Client) MysqlHostMetrics(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
 
-	resp, err := c.MysqlSystemMetrics(ctx, req)
+	resp, err := c.MysqlHostMetrics(ctx, req)
 	if err != nil {
 		return nil, err
 	}

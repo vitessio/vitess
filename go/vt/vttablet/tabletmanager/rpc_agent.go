@@ -89,7 +89,7 @@ type RPCTM interface {
 
 	ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error
 
-	MysqlSystemMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlSystemMetricsRequest) (*tabletmanagerdatapb.MysqlSystemMetricsResponse, error)
+	MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error)
 
 	// Replication related methods
 	PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
