@@ -1947,6 +1947,10 @@ func (m *BackupRequest) CloneVT() *BackupRequest {
 	r.AllowPrimary = m.AllowPrimary
 	r.IncrementalFromPos = m.IncrementalFromPos
 	r.UpgradeSafe = m.UpgradeSafe
+	if rhs := m.BackupEngine; rhs != nil {
+		tmpVal := *rhs
+		r.BackupEngine = &tmpVal
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1984,6 +1988,11 @@ func (m *RestoreFromBackupRequest) CloneVT() *RestoreFromBackupRequest {
 	r.RestoreToPos = m.RestoreToPos
 	r.DryRun = m.DryRun
 	r.RestoreToTimestamp = m.RestoreToTimestamp.CloneVT()
+	if rhs := m.AllowedBackupEngines; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.AllowedBackupEngines = tmpContainer
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -7377,6 +7386,13 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.BackupEngine != nil {
+		i -= len(*m.BackupEngine)
+		copy(dAtA[i:], *m.BackupEngine)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(*m.BackupEngine)))
+		i--
+		dAtA[i] = 0x2a
+	}
 	if m.UpgradeSafe {
 		i--
 		if m.UpgradeSafe {
@@ -7484,6 +7500,15 @@ func (m *RestoreFromBackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.AllowedBackupEngines) > 0 {
+		for iNdEx := len(m.AllowedBackupEngines) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.AllowedBackupEngines[iNdEx])
+			copy(dAtA[i:], m.AllowedBackupEngines[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.AllowedBackupEngines[iNdEx])))
+			i--
+			dAtA[i] = 0x2a
+		}
 	}
 	if m.RestoreToTimestamp != nil {
 		size, err := m.RestoreToTimestamp.MarshalToSizedBufferVT(dAtA[:i])
@@ -11535,6 +11560,10 @@ func (m *BackupRequest) SizeVT() (n int) {
 	if m.UpgradeSafe {
 		n += 2
 	}
+	if m.BackupEngine != nil {
+		l = len(*m.BackupEngine)
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -11573,6 +11602,12 @@ func (m *RestoreFromBackupRequest) SizeVT() (n int) {
 	if m.RestoreToTimestamp != nil {
 		l = m.RestoreToTimestamp.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if len(m.AllowedBackupEngines) > 0 {
+		for _, s := range m.AllowedBackupEngines {
+			l = len(s)
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -22001,6 +22036,39 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.UpgradeSafe = bool(v != 0)
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupEngine", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			s := string(dAtA[iNdEx:postIndex])
+			m.BackupEngine = &s
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -22262,6 +22330,38 @@ func (m *RestoreFromBackupRequest) UnmarshalVT(dAtA []byte) error {
 			if err := m.RestoreToTimestamp.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowedBackupEngines", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AllowedBackupEngines = append(m.AllowedBackupEngines, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
