@@ -95,6 +95,9 @@ var (
 				return fmt.Errorf("invalid value provided for --strip-sharded-auto-increment, valid values are: %s", stripShardedAutoIncOptions)
 			}
 			createOptions.WorkflowOptions.StripShardedAutoIncrement = vtctldatapb.ShardedAutoIncrementHandling(val)
+			if val == int32(vtctldatapb.ShardedAutoIncrementHandling_REPLACE) && createOptions.WorkflowOptions.GlobalKeyspace == "" {
+				fmt.Println("WARNING: no global-keyspace value provided so all sequence tables must be created manually before switching traffic")
+			}
 
 			return nil
 		},

@@ -123,7 +123,8 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 			}
 			for _, wf := range res.Workflows {
 				if wf.Workflow == workflow {
-					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
+					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %s",
+						workflow, keyspace, topoproto.TabletAliasString(primary.Alias)))
 					return
 				}
 			}
