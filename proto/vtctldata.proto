@@ -209,11 +209,18 @@ message Shard {
   topodata.Shard shard = 3;
 }
 
+enum ShardedAutoIncrementHandling {
+  LEAVE = 0;
+  REMOVE = 1;
+  REPLACE = 2;
+}
+
 message WorkflowOptions {
   string tenant_id = 1;
   // Remove auto_increment clauses on tables when moving them to a sharded
-  // keyspace.
-  bool strip_sharded_auto_increment = 2;
+  // keyspace and optionally replace them with vschema AutoIncrement
+  // definitions.
+  ShardedAutoIncrementHandling strip_sharded_auto_increment = 2;
   // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
   // from the source will be vreplicated.
   repeated string shards = 3;

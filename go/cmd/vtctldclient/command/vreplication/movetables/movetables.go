@@ -17,9 +17,13 @@ limitations under the License.
 package movetables
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
@@ -32,6 +36,7 @@ var (
 		Aliases:               []string{"movetables"},
 		Args:                  cobra.ExactArgs(1),
 	}
+	stripShardedAutoIncOptions string
 )
 
 func registerCommands(root *cobra.Command) {
@@ -49,9 +54,11 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 	create.Flags().BoolVar(&createOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
 	create.Flags().StringVar(&createOptions.WorkflowOptions.TenantId, "tenant-id", "", "(EXPERIMENTAL: Multi-tenant migrations only) The tenant ID to use for the MoveTables workflow into a multi-tenant keyspace.")
-	create.Flags().BoolVar(&createOptions.WorkflowOptions.StripShardedAutoIncrement, "remove-sharded-auto-increment", true, "If moving the table(s) to a sharded keyspace, remove any auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness.")
 	create.Flags().StringSliceVar(&createOptions.WorkflowOptions.Shards, "shards", nil, "(EXPERIMENTAL: Multi-tenant migrations only) Specify that vreplication streams should only be created on this subset of target shards. Warning: you should first ensure that all rows on the source route to the specified subset of target shards using your VIndex of choice or you could lose data during the migration.")
-	create.Flags().StringVar(&createOptions.WorkflowOptions.GlobalKeyspace, "global-keyspace", "", "If specified, then attempt to create any global resources such as sequence tables needed to replace auto_increment table clauses that are removed due to --remove-sharded-auto-increment here.")
+	create.Flags().StringVar(&createOptions.WorkflowOptions.GlobalKeyspace, "global-keyspace", "", "If specified, then attempt to create any global resources here such as sequence tables needed to replace auto_increment table clauses that are removed due to --remove-sharded-auto-increment=REPLACE.")
+	create.Flags().StringVar(&createOptions.StripShardedAutoIncrement, "remove-sharded-auto-increment", vtctldata.ShardedAutoIncrementHandling_REMOVE.String(),
+		fmt.Sprintf("If moving the table(s) to a sharded keyspace, remove any auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness. (options are: %s)",
+			stripShardedAutoIncOptions))
 	base.AddCommand(create)
 
 	opts := &common.SubCommandsOpts{
@@ -101,4 +108,13 @@ func registerCommands(root *cobra.Command) {
 
 func init() {
 	common.RegisterCommandHandler("MoveTables", registerCommands)
+
+	sb := strings.Builder{}
+	for i, v := range vtctldata.ShardedAutoIncrementHandling_name {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(v)
+	}
+	stripShardedAutoIncOptions = sb.String()
 }

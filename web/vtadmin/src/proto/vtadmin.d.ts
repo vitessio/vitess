@@ -48803,6 +48803,13 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** ShardedAutoIncrementHandling enum. */
+    enum ShardedAutoIncrementHandling {
+        LEAVE = 0,
+        REMOVE = 1,
+        REPLACE = 2
+    }
+
     /** Properties of a WorkflowOptions. */
     interface IWorkflowOptions {
 
@@ -48810,7 +48817,7 @@ export namespace vtctldata {
         tenant_id?: (string|null);
 
         /** WorkflowOptions strip_sharded_auto_increment */
-        strip_sharded_auto_increment?: (boolean|null);
+        strip_sharded_auto_increment?: (vtctldata.ShardedAutoIncrementHandling|null);
 
         /** WorkflowOptions shards */
         shards?: (string[]|null);
@@ -48835,7 +48842,7 @@ export namespace vtctldata {
         public tenant_id: string;
 
         /** WorkflowOptions strip_sharded_auto_increment. */
-        public strip_sharded_auto_increment: boolean;
+        public strip_sharded_auto_increment: vtctldata.ShardedAutoIncrementHandling;
 
         /** WorkflowOptions shards. */
         public shards: string[];

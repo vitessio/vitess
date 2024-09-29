@@ -40,6 +40,8 @@ var (
 		NoRoutingRules      bool
 		AtomicCopy          bool
 		WorkflowOptions     vtctldatapb.WorkflowOptions
+		// This maps to a WorkflowOptions.StripShardedAutoIncrement ENUM value.
+		StripShardedAutoIncrement string
 	}{}
 
 	// create makes a MoveTablesCreate gRPC call to a vtctld.
@@ -86,6 +88,13 @@ var (
 			if tenantId != "" && len(createOptions.SourceShards) > 0 {
 				return fmt.Errorf("cannot specify both --tenant-id (i.e. a multi-tenant migration) and --source-shards (i.e. a shard-by-shard migration)")
 			}
+
+			createOptions.StripShardedAutoIncrement = strings.ToUpper(createOptions.StripShardedAutoIncrement)
+			val, ok := vtctldatapb.ShardedAutoIncrementHandling_value[createOptions.StripShardedAutoIncrement]
+			if !ok {
+				return fmt.Errorf("invalid value provided for --strip-sharded-auto-increment, valid values are: %s", stripShardedAutoIncOptions)
+			}
+			createOptions.WorkflowOptions.StripShardedAutoIncrement = vtctldatapb.ShardedAutoIncrementHandling(val)
 
 			return nil
 		},

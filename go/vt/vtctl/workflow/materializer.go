@@ -278,7 +278,7 @@ func (mz *materializer) deploySchema() error {
 	var targetVSchema *vschemapb.Keyspace
 	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
-		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().StripShardedAutoIncrement) {
+		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().StripShardedAutoIncrement != vtctldatapb.ShardedAutoIncrementHandling_LEAVE) {
 		removeAutoInc = true
 		var err error
 		targetVSchema, err = mz.ts.GetVSchema(mz.ctx, mz.ms.TargetKeyspace)
@@ -369,22 +369,25 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if removeAutoInc {
-					replaceFunc := func(columnName string) {
-						mu.Lock()
-						defer mu.Unlock()
-						// At this point we've already confirmed that the table exists in the target
-						// vschema.
-						table := targetVSchema.Tables[ts.TargetTable]
-						// Don't override or redo anything that already exists.
-						if table != nil && table.AutoIncrement == nil {
-							seqTableName := fmt.Sprintf("%s_seq", ts.TargetTable)
-							// Create a Vitess AutoIncrement definition -- which uses a sequence -- to
-							// replace the MySQL auto_increment definition that we removed.
-							table.AutoIncrement = &vschemapb.AutoIncrement{
-								Column:   columnName,
-								Sequence: seqTableName,
+					var replaceFunc func(columnName string)
+					if mz.ms.GetWorkflowOptions().StripShardedAutoIncrement == vtctldatapb.ShardedAutoIncrementHandling_REPLACE {
+						replaceFunc = func(columnName string) {
+							mu.Lock()
+							defer mu.Unlock()
+							// At this point we've already confirmed that the table exists in the target
+							// vschema.
+							table := targetVSchema.Tables[ts.TargetTable]
+							// Don't override or redo anything that already exists.
+							if table != nil && table.AutoIncrement == nil {
+								seqTableName := fmt.Sprintf("%s_seq", ts.TargetTable)
+								// Create a Vitess AutoIncrement definition -- which uses a sequence -- to
+								// replace the MySQL auto_increment definition that we removed.
+								table.AutoIncrement = &vschemapb.AutoIncrement{
+									Column:   columnName,
+									Sequence: seqTableName,
+								}
+								updatedVSchema = true
 							}
-							updatedVSchema = true
 						}
 					}
 					ddl, err = stripAutoIncrement(ddl, mz.env.Parser(), replaceFunc)

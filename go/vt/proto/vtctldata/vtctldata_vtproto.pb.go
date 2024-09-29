@@ -6689,13 +6689,8 @@ func (m *WorkflowOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0x1a
 		}
 	}
-	if m.StripShardedAutoIncrement {
-		i--
-		if m.StripShardedAutoIncrement {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
+	if m.StripShardedAutoIncrement != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.StripShardedAutoIncrement))
 		i--
 		dAtA[i] = 0x10
 	}
@@ -21512,8 +21507,8 @@ func (m *WorkflowOptions) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.StripShardedAutoIncrement {
-		n += 2
+	if m.StripShardedAutoIncrement != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.StripShardedAutoIncrement))
 	}
 	if len(m.Shards) > 0 {
 		for _, s := range m.Shards {
@@ -29745,7 +29740,7 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StripShardedAutoIncrement", wireType)
 			}
-			var v int
+			m.StripShardedAutoIncrement = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -29755,12 +29750,11 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				m.StripShardedAutoIncrement |= ShardedAutoIncrementHandling(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.StripShardedAutoIncrement = bool(v != 0)
 		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Shards", wireType)

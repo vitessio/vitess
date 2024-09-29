@@ -1495,7 +1495,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		// Try and create the backing sequence tables if we can.
 		globalKeyspace := ts.options.GetGlobalKeyspace()
 		if globalKeyspace == "" {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used and no global-keyspace was provided to auto create them in: %s",
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used and no keyspace was provided to auto create them in: %s",
 				strings.Join(maps.Keys(sequencesByBackingTable), ","))
 		}
 		shards, err := ts.ws.ts.GetShardNames(ctx, globalKeyspace)
