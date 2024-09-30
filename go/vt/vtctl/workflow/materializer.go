@@ -51,6 +51,7 @@ const (
 	createDDLAsCopy                = "copy"
 	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
 	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
+	autoSequenceTableFormat        = "%s_seq"
 )
 
 type materializer struct {
@@ -379,7 +380,7 @@ func (mz *materializer) deploySchema() error {
 							table := targetVSchema.Tables[ts.TargetTable]
 							// Don't override or redo anything that already exists.
 							if table != nil && table.AutoIncrement == nil {
-								seqTableName := fmt.Sprintf("%s_seq", ts.TargetTable)
+								seqTableName := fmt.Sprintf(autoSequenceTableFormat, ts.TargetTable)
 								// Create a Vitess AutoIncrement definition -- which uses a sequence -- to
 								// replace the MySQL auto_increment definition that we removed.
 								table.AutoIncrement = &vschemapb.AutoIncrement{

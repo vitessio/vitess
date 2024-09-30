@@ -28,15 +28,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/proto/vschema"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type testTrafficSwitcher struct {
@@ -182,7 +183,8 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			},
 			expectSourceApplySchemaRequest: &applySchemaRequestResponse{
 				change: &tmutils.SchemaChange{
-					SQL:                     sqlparser.BuildParsedQuery(sqlCreateSequenceTable, fmt.Sprintf("`%s_seq`", unescapedTable)).Query,
+					SQL: sqlparser.BuildParsedQuery(sqlCreateSequenceTable,
+						sqlescape.EscapeID(fmt.Sprintf(autoSequenceTableFormat, unescapedTable))).Query,
 					Force:                   false,
 					AllowReplication:        true,
 					SQLMode:                 vreplication.SQLMode,
@@ -202,14 +204,14 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						},
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "my-col",
-							Sequence: fmt.Sprintf("%s_seq", unescapedTable),
+							Sequence: fmt.Sprintf(autoSequenceTableFormat, unescapedTable),
 						},
 					},
 				},
 			},
 			want: map[string]*sequenceMetadata{
-				fmt.Sprintf("%s_seq", unescapedTable): {
-					backingTableName:     fmt.Sprintf("%s_seq", unescapedTable),
+				fmt.Sprintf(autoSequenceTableFormat, unescapedTable): {
+					backingTableName:     fmt.Sprintf(autoSequenceTableFormat, unescapedTable),
 					backingTableKeyspace: "source-ks",
 					backingTableDBName:   "vt_source-ks",
 					usingTableName:       unescapedTable,
@@ -223,7 +225,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						},
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "my-col",
-							Sequence: fmt.Sprintf("%s_seq", unescapedTable),
+							Sequence: fmt.Sprintf(autoSequenceTableFormat, unescapedTable),
 						},
 					},
 				},

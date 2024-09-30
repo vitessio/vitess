@@ -601,7 +601,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 	}
 }
 
-// TestShardedAutoIncHandlings tests the optional behaviors available when moving
+// TestShardedAutoIncHandling tests the optional behaviors available when moving
 // tables to a sharded keyspace and the tables being copied contain MySQL
 // auto_increment clauses. The optional behaviors are:
 // 1. LEAVE the tables' MySQL auto_increment clauses alone
@@ -847,7 +847,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition added
 							Column:   "id",
-							Sequence: fmt.Sprintf("%s_seq", tableName),
+							Sequence: fmt.Sprintf(autoSequenceTableFormat, tableName),
 						},
 					},
 				},
