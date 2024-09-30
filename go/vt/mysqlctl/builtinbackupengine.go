@@ -1055,7 +1055,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// We check for errors before checking if the context is canceled on purpose, if there was an
 			// error, the context would have been canceled already.
 			if rec.HasErrors() {
-				params.Logger.Infof("Failed to restore files due to error.")
+				params.Logger.Errorf("Failed to restore files due to error: %v", bh.Error())
 				return
 			}
 
