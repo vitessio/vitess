@@ -51,7 +51,9 @@ const (
 	createDDLAsCopy                = "copy"
 	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
 	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
-	autoSequenceTableFormat        = "%s_seq"
+	// For automatically created sequence tables, use a standard format
+	// of tableName_seq.
+	autoSequenceTableFormat = "%s_seq"
 )
 
 type materializer struct {
