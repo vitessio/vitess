@@ -1925,6 +1925,8 @@ func (ty VExplainType) ToString() string {
 		return AllVExplainStr
 	case TraceVExplainType:
 		return TraceStr
+	case KeysVExplainType:
+		return KeysStr
 	default:
 		return "Unknown VExplainType"
 	}

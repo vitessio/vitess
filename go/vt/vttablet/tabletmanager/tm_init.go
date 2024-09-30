@@ -126,6 +126,9 @@ var (
 	// statsIsInSrvKeyspace is set to 1 (true), 0 (false) whether the tablet is in the serving keyspace
 	statsIsInSrvKeyspace *stats.Gauge
 
+	// statsTabletTags is set to 1 (true) if a tablet tag exists.
+	statsTabletTags *stats.GaugesWithMultiLabels
+
 	statsKeyspace      = stats.NewString("TabletKeyspace")
 	statsShard         = stats.NewString("TabletShard")
 	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
@@ -145,6 +148,7 @@ func init() {
 	statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 	statsIsInSrvKeyspace = stats.NewGauge("IsInSrvKeyspace", "Whether the vttablet is in the serving keyspace (1 = true / 0 = false)")
+	statsTabletTags = stats.NewGaugesWithMultiLabels("TabletTags", "Tablet tags key/values", []string{"key", "value"})
 }
 
 // TabletManager is the main class for the tablet manager.
@@ -848,9 +852,10 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
 				}
 			}
+
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, mysqlShutdownTimeout); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 
@@ -896,6 +901,9 @@ func (tm *TabletManager) exportStats() {
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}
 	statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
+	for k, v := range tablet.Tags {
+		statsTabletTags.Set([]string{k, v}, 1)
+	}
 }
 
 // withRetry will exponentially back off and retry a function upon

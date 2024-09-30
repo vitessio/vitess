@@ -44,6 +44,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	transport "github.com/aws/smithy-go/endpoints"
 	"github.com/aws/smithy-go/middleware"
 	"github.com/spf13/pflag"
 
@@ -109,6 +110,23 @@ type logNameToLogLevel map[string]aws.ClientLogMode
 var logNameMap logNameToLogLevel
 
 const sseCustomerPrefix = "sse_c:"
+
+type endpointResolver struct {
+	r        s3.EndpointResolverV2
+	endpoint *string
+}
+
+func (er *endpointResolver) ResolveEndpoint(ctx context.Context, params s3.EndpointParameters) (transport.Endpoint, error) {
+	params.Endpoint = er.endpoint
+	return er.r.ResolveEndpoint(ctx, params)
+}
+
+func newEndpointResolver() *endpointResolver {
+	return &endpointResolver{
+		r:        s3.NewDefaultEndpointResolverV2(),
+		endpoint: &endpoint,
+	}
+}
 
 type iClient interface {
 	manager.UploadAPIClient
@@ -182,8 +200,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		object := objName(bh.dir, bh.name, filename)
 		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-		// Using UploadWithContext breaks uploading to Minio and Ceph https://github.com/vitessio/vitess/issues/14188
-		_, err := uploader.Upload(context.Background(), &s3.PutObjectInput{
+		_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 			Bucket:               &bucket,
 			Key:                  &object,
 			Body:                 reader,
@@ -494,7 +511,7 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 				o.RetryMaxAttempts = retryCount
 				o.Retryer = &ClosedConnectionRetryer{}
 			}
-		})
+		}, s3.WithEndpointResolverV2(newEndpointResolver()))
 
 		if len(bucket) == 0 {
 			return nil, fmt.Errorf("--s3_backup_storage_bucket required")
