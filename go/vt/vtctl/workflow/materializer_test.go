@@ -602,15 +602,16 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 }
 
 func TestShardedAutoIncHandling(t *testing.T) {
-	t1DDL := "create table t1 (id int not null auto_increment primary key, c1 varchar(10))"
+	tableName := "t1"
+	tableDDL := fmt.Sprintf("create table %s (id int not null auto_increment primary key, c1 varchar(10))", tableName)
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			CreateDdl:        t1DDL,
-			SourceExpression: "select * from t1",
+			TargetTable:      tableName,
+			CreateDdl:        tableDDL,
+			SourceExpression: fmt.Sprintf("select * from %s", tableName),
 		}},
 		WorkflowOptions: &vtctldatapb.WorkflowOptions{},
 	}
@@ -632,13 +633,38 @@ func TestShardedAutoIncHandling(t *testing.T) {
 			expectErr:      "global-keyspace foo does not exist",
 		},
 		{
-			name:           "leave",
-			globalKeyspace: "sourceks",
+			name:           "global keyspace is sharded",
+			globalKeyspace: ms.TargetKeyspace,
 			targetShards:   []string{"-80", "80-"},
 			targetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
-					"t1": {
+					tableName: {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "id",
+							},
+						},
+					},
+				},
+				Vindexes: map[string]*vschemapb.Vindex{
+					"xxhash": {
+						Type: "xxhash",
+					},
+				},
+			},
+			expectErr: fmt.Sprintf("global-keyspace %s is sharded and thus cannot be used for global resources",
+				ms.TargetKeyspace),
+		},
+		{
+			name:           "leave",
+			globalKeyspace: ms.SourceKeyspace,
+			targetShards:   []string{"-80", "80-"},
+			targetVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					tableName: {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Name:   "xxhash",
@@ -657,7 +683,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 			wantTargetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
-					"t1": {
+					tableName: {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Name:   "xxhash",
@@ -673,17 +699,17 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{
-				t1DDL, // Unchanged
+				tableDDL, // Unchanged
 			},
 		},
 		{
 			name:           "remove",
-			globalKeyspace: "sourceks",
+			globalKeyspace: ms.SourceKeyspace,
 			targetShards:   []string{"-80", "80-"},
 			targetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
-					"t1": {
+					tableName: {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Name:   "xxhash",
@@ -702,7 +728,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 			wantTargetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
-					"t1": {
+					tableName: {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Name:   "xxhash",
@@ -718,20 +744,20 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{ // auto_increment clause removed
-				`create table t1 (
+				fmt.Sprintf(`create table %s (
 	id int not null primary key,
 	c1 varchar(10)
-)`,
+)`, tableName),
 			},
 		},
 		{
 			name:           "replace, but vschema AutoIncrement already in place",
-			globalKeyspace: "sourceks",
+			globalKeyspace: ms.SourceKeyspace,
 			targetShards:   []string{"-80", "80-"},
 			targetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
-					"t1": {
+					tableName: {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Name:   "xxhash",
@@ -740,7 +766,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition exists
 							Column:   "id",
-							Sequence: "t1_non_default_seq_name",
+							Sequence: fmt.Sprintf("%s_non_default_seq_name", tableName),
 						},
 					},
 				},
@@ -754,7 +780,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 			wantTargetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
-					"t1": {
+					tableName: {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Name:   "xxhash",
@@ -763,7 +789,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition left alone
 							Column:   "id",
-							Sequence: "t1_non_default_seq_name",
+							Sequence: fmt.Sprintf("%s_non_default_seq_name", tableName),
 						},
 					},
 				},
@@ -774,20 +800,20 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{ // auto_increment clause removed
-				`create table t1 (
+				fmt.Sprintf(`create table %s (
 	id int not null primary key,
 	c1 varchar(10)
-)`,
+)`, tableName),
 			},
 		},
 		{
 			name:           "replace",
-			globalKeyspace: "sourceks",
+			globalKeyspace: ms.SourceKeyspace,
 			targetShards:   []string{"-80", "80-"},
 			targetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
-					"t1": {
+					tableName: {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Name:   "xxhash",
@@ -806,7 +832,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 			wantTargetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
-					"t1": {
+					tableName: {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Name:   "xxhash",
@@ -815,7 +841,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition added
 							Column:   "id",
-							Sequence: "t1_seq",
+							Sequence: fmt.Sprintf("%s_seq", tableName),
 						},
 					},
 				},
@@ -826,10 +852,10 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{ // auto_increment clause removed
-				`create table t1 (
+				fmt.Sprintf(`create table %s (
 	id int not null primary key,
 	c1 varchar(10)
-)`,
+)`, tableName),
 			},
 		},
 	}
@@ -864,7 +890,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				Workflow:       ms.Workflow,
 				SourceKeyspace: ms.SourceKeyspace,
 				TargetKeyspace: ms.TargetKeyspace,
-				IncludeTables:  []string{"t1"},
+				IncludeTables:  []string{tableName},
 				WorkflowOptions: &vtctldatapb.WorkflowOptions{
 					StripShardedAutoIncrement: tc.value,
 					GlobalKeyspace:            tc.globalKeyspace,
