@@ -30,6 +30,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -76,9 +77,10 @@ const (
 	// Use pt-osc's naming convention, this format also ensures vstreamer ignores such tables.
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
-	sqlDeleteWorkflow    = "delete from _vt.vreplication where db_name = %s and workflow = %s"
-	sqlGetMaxSequenceVal = "select max(%a) as maxval from %a.%a"
-	sqlInitSequenceTable = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
+	sqlDeleteWorkflow      = "delete from _vt.vreplication where db_name = %s and workflow = %s"
+	sqlGetMaxSequenceVal   = "select max(%a) as maxval from %a.%a"
+	sqlInitSequenceTable   = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
+	sqlCreateSequenceTable = "create table if not exists %a (id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence'"
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
@@ -1525,8 +1527,10 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 				if err != nil {
 					return nil, err
 				}
-				stmt := fmt.Sprintf("create table if not exists %s (id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence'",
-					tableName)
+				stmt, err := sqlparser.ParseAndBind(sqlCreateSequenceTable, sqltypes.StringBindVariable(sqlescape.EscapeID(tableName)))
+				if err != nil {
+					return nil, err
+				}
 				_, err = ts.ws.tmc.ApplySchema(ctx, primary.Tablet, &tmutils.SchemaChange{
 					SQL:                     stmt,
 					Force:                   false,
@@ -1770,13 +1774,32 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		)
 		// Now execute this on the primary tablet of the unsharded keyspace
 		// housing the backing table.
+	initialize:
 		qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ictx, sequenceTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 			Query:   []byte(query.Query),
 			MaxRows: 1,
 		})
 		if ierr != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s: %v",
+			vterr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s: %v",
 				sequenceMetadata.backingTableDBName, sequenceMetadata.backingTableName, ierr)
+			// If the sequence table doesn't exist, let's try and create it, otherwise
+			// return the error.
+			if sqlErr, ok := sqlerror.NewSQLErrorFromError(ierr).(*sqlerror.SQLError); !ok ||
+				(sqlErr.Num != sqlerror.ERNoSuchTable && sqlErr.Num != sqlerror.ERBadTable) {
+				return vterr
+			}
+			stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, backingTable)
+			_, ierr = ts.ws.tmc.ApplySchema(ctx, sequenceTablet.Tablet, &tmutils.SchemaChange{
+				SQL:                     stmt.Query,
+				Force:                   false,
+				AllowReplication:        true,
+				SQLMode:                 vreplication.SQLMode,
+				DisableForeignKeyChecks: true,
+			})
+			if ierr != nil {
+				return vterrors.Wrapf(vterr, "could not create missing sequence table: %v", err)
+			}
+			goto initialize
 		}
 		// If we actually updated the backing sequence table, then we need
 		// to tell the primary tablet managing the sequence to refresh/reset

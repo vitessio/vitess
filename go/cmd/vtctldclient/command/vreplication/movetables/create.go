@@ -96,7 +96,7 @@ var (
 			}
 			createOptions.WorkflowOptions.StripShardedAutoIncrement = vtctldatapb.ShardedAutoIncrementHandling(val)
 			if val == int32(vtctldatapb.ShardedAutoIncrementHandling_REPLACE) && createOptions.WorkflowOptions.GlobalKeyspace == "" {
-				fmt.Println("WARNING: no global-keyspace value provided so all sequence tables must be created manually before switching traffic")
+				fmt.Println("WARNING: no global-keyspace value provided so all sequence table references not fully qualified must be created manually before switching traffic")
 			}
 
 			return nil
