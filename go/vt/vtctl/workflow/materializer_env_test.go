@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -252,7 +253,8 @@ func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Cont
 	defer tmc.mu.Unlock()
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if expect.req != nil && !proto.Equal(expect.req, request) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", request, expect)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), request, expect)
 		}
 		if expect.res != nil {
 			return expect.res, expect.err

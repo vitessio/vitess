@@ -309,7 +309,8 @@ func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if expect.req != nil && !proto.Equal(expect.req, req) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", req, expect)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, expect)
 		}
 		if expect.res != nil {
 			return expect.res, expect.err
@@ -328,7 +329,8 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 	defer tmc.mu.Unlock()
 	if expect := tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if !proto.Equal(expect, req) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request: got %+v, want %+v", req, expect)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, expect)
 		}
 	}
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
@@ -545,14 +547,15 @@ func (tmc *testTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 
 	if vrr, ok := tmc.vdiffRequests[tablet.Alias.Uid]; ok {
 		if !proto.Equal(vrr.req, req) {
-			return nil, fmt.Errorf("unexpected VDiff request on tablet: %+v; got %+v, want %+v",
-				tablet, req, vrr.req)
+			return nil, fmt.Errorf("unexpected VDiff request on tablet %s; got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, vrr.req)
 		}
 		delete(tmc.vdiffRequests, tablet.Alias.Uid)
 		return vrr.res, vrr.err
 	}
 	if tmc.strict {
-		return nil, fmt.Errorf("unexpected VDiff request on tablet %+v: %+v", tablet, req)
+		return nil, fmt.Errorf("unexpected VDiff request on tablet %s: %+v",
+			topoproto.TabletAliasString(tablet.Alias), req)
 	}
 
 	return &tabletmanagerdatapb.VDiffResponse{
