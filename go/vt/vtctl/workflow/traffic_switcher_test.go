@@ -174,7 +174,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			name: "auto_increment replaced with sequence",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
-				Tables:   map[string]*vschema.Table{}, // Table will be created
+				Tables:   map[string]*vschema.Table{}, // Sequence table will be created
 			},
 			options: &vtctldatapb.WorkflowOptions{
 				StripShardedAutoIncrement: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,

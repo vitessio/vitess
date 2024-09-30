@@ -601,6 +601,12 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 	}
 }
 
+// TestShardedAutoIncHandlings tests the optional behaviors available when moving
+// tables to a sharded keyspace and the tables being copied contain MySQL
+// auto_increment clauses. The optional behaviors are:
+// 1. LEAVE the tables' MySQL auto_increment clauses alone
+// 2. REMOVE the tables' MySQL auto_increment clauses
+// 3. REPLACE the table's MySQL auto_increment clauses with Vitess sequences
 func TestShardedAutoIncHandling(t *testing.T) {
 	tableName := "t1"
 	tableDDL := fmt.Sprintf("create table %s (id int not null auto_increment primary key, c1 varchar(10))", tableName)
@@ -910,7 +916,8 @@ func TestShardedAutoIncHandling(t *testing.T) {
 	}
 }
 
-// TestMoveTablesNoRoutingRules confirms that MoveTables does not create routing rules if --no-routing-rules is specified.
+// TestMoveTablesNoRoutingRules confirms that MoveTables does not create routing rules if
+// --no-routing-rules is specified.
 func TestMoveTablesNoRoutingRules(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
