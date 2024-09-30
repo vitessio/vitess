@@ -99,6 +99,7 @@ type TxEngine struct {
 const (
 	TwoPCAllowed_SemiSync = iota
 	TwoPCAllowed_TabletControls
+	TwoPCAllowed_Len
 )
 
 // NewTxEngine creates a new TxEngine.
@@ -113,7 +114,10 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	te.txPool = NewTxPool(env, limiter)
 	// We initially allow twoPC (handles vttablet restarts).
 	// We will disallow them, when a new tablet is promoted if semi-sync is turned off.
-	te.twopcAllowed = []bool{true, true}
+	te.twopcAllowed = make([]bool, TwoPCAllowed_Len)
+	for idx := range te.twopcAllowed {
+		te.twopcAllowed[idx] = true
+	}
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
 		if config.TwoPCAbandonAge <= 0 {
