@@ -42,8 +42,7 @@ const (
 	ERUnknownError = ErrorCode(1105)
 
 	// internal
-	ERInternalError      = ErrorCode(1815)
-	ERInnodbIndexCorrupt = ErrorCode(1817)
+	ERInternalError = ErrorCode(1815)
 
 	// unimplemented
 	ERNotSupportedYet = ErrorCode(1235)
@@ -124,6 +123,7 @@ const (
 	ErSPNotVarArg                   = ErrorCode(1414)
 	ERRowIsReferenced2              = ErrorCode(1451)
 	ErNoReferencedRow2              = ErrorCode(1452)
+	ERInnodbIndexCorrupt            = ErrorCode(1817)
 	ERDupIndex                      = ErrorCode(1831)
 	ERInnodbReadOnly                = ErrorCode(1874)
 
