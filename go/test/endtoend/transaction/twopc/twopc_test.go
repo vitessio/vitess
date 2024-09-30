@@ -47,7 +47,7 @@ func TestDTCommit(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "fk_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -183,7 +183,7 @@ func TestDTRollback(t *testing.T) {
 	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')")
 
 	// run vstream to stream binlogs
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "fk_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -232,7 +232,7 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "fk_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -327,7 +327,7 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "fk_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -435,7 +435,7 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "fk_user", "")
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -637,6 +637,8 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 // TestDTResolveAfterRMPrepare tests that transaction is rolled back on recovery
 // failure after RM prepare and before MM commit.
 func TestDTResolveAfterRMPrepare(t *testing.T) {
+	defer cleanup(t)
+
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
@@ -697,6 +699,8 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 // TestDTResolveDuringRMPrepare tests that transaction is rolled back on recovery
 // failure after semi RM prepare.
 func TestDTResolveDuringRMPrepare(t *testing.T) {
+	defer cleanup(t)
+
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
@@ -844,6 +848,8 @@ func TestDTResolveDuringRMCommit(t *testing.T) {
 // TestDTResolveAfterTransactionRecord tests that transaction is rolled back on recovery
 // failure after TR created and before RM prepare.
 func TestDTResolveAfterTransactionRecord(t *testing.T) {
+	defer cleanup(t)
+
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
@@ -959,6 +965,8 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 
 // TestReadingUnresolvedTransactions tests the reading of unresolved transactions
 func TestReadingUnresolvedTransactions(t *testing.T) {
+	defer cleanup(t)
+
 	testcases := []struct {
 		name    string
 		queries []string
@@ -1021,6 +1029,250 @@ func TestReadingUnresolvedTransactions(t *testing.T) {
 			wg.Wait()
 		})
 	}
+}
+
+// TestDTSavepointWithVanilaMySQL tests distributed transaction should work with savepoint as with vanila MySQL
+func TestDTSavepointWithVanilaMySQL(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	// internal savepoint
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')")
+	utils.Exec(t, conn, "commit")
+	utils.Exec(t, conn, "select * from twopc_user order by id")
+
+	// external savepoint, single shard transaction.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "savepoint a")
+	utils.Exec(t, conn, "insert into twopc_user(id, name) values(9,'baz')")
+	utils.Exec(t, conn, "savepoint b")
+	utils.Exec(t, conn, "rollback to b")
+	utils.Exec(t, conn, "commit")
+	utils.Exec(t, conn, "select * from twopc_user order by id")
+
+	// external savepoint, multi-shard transaction.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "savepoint a")
+	utils.Exec(t, conn, "insert into twopc_user(id, name) values(10,'apa')")
+	utils.Exec(t, conn, "savepoint b")
+	utils.Exec(t, conn, "update twopc_user set name = 'temp' where id = 7")
+	utils.Exec(t, conn, "rollback to a")
+	utils.Exec(t, conn, "commit")
+	utils.Exec(t, conn, "select * from twopc_user order by id")
+
+	// external savepoint, multi-shard transaction.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "savepoint a")
+	utils.Exec(t, conn, "insert into twopc_user(id, name) values(10,'apa')")
+	utils.Exec(t, conn, "savepoint b")
+	utils.Exec(t, conn, "update twopc_user set name = 'temp' where id = 7")
+	utils.Exec(t, conn, "rollback to b")
+	utils.Exec(t, conn, "commit")
+	utils.Exec(t, conn, "select * from twopc_user order by id")
+
+	// external savepoint, multi-shard transaction.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "update twopc_user set name = 'temp1' where id = 10")
+	utils.Exec(t, conn, "savepoint b")
+	utils.Exec(t, conn, "update twopc_user set name = 'temp2' where id = 7")
+	utils.Exec(t, conn, "commit")
+	utils.Exec(t, conn, "select * from twopc_user order by id")
+}
+
+// TestDTSavepoint tests distributed transaction should work with savepoint.
+func TestDTSavepoint(t *testing.T) {
+	defer cleanup(t)
+
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *binlogdatapb.VEvent)
+	runVStream(t, ctx, ch, vtgateConn)
+
+	ss := vtgateConn.Session("", nil)
+
+	// internal savepoint
+	execute(ctx, t, ss, "begin")
+	execute(ctx, t, ss, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')")
+	execute(ctx, t, ss, "commit")
+
+	tableMap := make(map[string][]*querypb.Field)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
+	expectations := map[string][]string{
+		"ks.dt_participant:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+		},
+		"ks.dt_state:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.redo_state:80-": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:80-": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"savepoint-1\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"savepoint-1\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+		},
+		"ks.twopc_user:40-80": {"insert:[INT64(8) VARCHAR(\"bar\")]"},
+		"ks.twopc_user:80-":   {"insert:[INT64(7) VARCHAR(\"foo\")]"},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+
+	// external savepoint, single shard transaction.
+	execute(ctx, t, ss, "begin")
+	execute(ctx, t, ss, "savepoint a")
+	execute(ctx, t, ss, "insert into twopc_user(id, name) values(9,'baz')")
+	execute(ctx, t, ss, "savepoint b")
+	execute(ctx, t, ss, "rollback to b")
+	execute(ctx, t, ss, "commit")
+
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
+	expectations = map[string][]string{
+		"ks.twopc_user:80-": {"insert:[INT64(9) VARCHAR(\"baz\")]"}}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+
+	// external savepoint, multi-shard transaction - rollback to a savepoint that leaves no change.
+	execute(ctx, t, ss, "begin")
+	execute(ctx, t, ss, "savepoint a")
+	execute(ctx, t, ss, "insert into twopc_user(id, name) values(10,'apa')")
+	execute(ctx, t, ss, "savepoint b")
+	execute(ctx, t, ss, "update twopc_user set name = 'temp' where id = 7")
+	execute(ctx, t, ss, "rollback to a")
+	execute(ctx, t, ss, "commit")
+
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
+	expectations = map[string][]string{
+		"ks.dt_participant:-40": {
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+		},
+		"ks.dt_state:-40": {
+			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.redo_state:80-": {
+			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:80-": {
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"savepoint-2\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"savepoint-3\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(3) BLOB(\"update twopc_user set `name` = 'temp' where id = 7 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(4) BLOB(\"rollback-2\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"savepoint-2\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"savepoint-3\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(3) BLOB(\"update twopc_user set `name` = 'temp' where id = 7 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(4) BLOB(\"rollback-2\")]",
+		},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+
+	// external savepoint, multi-shard transaction - rollback to a savepoint that leaves a change.
+	execute(ctx, t, ss, "begin")
+	execute(ctx, t, ss, "savepoint a")
+	execute(ctx, t, ss, "insert into twopc_user(id, name) values(10,'apa')")
+	execute(ctx, t, ss, "savepoint b")
+	execute(ctx, t, ss, "update twopc_user set name = 'temp' where id = 7")
+	execute(ctx, t, ss, "rollback to b")
+	execute(ctx, t, ss, "commit")
+
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
+	expectations = map[string][]string{
+		"ks.dt_participant:-40": {
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+		},
+		"ks.dt_state:-40": {
+			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.redo_state:80-": {
+			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:80-": {
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"savepoint-2\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"savepoint-3\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"update twopc_user set `name` = 'temp' where id = 7 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"rollback-3\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"savepoint-2\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"savepoint-3\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"update twopc_user set `name` = 'temp' where id = 7 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"rollback-3\")]",
+		},
+		"ks.twopc_user:-40": {"insert:[INT64(10) VARCHAR(\"apa\")]"},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+
+	// external savepoint, multi-shard transaction - savepoint added later and rollback to it.
+	execute(ctx, t, ss, "begin")
+	execute(ctx, t, ss, "update twopc_user set name = 'temp1' where id = 7")
+	execute(ctx, t, ss, "savepoint c")
+	execute(ctx, t, ss, "update twopc_user set name = 'temp2' where id = 8")
+	execute(ctx, t, ss, "rollback to c")
+	execute(ctx, t, ss, "commit")
+
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
+	expectations = map[string][]string{
+		"ks.dt_participant:40-80": {
+			"insert:[VARCHAR(\"dtid-4\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+			"delete:[VARCHAR(\"dtid-4\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+		},
+		"ks.dt_state:40-80": {
+			"insert:[VARCHAR(\"dtid-4\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-4\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-4\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.redo_state:80-": {
+			"insert:[VARCHAR(\"dtid-4\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-4\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:80-": {
+			"insert:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-4\") INT64(2) BLOB(\"savepoint-4\")]",
+			"insert:[VARCHAR(\"dtid-4\") INT64(3) BLOB(\"rollback-4\")]",
+			"delete:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-4\") INT64(2) BLOB(\"savepoint-4\")]",
+			"delete:[VARCHAR(\"dtid-4\") INT64(3) BLOB(\"rollback-4\")]",
+		},
+		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"temp1\")]"},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+}
+
+func execute(ctx context.Context, t *testing.T, ss *vtgateconn.VTGateSession, sql string) {
+	t.Helper()
+
+	if sql == "commit" {
+		// sort by shard
+		sortShard(ss)
+	}
+	_, err := ss.Execute(ctx, sql, nil)
+	require.NoError(t, err)
+}
+
+func sortShard(ss *vtgateconn.VTGateSession) {
+	sort.Slice(ss.SessionPb().ShardSessions, func(i, j int) bool {
+		return ss.SessionPb().ShardSessions[i].Target.Shard < ss.SessionPb().ShardSessions[j].Target.Shard
+	})
 }
 
 // TestSemiSyncRequiredWithTwoPC tests that semi-sync is required when using two-phase commit.

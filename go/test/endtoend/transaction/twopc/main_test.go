@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -123,6 +124,7 @@ func cleanup(t *testing.T) {
 	cluster.PanicHandler(t)
 	utils.ClearOutTable(t, vtParams, "twopc_user")
 	utils.ClearOutTable(t, vtParams, "twopc_t1")
+	sm.reset()
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value
@@ -147,7 +149,8 @@ var tables = map[string]extractInterestingValues{
 	},
 	"ks.redo_statement": func(dtidMap map[string]string, vals []sqltypes.Value) (out []sqltypes.Value) {
 		dtid := getDTID(dtidMap, vals[0].ToString())
-		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[1:]...)
+		stmt := getStatement(vals[2].ToString())
+		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[1], sqltypes.TestValue(sqltypes.Blob, stmt))
 		return
 	},
 	"ks.twopc_user": func(_ map[string]string, vals []sqltypes.Value) []sqltypes.Value { return vals },
@@ -165,6 +168,28 @@ func getDTID(dtidMap map[string]string, dtKey string) string {
 		dtidMap[dtKey] = dtid
 	}
 	return dtid
+}
+
+func getStatement(stmt string) string {
+	var sKey string
+	var prefix string
+	switch {
+	case strings.HasPrefix(stmt, "savepoint"):
+		prefix = "savepoint-"
+		sKey = stmt[9:]
+	case strings.HasPrefix(stmt, "rollback to"):
+		prefix = "rollback-"
+		sKey = stmt[11:]
+	default:
+		return stmt
+	}
+
+	sid, exists := sm.stmt[sKey]
+	if !exists {
+		sid = fmt.Sprintf("%d", len(sm.stmt)+1)
+		sm.stmt[sKey] = sid
+	}
+	return prefix + sid
 }
 
 func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent, vtgateConn *vtgateconn.VTGateConn) {
@@ -271,4 +296,14 @@ func prettyPrint(v interface{}) string {
 		return fmt.Sprintf("got error marshalling: %v", err)
 	}
 	return string(b)
+}
+
+type stmtMapper struct {
+	stmt map[string]string
+}
+
+var sm = &stmtMapper{stmt: make(map[string]string)}
+
+func (sm *stmtMapper) reset() {
+	sm.stmt = make(map[string]string)
 }

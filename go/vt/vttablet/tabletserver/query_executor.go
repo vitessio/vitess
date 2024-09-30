@@ -288,7 +288,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanUnlockTables:
 		return qre.execStatefulConn(conn, qre.query, true)
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
-		return qre.execStatefulConn(conn, qre.query, true)
+		return qre.execTxQuery(conn, qre.query, true)
 	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
@@ -790,6 +790,11 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 	if err != nil {
 		return nil, err
 	}
+	return qre.execTxQuery(conn, sql, record)
+}
+
+// execTxQuery executes the query provided and record in Tx Property if record is true.
+func (qre *QueryExecutor) execTxQuery(conn *StatefulConnection, sql string, record bool) (*sqltypes.Result, error) {
 	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
 		return nil, err

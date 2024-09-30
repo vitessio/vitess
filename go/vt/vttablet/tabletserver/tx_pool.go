@@ -280,6 +280,14 @@ func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	}
 
 	conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommit)
+	for _, savepoint := range savepointQueries {
+		if _, err = conn.Exec(ctx, savepoint, 1, false); err != nil {
+			return "", "", err
+		}
+		// Record the query detail for the savepoint.
+		conn.txProps.RecordQueryDetail(savepoint, nil)
+		beginQueries += ";" + savepoint
+	}
 
 	return beginQueries, sessionStateChanges, nil
 }
@@ -343,12 +351,6 @@ func createTransaction(
 		beginQueries += execSQL
 	default:
 		return "", false, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
-	}
-
-	for _, savepoint := range savepointQueries {
-		if _, err = conn.Exec(ctx, savepoint, 1, false); err != nil {
-			return "", false, "", err
-		}
 	}
 	return
 }
