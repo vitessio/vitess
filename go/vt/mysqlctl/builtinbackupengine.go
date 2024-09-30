@@ -625,7 +625,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 			// We check for errors before checking if the context is canceled on purpose, if there was an
 			// error, the context would have been canceled already.
 			if bh.HasErrors() {
-				params.Logger.Infof("Failed to restore files due to error.")
+				params.Logger.Errorf("Failed to restore files due to error: %v", bh.Error())
 				return
 			}
 
@@ -789,7 +789,7 @@ func (bp *backupPipe) ReportProgress(ctx context.Context, period time.Duration, 
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Infof("Canceled %q", bp.filename)
+			logger.Infof("Canceled %s of %q file", messageStr, bp.filename)
 			return
 		case <-bp.done:
 			logger.Infof("Completed %s %q", messageStr, bp.filename)
