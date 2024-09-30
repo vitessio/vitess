@@ -23,8 +23,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 var (
@@ -55,7 +53,7 @@ func (m *LoadAvgSelfMetric) RequiresConn() bool {
 	return false
 }
 
-func (m *LoadAvgSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
+func (m *LoadAvgSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
 	if runtime.GOOS != "linux" {
 		return loadavgOnlyAvailableOnLinuxMetric
 	}

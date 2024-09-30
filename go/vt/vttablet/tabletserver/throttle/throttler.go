@@ -950,15 +950,18 @@ func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context)
 		}
 	}
 	readMetric := func(selfMetric base.SelfMetric) *base.ThrottleMetric {
-		if !selfMetric.RequiresConn() {
-			return selfMetric.Read(ctx, throttler, nil)
+		params := &base.SelfMetricReadParams{
+			Throttler: throttler,
 		}
-		conn, err := throttler.pool.Get(ctx, nil)
-		if err != nil {
-			return &base.ThrottleMetric{Err: err}
+		if selfMetric.RequiresConn() {
+			conn, err := throttler.pool.Get(ctx, nil)
+			if err != nil {
+				return &base.ThrottleMetric{Err: err}
+			}
+			defer conn.Recycle()
+			params.Conn = conn.Conn
 		}
-		defer conn.Recycle()
-		return selfMetric.Read(ctx, throttler, conn.Conn)
+		return selfMetric.Read(ctx, params)
 	}
 	for metricName, selfMetric := range base.RegisteredSelfMetrics {
 		if metricName == base.DefaultMetricName {
