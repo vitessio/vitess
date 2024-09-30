@@ -318,7 +318,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		} else if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
 			// Reconnect to primary only for "NORMAL" keyspaces
 			params.Logger.Infof("Restore: starting replication at position %v", pos)
-			if err := tm.startReplication(context.Background(), pos, originalType); err != nil {
+			if err := tm.startReplication(ctx, pos, originalType); err != nil {
 				return err
 			}
 		}
@@ -569,15 +569,17 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 }
 
 func (tm *TabletManager) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType) error {
-	if err := tm.MysqlDaemon.StopReplication(ctx, nil); err != nil {
+	// The first three steps of stopping replication, and setting the replication position,
+	// we want to do even if the context expires, so we use a background context for these tasks.
+	if err := tm.MysqlDaemon.StopReplication(context.Background(), nil); err != nil {
 		return vterrors.Wrap(err, "failed to stop replication")
 	}
-	if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
+	if err := tm.MysqlDaemon.ResetReplicationParameters(context.Background()); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
 	// Set the position at which to resume from the primary.
-	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationPosition(context.Background(), pos); err != nil {
 		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
