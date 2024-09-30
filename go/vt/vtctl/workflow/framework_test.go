@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -269,6 +271,7 @@ type testTMClient struct {
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
 	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
+	applySchemaRequests                map[uint32]*applySchemaRequestResponse
 	primaryPositions                   map[uint32]string
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
 	refreshStateErrors                 map[uint32]error
@@ -291,6 +294,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
 		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
+		applySchemaRequests:                make(map[uint32]*applySchemaRequestResponse),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
 		vdiffRequests:                      make(map[uint32]*vdiffRequestResponse),
@@ -467,8 +471,30 @@ func (tmc *testTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *top
 	return nil, nil
 }
 
+func (tmc *testTMClient) expectApplySchemaRequest(tabletID uint32, req *applySchemaRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.applySchemaRequests == nil {
+		tmc.applySchemaRequests = make(map[uint32]*applySchemaRequestResponse)
+	}
+
+	tmc.applySchemaRequests[tabletID] = req
+}
+
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if expect, ok := tmc.applySchemaRequests[tablet.Alias.Uid]; ok {
+		if !reflect.DeepEqual(change, expect.change) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ApplySchema request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), change, expect.change)
+		}
+		return expect.res, expect.err
+	}
+
 	stmts := strings.Split(change.SQL, ";")
 
 	for _, stmt := range stmts {
@@ -495,6 +521,12 @@ type createVReplicationWorkflowRequestResponse struct {
 	req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest
 	res *tabletmanagerdatapb.CreateVReplicationWorkflowResponse
 	err error
+}
+
+type applySchemaRequestResponse struct {
+	change *tmutils.SchemaChange
+	res    *tabletmanagerdatapb.SchemaChangeResult
+	err    error
 }
 
 func (tmc *testTMClient) expectVDiffRequest(tablet *topodatapb.Tablet, vrr *vdiffRequestResponse) {

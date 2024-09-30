@@ -1527,12 +1527,14 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 				if err != nil {
 					return nil, err
 				}
-				stmt, err := sqlparser.ParseAndBind(sqlCreateSequenceTable, sqltypes.StringBindVariable(sqlescape.EscapeID(tableName)))
+				escapedTableName, err := sqlescape.EnsureEscaped(tableName)
 				if err != nil {
-					return nil, err
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s: %v",
+						tableName, err)
 				}
+				stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, escapedTableName)
 				_, err = ts.ws.tmc.ApplySchema(ctx, primary.Tablet, &tmutils.SchemaChange{
-					SQL:                     stmt,
+					SQL:                     stmt.Query,
 					Force:                   false,
 					AllowReplication:        true,
 					SQLMode:                 vreplication.SQLMode,
@@ -1543,6 +1545,9 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 						tableName, globalKeyspace)
 				}
 				if bt := globalVSchema.Tables[sequenceMetadata.backingTableName]; bt == nil {
+					if globalVSchema.Tables == nil {
+						globalVSchema.Tables = make(map[string]*vschemapb.Table)
+					}
 					globalVSchema.Tables[tableName] = &vschemapb.Table{
 						Type: vindexes.TypeSequence,
 					}
