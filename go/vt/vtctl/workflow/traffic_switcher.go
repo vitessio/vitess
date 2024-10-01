@@ -1495,76 +1495,87 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 
 	if len(tablesFound) != tableCount {
 		// Try and create the backing sequence tables if we can.
-		globalKeyspace := ts.options.GetGlobalKeyspace()
-		if globalKeyspace == "" {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used and no global-keyspace was provided to auto create them in: %s",
-				strings.Join(maps.Keys(sequencesByBackingTable), ","))
-		}
-		shards, err := ts.ws.ts.GetShardNames(ctx, globalKeyspace)
-		if err != nil {
+		if err := ts.createMissingSequenceTables(ctx, sequencesByBackingTable, tablesFound); err != nil {
 			return nil, err
 		}
-		if len(shards) != 1 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "global-keyspace %s is not unsharded", globalKeyspace)
-		}
-		globalVSchema, err := ts.ws.ts.GetVSchema(ctx, globalKeyspace)
-		if err != nil {
-			return nil, err
-		}
-		updatedGlobalVSchema := false
-		for tableName, sequenceMetadata := range sequencesByBackingTable {
-			if _, ok := tablesFound[tableName]; !ok {
-				// Create the backing table.
-				shard, err := ts.ws.ts.GetShard(ctx, globalKeyspace, shards[0])
-				if err != nil {
-					return nil, err
-				}
-				if shard.PrimaryAlias == nil {
-					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "global-keyspace %s does not currently have a primary tablet",
-						globalKeyspace)
-				}
-				primary, err := ts.ws.ts.GetTablet(ctx, shard.PrimaryAlias)
-				if err != nil {
-					return nil, err
-				}
-				escapedTableName, err := sqlescape.EnsureEscaped(tableName)
-				if err != nil {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s: %v",
-						tableName, err)
-				}
-				stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, escapedTableName)
-				_, err = ts.ws.tmc.ApplySchema(ctx, primary.Tablet, &tmutils.SchemaChange{
-					SQL:                     stmt.Query,
-					Force:                   false,
-					AllowReplication:        true,
-					SQLMode:                 vreplication.SQLMode,
-					DisableForeignKeyChecks: true,
-				})
-				if err != nil {
-					return nil, vterrors.Wrapf(err, "failed to create sequence backing table %s in global-keyspace %s",
-						tableName, globalKeyspace)
-				}
-				if bt := globalVSchema.Tables[sequenceMetadata.backingTableName]; bt == nil {
-					if globalVSchema.Tables == nil {
-						globalVSchema.Tables = make(map[string]*vschemapb.Table)
-					}
-					globalVSchema.Tables[tableName] = &vschemapb.Table{
-						Type: vindexes.TypeSequence,
-					}
-					updatedGlobalVSchema = true
-					sequenceMetadata.backingTableDBName = "vt_" + globalKeyspace // This will be overridden later if needed
-					sequenceMetadata.backingTableKeyspace = globalKeyspace
-				}
-			}
-		}
-		if updatedGlobalVSchema {
-			err = ts.ws.ts.SaveVSchema(ctx, globalKeyspace, globalVSchema)
+	}
+
+	return sequencesByBackingTable, nil
+}
+
+// createMissingSequenceTables will create the backing sequence tables for those that
+// could not be found in any current keyspace.
+func (ts trafficSwitcher) createMissingSequenceTables(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata, tablesFound map[string]struct{}) error {
+	// Try and create the backing sequence tables if we can.
+	globalKeyspace := ts.options.GetGlobalKeyspace()
+	if globalKeyspace == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used and no global-keyspace was provided to auto create them in: %s",
+			strings.Join(maps.Keys(sequencesByBackingTable), ","))
+	}
+	shards, err := ts.ws.ts.GetShardNames(ctx, globalKeyspace)
+	if err != nil {
+		return err
+	}
+	if len(shards) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "global-keyspace %s is not unsharded", globalKeyspace)
+	}
+	globalVSchema, err := ts.ws.ts.GetVSchema(ctx, globalKeyspace)
+	if err != nil {
+		return err
+	}
+	updatedGlobalVSchema := false
+	for tableName, sequenceMetadata := range sequencesByBackingTable {
+		if _, ok := tablesFound[tableName]; !ok {
+			// Create the backing table.
+			shard, err := ts.ws.ts.GetShard(ctx, globalKeyspace, shards[0])
 			if err != nil {
-				return nil, vterrors.Wrapf(err, "failed to update vschema in the global-keyspace %s", globalKeyspace)
+				return err
+			}
+			if shard.PrimaryAlias == nil {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "global-keyspace %s does not currently have a primary tablet",
+					globalKeyspace)
+			}
+			primary, err := ts.ws.ts.GetTablet(ctx, shard.PrimaryAlias)
+			if err != nil {
+				return err
+			}
+			escapedTableName, err := sqlescape.EnsureEscaped(tableName)
+			if err != nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s: %v",
+					tableName, err)
+			}
+			stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, escapedTableName)
+			_, err = ts.ws.tmc.ApplySchema(ctx, primary.Tablet, &tmutils.SchemaChange{
+				SQL:                     stmt.Query,
+				Force:                   false,
+				AllowReplication:        true,
+				SQLMode:                 vreplication.SQLMode,
+				DisableForeignKeyChecks: true,
+			})
+			if err != nil {
+				return vterrors.Wrapf(err, "failed to create sequence backing table %s in global-keyspace %s",
+					tableName, globalKeyspace)
+			}
+			if bt := globalVSchema.Tables[sequenceMetadata.backingTableName]; bt == nil {
+				if globalVSchema.Tables == nil {
+					globalVSchema.Tables = make(map[string]*vschemapb.Table)
+				}
+				globalVSchema.Tables[tableName] = &vschemapb.Table{
+					Type: vindexes.TypeSequence,
+				}
+				updatedGlobalVSchema = true
+				sequenceMetadata.backingTableDBName = "vt_" + globalKeyspace // This will be overridden later if needed
+				sequenceMetadata.backingTableKeyspace = globalKeyspace
 			}
 		}
 	}
-	return sequencesByBackingTable, nil
+	if updatedGlobalVSchema {
+		err = ts.ws.ts.SaveVSchema(ctx, globalKeyspace, globalVSchema)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to update vschema in the global-keyspace %s", globalKeyspace)
+		}
+	}
+	return nil
 }
 
 // findSequenceUsageInKeyspace searches the keyspace's vschema for usage
