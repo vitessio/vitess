@@ -1494,7 +1494,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	}
 
 	if len(tablesFound) != tableCount {
-		// Try and create the backing sequence tables if we can.
+		// Try and create the missing backing sequence tables if we can.
 		if err := ts.createMissingSequenceTables(ctx, sequencesByBackingTable, tablesFound); err != nil {
 			return nil, err
 		}
@@ -1506,7 +1506,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 // createMissingSequenceTables will create the backing sequence tables for those that
 // could not be found in any current keyspace.
 func (ts trafficSwitcher) createMissingSequenceTables(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata, tablesFound map[string]struct{}) error {
-	// Try and create the backing sequence tables if we can.
 	globalKeyspace := ts.options.GetGlobalKeyspace()
 	if globalKeyspace == "" {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used and no global-keyspace was provided to auto create them in: %s",
