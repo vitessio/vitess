@@ -197,6 +197,7 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 		// to have an error. This makes all queries against them to fail.
 		markErrorIfCyclesInFk(vschema)
 	}
+	vindexes.BuildGlobalTables(v, vschema)
 	return vschema
 }
 
