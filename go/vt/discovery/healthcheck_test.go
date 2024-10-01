@@ -67,14 +67,12 @@ func TestNewVTGateHealthCheckFilters(t *testing.T) {
 	defer func() {
 		KeyspacesToWatch = nil
 		tabletFilters = nil
-		tabletFilterTags = nil
 	}()
 
 	testCases := []struct {
 		name                string
 		keyspacesToWatch    []string
 		tabletFilters       []string
-		tabletFilterTags    map[string]string
 		expectedError       string
 		expectedFilterTypes []any
 	}{
@@ -90,18 +88,6 @@ func TestNewVTGateHealthCheckFilters(t *testing.T) {
 			name:                "keyspacesToWatch",
 			keyspacesToWatch:    []string{"ks1"},
 			expectedFilterTypes: []any{&FilterByKeyspace{}},
-		},
-		{
-			name:                "tabletFiltersAndTags",
-			tabletFilters:       []string{"ks1|-80"},
-			tabletFilterTags:    map[string]string{"test": "true"},
-			expectedFilterTypes: []any{&FilterByShard{}, &FilterByTabletTags{}},
-		},
-		{
-			name:                "keyspacesToWatchAndTags",
-			tabletFilterTags:    map[string]string{"test": "true"},
-			keyspacesToWatch:    []string{"ks1"},
-			expectedFilterTypes: []any{&FilterByKeyspace{}, &FilterByTabletTags{}},
 		},
 		{
 			name:             "failKeyspacesToWatchAndFilters",
@@ -120,7 +106,6 @@ func TestNewVTGateHealthCheckFilters(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			KeyspacesToWatch = testCase.keyspacesToWatch
 			tabletFilters = testCase.tabletFilters
-			tabletFilterTags = testCase.tabletFilterTags
 
 			filters, err := NewVTGateHealthCheckFilters()
 			if testCase.expectedError != "" {
