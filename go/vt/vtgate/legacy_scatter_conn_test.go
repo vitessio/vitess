@@ -620,6 +620,6 @@ func newTestScatterConn(ctx context.Context, hc discovery.HealthCheck, serv srvt
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
 	gw := NewTabletGateway(ctx, hc, serv, cell)
-	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
+	tc := NewTxConn(gw, vtgatepb.TransactionMode_MULTI)
 	return NewScatterConn("", tc, gw)
 }
