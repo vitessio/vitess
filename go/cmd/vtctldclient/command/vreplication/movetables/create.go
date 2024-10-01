@@ -41,7 +41,7 @@ var (
 		AtomicCopy          bool
 		WorkflowOptions     vtctldatapb.WorkflowOptions
 		// This maps to a WorkflowOptions.StripShardedAutoIncrement ENUM value.
-		StripShardedAutoIncrement string
+		StripShardedAutoIncrementStr string
 	}{}
 
 	// create makes a MoveTablesCreate gRPC call to a vtctld.
@@ -89,10 +89,13 @@ var (
 				return fmt.Errorf("cannot specify both --tenant-id (i.e. a multi-tenant migration) and --source-shards (i.e. a shard-by-shard migration)")
 			}
 
-			createOptions.StripShardedAutoIncrement = strings.ToUpper(createOptions.StripShardedAutoIncrement)
-			val, ok := vtctldatapb.ShardedAutoIncrementHandling_value[createOptions.StripShardedAutoIncrement]
+			// createOptions.StripShardedAutoIncrementStr is the CLI flag value provided and
+			// we need to map that to the ENUM value for createOptions.WorkflowOptions.StripShardedAutoIncrement
+			// which gets saved in the _vt.vreplication record's options column.
+			createOptions.StripShardedAutoIncrementStr = strings.ToUpper(createOptions.StripShardedAutoIncrementStr)
+			val, ok := vtctldatapb.ShardedAutoIncrementHandling_value[createOptions.StripShardedAutoIncrementStr]
 			if !ok {
-				return fmt.Errorf("invalid value provided for --strip-sharded-auto-increment, valid values are: %s", stripShardedAutoIncOptions)
+				return fmt.Errorf("invalid value provided for --strip-sharded-auto-increment, valid values are: %s", stripShardedAutoIncStrOptions)
 			}
 			createOptions.WorkflowOptions.StripShardedAutoIncrement = vtctldatapb.ShardedAutoIncrementHandling(val)
 			if val == int32(vtctldatapb.ShardedAutoIncrementHandling_REPLACE) && createOptions.WorkflowOptions.GlobalKeyspace == "" {

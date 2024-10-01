@@ -37,7 +37,7 @@ var (
 		Aliases:               []string{"movetables"},
 		Args:                  cobra.ExactArgs(1),
 	}
-	stripShardedAutoIncOptions string
+	stripShardedAutoIncStrOptions string
 )
 
 func registerCommands(root *cobra.Command) {
@@ -57,9 +57,9 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringVar(&createOptions.WorkflowOptions.TenantId, "tenant-id", "", "(EXPERIMENTAL: Multi-tenant migrations only) The tenant ID to use for the MoveTables workflow into a multi-tenant keyspace.")
 	create.Flags().StringSliceVar(&createOptions.WorkflowOptions.Shards, "shards", nil, "(EXPERIMENTAL: Multi-tenant migrations only) Specify that vreplication streams should only be created on this subset of target shards. Warning: you should first ensure that all rows on the source route to the specified subset of target shards using your VIndex of choice or you could lose data during the migration.")
 	create.Flags().StringVar(&createOptions.WorkflowOptions.GlobalKeyspace, "global-keyspace", "", "If specified, then attempt to create any global resources here such as sequence tables needed to replace auto_increment table clauses that are removed due to --remove-sharded-auto-increment=REPLACE. The value must be an unsharded keyspace that already exists.")
-	create.Flags().StringVar(&createOptions.StripShardedAutoIncrement, "remove-sharded-auto-increment", vtctldatapb.ShardedAutoIncrementHandling_REMOVE.String(),
+	create.Flags().StringVar(&createOptions.StripShardedAutoIncrementStr, "remove-sharded-auto-increment", vtctldatapb.ShardedAutoIncrementHandling_REMOVE.String(),
 		fmt.Sprintf("If moving the table(s) to a sharded keyspace, remove any MySQL auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness. If REPLACE is specified then they are automatically replaced by Vitess sequence definitions. (options are: %s)",
-			stripShardedAutoIncOptions))
+			stripShardedAutoIncStrOptions))
 	base.AddCommand(create)
 
 	opts := &common.SubCommandsOpts{
@@ -111,11 +111,15 @@ func init() {
 	common.RegisterCommandHandler("MoveTables", registerCommands)
 
 	sb := strings.Builder{}
-	for i, v := range vtctldatapb.ShardedAutoIncrementHandling_name {
+	strvals := make([]string, len(vtctldatapb.ShardedAutoIncrementHandling_name))
+	for enumval, strval := range vtctldatapb.ShardedAutoIncrementHandling_name {
+		strvals[enumval] = strval
+	}
+	for i, v := range strvals {
 		if i > 0 {
 			sb.WriteByte(',')
 		}
 		sb.WriteString(v)
 	}
-	stripShardedAutoIncOptions = sb.String()
+	stripShardedAutoIncStrOptions = sb.String()
 }
