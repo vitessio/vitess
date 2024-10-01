@@ -19,7 +19,6 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -74,6 +73,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 	cell := "cell1"
 	workflow := "wf1"
 	table := "`t1`"
+	table2 := "t2"
 	unescapedTable := "t1"
 	sourceKeyspace := &testKeyspace{
 		KeyspaceName: "source-ks",
@@ -202,6 +202,138 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			},
 		},
 		{
+			name: "sequences using vindexes with both column definition structures",
+			sourceVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					"seq1": {
+						Type: "sequence",
+					},
+					"seq2": {
+						Type: "sequence",
+					},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					table: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "col1",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "col1",
+							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+						},
+					},
+					table2: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:    "xxhash",
+								Columns: []string{"col2"},
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "col2",
+							Sequence: fmt.Sprintf("%s.seq2", sourceKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"seq1": {
+					backingTableName:     "seq1",
+					backingTableKeyspace: "source-ks",
+					backingTableDBName:   "vt_source-ks",
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Column: "col1",
+								Name:   "xxhash",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "col1",
+							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+						},
+					},
+				},
+				"seq2": {
+					backingTableName:     "seq2",
+					backingTableKeyspace: "source-ks",
+					backingTableDBName:   "vt_source-ks",
+					usingTableName:       table2,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Columns: []string{"col2"},
+								Name:    "xxhash",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "col2",
+							Sequence: fmt.Sprintf("%s.seq2", sourceKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "sequence with table having mult-col vindex",
+			sourceVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					"seq1": {
+						Type: "sequence",
+					},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					table: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:    "xxhash",
+								Columns: []string{"col3", "col4"},
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "col1",
+							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"seq1": {
+					backingTableName:     "seq1",
+					backingTableKeyspace: "source-ks",
+					backingTableDBName:   "vt_source-ks",
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Columns: []string{"col3", "col4"},
+								Name:    "xxhash",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "col1",
+							Sequence: fmt.Sprintf("%s.seq1", sourceKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "invalid table name",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
@@ -228,7 +360,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
-			err: "invalid table name `my-`seq1` in keyspace source-ks: UnescapeID err: unexpected single backtick at position 3 in 'my-`seq1'",
+			err: "invalid table name \"`my-`seq1`\" in keyspace source-ks: UnescapeID err: unexpected single backtick at position 3 in 'my-`seq1'",
 		},
 		{
 			name: "invalid keyspace name",
@@ -257,7 +389,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
-			err: "invalid keyspace in qualified sequence table name `ks`1`.`my-seq1` defined in sequence table column_vindexes:{column:\"`my-col`\" name:\"xxhash\"} auto_increment:{column:\"`my-col`\" sequence:\"`ks`1`.`my-seq1`\"}: UnescapeID err: unexpected single backtick at position 2 in 'ks`1'",
+			err: "invalid keyspace in qualified sequence table name \"`ks`1`.`my-seq1`\" defined in sequence table column_vindexes:{column:\"`my-col`\" name:\"xxhash\"} auto_increment:{column:\"`my-col`\" sequence:\"`ks`1`.`my-seq1`\"}: UnescapeID err: unexpected single backtick at position 2 in 'ks`1'",
 		},
 		{
 			name: "invalid auto-inc column name",
@@ -286,7 +418,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
-			err: "invalid auto-increment column name `my`-col` defined in sequence table column_vindexes:{column:\"my-col\" name:\"xxhash\"} auto_increment:{column:\"`my`-col`\" sequence:\"my-seq1\"}: UnescapeID err: unexpected single backtick at position 2 in 'my`-col'",
+			err: "invalid auto-increment column name \"`my`-col`\" defined in sequence table column_vindexes:{column:\"my-col\" name:\"xxhash\"} auto_increment:{column:\"`my`-col`\" sequence:\"my-seq1\"}: UnescapeID err: unexpected single backtick at position 2 in 'my`-col'",
 		},
 		{
 			name: "invalid sequence name",
@@ -315,7 +447,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
-			err: "invalid sequence table name `my-`seq1` defined in sequence table column_vindexes:{column:\"`my-col`\" name:\"xxhash\"} auto_increment:{column:\"`my-col`\" sequence:\"`my-`seq1`\"}: UnescapeID err: unexpected single backtick at position 3 in 'my-`seq1'",
+			err: "invalid sequence table name \"`my-`seq1`\" defined in sequence table column_vindexes:{column:\"`my-col`\" name:\"xxhash\"} auto_increment:{column:\"`my-col`\" sequence:\"`my-`seq1`\"}: UnescapeID err: unexpected single backtick at position 3 in 'my-`seq1'",
 		},
 	}
 
@@ -349,7 +481,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 				id:             1,
 				ws:             env.ws,
 				workflow:       workflow,
-				tables:         []string{table},
+				tables:         []string{table, table2},
 				sourceKeyspace: sourceKeyspace.KeyspaceName,
 				targetKeyspace: targetKeyspace.KeyspaceName,
 				sources:        sources,
@@ -361,7 +493,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.True(t, reflect.DeepEqual(tc.want, got), "want: %v, got: %v", tc.want, got)
+			require.EqualValues(t, tc.want, got)
 		})
 	}
 }

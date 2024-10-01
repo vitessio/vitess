@@ -1431,7 +1431,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 			// The table name can be escaped in the vschema definition.
 			unescapedTableName, err := sqlescape.UnescapeID(tableName)
 			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s in keyspace %s: %v",
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %q in keyspace %s: %v",
 					tableName, keyspace, err)
 			}
 			select {
@@ -1480,7 +1480,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		// The keyspace name could be escaped so we need to unescape it.
 		ks, err := sqlescape.UnescapeID(keyspace)
 		if err != nil { // Should never happen
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid keyspace name %s: %v", keyspace, err)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid keyspace name %q: %v", keyspace, err)
 		}
 		searchGroup.Go(func() error {
 			return searchKeyspace(gctx, searchCompleted, ks)
@@ -1521,7 +1521,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 		// in the vschema.
 		unescapedTable, err := sqlescape.UnescapeID(table)
 		if err != nil {
-			return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s defined in the sequence table %+v: %v",
+			return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %q defined in the sequence table %+v: %v",
 				table, seqTable, err)
 		}
 		sm := &sequenceMetadata{
@@ -1533,17 +1533,17 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 		if strings.Contains(seqTable.AutoIncrement.Sequence, ".") {
 			keyspace, tableName, found := strings.Cut(seqTable.AutoIncrement.Sequence, ".")
 			if !found {
-				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in the %s keyspace",
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %q defined in the %s keyspace",
 					seqTable.AutoIncrement.Sequence, ts.targetKeyspace)
 			}
 			// Unescape the table name and keyspace name as they may be escaped in the
 			// vschema definition if they e.g. contain dashes.
 			if keyspace, err = sqlescape.UnescapeID(keyspace); err != nil {
-				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid keyspace in qualified sequence table name %s defined in sequence table %+v: %v",
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid keyspace in qualified sequence table name %q defined in sequence table %+v: %v",
 					seqTable.AutoIncrement.Sequence, seqTable, err)
 			}
 			if tableName, err = sqlescape.UnescapeID(tableName); err != nil {
-				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid qualified sequence table name %s defined in sequence table %+v: %v",
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid qualified sequence table name %q defined in sequence table %+v: %v",
 					seqTable.AutoIncrement.Sequence, seqTable, err)
 			}
 			sm.backingTableKeyspace = keyspace
@@ -1557,7 +1557,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 		} else {
 			sm.backingTableName, err = sqlescape.UnescapeID(seqTable.AutoIncrement.Sequence)
 			if err != nil {
-				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in sequence table %+v: %v",
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %q defined in sequence table %+v: %v",
 					seqTable.AutoIncrement.Sequence, seqTable, err)
 			}
 			seqTable.AutoIncrement.Sequence = sm.backingTableName
@@ -1565,16 +1565,28 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 		}
 		// The column names can be escaped in the vschema definition.
 		for i := range seqTable.ColumnVindexes {
-			unescapedColumn, err := sqlescape.UnescapeID(seqTable.ColumnVindexes[i].Column)
+			var (
+				unescapedColumn string
+				err             error
+			)
+			if len(seqTable.ColumnVindexes[i].Columns) > 0 {
+				for n := range seqTable.ColumnVindexes[i].Columns {
+					unescapedColumn, err = sqlescape.UnescapeID(seqTable.ColumnVindexes[i].Columns[n])
+					seqTable.ColumnVindexes[i].Columns[n] = unescapedColumn
+				}
+			} else {
+				// This is the legacy vschema definition.
+				unescapedColumn, err = sqlescape.UnescapeID(seqTable.ColumnVindexes[i].Column)
+				seqTable.ColumnVindexes[i].Column = unescapedColumn
+			}
 			if err != nil {
-				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence column vindex name %s defined in sequence table %+v: %v",
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence column vindex name %q defined in sequence table %+v: %v",
 					seqTable.ColumnVindexes[i].Column, seqTable, err)
 			}
-			seqTable.ColumnVindexes[i].Column = unescapedColumn
 		}
 		unescapedAutoIncCol, err := sqlescape.UnescapeID(seqTable.AutoIncrement.Column)
 		if err != nil {
-			return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid auto-increment column name %s defined in sequence table %+v: %v",
+			return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid auto-increment column name %q defined in sequence table %+v: %v",
 				seqTable.AutoIncrement.Column, seqTable, err)
 		}
 		seqTable.AutoIncrement.Column = unescapedAutoIncCol
