@@ -2109,6 +2109,12 @@ type DDL struct {
 	// EventSpec is set for CREATE EVENT operations
 	EventSpec *EventSpec
 
+	// NotNullSpec is set when adding or dropping a NOT NULL constraint on a column
+	NotNullSpec *NotNullSpec
+
+	// ColumnTypeSpec is set when altering a column's type, without specifying the full column definition
+	ColumnTypeSpec *ColumnTypeSpec
+
 	// Temporary is set for CREATE TEMPORARY TABLE operations.
 	Temporary bool
 
@@ -3554,6 +3560,49 @@ func (node *AutoIncSpec) Format(buf *TrackedBuffer) {
 func (node *AutoIncSpec) walkSubtree(visit Visit) error {
 	err := Walk(visit, node.Sequence, node.Column)
 	return err
+}
+
+// ColumnTypeSpec defines a change to a column's type, without fully specifying the column definition.
+type ColumnTypeSpec struct {
+	Column ColIdent
+	Type  ColumnType
+}
+
+var _ SQLNode = (*ColumnTypeSpec)(nil)
+
+func (node ColumnTypeSpec)Format(buf *TrackedBuffer) {
+	buf.Myprintf("alter column %v type ")
+	node.Type.Format(buf)
+}
+
+// walkSubtree implements SQLNode.
+func (node *ColumnTypeSpec) walkSubtree(visit Visit) error {
+	return Walk(visit, node.Column)
+}
+
+// NotNullSpec defines a SET / DROP on a column for its NOT NULL constraint.
+type NotNullSpec struct {
+	// Action is SET to set a NOT NULL constraint on a column, or DROP to drop
+	// a NOT NULL constraint on a column.
+	Action string
+	Column ColIdent
+}
+
+var _ SQLNode = (*NotNullSpec)(nil)
+
+// Format implements SQLNode.
+func (node *NotNullSpec) Format(buf *TrackedBuffer) {
+	switch node.Action {
+	case SetStr:
+		buf.Myprintf("alter column %v set not null", node.Column)
+	case DropStr:
+		buf.Myprintf("alter column %v drop not null", node.Column)
+	}
+}
+
+// walkSubtree implements SQLNode.
+func (node *NotNullSpec) walkSubtree(visit Visit) error {
+	return Walk(visit, node.Column)
 }
 
 // DefaultSpec defines a SET / DROP on a column for its default value.
