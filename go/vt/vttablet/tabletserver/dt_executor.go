@@ -69,7 +69,8 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	}
 
 	// If no queries were executed, we just rollback.
-	if len(conn.TxProperties().Queries) == 0 {
+	queries := conn.TxProperties().GetQueries()
+	if len(queries) == 0 {
 		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
 		return nil
 	}
@@ -90,7 +91,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// Fail Prepare if any query rule disallows it.
 	// This could be due to ongoing cutover happening in vreplication workflow
 	// regarding OnlineDDL or MoveTables.
-	for _, query := range conn.TxProperties().Queries {
+	for _, query := range queries {
 		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
@@ -110,7 +111,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// Recheck the rules. As some prepare transaction could have passed the first check.
 	// If they are put in the prepared pool, then vreplication workflow waits.
 	// This check helps reject the prepare that came later.
-	for _, query := range conn.TxProperties().Queries {
+	for _, query := range queries {
 		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
@@ -130,7 +131,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	}
 
 	return dte.inTransaction(func(localConn *StatefulConnection) error {
-		return dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, conn.TxProperties().Queries)
+		return dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, queries)
 	})
 
 }

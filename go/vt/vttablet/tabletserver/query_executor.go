@@ -287,8 +287,12 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execDMLLimit(conn)
 	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanUnlockTables:
 		return qre.execStatefulConn(conn, qre.query, true)
-	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
-		return qre.execTxQuery(conn, qre.query, true)
+	case p.PlanSavepoint:
+		return qre.execSavepointQuery(conn, qre.query, qre.plan.FullStmt)
+	case p.PlanSRollback:
+		return qre.execRollbackToSavepoint(conn, qre.query, qre.plan.FullStmt)
+	case p.PlanRelease:
+		return qre.execTxQuery(conn, qre.query, false)
 	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
@@ -803,6 +807,40 @@ func (qre *QueryExecutor) execTxQuery(conn *StatefulConnection, sql string, reco
 	if record {
 		conn.TxProperties().RecordQueryDetail(sql, qre.plan.TableNames())
 	}
+	return qr, nil
+}
+
+// execTxQuery executes the query provided and record in Tx Property if record is true.
+func (qre *QueryExecutor) execSavepointQuery(conn *StatefulConnection, sql string, ast sqlparser.Statement) (*sqltypes.Result, error) {
+	qr, err := qre.execStatefulConn(conn, sql, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only record successful queries.
+	sp, ok := ast.(*sqlparser.Savepoint)
+	if !ok {
+		return nil, vterrors.VT13001("expected to get a savepoint statement")
+	}
+	conn.TxProperties().RecordSavePointDetail(sp.Name.String())
+
+	return qr, nil
+}
+
+// execTxQuery executes the query provided and record in Tx Property if record is true.
+func (qre *QueryExecutor) execRollbackToSavepoint(conn *StatefulConnection, sql string, ast sqlparser.Statement) (*sqltypes.Result, error) {
+	qr, err := qre.execStatefulConn(conn, sql, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only record successful queries.
+	sp, ok := ast.(*sqlparser.SRollback)
+	if !ok {
+		return nil, vterrors.VT13001("expected to get a rollback statement")
+	}
+
+	_ = conn.TxProperties().RollbackToSavepoint(sp.Name.String())
 	return qr, nil
 }
 

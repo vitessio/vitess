@@ -1261,18 +1261,106 @@ func TestDTSavepoint(t *testing.T) {
 func execute(ctx context.Context, t *testing.T, ss *vtgateconn.VTGateSession, sql string) {
 	t.Helper()
 
+	err := executeReturnError(ctx, t, ss, sql)
+	require.NoError(t, err)
+}
+
+func executeReturnError(ctx context.Context, t *testing.T, ss *vtgateconn.VTGateSession, sql string) error {
+	t.Helper()
+
 	if sql == "commit" {
 		// sort by shard
 		sortShard(ss)
 	}
 	_, err := ss.Execute(ctx, sql, nil)
-	require.NoError(t, err)
+	return err
 }
 
 func sortShard(ss *vtgateconn.VTGateSession) {
 	sort.Slice(ss.SessionPb().ShardSessions, func(i, j int) bool {
 		return ss.SessionPb().ShardSessions[i].Target.Shard < ss.SessionPb().ShardSessions[j].Target.Shard
 	})
+}
+
+// TestDTSavepointResolveAfterMMCommit tests that transaction is committed on recovery
+// failure after MM commit involving savepoint.
+func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
+	defer cleanup(t)
+
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *binlogdatapb.VEvent)
+	runVStream(t, ctx, ch, vtgateConn)
+
+	conn := vtgateConn.Session("", nil)
+	qCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Insert into multiple shards
+	execute(qCtx, t, conn, "begin")
+	execute(qCtx, t, conn, "insert into twopc_user(id, name) values(7,'foo'),(8,'bar')")
+	execute(qCtx, t, conn, "savepoint a")
+	execute(qCtx, t, conn, "insert into twopc_user(id, name) values(9,'baz')")
+	execute(qCtx, t, conn, "savepoint b")
+	execute(qCtx, t, conn, "insert into twopc_user(id, name) values(10,'apa')")
+	execute(qCtx, t, conn, "rollback to a")
+
+	// 2nd session to write something on primary key 9,
+	// to check if 2pc resolver do not try to acquire lock on `9` as it is rolled back by savepoint.
+	// conn2 := vtgateConn.Session("", nil)
+	// execute(qCtx, t, conn2, "insert into twopc_user(id, name) values(9,'mysession')")
+
+	// The caller ID is used to simulate the failure at the desired point.
+	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
+	err = executeReturnError(newCtx, t, conn, "commit")
+	require.ErrorContains(t, err, "Fail After MM commit")
+
+	testWarningAndTransactionStatus(t, conn,
+		"distributed transaction ID failed during metadata manager commit; transaction will be committed/rollbacked based on the state on recovery",
+		false, "COMMIT", "ks:40-80,ks:80-")
+
+	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
+	tableMap := make(map[string][]*querypb.Field)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
+	expectations := map[string][]string{
+		"ks.dt_participant:-40": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+		},
+		"ks.dt_state:-40": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.redo_state:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_state:80-": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+		"ks.redo_statement:80-": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+		},
+		"ks.twopc_user:40-80": {"insert:[INT64(8) VARCHAR(\"bar\")]"},
+		"ks.twopc_user:80-":   {"insert:[INT64(7) VARCHAR(\"foo\")]"},
+	}
+	assert.Equal(t, expectations, logTable,
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
 // TestSemiSyncRequiredWithTwoPC tests that semi-sync is required when using two-phase commit.

@@ -510,7 +510,14 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 	return tsv.begin(ctx, target, nil, 0, nil, options)
 }
 
-func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, savepointQueries []string, reservedID int64, settings []string, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
+func (tsv *TabletServer) begin(
+	ctx context.Context,
+	target *querypb.Target,
+	savepointQueries []string,
+	reservedID int64,
+	settings []string,
+	options *querypb.ExecuteOptions,
+) (state queryservice.TransactionState, err error) {
 	state.TabletAlias = tsv.alias
 	err = tsv.execRequest(
 		ctx, tsv.loadQueryTimeoutWithOptions(options),
@@ -528,7 +535,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 					return err
 				}
 			}
-			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, connSetting, options)
+			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, nil, reservedID, connSetting, options)
 			state.TransactionID = transactionID
 			state.SessionStateChanges = sessionStateChanges
 			logStats.TransactionID = transactionID
@@ -552,7 +559,19 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			return err
 		},
 	)
-	return state, err
+
+	if err != nil {
+		return
+	}
+
+	for _, savepointQuery := range savepointQueries {
+		_, err = tsv.execute(ctx, target, savepointQuery, nil, state.TransactionID, reservedID, settings, options)
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }
 
 func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions) int {

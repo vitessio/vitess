@@ -21,6 +21,9 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -30,10 +33,8 @@ import (
 type (
 	// ConnID as type int64
 	ConnID = int64
-
 	// DTID as type string
 	DTID = string
-
 	// EngineStateMachine is used to control the state the transactional engine -
 	// whether new connections and/or transactions are allowed or not.
 	EngineStateMachine interface {
@@ -42,10 +43,8 @@ type (
 		AcceptReadOnly() error
 		StopGently()
 	}
-
 	// ReleaseReason as type int
 	ReleaseReason int
-
 	// Properties contains all information that is related to the currently running
 	// transaction on the connection
 	Properties struct {
@@ -60,12 +59,12 @@ type (
 
 		Stats *servenv.TimingsWrapper
 	}
+	Query struct {
+		Savepoint string
+		Sql       string
+		Tables    []string
+	}
 )
-
-type Query struct {
-	Sql    string
-	Tables []string
-}
 
 const (
 	// TxClose - connection released on close.
@@ -130,6 +129,30 @@ func (p *Properties) RecordQueryDetail(query string, tables []string) {
 	})
 }
 
+// RecordQueryDetail records the query and tables against this transaction.
+func (p *Properties) RecordSavePointDetail(savepoint string) {
+	if p == nil {
+		return
+	}
+	p.Queries = append(p.Queries, Query{
+		Savepoint: savepoint,
+	})
+}
+
+func (p *Properties) RollbackToSavepoint(savepoint string) error {
+	if p == nil {
+		return nil
+	}
+	for i, query := range p.Queries {
+		if query.Savepoint == savepoint {
+			p.Queries = p.Queries[:i]
+			return nil
+		}
+	}
+
+	return vterrors.VT13001(fmt.Sprintf("savepoint %s not found", savepoint))
+}
+
 // RecordQuery records the query and extract tables against this transaction.
 func (p *Properties) RecordQuery(query string, parser *sqlparser.Parser) {
 	if p == nil {
@@ -180,4 +203,10 @@ func (p *Properties) String(sanitize bool, parser *sqlparser.Parser) string {
 		p.Conclusion,
 		printQueries(),
 	)
+}
+
+func (p *Properties) GetQueries() []Query {
+	return slice.Filter(p.Queries, func(q Query) bool {
+		return q.Sql != ""
+	})
 }
