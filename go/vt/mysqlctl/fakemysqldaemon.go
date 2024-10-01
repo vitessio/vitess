@@ -744,6 +744,19 @@ func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, erro
 	return "", nil
 }
 
+func (fmd *FakeMysqlDaemon) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
+	return &mysqlctlpb.HostMetricsResponse{
+		Metrics: map[string]*mysqlctlpb.HostMetricsResponse_Metric{
+			"loadavg": {
+				Value: 1.0,
+			},
+			"datadir-used-ratio": {
+				Value: 0.2,
+			},
+		},
+	}, nil
+}
+
 // AcquireGlobalReadLock is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
 	return errors.New("not implemented")

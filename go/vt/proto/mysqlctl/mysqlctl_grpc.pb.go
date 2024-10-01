@@ -30,6 +30,7 @@ type MysqlCtlClient interface {
 	ReinitConfig(ctx context.Context, in *ReinitConfigRequest, opts ...grpc.CallOption) (*ReinitConfigResponse, error)
 	RefreshConfig(ctx context.Context, in *RefreshConfigRequest, opts ...grpc.CallOption) (*RefreshConfigResponse, error)
 	VersionString(ctx context.Context, in *VersionStringRequest, opts ...grpc.CallOption) (*VersionStringResponse, error)
+	HostMetrics(ctx context.Context, in *HostMetricsRequest, opts ...grpc.CallOption) (*HostMetricsResponse, error)
 }
 
 type mysqlCtlClient struct {
@@ -112,6 +113,15 @@ func (c *mysqlCtlClient) VersionString(ctx context.Context, in *VersionStringReq
 	return out, nil
 }
 
+func (c *mysqlCtlClient) HostMetrics(ctx context.Context, in *HostMetricsRequest, opts ...grpc.CallOption) (*HostMetricsResponse, error) {
+	out := new(HostMetricsResponse)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/HostMetrics", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MysqlCtlServer is the server API for MysqlCtl service.
 // All implementations must embed UnimplementedMysqlCtlServer
 // for forward compatibility
@@ -124,6 +134,7 @@ type MysqlCtlServer interface {
 	ReinitConfig(context.Context, *ReinitConfigRequest) (*ReinitConfigResponse, error)
 	RefreshConfig(context.Context, *RefreshConfigRequest) (*RefreshConfigResponse, error)
 	VersionString(context.Context, *VersionStringRequest) (*VersionStringResponse, error)
+	HostMetrics(context.Context, *HostMetricsRequest) (*HostMetricsResponse, error)
 	mustEmbedUnimplementedMysqlCtlServer()
 }
 
@@ -154,6 +165,9 @@ func (UnimplementedMysqlCtlServer) RefreshConfig(context.Context, *RefreshConfig
 }
 func (UnimplementedMysqlCtlServer) VersionString(context.Context, *VersionStringRequest) (*VersionStringResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VersionString not implemented")
+}
+func (UnimplementedMysqlCtlServer) HostMetrics(context.Context, *HostMetricsRequest) (*HostMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HostMetrics not implemented")
 }
 func (UnimplementedMysqlCtlServer) mustEmbedUnimplementedMysqlCtlServer() {}
 
@@ -312,6 +326,24 @@ func _MysqlCtl_VersionString_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MysqlCtl_HostMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HostMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MysqlCtlServer).HostMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mysqlctl.MysqlCtl/HostMetrics",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MysqlCtlServer).HostMetrics(ctx, req.(*HostMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MysqlCtl_ServiceDesc is the grpc.ServiceDesc for MysqlCtl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -350,6 +382,10 @@ var MysqlCtl_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VersionString",
 			Handler:    _MysqlCtl_VersionString_Handler,
+		},
+		{
+			MethodName: "HostMetrics",
+			Handler:    _MysqlCtl_HostMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
