@@ -315,6 +315,17 @@ func (s *server) ConcludeTransaction(ctx context.Context, request *tabletmanager
 	return &tabletmanagerdatapb.ConcludeTransactionResponse{}, nil
 }
 
+func (s *server) MysqlHostMetrics(ctx context.Context, request *tabletmanagerdatapb.MysqlHostMetricsRequest) (response *tabletmanagerdatapb.MysqlHostMetricsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "MysqlHostMetrics", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+
+	resp, err := s.tm.MysqlHostMetrics(ctx, request)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+	return resp, nil
+}
+
 //
 // Replication related methods
 //
