@@ -143,8 +143,8 @@ The order of precedence is: comment directive > session variable > VTGate flag.
 VTTablet overrides its default query timeout with the value received from VTGate.
 All timeouts are specified in milliseconds.
 
-When a query is executed inside a transaction, this behavior does not apply; instead,
-the smaller of the transaction timeout or the query timeout from VTGate is used.
+When a query is executed inside a transaction, there is an additional nuance. The actual timeout used will be the smaller 
+of the transaction timeout and the query timeout.
 
 A query can also be set to have no timeout by using the `QUERY_TIMEOUT_MS` comment directive with a value of `0`.
 
