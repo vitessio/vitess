@@ -1707,7 +1707,6 @@ func (c *Conn) IsMarkedForClose() bool {
 	return c.closing
 }
 
-// GetTestConn returns a conn for testing purpose only.
-func GetTestConn() *Conn {
-	return newConn(testConn{})
+func (c *Conn) IsShuttingDown() bool {
+	return c.listener.shutdown.Load()
 }
