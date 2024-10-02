@@ -239,7 +239,7 @@ func newClient(ctx context.Context, primary *primary, replica *replica, ts *topo
 		log.Fatal(err)
 	}
 
-	healthCheck := discovery.NewHealthCheck(ctx, 5*time.Second, 1*time.Minute, ts, "cell1", "")
+	healthCheck := discovery.NewHealthCheck(ctx, 5*time.Second, 1*time.Minute, ts, "cell1", "", nil)
 	c := &client{
 		primary:     primary,
 		healthCheck: healthCheck,
