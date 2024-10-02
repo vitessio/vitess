@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -1008,6 +1009,53 @@ func applyTargetShards(ts *trafficSwitcher, targetShards []string) error {
 		if _, ok := tsm[target.GetShard().ShardName()]; !ok {
 			delete(ts.targets, key)
 		}
+	}
+	return nil
+}
+
+// validateEmptyTables checks if all specified tables are empty across specified shards.
+// It queries each shard's primary tablet and if any non-empty table is found, it returns an error
+// containing a list of non-empty tables.
+func validateEmptyTables(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, shards []*topo.ShardInfo, tableSettings []*vtctldatapb.TableMaterializeSettings) error {
+	var mu sync.Mutex
+	isTableFaulty := map[string]bool{}
+
+	err := forAllShards(shards, func(shard *topo.ShardInfo) error {
+		primary := shard.PrimaryAlias
+		if primary == nil {
+			return fmt.Errorf("shard does not have a primary: %v", shard.ShardName())
+		}
+
+		ti, err := ts.GetTablet(ctx, primary)
+		if err != nil {
+			return err
+		}
+
+		for _, ts := range tableSettings {
+			query := fmt.Sprintf("select 1 from %s limit 1", ts.TargetTable)
+			res, err := tmc.ExecuteFetchAsDba(ctx, ti.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:   []byte(query),
+				MaxRows: 1,
+			})
+			// Ignore table not found error
+			if err != nil && !IsTableDidNotExistError(err) {
+				return err
+			}
+			if res != nil && len(res.Rows) > 0 {
+				mu.Lock()
+				isTableFaulty[ts.TargetTable] = true
+				mu.Unlock()
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	faultyTables := maps.Keys(isTableFaulty)
+	if len(faultyTables) > 0 {
+		return fmt.Errorf("non-empty tables found in target keyspace: %s", strings.Join(faultyTables, ", "))
 	}
 	return nil
 }
