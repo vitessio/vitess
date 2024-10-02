@@ -327,6 +327,9 @@ func tstWorkflowCancel(t *testing.T) error {
 }
 
 func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.VttabletProcess) {
+	if tablet == nil {
+		return
+	}
 	if tabletTypes == "" {
 		tabletTypes = "replica,rdonly"
 	}
@@ -342,11 +345,15 @@ func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.Vttabl
 }
 
 func validateReadsRouteToSource(t *testing.T, tabletTypes string) {
-	validateReadsRoute(t, tabletTypes, sourceReplicaTab)
+	if sourceReplicaTab != nil {
+		validateReadsRoute(t, tabletTypes, sourceReplicaTab)
+	}
 }
 
 func validateReadsRouteToTarget(t *testing.T, tabletTypes string) {
-	validateReadsRoute(t, tabletTypes, targetReplicaTab1)
+	if targetReplicaTab1 != nil {
+		validateReadsRoute(t, tabletTypes, targetReplicaTab1)
+	}
 }
 
 func validateWritesRouteToSource(t *testing.T) {
@@ -752,8 +759,12 @@ func setupCluster(t *testing.T) *VitessCluster {
 	insertInitialData(t)
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	sourceTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	sourceReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
-	sourceRdonlyTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-102"].Vttablet
+	if defaultReplicas > 0 {
+		sourceReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
+	}
+	if defaultRdonly > 0 {
+		sourceRdonlyTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-102"].Vttablet
+	}
 
 	return vc
 }
@@ -767,8 +778,12 @@ func setupCustomerKeyspace(t *testing.T) {
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 	targetTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
-	targetReplicaTab1 = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
-	targetRdonlyTab1 = custKs.Shards["-80"].Tablets["zone1-202"].Vttablet
+	if defaultReplicas > 0 {
+		targetReplicaTab1 = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
+	}
+	if defaultRdonly > 0 {
+		targetRdonlyTab1 = custKs.Shards["-80"].Tablets["zone1-202"].Vttablet
+	}
 }
 
 func setupCustomer2Keyspace(t *testing.T) {

@@ -20,11 +20,18 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+<<<<<<< HEAD
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+=======
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+
+>>>>>>> 2e47aba034 (CI: Lower resources used for TestVtctldMigrateSharded (#16875))
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -48,8 +55,15 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 func TestVtctlMigrate(t *testing.T) {
 	vc = NewVitessCluster(t, nil)
 
+	oldDefaultReplicas := defaultReplicas
+	oldDefaultRdonly := defaultRdonly
 	defaultReplicas = 0
 	defaultRdonly = 0
+	defer func() {
+		defaultReplicas = oldDefaultReplicas
+		defaultRdonly = oldDefaultRdonly
+	}()
+
 	defer vc.TearDown()
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
@@ -297,3 +311,85 @@ func TestVtctldMigrate(t *testing.T) {
 		require.Errorf(t, err, "there is no vitess cluster named ext1")
 	})
 }
+<<<<<<< HEAD
+=======
+
+// TestVtctldMigrate adds a test for a sharded cluster to validate a fix for a bug where the target keyspace name
+// doesn't match that of the source cluster. The test migrates from a cluster with keyspace customer to an "external"
+// cluster with keyspace rating.
+func TestVtctldMigrateSharded(t *testing.T) {
+	setSidecarDBName("_vt")
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
+	oldDefaultReplicas := defaultReplicas
+	oldDefaultRdonly := defaultRdonly
+	defaultReplicas = 0
+	defaultRdonly = 0
+	defer func() {
+		defaultReplicas = oldDefaultReplicas
+		defaultRdonly = oldDefaultRdonly
+	}()
+
+	vc = setupCluster(t)
+	defer vc.TearDown()
+
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+
+	setupCustomerKeyspace(t)
+	createMoveTablesWorkflow(t, "customer,Lead,datze,customer2")
+	tstWorkflowSwitchReadsAndWrites(t)
+	tstWorkflowComplete(t)
+
+	var err error
+	// create external cluster
+	extCell := "extcell1"
+	extCells := []string{extCell}
+	extVc := NewVitessCluster(t, &clusterOptions{
+		cells:         extCells,
+		clusterConfig: externalClusterConfig,
+	})
+	defer extVc.TearDown()
+
+	setupExtKeyspace(t, extVc, "rating", extCell)
+	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "-80")
+	require.NoError(t, err)
+	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "80-")
+	require.NoError(t, err)
+	verifyClusterHealth(t, extVc)
+	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
+	defer extVtgateConn.Close()
+
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Migrate
+	var output string
+	if output, err = extVc.VtctldClient.ExecuteCommandWithOutput("Mount", "register", "--name=external", "--topo-type=etcd2",
+		fmt.Sprintf("--topo-server=localhost:%d", vc.ClusterConfig.topoPort), "--topo-root=/vitess/global"); err != nil {
+		require.FailNow(t, "Mount command failed with %+v : %s\n", err, output)
+	}
+	ksWorkflow := "rating.e1"
+	if output, err = extVc.VtctldClient.ExecuteCommandWithOutput("Migrate",
+		"--target-keyspace", "rating", "--workflow", "e1",
+		"create", "--source-keyspace", "customer", "--mount-name", "external", "--all-tables", "--cells=zone1",
+		"--tablet-types=primary"); err != nil {
+		require.FailNow(t, "Migrate command failed with %+v : %s\n", err, output)
+	}
+	waitForWorkflowState(t, extVc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	// this is because currently doVtctldclientVDiff is using the global vc :-( and we want to run a diff on the extVc cluster
+	vc = extVc
+	doVtctldclientVDiff(t, "rating", "e1", "zone1", nil)
+}
+
+func setupExtKeyspace(t *testing.T, vc *VitessCluster, ksName, cellName string) {
+	numReplicas := 1
+	shards := []string{"-80", "80-"}
+	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells[cellName]}, ksName, strings.Join(shards, ","),
+		customerVSchema, customerSchema, numReplicas, 0, 1200, nil); err != nil {
+		t.Fatal(err)
+	}
+	vtgate := vc.Cells[cellName].Vtgates[0]
+	for _, shard := range shards {
+		err := cluster.WaitForHealthyShard(vc.VtctldClient, ksName, shard)
+		require.NoError(t, err)
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shard), numReplicas, waitTimeout))
+	}
+}
+>>>>>>> 2e47aba034 (CI: Lower resources used for TestVtctldMigrateSharded (#16875))
