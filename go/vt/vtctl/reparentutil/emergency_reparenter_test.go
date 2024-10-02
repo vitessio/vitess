@@ -1900,7 +1900,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errShouldContain)
+				assert.ErrorContains(t, err, tt.errShouldContain)
 				return
 			}
 
