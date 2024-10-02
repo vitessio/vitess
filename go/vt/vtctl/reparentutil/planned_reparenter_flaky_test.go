@@ -3395,9 +3395,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			err := pr.reparentShardLocked(ctx, tt.ev, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
-				if tt.errShouldContain != "" {
-					assert.ErrorContains(t, err, tt.errShouldContain)
-				}
+				assert.ErrorContains(t, err, tt.errShouldContain)
 				return
 			}
 
