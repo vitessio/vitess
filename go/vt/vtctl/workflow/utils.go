@@ -1032,7 +1032,7 @@ func validateEmptyTables(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 		}
 
 		for _, ts := range tableSettings {
-			query := fmt.Sprintf("select 1 from %s limit 1", ts.TargetTable)
+			query := fmt.Sprintf("select 1 from `%s` limit 1", ts.TargetTable)
 			res, err := tmc.ExecuteFetchAsDba(ctx, ti.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 				Query:   []byte(query),
 				MaxRows: 1,
