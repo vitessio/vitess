@@ -63,10 +63,6 @@ const (
 	// to match the entire flag name + the default value (being the current bootstrap version)
 	// Example input: "flag.String("bootstrap-version", "20", "the version identifier to use for the docker images")"
 	regexpReplaceTestGoBootstrapVersion = `\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`
-
-	// regexpReplaceGolangVersionInWorkflow matches the golang version increment in the string `go-version: 1.20.5`
-	// which is used to replace the golang version we use inside our workflows
-	regexpReplaceGolangVersionInWorkflow = `go-version:[[:space:]]*([0-9.]+).*`
 )
 
 type (
@@ -81,7 +77,6 @@ type (
 )
 
 var (
-	workflowUpdate    = true
 	allowMajorUpgrade = false
 	isMainBranch      = false
 	goTo              = ""
@@ -137,21 +132,10 @@ The latest available version of Golang will be fetched and used instead of the o
 By default, we do not allow major Golang version upgrade such as 1.20 to 1.21 but this can be overridden using the
 --allow-major-upgrade CLI flag. Usually, we only allow such upgrade on the main branch of the repository.
 
-In CI, particularly, we do not want to modify the workflow files before automatically creating a Pull Request to
-avoid permission issues. The rewrite of workflow files can be disabled using the --workflow-update=false CLI flag.
-
 Moreover, this command automatically bumps the bootstrap version of our codebase. If we are on the main branch, we
 want to use the CLI flag --main to remember to increment the bootstrap version by 1 instead of 0.1.`,
 		Run:  runUpgradeCmd,
 		Args: cobra.NoArgs,
-	}
-
-	upgradeWorkflowsCmd = &cobra.Command{
-		Use:   "workflows",
-		Short: "workflows will upgrade the Golang version used in our CI workflows files.",
-		Long:  "This step is omitted by the bot since. We let the maintainers of Vitess manually upgrade the version used by the workflows using this command.",
-		Run:   runUpgradeWorkflowsCmd,
-		Args:  cobra.NoArgs,
 	}
 )
 
@@ -162,13 +146,8 @@ func init() {
 	getCmd.AddCommand(getGoCmd)
 	getCmd.AddCommand(getBootstrapCmd)
 
-	upgradeCmd.AddCommand(upgradeWorkflowsCmd)
-
-	upgradeCmd.Flags().BoolVar(&workflowUpdate, "workflow-update", workflowUpdate, "Whether or not the workflow files should be updated. Useful when using this script to auto-create PRs.")
 	upgradeCmd.Flags().BoolVar(&allowMajorUpgrade, "allow-major-upgrade", allowMajorUpgrade, "Defines if Golang major version upgrade are allowed.")
 	upgradeCmd.Flags().BoolVar(&isMainBranch, "main", isMainBranch, "Defines if the current branch is the main branch.")
-
-	upgradeWorkflowsCmd.Flags().StringVar(&goTo, "go-to", goTo, "The Golang version we want to upgrade to.")
 }
 
 func main() {
@@ -191,44 +170,14 @@ func runGetBootstrapCmd(_ *cobra.Command, _ []string) {
 	fmt.Println(currentVersion.toString())
 }
 
-func runUpgradeWorkflowsCmd(_ *cobra.Command, _ []string) {
-	err := updateWorkflowFilesOnly(goTo)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 func runUpgradeCmd(_ *cobra.Command, _ []string) {
-	err := upgradePath(allowMajorUpgrade, workflowUpdate, isMainBranch)
+	err := upgradePath(allowMajorUpgrade, isMainBranch)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func updateWorkflowFilesOnly(goTo string) error {
-	newV, err := version.NewVersion(goTo)
-	if err != nil {
-		return err
-	}
-	filesToChange, err := getListOfFilesInPaths([]string{"./.github/workflows"})
-	if err != nil {
-		return err
-	}
-
-	for _, fileToChange := range filesToChange {
-		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGolangVersionInWorkflow)},
-			[]string{"go-version: " + newV.String()},
-			fileToChange,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func upgradePath(allowMajorUpgrade, workflowUpdate, isMainBranch bool) error {
+func upgradePath(allowMajorUpgrade, isMainBranch bool) error {
 	currentVersion, err := currentGolangVersion()
 	if err != nil {
 		return err
@@ -244,7 +193,7 @@ func upgradePath(allowMajorUpgrade, workflowUpdate, isMainBranch bool) error {
 		return nil
 	}
 
-	err = replaceGoVersionInCodebase(currentVersion, upgradeTo, workflowUpdate)
+	err = replaceGoVersionInCodebase(currentVersion, upgradeTo)
 	if err != nil {
 		return err
 	}
@@ -385,7 +334,7 @@ func chooseNewVersion(curVersion *version.Version, latestVersions version.Collec
 
 // replaceGoVersionInCodebase goes through all the files in the codebase where the
 // Golang version must be updated
-func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) error {
+func replaceGoVersionInCodebase(old, new *version.Version) error {
 	if old.Equal(new) {
 		return nil
 	}
@@ -393,9 +342,9 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 		"./test/templates",
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
-	}
-	if workflowUpdate {
-		explore = append(explore, "./.github/workflows")
+		"./docker/lite/Dockerfile",
+		"./docker/lite/Dockerfile.percona80",
+		"./docker/vttestserver/Dockerfile.mysql80",
 	}
 	filesToChange, err := getListOfFilesInPaths(explore)
 	if err != nil {
@@ -415,7 +364,7 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 	}
 
 	if !isSameMajorMinorVersion(old, new) {
-		goModFiles := []string{"./go.mod", "./vitess-mixin/go.mod"}
+		goModFiles := []string{"./go.mod"}
 		for _, file := range goModFiles {
 			err = replaceInFile(
 				[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
@@ -435,9 +384,6 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 		return nil
 	}
 	files, err := getListOfFilesInPaths([]string{
-		"./docker/lite",
-		"./docker/local",
-		"./docker/vttestserver",
 		"./Makefile",
 		"./test/templates",
 	})

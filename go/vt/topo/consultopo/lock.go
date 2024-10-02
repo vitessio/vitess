@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/hashicorp/consul/api"
 
@@ -49,7 +50,27 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents)
+	return s.lock(ctx, dirPath, contents, s.lockTTL)
+}
+
+// LockWithTTL is part of the topo.Conn interface.
+func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (topo.LockDescriptor, error) {
+	// We list the directory first to make sure it exists.
+	if _, err := s.ListDir(ctx, dirPath, false /*full*/); err != nil {
+		// We need to return the right error codes, like
+		// topo.ErrNoNode and topo.ErrInterrupted, and the
+		// easiest way to do this is to return convertError(err).
+		// It may lose some of the context, if this is an issue,
+		// maybe logging the error would work here.
+		return nil, convertError(err, dirPath)
+	}
+
+	return s.lock(ctx, dirPath, contents, ttl.String())
+}
+
+// LockName is part of the topo.Conn interface.
+func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return s.lock(ctx, dirPath, contents, topo.NamedLockTTL.String())
 }
 
 // TryLock is part of the topo.Conn interface.
@@ -74,11 +95,11 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	}
 
 	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents)
+	return s.lock(ctx, dirPath, contents, s.lockTTL)
 }
 
 // Lock is part of the topo.Conn interface.
-func (s *Server) lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string) (topo.LockDescriptor, error) {
 	lockPath := path.Join(s.root, dirPath, locksFilename)
 
 	lockOpts := &api.LockOptions{
@@ -90,11 +111,18 @@ func (s *Server) lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		},
 	}
 	lockOpts.SessionOpts.Checks = s.lockChecks
+	if s.lockTTL != "" {
+		// Override the API default with the global default from
+		// --topo_consul_lock_session_ttl.
+		lockOpts.SessionOpts.TTL = s.lockTTL
+	}
+	if ttl != "" {
+		// Override the global default with the one provided by the
+		// caller.
+		lockOpts.SessionOpts.TTL = ttl
+	}
 	if s.lockDelay > 0 {
 		lockOpts.SessionOpts.LockDelay = s.lockDelay
-	}
-	if s.lockTTL != "" {
-		lockOpts.SessionOpts.TTL = s.lockTTL
 	}
 	// Build the lock structure.
 	l, err := s.client.LockOpts(lockOpts)

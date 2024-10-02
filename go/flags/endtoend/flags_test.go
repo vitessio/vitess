@@ -22,12 +22,11 @@ package flags
 
 import (
 	"bytes"
+	_ "embed"
 	"os"
 	"os/exec"
 	"testing"
 	"text/template"
-
-	_ "embed"
 
 	"github.com/stretchr/testify/require"
 

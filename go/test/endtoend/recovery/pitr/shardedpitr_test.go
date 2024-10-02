@@ -130,7 +130,7 @@ func TestPITRRecovery(t *testing.T) {
 	initializeCluster(t)
 	defer clusterInstance.Teardown()
 
-	//start the binlog server and point it to primary
+	// start the binlog server and point it to primary
 	bs := startBinlogServer(t, primary)
 	defer bs.stop()
 
@@ -167,11 +167,11 @@ func TestPITRRecovery(t *testing.T) {
 	// starting resharding process
 	performResharding(t)
 
-	//start the binlog server and point it to shard0Primary
+	// start the binlog server and point it to shard0Primary
 	bs0 := startBinlogServer(t, shard0Primary)
 	defer bs0.stop()
 
-	//start the binlog server and point it to shard1Primary
+	// start the binlog server and point it to shard1Primary
 	bs1 := startBinlogServer(t, shard1Primary)
 	defer bs1.stop()
 
@@ -585,7 +585,7 @@ func waitForNoWorkflowLag(t *testing.T, vc *cluster.LocalProcessCluster, ks stri
 		require.NoError(t, err)
 
 		var resp vtctldatapb.GetWorkflowsResponse
-		err = json2.Unmarshal([]byte(output), &resp)
+		err = json2.UnmarshalPB([]byte(output), &resp)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, len(resp.Workflows), 1, "responce should have at least one workflow")
 		lag = resp.Workflows[0].MaxVReplicationTransactionLag

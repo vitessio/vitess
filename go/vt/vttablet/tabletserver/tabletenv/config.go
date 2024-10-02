@@ -157,7 +157,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
 	fs.Int64Var(&currentConfig.SchemaVersionMaxAgeSeconds, "schema-version-max-age-seconds", 0, "max age of schema version records to kept in memory by the vreplication historian")
 	fs.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
-	fs.StringVar(&currentConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", defaultConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
 	SecondsVar(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
 	// Tx throttler config
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
@@ -200,7 +199,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 	fs.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
 	fs.BoolVar(&currentConfig.SanitizeLogMessages, "sanitize_log_messages", false, "Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.")
-	fs.BoolVar(&currentConfig.EnableSettingsPool, "queryserver-enable-settings-pool", true, "Enable pooling of connections with modified system settings")
+	_ = fs.Bool("queryserver-enable-settings-pool", true, "Enable pooling of connections with modified system settings")
+	_ = fs.MarkDeprecated("queryserver-enable-settings-pool", "New pool implementation does it internally and at the api level this has been enabled since v17")
 
 	fs.Int64Var(&currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 	fs.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
@@ -311,34 +311,32 @@ type TabletConfig struct {
 	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
 
 	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
-	Consolidator                     string        `json:"consolidator,omitempty"`
-	PassthroughDML                   bool          `json:"passthroughDML,omitempty"`
-	StreamBufferSize                 int           `json:"streamBufferSize,omitempty"`
-	ConsolidatorStreamTotalSize      int64         `json:"consolidatorStreamTotalSize,omitempty"`
-	ConsolidatorStreamQuerySize      int64         `json:"consolidatorStreamQuerySize,omitempty"`
-	QueryCacheMemory                 int64         `json:"queryCacheMemory,omitempty"`
-	QueryCacheDoorkeeper             bool          `json:"queryCacheDoorkeeper,omitempty"`
-	SchemaReloadInterval             time.Duration `json:"schemaReloadIntervalSeconds,omitempty"`
-	SignalSchemaChangeReloadInterval time.Duration `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
-	SchemaChangeReloadTimeout        time.Duration `json:"schemaChangeReloadTimeout,omitempty"`
-	WatchReplication                 bool          `json:"watchReplication,omitempty"`
-	TrackSchemaVersions              bool          `json:"trackSchemaVersions,omitempty"`
-	SchemaVersionMaxAgeSeconds       int64         `json:"schemaVersionMaxAgeSeconds,omitempty"`
-	TerseErrors                      bool          `json:"terseErrors,omitempty"`
-	TruncateErrorLen                 int           `json:"truncateErrorLen,omitempty"`
-	AnnotateQueries                  bool          `json:"annotateQueries,omitempty"`
-	MessagePostponeParallelism       int           `json:"messagePostponeParallelism,omitempty"`
-	SignalWhenSchemaChange           bool          `json:"signalWhenSchemaChange,omitempty"`
+	Consolidator                string        `json:"consolidator,omitempty"`
+	PassthroughDML              bool          `json:"passthroughDML,omitempty"`
+	StreamBufferSize            int           `json:"streamBufferSize,omitempty"`
+	ConsolidatorStreamTotalSize int64         `json:"consolidatorStreamTotalSize,omitempty"`
+	ConsolidatorStreamQuerySize int64         `json:"consolidatorStreamQuerySize,omitempty"`
+	QueryCacheMemory            int64         `json:"queryCacheMemory,omitempty"`
+	QueryCacheDoorkeeper        bool          `json:"queryCacheDoorkeeper,omitempty"`
+	SchemaReloadInterval        time.Duration `json:"schemaReloadIntervalSeconds,omitempty"`
+	SchemaChangeReloadTimeout   time.Duration `json:"schemaChangeReloadTimeout,omitempty"`
+	WatchReplication            bool          `json:"watchReplication,omitempty"`
+	TrackSchemaVersions         bool          `json:"trackSchemaVersions,omitempty"`
+	SchemaVersionMaxAgeSeconds  int64         `json:"schemaVersionMaxAgeSeconds,omitempty"`
+	TerseErrors                 bool          `json:"terseErrors,omitempty"`
+	TruncateErrorLen            int           `json:"truncateErrorLen,omitempty"`
+	AnnotateQueries             bool          `json:"annotateQueries,omitempty"`
+	MessagePostponeParallelism  int           `json:"messagePostponeParallelism,omitempty"`
+	SignalWhenSchemaChange      bool          `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
-	SanitizeLogMessages     bool    `json:"-"`
-	StrictTableACL          bool    `json:"-"`
-	EnableTableACLDryRun    bool    `json:"-"`
-	TableACLExemptACL       string  `json:"-"`
-	TwoPCEnable             bool    `json:"-"`
-	TwoPCCoordinatorAddress string  `json:"-"`
-	TwoPCAbandonAge         Seconds `json:"-"`
+	SanitizeLogMessages  bool    `json:"-"`
+	StrictTableACL       bool    `json:"-"`
+	EnableTableACLDryRun bool    `json:"-"`
+	TableACLExemptACL    string  `json:"-"`
+	TwoPCEnable          bool    `json:"-"`
+	TwoPCAbandonAge      Seconds `json:"-"`
 
 	EnableTxThrottler              bool                          `json:"-"`
 	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
@@ -354,7 +352,6 @@ type TabletConfig struct {
 
 	EnforceStrictTransTables bool `json:"-"`
 	EnableOnlineDDL          bool `json:"-"`
-	EnableSettingsPool       bool `json:"-"`
 
 	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
 
@@ -368,19 +365,14 @@ func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
 
 	tmp := struct {
 		TCProxy
-		SchemaReloadInterval             string `json:"schemaReloadIntervalSeconds,omitempty"`
-		SignalSchemaChangeReloadInterval string `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
-		SchemaChangeReloadTimeout        string `json:"schemaChangeReloadTimeout,omitempty"`
+		SchemaReloadInterval      string `json:"schemaReloadIntervalSeconds,omitempty"`
+		SchemaChangeReloadTimeout string `json:"schemaChangeReloadTimeout,omitempty"`
 	}{
 		TCProxy: TCProxy(*cfg),
 	}
 
 	if d := cfg.SchemaReloadInterval; d != 0 {
 		tmp.SchemaReloadInterval = d.String()
-	}
-
-	if d := cfg.SignalSchemaChangeReloadInterval; d != 0 {
-		tmp.SignalSchemaChangeReloadInterval = d.String()
 	}
 
 	if d := cfg.SchemaChangeReloadTimeout; d != 0 {
@@ -395,9 +387,8 @@ func (cfg *TabletConfig) UnmarshalJSON(data []byte) (err error) {
 
 	var tmp struct {
 		TCProxy
-		SchemaReloadInterval             string `json:"schemaReloadIntervalSeconds,omitempty"`
-		SignalSchemaChangeReloadInterval string `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
-		SchemaChangeReloadTimeout        string `json:"schemaChangeReloadTimeout,omitempty"`
+		SchemaReloadInterval      string `json:"schemaReloadIntervalSeconds,omitempty"`
+		SchemaChangeReloadTimeout string `json:"schemaChangeReloadTimeout,omitempty"`
 	}
 
 	tmp.TCProxy = TCProxy(*cfg)
@@ -413,17 +404,6 @@ func (cfg *TabletConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.SchemaReloadInterval = 0
-	}
-
-	if tmp.SignalSchemaChangeReloadInterval != "" {
-		cfg.SignalSchemaChangeReloadInterval, err = time.ParseDuration(tmp.SignalSchemaChangeReloadInterval)
-		if err != nil {
-			return err
-		}
-	} else {
-		cfg.SignalSchemaChangeReloadInterval = 0
 	}
 
 	if tmp.SchemaChangeReloadTimeout != "" {
@@ -431,8 +411,6 @@ func (cfg *TabletConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.SchemaChangeReloadTimeout = 0
 	}
 
 	return nil
@@ -1076,7 +1054,6 @@ var defaultConfig = TabletConfig{
 	},
 
 	EnablePerWorkloadTableMetrics: false,
-	EnableSettingsPool:            true,
 }
 
 // defaultTxThrottlerConfig returns the default TxThrottlerConfigFlag object based on

@@ -265,7 +265,9 @@ export const deleteTablet = async ({ allowPrimary, clusterID, alias }: DeleteTab
         req.append('allow_primary', allowPrimary.toString());
     }
 
-    const { result } = await vtfetch(`/api/tablet/${alias}?${req}`, { method: 'delete' });
+    const { result } = await vtfetch(`/api/tablet/${alias}?${req}`, {
+        method: 'delete',
+    });
 
     const err = pb.DeleteTabletResponse.verify(result);
     if (err) throw Error(err);
@@ -419,6 +421,20 @@ export const fetchVSchema = async ({ clusterID, keyspace }: FetchVSchemaParams) 
     return pb.VSchema.create(result);
 };
 
+export interface FetchTransactionsParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const fetchTransactions = async ({ clusterID, keyspace }: FetchTransactionsParams) => {
+    const { result } = await vtfetch(`/api/transactions/${clusterID}/${keyspace}`);
+
+    const err = vtctldata.GetUnresolvedTransactionsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetUnresolvedTransactionsResponse.create(result);
+};
+
 export const fetchWorkflows = async () => {
     const { result } = await vtfetch(`/api/workflows`);
 
@@ -435,6 +451,54 @@ export const fetchWorkflow = async (params: { clusterID: string; keyspace: strin
     if (err) throw Error(err);
 
     return pb.Workflow.create(result);
+};
+
+export const fetchWorkflowStatus = async (params: { clusterID: string; keyspace: string; name: string }) => {
+    const { result } = await vtfetch(`/api/workflow/${params.clusterID}/${params.keyspace}/${params.name}/status`);
+
+    const err = vtctldata.WorkflowStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowStatusResponse.create(result);
+};
+
+export interface CreateMoveTablesParams {
+    clusterID: string;
+    request: vtctldata.IMoveTablesCreateRequest;
+}
+
+export const createMoveTables = async ({ clusterID, request }: CreateMoveTablesParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/movetables`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtctldata.WorkflowStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowStatusResponse.create(result);
+};
+
+export interface WorkflowActionParams {
+    clusterID: string;
+    keyspace: string;
+    name: string;
+}
+
+export const startWorkflow = async ({ clusterID, keyspace, name }: WorkflowActionParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/start`);
+    const err = vtctldata.WorkflowUpdateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowUpdateResponse.create(result);
+};
+
+export const stopWorkflow = async ({ clusterID, keyspace, name }: WorkflowActionParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/stop`);
+    const err = vtctldata.WorkflowUpdateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowUpdateResponse.create(result);
 };
 
 export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {
@@ -553,7 +617,9 @@ export const reloadSchema = async (params: ReloadSchemaParams) => {
         req.append('wait_position', params.waitPosition);
     }
 
-    const { result } = await vtfetch(`/api/schemas/reload?${req}`, { method: 'put' });
+    const { result } = await vtfetch(`/api/schemas/reload?${req}`, {
+        method: 'put',
+    });
 
     const err = pb.ReloadSchemasResponse.verify(result);
     if (err) throw Error(err);
@@ -574,7 +640,9 @@ export const deleteShard = async (params: DeleteShardParams) => {
     req.append('even_if_serving', String(params.evenIfServing));
     req.append('recursive', String(params.recursive));
 
-    const { result } = await vtfetch(`/api/shards/${params.clusterID}?${req}`, { method: 'delete' });
+    const { result } = await vtfetch(`/api/shards/${params.clusterID}?${req}`, {
+        method: 'delete',
+    });
 
     const err = vtctldata.DeleteShardsResponse.verify(result);
     if (err) throw Error(err);
@@ -701,7 +769,10 @@ export interface RebuildKeyspaceGraphParams {
 export const rebuildKeyspaceGraph = async (params: RebuildKeyspaceGraphParams) => {
     const { result } = await vtfetch(`/api/keyspace/${params.clusterID}/${params.keyspace}/rebuild_keyspace_graph`, {
         method: 'put',
-        body: JSON.stringify({ cells: params.cells, allow_partial: params.allowPartial }),
+        body: JSON.stringify({
+            cells: params.cells,
+            allow_partial: params.allowPartial,
+        }),
     });
     const err = pb.RebuildKeyspaceGraphRequest.verify(result);
     if (err) throw Error(err);
@@ -720,7 +791,11 @@ export interface RemoveKeyspaceCellParams {
 export const removeKeyspaceCell = async (params: RemoveKeyspaceCellParams) => {
     const { result } = await vtfetch(`/api/keyspace/${params.clusterID}/${params.keyspace}/remove_keyspace_cell`, {
         method: 'put',
-        body: JSON.stringify({ cell: params.cell, force: params.force, recursive: params.recursive }),
+        body: JSON.stringify({
+            cell: params.cell,
+            force: params.force,
+            recursive: params.recursive,
+        }),
     });
     const err = pb.RemoveKeyspaceCellRequest.verify(result);
     if (err) throw Error(err);

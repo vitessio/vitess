@@ -182,11 +182,6 @@ func (conn *FakeVTGateConn) CloseSession(ctx context.Context, session *vtgatepb.
 	panic("not implemented")
 }
 
-// ResolveTransaction please see vtgateconn.Impl.ResolveTransaction
-func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
-	return nil
-}
-
 // VStream streams binlog events.
 func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
 	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {

@@ -41,11 +41,6 @@ limitations under the License.
 
 package config
 
-// NewConfigurationSettings creates new throttler configuration settings.
-func NewConfigurationSettings() *ConfigurationSettings {
-	return &ConfigurationSettings{}
-}
-
 // ConfigurationSettings models a set of configurable values, that can be
 // provided by the user via one or several JSON formatted files.
 //
@@ -57,5 +52,10 @@ type ConfigurationSettings struct {
 	Environment     string
 	Domain          string
 	EnableProfiling bool // enable pprof profiling http api
-	Stores          StoresSettings
+	MySQLStore      MySQLConfigurationSettings
+}
+
+// NewConfigurationSettings creates new throttler configuration settings.
+func NewConfigurationSettings() *ConfigurationSettings {
+	return &ConfigurationSettings{}
 }

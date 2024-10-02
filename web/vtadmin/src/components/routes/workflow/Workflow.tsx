@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
+import { Link, Redirect, Route, Switch, useLocation, useParams, useRouteMatch } from 'react-router-dom';
 
 import style from './Workflow.module.scss';
 
@@ -24,11 +24,13 @@ import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { KeyspaceLink } from '../../links/KeyspaceLink';
 import { WorkflowStreams } from './WorkflowStreams';
+import { WorkflowDetails } from './WorkflowDetails';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { TabContainer } from '../../tabs/TabContainer';
 import { Tab } from '../../tabs/Tab';
 import { getStreams } from '../../../util/workflows';
 import { Code } from '../../Code';
+import { ShardLink } from '../../links/ShardLink';
 
 interface RouteParams {
     clusterID: string;
@@ -39,11 +41,20 @@ interface RouteParams {
 export const Workflow = () => {
     const { clusterID, keyspace, name } = useParams<RouteParams>();
     const { path, url } = useRouteMatch();
+    const location = useLocation();
 
     useDocumentTitle(`${name} (${keyspace})`);
 
     const { data } = useWorkflow({ clusterID, keyspace, name });
     const streams = getStreams(data);
+
+    const detailsURL = `${url}/details`;
+    const detailsTab = location.pathname === detailsURL;
+
+    let isReshard = false;
+    if (data && data.workflow) {
+        isReshard = data.workflow.workflow_type === 'Reshard';
+    }
 
     return (
         <div>
@@ -53,28 +64,76 @@ export const Workflow = () => {
                 </NavCrumbs>
 
                 <WorkspaceTitle className="font-mono">{name}</WorkspaceTitle>
-                <div className={style.headingMeta}>
-                    <span>
-                        Cluster: <code>{clusterID}</code>
-                    </span>
-                    <span>
-                        Target keyspace:{' '}
-                        <KeyspaceLink clusterID={clusterID} name={keyspace}>
-                            <code>{keyspace}</code>
-                        </KeyspaceLink>
-                    </span>
+                {isReshard && (
+                    <div className={style.headingMetaContainer}>
+                        <div className={style.headingMeta}>
+                            <span>
+                                {data?.workflow?.source?.shards?.length! > 1 ? 'Source Shards: ' : 'Source Shard: '}
+                                {data?.workflow?.source?.shards?.map((shard) => (
+                                    <code key={`${keyspace}/${shard}`}>
+                                        <ShardLink
+                                            className="mr-1"
+                                            clusterID={clusterID}
+                                            keyspace={keyspace}
+                                            shard={shard}
+                                        >
+                                            {`${keyspace}/${shard}`}
+                                        </ShardLink>
+                                    </code>
+                                ))}
+                            </span>
+                            <span>
+                                {data?.workflow?.target?.shards?.length! > 1 ? 'Target Shards: ' : 'Target Shard: '}
+                                {data?.workflow?.target?.shards?.map((shard) => (
+                                    <code key={`${keyspace}/${shard}`}>
+                                        <ShardLink
+                                            className="mr-1"
+                                            clusterID={clusterID}
+                                            keyspace={keyspace}
+                                            shard={shard}
+                                        >
+                                            {`${keyspace}/${shard}`}
+                                        </ShardLink>
+                                    </code>
+                                ))}
+                            </span>
+                        </div>
+                    </div>
+                )}
+                <div className={style.headingMetaContainer}>
+                    <div className={style.headingMeta} style={{ float: 'left' }}>
+                        <span>
+                            Cluster: <code>{clusterID}</code>
+                        </span>
+                        <span>
+                            Target Keyspace:{' '}
+                            <KeyspaceLink clusterID={clusterID} name={keyspace}>
+                                <code>{keyspace}</code>
+                            </KeyspaceLink>
+                        </span>
+                    </div>
+                    {detailsTab && (
+                        <div style={{ float: 'right' }}>
+                            <a href={`#workflowStreams`}>Scroll To Streams</a>
+                        </div>
+                    )}
                 </div>
             </WorkspaceHeader>
 
             <ContentContainer>
                 <TabContainer>
                     <Tab text="Streams" to={`${url}/streams`} count={streams.length} />
+                    <Tab text="Details" to={detailsURL} />
                     <Tab text="JSON" to={`${url}/json`} />
                 </TabContainer>
 
                 <Switch>
                     <Route path={`${path}/streams`}>
                         <WorkflowStreams clusterID={clusterID} keyspace={keyspace} name={name} />
+                    </Route>
+
+                    <Route path={`${path}/details`}>
+                        <WorkflowDetails clusterID={clusterID} keyspace={keyspace} name={name} />
                     </Route>
 
                     <Route path={`${path}/json`}>

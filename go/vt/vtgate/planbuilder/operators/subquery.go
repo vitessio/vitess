@@ -53,7 +53,8 @@ type SubQuery struct {
 	// We use this information to fail the planning if we are unable to merge the subquery with a route.
 	correlated bool
 
-	IsProjection bool
+	// IsArgument is set to true if the subquery puts the
+	IsArgument bool
 }
 
 func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) Operator {
@@ -156,8 +157,8 @@ func (sq *SubQuery) SetInputs(inputs []Operator) {
 
 func (sq *SubQuery) ShortDescription() string {
 	var typ string
-	if sq.IsProjection {
-		typ = "PROJ"
+	if sq.IsArgument {
+		typ = "ARGUMENT"
 	} else {
 		typ = "FILTER"
 	}
@@ -175,8 +176,11 @@ func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 	return sq
 }
 
-func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {
-	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
+func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
+	ae = sqlparser.Clone(ae)
+	// we need to rewrite the column name to an argument if it's the same as the subquery column name
+	ae.Expr = rewriteColNameToArgument(ctx, ae.Expr, []*SubQuery{sq}, sq)
+	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, ae)
 }
 
 func (sq *SubQuery) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
@@ -204,13 +208,15 @@ func (sq *SubQuery) GetMergePredicates() []sqlparser.Expr {
 }
 
 func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Operator {
-	if !sq.TopLevel {
+	// We can allow uncorrelated queries even when subquery isn't the top level construct,
+	// like if its underneath an Aggregator, because they will be pulled out and run separately.
+	if !sq.TopLevel && sq.correlated {
 		panic(subqueryNotAtTopErr)
 	}
 	if sq.correlated && sq.FilterType != opcode.PulloutExists {
 		panic(correlatedSubqueryErr)
 	}
-	if sq.IsProjection {
+	if sq.IsArgument {
 		if len(sq.GetMergePredicates()) > 0 {
 			// this means that we have a correlated subquery on our hands
 			panic(correlatedSubqueryErr)
@@ -224,11 +230,17 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
 var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
+func (sq *SubQuery) addLimit() {
+	// for a correlated subquery, we can add a limit 1 to the subquery
+	sq.Subquery = newLimit(sq.Subquery, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")}, true)
+}
+
 func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) Operator {
 	if len(sq.Predicates) > 0 {
 		if sq.FilterType != opcode.PulloutExists {
 			panic(correlatedSubqueryErr)
 		}
+		sq.addLimit()
 		return outer
 	}
 
@@ -239,6 +251,20 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	}
 	post := func(cursor *sqlparser.CopyOnWriteCursor) {
 		node := cursor.Node()
+		// For IN and NOT IN type filters, we have to add a Expression that checks if we got any rows back or not
+		// for correctness. That expression should be ANDed with the expression that has the IN/NOT IN comparison.
+		if compExpr, isCompExpr := node.(*sqlparser.ComparisonExpr); sq.FilterType.NeedsListArg() && isCompExpr {
+			if listArg, isListArg := compExpr.Right.(sqlparser.ListArg); isListArg && listArg.String() == sq.ArgName {
+				if sq.FilterType == opcode.PulloutIn {
+					cursor.Replace(sqlparser.AndExpressions(sqlparser.NewArgument(hasValuesArg()), compExpr))
+				} else {
+					cursor.Replace(&sqlparser.OrExpr{
+						Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())),
+						Right: compExpr,
+					})
+				}
+			}
+		}
 		if _, ok := node.(*sqlparser.Subquery); !ok {
 			return
 		}
@@ -256,18 +282,25 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	var predicates []sqlparser.Expr
 	switch sq.FilterType {
 	case opcode.PulloutExists:
+		sq.addLimit()
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()))
 	case opcode.PulloutNotExists:
+		sq.addLimit()
 		sq.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
 		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
 	case opcode.PulloutIn:
-		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()), rhsPred)
+		// Because we replace the comparison expression with an AND expression, it might be the top level construct there.
+		// In this case, it is better to send the two sides of the AND expression separately in the predicates because it can
+		// lead to better routing. This however might not always be true for example we can have the rhsPred to be something like
+		// `user.id = 2 OR (:__sq_has_values AND user.id IN ::sql1)`
+		if andExpr, isAndExpr := rhsPred.(*sqlparser.AndExpr); isAndExpr {
+			predicates = append(predicates, andExpr.Left, andExpr.Right)
+		} else {
+			predicates = append(predicates, rhsPred)
+		}
 		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutNotIn:
-		predicates = append(predicates, &sqlparser.OrExpr{
-			Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())),
-			Right: rhsPred,
-		})
+		predicates = append(predicates, rhsPred)
 		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutValue:
 		predicates = append(predicates, rhsPred)

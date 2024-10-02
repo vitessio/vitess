@@ -50,7 +50,7 @@ type Insert struct {
 	// that will appear in the result set of the select query.
 	VindexValueOffset [][]int
 
-	noInputs
+	nullaryOperator
 	noColumns
 	noPredicates
 }
@@ -96,8 +96,12 @@ func (i *Insert) Clone([]Operator) Operator {
 	}
 }
 
-func (i *Insert) TablesUsed() []string {
-	return SingleQualifiedIdentifier(i.VTable.Keyspace, i.VTable.Name)
+func (i *Insert) TablesUsed(in []string) []string {
+	return append(in, i.tableTarget())
+}
+
+func (i *Insert) tableTarget() string {
+	return QualifiedString(i.VTable.Keyspace, i.VTable.Name.String())
 }
 
 func (i *Insert) Statement() sqlparser.Statement {
@@ -363,8 +367,8 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 		AST:    insStmt,
 	}
 	route := &Route{
-		Source:  insOp,
-		Routing: routing,
+		unaryOperator: newUnaryOp(insOp),
+		Routing:       routing,
 	}
 
 	// Table column list is nil then add all the columns
@@ -394,10 +398,7 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 		op = insertSelectPlan(ctx, insOp, route, insStmt, rows)
 	}
 	if insStmt.Comments != nil {
-		op = &LockAndComment{
-			Source:   op,
-			Comments: insStmt.Comments,
-		}
+		op = newLockAndComment(op, insStmt.Comments, sqlparser.NoLock)
 	}
 	return op
 }
@@ -420,17 +421,13 @@ func insertSelectPlan(
 
 	// output of the select plan will be used to insert rows into the table.
 	insertSelect := &InsertSelection{
-		Select: &LockAndComment{
-			Source: selOp,
-			Lock:   sqlparser.ShareModeLock,
-		},
-		Insert: routeOp,
+		binaryOperator: newBinaryOp(newLockAndComment(selOp, nil, sqlparser.ShareModeLock), routeOp),
 	}
 
 	// When the table you are streaming data from and table you are inserting from are same.
 	// Then due to locking of the index range on the table we might not be able to insert into the table.
 	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
-	insertTbl := insOp.TablesUsed()[0]
+	insertTbl := insOp.tableTarget()
 	selTables := TablesUsed(selOp)
 	for _, tbl := range selTables {
 		if insertTbl == tbl {
@@ -506,7 +503,7 @@ func insertRowsPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlpar
 			colNum, _ := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
 				innerpv, err := evalengine.Translate(row[colNum], &evalengine.Config{
-					ResolveType: ctx.SemTable.TypeForExpr,
+					ResolveType: ctx.TypeForExpr,
 					Collation:   ctx.SemTable.Collation,
 					Environment: ctx.VSchema.Environment(),
 				})
@@ -637,7 +634,7 @@ func modifyForAutoinc(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, v
 		}
 		var err error
 		gen.Values, err = evalengine.Translate(autoIncValues, &evalengine.Config{
-			ResolveType: ctx.SemTable.TypeForExpr,
+			ResolveType: ctx.TypeForExpr,
 			Collation:   ctx.SemTable.Collation,
 			Environment: ctx.VSchema.Environment(),
 		})

@@ -19,6 +19,7 @@ package vreplication
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -27,13 +28,16 @@ import (
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 // TestVtctldclientCLI tests the vreplication vtctldclient CLI commands, primarily to check that non-standard flags
@@ -47,6 +51,7 @@ func TestVtctldclientCLI(t *testing.T) {
 	}()
 	defaultRdonly = 0
 	vc = setupMinimalCluster(t)
+	vttablet.InitVReplicationConfigDefaults()
 
 	err = vc.Vtctl.AddCellInfo("zone2")
 	require.NoError(t, err)
@@ -61,11 +66,17 @@ func TestVtctldclientCLI(t *testing.T) {
 	workflowName := "wf1"
 	targetTabs := setupMinimalCustomerKeyspace(t)
 
+	t.Run("RoutingRulesApply", func(t *testing.T) {
+		testRoutingRulesApplyCommands(t)
+	})
 	t.Run("WorkflowList", func(t *testing.T) {
 		testWorkflowList(t, sourceKeyspaceName, targetKeyspaceName)
 	})
 	t.Run("MoveTablesCreateFlags1", func(t *testing.T) {
 		testMoveTablesFlags1(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
+	})
+	t.Run("testWorkflowUpdateConfig", func(t *testing.T) {
+		testWorkflowUpdateConfig(t, &mt, targetTabs, targetKeyspaceName, workflowName)
 	})
 	t.Run("MoveTablesCreateFlags2", func(t *testing.T) {
 		testMoveTablesFlags2(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
@@ -91,10 +102,16 @@ func TestVtctldclientCLI(t *testing.T) {
 // Tests several create flags and some complete flags and validates that some of them are set correctly for the workflow.
 func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
 	tables := "customer,customer2"
+	overrides := map[string]string{
+		"vreplication_net_read_timeout":        "6000",
+		"relay_log_max_items":                  "10000",
+		"vreplication-parallel-insert-workers": "10",
+	}
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells",
+		"--config-overrides", mapToCSV(overrides),
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 	switchFlags := []string{}
@@ -111,6 +128,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	validateMoveTablesWorkflow(t, workflowResponse.Workflows)
 	// Since we used --no-routing-rules, there should be no routing rules.
 	confirmNoRoutingRules(t)
+	validateOverrides(t, targetTabs, overrides)
 }
 
 func getMoveTablesShowResponse(mt *iMoveTables) *vtctldatapb.GetWorkflowsResponse {
@@ -206,6 +224,91 @@ func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
 	require.EqualValues(t, wfNames, workflowNames)
 }
 
+func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[string]*cluster.VttabletProcess, targetKeyspace, workflow string) {
+	updateConfig := func(t *testing.T, overrides map[string]string) error {
+		overridesCSV := mapToCSV(overrides)
+		_, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKeyspace, "update",
+			"--workflow", workflow, "--config-overrides", overridesCSV)
+		return err
+	}
+	require.GreaterOrEqual(t, len(targetTabs), 1)
+	tab := maps.Values(targetTabs)[0]
+	require.NotNil(t, tab)
+	defaultConfig := vttablet.InitVReplicationConfigDefaults()
+	type testCase struct {
+		name      string
+		config    map[string]string
+		needError bool
+		clears    bool
+	}
+	testCases := []testCase{
+		{
+			name:   "reset flags",
+			config: defaultConfig.Map(),
+			clears: true,
+		},
+		{
+			name: "one value",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "10",
+			},
+		},
+		{
+			name: "two values",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "100",
+				"vreplication_store_compressed_gtid":     "true",
+			},
+		},
+		{
+			name: "invalid value",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "12s",
+				"vreplication_store_compressed_gtid":     "true",
+			},
+			needError: true,
+		},
+		{
+			name: "unknown flag",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "1",
+				"vreplication_store_compressed_gtid":     "true",
+				"unknown":                                "value",
+			},
+			needError: true,
+		},
+		{
+			name: "clear flags",
+			config: map[string]string{
+				"vreplication_heartbeat_update_interval": "",
+				"vreplication_store_compressed_gtid":     "",
+			},
+			clears: true,
+		},
+	}
+
+	expectedConfig, err := vttablet.NewVReplicationConfig(nil)
+	require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := updateConfig(t, tc.config)
+			if tc.needError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				expectedConfig, err = vttablet.NewVReplicationConfig(tc.config)
+				require.NoError(t, err)
+			}
+			config := getVReplicationConfig(t, tab)
+			if tc.clears {
+				expectedConfig, err = vttablet.NewVReplicationConfig(nil)
+				require.NoError(t, err)
+			}
+			require.EqualValues(t, expectedConfig.Map(), config)
+		})
+	}
+}
+
 func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tables string,
 	createFlags, completeFlags, switchFlags []string) iMoveTables {
 	mt := newMoveTables(vc, &moveTablesWorkflow{
@@ -227,9 +330,17 @@ func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName
 // reshard helpers
 
 func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess) {
+	overrides := map[string]string{
+		"vreplication_copy_phase_duration":     "10h11m12s",
+		"vreplication_experimental_flags":      "7",
+		"vreplication-parallel-insert-workers": "4",
+		"vreplication_net_read_timeout":        "6000",
+		"relay_log_max_items":                  "10000",
+	}
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--format=json",
+		"--config-overrides", mapToCSV(overrides),
 	}
 	rs := newReshard(vc, &reshardWorkflow{
 		workflowInfo: &workflowInfo{
@@ -245,6 +356,7 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflowName)
 	rs.Create()
 	validateReshardResponse(rs)
+	validateOverrides(t, targetTabs, overrides)
 	workflowResponse := getWorkflow(keyspace, workflowName)
 	reshardShowResponse := getReshardShowResponse(&rs)
 	require.EqualValues(t, reshardShowResponse, workflowResponse)
@@ -390,6 +502,48 @@ func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {
 	return true
 }
 
+func getMirrorRules(t *testing.T) *vschemapb.MirrorRules {
+	mirrorRules, err := vc.VtctldClient.ExecuteCommandWithOutput("GetMirrorRules")
+	require.NoError(t, err)
+	var mirrorRulesResponse vschemapb.MirrorRules
+	err = protojson.Unmarshal([]byte(mirrorRules), &mirrorRulesResponse)
+	require.NoError(t, err)
+	return &mirrorRulesResponse
+}
+
+func confirmNoMirrorRules(t *testing.T) {
+	mirrorRulesResponse := getMirrorRules(t)
+	require.Zero(t, len(mirrorRulesResponse.Rules))
+}
+
+func confirmMirrorRulesExist(t *testing.T) {
+	mirrorRulesResponse := getMirrorRules(t)
+	require.NotZero(t, len(mirrorRulesResponse.Rules))
+}
+
+func expectMirrorRules(t *testing.T, sourceKeyspace, targetKeyspace string, tables []string, tabletTypes []topodatapb.TabletType, percent float32) {
+	t.Helper()
+
+	// Each table should have a mirror rule for each serving type.
+	mirrorRules := getMirrorRules(t)
+	require.Len(t, mirrorRules.Rules, len(tables)*len(tabletTypes))
+	fromTableToRule := make(map[string]*vschemapb.MirrorRule)
+	for _, rule := range mirrorRules.Rules {
+		fromTableToRule[rule.FromTable] = rule
+	}
+	for _, table := range tables {
+		for _, tabletType := range tabletTypes {
+			fromTable := fmt.Sprintf("%s.%s", sourceKeyspace, table)
+			if tabletType != topodatapb.TabletType_PRIMARY {
+				fromTable = fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
+			}
+			require.Contains(t, fromTableToRule, fromTable)
+			require.Equal(t, fmt.Sprintf("%s.%s", targetKeyspace, table), fromTableToRule[fromTable].ToTable)
+			require.Equal(t, percent, fromTableToRule[fromTable].Percent)
+		}
+	}
+}
+
 func getRoutingRules(t *testing.T) *vschemapb.RoutingRules {
 	routingRules, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
@@ -437,4 +591,139 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 	require.Equalf(t, 1, len(bls.Filter.Rules), "Rules are %+v", bls.Filter.Rules) // only customer, customer2 should be excluded
 	require.Equal(t, binlogdatapb.OnDDLAction_STOP, bls.OnDdl)
 	require.True(t, bls.StopAfterCopy)
+}
+
+// Test that routing rules can be applied using the vtctldclient CLI for all types of routing rules.
+func testRoutingRulesApplyCommands(t *testing.T) {
+	var rulesBytes []byte
+	var err error
+	var validateRules func(want, got string)
+
+	ruleTypes := []string{"RoutingRules", "ShardRoutingRules", "KeyspaceRoutingRules"}
+	for _, typ := range ruleTypes {
+		switch typ {
+		case "RoutingRules":
+			rr := &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "from1",
+						ToTables:  []string{"to1", "to2"},
+					},
+				},
+			}
+			rulesBytes, err = json2.MarshalPB(rr)
+			require.NoError(t, err)
+			validateRules = func(want, got string) {
+				var wantRules = &vschemapb.RoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
+				var gotRules = &vschemapb.RoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
+				require.EqualValues(t, wantRules, gotRules)
+			}
+		case "ShardRoutingRules":
+			srr := &vschemapb.ShardRoutingRules{
+				Rules: []*vschemapb.ShardRoutingRule{
+					{
+						FromKeyspace: "from1",
+						ToKeyspace:   "to1",
+						Shard:        "-80",
+					},
+				},
+			}
+			rulesBytes, err = json2.MarshalPB(srr)
+			require.NoError(t, err)
+			validateRules = func(want, got string) {
+				var wantRules = &vschemapb.ShardRoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
+				var gotRules = &vschemapb.ShardRoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
+				require.EqualValues(t, wantRules, gotRules)
+			}
+		case "KeyspaceRoutingRules":
+			krr := &vschemapb.KeyspaceRoutingRules{
+				Rules: []*vschemapb.KeyspaceRoutingRule{
+					{
+						FromKeyspace: "from1",
+						ToKeyspace:   "to1",
+					},
+				},
+			}
+			rulesBytes, err = json2.MarshalPB(krr)
+			require.NoError(t, err)
+			validateRules = func(want, got string) {
+				var wantRules = &vschemapb.KeyspaceRoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
+				var gotRules = &vschemapb.KeyspaceRoutingRules{}
+				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
+				require.EqualValues(t, wantRules, gotRules)
+			}
+		default:
+			require.FailNow(t, "Unknown type %s", typ)
+		}
+		testOneRoutingRulesCommand(t, typ, string(rulesBytes), validateRules)
+	}
+
+}
+
+// For a given routing rules type, test that the rules can be applied using the vtctldclient CLI.
+// We test both inline and file-based rules.
+// The test also validates that both camelCase and snake_case key names work correctly.
+func testOneRoutingRulesCommand(t *testing.T, typ string, rules string, validateRules func(want, got string)) {
+	type routingRulesTest struct {
+		name    string
+		rules   string
+		useFile bool // if true, use a file to pass the rules
+	}
+	tests := []routingRulesTest{
+		{
+			name:  "inline",
+			rules: rules,
+		},
+		{
+			name:    "file",
+			rules:   rules,
+			useFile: true,
+		},
+		{
+			name:  "empty", // finally, cleanup rules
+			rules: "{}",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(typ+"/"+tt.name, func(t *testing.T) {
+			wantRules := tt.rules
+			// The input rules are in camelCase, since they are the output of json2.MarshalPB
+			// The first iteration uses the output of routing rule Gets which are in snake_case.
+			for _, keyCase := range []string{"camelCase", "snake_case"} {
+				t.Run(keyCase, func(t *testing.T) {
+					var args []string
+					apply := fmt.Sprintf("Apply%s", typ)
+					get := fmt.Sprintf("Get%s", typ)
+					args = append(args, apply)
+					if tt.useFile {
+						tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_rules.json", tt.name))
+						require.NoError(t, err)
+						defer os.Remove(tmpFile.Name())
+						_, err = tmpFile.WriteString(wantRules)
+						require.NoError(t, err)
+						args = append(args, "--rules-file", tmpFile.Name())
+					} else {
+						args = append(args, "--rules", wantRules)
+					}
+					var output string
+					var err error
+					if output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...); err != nil {
+						require.FailNowf(t, "failed action", apply, "%v: %s", err, output)
+					}
+					if output, err = vc.VtctldClient.ExecuteCommandWithOutput(get); err != nil {
+						require.FailNowf(t, "failed action", get, "%v: %s", err, output)
+					}
+					validateRules(wantRules, output)
+					// output of GetRoutingRules is in snake_case and we use it for the next iteration which
+					// tests applying rules with snake_case keys.
+					wantRules = output
+				})
+			}
+		})
+	}
 }

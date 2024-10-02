@@ -82,16 +82,23 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// datetime val
 		in:      "select * from t where foobar = timestamp'2012-02-29 12:34:56.123456'",
-		outstmt: "select * from t where foobar = :foobar /* DATETIME(6) */",
+		outstmt: "select * from t where foobar = CAST(:foobar AS DATETIME(6))",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.ValueBindVariable(sqltypes.NewDatetime("2012-02-29 12:34:56.123456")),
 		},
 	}, {
 		// time val
 		in:      "select * from t where foobar = time'12:34:56.123456'",
-		outstmt: "select * from t where foobar = :foobar /* TIME(6) */",
+		outstmt: "select * from t where foobar = CAST(:foobar AS TIME(6))",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.ValueBindVariable(sqltypes.NewTime("12:34:56.123456")),
+		},
+	}, {
+		// time val
+		in:      "select * from t where foobar = time'12:34:56'",
+		outstmt: "select * from t where foobar = CAST(:foobar AS TIME)",
+		outbv: map[string]*querypb.BindVariable{
+			"foobar": sqltypes.ValueBindVariable(sqltypes.NewTime("12:34:56")),
 		},
 	}, {
 		// multiple vals
@@ -224,6 +231,23 @@ func TestNormalize(t *testing.T) {
 			"v1": sqltypes.BitNumBindVariable([]byte("0b11")),
 		},
 	}, {
+		// json value in insert
+		in:      "insert into t values ('{\"k\", \"v\"}')",
+		outstmt: "insert into t values (:bv1 /* VARCHAR */)",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.StringBindVariable("{\"k\", \"v\"}"),
+		},
+	}, {
+		// json function in insert
+		in:      "insert into t values (JSON_OBJECT('_id', 27, 'name', 'carrot'))",
+		outstmt: "insert into t values (json_object(:bv1 /* VARCHAR */, :bv2 /* INT64 */, :bv3 /* VARCHAR */, :bv4 /* VARCHAR */))",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.StringBindVariable("_id"),
+			"bv2": sqltypes.Int64BindVariable(27),
+			"bv3": sqltypes.StringBindVariable("name"),
+			"bv4": sqltypes.StringBindVariable("carrot"),
+		},
+	}, {
 		// ORDER BY column_position
 		in:      "select a, b from t order by 1 asc",
 		outstmt: "select a, b from t order by 1 asc",
@@ -334,21 +358,21 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// DateVal should also be normalized
 		in:      `select date'2022-08-06'`,
-		outstmt: `select :bv1 /* DATE */ from dual`,
+		outstmt: `select CAST(:bv1 AS DATE) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Date, []byte("2022-08-06"))),
 		},
 	}, {
 		// TimeVal should also be normalized
 		in:      `select time'17:05:12'`,
-		outstmt: `select :bv1 /* TIME */ from dual`,
+		outstmt: `select CAST(:bv1 AS TIME) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Time, []byte("17:05:12"))),
 		},
 	}, {
 		// TimestampVal should also be normalized
 		in:      `select timestamp'2022-08-06 17:05:12'`,
-		outstmt: `select :bv1 /* DATETIME */ from dual`,
+		outstmt: `select CAST(:bv1 AS DATETIME) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
 		},
@@ -410,6 +434,13 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.Int64BindVariable(1),
 			"bv2": sqltypes.Int64BindVariable(2),
 			"bv3": sqltypes.TestBindVariable([]any{1, 2}),
+		},
+	}, {
+		in:      "SELECT 1 WHERE (~ (1||0)) IS NULL",
+		outstmt: "select :bv1 /* INT64 */ from dual where ~(:bv1 /* INT64 */ or :bv2 /* INT64 */) is null",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.Int64BindVariable(0),
 		},
 	}}
 	parser := NewTestParser()
@@ -501,6 +532,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 	err = Normalize(tree, NewReservedVars("vtg", known), bv)
 	require.NoError(t, err)
 	normalizerOutput := String(tree)
+	require.EqualValues(t, testOne.output, normalizerOutput)
 	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 		return
 	}

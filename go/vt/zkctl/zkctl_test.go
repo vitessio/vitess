@@ -18,8 +18,9 @@ package zkctl
 
 import (
 	"fmt"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // This test depend on starting and stopping a ZK instance,
@@ -39,29 +40,21 @@ func TestLifeCycle(t *testing.T) {
 	adminServerCfg := "admin.serverPort=8081"
 	zkConf.Extra = []string{tpcKeepAliveCfg, adminServerCfg}
 
-	if zkObservedConf, err := MakeZooCfg([]string{zkConf.ConfigFile()}, zkConf, "header"); err != nil {
-		t.Fatalf("MakeZooCfg err: %v", err)
-	} else if !strings.Contains(zkObservedConf, fmt.Sprintf("\n%s\n", tpcKeepAliveCfg)) {
-		t.Fatalf("Expected tpcKeepAliveCfg in zkObservedConf")
-	} else if !strings.Contains(zkObservedConf, fmt.Sprintf("\n%s\n", adminServerCfg)) {
-		t.Fatalf("Expected adminServerCfg in zkObservedConf")
-	}
+	zkObservedConf, err := MakeZooCfg([]string{zkConf.ConfigFile()}, zkConf, "header")
+	require.NoError(t, err)
+	require.Contains(t, zkObservedConf, fmt.Sprintf("\n%s\n", tpcKeepAliveCfg), "Expected tpcKeepAliveCfg in zkObservedConf")
+	require.Contains(t, zkObservedConf, fmt.Sprintf("\n%s\n", adminServerCfg), "Expected adminServerCfg in zkObservedConf")
 
 	zkd := NewZkd(zkConf)
-	if err := zkd.Init(); err != nil {
-		t.Fatalf("Init() err: %v", err)
-	}
+	err = zkd.Init()
+	require.NoError(t, err)
 
-	if err := zkd.Shutdown(); err != nil {
-		t.Fatalf("Shutdown() err: %v", err)
-	}
+	err = zkd.Shutdown()
+	require.NoError(t, err)
 
-	if err := zkd.Start(); err != nil {
-		t.Fatalf("Start() err: %v", err)
-	}
+	err = zkd.Start()
+	require.NoError(t, err)
 
-	if err := zkd.Teardown(); err != nil {
-		t.Fatalf("Teardown() err: %v", err)
-	}
-
+	err = zkd.Teardown()
+	require.NoError(t, err)
 }

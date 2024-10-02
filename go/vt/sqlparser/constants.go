@@ -23,7 +23,11 @@ const (
 	// Select.Distinct
 	AllStr              = "all "
 	DistinctStr         = "distinct "
+	HighPriorityStr     = "high_priority "
 	StraightJoinHint    = "straight_join "
+	SQLSmallResultStr   = "sql_small_result "
+	SQLBigResultStr     = "sql_big_result "
+	SQLBufferResultStr  = "sql_buffer_result "
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
@@ -272,6 +276,8 @@ const (
 	QueriesStr     = "queries"
 	AllVExplainStr = "all"
 	PlanStr        = "plan"
+	TraceStr       = "trace"
+	KeysStr        = "keys"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -478,6 +484,9 @@ const (
 	// KillType strings
 	ConnectionStr = "connection"
 	QueryStr      = "query"
+
+	// GroupConcatDefaultSeparator is the default separator for GroupConcatExpr.
+	GroupConcatDefaultSeparator = ","
 )
 
 // Constants for Enum Type - Insert.Action
@@ -677,6 +686,12 @@ const (
 	NotRegexpOp
 )
 
+const (
+	Missing ComparisonModifier = iota
+	Any
+	All
+)
+
 func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
 	switch op {
 	case EqualOp:
@@ -833,6 +848,8 @@ const (
 	QueriesVExplainType VExplainType = iota
 	PlanVExplainType
 	AllVExplainType
+	TraceVExplainType
+	KeysVExplainType
 )
 
 // Constant for Enum Type - SelectIntoType
@@ -936,6 +953,7 @@ const (
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType
+	CleanupAllMigrationType
 	ThrottleMigrationType
 	ThrottleAllMigrationType
 	UnthrottleMigrationType

@@ -42,8 +42,6 @@ func TestFullGeneration(t *testing.T) {
 		require.Contains(t, contents, "http://www.apache.org/licenses/LICENSE-2.0")
 		applyIdx := strings.Index(contents, "func (a *application) apply(parent, node AST, replacer replacerFunc)")
 		cloneIdx := strings.Index(contents, "CloneAST(in AST) AST")
-		if applyIdx == 0 && cloneIdx == 0 {
-			t.Fatalf("file doesn't contain expected contents")
-		}
+		require.False(t, applyIdx == 0 && cloneIdx == 0, "file doesn't contain expected contents")
 	}
 }

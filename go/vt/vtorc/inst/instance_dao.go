@@ -59,9 +59,8 @@ var (
 var forgetAliases *cache.Cache
 
 var (
-	// The metrics are registered with deprecated names. The old metric names can be removed in v21.
-	readTopologyInstanceCounter = stats.NewCounterWithDeprecatedName("InstanceReadTopology", "instance.read_topology", "Number of times an instance was read from the topology")
-	readInstanceCounter         = stats.NewCounterWithDeprecatedName("InstanceRead", "instance.read", "Number of times an instance was read")
+	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
+	readInstanceCounter         = stats.NewCounter("InstanceRead", "Number of times an instance was read")
 	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
 	writeBufferLatency          = stopwatch.NewNamedStopwatch()
 )
@@ -142,8 +141,8 @@ func logReadTopologyInstanceError(tabletAlias string, hint string, err error) er
 			strings.Replace(hint, "%", "%%", -1), // escape %
 			err)
 	}
-	log.Errorf(msg)
-	return fmt.Errorf(msg)
+	log.Error(msg)
+	return errors.New(msg)
 }
 
 // RegisterStats registers stats from the inst package
@@ -934,7 +933,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to build query: %v", err)
 		log.Errorf(errMsg)
-		return sql, args, fmt.Errorf(errMsg)
+		return sql, args, errors.New(errMsg)
 	}
 
 	return sql, args, nil
@@ -1032,7 +1031,7 @@ func ForgetInstance(tabletAlias string) error {
 	if tabletAlias == "" {
 		errMsg := "ForgetInstance(): empty tabletAlias"
 		log.Errorf(errMsg)
-		return fmt.Errorf(errMsg)
+		return errors.New(errMsg)
 	}
 	forgetAliases.Set(tabletAlias, true, cache.DefaultExpiration)
 	log.Infof("Forgetting: %v", tabletAlias)
@@ -1070,8 +1069,8 @@ func ForgetInstance(tabletAlias string) error {
 	}
 	if rows == 0 {
 		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAlias)
-		log.Errorf(errMsg)
-		return fmt.Errorf(errMsg)
+		log.Error(errMsg)
+		return errors.New(errMsg)
 	}
 	_ = AuditOperation("forget", tabletAlias, "")
 	return nil

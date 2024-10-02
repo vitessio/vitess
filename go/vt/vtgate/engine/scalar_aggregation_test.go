@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/sqlparser"
 	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
@@ -233,6 +234,7 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 					Opcode: AggregateGroupConcat,
 					Col:    0,
 					Alias:  "group_concat(c2)",
+					Func:   &sqlparser.GroupConcatExpr{Separator: ","},
 				}},
 				Input: fp,
 			}
@@ -394,6 +396,7 @@ func TestScalarGroupConcat(t *testing.T) {
 				Aggregates: []*AggregateParams{{
 					Opcode: AggregateGroupConcat,
 					Col:    0,
+					Func:   &sqlparser.GroupConcatExpr{Separator: ","},
 				}},
 				Input: fp,
 			}

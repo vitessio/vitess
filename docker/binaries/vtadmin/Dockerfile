@@ -17,7 +17,7 @@ ARG DEBIAN_VER=bullseye-slim
 
 FROM vitess/lite:${VT_BASE_VER} AS lite
 
-FROM node:18-${DEBIAN_VER} as node
+FROM node:20-${DEBIAN_VER} as node
 
 # Prepare directory structure.
 RUN mkdir -p /vt/web

@@ -44,7 +44,7 @@ type (
 
 		// Left and Right are the LHS and RHS primitives
 		// of the Join. They can be any primitive.
-		Left, Right Primitive `json:",omitempty"`
+		Left, Right Primitive
 
 		// Cols defines which columns from the left
 		// or right results should be used to build the
@@ -53,7 +53,7 @@ type (
 		// For the right query, they're 1, 2, etc.
 		// If Cols is {-1, -2, 1, 2}, it means that
 		// the returned result will be {Left0, Left1, Right0, Right1}.
-		Cols []int `json:",omitempty"`
+		Cols []int
 
 		// The keys correspond to the column offset in the inputs where
 		// the join columns can be found

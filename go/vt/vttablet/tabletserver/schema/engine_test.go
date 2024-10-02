@@ -467,7 +467,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
 	want := "injected error"
-	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf(want))
+	db.AddRejectedQuery(mysql.BaseShowTables, errors.New(want))
 	se := newEngine(1*time.Second, 1*time.Second, 0, db)
 	err := se.Open()
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1331,7 +1331,8 @@ func TestEngineReload(t *testing.T) {
 	}
 
 	// adding query pattern for udfs
-	db.AddQueryPattern("SELECT name.*", &sqltypes.Result{})
+	udfQueryPattern := "SELECT name.*"
+	db.AddQueryPattern(udfQueryPattern, &sqltypes.Result{})
 
 	// Verify the list of created, altered and dropped tables seen.
 	se.RegisterNotifier("test", func(full map[string]*Table, created, altered, dropped []*Table, _ bool) {
@@ -1344,6 +1345,16 @@ func TestEngineReload(t *testing.T) {
 	err = se.reload(context.Background(), false)
 	require.NoError(t, err)
 	require.NoError(t, db.LastError())
+	require.Zero(t, se.throttledLogger.GetLastLogTime())
+
+	// Now if we remove the query pattern for udfs, schema engine shouldn't fail.
+	// Instead we should see a log message with the error.
+	db.RemoveQueryPattern(udfQueryPattern)
+	se.UnregisterNotifier("test")
+	err = se.reload(context.Background(), false)
+	require.NoError(t, err)
+	// Check for the udf error being logged. The last log time should be less than a second.
+	require.Less(t, time.Since(se.throttledLogger.GetLastLogTime()), 1*time.Second)
 }
 
 // TestEngineReload tests the vreplication specific GetTableForPos function to ensure

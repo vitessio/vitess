@@ -128,6 +128,15 @@ func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctld
 	return client.c.ChangeTabletType(ctx, in, opts...)
 }
 
+// CheckThrottler is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CheckThrottler(ctx context.Context, in *vtctldatapb.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldatapb.CheckThrottlerResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CheckThrottler(ctx, in, opts...)
+}
+
 // CleanupSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
 	if client.c == nil {
@@ -144,6 +153,15 @@ func (client *gRPCVtctldClient) CompleteSchemaMigration(ctx context.Context, in 
 	}
 
 	return client.c.CompleteSchemaMigration(ctx, in, opts...)
+}
+
+// ConcludeTransaction is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ConcludeTransaction(ctx context.Context, in *vtctldatapb.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldatapb.ConcludeTransactionResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ConcludeTransaction(ctx, in, opts...)
 }
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
@@ -353,6 +371,15 @@ func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatap
 	return client.c.GetKeyspaces(ctx, in, opts...)
 }
 
+// GetMirrorRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetMirrorRules(ctx context.Context, in *vtctldatapb.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetMirrorRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetMirrorRules(ctx, in, opts...)
+}
+
 // GetPermissions is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetPermissions(ctx context.Context, in *vtctldatapb.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetPermissionsResponse, error) {
 	if client.c == nil {
@@ -470,6 +497,15 @@ func (client *gRPCVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb.
 	return client.c.GetTablets(ctx, in, opts...)
 }
 
+// GetThrottlerStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldatapb.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.GetThrottlerStatusResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetThrottlerStatus(ctx, in, opts...)
+}
+
 // GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetTopologyPath(ctx context.Context, in *vtctldatapb.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTopologyPathResponse, error) {
 	if client.c == nil {
@@ -477,6 +513,15 @@ func (client *gRPCVtctldClient) GetTopologyPath(ctx context.Context, in *vtctlda
 	}
 
 	return client.c.GetTopologyPath(ctx, in, opts...)
+}
+
+// GetUnresolvedTransactions is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetUnresolvedTransactions(ctx context.Context, in *vtctldatapb.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetUnresolvedTransactions(ctx, in, opts...)
 }
 
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.
@@ -1035,6 +1080,15 @@ func (client *gRPCVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldat
 	}
 
 	return client.c.WorkflowDelete(ctx, in, opts...)
+}
+
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) WorkflowMirrorTraffic(ctx context.Context, in *vtctldatapb.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowMirrorTrafficResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.WorkflowMirrorTraffic(ctx, in, opts...)
 }
 
 // WorkflowStatus is part of the vtctlservicepb.VtctldClient interface.

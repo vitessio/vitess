@@ -159,7 +159,7 @@ func createSubquery(
 	parent sqlparser.Expr,
 	argName string,
 	filterType opcode.PulloutOpcode,
-	isProjection bool,
+	isArg bool,
 ) *SubQuery {
 	topLevel := ctx.SemTable.EqualsExpr(original, parent)
 	original = cloneASTAndSemState(ctx, original)
@@ -181,7 +181,7 @@ func createSubquery(
 		Original:         original,
 		ArgName:          argName,
 		originalSubquery: originalSq,
-		IsProjection:     isProjection,
+		IsArgument:       isArg,
 		TopLevel:         topLevel,
 		JoinColumns:      joinCols,
 		correlated:       correlated,

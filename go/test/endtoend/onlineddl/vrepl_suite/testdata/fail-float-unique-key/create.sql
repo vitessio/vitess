@@ -1,6 +1,6 @@
 drop table if exists onlineddl_test;
 create table onlineddl_test (
-  f float,
+  f float not null,
   i int not null,
   ts timestamp default current_timestamp,
   dt datetime,

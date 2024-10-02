@@ -89,17 +89,24 @@ func TestReparentSorter(t *testing.T) {
 	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
 
 	testcases := []struct {
-		name          string
-		tablets       []*topodatapb.Tablet
-		positions     []replication.Position
-		containsErr   string
-		sortedTablets []*topodatapb.Tablet
+		name             string
+		tablets          []*topodatapb.Tablet
+		innodbBufferPool []int
+		positions        []replication.Position
+		containsErr      string
+		sortedTablets    []*topodatapb.Tablet
 	}{
 		{
 			name:          "all advanced, sort via promotion rules",
 			tablets:       []*topodatapb.Tablet{nil, tabletReplica1_100, tabletRdonly1_102},
 			positions:     []replication.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletRdonly1_102, nil},
+		}, {
+			name:             "all advanced, sort via innodb buffer pool",
+			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100},
+			positions:        []replication.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
+			innodbBufferPool: []int{10, 40, 25},
+			sortedTablets:    []*topodatapb.Tablet{tabletReplica2_100, tabletReplica1_100, tabletReplica1_101},
 		}, {
 			name:          "ordering by position",
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
@@ -120,6 +127,12 @@ func TestReparentSorter(t *testing.T) {
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
 			positions:     []replication.Position{positionEmpty, positionIntermediate1, positionMostAdvanced, positionIntermediate1},
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletRdonly1_102, tabletReplica1_101},
+		}, {
+			name:             "mixed - another",
+			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
+			positions:        []replication.Position{positionIntermediate1, positionIntermediate1, positionMostAdvanced, positionIntermediate1},
+			innodbBufferPool: []int{100, 200, 0, 200},
+			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletReplica1_101, tabletRdonly1_102},
 		},
 	}
 
@@ -127,7 +140,7 @@ func TestReparentSorter(t *testing.T) {
 	require.NoError(t, err)
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := sortTabletsForReparent(testcase.tablets, testcase.positions, durability)
+			err := sortTabletsForReparent(testcase.tablets, testcase.positions, testcase.innodbBufferPool, durability)
 			if testcase.containsErr != "" {
 				require.EqualError(t, err, testcase.containsErr)
 			} else {

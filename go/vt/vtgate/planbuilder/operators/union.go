@@ -208,7 +208,8 @@ func (u *Union) addConstantToUnion(ctx *plancontext.PlanningContext, aexpr *sqlp
 			outputOffset = thisOffset
 		} else {
 			if thisOffset != outputOffset {
-				panic(vterrors.VT12001("argument offsets did not line up for UNION"))
+				tree := ToTree(u)
+				panic(vterrors.VT12001(fmt.Sprintf("argument offsets did not line up for UNION. Pushing %s - want %d got %d\n%s", sqlparser.String(aexpr), outputOffset, thisOffset, tree)))
 			}
 		}
 	}
@@ -224,7 +225,7 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 			outputOffset = thisOffset
 		} else {
 			if thisOffset != outputOffset {
-				panic(vterrors.VT12001("weight_string offsets did not line up for UNION"))
+				panic(vterrors.VT13001("weight_string offsets did not line up for UNION"))
 			}
 		}
 	}

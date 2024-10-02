@@ -18,7 +18,6 @@ package stats
 
 import (
 	"encoding/json"
-	"expvar"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -59,21 +58,6 @@ func NewTimings(name, help, label string, categories ...string) *Timings {
 		publish(name, t)
 	}
 
-	return t
-}
-
-// NewTimingsWithDeprecatedName returns a new Timings that also has a deprecated name that can be removed in a future release.
-// It is important to ensure that we only call this function with values for name and deprecatedName such that they match to the same
-// metric name in snake case.
-func NewTimingsWithDeprecatedName(name string, deprecatedName string, help, label string, categories ...string) *Timings {
-	// Ensure that the snake case for the deprecated name and the new name are the same.
-	if deprecatedName == "" || GetSnakeName(name) != GetSnakeName(deprecatedName) {
-		panic(fmt.Sprintf("New name for deprecated metric doesn't have the same snake case - %v", deprecatedName))
-	}
-	t := NewTimings(deprecatedName, help, label, categories...)
-	// We have already published the deprecated name for backward compatibility.
-	// At the same time we want the new metric to be visible on the `/debug/vars` page, so we publish the new name in expvar.
-	expvar.Publish(name, t)
 	return t
 }
 

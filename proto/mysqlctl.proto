@@ -24,6 +24,7 @@ package mysqlctl;
 
 import "topodata.proto";
 import "vttime.proto";
+import "vtrpc.proto";
 
 message StartRequest{
   repeated string mysqld_args = 1;
@@ -79,6 +80,22 @@ message VersionStringResponse{
   string version = 1;
 }
 
+message HostMetricsRequest{}
+
+message HostMetricsResponse{
+  message Metric {
+    // Name of the metric
+    string name = 1;
+    // Value is the metric value
+    double value = 2;
+    // Error indicates an error retrieving the value
+    vtrpc.RPCError error = 3;
+  }
+  // Metrics is a map (metric name -> metric value/error) so that the client has as much
+  // information as possible about all the checked metrics.
+  map<string, Metric> metrics = 1;
+}
+
 // MysqlCtl is the service definition
 service MysqlCtl {
   rpc Start(StartRequest) returns (StartResponse) {};
@@ -89,6 +106,7 @@ service MysqlCtl {
   rpc ReinitConfig(ReinitConfigRequest) returns (ReinitConfigResponse) {};
   rpc RefreshConfig(RefreshConfigRequest) returns (RefreshConfigResponse) {};
   rpc VersionString(VersionStringRequest) returns (VersionStringResponse) {};
+  rpc HostMetrics(HostMetricsRequest) returns (HostMetricsResponse) {};
 }
 
 // BackupInfo is the read-only attributes of a mysqlctl/backupstorage.BackupHandle.

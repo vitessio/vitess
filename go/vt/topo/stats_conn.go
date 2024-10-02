@@ -159,17 +159,33 @@ func (st *StatsConn) Delete(ctx context.Context, filePath string, version Versio
 
 // Lock is part of the Conn interface
 func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	return st.internalLock(ctx, dirPath, contents, true)
+	return st.internalLock(ctx, dirPath, contents, Blocking, 0)
+}
+
+// LockWithTTL is part of the Conn interface
+func (st *StatsConn) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (LockDescriptor, error) {
+	return st.internalLock(ctx, dirPath, contents, Blocking, ttl)
+}
+
+// LockName is part of the Conn interface
+func (st *StatsConn) LockName(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
+	return st.internalLock(ctx, dirPath, contents, Named, 0)
 }
 
 // TryLock is part of the topo.Conn interface. Its implementation is same as Lock
 func (st *StatsConn) TryLock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	return st.internalLock(ctx, dirPath, contents, false)
+	return st.internalLock(ctx, dirPath, contents, NonBlocking, 0)
 }
 
 // TryLock is part of the topo.Conn interface. Its implementation is same as Lock
-func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string, isBlocking bool) (LockDescriptor, error) {
-	statsKey := []string{"Lock", st.cell}
+func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string, lockType LockType, ttl time.Duration) (LockDescriptor, error) {
+	statsKey := []string{"Lock", st.cell} // Also used for NonBlocking / TryLock
+	switch {
+	case lockType == Named:
+		statsKey[0] = "LockName"
+	case ttl != 0:
+		statsKey[0] = "LockWithTTL"
+	}
 	if st.readOnly {
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], dirPath)
 	}
@@ -177,10 +193,17 @@ func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string,
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	var res LockDescriptor
 	var err error
-	if isBlocking {
-		res, err = st.conn.Lock(ctx, dirPath, contents)
-	} else {
+	switch lockType {
+	case NonBlocking:
 		res, err = st.conn.TryLock(ctx, dirPath, contents)
+	case Named:
+		res, err = st.conn.LockName(ctx, dirPath, contents)
+	default:
+		if ttl != 0 {
+			res, err = st.conn.LockWithTTL(ctx, dirPath, contents, ttl)
+		} else {
+			res, err = st.conn.Lock(ctx, dirPath, contents)
+		}
 	}
 	if err != nil {
 		topoStatsConnErrors.Add(statsKey, int64(1))

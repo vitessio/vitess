@@ -67,7 +67,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	waitForBuffering := func(enabled bool) {
 		timer := time.NewTimer(bufferingWaitTimeout)
 		defer timer.Stop()
-		for _, buffering := tg.kev.PrimaryIsNotServing(ctx, target); buffering != enabled; _, buffering = tg.kev.PrimaryIsNotServing(ctx, target) {
+		for _, buffering := tg.kev.ShouldStartBufferingForTarget(ctx, target); buffering != enabled; _, buffering = tg.kev.ShouldStartBufferingForTarget(ctx, target) {
 			select {
 			case <-timer.C:
 				require.Fail(t, "timed out waiting for buffering of enabled: %t", enabled)
@@ -213,8 +213,8 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.Broadcast(primaryTablet)
 
 	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
-	_, isNotServing := tg.kev.PrimaryIsNotServing(ctx, target)
-	require.True(t, isNotServing)
+	_, shouldStartBuffering := tg.kev.ShouldStartBufferingForTarget(ctx, target)
+	require.True(t, shouldStartBuffering)
 
 	// add a result to the sandbox connection of the new primary
 	sbcReplica.SetResults([]*sqltypes.Result{sqlResult1})
@@ -244,8 +244,8 @@ outer:
 		case <-timeout:
 			require.Fail(t, "timed out - could not verify the new primary")
 		case <-time.After(10 * time.Millisecond):
-			newPrimary, notServing := tg.kev.PrimaryIsNotServing(ctx, target)
-			if newPrimary != nil && newPrimary.Uid == 1 && !notServing {
+			newPrimary, shouldBuffer := tg.kev.ShouldStartBufferingForTarget(ctx, target)
+			if newPrimary != nil && newPrimary.Uid == 1 && !shouldBuffer {
 				break outer
 			}
 		}

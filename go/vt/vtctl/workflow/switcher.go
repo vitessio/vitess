@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -126,8 +128,8 @@ func (r *switcher) cancelMigration(ctx context.Context, sm *StreamMigrator) {
 	r.ts.cancelMigration(ctx, sm)
 }
 
-func (r *switcher) lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
-	return r.s.ts.LockKeyspace(ctx, keyspace, action)
+func (r *switcher) lockKeyspace(ctx context.Context, keyspace, action string, opts ...topo.LockOption) (context.Context, func(*error), error) {
+	return r.s.ts.LockKeyspace(ctx, keyspace, action, opts...)
 }
 
 func (r *switcher) freezeTargetVReplication(ctx context.Context) error {
@@ -160,4 +162,8 @@ func (r *switcher) resetSequences(ctx context.Context) error {
 
 func (r *switcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
 	return r.ts.initializeTargetSequences(ctx, sequencesByBackingTable)
+}
+
+func (r *switcher) mirrorTableTraffic(ctx context.Context, types []topodatapb.TabletType, percent float32) error {
+	return r.ts.mirrorTableTraffic(ctx, types, percent)
 }

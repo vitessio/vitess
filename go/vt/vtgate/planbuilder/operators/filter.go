@@ -29,14 +29,14 @@ import (
 )
 
 type Filter struct {
-	Source     Operator
+	unaryOperator
 	Predicates []sqlparser.Expr
 
 	// PredicateWithOffsets is the evalengine expression that will finally be used.
 	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
 	PredicateWithOffsets evalengine.Expr
 
-	Truncate int
+	ResultColumns int
 }
 
 func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
@@ -45,28 +45,17 @@ func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
 
 func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 	return &Filter{
-		Source: op, Predicates: expr,
+		unaryOperator: newUnaryOp(op),
+		Predicates:    expr,
 	}
 }
 
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []Operator) Operator {
-	return &Filter{
-		Source:               inputs[0],
-		Predicates:           slices.Clone(f.Predicates),
-		PredicateWithOffsets: f.PredicateWithOffsets,
-		Truncate:             f.Truncate,
-	}
-}
-
-// Inputs implements the Operator interface
-func (f *Filter) Inputs() []Operator {
-	return []Operator{f.Source}
-}
-
-// SetInputs implements the Operator interface
-func (f *Filter) SetInputs(ops []Operator) {
-	f.Source = ops[0]
+	klon := *f
+	klon.Source = inputs[0]
+	klon.Predicates = slices.Clone(f.Predicates)
+	return &klon
 }
 
 // UnsolvedPredicates implements the unresolved interface
@@ -100,11 +89,11 @@ func (f *Filter) AddWSColumn(ctx *plancontext.PlanningContext, offset int, under
 }
 
 func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return f.Source.GetColumns(ctx)
+	return truncate(f, f.Source.GetColumns(ctx))
 }
 
 func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return f.Source.GetSelectExprs(ctx)
+	return truncate(f, f.Source.GetSelectExprs(ctx))
 }
 
 func (f *Filter) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
@@ -127,7 +116,7 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (Operator, *ApplyResult) 
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	cfg := &evalengine.Config{
-		ResolveType: ctx.SemTable.TypeForExpr,
+		ResolveType: ctx.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
 	}
@@ -151,5 +140,9 @@ func (f *Filter) ShortDescription() string {
 }
 
 func (f *Filter) setTruncateColumnCount(offset int) {
-	f.Truncate = offset
+	f.ResultColumns = offset
+}
+
+func (f *Filter) getTruncateColumnCount() int {
+	return f.ResultColumns
 }

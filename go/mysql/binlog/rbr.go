@@ -111,7 +111,7 @@ func CellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x], nil
 	case TypeEnum, TypeSet:
 		return int(metadata & 0xff), nil
-	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
+	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry, TypeVector:
 		// Of the Blobs, only TypeBlob is used in binary logs,
 		// but supports others just in case.
 		switch metadata {
@@ -542,7 +542,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		}
 
 		// now the full digits, 32 bits each, 9 digits
-		for i := 0; i < intg0; i++ {
+		for range intg0 {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
 			fmt.Fprintf(txt, "%09d", val)
 			pos += 4
@@ -564,7 +564,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		txt.WriteByte('.')
 
 		// now the full fractional digits
-		for i := 0; i < frac0; i++ {
+		for range frac0 {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
 			fmt.Fprintf(txt, "%09d", val)
 			pos += 4
@@ -652,8 +652,8 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		return sqltypes.MakeTrusted(querypb.Type_SET,
 			data[pos:pos+l]), l, nil
 
-	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob:
-		// Only TypeBlob is used in binary logs,
+	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeVector:
+		// Only TypeBlob and TypeVector is used in binary logs,
 		// but supports others just in case.
 		l := 0
 		switch metadata {
@@ -718,7 +718,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			// numbers.
 			l := int(metadata & 0xff)
 			var val uint64
-			for i := 0; i < l; i++ {
+			for i := range l {
 				val += uint64(data[pos+i]) << (uint(i) * 8)
 			}
 			return sqltypes.MakeTrusted(querypb.Type_UINT64,

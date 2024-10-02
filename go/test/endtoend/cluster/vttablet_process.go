@@ -74,6 +74,7 @@ type VttabletProcess struct {
 	SupportsBackup              bool
 	ExplicitServingStatus       bool
 	ServingStatus               string
+	DbName                      string
 	DbPassword                  string
 	DbPort                      int
 	DbFlavor                    string
@@ -110,13 +111,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
 		"--db_charset", vttablet.Charset,
+		"--bind-address", "127.0.0.1",
+		"--grpc_bind_address", "127.0.0.1",
 	)
-	if v, err := GetMajorVersion("vttablet"); err != nil {
-		return err
-	} else if v >= 18 {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--bind-address", "127.0.0.1")
-		vttablet.proc.Args = append(vttablet.proc.Args, "--grpc_bind_address", "127.0.0.1")
-	}
 
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
@@ -147,6 +144,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	if err != nil {
 		return
 	}
+
+	vttablet.DbName = "vt_" + vttablet.Keyspace
 
 	vttablet.exit = make(chan error)
 	go func() {
@@ -442,8 +441,11 @@ func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) erro
 
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
-	_, _ = vttablet.QueryTablet(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)
-	_, err := vttablet.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace), keyspace, false)
+	if vttablet.DbName == "" {
+		vttablet.DbName = "vt_" + keyspace
+	}
+	_, _ = vttablet.QueryTablet(fmt.Sprintf("drop database IF EXISTS %s", vttablet.DbName), keyspace, false)
+	_, err := vttablet.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS %s", vttablet.DbName), keyspace, false)
 	return err
 }
 
@@ -609,6 +611,7 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
 func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
+	t.Helper()
 	if sidecarDBName == "" {
 		sidecarDBName = sidecar.DefaultName
 	}
@@ -634,7 +637,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 	for ind, query := range queries {
 		waitDuration := 500 * time.Millisecond
 		for duration > 0 {
-			log.Infof("Executing query %s on %s", query, vttablet.Name)
+			log.Infof("Executing query %s on %s", query, vttablet.TabletPath)
 			lastChecked = time.Now()
 			qr, err := executeQuery(conn, query)
 			if err != nil {

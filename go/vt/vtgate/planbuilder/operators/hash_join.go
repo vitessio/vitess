@@ -31,7 +31,7 @@ import (
 
 type (
 	HashJoin struct {
-		LHS, RHS Operator
+		binaryOperator
 
 		// LeftJoin will be true in the case of an outer join
 		LeftJoin bool
@@ -79,10 +79,9 @@ var _ JoinOp = (*HashJoin)(nil)
 
 func NewHashJoin(lhs, rhs Operator, outerJoin bool) *HashJoin {
 	hj := &HashJoin{
-		LHS:      lhs,
-		RHS:      rhs,
-		LeftJoin: outerJoin,
-		columns:  &hashJoinColumns{},
+		binaryOperator: newBinaryOp(lhs, rhs),
+		LeftJoin:       outerJoin,
+		columns:        &hashJoinColumns{},
 	}
 	return hj
 }
@@ -95,14 +94,6 @@ func (hj *HashJoin) Clone(inputs []Operator) Operator {
 	kopy.RHSKeys = slices.Clone(hj.RHSKeys)
 	kopy.JoinComparisons = slices.Clone(hj.JoinComparisons)
 	return &kopy
-}
-
-func (hj *HashJoin) Inputs() []Operator {
-	return []Operator{hj.LHS, hj.RHS}
-}
-
-func (hj *HashJoin) SetInputs(operators []Operator) {
-	hj.LHS, hj.RHS = operators[0], operators[1]
 }
 
 func (hj *HashJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
@@ -326,20 +317,9 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 				inOffset = op.AddColumn(ctx, false, false, aeWrap(expr))
 			}
 
-			// we turn the
+			// we have to turn the incoming offset to an outgoing offset of the columns this operator is exposing
 			internalOffset := offsetter(inOffset)
-
-			// ok, we have an offset from the input operator. Let's check if we already have it
-			// in our list of incoming columns
-
-			for idx, offset := range hj.ColumnOffsets {
-				if internalOffset == offset {
-					return idx
-				}
-			}
-
 			hj.ColumnOffsets = append(hj.ColumnOffsets, internalOffset)
-
 			return len(hj.ColumnOffsets) - 1
 		}
 
@@ -358,7 +338,7 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 
 	rewrittenExpr := sqlparser.CopyOnRewrite(in, pre, r.post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
 	cfg := &evalengine.Config{
-		ResolveType: ctx.SemTable.TypeForExpr,
+		ResolveType: ctx.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
 	}
@@ -434,17 +414,7 @@ func (hj *HashJoin) addSingleSidedColumn(
 
 			// we have to turn the incoming offset to an outgoing offset of the columns this operator is exposing
 			internalOffset := offsetter(inOffset)
-
-			// ok, we have an offset from the input operator. Let's check if we already have it
-			// in our list of incoming columns
-			for idx, offset := range hj.ColumnOffsets {
-				if internalOffset == offset {
-					return idx
-				}
-			}
-
 			hj.ColumnOffsets = append(hj.ColumnOffsets, internalOffset)
-
 			return len(hj.ColumnOffsets) - 1
 		}
 
@@ -458,7 +428,7 @@ func (hj *HashJoin) addSingleSidedColumn(
 
 	rewrittenExpr := sqlparser.CopyOnRewrite(in, pre, r.post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
 	cfg := &evalengine.Config{
-		ResolveType: ctx.SemTable.TypeForExpr,
+		ResolveType: ctx.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
 	}

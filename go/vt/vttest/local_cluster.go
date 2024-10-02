@@ -128,7 +128,7 @@ type Config struct {
 	// TransactionMode is SINGLE, MULTI or TWOPC
 	TransactionMode string
 
-	TransactionTimeout float64
+	TransactionTimeout time.Duration
 
 	// The host name to use for the table otherwise it will be resolved from the local hostname
 	TabletHostName string
@@ -289,6 +289,15 @@ func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
 		panic(err)
 	}
 	connParams.Charset = ch
+	return connParams
+}
+
+func (db *LocalCluster) MySQLTCPConnParams() mysql.ConnParams {
+	connParams := db.mysql.Params(db.DbName())
+	_, port := db.mysql.Address()
+	connParams.UnixSocket = ""
+	connParams.Host = "127.0.0.1"
+	connParams.Port = port
 	return connParams
 }
 

@@ -155,6 +155,8 @@ var Cases = []TestCase{
 	{Run: FnWeekOfYear},
 	{Run: FnYear},
 	{Run: FnYearWeek},
+	{Run: FnPeriodAdd},
+	{Run: FnPeriodDiff},
 	{Run: FnInetAton},
 	{Run: FnInetNtoa},
 	{Run: FnInet6Aton},
@@ -1960,6 +1962,9 @@ func FnMaketime(yield Query) {
 		"''", "0", "'3'", "59", "60", "0xFF666F6F626172FF", "18446744073709551615",
 	}
 	for _, h := range inputConversions {
+		if !(bugs{}).MakeTimeValidHours(h) {
+			continue
+		}
 		for _, m := range minutes {
 			for _, s := range inputConversions {
 				yield(fmt.Sprintf("MAKETIME(%s, %s, %s)", h, m, s), nil)
@@ -2217,6 +2222,48 @@ func FnYearWeek(yield Query) {
 	}
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("YEARWEEK(%s)", d), nil)
+	}
+}
+
+func FnPeriodAdd(yield Query) {
+	for _, p := range inputBitwise {
+		for _, m := range inputBitwise {
+			yield(fmt.Sprintf("PERIOD_ADD(%s, %s)", p, m), nil)
+		}
+	}
+	for _, p := range inputPeriods {
+		for _, m := range inputBitwise {
+			yield(fmt.Sprintf("PERIOD_ADD(%s, %s)", p, m), nil)
+		}
+	}
+
+	mysqlDocSamples := []string{
+		`PERIOD_ADD(200801,2)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+}
+
+func FnPeriodDiff(yield Query) {
+	for _, p1 := range inputBitwise {
+		for _, p2 := range inputBitwise {
+			yield(fmt.Sprintf("PERIOD_DIFF(%s, %s)", p1, p2), nil)
+		}
+	}
+	for _, p1 := range inputPeriods {
+		for _, p2 := range inputPeriods {
+			yield(fmt.Sprintf("PERIOD_DIFF(%s, %s)", p1, p2), nil)
+		}
+	}
+
+	mysqlDocSamples := []string{
+		`PERIOD_DIFF(200802,200703)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
 	}
 }
 

@@ -47,7 +47,7 @@ type OrderedAggregate struct {
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
-	TruncateColumnCount int `json:",omitempty"`
+	TruncateColumnCount int
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive

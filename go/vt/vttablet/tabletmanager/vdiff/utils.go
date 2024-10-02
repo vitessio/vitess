@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -88,4 +89,24 @@ func stringListContains(lst []string, item string) bool {
 		}
 	}
 	return contains
+}
+
+// copyNonKeyRangeExpressions copies all expressions from the input WHERE clause
+// to the output WHERE clause except for any in_keyrange() expressions.
+func copyNonKeyRangeExpressions(where *sqlparser.Where) *sqlparser.Where {
+	if where == nil {
+		return nil
+	}
+	exprs := sqlparser.SplitAndExpression(nil, where.Expr)
+	newWhere := &sqlparser.Where{}
+	for _, expr := range exprs {
+		switch expr := expr.(type) {
+		case *sqlparser.FuncExpr:
+			if expr.Name.EqualString("in_keyrange") {
+				continue
+			}
+		}
+		newWhere.Expr = sqlparser.AndExpressions(newWhere.Expr, expr)
+	}
+	return newWhere
 }

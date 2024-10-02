@@ -32,10 +32,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -176,6 +177,7 @@ func TestVDiff2(t *testing.T) {
 	// We ONLY add primary tablets in this test.
 	tks, err := vc.AddKeyspace(t, []*Cell{zone3, zone1, zone2}, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
+	verifyClusterHealth(t, vc)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -306,10 +308,12 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
 
 	// These are done here so that we have a valid workflow to test the commands against.
+
 	if tc.stop {
 		testStop(t, ksWorkflow, allCellNames)
 		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
 	}
+
 	if tc.testCLICreateWait {
 		testCLICreateWait(t, ksWorkflow, allCellNames)
 		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
@@ -318,8 +322,8 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
 	if tc.testCLIFlagHandling {
+		// This creates and then deletes the vdiff so we don't increment the count.
 		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
-		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
 	}
 
 	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
@@ -375,6 +379,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			UpdateTableStats:      true,
 			TimeoutSeconds:        60,
 			MaxDiffSeconds:        333,
+			AutoStart:             ptr.Of(false),
 		},
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			SourceCell:  "zone1,zone2,zone3,zonefoosource",
@@ -382,8 +387,9 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			TabletTypes: "replica,primary,rdonly",
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			MaxSampleRows: 888,
-			OnlyPks:       true,
+			MaxSampleRows:           888,
+			OnlyPks:                 true,
+			RowDiffColumnTruncateAt: 444,
 		},
 	}
 
@@ -401,6 +407,8 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			fmt.Sprintf("--update-table-stats=%t", expectedOptions.CoreOptions.UpdateTableStats),
 			fmt.Sprintf("--auto-retry=%t", expectedOptions.CoreOptions.AutoRetry),
 			fmt.Sprintf("--only-pks=%t", expectedOptions.ReportOptions.OnlyPks),
+			fmt.Sprintf("--row-diff-column-truncate-at=%d", expectedOptions.ReportOptions.RowDiffColumnTruncateAt),
+			fmt.Sprintf("--auto-start=%t", *expectedOptions.CoreOptions.AutoStart),
 			"--tablet-types-in-preference-order=false", // So tablet_types should not start with "in_order:", which is the default
 			"--format=json") // So we can easily grab the UUID
 		require.NoError(t, err, "vdiff command failed: %s", res)
@@ -425,6 +433,11 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		err = protojson.Unmarshal(bytes, storedOptions)
 		require.NoError(t, err, "failed to unmarshal result %s to a %T: %v", string(bytes), storedOptions, err)
 		require.True(t, proto.Equal(expectedOptions, storedOptions), "stored options %v != expected options %v", storedOptions, expectedOptions)
+
+		// Delete this vdiff as we used --auto-start=false and thus it never starts and
+		// does not provide the normally expected show --verbose --format=json output.
+		_, output := performVDiff2Action(t, false, fmt.Sprintf("%s.%s", targetKs, workflowName), "", "delete", vduuid.String(), false)
+		require.Equal(t, "completed", gjson.Get(output, "Status").String())
 	})
 }
 
@@ -519,14 +532,16 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 
 func testStop(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Stop", func(t *testing.T) {
-		// create a new VDiff and immediately stop it
+		// Create a new VDiff and immediately stop it.
 		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false)
 		_, _ = performVDiff2Action(t, false, ksWorkflow, cells, "stop", uuid, false)
-		// confirm the VDiff is in the expected stopped state
+		// Confirm the VDiff is in the expected state.
 		_, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", uuid, false)
 		jsonOutput := getVDiffInfo(output)
-		require.Equal(t, "stopped", jsonOutput.State)
-		// confirm that the context cancelled error was also cleared
+		// It may have been able to complete before we could stop it (there's virtually no data
+		// to diff). There's no way to avoid this potential race so don't consider that a failure.
+		require.True(t, (jsonOutput.State == "stopped" || jsonOutput.State == "completed"), "expected vdiff state to be stopped or completed but it was %s", jsonOutput.State)
+		// Confirm that the context cancelled error was also cleared.
 		require.False(t, strings.Contains(output, `"Errors":`))
 	})
 }

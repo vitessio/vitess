@@ -35,6 +35,17 @@ import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { UseQueryResult } from 'react-query';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import Dropdown from '../dropdown/Dropdown';
+import MenuItem from '../dropdown/MenuItem';
+import { Icons } from '../Icon';
+import WorkflowActions from './workflows/WorkflowActions';
+import { isReadOnlyMode } from '../../util/env';
+
+export const ThrottleThresholdSeconds = 60;
+
+const COLUMNS = ['Workflow', 'Source', 'Target', 'Streams', 'Last Updated', 'Actions'];
+const READ_ONLY_COLUMNS = ['Workflow', 'Source', 'Target', 'Streams', 'Last Updated'];
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -67,7 +78,6 @@ export const Workflows = () => {
                 row.clusterID && row.keyspace && row.name
                     ? `/workflow/${row.clusterID}/${row.keyspace}/${row.name}`
                     : null;
-
             return (
                 <tr key={idx}>
                     <DataCell>
@@ -112,13 +122,52 @@ export const Workflows = () => {
                             {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
                             {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
                                 if (streamState in row.streams) {
+                                    var numThrottled = 0;
+                                    var throttledApp: string | undefined = '';
                                     const streamCount = row.streams[streamState].length;
+                                    var streamDescription: string;
+                                    switch (streamState) {
+                                        case 'Error':
+                                            streamDescription = 'failed';
+                                            break;
+                                        case 'Running':
+                                        case 'Copying':
+                                            const streams = row.streams[streamState];
+                                            if (streams !== undefined && streams !== null) {
+                                                for (const stream of streams) {
+                                                    if (
+                                                        stream?.throttler_status?.time_throttled !== null &&
+                                                        stream?.throttler_status?.time_throttled !== undefined &&
+                                                        // If the stream has been throttled recently, treat it as throttled.
+                                                        Number(stream?.throttler_status?.time_throttled?.seconds) >
+                                                            Date.now() / 1000 - ThrottleThresholdSeconds
+                                                    ) {
+                                                        numThrottled++;
+                                                        // In case of multiple streams, show the first throttled app and time.
+                                                        // The detail page will show each stream separately.
+                                                        if (numThrottled === 1) {
+                                                            throttledApp =
+                                                                stream?.throttler_status?.component_throttled?.toString();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            streamDescription = streamState.toLocaleLowerCase();
+                                            if (numThrottled > 0) {
+                                                streamState = 'Throttled';
+                                            }
+                                            break;
+                                        default:
+                                            streamDescription = streamState.toLocaleLowerCase();
+                                    }
                                     const tooltip = [
                                         streamCount,
-                                        streamState === 'Error' ? 'failed' : streamState.toLocaleLowerCase(),
+                                        streamDescription,
                                         streamCount === 1 ? 'stream' : 'streams',
+                                        numThrottled > 0
+                                            ? '(' + numThrottled + ' throttled in ' + throttledApp + ')'
+                                            : '',
                                     ].join(' ');
-
                                     return (
                                         <Tooltip key={streamState} text={tooltip}>
                                             <span className={style.stream}>
@@ -140,6 +189,17 @@ export const Workflows = () => {
                         <div className="font-sans whitespace-nowrap">{formatDateTime(row.timeUpdated)}</div>
                         <div className="font-sans text-sm text-secondary">{formatRelativeTime(row.timeUpdated)}</div>
                     </DataCell>
+
+                    <ReadOnlyGate>
+                        <DataCell>
+                            <WorkflowActions
+                                refetchWorkflows={workflowsQuery.refetch}
+                                keyspace={row.keyspace as string}
+                                clusterID={row.clusterID as string}
+                                name={row.name as string}
+                            />
+                        </DataCell>
+                    </ReadOnlyGate>
                 </tr>
             );
         });
@@ -147,7 +207,24 @@ export const Workflows = () => {
     return (
         <div>
             <WorkspaceHeader>
-                <WorkspaceTitle>Workflows</WorkspaceTitle>
+                <div className="flex items-top justify-between">
+                    <WorkspaceTitle>Workflows</WorkspaceTitle>
+                    <ReadOnlyGate>
+                        <div>
+                            <Dropdown
+                                dropdownButton={Icons.circleAdd}
+                                title="Create Workflow"
+                                className="!text-[32px] w-16 h-16"
+                            >
+                                <Link to="/workflows/movetables/create">
+                                    <MenuItem>MoveTables</MenuItem>
+                                </Link>
+                                <MenuItem disabled>Reshard</MenuItem>
+                                <MenuItem disabled>Materialize</MenuItem>
+                            </Dropdown>
+                        </div>
+                    </ReadOnlyGate>
+                </div>
             </WorkspaceHeader>
             <ContentContainer>
                 <DataFilter
@@ -159,7 +236,7 @@ export const Workflows = () => {
                 />
 
                 <DataTable
-                    columns={['Workflow', 'Source', 'Target', 'Streams', 'Last Updated']}
+                    columns={isReadOnlyMode() ? READ_ONLY_COLUMNS : COLUMNS}
                     data={sortedData}
                     renderRows={renderRows}
                 />

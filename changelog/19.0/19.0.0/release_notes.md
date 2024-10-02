@@ -53,6 +53,10 @@ Vitess will however, continue to support importing from MySQL 5.7 into Vitess ev
 
 #### <a id="deprecation-vitess-lite-mysqld"/>Docker Image vitess/lite
 
+> [!CAUTION]  
+> If you are using incremental backups, you must remain on the `vitess/lite` image, as the official MySQL image does not have `mysqlbinlog` installed.
+> See https://github.com/vitessio/vitess/issues/16281 for more information.
+
 The `mysqld` binary is now deprecated in the `vitess/lite` Docker image and will be removed in a future release.
 This means that the MySQL/Percona version specific image tags for the `vitess/lite` image are deprecated.
 

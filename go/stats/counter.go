@@ -17,8 +17,6 @@ limitations under the License.
 package stats
 
 import (
-	"expvar"
-	"fmt"
 	"math"
 	"strconv"
 	"sync/atomic"
@@ -44,22 +42,6 @@ func NewCounter(name string, help string) *Counter {
 	if name != "" {
 		publish(name, v)
 	}
-	return v
-}
-
-// NewCounterWithDeprecatedName returns a new Counter that also has a deprecated name that can be removed in a future release.
-// It is important to ensure that we only call this function with values for name and deprecatedName such that they match to the same
-// metric name in snake case.
-func NewCounterWithDeprecatedName(name string, deprecatedName string, help string) *Counter {
-	// Ensure that the snake case for the deprecated name and the new name are the same.
-	if deprecatedName == "" || GetSnakeName(name) != GetSnakeName(deprecatedName) {
-		panic(fmt.Sprintf("New name for deprecated metric doesn't have the same snake case - %v", deprecatedName))
-	}
-
-	v := NewCounter(deprecatedName, help)
-	// We have already published the deprecated name for backward compatibility.
-	// At the same time we want the new metric to be visible on the `/debug/vars` page, so we publish the new name in expvar.
-	expvar.Publish(name, v)
 	return v
 }
 
@@ -151,21 +133,6 @@ func NewGauge(name string, help string) *Gauge {
 	if name != "" {
 		publish(name, v)
 	}
-	return v
-}
-
-// NewGaugeWithDeprecatedName creates a new Gauge and publishes it if name is set that also has a deprecated name that can be removed in a future release.
-// It is important to ensure that we only call this function with values for name and deprecatedName such that they match to the same metric name in snake case.
-func NewGaugeWithDeprecatedName(name string, deprecatedName string, help string) *Gauge {
-	// Ensure that the snake case for the deprecated name and the new name are the same.
-	if deprecatedName == "" || GetSnakeName(name) != GetSnakeName(deprecatedName) {
-		panic(fmt.Sprintf("New name for deprecated metric doesn't have the same snake case - %v", deprecatedName))
-	}
-
-	v := NewGauge(deprecatedName, help)
-	// We have already published the deprecated name for backward compatibility.
-	// At the same time we want the new metric to be visible on the `/debug/vars` page, so we publish the new name in expvar.
-	expvar.Publish(name, v)
 	return v
 }
 

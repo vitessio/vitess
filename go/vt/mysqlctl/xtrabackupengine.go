@@ -71,6 +71,7 @@ const (
 	writerBufferSize     = 2 * 1024 * 1024 /*2 MiB*/
 	xtrabackupBinaryName = "xtrabackup"
 	xtrabackupEngineName = "xtrabackup"
+	xtrabackupInfoFile   = "xtrabackup_info"
 	xbstream             = "xbstream"
 )
 
@@ -276,7 +277,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	if err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFileName)
 	}
-	if _, err := mwc.Write([]byte(data)); err != nil {
+	if _, err := mwc.Write(data); err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 
@@ -292,7 +293,6 @@ func (be *XtrabackupEngine) backupFiles(
 	numStripes int,
 	flavor string,
 ) (replicationPosition replication.Position, finalErr error) {
-
 	backupProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{"--defaults-file=" + params.Cnf.Path,
 		"--backup",
@@ -300,6 +300,7 @@ func (be *XtrabackupEngine) backupFiles(
 		"--slave-info",
 		"--user=" + xtrabackupUser,
 		"--target-dir=" + params.Cnf.TmpDir,
+		"--extra-lsndir=" + params.Cnf.TmpDir,
 	}
 	if xtrabackupStreamMode != "" {
 		flagsToExec = append(flagsToExec, "--stream="+xtrabackupStreamMode)
@@ -315,8 +316,15 @@ func (be *XtrabackupEngine) backupFiles(
 	// would impose a timeout that starts counting right now, so it would
 	// include the time spent uploading the file content. We only want to impose
 	// a timeout on the final Close() step.
+	// This context also allows us to immediately abort AddFiles if we encountered
+	// an error in this function.
 	addFilesCtx, cancelAddFiles := context.WithCancel(ctx)
-	defer cancelAddFiles()
+	defer func() {
+		if finalErr != nil {
+			cancelAddFiles()
+		}
+	}()
+
 	destFiles, err := addStripeFiles(addFilesCtx, params, bh, backupFileName, numStripes)
 	if err != nil {
 		return replicationPosition, vterrors.Wrapf(err, "cannot create backup file %v", backupFileName)
@@ -398,27 +406,14 @@ func (be *XtrabackupEngine) backupFiles(
 	// the replication position. Note that if we don't read stderr as we go, the
 	// xtrabackup process gets blocked when the write buffer fills up.
 	stderrBuilder := &strings.Builder{}
-	posBuilder := &strings.Builder{}
 	stderrDone := make(chan struct{})
 	go func() {
 		defer close(stderrDone)
 
 		scanner := bufio.NewScanner(backupErr)
-		capture := false
 		for scanner.Scan() {
 			line := scanner.Text()
 			params.Logger.Infof("xtrabackup stderr: %s", line)
-
-			// Wait until we see the first line of the binlog position.
-			// Then capture all subsequent lines. We need multiple lines since
-			// the value we're looking for has newlines in it.
-			if !capture {
-				if !strings.Contains(line, "MySQL binlog position") {
-					continue
-				}
-				capture = true
-			}
-			fmt.Fprintln(posBuilder, line)
 		}
 		if err := scanner.Err(); err != nil {
 			params.Logger.Errorf("error reading from xtrabackup stderr: %v", err)
@@ -462,8 +457,7 @@ func (be *XtrabackupEngine) backupFiles(
 		return replicationPosition, vterrors.Wrap(err, fmt.Sprintf("xtrabackup failed with error. Output=%s", sterrOutput))
 	}
 
-	posOutput := posBuilder.String()
-	replicationPosition, rerr := findReplicationPosition(posOutput, flavor, params.Logger)
+	replicationPosition, rerr := findReplicationPositionFromXtrabackupInfo(params.Cnf.TmpDir, flavor, params.Logger)
 	if rerr != nil {
 		return replicationPosition, vterrors.Wrap(rerr, "backup failed trying to find replication position")
 	}
@@ -751,6 +745,22 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	return nil
 }
 
+func findReplicationPositionFromXtrabackupInfo(directory, flavor string, logger logutil.Logger) (replication.Position, error) {
+	f, err := os.Open(path.Join(directory, xtrabackupInfoFile))
+	if err != nil {
+		return replication.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT,
+			"couldn't open %q to read GTID position", path.Join(directory, xtrabackupInfoFile))
+	}
+	defer f.Close()
+
+	contents, err := io.ReadAll(f)
+	if err != nil {
+		return replication.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "couldn't read GTID position from %q", f.Name())
+	}
+
+	return findReplicationPosition(string(contents), flavor, logger)
+}
+
 var xtrabackupReplicationPositionRegexp = regexp.MustCompile(`GTID of the last change '([^']*)'`)
 
 func findReplicationPosition(input, flavor string, logger logutil.Logger) (replication.Position, error) {
@@ -774,23 +784,6 @@ func findReplicationPosition(input, flavor string, logger logutil.Logger) (repli
 		return replication.Position{}, vterrors.Wrapf(err, "can't parse replication position from xtrabackup: %v", position)
 	}
 	return replicationPosition, nil
-}
-
-// scanLinesToLogger scans full lines from the given Reader and sends them to
-// the given Logger until EOF.
-func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, doneFunc func()) {
-	defer doneFunc()
-
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		logger.Infof("%s: %s", prefix, line)
-	}
-	if err := scanner.Err(); err != nil {
-		// This is usually run in a background goroutine, so there's no point
-		// returning an error. Just log it.
-		logger.Warningf("error scanning lines from %s: %v", prefix, err)
-	}
 }
 
 func stripeFileName(baseFileName string, index int) string {
@@ -955,6 +948,13 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 func (be *XtrabackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool {
 	return false
 }
+
+// ShouldStartMySQLAfterRestore signifies if this backup engine needs to restart MySQL once the restore is completed.
+func (be *XtrabackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
+}
+
+func (be *XtrabackupEngine) Name() string { return xtrabackupEngineName }
 
 func init() {
 	BackupRestoreEngineMap[xtrabackupEngineName] = &XtrabackupEngine{}

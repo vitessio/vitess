@@ -18,6 +18,7 @@ package operators
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -34,7 +35,7 @@ import (
 // Project/Aggregate/Sort/Limit operations, some which can be pushed down,
 // and some that have to be evaluated at the vtgate level.
 type Horizon struct {
-	Source Operator
+	unaryOperator
 
 	// If this is a derived table, the two following fields will contain the tableID and name of it
 	TableId       *semantics.TableSet
@@ -49,10 +50,15 @@ type Horizon struct {
 	// Columns needed to feed other plans
 	Columns       []*sqlparser.ColName
 	ColumnsOffset []int
+
+	Truncate bool
 }
 
 func newHorizon(src Operator, query sqlparser.SelectStatement) *Horizon {
-	return &Horizon{Source: src, Query: query}
+	return &Horizon{
+		unaryOperator: newUnaryOp(src),
+		Query:         query,
+	}
 }
 
 // Clone implements the Operator interface
@@ -75,16 +81,6 @@ func (h *Horizon) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	return isMergeable(ctx, h.Query, h)
 }
 
-// Inputs implements the Operator interface
-func (h *Horizon) Inputs() []Operator {
-	return []Operator{h.Source}
-}
-
-// SetInputs implements the Operator interface
-func (h *Horizon) SetInputs(ops []Operator) {
-	h.Source = ops[0]
-}
-
 func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	if _, isUNion := h.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
@@ -100,7 +96,7 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 
 	newExpr := ctx.RewriteDerivedTableExpression(expr, tableInfo)
-	if ContainsAggr(ctx, newExpr) {
+	if ctx.ContainsAggr(newExpr) {
 		return newFilter(h, expr)
 	}
 	h.Source = h.Source.AddPredicate(ctx, newExpr)
@@ -205,7 +201,7 @@ func (h *Horizon) getQP(ctx *plancontext.PlanningContext) *QueryProjection {
 }
 
 func (h *Horizon) ShortDescription() string {
-	return h.Alias
+	return fmt.Sprintf("Horizon (Alias: %s)", h.Alias)
 }
 
 func (h *Horizon) introducesTableID() semantics.TableSet {

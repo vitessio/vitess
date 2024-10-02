@@ -17,14 +17,17 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"io"
 	"sync"
 	"time"
 
-	"context"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
+
+const relayLogIOStalledMsg = "relay log I/O stalled"
 
 type relayLog struct {
 	ctx      context.Context
@@ -72,12 +75,18 @@ func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
 	if err := rl.checkDone(); err != nil {
 		return err
 	}
+	cancelTimer := rl.startSendTimer()
+	defer cancelTimer()
 	for rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
 		rl.canAccept.Wait()
+		if rl.timedout {
+			return vterrors.Wrap(errVPlayerStalled, relayLogIOStalledMsg)
+		}
 		if err := rl.checkDone(); err != nil {
 			return err
 		}
 	}
+	rl.timedout = false
 	rl.items = append(rl.items, events)
 	rl.curSize += eventsSize(events)
 	rl.hasItems.Broadcast()
@@ -92,7 +101,7 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	if err := rl.checkDone(); err != nil {
 		return nil, err
 	}
-	cancelTimer := rl.startTimer()
+	cancelTimer := rl.startFetchTimer()
 	defer cancelTimer()
 	for len(rl.items) == 0 && !rl.timedout {
 		rl.hasItems.Wait()
@@ -117,7 +126,33 @@ func (rl *relayLog) checkDone() error {
 	return nil
 }
 
-func (rl *relayLog) startTimer() (cancel func()) {
+// startSendTimer starts a timer that will wake up the sender if we hit
+// the vplayerProgressDeadline timeout. This ensures that we don't
+// block forever if the vplayer cannot process the previous relay log
+// contents in a timely manner; allowing us to provide the user with a
+// helpful error message.
+func (rl *relayLog) startSendTimer() (cancel func()) {
+	timer := time.NewTimer(vplayerProgressDeadline)
+	timerDone := make(chan struct{})
+	go func() {
+		select {
+		case <-timer.C:
+			rl.mu.Lock()
+			defer rl.mu.Unlock()
+			rl.timedout = true
+			rl.canAccept.Broadcast()
+		case <-timerDone:
+		}
+	}()
+	return func() {
+		timer.Stop()
+		close(timerDone)
+	}
+}
+
+// startFetchTimer starts a timer that will wake up the fetcher after
+// idleTimeout to be sure that we're regularly checking for new events.
+func (rl *relayLog) startFetchTimer() (cancel func()) {
 	timer := time.NewTimer(idleTimeout)
 	timerDone := make(chan struct{})
 	go func() {

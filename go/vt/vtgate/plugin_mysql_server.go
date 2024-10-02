@@ -75,6 +75,7 @@ var (
 
 	mysqlDefaultWorkloadName = "OLTP"
 	mysqlDefaultWorkload     int32
+	mysqlDrainOnTerm         bool
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 )
@@ -102,6 +103,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&mysqlKeepAlivePeriod, "mysql-server-keepalive-period", mysqlKeepAlivePeriod, "TCP period between keep-alives")
 	fs.DurationVar(&mysqlServerFlushDelay, "mysql_server_flush_delay", mysqlServerFlushDelay, "Delay after which buffered response will be flushed to the client.")
 	fs.StringVar(&mysqlDefaultWorkloadName, "mysql_default_workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
+	fs.BoolVar(&mysqlDrainOnTerm, "mysql-server-drain-onterm", mysqlDrainOnTerm, "If set, the server waits for --onterm_timeout for already connected clients to complete their in flight work")
 }
 
 // vtgateHandler implements the Listener interface.
@@ -397,7 +399,7 @@ func (vh *vtgateHandler) KillConnection(ctx context.Context, connectionID uint32
 
 	c, exists := vh.connections[connectionID]
 	if !exists {
-		return sqlerror.NewSQLError(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
+		return sqlerror.NewSQLErrorf(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
 	}
 
 	// First, we mark the connection for close, so that even when the context is cancelled, while returning the response back to client,
@@ -415,7 +417,7 @@ func (vh *vtgateHandler) KillQuery(connectionID uint32) error {
 	defer vh.mu.Unlock()
 	c, exists := vh.connections[connectionID]
 	if !exists {
-		return sqlerror.NewSQLError(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
+		return sqlerror.NewSQLErrorf(sqlerror.ERNoSuchThread, sqlerror.SSUnknownSQLState, "Unknown thread id: %d", connectionID)
 	}
 	c.CancelCtx()
 	return nil
@@ -621,18 +623,34 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 }
 
 func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
-	if srv.tcpListener != nil {
-		srv.tcpListener.Shutdown()
-		srv.tcpListener = nil
-	}
-	if srv.unixListener != nil {
-		srv.unixListener.Shutdown()
-		srv.unixListener = nil
-	}
 	if srv.sigChan != nil {
 		signal.Stop(srv.sigChan)
 	}
+	setListenerToNil := func() {
+		srv.tcpListener = nil
+		srv.unixListener = nil
+	}
 
+	if mysqlDrainOnTerm {
+		stopListener(srv.unixListener, false)
+		stopListener(srv.tcpListener, false)
+		setListenerToNil()
+		// We wait for connected clients to drain by themselves or to run into the onterm timeout
+		log.Infof("Starting drain loop, waiting for all clients to disconnect")
+		reported := time.Now()
+		for srv.vtgateHandle.numConnections() > 0 {
+			if time.Since(reported) > 2*time.Second {
+				log.Infof("Still waiting for client connections to drain (%d connected)...", srv.vtgateHandle.numConnections())
+				reported = time.Now()
+			}
+			time.Sleep(1000 * time.Millisecond)
+		}
+		return
+	}
+
+	stopListener(srv.unixListener, true)
+	stopListener(srv.tcpListener, true)
+	setListenerToNil()
 	if busy := srv.vtgateHandle.busyConnections.Load(); busy > 0 {
 		log.Infof("Waiting for all client connections to be idle (%d active)...", busy)
 		start := time.Now()
@@ -646,6 +664,18 @@ func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
 			time.Sleep(1 * time.Millisecond)
 			busy = srv.vtgateHandle.busyConnections.Load()
 		}
+	}
+}
+
+// stopListener Close or Shutdown a mysql listener depending on the shutdown argument.
+func stopListener(listener *mysql.Listener, shutdown bool) {
+	if listener == nil {
+		return
+	}
+	if shutdown {
+		listener.Shutdown()
+	} else {
+		listener.Close()
 	}
 }
 

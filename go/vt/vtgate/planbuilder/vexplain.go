@@ -20,8 +20,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -31,14 +29,25 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildVExplainPlan(
+	ctx context.Context,
+	vexplainStmt *sqlparser.VExplainStmt,
+	reservedVars *sqlparser.ReservedVars,
+	vschema plancontext.VSchema,
+	enableOnlineDDL, enableDirectDDL bool,
+) (*planResult, error) {
 	switch vexplainStmt.Type {
 	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType:
 		return buildVExplainLoggingPlan(ctx, vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case sqlparser.PlanVExplainType:
 		return buildVExplainVtgatePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case sqlparser.TraceVExplainType:
+		return buildVExplainTracePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case sqlparser.KeysVExplainType:
+		return buildVExplainKeysPlan(vexplainStmt.Statement, vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vexplainStmt.Type.ToString())
 }
@@ -88,20 +97,31 @@ func buildVExplainVtgatePlan(ctx context.Context, explainStatement sqlparser.Sta
 	if err != nil {
 		return nil, err
 	}
-	description := engine.PrimitiveToPlanDescription(innerInstruction.primitive)
-	output, err := json.MarshalIndent(description, "", "\t")
+
+	return getJsonResultPlan(
+		engine.PrimitiveToPlanDescription(innerInstruction.primitive, nil),
+		"JSON",
+	)
+}
+
+// getJsonResultPlan marshals the given struct into a JSON string and returns it as a planResult.
+func getJsonResultPlan(v any, colName string) (*planResult, error) {
+	output, err := json.MarshalIndent(v, "", "\t")
 	if err != nil {
 		return nil, err
 	}
-	fields := []*querypb.Field{
-		{Name: "JSON", Type: querypb.Type_VARCHAR},
-	}
-	rows := []sqltypes.Row{
-		{
-			sqltypes.NewVarChar(string(output)),
-		},
-	}
+	fields := []*querypb.Field{{Name: colName, Type: querypb.Type_VARCHAR}}
+	rows := []sqltypes.Row{{sqltypes.NewVarChar(string(output))}}
 	return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
+}
+
+func buildVExplainKeysPlan(statement sqlparser.Statement, vschema plancontext.VSchema) (*planResult, error) {
+	ctx, err := plancontext.CreatePlanningContext(statement, sqlparser.NewReservedVars("", sqlparser.BindVars{}), vschema, querypb.ExecuteOptions_Gen4)
+	if err != nil {
+		return nil, err
+	}
+	result := operators.GetVExplainKeys(ctx, statement)
+	return getJsonResultPlan(result, "ColumnUsage")
 }
 
 func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
@@ -166,4 +186,18 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
 	}, tables...), nil
+}
+
+func buildVExplainTracePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll set the trace engine as the root primitive
+	innerInstruction.primitive = &engine.VExplain{
+		Input: innerInstruction.primitive,
+		Type:  sqlparser.TraceVExplainType,
+	}
+	return innerInstruction, nil
 }

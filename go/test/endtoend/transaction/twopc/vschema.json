@@ -1,0 +1,37 @@
+{
+  "sharded":true,
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    },
+    "reverse_bits": {
+      "type": "reverse_bits"
+    }
+  },
+  "tables": {
+    "twopc_user":{
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "twopc_music": {
+      "column_vindexes": [
+        {
+          "column": "user_id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "twopc_t1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    }
+  }
+}

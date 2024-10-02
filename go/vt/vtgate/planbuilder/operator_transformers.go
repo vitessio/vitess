@@ -77,9 +77,29 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return transformSequential(ctx, op)
 	case *operators.DMLWithInput:
 		return transformDMLWithInput(ctx, op)
+	case *operators.RecurseCTE:
+		return transformRecurseCTE(ctx, op)
+	case *operators.PercentBasedMirror:
+		return transformPercentBasedMirror(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToPrimitive)", op))
+}
+
+func transformPercentBasedMirror(ctx *plancontext.PlanningContext, op *operators.PercentBasedMirror) (engine.Primitive, error) {
+	primitive, err := transformToPrimitive(ctx, op.Operator())
+	if err != nil {
+		return nil, err
+	}
+
+	target, err := transformToPrimitive(ctx.UseMirror(), op.Target())
+	// Mirroring is best-effort. If we encounter an error while building the
+	// mirror target primitive, proceed without mirroring.
+	if err != nil {
+		return primitive, nil
+	}
+
+	return engine.NewPercentBasedMirror(op.Percent, primitive, target), nil
 }
 
 func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWithInput) (engine.Primitive, error) {
@@ -149,7 +169,7 @@ func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequent
 }
 
 func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (engine.Primitive, error) {
-	rb, isRoute := op.Insert.(*operators.Route)
+	rb, isRoute := op.Insert().(*operators.Route)
 	if !isRoute {
 		return nil, vterrors.VT13001(fmt.Sprintf("Incorrect type encountered: %T (transformInsertionSelection)", op.Insert))
 	}
@@ -178,7 +198,7 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 
 	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
-	selectionPlan, err := transformToPrimitive(ctx, op.Select)
+	selectionPlan, err := transformToPrimitive(ctx, op.Select())
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +308,6 @@ func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify
 		Verify: verify,
 		Exec:   inputLP,
 	}, nil
-
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (engine.Primitive, error) {
@@ -304,11 +323,19 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	var groupByKeys []*engine.GroupByParams
 
 	for _, aggr := range op.Aggregations {
-		if aggr.OpCode == opcode.AggregateUnassigned {
+		switch aggr.OpCode {
+		case opcode.AggregateUnassigned:
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+		case opcode.AggregateUDF:
+			message := fmt.Sprintf("Aggregate UDF '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
+			return nil, vterrors.VT12001(message)
 		}
+
 		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias, ctx.VSchema.Environment().CollationEnv())
-		aggrParam.Expr = aggr.Func
+		aggrParam.Func = aggr.Func
+		if gcFunc, isGc := aggrParam.Func.(*sqlparser.GroupConcatExpr); isGc && gcFunc.Separator == "" {
+			gcFunc.Separator = sqlparser.GroupConcatDefaultSeparator
+		}
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
 		aggrParam.WCol = aggr.WSOffset
@@ -317,7 +344,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 
 	for _, groupBy := range op.Grouping {
-		typ, _ := ctx.SemTable.TypeForExpr(groupBy.Inner)
+		typ, _ := ctx.TypeForExpr(groupBy.Inner)
 		groupByKeys = append(groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
@@ -352,7 +379,7 @@ func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct)
 	return &engine.Distinct{
 		Source:    src,
 		CheckCols: op.Columns,
-		Truncate:  op.Truncate,
+		Truncate:  op.ResultColumns,
 	}, nil
 }
 
@@ -372,7 +399,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src engine.Primitive, or
 	}
 
 	for idx, order := range ordering.Order {
-		typ, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
+		typ, _ := ctx.TypeForExpr(order.SimplifiedExpr)
 		prim.OrderBy = append(prim.OrderBy, evalengine.OrderByParams{
 			Col:             ordering.Offset[idx],
 			WeightStringCol: ordering.WOffset[idx],
@@ -438,12 +465,11 @@ func getEvalEngineExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr)
 	case *operators.EvalEngine:
 		return e.EExpr, nil
 	case operators.Offset:
-		typ, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
+		typ, _ := ctx.TypeForExpr(pe.EvalExpr)
 		return evalengine.NewColumn(int(e), typ, pe.EvalExpr), nil
 	default:
 		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
 	}
-
 }
 
 // newSimpleProjection creates a simple projections
@@ -470,7 +496,7 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (en
 		Input:        src,
 		Predicate:    predicate,
 		ASTPredicate: ctx.SemTable.AndExpressions(op.Predicates...),
-		Truncate:     op.Truncate,
+		Truncate:     op.ResultColumns,
 	}, nil
 }
 
@@ -590,7 +616,7 @@ func buildRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, 
 	}
 
 	for _, order := range op.Ordering {
-		typ, _ := ctx.SemTable.TypeForExpr(order.AST)
+		typ, _ := ctx.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, evalengine.OrderByParams{
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
@@ -907,11 +933,11 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 
 	var missingTypes []string
 
-	ltyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].LHS)
+	ltyp, found := ctx.TypeForExpr(op.JoinComparisons[0].LHS)
 	if !found {
 		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].LHS))
 	}
-	rtyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].RHS)
+	rtyp, found := ctx.TypeForExpr(op.JoinComparisons[0].RHS)
 	if !found {
 		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].RHS))
 	}
@@ -949,7 +975,7 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 
 	expr, err := evalengine.Translate(op.Value, &evalengine.Config{
 		Collation:   ctx.SemTable.Collation,
-		ResolveType: ctx.SemTable.TypeForExpr,
+		ResolveType: ctx.TypeForExpr,
 		Environment: ctx.VSchema.Environment(),
 	})
 	if err != nil {
@@ -971,6 +997,22 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 		}
 	}
 	return prim, nil
+}
+
+func transformRecurseCTE(ctx *plancontext.PlanningContext, op *operators.RecurseCTE) (engine.Primitive, error) {
+	seed, err := transformToPrimitive(ctx, op.Seed())
+	if err != nil {
+		return nil, err
+	}
+	term, err := transformToPrimitive(ctx, op.Term())
+	if err != nil {
+		return nil, err
+	}
+	return &engine.RecurseCTE{
+		Seed: seed,
+		Term: term,
+		Vars: op.Vars,
+	}, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {

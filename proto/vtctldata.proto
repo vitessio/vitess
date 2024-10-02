@@ -98,6 +98,9 @@ message MaterializeSettings {
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
   WorkflowOptions workflow_options = 17;
+
+  // ReferenceTables is set to a csv list of tables, if the materialization is for reference tables.
+  repeated string reference_tables = 18;
 }
 
 /* Data types for VtctldServer */
@@ -214,6 +217,8 @@ message WorkflowOptions {
   // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
   // from the source will be vreplicated.
   repeated string shards = 3;
+  map<string, string> config = 4;
+
 }
 
 // TODO: comment the hell out of this.
@@ -445,6 +450,8 @@ message BackupRequest {
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 5;
+  // BackupEngine specifies if we want to use a particular backup engine for this backup request
+  optional string backup_engine = 6;
 }
 
 message BackupResponse {
@@ -491,6 +498,24 @@ message ChangeTabletTypeResponse {
   topodata.Tablet before_tablet = 1;
   topodata.Tablet after_tablet = 2;
   bool was_dry_run = 3;
+}
+
+message CheckThrottlerRequest {
+  topodata.TabletAlias tablet_alias = 1;
+
+  string app_name = 2;
+
+  string scope = 3;
+  // SkipRequestHeartbeats ensures this check does not renew heartbeat lease
+  bool skip_request_heartbeats = 4;
+  // OKIfNotExists asks the throttler to return OK even if the metric does not exist
+  bool ok_if_not_exists = 5;
+}
+
+message CheckThrottlerResponse {
+  topodata.TabletAlias tablet_alias = 1;
+
+  tabletmanagerdata.CheckThrottlerResponse Check = 2;
 }
 
 message CleanupSchemaMigrationRequest {
@@ -988,6 +1013,13 @@ message UpdateThrottlerConfigRequest {
   bool check_as_check_shard = 8;
   // ThrottledApp indicates a single throttled app rule (ignored if name is empty)
   topodata.ThrottledAppRule throttled_app = 9;
+  // MetricName is the name of the metric for which we apply a new threshold
+  string metric_name = 10;
+  // AppName is the name of the app for which we assign metrics
+  string app_name = 11;
+  // AppCheckedMetrics are the metrics to be checked got the given AppName. These can be scoped. For example:
+  // ["lag", "self/loadvg", "shard/threads_running"]
+  repeated string app_checked_metrics = 12;
 }
 
 message UpdateThrottlerConfigResponse {
@@ -1047,6 +1079,15 @@ message GetTabletsResponse {
   repeated topodata.Tablet tablets = 1;
 }
 
+message GetThrottlerStatusRequest {
+  // TabletAlias is the alias of the tablet to probe
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetThrottlerStatusResponse {
+  tabletmanagerdata.GetThrottlerStatusResponse status = 1;
+}
+
 message GetTopologyPathRequest {
   string path = 1;
   int64 version = 2;
@@ -1065,6 +1106,23 @@ message TopologyCell {
   string data = 3;
   repeated string children = 4;
   int64 version = 5;
+}
+
+message GetUnresolvedTransactionsRequest {
+  string keyspace = 1;
+  int64 abandon_age = 2; // in seconds
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
+message ConcludeTransactionRequest {
+  string dtid = 1;
+  repeated query.Target participants = 2;
+}
+
+message ConcludeTransactionResponse {
 }
 
 message GetVSchemaRequest {
@@ -1323,6 +1381,8 @@ message PlannedReparentShardRequest {
   // acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.
   // A value of 0 indicates that Vitess shouldn't consider the replication lag at all.
   vttime.Duration tolerable_replication_lag = 6;
+  // AllowCrossCellPromotion allows cross cell promotion,
+  bool allow_cross_cell_promotion = 7;
 }
 
 message PlannedReparentShardResponse {
@@ -1489,6 +1549,8 @@ message ReshardCreateRequest {
   bool defer_secondary_keys = 11;
   // Start the workflow after creating it.
   bool auto_start = 12;
+  WorkflowOptions workflow_options = 13;
+
 }
 
 message RestoreFromBackupRequest {
@@ -1505,6 +1567,8 @@ message RestoreFromBackupRequest {
   // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
   // RestoreToTimestamp and RestoreToPos are mutually exclusive.
   vttime.Time restore_to_timestamp = 5;
+  // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
+  repeated string allowed_backup_engines = 6;
 }
 
 message RestoreFromBackupResponse {
@@ -1826,6 +1890,8 @@ message VDiffCreateRequest {
   bool verbose = 18;
   int64 max_report_sample_rows = 19;
   vttime.Duration max_diff_duration = 20;
+  int64 row_diff_column_truncate_at = 21;
+  optional bool auto_start = 22;
 }
 
 message VDiffCreateResponse {
@@ -1848,6 +1914,7 @@ message VDiffResumeRequest {
   string workflow = 1;
   string target_keyspace = 2;
   string uuid = 3;
+  repeated string target_shards = 4;
 }
 
 message VDiffResumeResponse {
@@ -1869,6 +1936,7 @@ message VDiffStopRequest {
   string workflow = 1;
   string target_keyspace = 2;
   string uuid = 3;
+  repeated string target_shards = 4;
 }
 
 message VDiffStopResponse {
@@ -1936,6 +2004,7 @@ message WorkflowSwitchTrafficRequest {
   bool dry_run = 9;
   bool initialize_target_sequences = 10;
   repeated string shards = 11;
+  bool force = 12;
 }
 
 message WorkflowSwitchTrafficResponse {
@@ -1961,4 +2030,24 @@ message WorkflowUpdateResponse {
   }
   string summary = 1;
   repeated TabletInfo details = 2;
+}
+
+message GetMirrorRulesRequest {
+}
+
+message GetMirrorRulesResponse {
+  vschema.MirrorRules mirror_rules = 1;
+}
+
+message WorkflowMirrorTrafficRequest {
+  string keyspace = 1;
+  string workflow = 2;
+  repeated topodata.TabletType tablet_types = 3;
+  float percent = 4;
+}
+
+message WorkflowMirrorTrafficResponse {
+  string summary = 1;
+  string start_state = 2;
+  string current_state = 3;
 }

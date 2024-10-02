@@ -52,8 +52,7 @@ var (
 
 // ReplTracker tracks replication lag.
 type ReplTracker struct {
-	mode           string
-	forceHeartbeat bool
+	mode string
 
 	mu        sync.Mutex
 	isPrimary bool
@@ -66,11 +65,10 @@ type ReplTracker struct {
 // NewReplTracker creates a new ReplTracker.
 func NewReplTracker(env tabletenv.Env, alias *topodatapb.TabletAlias) *ReplTracker {
 	return &ReplTracker{
-		mode:           env.Config().ReplicationTracker.Mode,
-		forceHeartbeat: env.Config().ReplicationTracker.HeartbeatOnDemand > 0,
-		hw:             newHeartbeatWriter(env, alias),
-		hr:             newHeartbeatReader(env),
-		poller:         &poller{},
+		mode:   env.Config().ReplicationTracker.Mode,
+		hw:     newHeartbeatWriter(env, alias),
+		hr:     newHeartbeatReader(env),
+		poller: &poller{},
 	}
 }
 
@@ -97,9 +95,7 @@ func (rt *ReplTracker) MakePrimary() {
 		rt.hr.Close()
 		rt.hw.Open()
 	}
-	if rt.forceHeartbeat {
-		rt.hw.Open()
-	}
+	rt.hw.Open()
 }
 
 // MakeNonPrimary must be called if the tablet type becomes non-PRIMARY.
@@ -117,9 +113,7 @@ func (rt *ReplTracker) MakeNonPrimary() {
 		// Run the status once to pre-initialize values.
 		rt.poller.Status()
 	}
-	if rt.forceHeartbeat {
-		rt.hw.Close()
-	}
+	rt.hw.Close()
 }
 
 // Close closes ReplTracker.
@@ -147,5 +141,9 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 // EnableHeartbeat enables or disables writes of heartbeat. This functionality
 // is only used by tests.
 func (rt *ReplTracker) EnableHeartbeat(enable bool) {
-	rt.hw.enableWrites(enable)
+	if enable {
+		rt.hw.enableWrites()
+	} else {
+		rt.hw.disableWrites()
+	}
 }

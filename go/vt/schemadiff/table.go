@@ -445,6 +445,18 @@ type CreateTableEntity struct {
 	Env *Environment
 }
 
+func NewCreateTableEntityFromSQL(env *Environment, sql string) (*CreateTableEntity, error) {
+	stmt, err := env.Parser().ParseStrictDDL(sql)
+	if err != nil {
+		return nil, err
+	}
+	createTable, ok := stmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil, ErrExpectedCreateTable
+	}
+	return NewCreateTableEntity(env, createTable)
+}
+
 func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTableEntity, error) {
 	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.Table.Name.String(), Statement: sqlparser.CanonicalString(c)}
@@ -452,6 +464,64 @@ func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTa
 	entity := &CreateTableEntity{CreateTable: c, Env: env}
 	entity.normalize()
 	return entity, nil
+}
+
+// ColumnDefinitionEntities returns the list of column entities for the table.
+func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity {
+	cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
+	pkColumnsMaps := c.primaryKeyColumnsMap()
+	entities := make([]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
+	for i := range c.CreateTable.TableSpec.Columns {
+		col := c.CreateTable.TableSpec.Columns[i]
+		_, inPK := pkColumnsMaps[col.Name.Lowered()]
+		entities[i] = NewColumnDefinitionEntity(c.Env, col, inPK, cc)
+	}
+	return entities
+}
+
+// ColumnDefinitionEntities returns the list of column entities for the table.
+func (c *CreateTableEntity) ColumnDefinitionEntitiesList() *ColumnDefinitionEntityList {
+	return NewColumnDefinitionEntityList(c.ColumnDefinitionEntities())
+}
+
+// ColumnDefinitionEntities returns column entities mapped by their lower cased name
+func (c *CreateTableEntity) ColumnDefinitionEntitiesMap() map[string]*ColumnDefinitionEntity {
+	entities := c.ColumnDefinitionEntities()
+	m := make(map[string]*ColumnDefinitionEntity, len(entities))
+	for _, entity := range entities {
+		m[entity.NameLowered()] = entity
+	}
+	return m
+}
+
+// IndexDefinitionEntities returns the list of index entities for the table.
+func (c *CreateTableEntity) IndexDefinitionEntities() []*IndexDefinitionEntity {
+	colMap := c.ColumnDefinitionEntitiesMap()
+	keys := c.CreateTable.TableSpec.Indexes
+	entities := make([]*IndexDefinitionEntity, len(keys))
+	for i, key := range keys {
+		colEntities := make([]*ColumnDefinitionEntity, len(key.Columns))
+		for i, keyCol := range key.Columns {
+			colEntities[i] = colMap[keyCol.Column.Lowered()]
+		}
+		entities[i] = NewIndexDefinitionEntity(c.Env, key, NewColumnDefinitionEntityList(colEntities))
+	}
+	return entities
+}
+
+// IndexDefinitionEntityList returns the list of index entities for the table.
+func (c *CreateTableEntity) IndexDefinitionEntitiesList() *IndexDefinitionEntityList {
+	return NewIndexDefinitionEntityList(c.IndexDefinitionEntities())
+}
+
+// IndexDefinitionEntitiesMap returns index entities mapped by their lower cased name.
+func (c *CreateTableEntity) IndexDefinitionEntitiesMap() map[string]*IndexDefinitionEntity {
+	entities := c.IndexDefinitionEntities()
+	m := make(map[string]*IndexDefinitionEntity, len(entities))
+	for _, entity := range entities {
+		m[entity.NameLowered()] = entity
+	}
+	return m
 }
 
 // normalize cleans up the table definition:
@@ -1520,6 +1590,21 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		t2KeysMap[key.Info.Name.String()] = key
 	}
 
+	// A map of index definition text to lost of key names that have that definition.
+	// For example, in:
+	//
+	// create table t (
+	// 	i1 int,
+	// 	i2 int,
+	// 	key k1 (i1),
+	// 	key k2 (i2),
+	// 	key k3 (i2)
+	// )
+	// We will have:
+	// - "KEY `` (i1)": ["k1"]
+	// - "KEY `` (i2)": ["k2", "k3"]
+	droppedKeysAnonymousDefinitions := map[string]([]string){}
+
 	dropKeyStatement := func(info *sqlparser.IndexInfo) *sqlparser.DropKey {
 		dropKey := &sqlparser.DropKey{}
 		if info.Type == sqlparser.IndexTypePrimary {
@@ -1531,14 +1616,25 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		return dropKey
 	}
 
+	anonymizedIndexDefinition := func(indexDefinition *sqlparser.IndexDefinition) string {
+		currentName := indexDefinition.Info.Name
+		defer func() { indexDefinition.Info.Name = currentName }()
+		indexDefinition.Info.Name = sqlparser.NewIdentifierCI("")
+		return sqlparser.CanonicalString(indexDefinition)
+	}
+
 	// evaluate dropped keys
 	//
+	dropKeyStatements := map[string]*sqlparser.DropKey{}
 	for _, t1Key := range t1Keys {
 		if _, ok := t2KeysMap[t1Key.Info.Name.String()]; !ok {
 			// column exists in t1 but not in t2, hence it is dropped
 			dropKey := dropKeyStatement(t1Key.Info)
-			alterTable.AlterOptions = append(alterTable.AlterOptions, dropKey)
+			dropKeyStatements[t1Key.Info.Name.String()] = dropKey
 			annotations.MarkRemoved(sqlparser.CanonicalString(t1Key))
+
+			anonymized := anonymizedIndexDefinition(t1Key)
+			droppedKeysAnonymousDefinitions[anonymized] = append(droppedKeysAnonymousDefinitions[anonymized], t1Key.Info.Name.String())
 		}
 	}
 
@@ -1574,6 +1670,28 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			}
 		} else {
 			// key exists in t2 but not in t1, hence it is added
+
+			// But wait! As an optimization, if this index has the exact same definition as a previously dropped index,
+			// then we convert the drop+add statements in to a `RENAME INDEX` statement.
+			convertedToRename := false
+			anonymized := anonymizedIndexDefinition(t2Key)
+			if droppedKeys := droppedKeysAnonymousDefinitions[anonymized]; len(droppedKeys) > 0 {
+				if dropKey, ok := dropKeyStatements[droppedKeys[0]]; ok {
+					delete(dropKeyStatements, droppedKeys[0])
+					droppedKeysAnonymousDefinitions[anonymized] = droppedKeys[1:]
+					renameIndex := &sqlparser.RenameIndex{
+						OldName: dropKey.Name,
+						NewName: t2Key.Info.Name,
+					}
+					alterTable.AlterOptions = append(alterTable.AlterOptions, renameIndex)
+					convertedToRename = true
+				}
+			}
+			if convertedToRename {
+				continue
+			}
+			// End of conversion to RENAME INDEX. Proceed with actual ADD INDEX
+
 			addKey := &sqlparser.AddIndexDefinition{
 				IndexDefinition: t2Key,
 			}
@@ -1592,6 +1710,9 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 				annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 			}
 		}
+	}
+	for _, stmt := range dropKeyStatements {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, stmt)
 	}
 	return superfluousFulltextKeys
 }
@@ -1659,6 +1780,35 @@ func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.Colu
 	}
 
 	return minimalColumnReordering
+}
+
+// This function looks for a non-deterministic function call in the given expression.
+// If recurses into all function arguments.
+// The known non-deterministic function we handle are:
+// - UUID()
+// - UUID_SHORT()
+// - RAND()
+// - RANDOM_BYTES()
+// - SYSDATE()
+func findNoNondeterministicFunction(expr sqlparser.Expr) (foundFunction string) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.CurTimeFuncExpr:
+			switch node.Name.Lowered() {
+			case "sysdate":
+				foundFunction = node.Name.String()
+				return false, nil
+			}
+		case *sqlparser.FuncExpr:
+			switch node.Name.Lowered() {
+			case "uuid", "uuid_short", "rand", "random_bytes":
+				foundFunction = node.Name.String()
+				return false, nil
+			}
+		}
+		return true, nil
+	}, expr)
+	return foundFunction
 }
 
 // Diff compares this table statement with another table statement, and sees what it takes to
@@ -1731,11 +1881,11 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColName := t2Col.Name.Lowered()
 		// we know that column exists in both tables
 		t1Col := t1ColumnsMap[t2ColName]
-		t1ColEntity := NewColumnDefinitionEntity(t1Col.col)
-		t2ColEntity := NewColumnDefinitionEntity(t2Col)
+		t1ColEntity := NewColumnDefinitionEntity(c.Env, t1Col.col, false, t1cc)
+		t2ColEntity := NewColumnDefinitionEntity(c.Env, t2Col, false, t2cc)
 
 		// check diff between before/after columns:
-		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, t1cc, t2cc, hints)
+		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, hints)
 		if err != nil {
 			return err
 		}
@@ -1781,6 +1931,16 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			// column exists in t2 but not in t1, hence it is added
 			addColumn := &sqlparser.AddColumns{
 				Columns: []*sqlparser.ColumnDefinition{t2Col},
+			}
+			// See whether this ADD COLUMN has a non-deterministic default value
+			if t2Col.Type.Options.Default != nil && !t2Col.Type.Options.DefaultLiteral {
+				if function := findNoNondeterministicFunction(t2Col.Type.Options.Default); function != "" {
+					return &NonDeterministicDefaultError{
+						Table:    c.Name(),
+						Column:   t2Col.Name.String(),
+						Function: function,
+					}
+				}
 			}
 			if t2ColIndex < expectAppendIndex {
 				// This column is added somewhere in between existing columns, not appended at end of column list
@@ -1883,6 +2043,15 @@ func (c *CreateTableEntity) primaryKeyColumns() []*sqlparser.IndexColumn {
 	return nil
 }
 
+func (c *CreateTableEntity) primaryKeyColumnsMap() map[string]*sqlparser.IndexColumn {
+	columns := c.primaryKeyColumns()
+	m := make(map[string]*sqlparser.IndexColumn, len(columns))
+	for _, col := range columns {
+		m[col.Column.Lowered()] = col
+	}
+	return m
+}
+
 // Create implements Entity interface
 func (c *CreateTableEntity) Create() EntityDiff {
 	if c == nil {
@@ -1918,12 +2087,14 @@ func sortAlterOptions(diff *AlterTableEntityDiff) {
 			return 5
 		case *sqlparser.AddColumns:
 			return 6
-		case *sqlparser.AddIndexDefinition:
+		case *sqlparser.RenameIndex:
 			return 7
-		case *sqlparser.AddConstraintDefinition:
+		case *sqlparser.AddIndexDefinition:
 			return 8
-		case sqlparser.TableOptions, *sqlparser.TableOptions:
+		case *sqlparser.AddConstraintDefinition:
 			return 9
+		case sqlparser.TableOptions, *sqlparser.TableOptions:
+			return 10
 		default:
 			return math.MaxInt
 		}
@@ -2079,20 +2250,25 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				return &ApplyKeyNotFoundError{Table: c.Name(), Key: opt.Name.String()}
 			}
 
-			// Now, if this is a normal key being dropped, let's validate it does not leave any foreign key constraint uncovered
-			switch opt.Type {
-			case sqlparser.PrimaryKeyType, sqlparser.NormalKeyType:
-				for _, cs := range c.CreateTable.TableSpec.Constraints {
-					fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
-					if !ok {
-						continue
-					}
-					if !c.columnsCoveredByInOrderIndex(fk.Source) {
-						return &IndexNeededByForeignKeyError{Table: c.Name(), Key: opt.Name.String()}
-					}
+		case *sqlparser.RenameIndex:
+			// validate no existing key by same name
+			newKeyName := opt.NewName.String()
+			for _, index := range c.TableSpec.Indexes {
+				if strings.EqualFold(index.Info.Name.String(), newKeyName) {
+					return &ApplyDuplicateKeyError{Table: c.Name(), Key: newKeyName}
 				}
 			}
-
+			found := false
+			for _, index := range c.TableSpec.Indexes {
+				if index.Info.Name.String() == opt.OldName.String() {
+					index.Info.Name = opt.NewName
+					found = true
+					break
+				}
+			}
+			if !found {
+				return &ApplyKeyNotFoundError{Table: c.Name(), Key: opt.OldName.String()}
+			}
 		case *sqlparser.AddIndexDefinition:
 			// validate no existing key by same name
 			keyName := opt.IndexDefinition.Info.Name.String()
@@ -2289,8 +2465,38 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		}
 		return nil
 	}
+	// postApplyOptionsIteration runs on all options, after applyAlterOption does.
+	// Some validations can only take place after all options have been applied.
+	postApplyOptionsIteration := func(opt sqlparser.AlterOption) error {
+		switch opt := opt.(type) {
+		case *sqlparser.DropKey:
+			// Now, if this is a normal key being dropped, let's validate it does not leave any foreign key constraint uncovered.
+			// We must have this in `postApplyOptionsIteration` as opposed to `applyAlterOption` because
+			// this DROP KEY may have been followed by an ADD KEY that covers the foreign key constraint, so it's wrong
+			// to error out before applying the ADD KEY.
+			switch opt.Type {
+			case sqlparser.PrimaryKeyType, sqlparser.NormalKeyType:
+				for _, cs := range c.CreateTable.TableSpec.Constraints {
+					fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+					if !ok {
+						continue
+					}
+					if !c.columnsCoveredByInOrderIndex(fk.Source) {
+						return &IndexNeededByForeignKeyError{Table: c.Name(), Key: opt.Name.String()}
+					}
+				}
+			}
+		}
+		return nil
+	}
+
 	for _, alterOption := range diff.alterTable.AlterOptions {
 		if err := applyAlterOption(alterOption); err != nil {
+			return err
+		}
+	}
+	for _, alterOption := range diff.alterTable.AlterOptions {
+		if err := postApplyOptionsIteration(alterOption); err != nil {
 			return err
 		}
 	}
@@ -2638,4 +2844,19 @@ func (c *CreateTableEntity) identicalOtherThanName(other *CreateTableEntity) boo
 	}
 	return sqlparser.Equals.RefOfTableSpec(c.TableSpec, other.TableSpec) &&
 		sqlparser.Equals.RefOfParsedComments(c.Comments, other.Comments)
+}
+
+// AutoIncrementValue returns the value of the AUTO_INCREMENT option, or zero if not exists.
+func (c *CreateTableEntity) AutoIncrementValue() (autoIncrement uint64, err error) {
+	for _, option := range c.CreateTable.TableSpec.Options {
+		if strings.ToUpper(option.Name) == "AUTO_INCREMENT" {
+			autoIncrement, err := strconv.ParseUint(option.Value.Val, 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			return autoIncrement, nil
+		}
+	}
+	// Auto increment not found
+	return 0, nil
 }

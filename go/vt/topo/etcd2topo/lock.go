@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -34,7 +35,7 @@ import (
 )
 
 var (
-	leaseTTL = 30
+	leaseTTL = 30 // This is the default used for all non-named locks
 )
 
 func init() {
@@ -153,7 +154,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	}
 
 	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents)
+	return s.lock(ctx, dirPath, contents, leaseTTL)
 }
 
 // Lock is part of the topo.Conn interface.
@@ -168,15 +169,35 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents)
+	return s.lock(ctx, dirPath, contents, leaseTTL)
+}
+
+// LockWithTTL is part of the topo.Conn interface.
+func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (topo.LockDescriptor, error) {
+	// We list the directory first to make sure it exists.
+	if _, err := s.ListDir(ctx, dirPath, false /*full*/); err != nil {
+		// We need to return the right error codes, like
+		// topo.ErrNoNode and topo.ErrInterrupted, and the
+		// easiest way to do this is to return convertError(err).
+		// It may lose some of the context, if this is an issue,
+		// maybe logging the error would work here.
+		return nil, convertError(err, dirPath)
+	}
+
+	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()))
+}
+
+// LockName is part of the topo.Conn interface.
+func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()))
 }
 
 // lock is used by both Lock() and primary election.
-func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.LockDescriptor, error) {
+func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (topo.LockDescriptor, error) {
 	nodePath = path.Join(s.root, nodePath, locksPath)
 
 	// Get a lease, set its KeepAlive.
-	lease, err := s.cli.Grant(ctx, int64(leaseTTL))
+	lease, err := s.cli.Grant(ctx, int64(ttl))
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}

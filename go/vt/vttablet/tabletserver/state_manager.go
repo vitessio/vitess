@@ -164,6 +164,7 @@ type (
 		AcceptReadWrite()
 		AcceptReadOnly()
 		Close()
+		RollbackPrepared()
 	}
 
 	subComponent interface {
@@ -610,6 +611,12 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		log.Infof("Killed all stateless OLTP queries.")
 		sm.statefulql.TerminateAll()
 		log.Infof("Killed all OLTP queries.")
+		// We can rollback prepared transactions only after we have killed all the write queries in progress.
+		// This is essential because when we rollback a prepared transaction, it lets go of the locks it was holding.
+		// If there were some other conflicting write in progress that hadn't been killed, then it could potentially go through
+		// and cause data corruption since we won't be able to prepare the transaction again.
+		sm.te.RollbackPrepared()
+		log.Infof("Rollbacked all prepared transactions")
 	}()
 	return cancel
 }

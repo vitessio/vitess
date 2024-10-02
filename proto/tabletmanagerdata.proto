@@ -29,6 +29,7 @@ import "replicationdata.proto";
 import "logutil.proto";
 import "vttime.proto";
 import "vtrpc.proto";
+import "mysqlctl.proto";
 
 //
 // Data structures
@@ -309,6 +310,39 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
+message GetUnresolvedTransactionsRequest {
+  int64 abandon_age = 1;
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
+message ReadTransactionRequest {
+  string dtid = 1;
+}
+
+message ReadTransactionResponse {
+  query.TransactionMetadata transaction = 1;
+}
+
+message ConcludeTransactionRequest {
+  string dtid = 1;
+  bool mm = 2;
+}
+
+message ConcludeTransactionResponse {
+}
+
+
+message MysqlHostMetricsRequest {
+}
+
+message MysqlHostMetricsResponse {
+  mysqlctl.HostMetricsResponse HostMetrics = 1;
+}
+
+
 message ReplicationStatusRequest {
 }
 
@@ -516,6 +550,8 @@ message BackupRequest {
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 4;
+  // BackupEngine specifies if we want to use a particular backup engine for this backup request
+  optional string backup_engine = 5;
 }
 
 message BackupResponse {
@@ -533,6 +569,8 @@ message RestoreFromBackupRequest {
   // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
   // RestoreToTimestamp and RestoreToPos are mutually exclusive.
   vttime.Time restore_to_timestamp = 4;
+  // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
+  repeated string allowed_backup_engines = 5;
 }
 
 message RestoreFromBackupResponse {
@@ -627,6 +665,18 @@ message ReadVReplicationWorkflowResponse {
   }
   repeated Stream streams = 11;
   string options = 12;
+  map<string, string> config_overrides = 13;
+}
+
+message ValidateVReplicationPermissionsRequest {
+}
+
+message ValidateVReplicationPermissionsResponse {
+  // The --db_filtered_user on the tablet.
+  string user = 1;
+  // Does the user have the minimum privileges needed to manage
+  // vreplication metadata.
+  bool ok = 2;
 }
 
 message VDiffRequest {
@@ -657,6 +707,7 @@ message VDiffReportOptions {
   bool debug_query = 2;
   string format = 3;
   int64 max_sample_rows = 4;
+  int64 row_diff_column_truncate_at = 5;
 }
 
 message VDiffCoreOptions {
@@ -669,6 +720,7 @@ message VDiffCoreOptions {
   int64 max_extra_rows_to_compare = 7;
   bool update_table_stats = 8;
   int64 max_diff_seconds = 9;
+  optional bool auto_start = 10;
 }
 
 message VDiffOptions {
@@ -676,6 +728,7 @@ message VDiffOptions {
   VDiffCoreOptions core_options = 2;
   VDiffReportOptions report_options = 3;
 }
+
 
 // UpdateVReplicationWorkflowRequest is used to update an existing VReplication
 // workflow. Note that the following fields MUST have an explicit value provided
@@ -687,10 +740,11 @@ message UpdateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
   repeated topodata.TabletType tablet_types = 3;
-  TabletSelectionPreference tablet_selection_preference = 4;
-  binlogdata.OnDDLAction on_ddl = 5;
-  binlogdata.VReplicationWorkflowState state = 6;
+  optional TabletSelectionPreference tablet_selection_preference = 4;
+  optional binlogdata.OnDDLAction on_ddl = 5;
+  optional binlogdata.VReplicationWorkflowState state = 6;
   reserved 7; // unused, was: repeated string shards
+  map<string, string> config_overrides = 8;
 }
 
 message UpdateVReplicationWorkflowResponse {
@@ -707,9 +761,9 @@ message UpdateVReplicationWorkflowsRequest {
   bool all_workflows = 1;
   repeated string include_workflows = 2;
   repeated string exclude_workflows = 3;
-  binlogdata.VReplicationWorkflowState state = 4;
-  string message = 5;
-  string stop_position = 6;
+  optional binlogdata.VReplicationWorkflowState state = 4;
+  optional string message = 5;
+  optional string stop_position = 6;
 }
 
 message UpdateVReplicationWorkflowsResponse {
@@ -725,6 +779,24 @@ message ResetSequencesResponse {
 
 message CheckThrottlerRequest {
   string app_name = 1;
+
+  string scope = 2;
+  // SkipRequestHeartbeats ensures this check does not renew heartbeat lease
+  bool skip_request_heartbeats = 3;
+  // OKIfNotExists asks the throttler to return OK even if the metric does not exist
+  bool ok_if_not_exists = 4;
+  // MultiMetricsEnabled is always set to "true" and is how a multi-metrics enabled replica
+  // throttler knows its being probed by a multi-metrics enabled primary vttablet.
+  bool multi_metrics_enabled = 5;
+}
+
+enum CheckThrottlerResponseCode {
+  UNDEFINED = 0;
+  OK = 1;
+  THRESHOLD_EXCEEDED = 2;
+  APP_DENIED = 3;
+  UNKNOWN_METRIC = 4;
+  INTERNAL_ERROR = 5;
 }
 
 message CheckThrottlerResponse {
@@ -736,9 +808,103 @@ message CheckThrottlerResponse {
   double threshold = 3;
   // Error indicates an error retrieving the value
   string error = 4;
-  // Message 
+  // Message
   string message = 5;
   // RecentlyChecked indicates that the tablet has been hit with a user-facing check, which can then imply
   // that heartbeats lease should be renwed.
   bool recently_checked = 6;
+
+  message Metric {
+    // Name of the metric
+    string name = 1;
+    // StatusCode is HTTP compliant response code (e.g. 200 for OK)
+    int32 status_code = 2;
+    // Value is the metric value collected by the tablet
+    double value = 3;
+    // Threshold is the throttling threshold the table was comparing the value with
+    double threshold = 4;
+    // Error indicates an error retrieving the value
+    string error = 5;
+    // Message
+    string message = 6;
+    // Scope used in this check
+    string scope = 7;
+    // ResponseCode is the enum representation of the response
+    CheckThrottlerResponseCode response_code = 8;
+  }
+  // Metrics is a map (metric name -> metric value/error) so that the client has as much
+  // information as possible about all the checked metrics.
+  map<string, Metric> metrics = 7;
+
+  // AppName is the name of app that was matched by the throttler
+  string app_name = 8;
+
+  // Summary is a human readable analysis of the result
+  string summary = 9;
+
+  // ResponseCode is the enum representation of the response
+  CheckThrottlerResponseCode response_code = 10;
+}
+
+message GetThrottlerStatusRequest {
+}
+
+message GetThrottlerStatusResponse {
+  // TabletAlias of probed tablet
+  string tablet_alias = 1;
+  string keyspace = 2;
+  string shard = 3;
+
+  // IsLeader indicates if the tablet is the leader of the shard, ie. the primary
+  bool is_leader = 4;
+  // IsOpen per stateManager
+  bool is_open = 5;
+  // IsEnabled per throttler configuration
+  bool is_enabled = 6;
+  // IsDormant: whether the throttler is dormant, ie has not received any checks in a while
+  // and goes into low-frequency probing mode.
+  bool is_dormant = 7;
+
+  // LagMetricQuery is the query used to check the lag metric, a constant used by the throttler.
+  string lag_metric_query = 8;
+  // CustomMetricQuery is the query used to check the custom metric, supplied by the user.
+  string custom_metric_query = 9;
+  // DefaultThreshold is the threshold used by the throttler for the default metric (lag or custom in single-metric throttlers)
+  double default_threshold = 10;
+  // MetricNameUsedAsDefault is the name of the metric used as the default metric: "lag" or "custom", for backwards compatibility
+  // with single-metric throttlers
+  string metric_name_used_as_default = 11;
+
+  message MetricResult {
+    double value = 1;
+    string error = 2;
+  }
+
+  // AggregatedMetrics is a map of metric names to their values/errors
+  // Names are, for example, "self", "self/lag", "shard/lag", "shard/loadavg", etc.
+  map<string, MetricResult> aggregated_metrics = 12;
+  // MetricThresholds is a map of metric names to their thresholds.
+  map<string, double> metric_thresholds = 13;
+
+  message MetricHealth {
+    vttime.Time last_healthy_at = 1;
+    int64 seconds_since_last_healthy = 2;
+  }
+  // MetricsHealth is a map of metric names to their health status.
+  map<string, MetricHealth> metrics_health = 14;
+  // ThrottledApps is a map of app names to their throttling rules
+  map<string, topodata.ThrottledAppRule> throttled_apps = 15;
+  // AppCheckedMetrics is a map of app names to their assigned metrics
+  map<string, string> app_checked_metrics = 16;
+
+  bool recently_checked = 17;
+
+  message RecentApp {
+    vttime.Time checked_at = 1;
+    int32 status_code = 2;
+    // ResponseCode is the enum representation of the response
+    CheckThrottlerResponseCode response_code = 3;
+  }
+  // RecentApps is a map of app names to their recent check status
+  map<string, RecentApp> recent_apps = 18;
 }

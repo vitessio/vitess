@@ -43,7 +43,7 @@ type analyzer struct {
 	err          error
 	inProjection int
 
-	projErr                 error
+	notSingleRouteErr       error
 	unshardedErr            error
 	warning                 string
 	canShortcut             bool
@@ -143,7 +143,7 @@ func (a *analyzer) newSemTable(
 			Warning:                   a.warning,
 			Collation:                 coll,
 			ExprTypes:                 map[sqlparser.Expr]evalengine.Type{},
-			NotSingleRouteErr:         a.projErr,
+			NotSingleRouteErr:         a.notSingleRouteErr,
 			NotUnshardedErr:           a.unshardedErr,
 			Recursive:                 ExprDependencies{},
 			Direct:                    ExprDependencies{},
@@ -175,7 +175,7 @@ func (a *analyzer) newSemTable(
 		ExprTypes:                 a.typer.m,
 		Tables:                    a.tables.Tables,
 		Targets:                   a.binder.targets,
-		NotSingleRouteErr:         a.projErr,
+		NotSingleRouteErr:         a.notSingleRouteErr,
 		NotUnshardedErr:           a.unshardedErr,
 		Warning:                   a.warning,
 		Comments:                  comments,
@@ -194,13 +194,13 @@ func (a *analyzer) newSemTable(
 
 func (a *analyzer) setError(err error) {
 	switch err := err.(type) {
-	case ProjError:
-		a.projErr = err.Inner
+	case NotSingleRouteErr:
+		a.notSingleRouteErr = err.Inner
 	case ShardedError:
 		a.unshardedErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
-			a.projErr = err
+			a.notSingleRouteErr = err
 		} else {
 			a.err = err
 		}
@@ -357,7 +357,7 @@ func (a *analyzer) collationEnv() *collations.Environment {
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
-	_ = sqlparser.Rewrite(statement, nil, a.earlyUp)
+	_ = sqlparser.Rewrite(statement, a.earlyTables.down, a.earlyTables.up)
 	if a.err != nil {
 		return a.err
 	}
@@ -387,7 +387,14 @@ func (a *analyzer) reAnalyze(statement sqlparser.SQLNode) error {
 // canShortCut checks if we are dealing with a single unsharded keyspace and no tables that have managed foreign keys
 // if so, we can stop the analyzer early
 func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool) {
-	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
+	var ks *vindexes.Keyspace
+	switch statement.(type) {
+	case sqlparser.SelectStatement:
+		ks, canShortCut = canTakeSelectUnshardedShortcut(a.earlyTables.Tables)
+	default:
+		ks, canShortCut = canTakeUnshardedShortcut(a.earlyTables.Tables)
+	}
+
 	a.singleUnshardedKeyspace = ks != nil
 	if !a.singleUnshardedKeyspace {
 		return false
@@ -424,13 +431,6 @@ func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool)
 	return true
 }
 
-// earlyUp collects tables in the query, so we can check
-// if this a single unsharded query we are dealing with
-func (a *analyzer) earlyUp(cursor *sqlparser.Cursor) bool {
-	a.earlyTables.up(cursor)
-	return true
-}
-
 func (a *analyzer) shouldContinue() bool {
 	return a.err == nil
 }
@@ -455,6 +455,10 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 		if node.GroupBy != nil {
 			a.sig.Aggregation = true
 		}
+	case *sqlparser.With:
+		if node.Recursive {
+			a.sig.RecursiveCTE = true
+		}
 	case sqlparser.AggrFunc:
 		a.sig.Aggregation = true
 	case *sqlparser.Delete, *sqlparser.Update, *sqlparser.Insert:
@@ -464,8 +468,8 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 
 // getError gets the error stored in the analyzer during previous phases.
 func (a *analyzer) getError() error {
-	if a.projErr != nil {
-		return a.projErr
+	if a.notSingleRouteErr != nil {
+		return a.notSingleRouteErr
 	}
 	if a.unshardedErr != nil {
 		return a.unshardedErr
@@ -473,13 +477,13 @@ func (a *analyzer) getError() error {
 	return a.err
 }
 
-// ProjError is used to mark an error as something that should only be returned
+// NotSingleRouteErr is used to mark an error as something that should only be returned
 // if the planner fails to merge everything down to a single route
-type ProjError struct {
+type NotSingleRouteErr struct {
 	Inner error
 }
 
-func (p ProjError) Error() string {
+func (p NotSingleRouteErr) Error() string {
 	return p.Inner.Error()
 }
 

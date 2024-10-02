@@ -110,7 +110,7 @@ func (ri *rows) ColumnTypeScanType(index int) reflect.Type {
 	case query.Type_TIMESTAMP, query.Type_DECIMAL, query.Type_VARCHAR, query.Type_TEXT,
 		query.Type_BLOB, query.Type_VARBINARY, query.Type_CHAR, query.Type_BINARY, query.Type_BIT,
 		query.Type_ENUM, query.Type_SET, query.Type_TUPLE, query.Type_GEOMETRY, query.Type_JSON,
-		query.Type_HEXNUM, query.Type_HEXVAL, query.Type_BITNUM:
+		query.Type_HEXNUM, query.Type_HEXVAL, query.Type_BITNUM, query.Type_VECTOR:
 
 		return typeRawBytes
 	case query.Type_DATE, query.Type_TIME, query.Type_DATETIME:
@@ -179,6 +179,8 @@ func (ri *rows) ColumnTypeDatabaseTypeName(index int) string {
 		return "GEOMETRY"
 	case query.Type_JSON:
 		return "JSON"
+	case query.Type_VECTOR:
+		return "VECTOR"
 	case query.Type_TIMESTAMP:
 		return "TIMESTAMP"
 	case query.Type_DATE:

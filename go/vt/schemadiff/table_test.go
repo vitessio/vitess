@@ -28,16 +28,17 @@ import (
 
 func TestCreateTableDiff(t *testing.T) {
 	tt := []struct {
-		name        string
-		from        string
-		to          string
-		fromName    string
-		toName      string
-		diff        string
-		diffs       []string
-		cdiff       string
-		cdiffs      []string
-		errorMsg    string
+		name     string
+		from     string
+		to       string
+		fromName string
+		toName   string
+		diff     string
+		diffs    []string
+		cdiff    string
+		cdiffs   []string
+		errorMsg string
+		// hints:
 		autoinc     int
 		rotation    int
 		fulltext    int
@@ -47,6 +48,7 @@ func TestCreateTableDiff(t *testing.T) {
 		algorithm   int
 		enumreorder int
 		subsequent  int
+		//
 		textdiffs   []string
 		atomicdiffs []string
 	}{
@@ -449,6 +451,80 @@ func TestCreateTableDiff(t *testing.T) {
 				"+	`y` int,",
 			},
 		},
+		{
+			name:     "added column with non deterministic expression, uuid, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (uuid()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
+		},
+		{
+			name:     "added column with non deterministic expression, uuid, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (uuid_short()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid_short"}).Error(),
+		},
+		{
+			name:     "added column with non deterministic expression, UUID, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (UUID()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "UUID"}).Error(),
+		},
+		{
+			name:     "added column with non deterministic expression, uuid, spacing, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (uuid ()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
+		},
+		{
+			name:     "added column with non deterministic expression, uuid, inner, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (left(uuid(),10)))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "uuid"}).Error(),
+		},
+		{
+			name:     "added column with non deterministic expression, rand, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (2.0 + rand()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "rand"}).Error(),
+		},
+		{
+			name:     "added column with non deterministic expression, random_bytes, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (random_bytes(3)))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "random_bytes"}).Error(),
+		},
+		{
+			name:     "added column with non deterministic expression, sysdate, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (sysdate()))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "sysdate"}).Error(),
+		},
+		{
+			name:     "added column with non deterministic expression, sysdate, reject",
+			from:     "create table t1 (id int primary key, a int)",
+			to:       "create table t2 (id int primary key, a int, v varchar(36) not null default (to_days(sysdate())))",
+			errorMsg: (&NonDeterministicDefaultError{Table: "t1", Column: "v", Function: "sysdate"}).Error(),
+		},
+		{
+			name:  "added column with deterministic expression, now, reject does not apply",
+			from:  "create table t1 (id int primary key, a int)",
+			to:    "create table t2 (id int primary key, a int, v varchar(36) not null default (now()))",
+			diff:  "alter table t1 add column v varchar(36) not null default (now())",
+			cdiff: "ALTER TABLE `t1` ADD COLUMN `v` varchar(36) NOT NULL DEFAULT (now())",
+			textdiffs: []string{
+				"+	`v` varchar(36) NOT NULL DEFAULT (now()),",
+			},
+		},
+		{
+			name:  "added column with deterministic expression, curdate, reject does not apply",
+			from:  "create table t1 (id int primary key, a int)",
+			to:    "create table t2 (id int primary key, a int, v varchar(36) not null default (to_days(curdate())))",
+			diff:  "alter table t1 add column v varchar(36) not null default (to_days(curdate()))",
+			cdiff: "ALTER TABLE `t1` ADD COLUMN `v` varchar(36) NOT NULL DEFAULT (to_days(curdate()))",
+			textdiffs: []string{
+				"+	`v` varchar(36) NOT NULL DEFAULT (to_days(curdate())),",
+			},
+		},
 		// enum
 		{
 			name:  "expand enum",
@@ -728,6 +804,41 @@ func TestCreateTableDiff(t *testing.T) {
 			textdiffs: []string{
 				"+	KEY `i_idx3` (`id`)",
 			},
+		},
+		{
+			name:  "reordered and renamed key",
+			from:  "create table t1 (`id` int primary key, i int, key i_idx(i), key i2_idx(i, `id`))",
+			to:    "create table t2 (`id` int primary key, i int, key i2_alternative (`i`, id), key i_idx ( i ) )",
+			diff:  "alter table t1 rename index i2_idx to i2_alternative",
+			cdiff: "ALTER TABLE `t1` RENAME INDEX `i2_idx` TO `i2_alternative`",
+		},
+		{
+			name:  "reordered and renamed keys",
+			from:  "create table t1 (`id` int primary key, i int, key i_idx(i), key i2_idx(i, `id`))",
+			to:    "create table t2 (`id` int primary key, i int, key i2_alternative (`i`, id), key i_alternative ( i ) )",
+			diff:  "alter table t1 rename index i2_idx to i2_alternative, rename index i_idx to i_alternative",
+			cdiff: "ALTER TABLE `t1` RENAME INDEX `i2_idx` TO `i2_alternative`, RENAME INDEX `i_idx` TO `i_alternative`",
+		},
+		{
+			name:  "multiple similar keys, one rename",
+			from:  "create table t1 (`id` int primary key, i int, key i_idx(i), key i2_idx(i))",
+			to:    "create table t2 (`id` int primary key, i int, key i_idx(i), key i2_alternative(i))",
+			diff:  "alter table t1 rename index i2_idx to i2_alternative",
+			cdiff: "ALTER TABLE `t1` RENAME INDEX `i2_idx` TO `i2_alternative`",
+		},
+		{
+			name:  "multiple similar keys, two renames",
+			from:  "create table t1 (`id` int primary key, i int, key i_idx(i), key i2_idx(i))",
+			to:    "create table t2 (`id` int primary key, i int, key i_alternative(i), key i2_alternative(i))",
+			diff:  "alter table t1 rename index i_idx to i_alternative, rename index i2_idx to i2_alternative",
+			cdiff: "ALTER TABLE `t1` RENAME INDEX `i_idx` TO `i_alternative`, RENAME INDEX `i2_idx` TO `i2_alternative`",
+		},
+		{
+			name:  "multiple similar keys, two renames, reorder",
+			from:  "create table t1 (`id` int primary key, i int, key i0 (i, id), key i_idx(i), key i2_idx(i))",
+			to:    "create table t2 (`id` int primary key, i int, key i_alternative(i), key i2_alternative(i), key i0 (i, id))",
+			diff:  "alter table t1 rename index i_idx to i_alternative, rename index i2_idx to i2_alternative",
+			cdiff: "ALTER TABLE `t1` RENAME INDEX `i_idx` TO `i_alternative`, RENAME INDEX `i2_idx` TO `i2_alternative`",
 		},
 		{
 			name:  "key made visible",
@@ -2713,6 +2824,18 @@ func TestValidate(t *testing.T) {
 			expectErr: &IndexNeededByForeignKeyError{Table: "t", Key: "i"},
 		},
 		{
+			name:  "allow drop key when also adding a different index for foreign key constraint",
+			from:  "create table t (id int primary key, i int, key i_idx (i), constraint f foreign key (i) references parent(id))",
+			alter: "alter table t drop key `i_idx`, add key i_alternative (i)",
+			to:    "create table t (id int primary key, i int, key i_alternative (i), constraint f foreign key (i) references parent(id))",
+		},
+		{
+			name:  "allow drop key when also adding a different, longer, index for foreign key constraint",
+			from:  "create table t (id int primary key, i int, key i_idx (i), constraint f foreign key (i) references parent(id))",
+			alter: "alter table t drop key `i_idx`, add key i_alternative (i, id)",
+			to:    "create table t (id int primary key, i int, key i_alternative (i, id), constraint f foreign key (i) references parent(id))",
+		},
+		{
 			name:  "drop key with alternative key for foreign key constraint, 1",
 			from:  "create table t (id int primary key, i int, key i (i), key i2 (i, id), constraint f foreign key (i) references parent(id))",
 			alter: "alter table t drop key `i`",
@@ -2781,9 +2904,10 @@ func TestValidate(t *testing.T) {
 
 func TestNormalize(t *testing.T) {
 	tt := []struct {
-		name string
-		from string
-		to   string
+		name    string
+		from    string
+		to      string
+		autoinc uint64
 	}{
 		{
 			name: "basic table",
@@ -2794,6 +2918,17 @@ func TestNormalize(t *testing.T) {
 			name: "basic table, primary key",
 			from: "create table t (id int primary key, i int)",
 			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "basic table, auto increment",
+			from: "create table t (id int auto_increment primary key, i int)",
+			to:   "CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name:    "basic table, auto increment val",
+			from:    "create table t (id int auto_increment primary key, i int) auto_increment = 123",
+			to:      "CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n) AUTO_INCREMENT 123",
+			autoinc: 123,
 		},
 		{
 			name: "removes default null",
@@ -3067,6 +3202,10 @@ func TestNormalize(t *testing.T) {
 			from, err := NewCreateTableEntity(env, fromCreateTable)
 			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
+
+			autoinc, err := from.AutoIncrementValue()
+			require.NoError(t, err)
+			assert.EqualValues(t, ts.autoinc, autoinc)
 		})
 	}
 }

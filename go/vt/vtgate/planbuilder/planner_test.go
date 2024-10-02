@@ -19,11 +19,10 @@ package planbuilder
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )

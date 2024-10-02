@@ -169,7 +169,7 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 			continue
 		}
 		ts := b.org.tableSetFor(table.GetAliasedTableExpr())
-		c := createCertain(ts, ts, evalengine.Type{})
+		c := createCertain(ts, ts, evalengine.NewUnknownType())
 		deps = deps.merge(c, false)
 	}
 	finalDep, err := deps.get(nil)
@@ -451,7 +451,7 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 	}
 	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
-		return nil, ProjError{Inner: newAmbiguousColumnError(expr)}
+		return nil, NotSingleRouteErr{Inner: newAmbiguousColumnError(expr)}
 	}
 	return deps, nil
 }

@@ -24,7 +24,7 @@ import (
 )
 
 func CoerceTo(value sqltypes.Value, typ Type, sqlmode SQLMode) (sqltypes.Value, error) {
-	cast, err := valueToEvalCast(value, value.Type(), collations.Unknown, typ.values, sqlmode)
+	cast, err := valueToEvalCast(value, value.Type(), typ.collation, typ.values, sqlmode)
 	if err != nil {
 		return sqltypes.Value{}, err
 	}

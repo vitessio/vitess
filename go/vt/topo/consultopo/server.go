@@ -111,7 +111,7 @@ type Server struct {
 	locks map[string]*lockInstance
 
 	lockChecks []string
-	lockTTL    string
+	lockTTL    string // This is the default used for all non-named locks
 	lockDelay  time.Duration
 }
 

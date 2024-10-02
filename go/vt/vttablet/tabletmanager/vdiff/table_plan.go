@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -54,17 +55,19 @@ type tablePlan struct {
 	pkCols []int
 
 	// selectPks is the list of pk columns as they appear in the select clause for the diff.
-	selectPks  []int
-	dbName     string
-	table      *tabletmanagerdatapb.TableDefinition
-	orderBy    sqlparser.OrderBy
-	aggregates []*engine.AggregateParams
+	selectPks      []int
+	dbName         string
+	table          *tabletmanagerdatapb.TableDefinition
+	orderBy        sqlparser.OrderBy
+	aggregates     []*engine.AggregateParams
+	WorkflowConfig **vttablet.VReplicationConfig
 }
 
 func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName string, collationEnv *collations.Environment) (*tablePlan, error) {
 	tp := &tablePlan{
-		table:  td.table,
-		dbName: dbName,
+		table:          td.table,
+		dbName:         dbName,
+		WorkflowConfig: td.wd.WorkflowConfig,
 	}
 	statement, err := td.wd.ct.vde.parser.Parse(td.sourceQuery)
 	if err != nil {
@@ -174,8 +177,14 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 		return nil, err
 	}
 
-	// Remove in_keyrange. It's not understood by mysql.
-	sourceSelect.Where = sel.Where // removeKeyrange(sel.Where)
+	// Copy all workflow filters for the source query.
+	sourceSelect.Where = sel.Where
+
+	// Copy all non-in_keyrange workflow filters to the target query.
+	// This is important for things like multi-tenant migrations where
+	// an additional tenant_id filter is applied in the workflow.
+	targetSelect.Where = copyNonKeyRangeExpressions(sel.Where)
+
 	// The source should also perform the group by.
 	sourceSelect.GroupBy = sel.GroupBy
 	sourceSelect.OrderBy = tp.orderBy

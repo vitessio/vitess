@@ -42,19 +42,25 @@ package base
 
 import (
 	"time"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // RecentApp indicates when an app was last checked
 type RecentApp struct {
-	CheckedAtEpoch      int64
-	MinutesSinceChecked int64
+	AppName      string
+	CheckedAt    time.Time
+	StatusCode   int
+	ResponseCode tabletmanagerdatapb.CheckThrottlerResponseCode
 }
 
 // NewRecentApp creates a RecentApp
-func NewRecentApp(checkedAt time.Time) *RecentApp {
+func NewRecentApp(appName string, statusCode int, responseCode tabletmanagerdatapb.CheckThrottlerResponseCode) *RecentApp {
 	result := &RecentApp{
-		CheckedAtEpoch:      checkedAt.Unix(),
-		MinutesSinceChecked: int64(time.Since(checkedAt).Minutes()),
+		AppName:      appName,
+		CheckedAt:    time.Now(),
+		StatusCode:   statusCode,
+		ResponseCode: responseCode,
 	}
 	return result
 }

@@ -23,7 +23,6 @@ package grpcvtgateconn
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -229,21 +228,6 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 // CloseSession is part of the VTGateService interface
 func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
 	panic("unimplemented")
-}
-
-// ResolveTransaction is part of the VTGateService interface
-func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
-	if f.hasError {
-		return errTestVtGateError
-	}
-	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
-	}
-	f.checkCallerID(ctx, "ResolveTransaction")
-	if dtid != dtid2 {
-		return errors.New("ResolveTransaction: dtid mismatch")
-	}
-	return nil
 }
 
 func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {

@@ -43,6 +43,7 @@ const (
 	tableMapEnumAndSetDefaultCharset
 	tableMapEnumAndSetColumnCharset
 	tableMapColumnVisibility
+	tableMapVectorDimensionality
 )
 
 // This byte in the optional metadata indicates that we should
@@ -136,7 +137,7 @@ func metadataLength(typ byte) int {
 		// No data here.
 		return 0
 
-	case binlog.TypeFloat, binlog.TypeDouble, binlog.TypeTimestamp2, binlog.TypeDateTime2, binlog.TypeTime2, binlog.TypeJSON, binlog.TypeTinyBlob, binlog.TypeMediumBlob, binlog.TypeLongBlob, binlog.TypeBlob, binlog.TypeGeometry:
+	case binlog.TypeFloat, binlog.TypeDouble, binlog.TypeTimestamp2, binlog.TypeDateTime2, binlog.TypeTime2, binlog.TypeJSON, binlog.TypeTinyBlob, binlog.TypeMediumBlob, binlog.TypeLongBlob, binlog.TypeBlob, binlog.TypeGeometry, binlog.TypeVector:
 		// One byte.
 		return 1
 
@@ -172,7 +173,7 @@ func metadataRead(data []byte, pos int, typ byte) (uint16, int, error) {
 		// No data here.
 		return 0, pos, nil
 
-	case binlog.TypeFloat, binlog.TypeDouble, binlog.TypeTimestamp2, binlog.TypeDateTime2, binlog.TypeTime2, binlog.TypeJSON, binlog.TypeTinyBlob, binlog.TypeMediumBlob, binlog.TypeLongBlob, binlog.TypeBlob, binlog.TypeGeometry:
+	case binlog.TypeFloat, binlog.TypeDouble, binlog.TypeTimestamp2, binlog.TypeDateTime2, binlog.TypeTime2, binlog.TypeJSON, binlog.TypeTinyBlob, binlog.TypeMediumBlob, binlog.TypeLongBlob, binlog.TypeBlob, binlog.TypeGeometry, binlog.TypeVector:
 		// One byte.
 		return uint16(data[pos]), pos + 1, nil
 
@@ -198,7 +199,7 @@ func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 		// No data here.
 		return pos
 
-	case binlog.TypeFloat, binlog.TypeDouble, binlog.TypeTimestamp2, binlog.TypeDateTime2, binlog.TypeTime2, binlog.TypeJSON, binlog.TypeTinyBlob, binlog.TypeMediumBlob, binlog.TypeLongBlob, binlog.TypeBlob, binlog.TypeGeometry:
+	case binlog.TypeFloat, binlog.TypeDouble, binlog.TypeTimestamp2, binlog.TypeDateTime2, binlog.TypeTime2, binlog.TypeJSON, binlog.TypeTinyBlob, binlog.TypeMediumBlob, binlog.TypeLongBlob, binlog.TypeBlob, binlog.TypeGeometry, binlog.TypeVector:
 		// One byte.
 		data[pos] = byte(value)
 		return pos + 1

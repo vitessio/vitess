@@ -88,6 +88,10 @@ func (s *server) VersionString(ctx context.Context, request *mysqlctlpb.VersionS
 	return &mysqlctlpb.VersionStringResponse{Version: version}, nil
 }
 
+func (s *server) HostMetrics(ctx context.Context, request *mysqlctlpb.HostMetricsRequest) (*mysqlctlpb.HostMetricsResponse, error) {
+	return s.mysqld.HostMetrics(ctx, s.cnf)
+}
+
 // StartServer registers the Server for RPCs.
 func StartServer(s *grpc.Server, cnf *mysqlctl.Mycnf, mysqld *mysqlctl.Mysqld) {
 	mysqlctlpb.RegisterMysqlCtlServer(s, &server{cnf: cnf, mysqld: mysqld})

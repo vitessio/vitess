@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/assert"
@@ -1058,8 +1059,10 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			agp := NewAggregateParam(AggregateGroupConcat, 1, "group_concat(c2)", collations.MySQL8())
+			agp.Func = &sqlparser.GroupConcatExpr{Separator: ","}
 			oa := &OrderedAggregate{
-				Aggregates:  []*AggregateParams{NewAggregateParam(AggregateGroupConcat, 1, "group_concat(c2)", collations.MySQL8())},
+				Aggregates:  []*AggregateParams{agp},
 				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 				Input:       fp,
 			}
@@ -1137,8 +1140,10 @@ func TestGroupConcat(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			agp := NewAggregateParam(AggregateGroupConcat, 1, "", collations.MySQL8())
+			agp.Func = &sqlparser.GroupConcatExpr{Separator: ","}
 			oa := &OrderedAggregate{
-				Aggregates:  []*AggregateParams{NewAggregateParam(AggregateGroupConcat, 1, "", collations.MySQL8())},
+				Aggregates:  []*AggregateParams{agp},
 				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 				Input:       fp,
 			}

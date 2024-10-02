@@ -26,15 +26,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/vtenv"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtenv"
 )
 
 var (
@@ -151,15 +154,11 @@ func TestVExec(t *testing.T) {
 			if testCase.errorString == "" {
 				require.NoError(t, err)
 				for _, result := range results {
-					if !testCase.result.Equal(result) {
-						t.Errorf("mismatched result:\nwant: %v\ngot:  %v", testCase.result, result)
-					}
+					assert.True(t, testCase.result.Equal(result), "mismatched result")
 				}
 			} else {
-				require.Error(t, err)
-				if !strings.Contains(err.Error(), testCase.errorString) {
-					t.Fatalf("Wrong error, want %s, got %s", testCase.errorString, err.Error())
-				}
+				require.ErrorContains(t, err, testCase.errorString, "Wrong error, want %s, got %s", testCase.errorString, err.Error())
+
 			}
 		})
 	}
@@ -400,49 +399,45 @@ func TestWorkflowUpdate(t *testing.T) {
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
-	nullSlice := textutil.SimulatedNullStringSlice                   // Used to represent a non-provided value
-	nullOnDDL := binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) // Used to represent a non-provided value
+
 	tests := []struct {
 		name        string
 		cells       []string
 		tabletTypes []topodatapb.TabletType
-		onDDL       binlogdatapb.OnDDLAction
+		onDDL       *binlogdatapb.OnDDLAction
 		output      string
 		wantErr     string
 	}{
 		{
 			name:        "no flags",
-			cells:       nullSlice,
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			onDDL:       nullOnDDL,
+			cells:       textutil.SimulatedNullStringSlice,
+			tabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			wantErr:     "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values",
 		},
 		{
 			name:        "only cells",
 			cells:       []string{"zone1"},
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			onDDL:       nullOnDDL,
+			tabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			output:      "The following workflow fields will be updated:\n  cells=\"zone1\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 		{
 			name:        "only tablet types",
-			cells:       nullSlice,
+			cells:       textutil.SimulatedNullStringSlice,
 			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
-			onDDL:       nullOnDDL,
 			output:      "The following workflow fields will be updated:\n  tablet_types=\"primary,replica\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 		{
 			name:        "only on-ddl",
-			cells:       nullSlice,
-			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			onDDL:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
+			cells:       textutil.SimulatedNullStringSlice,
+			tabletTypes: textutil.SimulatedNullTabletTypeSlice,
+			onDDL:       ptr.Of(binlogdatapb.OnDDLAction_EXEC_IGNORE),
 			output:      "The following workflow fields will be updated:\n  on_ddl=\"EXEC_IGNORE\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 		{
 			name:        "all flags",
 			cells:       []string{"zone1", "zone2"},
 			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE},
-			onDDL:       binlogdatapb.OnDDLAction_EXEC,
+			onDDL:       ptr.Of(binlogdatapb.OnDDLAction_EXEC),
 			output:      "The following workflow fields will be updated:\n  cells=\"zone1,zone2\"\n  tablet_types=\"rdonly,spare\"\n  on_ddl=\"EXEC\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 	}

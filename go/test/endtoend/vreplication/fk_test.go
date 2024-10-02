@@ -29,12 +29,12 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-const testWorkflowFlavor = workflowFlavorRandom
+const testWorkflowFlavor = workflowFlavorVtctld
 
 // TestFKWorkflow runs a MoveTables workflow with atomic copy for a db with foreign key constraints.
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,

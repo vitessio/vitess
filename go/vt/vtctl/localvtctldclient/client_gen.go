@@ -176,6 +176,11 @@ func (client *localVtctldClient) ChangeTabletType(ctx context.Context, in *vtctl
 	return client.s.ChangeTabletType(ctx, in)
 }
 
+// CheckThrottler is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) CheckThrottler(ctx context.Context, in *vtctldatapb.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldatapb.CheckThrottlerResponse, error) {
+	return client.s.CheckThrottler(ctx, in)
+}
+
 // CleanupSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
 	return client.s.CleanupSchemaMigration(ctx, in)
@@ -184,6 +189,11 @@ func (client *localVtctldClient) CleanupSchemaMigration(ctx context.Context, in 
 // CompleteSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldatapb.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
 	return client.s.CompleteSchemaMigration(ctx, in)
+}
+
+// ConcludeTransaction is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ConcludeTransaction(ctx context.Context, in *vtctldatapb.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldatapb.ConcludeTransactionResponse, error) {
+	return client.s.ConcludeTransaction(ctx, in)
 }
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
@@ -301,6 +311,11 @@ func (client *localVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldata
 	return client.s.GetKeyspaces(ctx, in)
 }
 
+// GetMirrorRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetMirrorRules(ctx context.Context, in *vtctldatapb.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetMirrorRulesResponse, error) {
+	return client.s.GetMirrorRules(ctx, in)
+}
+
 // GetPermissions is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetPermissions(ctx context.Context, in *vtctldatapb.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetPermissionsResponse, error) {
 	return client.s.GetPermissions(ctx, in)
@@ -366,9 +381,19 @@ func (client *localVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb
 	return client.s.GetTablets(ctx, in)
 }
 
+// GetThrottlerStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldatapb.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.GetThrottlerStatusResponse, error) {
+	return client.s.GetThrottlerStatus(ctx, in)
+}
+
 // GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetTopologyPath(ctx context.Context, in *vtctldatapb.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTopologyPathResponse, error) {
 	return client.s.GetTopologyPath(ctx, in)
+}
+
+// GetUnresolvedTransactions is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetUnresolvedTransactions(ctx context.Context, in *vtctldatapb.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	return client.s.GetUnresolvedTransactions(ctx, in)
 }
 
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.
@@ -725,6 +750,11 @@ func (client *localVtctldClient) ValidateVersionShard(ctx context.Context, in *v
 // WorkflowDelete is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldatapb.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowDeleteResponse, error) {
 	return client.s.WorkflowDelete(ctx, in)
+}
+
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowMirrorTraffic(ctx context.Context, in *vtctldatapb.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowMirrorTrafficResponse, error) {
+	return client.s.WorkflowMirrorTraffic(ctx, in)
 }
 
 // WorkflowStatus is part of the vtctlservicepb.VtctldClient interface.

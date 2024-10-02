@@ -63,6 +63,77 @@ func init() {
 	refreshInterval = time.Minute
 }
 
+func TestNewVTGateHealthCheckFilters(t *testing.T) {
+	defer func() {
+		KeyspacesToWatch = nil
+		tabletFilters = nil
+		tabletFilterTags = nil
+	}()
+
+	testCases := []struct {
+		name                string
+		keyspacesToWatch    []string
+		tabletFilters       []string
+		tabletFilterTags    map[string]string
+		expectedError       string
+		expectedFilterTypes []any
+	}{
+		{
+			name: "noFilters",
+		},
+		{
+			name:                "tabletFilters",
+			tabletFilters:       []string{"ks1|-80"},
+			expectedFilterTypes: []any{&FilterByShard{}},
+		},
+		{
+			name:                "keyspacesToWatch",
+			keyspacesToWatch:    []string{"ks1"},
+			expectedFilterTypes: []any{&FilterByKeyspace{}},
+		},
+		{
+			name:                "tabletFiltersAndTags",
+			tabletFilters:       []string{"ks1|-80"},
+			tabletFilterTags:    map[string]string{"test": "true"},
+			expectedFilterTypes: []any{&FilterByShard{}, &FilterByTabletTags{}},
+		},
+		{
+			name:                "keyspacesToWatchAndTags",
+			tabletFilterTags:    map[string]string{"test": "true"},
+			keyspacesToWatch:    []string{"ks1"},
+			expectedFilterTypes: []any{&FilterByKeyspace{}, &FilterByTabletTags{}},
+		},
+		{
+			name:             "failKeyspacesToWatchAndFilters",
+			tabletFilters:    []string{"ks1|-80"},
+			keyspacesToWatch: []string{"ks1"},
+			expectedError:    errKeyspacesToWatchAndTabletFilters.Error(),
+		},
+		{
+			name:          "failInvalidTabletFilters",
+			tabletFilters: []string{"shouldfail|"},
+			expectedError: "failed to parse tablet_filters value \"shouldfail|\": error parsing shard name : Code: INVALID_ARGUMENT\nempty name\n",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			KeyspacesToWatch = testCase.keyspacesToWatch
+			tabletFilters = testCase.tabletFilters
+			tabletFilterTags = testCase.tabletFilterTags
+
+			filters, err := NewVTGateHealthCheckFilters()
+			if testCase.expectedError != "" {
+				assert.EqualError(t, err, testCase.expectedError)
+			}
+			assert.Len(t, filters, len(testCase.expectedFilterTypes))
+			for i, filter := range filters {
+				assert.IsType(t, testCase.expectedFilterTypes[i], filter)
+			}
+		})
+	}
+}
+
 func TestHealthCheck(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	// reset error counters
@@ -784,6 +855,127 @@ func TestRemoveTablet(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
+// When an external primary failover is performed,
+// the demoted primary will advertise itself as a `PRIMARY`
+// tablet until it recognizes that it was demoted,
+// and until all in-flight operations have either finished
+// (successfully or unsuccessfully, see `--shutdown_grace_period` flag).
+//
+// During this time, operations like `RemoveTablet` should not lead
+// to multiple tablets becoming valid targets for `PRIMARY`.
+func TestRemoveTabletDuringExternalReparenting(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// reset error counters
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// close healthcheck
+	defer hc.Close()
+
+	firstTablet := createTestTablet(0, "cell", "a")
+	firstTablet.Type = topodatapb.TabletType_PRIMARY
+
+	secondTablet := createTestTablet(1, "cell", "b")
+	secondTablet.Type = topodatapb.TabletType_REPLICA
+
+	thirdTablet := createTestTablet(2, "cell", "c")
+	thirdTablet.Type = topodatapb.TabletType_REPLICA
+
+	firstTabletHealthStream := make(chan *querypb.StreamHealthResponse)
+	firstTabletConn := createFakeConn(firstTablet, firstTabletHealthStream)
+	firstTabletConn.errCh = make(chan error)
+
+	secondTabletHealthStream := make(chan *querypb.StreamHealthResponse)
+	secondTabletConn := createFakeConn(secondTablet, secondTabletHealthStream)
+	secondTabletConn.errCh = make(chan error)
+
+	thirdTabletHealthStream := make(chan *querypb.StreamHealthResponse)
+	thirdTabletConn := createFakeConn(thirdTablet, thirdTabletHealthStream)
+	thirdTabletConn.errCh = make(chan error)
+
+	resultChan := hc.Subscribe()
+
+	hc.AddTablet(firstTablet)
+	<-resultChan
+
+	hc.AddTablet(secondTablet)
+	<-resultChan
+
+	hc.AddTablet(thirdTablet)
+	<-resultChan
+
+	firstTabletPrimaryTermStartTimestamp := time.Now().Unix() - 10
+
+	firstTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: firstTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: firstTabletPrimaryTermStartTimestamp,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
+	}
+	<-resultChan
+
+	secondTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: secondTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+	}
+	<-resultChan
+
+	thirdTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: thirdTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+	}
+	<-resultChan
+
+	secondTabletPrimaryTermStartTimestamp := time.Now().Unix()
+
+	// Simulate a failover
+	firstTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: firstTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: firstTabletPrimaryTermStartTimestamp,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
+	}
+	<-resultChan
+
+	secondTabletHealthStream <- &querypb.StreamHealthResponse{
+		TabletAlias: secondTablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:     true,
+
+		PrimaryTermStartTimestamp: secondTabletPrimaryTermStartTimestamp,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
+	}
+	<-resultChan
+
+	hc.RemoveTablet(thirdTablet)
+
+	// `secondTablet` should be the primary now
+	expectedTabletStats := []*TabletHealth{{
+		Tablet:               secondTablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.5},
+		PrimaryTermStartTime: secondTabletPrimaryTermStartTimestamp,
+	}}
+
+	actualTabletStats := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
+	mustMatch(t, expectedTabletStats, actualTabletStats, "unexpected result")
+}
+
 // TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
 func TestGetHealthyTablets(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
@@ -979,7 +1171,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
-	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2", nil)
 	defer hc.Close()
 
 	// add a tablet as primary in different cell
@@ -1039,7 +1231,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
-	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2", nil)
 	defer hc.Close()
 
 	// add a tablet as replica
@@ -1144,7 +1336,7 @@ func TestCellAliases(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
-	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2", nil)
 	defer hc.Close()
 
 	cellsAlias := &topodatapb.CellsAlias{
@@ -1295,7 +1487,7 @@ func tabletDialer(ctx context.Context, tablet *topodatapb.Tablet, _ grpcclient.F
 }
 
 func createTestHc(ctx context.Context, ts *topo.Server) *HealthCheckImpl {
-	return NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell", "")
+	return NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell", "", nil)
 }
 
 type fakeConn struct {

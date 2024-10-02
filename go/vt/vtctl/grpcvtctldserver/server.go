@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 
@@ -43,6 +44,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/dtids"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -51,6 +53,16 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -64,18 +76,8 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -291,7 +293,6 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 		schemamanager.NewPlainController(req.Sql, req.Keyspace),
 		executor,
 	)
-
 	if err != nil {
 		return nil, err
 	}
@@ -437,6 +438,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
+	span.Annotate("backup_engine", req.BackupEngine)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -464,7 +466,6 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
-
 	// Instead of return on err directly, only return err when no tablets for backup at all
 	if err != nil {
 		tablets = reparentutil.GetBackupCandidates(tablets, stats)
@@ -517,12 +518,14 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, req *vtctldatapb.BackupRequest, stream interface {
 	Send(resp *vtctldatapb.BackupResponse) error
-}) error {
+},
+) error {
 	r := &tabletmanagerdatapb.BackupRequest{
 		Concurrency:        req.Concurrency,
 		AllowPrimary:       req.AllowPrimary,
 		IncrementalFromPos: req.IncrementalFromPos,
 		UpgradeSafe:        req.UpgradeSafe,
+		BackupEngine:       req.BackupEngine,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -679,6 +682,64 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		AfterTablet:  changedTablet,
 		WasDryRun:    false,
 	}, nil
+}
+
+// CheckThrottler is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.CheckThrottlerRequest) (resp *vtctldatapb.CheckThrottlerResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.CheckThrottler")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("app_name", req.AppName)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	tmReq := &tabletmanagerdatapb.CheckThrottlerRequest{
+		AppName:               req.AppName,
+		Scope:                 req.Scope,
+		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
+		OkIfNotExists:         req.OkIfNotExists,
+		MultiMetricsEnabled:   true,
+	}
+	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, tmReq)
+	if err != nil {
+		return nil, err
+	}
+
+	resp = &vtctldatapb.CheckThrottlerResponse{
+		TabletAlias: req.TabletAlias,
+		Check:       r,
+	}
+	return resp, nil
+}
+
+// GetThrottlerStatus is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.GetThrottlerStatusRequest) (resp *vtctldatapb.GetThrottlerStatusResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetThrottlerStatus")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := s.tmc.GetThrottlerStatus(ctx, ti.Tablet, &tabletmanagerdatapb.GetThrottlerStatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	resp = &vtctldatapb.GetThrottlerStatusResponse{
+		Status: r,
+	}
+	return resp, nil
 }
 
 // CleanupSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
@@ -1898,7 +1959,6 @@ func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.Get
 	for _, cell := range cells {
 		var srvKeyspace *topodatapb.SrvKeyspace
 		srvKeyspace, err = s.ts.GetSrvKeyspace(ctx, cell, req.Keyspace)
-
 		if err != nil {
 			if !topo.IsErrType(err, topo.NoNode) {
 				return nil, err
@@ -1931,6 +1991,24 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
+	if req.MetricName != "" && !base.KnownMetricNames.Contains(base.MetricName(req.MetricName)) {
+		return nil, fmt.Errorf("unknown metric name: %s", req.MetricName)
+	}
+
+	if len(req.AppCheckedMetrics) > 0 {
+		specifiedMetrics := map[base.MetricName]bool{}
+		for _, metricName := range req.AppCheckedMetrics {
+			_, knownMetric, err := base.DisaggregateMetricName(metricName)
+			if err != nil {
+				return nil, fmt.Errorf("invalid metric name: %s", metricName)
+			}
+			if _, ok := specifiedMetrics[knownMetric]; ok {
+				return nil, fmt.Errorf("duplicate metric name: %s", knownMetric)
+			}
+			specifiedMetrics[knownMetric] = true
+		}
+	}
+
 	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.ThrottlerConfig{}
@@ -1938,14 +2016,37 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		if throttlerConfig.ThrottledApps == nil {
 			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
 		}
-		if req.CustomQuerySet {
-			// custom query provided
-			throttlerConfig.CustomQuery = req.CustomQuery
-			throttlerConfig.Threshold = req.Threshold // allowed to be zero/negative because who knows what kind of custom query this is
-		} else {
-			// no custom query, throttler works by querying replication lag. We only allow positive values
-			if req.Threshold > 0 {
+		if throttlerConfig.AppCheckedMetrics == nil {
+			throttlerConfig.AppCheckedMetrics = make(map[string]*topodatapb.ThrottlerConfig_MetricNames)
+		}
+		if throttlerConfig.MetricThresholds == nil {
+			throttlerConfig.MetricThresholds = make(map[string]float64)
+		}
+		if req.MetricName == "" {
+			// v20 behavior
+			if req.CustomQuerySet {
+				// custom query provided
+				throttlerConfig.CustomQuery = req.CustomQuery
+				throttlerConfig.Threshold = req.Threshold // allowed to be zero/negative because who knows what kind of custom query this is
+			} else if req.Threshold > 0 {
+				// no custom query, throttler works by querying replication lag. We only allow positive values
 				throttlerConfig.Threshold = req.Threshold
+			}
+		} else {
+			// --metric-name specified. We apply the threshold to the metric
+			if req.Threshold > 0 {
+				throttlerConfig.MetricThresholds[req.MetricName] = req.Threshold
+			} else {
+				delete(throttlerConfig.MetricThresholds, req.MetricName)
+			}
+		}
+		if req.AppName != "" {
+			if len(req.AppCheckedMetrics) > 0 {
+				throttlerConfig.AppCheckedMetrics[req.AppName] = &topodatapb.ThrottlerConfig_MetricNames{
+					Names: req.AppCheckedMetrics,
+				}
+			} else {
+				delete(throttlerConfig.AppCheckedMetrics, req.AppName)
 			}
 		}
 		if req.Enable {
@@ -1961,7 +2062,14 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 			throttlerConfig.CheckAsCheckSelf = false
 		}
 		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			// TODO(shlomi) in v22: replace the following line with the commented out block
 			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// 	timeNow := time.Now()
+			// if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+			// 	throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			// } else {
+			// 	delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			// }
 		}
 		return throttlerConfig
 	}
@@ -2036,7 +2144,6 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 	for _, cell := range cells {
 		var sv *vschemapb.SrvVSchema
 		sv, err = s.ts.GetSrvVSchema(ctx, cell)
-
 		if err != nil {
 			if !topo.IsErrType(err, topo.NoNode) {
 				return nil, err
@@ -2287,6 +2394,115 @@ func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.Get
 	return &vtctldatapb.GetTopologyPathResponse{
 		Cell: cell,
 	}, nil
+}
+
+// GetUnresolvedTransactions is part of the vtctlservicepb.VtctldServer interface.
+// It returns the unresolved distributed transactions list for the provided keyspace.
+func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctldatapb.GetUnresolvedTransactionsRequest) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetUnresolvedTransactions")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	var mu sync.Mutex
+	var transactions []*querypb.TransactionMetadata
+
+	eg, newCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, shard := range shards {
+		eg.Go(func() error {
+			si, err := s.ts.GetShard(newCtx, req.Keyspace, shard)
+			if err != nil {
+				return err
+			}
+			primary, err := s.ts.GetTablet(newCtx, si.PrimaryAlias)
+			if err != nil {
+				return err
+			}
+			shardTrnxs, err := s.tmc.GetUnresolvedTransactions(newCtx, primary.Tablet)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			transactions = append(transactions, shardTrnxs...)
+			return nil
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetUnresolvedTransactionsResponse{
+		Transactions: transactions,
+	}, nil
+}
+
+// ConcludeTransaction is part of the vtctlservicepb.VtctldServer interface.
+// It concludes the unresolved distributed transaction.
+func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb.ConcludeTransactionRequest) (resp *vtctldatapb.ConcludeTransactionResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ConcludeTransaction")
+	defer span.Finish()
+
+	span.Annotate("dtid", req.Dtid)
+	span.Annotate("participants", req.Participants)
+
+	ss, err := dtids.ShardSession(req.Dtid)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := s.getPrimaryTablet(ctx, ss.Target)
+	if err != nil {
+		return nil, err
+	}
+
+	participants := req.Participants
+	if len(participants) == 0 {
+		// Read the transaction metadata if participating resource manager list is not provided in the request.
+		transaction, err := s.tmc.ReadTransaction(ctx, primary.Tablet, req.Dtid)
+		if transaction == nil || err != nil {
+			// no transaction record for the given ID. It is already concluded or does not exist.
+			return nil, err
+		}
+		participants = transaction.Participants
+	}
+
+	eg, newCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, rm := range participants {
+		eg.Go(func() error {
+			primary, err := s.getPrimaryTablet(newCtx, rm)
+			if err != nil {
+				return err
+			}
+			return s.tmc.ConcludeTransaction(newCtx, primary.Tablet, req.Dtid, false)
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	if err = s.tmc.ConcludeTransaction(ctx, primary.Tablet, req.Dtid, true); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ConcludeTransactionResponse{}, nil
+}
+
+func (s *VtctldServer) getPrimaryTablet(newCtx context.Context, rm *querypb.Target) (*topo.TabletInfo, error) {
+	si, err := s.ts.GetShard(newCtx, rm.Keyspace, rm.Shard)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := s.ts.GetTablet(newCtx, si.PrimaryAlias)
+	if err != nil {
+		return nil, err
+	}
+	return primary, nil
 }
 
 // GetVersion returns the version of a tablet from its debug vars
@@ -2872,10 +3088,11 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		req.Keyspace,
 		req.Shard,
 		reparentutil.PlannedReparentOptions{
-			AvoidPrimaryAlias:   req.AvoidPrimary,
-			NewPrimaryAlias:     req.NewPrimary,
-			WaitReplicasTimeout: waitReplicasTimeout,
-			TolerableReplLag:    tolerableReplLag,
+			AvoidPrimaryAlias:       req.AvoidPrimary,
+			NewPrimaryAlias:         req.NewPrimary,
+			WaitReplicasTimeout:     waitReplicasTimeout,
+			TolerableReplLag:        tolerableReplLag,
+			AllowCrossCellPromotion: req.AllowCrossCellPromotion,
 		},
 	)
 
@@ -3289,6 +3506,7 @@ func (s *VtctldServer) ReshardCreate(ctx context.Context, req *vtctldatapb.Resha
 	resp, err = s.ws.ReshardCreate(ctx, req)
 	return resp, err
 }
+
 func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupRequest, stream vtctlservicepb.Vtctld_RestoreFromBackupServer) (err error) {
 	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.RestoreFromBackup")
 	defer span.Finish()
@@ -3310,10 +3528,11 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("shard", ti.Shard)
 
 	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
-		BackupTime:         req.BackupTime,
-		RestoreToPos:       req.RestoreToPos,
-		RestoreToTimestamp: req.RestoreToTimestamp,
-		DryRun:             req.DryRun,
+		BackupTime:           req.BackupTime,
+		RestoreToPos:         req.RestoreToPos,
+		RestoreToTimestamp:   req.RestoreToTimestamp,
+		DryRun:               req.DryRun,
+		AllowedBackupEngines: req.AllowedBackupEngines,
 	}
 	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {
@@ -4119,7 +4338,6 @@ func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.Upda
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -4150,7 +4368,6 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 		ca.Cells = req.CellsAlias.Cells
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -4930,6 +5147,7 @@ func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCr
 	span.Annotate("target_cells", req.TargetCells)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
+	span.Annotate("auto_start", req.AutoStart)
 	span.Annotate("auto_retry", req.AutoRetry)
 	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
@@ -4962,6 +5180,7 @@ func (s *VtctldServer) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffRe
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("shards", req.TargetShards)
 
 	resp, err = s.ws.VDiffResume(ctx, req)
 	return resp, err
@@ -4992,6 +5211,7 @@ func (s *VtctldServer) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStop
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("shards", req.TargetShards)
 
 	resp, err = s.ws.VDiffStop(ctx, req)
 	return resp, err
@@ -5006,6 +5226,9 @@ func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.Work
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keep_data", req.KeepData)
+	span.Annotate("keep_routing_rules", req.KeepRoutingRules)
+	span.Annotate("shards", req.Shards)
 
 	resp, err = s.ws.WorkflowDelete(ctx, req)
 	return resp, err
@@ -5037,6 +5260,7 @@ func (s *VtctldServer) WorkflowSwitchTraffic(ctx context.Context, req *vtctldata
 	span.Annotate("tablet-types", req.TabletTypes)
 	span.Annotate("direction", req.Direction)
 	span.Annotate("enable-reverse-replication", req.EnableReverseReplication)
+	span.Annotate("force", req.Force)
 
 	resp, err = s.ws.WorkflowSwitchTraffic(ctx, req)
 	return resp, err
@@ -5057,6 +5281,38 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 	span.Annotate("state", req.TabletRequest.State)
 
 	resp, err = s.ws.WorkflowUpdate(ctx, req)
+	return resp, err
+}
+
+// GetMirrorRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetMirrorRules(ctx context.Context, req *vtctldatapb.GetMirrorRulesRequest) (resp *vtctldatapb.GetMirrorRulesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetMirrorRules")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	mr, err := s.ts.GetMirrorRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetMirrorRulesResponse{
+		MirrorRules: mr,
+	}, nil
+}
+
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest) (resp *vtctldatapb.WorkflowMirrorTrafficResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowMirrorTraffic")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("percent", req.Percent)
+
+	resp, err = s.ws.WorkflowMirrorTraffic(ctx, req)
 	return resp, err
 }
 
@@ -5150,8 +5406,10 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 	return version, nil
 }
 
-var versionFuncMu sync.Mutex
-var getVersionFromTablet = getVersionFromTabletDebugVars
+var (
+	versionFuncMu        sync.Mutex
+	getVersionFromTablet = getVersionFromTabletDebugVars
+)
 
 func SetVersionFunc(versionFunc func(string) (string, error)) {
 	versionFuncMu.Lock()

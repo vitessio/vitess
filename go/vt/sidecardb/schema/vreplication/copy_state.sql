@@ -22,4 +22,4 @@ CREATE TABLE IF NOT EXISTS copy_state
     `lastpk`     varbinary(2000) DEFAULT NULL,
     PRIMARY KEY (`id`),
     KEY `vrepl_id` (`vrepl_id`,`table_name`)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

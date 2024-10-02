@@ -50,12 +50,11 @@ var snapshotDiscoveryKeys chan string
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
 
-// The metrics are registered with deprecated names. The old metric names can be removed in v21.
-var discoveriesCounter = stats.NewCounterWithDeprecatedName("DiscoveriesAttempt", "discoveries.attempt", "Number of discoveries attempted")
-var failedDiscoveriesCounter = stats.NewCounterWithDeprecatedName("DiscoveriesFail", "discoveries.fail", "Number of failed discoveries")
-var instancePollSecondsExceededCounter = stats.NewCounterWithDeprecatedName("DiscoveriesInstancePollSecondsExceeded", "discoveries.instance_poll_seconds_exceeded", "Number of instances that took longer than InstancePollSeconds to poll")
-var discoveryQueueLengthGauge = stats.NewGaugeWithDeprecatedName("DiscoveriesQueueLength", "discoveries.queue_length", "Length of the discovery queue")
-var discoveryRecentCountGauge = stats.NewGaugeWithDeprecatedName("DiscoveriesRecentCount", "discoveries.recent_count", "Number of recent discoveries")
+var discoveriesCounter = stats.NewCounter("DiscoveriesAttempt", "Number of discoveries attempted")
+var failedDiscoveriesCounter = stats.NewCounter("DiscoveriesFail", "Number of failed discoveries")
+var instancePollSecondsExceededCounter = stats.NewCounter("DiscoveriesInstancePollSecondsExceeded", "Number of instances that took longer than InstancePollSeconds to poll")
+var discoveryQueueLengthGauge = stats.NewGauge("DiscoveriesQueueLength", "Length of the discovery queue")
+var discoveryRecentCountGauge = stats.NewGauge("DiscoveriesRecentCount", "Number of recent discoveries")
 var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
 
 var recentDiscoveryOperationKeys *cache.Cache

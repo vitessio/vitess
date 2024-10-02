@@ -28,17 +28,16 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
-
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
@@ -119,7 +118,7 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -182,7 +181,7 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 		time.Sleep(1 * time.Second)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
@@ -194,14 +193,18 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 }
 
 func TestHeartbeatFrequencyFlag(t *testing.T) {
-	origVReplicationHeartbeatUpdateInterval := vreplicationHeartbeatUpdateInterval
+	origVReplicationHeartbeatUpdateInterval := vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval
 	defer func() {
-		vreplicationHeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
+		vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
 	}()
 
 	stats := binlogplayer.NewStats()
 	defer stats.Stop()
-	vp := &vplayer{vr: &vreplicator{dbClient: newVDBClient(realDBClientFactory(), stats), stats: stats}}
+	vp := &vplayer{vr: &vreplicator{
+		dbClient:       newVDBClient(realDBClientFactory(), stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
+		stats:          stats,
+		workflowConfig: vttablet.DefaultVReplicationConfig,
+	}}
 
 	type testcount struct {
 		count      int
@@ -219,7 +222,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			vreplicationHeartbeatUpdateInterval = tcase.interval
+			vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval = tcase.interval
 			for _, tcount := range tcase.counts {
 				vp.numAccumulatedHeartbeats = tcount.count
 				require.Equal(t, tcount.mustUpdate, vp.mustUpdateHeartbeat())
@@ -272,7 +275,7 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		require.NoError(t, err)
 		return timeUpdated, transactionTimestamp, timeHeartbeat
 	}
-	expectNontxQueries(t, qh.Expect("insert into t1(id,val) values (1,'aaa')"))
+	expectNontxQueries(t, qh.Expect("insert into t1(id,val) values (1,'aaa')"), recvTimeout)
 	time.Sleep(1 * time.Second)
 	timeUpdated1, transactionTimestamp1, timeHeartbeat1 := getTimestamps()
 	time.Sleep(2 * time.Second)
@@ -335,7 +338,7 @@ func TestCharPK(t *testing.T) {
 		output string
 		table  string
 		data   [][]string
-	}{{ //binary(2)
+	}{{ // binary(2)
 		input:  "insert into t1 values(1, 'a')",
 		output: "insert into t1(id,val) values (1,'a\\0')",
 		table:  "t1",
@@ -349,7 +352,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a\000"},
 		},
-	}, { //char(2)
+	}, { // char(2)
 		input:  "insert into t2 values(1, 'a')",
 		output: "insert into t2(id,val) values (1,'a')",
 		table:  "t2",
@@ -363,7 +366,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varbinary(2)
+	}, { // varbinary(2)
 		input:  "insert into t3 values(1, 'a')",
 		output: "insert into t3(id,val) values (1,'a')",
 		table:  "t3",
@@ -377,7 +380,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varchar(2)
+	}, { // varchar(2)
 		input:  "insert into t4 values(1, 'a')",
 		output: "insert into t4(id,val) values (1,'a')",
 		table:  "t4",
@@ -576,8 +579,19 @@ func TestPlayerForeignKeyCheck(t *testing.T) {
 	cancel()
 }
 
-func TestPlayerStatementModeWithFilter(t *testing.T) {
+// TestPlayerStatementModeWithFilterAndErrorHandling confirms that we get the
+// expected error when using a filter with statement mode. It also tests the
+// general vplayer applyEvent error and log message handling.
+func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
+
+	// We want to check for the expected log message.
+	ole := log.Errorf
+	logger := logutil.NewMemoryLogger()
+	log.Errorf = logger.Errorf
+	defer func() {
+		log.Errorf = ole
+	}()
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
@@ -601,21 +615,29 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
+	const gtid = "37f16b4c-5a74-11ef-87de-56bfd605e62e:100"
 	input := []string{
 		"set @@session.binlog_format='STATEMENT'",
+		fmt.Sprintf("set @@session.gtid_next='%s'", gtid),
 		"insert into src1 values(1, 'aaa')",
+		"set @@session.gtid_next='AUTOMATIC'",
 		"set @@session.binlog_format='ROW'",
 	}
+
+	expectedMsg := fmt.Sprintf("[Ee]rror applying event while processing position .*%s.* filter rules are not supported for SBR.*", gtid)
 
 	// It does not work when filter is enabled
 	output := qh.Expect(
 		"begin",
 		"rollback",
-		"/update _vt.vreplication set message='filter rules are not supported for SBR",
+		fmt.Sprintf("/update _vt.vreplication set message='%s", expectedMsg),
 	)
 
 	execStatements(t, input)
 	expectDBClientQueries(t, output)
+
+	logs := logger.String()
+	require.Regexp(t, expectedMsg, logs)
 }
 
 func TestPlayerStatementMode(t *testing.T) {
@@ -1710,7 +1732,7 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) //For debugging only
+	pos0 := primaryPosition(t) // For debugging only
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	pos1 := primaryPosition(t)
 	// The stop position must be the GTID of the first DDL
@@ -1724,7 +1746,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
 	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) //For debugging only: to check what are the positions when test works and if/when it fails
+		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
@@ -1759,8 +1781,8 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
-		"/update _vt.vreplication set message='Duplicate",
-		"/update _vt.vreplication set state='Error', message='Duplicate",
+		"/update _vt.vreplication set message='error applying event: Duplicate",
+		"/update _vt.vreplication set state='Error', message='error applying event: Duplicate",
 	))
 	cancel()
 
@@ -1847,9 +1869,9 @@ func TestGTIDCompress(t *testing.T) {
 
 func TestPlayerStopPos(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-	vreplicationStoreCompressedGTID = true
+	vttablet.DefaultVReplicationConfig.StoreCompressedGTID = true
 	defer func() {
-		vreplicationStoreCompressedGTID = false
+		vttablet.DefaultVReplicationConfig.StoreCompressedGTID = false
 	}()
 	execStatements(t, []string{
 		"create table yes(id int, val varbinary(128), primary key(id))",
@@ -2409,13 +2431,13 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 		func() {
 			switch i {
 			case 0:
-				savedSize := relayLogMaxSize
-				defer func() { relayLogMaxSize = savedSize }()
-				relayLogMaxSize = 10
+				savedSize := vttablet.DefaultVReplicationConfig.RelayLogMaxSize
+				defer func() { vttablet.DefaultVReplicationConfig.RelayLogMaxSize = savedSize }()
+				vttablet.DefaultVReplicationConfig.RelayLogMaxSize = 10
 			case 1:
-				savedLen := relayLogMaxItems
-				defer func() { relayLogMaxItems = savedLen }()
-				relayLogMaxItems = 2
+				savedLen := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+				defer func() { vttablet.DefaultVReplicationConfig.RelayLogMaxItems = savedLen }()
+				vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 2
 			}
 
 			execStatements(t, []string{
@@ -2508,9 +2530,9 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 func TestRestartOnVStreamEnd(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedDelay := retryDelay
-	defer func() { retryDelay = savedDelay }()
-	retryDelay = 1 * time.Millisecond
+	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+	vttablet.DefaultVReplicationConfig.RetryDelay = 1 * time.Millisecond
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -2756,7 +2778,7 @@ func TestVReplicationLogs(t *testing.T) {
 	err := dbClient.Connect()
 	require.NoError(t, err)
 	defer dbClient.Close()
-	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+	vdbc := newVDBClient(dbClient, binlogplayer.NewStats(), vttablet.DefaultVReplicationConfig.RelayLogMaxItems)
 	query := "select vrepl_id, state, message, count from _vt.vreplication_log order by id desc limit 1"
 
 	expected := []string{
@@ -2846,7 +2868,7 @@ func TestGeneratedColumns(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -2916,7 +2938,7 @@ func TestPlayerInvalidDates(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
@@ -2932,10 +2954,10 @@ func TestPlayerNoBlob(t *testing.T) {
 	if !runNoBlobTest {
 		t.Skip()
 	}
-	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
-	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
 	defer func() {
-		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
@@ -3054,7 +3076,7 @@ func TestPlayerNoBlob(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 		time.Sleep(1 * time.Second)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
@@ -3072,10 +3094,10 @@ func TestPlayerNoBlob(t *testing.T) {
 func TestPlayerBatchMode(t *testing.T) {
 	// To test trx batch splitting at 1024-64 bytes.
 	maxAllowedPacket := 1024
-	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
-	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
 	defer func() {
-		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
@@ -3291,7 +3313,7 @@ func TestPlayerBatchMode(t *testing.T) {
 			for _, stmt := range tcase.output {
 				require.LessOrEqual(t, len(stmt), maxBatchSize, "expected output statement is longer than the max batch size (%d): %s", maxBatchSize, stmt)
 			}
-			expectNontxQueries(t, output)
+			expectNontxQueries(t, output, recvTimeout)
 			time.Sleep(1 * time.Second)
 			if tcase.table != "" {
 				expectData(t, tcase.table, tcase.data)
@@ -3317,6 +3339,154 @@ func TestPlayerBatchMode(t *testing.T) {
 	}
 }
 
+// TestPlayerStalls confirms that the vplayer will detect a stall and generate
+// a meaningful error -- which is stored in the vreplication record and the
+// vreplication_log table as well as being logged -- when it does.
+func TestPlayerStalls(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	defer deleteTablet(addTablet(100))
+
+	// We want to check for the expected log messages.
+	ole := log.Errorf
+	logger := logutil.NewMemoryLogger()
+	log.Errorf = logger.Errorf
+
+	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
+	oldProgressDeadline := vplayerProgressDeadline
+	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() {
+		log.Errorf = ole
+		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
+		vplayerProgressDeadline = oldProgressDeadline
+		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
+		vttablet.DefaultVReplicationConfig.RetryDelay = oldRetryDelay
+	}()
+
+	// Shorten the deadline for the test.
+	vplayerProgressDeadline = 5 * time.Second
+	// Shorten the time for a required heartbeat recording for the test.
+	vreplicationMinimumHeartbeatUpdateInterval = 5
+	// So each relay log batch will be a single statement transaction.
+	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
+
+	// Don't retry the workflow if it goes into the error state.
+	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Minute
+	vttablet.DefaultVReplicationConfig.MaxTimeToRetryError = 1 * time.Second
+
+	// A channel to communicate across goroutines.
+	done := make(chan struct{})
+
+	testTimeout := vplayerProgressDeadline * 10
+
+	execStatements(t, []string{
+		"create table t1(id bigint, val1 varchar(1000), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id bigint, val1 varchar(1000), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	testcases := []struct {
+		name          string
+		input         []string
+		output        qh.ExpectationSequencer
+		preFunc       func()
+		postFunc      func()
+		expectQueries bool
+	}{
+		{
+			name: "stall in relay log IO",
+			input: []string{
+				"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
+				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')", // This should be the only query that gets replicated
+				// This will cause a stall in the vplayer.
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+			},
+			expectQueries: true,
+			output: qh.Expect(
+				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
+				// This will cause a stall to be detected in the vplayer. This is
+				// what we want in the end, our improved error message (which also
+				// gets logged).
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+				"/update _vt.vreplication set message=.*progress stalled.*",
+			),
+			postFunc: func() {
+				time.Sleep(vplayerProgressDeadline)
+				log.Flush()
+				require.Contains(t, logger.String(), relayLogIOStalledMsg, "expected log message not found")
+				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
+			},
+		},
+		{
+			name: "stall in heartbeat recording",
+			input: []string{
+				fmt.Sprintf("set @@session.innodb_lock_wait_timeout=%d", int64(vplayerProgressDeadline.Seconds()+5)),
+				"insert into t1(id, val1) values (10, 'mmm'), (11, 'nnn'), (12, 'ooo')",
+				"update t1 set val1 = 'yyy' where id = 10",
+			},
+			preFunc: func() {
+				dbc, err := env.Mysqld.GetAllPrivsConnection(context.Background())
+				require.NoError(t, err)
+				_, err = dbc.ExecuteFetch("begin", 1, false)
+				require.NoError(t, err)
+				// The row locks held for this will block us from recording the heartbeats.
+				_, err = dbc.ExecuteFetch("select * from _vt.vreplication for update", 1000, false)
+				require.NoError(t, err)
+				go func() {
+					defer func() {
+						dbc.Close()
+					}()
+					select {
+					case <-done:
+					case <-ctx.Done():
+					}
+				}()
+			},
+			postFunc: func() {
+				// Sleep long enough that we fail to record the heartbeat.
+				to := time.Duration(int64(vreplicationMinimumHeartbeatUpdateInterval*2) * int64(time.Second))
+				time.Sleep(to)
+				// Signal the preFunc goroutine to close the connection holding the row locks.
+				done <- struct{}{}
+				log.Flush()
+				require.Contains(t, logger.String(), failedToRecordHeartbeatMsg, "expected log message not found")
+			},
+			// Nothing should get replicated because of the exclusing row locks
+			// held in the other connection from our preFunc.
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			vrcancel, _ := startVReplication(t, bls, "")
+			defer vrcancel()
+			execStatements(t, tc.input)
+			if tc.preFunc != nil {
+				tc.preFunc()
+			}
+			if tc.expectQueries {
+				expectNontxQueries(t, tc.output, testTimeout)
+			}
+			if tc.postFunc != nil {
+				tc.postFunc()
+			}
+			logger.Clear()
+		})
+	}
+}
+
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 
@@ -3327,26 +3497,16 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 		query = fmt.Sprintf("select * from %s where id=%d", table, id)
 	}
 	qr, err := exec(context.Background(), query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if len(values) != len(qr.Rows) {
 		t.Fatalf("row counts don't match: %d, want %d", len(qr.Rows), len(values))
 	}
 	for i, row := range values {
-		if len(row) != len(qr.Rows[i]) {
-			t.Fatalf("Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
-		}
-		if qr.Rows[i][0].ToString() != row[0] {
-			t.Fatalf("Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
-		}
-
+		require.Len(t, row, len(qr.Rows[i]), "Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
+		require.Equal(t, qr.Rows[i][0].ToString(), row[0], "Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
 		opts := jsondiff.DefaultConsoleOptions()
 		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
-		if compare != jsondiff.FullMatch {
-			t.Errorf("Diff:\n%s\n", s)
-		}
+		require.Equal(t, compare, jsondiff.FullMatch, "Diff:\n%s\n", s)
 	}
 }
 
@@ -3359,9 +3519,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
 	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
@@ -3372,9 +3530,8 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 		t.Helper()
 		once.Do(func() {
 			query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-			if _, err := playerEngine.Exec(query); err != nil {
-				t.Fatal(err)
-			}
+			_, err := playerEngine.Exec(query)
+			require.NoError(t, err)
 			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)

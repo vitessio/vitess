@@ -91,7 +91,7 @@ func (mp *etcdLeaderParticipation) WaitForLeadership() (context.Context, error) 
 
 	// Try to get the primaryship, by getting a lock.
 	var err error
-	ld, err = mp.s.lock(lockCtx, electionPath, mp.id)
+	ld, err = mp.s.lock(lockCtx, electionPath, mp.id, leaseTTL)
 	if err != nil {
 		// It can be that we were interrupted.
 		return nil, err

@@ -29,6 +29,7 @@ import (
 type iWorkflow interface {
 	Create()
 	Show()
+	MirrorTraffic()
 	SwitchReads()
 	SwitchWrites()
 	SwitchReadsAndWrites()
@@ -79,6 +80,7 @@ type moveTablesWorkflow struct {
 	lastOutput    string
 	createFlags   []string
 	completeFlags []string
+	mirrorFlags   []string
 	switchFlags   []string
 	showFlags     []string
 }
@@ -120,6 +122,11 @@ func newVtctlMoveTables(mt *moveTablesWorkflow) *VtctlMoveTables {
 func (vmt *VtctlMoveTables) Create() {
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	vmt.exec(workflowActionCreate)
+}
+
+func (vmt *VtctlMoveTables) MirrorTraffic() {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (vmt *VtctlMoveTables) SwitchReadsAndWrites() {
@@ -215,6 +222,12 @@ func (v VtctldMoveTables) Create() {
 		args = append(args, "--source-shards="+v.sourceShards)
 	}
 	args = append(args, v.createFlags...)
+	v.exec(args...)
+}
+
+func (v VtctldMoveTables) MirrorTraffic() {
+	args := []string{"MirrorTraffic"}
+	args = append(args, v.mirrorFlags...)
 	v.exec(args...)
 }
 
@@ -323,6 +336,11 @@ func (vrs *VtctlReshard) Create() {
 	vrs.exec(workflowActionCreate)
 }
 
+func (vrs *VtctlReshard) MirrorTraffic() {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (vrs *VtctlReshard) SwitchReadsAndWrites() {
 	vrs.exec(workflowActionSwitchTraffic)
 }
@@ -409,6 +427,11 @@ func (v VtctldReshard) Create() {
 	}
 	args = append(args, v.createFlags...)
 	v.exec(args...)
+}
+
+func (v VtctldReshard) MirrorTraffic() {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (v VtctldReshard) SwitchReadsAndWrites() {

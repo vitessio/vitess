@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -573,7 +572,7 @@ func (tr *ShardedRouting) planCompositeInOpArg(
 			Key:   right.String(),
 			Index: idx,
 		}
-		if typ, found := ctx.SemTable.TypeForExpr(col); found {
+		if typ, found := ctx.TypeForExpr(col); found {
 			value.Type = typ.Type()
 			value.Collation = typ.Collation()
 		}
@@ -634,13 +633,15 @@ func (tr *ShardedRouting) extraInfo() string {
 	)
 }
 
-func tryMergeJoinShardedRouting(
+func tryMergeShardedRouting(
 	ctx *plancontext.PlanningContext,
 	routeA, routeB *Route,
 	m merger,
 	joinPredicates []sqlparser.Expr,
 ) *Route {
-	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
+	if routeA.Routing.Keyspace() != routeB.Routing.Keyspace() {
+		return nil
+	}
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)
 
@@ -669,10 +670,6 @@ func tryMergeJoinShardedRouting(
 			return nil
 		}
 
-		if !sameKeyspace {
-			panic(vterrors.VT12001("cross-shard correlated subquery"))
-		}
-
 		canMerge := canMergeOnFilters(ctx, routeA, routeB, joinPredicates)
 		if !canMerge {
 			return nil
@@ -687,7 +684,7 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
 		ee, _ := evalengine.Translate(expr, &evalengine.Config{
 			Collation:   ctx.SemTable.Collation,
-			ResolveType: ctx.SemTable.TypeForExpr,
+			ResolveType: ctx.TypeForExpr,
 			Environment: ctx.VSchema.Environment(),
 		})
 		if ee != nil {

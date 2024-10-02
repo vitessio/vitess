@@ -26,7 +26,7 @@ import (
 )
 
 type Ordering struct {
-	Source  Operator
+	unaryOperator
 	Offset  []int
 	WOffset []int
 
@@ -35,21 +35,20 @@ type Ordering struct {
 }
 
 func (o *Ordering) Clone(inputs []Operator) Operator {
+	klone := *o
+	klone.Source = inputs[0]
+	klone.Offset = slices.Clone(o.Offset)
+	klone.WOffset = slices.Clone(o.WOffset)
+	klone.Order = slices.Clone(o.Order)
+
+	return &klone
+}
+
+func newOrdering(src Operator, order []OrderBy) Operator {
 	return &Ordering{
-		Source:        inputs[0],
-		Offset:        slices.Clone(o.Offset),
-		WOffset:       slices.Clone(o.WOffset),
-		Order:         slices.Clone(o.Order),
-		ResultColumns: o.ResultColumns,
+		unaryOperator: newUnaryOp(src),
+		Order:         order,
 	}
-}
-
-func (o *Ordering) Inputs() []Operator {
-	return []Operator{o.Source}
-}
-
-func (o *Ordering) SetInputs(operators []Operator) {
-	o.Source = operators[0]
 }
 
 func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
@@ -70,11 +69,11 @@ func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr
 }
 
 func (o *Ordering) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return o.Source.GetColumns(ctx)
+	return truncate(o, o.Source.GetColumns(ctx))
 }
 
 func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return o.Source.GetSelectExprs(ctx)
+	return truncate(o, o.Source.GetSelectExprs(ctx))
 }
 
 func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []OrderBy {
@@ -82,17 +81,25 @@ func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 }
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	var weightStrings []*OrderBy
+
 	for _, order := range o.Order {
 		offset := o.Source.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 		o.Offset = append(o.Offset, offset)
 
-		if !ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
+		if !ctx.NeedsWeightString(order.SimplifiedExpr) {
+			weightStrings = append(weightStrings, nil)
+			continue
+		}
+		weightStrings = append(weightStrings, &order)
+	}
+
+	for i, order := range weightStrings {
+		if order == nil {
 			o.WOffset = append(o.WOffset, -1)
 			continue
 		}
-
-		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.SimplifiedExpr}
-		offset = o.Source.AddColumn(ctx, true, false, aeWrap(wsExpr))
+		offset := o.Source.AddWSColumn(ctx, o.Offset[i], false)
 		o.WOffset = append(o.WOffset, offset)
 	}
 	return nil
@@ -107,4 +114,8 @@ func (o *Ordering) ShortDescription() string {
 
 func (o *Ordering) setTruncateColumnCount(offset int) {
 	o.ResultColumns = offset
+}
+
+func (o *Ordering) getTruncateColumnCount() int {
+	return o.ResultColumns
 }

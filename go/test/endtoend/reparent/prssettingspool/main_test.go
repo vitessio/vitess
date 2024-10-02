@@ -61,8 +61,6 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: schemaSQL,
 		}
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--queryserver-enable-settings-pool")
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false)
 		if err != nil {
 			return 1

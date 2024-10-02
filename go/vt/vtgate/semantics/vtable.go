@@ -175,3 +175,8 @@ func selectExprsToInfos(
 	}
 	return
 }
+
+// GetMirrorRule implements TableInfo.
+func (v *vTableInfo) GetMirrorRule() *vindexes.MirrorRule {
+	return nil
+}

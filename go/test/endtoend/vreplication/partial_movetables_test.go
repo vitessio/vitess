@@ -53,7 +53,7 @@ func testCancel(t *testing.T) {
 		sourceKeyspace: sourceKeyspace,
 		tables:         table,
 		sourceShards:   shard,
-	}, workflowFlavorRandom)
+	}, workflowFlavorVtctld)
 	mt.Create()
 
 	checkDenyList := func(keyspace string, expected bool) {
@@ -390,9 +390,5 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 // We test with both the vtctlclient and vtctldclient flavors.
 func TestPartialMoveTablesBasic(t *testing.T) {
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
-	for _, flavor := range workflowFlavors {
-		t.Run(workflowFlavorNames[flavor], func(t *testing.T) {
-			testPartialMoveTablesBasic(t, flavor)
-		})
-	}
+	testPartialMoveTablesBasic(t, workflowFlavorVtctld)
 }

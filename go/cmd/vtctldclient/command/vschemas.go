@@ -102,7 +102,7 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 		}
 
 		var vs vschemapb.Keyspace
-		err = json2.Unmarshal(schema, &vs)
+		err = json2.UnmarshalPB(schema, &vs)
 		if err != nil {
 			return err
 		}

@@ -413,6 +413,28 @@ func TestInvalidSchema(t *testing.T) {
 			`,
 		},
 		{
+			schema: `
+				CREATE TABLE t1 (id int NOT NULL AUTO_INCREMENT, primary key (id));
+				CREATE TABLE t2 (
+					id int NOT NULL AUTO_INCREMENT,
+					t1id int NOT NULL,
+					primary key (id),
+					CONSTRAINT fk1_en9z857fmvhhyrzb1p7lr751o FOREIGN KEY (t1id) REFERENCES t1 (id) ON DELETE CASCADE
+				);
+			`,
+		},
+		{
+			schema: `
+				CREATE TABLE t1 (id int NOT NULL AUTO_INCREMENT, primary key (id)) CHARSET utf8mb4, COLLATE utf8mb4_unicode_ci;
+				CREATE TABLE t2 (
+					id int NOT NULL AUTO_INCREMENT,
+					t1id int NOT NULL,
+					primary key (id),
+					CONSTRAINT fk1_en9z857fmvhhyrzb1p7lr751o FOREIGN KEY (t1id) REFERENCES t1 (id) ON DELETE CASCADE
+				) CHARSET utf8mb4, COLLATE utf8mb4_0900_ai_ci;
+			`,
+		},
+		{
 			schema:    "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id2) on delete restrict)",
 			expectErr: &InvalidReferencedColumnInForeignKeyConstraintError{Table: "t11", Constraint: "f11", ReferencedTable: "t11", ReferencedColumn: "id2"},
 		},
@@ -479,6 +501,26 @@ func TestInvalidSchema(t *testing.T) {
 		{
 			schema:    "create table t10(id VARCHAR(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i VARCHAR(100) charset utf8mb4 collate utf8mb4_general_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
+		},
+		{
+			schema: "create table post (id varchar(191) not null, `title` text, primary key (`id`)); create table post_fks (id varchar(191) not null, `post_id` varchar(191) collate utf8mb4_0900_ai_ci not null, primary key (id), constraint post_fk foreign key (post_id) references post (id)) charset utf8mb4, collate utf8mb4_0900_as_ci;",
+		},
+		{
+			schema: "create table post (id varchar(191) not null, `title` text, primary key (`id`)); create table post_fks (id varchar(191) not null, `post_id` varchar(191) collate utf8mb4_0900_ai_ci not null, primary key (id), constraint post_fk foreign key (post_id) references post (id)) collate utf8mb4_0900_as_ci;",
+		},
+		{
+			schema: "create table post (id varchar(191) not null, `title` text, primary key (`id`)); create table post_fks (id varchar(191) not null, `post_id` varchar(191) collate utf8mb4_0900_ai_ci not null, primary key (id), constraint post_fk foreign key (post_id) references post (id)) charset utf8mb4;",
+		},
+		{
+			schema:    "create table post (id varchar(191) not null, `title` text, primary key (`id`)); create table post_fks (id varchar(191) not null, `post_id` varchar(191), primary key (id), constraint post_fk foreign key (post_id) references post (id)) charset utf8mb4, collate utf8mb4_0900_as_ci;",
+			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "post_fks", Constraint: "post_fk", Column: "post_id", ReferencedTable: "post", ReferencedColumn: "id"},
+		},
+		{
+			schema:    "create table post (id varchar(191) charset utf8mb4 not null, `title` text, primary key (`id`)); create table post_fks (id varchar(191) not null, `post_id` varchar(191), primary key (id), constraint post_fk foreign key (post_id) references post (id)) charset utf8mb4, collate utf8mb4_0900_as_ci;",
+			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "post_fks", Constraint: "post_fk", Column: "post_id", ReferencedTable: "post", ReferencedColumn: "id"},
+		},
+		{
+			schema: "create table post (id varchar(191) charset utf8mb4 not null, `title` text, primary key (`id`)); create table post_fks (id varchar(191) not null, `post_id` varchar(191) collate utf8mb4_0900_ai_ci, primary key (id), constraint post_fk foreign key (post_id) references post (id)) charset utf8mb4, collate utf8mb4_0900_as_ci;",
 		},
 	}
 	for _, ts := range tt {

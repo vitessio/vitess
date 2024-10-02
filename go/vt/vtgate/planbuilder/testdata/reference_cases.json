@@ -746,5 +746,30 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "two sharded and two unsharded reference table join - all should be merged into one route",
+    "query": "select 1 from user u join user_extra ue on u.id = ue.user_id join main.source_of_ref sr on sr.foo = ue.foo join main.rerouted_ref rr on rr.bar = sr.bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user u join user_extra ue on u.id = ue.user_id join main.source_of_ref sr on sr.foo = ue.foo join main.rerouted_ref rr on rr.bar = sr.bar",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where 1 != 1",
+        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where rr.bar = sr.bar and u.id = ue.user_id and sr.foo = ue.foo",
+        "Table": "`user`, ref, ref_with_source, user_extra"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.ref_with_source",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

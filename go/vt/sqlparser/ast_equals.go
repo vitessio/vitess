@@ -656,6 +656,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfIsExpr(a, b)
+	case *JSONArrayAgg:
+		b, ok := inB.(*JSONArrayAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONArrayAgg(a, b)
 	case *JSONArrayExpr:
 		b, ok := inB.(*JSONArrayExpr)
 		if !ok {
@@ -692,6 +698,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfJSONKeysExpr(a, b)
+	case *JSONObjectAgg:
+		b, ok := inB.(*JSONObjectAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONObjectAgg(a, b)
 	case *JSONObjectExpr:
 		b, ok := inB.(*JSONObjectExpr)
 		if !ok {
@@ -1328,6 +1340,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowThrottlerStatus(a, b)
+	case *ShowTransactionStatus:
+		b, ok := inB.(*ShowTransactionStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowTransactionStatus(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -1745,6 +1763,7 @@ func (cmp *Comparator) RefOfAlterDatabase(a, b *AlterDatabase) bool {
 	}
 	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
 		a.FullyParsed == b.FullyParsed &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCS(a.DBName, b.DBName) &&
 		cmp.SliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
 }
@@ -2175,7 +2194,7 @@ func (cmp *Comparator) RefOfCommonTableExpr(a, b *CommonTableExpr) bool {
 	}
 	return cmp.IdentifierCS(a.ID, b.ID) &&
 		cmp.Columns(a.Columns, b.Columns) &&
-		cmp.RefOfSubquery(a.Subquery, b.Subquery)
+		cmp.SelectStatement(a.Subquery, b.Subquery)
 }
 
 // RefOfComparisonExpr does deep equals between the two objects.
@@ -2187,6 +2206,7 @@ func (cmp *Comparator) RefOfComparisonExpr(a, b *ComparisonExpr) bool {
 		return false
 	}
 	return a.Operator == b.Operator &&
+		a.Modifier == b.Modifier &&
 		cmp.Expr(a.Left, b.Left) &&
 		cmp.Expr(a.Right, b.Right) &&
 		cmp.Expr(a.Escape, b.Escape)
@@ -2965,6 +2985,18 @@ func (cmp *Comparator) RefOfIsExpr(a, b *IsExpr) bool {
 		a.Right == b.Right
 }
 
+// RefOfJSONArrayAgg does deep equals between the two objects.
+func (cmp *Comparator) RefOfJSONArrayAgg(a, b *JSONArrayAgg) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Expr, b.Expr) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
+}
+
 // RefOfJSONArrayExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfJSONArrayExpr(a, b *JSONArrayExpr) bool {
 	if a == b {
@@ -3037,6 +3069,19 @@ func (cmp *Comparator) RefOfJSONKeysExpr(a, b *JSONKeysExpr) bool {
 	}
 	return cmp.Expr(a.JSONDoc, b.JSONDoc) &&
 		cmp.Expr(a.Path, b.Path)
+}
+
+// RefOfJSONObjectAgg does deep equals between the two objects.
+func (cmp *Comparator) RefOfJSONObjectAgg(a, b *JSONObjectAgg) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Key, b.Key) &&
+		cmp.Expr(a.Value, b.Value) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfJSONObjectExpr does deep equals between the two objects.
@@ -4146,7 +4191,11 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		a.HighPriority == b.HighPriority &&
 		a.StraightJoinHint == b.StraightJoinHint &&
+		a.SQLSmallResult == b.SQLSmallResult &&
+		a.SQLBigResult == b.SQLBigResult &&
+		a.SQLBufferResult == b.SQLBufferResult &&
 		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
 		cmp.RefOfBool(a.Cache, b.Cache) &&
 		cmp.RefOfWith(a.With, b.With) &&
@@ -4323,6 +4372,18 @@ func (cmp *Comparator) RefOfShowThrottlerStatus(a, b *ShowThrottlerStatus) bool 
 		return false
 	}
 	return cmp.Comments(a.Comments, b.Comments)
+}
+
+// RefOfShowTransactionStatus does deep equals between the two objects.
+func (cmp *Comparator) RefOfShowTransactionStatus(a, b *ShowTransactionStatus) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Keyspace == b.Keyspace &&
+		a.TransactionID == b.TransactionID
 }
 
 // RefOfStarExpr does deep equals between the two objects.
@@ -5008,6 +5069,18 @@ func (cmp *Comparator) AggrFunc(inA, inB AggrFunc) bool {
 			return false
 		}
 		return cmp.RefOfGroupConcatExpr(a, b)
+	case *JSONArrayAgg:
+		b, ok := inB.(*JSONArrayAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONArrayAgg(a, b)
+	case *JSONObjectAgg:
+		b, ok := inB.(*JSONObjectAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONObjectAgg(a, b)
 	case *Max:
 		b, ok := inB.(*Max)
 		if !ok {
@@ -6172,6 +6245,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfIsExpr(a, b)
+	case *JSONArrayAgg:
+		b, ok := inB.(*JSONArrayAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONArrayAgg(a, b)
 	case *JSONArrayExpr:
 		b, ok := inB.(*JSONArrayExpr)
 		if !ok {
@@ -6208,6 +6287,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfJSONKeysExpr(a, b)
+	case *JSONObjectAgg:
+		b, ok := inB.(*JSONObjectAgg)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfJSONObjectAgg(a, b)
 	case *JSONObjectExpr:
 		b, ok := inB.(*JSONObjectExpr)
 		if !ok {
@@ -6712,6 +6797,12 @@ func (cmp *Comparator) ShowInternal(inA, inB ShowInternal) bool {
 			return false
 		}
 		return cmp.RefOfShowOther(a, b)
+	case *ShowTransactionStatus:
+		b, ok := inB.(*ShowTransactionStatus)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowTransactionStatus(a, b)
 	default:
 		// this should never happen
 		return false

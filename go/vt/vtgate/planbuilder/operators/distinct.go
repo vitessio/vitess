@@ -26,8 +26,8 @@ import (
 
 type (
 	Distinct struct {
-		Source Operator
-		QP     *QueryProjection
+		unaryOperator
+		QP *QueryProjection
 
 		// When we go from AST to operator, we place DISTINCT ops in the required places in the op tree
 		// These are marked as `Required`, because they are semantically important to the results of the query.
@@ -41,20 +41,28 @@ type (
 		// This is only filled in during offset planning
 		Columns []engine.CheckCol
 
-		Truncate int
+		ResultColumns int
 	}
 )
+
+func newDistinct(src Operator, qp *QueryProjection, required bool) *Distinct {
+	return &Distinct{
+		unaryOperator: newUnaryOp(src),
+		QP:            qp,
+		Required:      required,
+	}
+}
 
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
 		e := col.Expr
 		var wsCol *int
-		if ctx.SemTable.NeedsWeightString(e) {
+		if ctx.NeedsWeightString(e) {
 			offset := d.Source.AddWSColumn(ctx, idx, false)
 			wsCol = &offset
 		}
-		typ, _ := ctx.SemTable.TypeForExpr(e)
+		typ, _ := ctx.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:          idx,
 			WsCol:        wsCol,
@@ -66,22 +74,10 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 }
 
 func (d *Distinct) Clone(inputs []Operator) Operator {
-	return &Distinct{
-		Required:          d.Required,
-		Source:            inputs[0],
-		Columns:           slices.Clone(d.Columns),
-		QP:                d.QP,
-		PushedPerformance: d.PushedPerformance,
-		Truncate:          d.Truncate,
-	}
-}
-
-func (d *Distinct) Inputs() []Operator {
-	return []Operator{d.Source}
-}
-
-func (d *Distinct) SetInputs(operators []Operator) {
-	d.Source = operators[0]
+	kopy := *d
+	kopy.Columns = slices.Clone(d.Columns)
+	kopy.Source = inputs[0]
+	return &kopy
 }
 
 func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
@@ -101,11 +97,11 @@ func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr
 }
 
 func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return d.Source.GetColumns(ctx)
+	return truncate(d, d.Source.GetColumns(ctx))
 }
 
 func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return d.Source.GetSelectExprs(ctx)
+	return truncate(d, d.Source.GetSelectExprs(ctx))
 }
 
 func (d *Distinct) ShortDescription() string {
@@ -120,5 +116,9 @@ func (d *Distinct) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func (d *Distinct) setTruncateColumnCount(offset int) {
-	d.Truncate = offset
+	d.ResultColumns = offset
+}
+
+func (d *Distinct) getTruncateColumnCount() int {
+	return d.ResultColumns
 }

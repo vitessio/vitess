@@ -130,6 +130,8 @@ func TestStandalone(t *testing.T) {
 	tmp, _ := cmd.([]any)
 	require.Contains(t, tmp[0], "vtcombo")
 
+	assertVSchemaExists(t, grpcAddress)
+
 	ctx := context.Background()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.NoError(t, err)
@@ -158,6 +160,17 @@ func TestStandalone(t *testing.T) {
 	assertInsertedRowsExist(ctx, t, conn, idStart, rowCount)
 	assertTabletsPresent(t)
 	assertTransactionalityAndRollbackObeyed(ctx, t, conn, idStart)
+}
+
+func assertVSchemaExists(t *testing.T, grpcAddress string) {
+	tmpCmd := exec.Command("vtctldclient", "--server", grpcAddress, "--compact", "GetVSchema", "routed")
+
+	log.Infof("Running vtctldclient with command: %v", tmpCmd.Args)
+
+	output, err := tmpCmd.CombinedOutput()
+	require.NoError(t, err, fmt.Sprintf("Output:\n%v", string(output)))
+
+	assert.Equal(t, "{}\n", string(output))
 }
 
 func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, idStart, rowCount int) {

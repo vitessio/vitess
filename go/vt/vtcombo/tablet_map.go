@@ -165,6 +165,23 @@ func InitRoutingRules(
 	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
+// InitMirrorRules saves the mirror rules into ts and reloads the vschema.
+func InitMirrorRules(
+	ctx context.Context,
+	ts *topo.Server,
+	mr *vschemapb.MirrorRules,
+) error {
+	if mr == nil {
+		return nil
+	}
+
+	if err := ts.SaveMirrorRules(ctx, mr); err != nil {
+		return err
+	}
+
+	return ts.RebuildSrvVSchema(ctx, nil)
+}
+
 // InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(
@@ -237,7 +254,11 @@ func DeleteKs(
 			tablet.tm.Stop()
 			tablet.tm.Close()
 			tablet.qsc.SchemaEngine().Close()
-			err := ts.DeleteTablet(ctx, tablet.alias)
+			err := tablet.qsc.QueryService().Close(ctx)
+			if err != nil {
+				return err
+			}
+			err = ts.DeleteTablet(ctx, tablet.alias)
 			if err != nil {
 				return err
 			}
@@ -303,6 +324,11 @@ func CreateKs(
 	// create a regular keyspace
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
 		return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+	}
+
+	// make sure a valid vschema has been loaded
+	if err := ts.EnsureVSchema(ctx, keyspace); err != nil {
+		return 0, fmt.Errorf("EnsureVSchema(%v) failed: %v", keyspace, err)
 	}
 
 	// iterate through the shards
@@ -534,6 +560,12 @@ func (itc *internalTabletConn) ConcludeTransaction(ctx context.Context, target *
 func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	metadata, err = itc.tablet.qsc.QueryService().ReadTransaction(ctx, target, dtid)
 	return metadata, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
+// UnresolvedTransactions is part of queryservice.QueryService
+func (itc *internalTabletConn) UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) (transactions []*querypb.TransactionMetadata, err error) {
+	transactions, err = itc.tablet.qsc.QueryService().UnresolvedTransactions(ctx, target, abandonAgeSeconds)
+	return transactions, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // BeginExecute is part of queryservice.QueryService
@@ -862,6 +894,22 @@ func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(context.Context, *top
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) MysqlHostMetrics(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) PrimaryStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
@@ -895,6 +943,10 @@ func (itmc *internalTabletManagerClient) ReadVReplicationWorkflows(context.Conte
 }
 
 func (itmc *internalTabletManagerClient) ReadVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ValidateVReplicationPermissions(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -955,6 +1007,10 @@ func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *top
 }
 
 func (itmc *internalTabletManagerClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) GetThrottlerStatus(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

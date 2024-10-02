@@ -39,11 +39,18 @@ func (n Name) ConcatenateString(s string) string {
 func (n Name) Concatenate(other Name) Name {
 	return Name(n.ConcatenateString(other.String()))
 }
+func (n Name) SplitStrings() []string {
+	return strings.Split(n.String(), ":")
+}
 
 const (
-	// DefaultName is the app name used by vitess when app doesn't indicate its name
-	DefaultName             Name = "default"
-	VitessName              Name = "vitess"
+	// AllName is a special catch-all name for all apps
+	AllName Name = "all"
+	// VitessName is used by vitess tablets when communicating between themselves,
+	// as well as for self checks.
+	// It is also the name used by checks that do not identify by any app name.
+	VitessName Name = "vitess"
+	// ThrottlerStimulatorName is used by a replica tablet to stimulate the throttler on the Primary tablet
 	ThrottlerStimulatorName Name = "throttler-stimulator"
 
 	TableGCName   Name = "tablegc"
@@ -63,6 +70,9 @@ const (
 	BinlogWatcherName Name = "binlog-watcher"
 	MessagerName      Name = "messager"
 	SchemaTrackerName Name = "schema-tracker"
+
+	TestingName                Name = "test"
+	TestingAlwaysThrottlerName Name = "always-throttled-app"
 )
 
 var (

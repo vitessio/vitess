@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -26,13 +27,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+type compactable interface {
+	// Compact implement this interface for operators that have easy to see optimisations
+	Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult)
+}
+
 // compact will optimise the operator tree into a smaller but equivalent version
 func compact(ctx *plancontext.PlanningContext, op Operator) Operator {
-	type compactable interface {
-		// Compact implement this interface for operators that have easy to see optimisations
-		Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult)
-	}
-
 	newOp := BottomUp(op, TableID, func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		newOp, ok := op.(compactable)
 		if !ok {
@@ -82,20 +83,21 @@ func TableID(op Operator) (result semantics.TableSet) {
 
 // TableUser is used to signal that this operator directly interacts with one or more tables
 type TableUser interface {
-	TablesUsed() []string
+	TablesUsed([]string) []string
 }
 
 func TablesUsed(op Operator) []string {
-	addString, collect := collectSortedUniqueStrings()
+	var in []string
 	_ = Visit(op, func(this Operator) error {
 		if tbl, ok := this.(TableUser); ok {
-			for _, u := range tbl.TablesUsed() {
-				addString(u)
-			}
+			in = tbl.TablesUsed(in)
 		}
 		return nil
 	})
-	return collect()
+
+	slices.Sort(in)
+	compacted := slices.Compact(in)
+	return compacted
 }
 
 func CostOf(op Operator) (cost int) {

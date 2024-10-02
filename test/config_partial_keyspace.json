@@ -29,7 +29,7 @@
     },
     "vtgate_transaction_partial_keyspace": {
       "File": "unused.go",
-      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction"],
+      "Args": ["vitess.io/vitess/go/test/endtoend/transaction"],
       "Command": [],
       "Manual": false,
       "Shard": "vtgate_partial_keyspace",
@@ -38,7 +38,7 @@
     },
     "vtgate_transaction_rollback_partial_keyspace": {
       "File": "unused.go",
-      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/rollback"],
+      "Args": ["vitess.io/vitess/go/test/endtoend/transaction/rollback"],
       "Command": [],
       "Manual": false,
       "Shard": "vtgate_partial_keyspace",
@@ -47,7 +47,7 @@
     },
     "vtgate_transaction_single_partial_keyspace": {
       "File": "unused.go",
-      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/single"],
+      "Args": ["vitess.io/vitess/go/test/endtoend/transaction/single"],
       "Command": [],
       "Manual": false,
       "Shard": "vtgate_partial_keyspace",

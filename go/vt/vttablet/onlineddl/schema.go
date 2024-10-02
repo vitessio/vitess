@@ -169,6 +169,13 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateReadyForCleanupAll = `UPDATE _vt.schema_migrations
+			SET retain_artifacts_seconds=-1
+		WHERE
+			migration_status IN ('complete', 'cancelled', 'failed')
+			AND cleanup_timestamp IS NULL
+			AND retain_artifacts_seconds > 0
+	`
 	sqlUpdateForceCutOver = `UPDATE _vt.schema_migrations
 			SET force_cutover=1
 		WHERE
@@ -202,7 +209,9 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateMessage = `UPDATE _vt.schema_migrations
-			SET message=%a
+			SET
+				message=%a,
+				message_timestamp=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
@@ -242,7 +251,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateLastThrottled = `UPDATE _vt.schema_migrations
-			SET last_throttled_timestamp=%a, component_throttled=%a
+			SET last_throttled_timestamp=%a, component_throttled=%a, reason_throttled=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -297,7 +306,7 @@ const (
 			postpone_completion,
 			force_cutover,
 			cutover_attempts,
-			ifnull(timestampdiff(second, ready_to_complete_timestamp, now()), 0) as seconds_since_ready_to_complete,
+			ifnull(timestampdiff(microsecond, ready_to_complete_timestamp, now(6)), 0) as microseconds_since_ready_to_complete,
 			ifnull(timestampdiff(second, last_cutover_attempt_timestamp, now()), 0) as seconds_since_last_cutover_attempt,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
@@ -428,6 +437,7 @@ const (
 			last_throttled_timestamp,
 			cancelled_timestamp,
 			component_throttled,
+			reason_throttled,
 			postpone_launch,
 			postpone_completion,
 			is_immediate_operation,
@@ -453,16 +463,6 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
-	sqlSelectColumnTypes = `
-		select
-				*,
-				COLUMN_DEFAULT IS NULL AS is_default_null
-			from
-				information_schema.columns
-			where
-				table_schema=%a
-				and table_name=%a
-		`
 	selSelectCountFKParentConstraints = `
 		SELECT
 			COUNT(*) as num_fk_constraints
@@ -479,75 +479,10 @@ const (
 			TABLE_SCHEMA=%a AND TABLE_NAME=%a
 			AND REFERENCED_TABLE_NAME IS NOT NULL
 		`
-	sqlSelectUniqueKeys = `
-	SELECT
-		COLUMNS.TABLE_SCHEMA as table_schema,
-		COLUMNS.TABLE_NAME as table_name,
-		COLUMNS.COLUMN_NAME as column_name,
-		UNIQUES.INDEX_NAME as index_name,
-		UNIQUES.COLUMN_NAMES as column_names,
-		UNIQUES.COUNT_COLUMN_IN_INDEX as count_column_in_index,
-		COLUMNS.DATA_TYPE as data_type,
-		COLUMNS.CHARACTER_SET_NAME as character_set_name,
-		LOCATE('auto_increment', EXTRA) > 0 as is_auto_increment,
-		(DATA_TYPE='float' OR DATA_TYPE='double') AS is_float,
-		has_subpart,
-		has_nullable
-	FROM INFORMATION_SCHEMA.COLUMNS INNER JOIN (
-		SELECT
-			TABLE_SCHEMA,
-			TABLE_NAME,
-			INDEX_NAME,
-			COUNT(*) AS COUNT_COLUMN_IN_INDEX,
-			GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC) AS COLUMN_NAMES,
-			SUBSTRING_INDEX(GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC), ',', 1) AS FIRST_COLUMN_NAME,
-			SUM(SUB_PART IS NOT NULL) > 0 AS has_subpart,
-			SUM(NULLABLE='YES') > 0 AS has_nullable
-		FROM INFORMATION_SCHEMA.STATISTICS
-		WHERE
-			NON_UNIQUE=0
-			AND TABLE_SCHEMA=%a
-			AND TABLE_NAME=%a
-		GROUP BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
-	) AS UNIQUES
-	ON (
-		COLUMNS.COLUMN_NAME = UNIQUES.FIRST_COLUMN_NAME
-	)
-	WHERE
-		COLUMNS.TABLE_SCHEMA=%a
-		AND COLUMNS.TABLE_NAME=%a
-	ORDER BY
-		COLUMNS.TABLE_SCHEMA, COLUMNS.TABLE_NAME,
-		CASE UNIQUES.INDEX_NAME
-			WHEN 'PRIMARY' THEN 0
-			ELSE 1
-		END,
-		CASE has_nullable
-			WHEN 0 THEN 0
-			ELSE 1
-		END,
-		CASE has_subpart
-			WHEN 0 THEN 0
-			ELSE 1
-		END,
-		CASE IFNULL(CHARACTER_SET_NAME, '')
-				WHEN '' THEN 0
-				ELSE 1
-		END,
-		CASE DATA_TYPE
-			WHEN 'tinyint' THEN 0
-			WHEN 'smallint' THEN 1
-			WHEN 'int' THEN 2
-			WHEN 'bigint' THEN 3
-			ELSE 100
-		END,
-		COUNT_COLUMN_IN_INDEX
-	`
 	sqlDropTrigger                         = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike                      = "SHOW TABLES LIKE '%a'"
 	sqlDropTable                           = "DROP TABLE `%a`"
 	sqlDropTableIfExists                   = "DROP TABLE IF EXISTS `%a`"
-	sqlShowColumnsFrom                     = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus                     = "SHOW TABLE STATUS LIKE '%a'"
 	sqlAnalyzeTable                        = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
 	sqlShowCreateTable                     = "SHOW CREATE TABLE `%a`"
@@ -555,23 +490,14 @@ const (
 	sqlShowVariablesLikeFastAnalyzeTable   = "show global variables like 'fast_analyze_table'"
 	sqlEnableFastAnalyzeTable              = "set @@fast_analyze_table = 1"
 	sqlDisableFastAnalyzeTable             = "set @@fast_analyze_table = 0"
-	sqlGetAutoIncrement                    = `
-		SELECT
-			AUTO_INCREMENT
-		FROM INFORMATION_SCHEMA.TABLES
-		WHERE
-			TABLES.TABLE_SCHEMA=%a
-			AND TABLES.TABLE_NAME=%a
-			AND AUTO_INCREMENT IS NOT NULL
-		`
-	sqlAlterTableAutoIncrement      = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
-	sqlAlterTableExchangePartition  = "ALTER TABLE `%a` EXCHANGE PARTITION `%a` WITH TABLE `%a`"
-	sqlAlterTableRemovePartitioning = "ALTER TABLE `%a` REMOVE PARTITIONING"
-	sqlAlterTableDropPartition      = "ALTER TABLE `%a` DROP PARTITION `%a`"
-	sqlStartVReplStream             = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
-	sqlStopVReplStream              = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
-	sqlDeleteVReplStream            = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream              = `SELECT
+	sqlAlterTableAutoIncrement             = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
+	sqlAlterTableExchangePartition         = "ALTER TABLE `%a` EXCHANGE PARTITION `%a` WITH TABLE `%a`"
+	sqlAlterTableRemovePartitioning        = "ALTER TABLE `%a` REMOVE PARTITIONING"
+	sqlAlterTableDropPartition             = "ALTER TABLE `%a` DROP PARTITION `%a`"
+	sqlStartVReplStream                    = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream                     = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream                   = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream                     = `SELECT
 			id,
 			workflow,
 			source,
@@ -581,6 +507,7 @@ const (
 			time_heartbeat,
 			time_throttled,
 			component_throttled,
+			reason_throttled,
 			state,
 			message,
 			rows_copied

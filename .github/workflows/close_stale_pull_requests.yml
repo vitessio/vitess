@@ -9,12 +9,12 @@ permissions: read-all
 
 jobs:
   close_stale_pull_requests:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       pull-requests: write
 
     steps:
-      - uses: actions/stale@v5
+      - uses: actions/stale@f7176fd3007623b69d27091f9b9d4ab7995f0a06 # v5.2.1
         with:
           days-before-stale: 30
           # Do not handle issues at all. We only want to handle PRs.

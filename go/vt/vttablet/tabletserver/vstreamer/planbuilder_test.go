@@ -77,7 +77,7 @@ func init() {
   }
 }`
 	var kspb vschemapb.Keyspace
-	if err := json2.Unmarshal([]byte(input), &kspb); err != nil {
+	if err := json2.UnmarshalPB([]byte(input), &kspb); err != nil {
 		panic(fmt.Errorf("Unmarshal failed: %v", err))
 	}
 	srvVSchema := &vschemapb.SrvVSchema{

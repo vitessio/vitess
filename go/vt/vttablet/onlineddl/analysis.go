@@ -68,23 +68,6 @@ func (p *SpecialAlterPlan) String() string {
 	return string(b)
 }
 
-// getCreateTableStatement gets a formal AlterTable representation of the given table
-func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string) (*sqlparser.CreateTable, error) {
-	showCreateTable, err := e.showCreateTable(ctx, tableName)
-	if err != nil {
-		return nil, vterrors.Wrapf(err, "in Executor.getCreateTableStatement()")
-	}
-	stmt, err := e.env.Environment().Parser().ParseStrictDDL(showCreateTable)
-	if err != nil {
-		return nil, err
-	}
-	createTable, ok := stmt.(*sqlparser.CreateTable)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.CanonicalString(stmt))
-	}
-	return createTable, nil
-}
-
 // analyzeInstantDDL takes declarative CreateTable and AlterTable, as well as a server version, and checks whether it is possible to run the ALTER
 // using ALGORITHM=INSTANT for that version.
 func analyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (*SpecialAlterPlan, error) {

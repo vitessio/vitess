@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -35,6 +36,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 var (
@@ -47,7 +49,6 @@ var (
 	}
 	onDDLDefault             = binlogdatapb.OnDDLAction_IGNORE.String()
 	MaxReplicationLagDefault = 30 * time.Second
-	TimeoutDefault           = 30 * time.Second
 
 	BaseOptions = struct {
 		Workflow       string
@@ -67,6 +68,8 @@ var (
 		MySQLServerVersion           string
 		TruncateUILen                int
 		TruncateErrLen               int
+		ReferenceTables              []string
+		ConfigOverrides              []string
 	}{}
 )
 
@@ -147,6 +150,37 @@ func validateOnDDL(cmd *cobra.Command) error {
 	return nil
 }
 
+// ParseConfigOverrides converts a slice of key=value strings into a map of config overrides. The slice is passed
+// as a flag to the command, and the key=value pairs are used to override the default vreplication config values.
+func ParseConfigOverrides(overrides []string) (map[string]string, error) {
+	configOverrides := make(map[string]string, len(overrides))
+	defaultConfig, err := vttablet.NewVReplicationConfig(nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, kv := range overrides {
+		key, value, ok := strings.Cut(kv, "=")
+		if !ok {
+			return nil, fmt.Errorf("invalid config override format (var=value expected): %s", kv)
+		}
+		if _, ok := defaultConfig.Map()[key]; !ok {
+			return nil, fmt.Errorf("unknown vreplication config flag: %s", key)
+		}
+		configOverrides[key] = value
+	}
+	return configOverrides, nil
+}
+
+// ValidateShards checks if the provided shard names are valid key ranges.
+func ValidateShards(shards []string) error {
+	for _, shard := range shards {
+		if !key.IsValidKeyRange(shard) {
+			return fmt.Errorf("invalid shard: %q", shard)
+		}
+	}
+	return nil
+}
+
 func ParseAndValidateCreateOptions(cmd *cobra.Command) error {
 	if err := validateOnDDL(cmd); err != nil {
 		return err
@@ -222,7 +256,14 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&CreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied.")
 	cmd.Flags().BoolVar(&CreateOptions.AutoStart, "auto-start", true, "Start the workflow after creating it.")
 	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
+	cmd.Flags().StringSliceVar(&CreateOptions.ConfigOverrides, "config-overrides", []string{}, "Specify one or more VReplication config flags to override as a comma-separated list of key=value pairs.")
 }
+
+var MirrorTrafficOptions = struct {
+	DryRun      bool
+	Percent     float32
+	TabletTypes []topodatapb.TabletType
+}{}
 
 var SwitchTrafficOptions = struct {
 	Cells                     []string
@@ -234,15 +275,17 @@ var SwitchTrafficOptions = struct {
 	Direction                 workflow.TrafficSwitchDirection
 	InitializeTargetSequences bool
 	Shards                    []string
+	Force                     bool
 }{}
 
 func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences bool) {
 	cmd.Flags().StringSliceVarP(&SwitchTrafficOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to switch traffic in.")
 	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&SwitchTrafficOptions.TabletTypes), "tablet-types", "Tablet types to switch traffic for.")
-	cmd.Flags().DurationVar(&SwitchTrafficOptions.Timeout, "timeout", TimeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
+	cmd.Flags().DurationVar(&SwitchTrafficOptions.Timeout, "timeout", workflow.DefaultTimeout, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
 	cmd.Flags().DurationVar(&SwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", MaxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this.")
 	cmd.Flags().BoolVar(&SwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original source keyspace to support rolling back the traffic cutover.")
 	cmd.Flags().BoolVar(&SwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred.")
+	cmd.Flags().BoolVar(&SwitchTrafficOptions.Force, "force", false, "Force the traffic switch even if some potentially non-critical actions cannot be performed; for example the tablet refresh fails on some tablets in the keyspace. WARNING: this should be used with extreme caution and only in emergency situations!")
 	if initializeTargetSequences {
 		cmd.Flags().BoolVar(&SwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 	}

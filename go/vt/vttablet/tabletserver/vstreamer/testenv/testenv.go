@@ -202,7 +202,7 @@ func (te *Env) Close() {
 func (te *Env) SetVSchema(vs string) error {
 	ctx := context.Background()
 	var kspb vschemapb.Keyspace
-	if err := json2.Unmarshal([]byte(vs), &kspb); err != nil {
+	if err := json2.UnmarshalPB([]byte(vs), &kspb); err != nil {
 		return err
 	}
 	if err := te.TopoServ.SaveVSchema(ctx, te.KeyspaceName, &kspb); err != nil {

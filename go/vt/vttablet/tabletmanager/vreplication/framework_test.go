@@ -32,10 +32,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -46,8 +45,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -74,6 +74,7 @@ var (
 	testForeignKeyQueries    = false
 	testSetForeignKeyQueries = false
 	doNotLogDBQueries        = false
+	recvTimeout              = 5 * time.Second
 )
 
 type LogExpectation struct {
@@ -139,7 +140,8 @@ func setup(ctx context.Context) (func(), int) {
 	globalDBQueries = make(chan string, 1000)
 	resetBinlogClient()
 
-	vttablet.VReplicationExperimentalFlags = 0
+	vttablet.InitVReplicationConfigDefaults()
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = 0
 
 	// Engines cannot be initialized in testenv because it introduces circular dependencies.
 	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
@@ -236,7 +238,7 @@ func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []s
 	}
 }
 
-//--------------------------------------
+// --------------------------------------
 // Topos and tablets
 
 func addTablet(id int) *topodatapb.Tablet {
@@ -318,7 +320,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
+	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, nil)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
@@ -340,15 +342,18 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 		}
 		row = r.Rows[0]
 	}
+	vstreamOptions := &binlogdatapb.VStreamOptions{
+		ConfigOverrides: vttablet.GetVReplicationConfigDefaults(false).Map(),
+	}
 	return streamerEngine.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}
 		return send(rows)
-	})
+	}, vstreamOptions)
 }
 
-//--------------------------------------
+// --------------------------------------
 // Binlog Client to TabletManager
 
 // fakeBinlogClient satisfies binlogplayer.Client.
@@ -425,7 +430,7 @@ func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, table
 	}
 }
 
-//--------------------------------------
+// --------------------------------------
 // DBCLient wrapper
 
 func realDBClientFactory() binlogplayer.DBClient {
@@ -486,20 +491,20 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		globalDBQueries <- query
 	} else if testSetForeignKeyQueries && strings.Contains(query, "set foreign_key_checks") {
 		globalDBQueries <- query
-	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
+	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { // allow select/set for foreign_key_checks
 		globalDBQueries <- query
 	}
 	return qr, err
 }
 
-func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
 	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(query)
 	if err != nil {
 		return nil, err
 	}
 	results := make([]*sqltypes.Result, 0, len(queries))
 	for _, query := range queries {
-		qr, err := dc.ExecuteFetch(query, maxrows)
+		qr, err := dbc.ExecuteFetch(query, maxrows)
 		if err != nil {
 			return nil, err
 		}
@@ -507,6 +512,10 @@ func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 	}
 	lastMultiExecQuery = query
 	return results, nil
+}
+
+func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return dbc.conn.SupportsCapability(capability)
 }
 
 func expectDeleteQueries(t *testing.T) {
@@ -518,7 +527,7 @@ func expectDeleteQueries(t *testing.T) {
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
 		"/delete from _vt.post_copy_action",
-	))
+	), recvTimeout)
 }
 
 func deleteAllVReplicationStreams(t *testing.T) {
@@ -635,7 +644,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 				))
 			}
 		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received")
+			require.FailNow(t, "no query received")
 			failed = true
 		}
 	}
@@ -656,7 +665,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 
 // expectNontxQueries disregards transactional statements like begin and commit.
 // It also disregards updates to _vt.vreplication.
-func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
+func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvTimeout time.Duration) {
 	t.Helper()
 	if doNotLogDBQueries {
 		return
@@ -679,13 +688,13 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 			}
 
 			result := validator.AcceptQuery(got)
-
+			require.NotNil(t, result)
 			require.True(t, result.Accepted, fmt.Sprintf(
 				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
 				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
 			))
-		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received")
+		case <-time.After(recvTimeout):
+			require.FailNow(t, "no query received")
 			failed = true
 		}
 	}

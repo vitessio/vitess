@@ -19,6 +19,7 @@ package memorytopo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -65,11 +66,32 @@ func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDes
 		return nil, err
 	}
 
-	return c.lock(ctx, dirPath, contents)
+	return c.lock(ctx, dirPath, contents, false)
+}
+
+// LockWithTTL is part of the topo.Conn interface. It behaves the same as Lock
+// as TTLs are not supported in memorytopo.
+func (c *Conn) LockWithTTL(ctx context.Context, dirPath, contents string, _ time.Duration) (topo.LockDescriptor, error) {
+	c.factory.callstats.Add([]string{"LockWithTTL"}, 1)
+
+	c.factory.mu.Lock()
+	err := c.factory.getOperationError(Lock, dirPath)
+	c.factory.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.lock(ctx, dirPath, contents, false)
+}
+
+// LockName is part of the topo.Conn interface.
+func (c *Conn) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	c.factory.callstats.Add([]string{"LockName"}, 1)
+	return c.lock(ctx, dirPath, contents, true)
 }
 
 // Lock is part of the topo.Conn interface.
-func (c *Conn) lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+func (c *Conn) lock(ctx context.Context, dirPath, contents string, named bool) (topo.LockDescriptor, error) {
 	for {
 		if err := c.dial(ctx); err != nil {
 			return nil, err
@@ -82,7 +104,12 @@ func (c *Conn) lock(ctx context.Context, dirPath, contents string) (topo.LockDes
 			return nil, c.factory.err
 		}
 
-		n := c.factory.nodeByPath(c.cell, dirPath)
+		var n *node
+		if named {
+			n = c.factory.getOrCreatePath(c.cell, dirPath)
+		} else {
+			n = c.factory.nodeByPath(c.cell, dirPath)
+		}
 		if n == nil {
 			c.factory.mu.Unlock()
 			return nil, topo.NewError(topo.NoNode, dirPath)

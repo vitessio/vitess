@@ -54,6 +54,23 @@ func TestRateLimiterShort(t *testing.T) {
 	assert.Less(t, val, 10)
 }
 
+func TestRateLimiterAllowOne(t *testing.T) {
+	r := NewRateLimiter(time.Millisecond * 250)
+	require.NotNil(t, r)
+	defer r.Stop()
+	val := 0
+	incr := func() error { val++; return nil }
+	times := 10
+	for range times {
+		time.Sleep(time.Millisecond * 100)
+		r.AllowOne()
+		err := r.Do(incr)
+		assert.NoError(t, err)
+	}
+	// we expect exactly 10 successful entries.
+	assert.Equal(t, times, val)
+}
+
 func TestRateLimiterStop(t *testing.T) {
 	r := NewRateLimiter(time.Millisecond * 10)
 	require.NotNil(t, r)
@@ -90,4 +107,9 @@ func TestRateLimiterDiff(t *testing.T) {
 	assert.Greater(t, r.Diff(), int64(math.MaxInt32))
 	r.DoEmpty()
 	assert.LessOrEqual(t, r.Diff(), int64(1))
+}
+
+func TestRateLimiterUninitialized(t *testing.T) {
+	r := &RateLimiter{}
+	r.Stop()
 }

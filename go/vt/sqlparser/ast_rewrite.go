@@ -232,6 +232,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *JSONArrayAgg:
+		return a.rewriteRefOfJSONArrayAgg(parent, node, replacer)
 	case *JSONArrayExpr:
 		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
 	case *JSONAttributesExpr:
@@ -244,6 +246,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONExtractExpr(parent, node, replacer)
 	case *JSONKeysExpr:
 		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
+	case *JSONObjectAgg:
+		return a.rewriteRefOfJSONObjectAgg(parent, node, replacer)
 	case *JSONObjectExpr:
 		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
 	case *JSONObjectParam:
@@ -456,6 +460,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *ShowThrottlerStatus:
 		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
+	case *ShowTransactionStatus:
+		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Std:
@@ -824,6 +830,11 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 		if !a.pre(&a.cur) {
 			return true
 		}
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterDatabase).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
 	}
 	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*AlterDatabase).DBName = newNode.(IdentifierCS)
@@ -1958,8 +1969,8 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
-		parent.(*CommonTableExpr).Subquery = newNode.(*Subquery)
+	if !a.rewriteSelectStatement(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).Subquery = newNode.(SelectStatement)
 	}) {
 		return false
 	}
@@ -4104,6 +4115,43 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	}
 	return true
 }
+func (a *application) rewriteRefOfJSONArrayAgg(parent SQLNode, node *JSONArrayAgg, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*JSONArrayAgg).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*JSONArrayAgg).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4330,6 +4378,48 @@ func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExp
 	}
 	if !a.rewriteExpr(node, node.Path, func(newNode, parent SQLNode) {
 		parent.(*JSONKeysExpr).Path = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObjectAgg, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
+		parent.(*JSONObjectAgg).Key = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
+		parent.(*JSONObjectAgg).Value = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*JSONObjectAgg).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -7851,6 +7941,30 @@ func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *Show
 	}
 	return true
 }
+func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *ShowTransactionStatus, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9654,6 +9768,10 @@ func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer re
 		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *JSONArrayAgg:
+		return a.rewriteRefOfJSONArrayAgg(parent, node, replacer)
+	case *JSONObjectAgg:
+		return a.rewriteRefOfJSONObjectAgg(parent, node, replacer)
 	case *Max:
 		return a.rewriteRefOfMax(parent, node, replacer)
 	case *Min:
@@ -10082,6 +10200,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *JSONArrayAgg:
+		return a.rewriteRefOfJSONArrayAgg(parent, node, replacer)
 	case *JSONArrayExpr:
 		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
 	case *JSONAttributesExpr:
@@ -10094,6 +10214,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfJSONExtractExpr(parent, node, replacer)
 	case *JSONKeysExpr:
 		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
+	case *JSONObjectAgg:
+		return a.rewriteRefOfJSONObjectAgg(parent, node, replacer)
 	case *JSONObjectExpr:
 		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
 	case *JSONOverlapsExpr:
@@ -10282,6 +10404,8 @@ func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, rep
 		return a.rewriteRefOfShowCreate(parent, node, replacer)
 	case *ShowOther:
 		return a.rewriteRefOfShowOther(parent, node, replacer)
+	case *ShowTransactionStatus:
+		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
 	default:
 		// this should never happen
 		return true

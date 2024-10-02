@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -77,12 +78,29 @@ func TestRemoveCellsFromList(t *testing.T) {
 	}
 }
 
+// fakeLockDescriptor implements the topo.LockDescriptor interface
+type fakeLockDescriptor struct{}
+
+// Check implements the topo.LockDescriptor interface
+func (f fakeLockDescriptor) Check(ctx context.Context) error {
+	return nil
+}
+
+// Unlock implements the topo.LockDescriptor interface
+func (f fakeLockDescriptor) Unlock(ctx context.Context) error {
+	return nil
+}
+
+var _ LockDescriptor = (*fakeLockDescriptor)(nil)
+
 func lockedKeyspaceContext(keyspace string) context.Context {
 	ctx := context.Background()
 	return context.WithValue(ctx, locksKey, &locksInfo{
 		info: map[string]*lockInfo{
 			// An empty entry is good enough for this.
-			keyspace: {},
+			keyspace: {
+				lockDescriptor: fakeLockDescriptor{},
+			},
 		},
 	})
 }
@@ -121,14 +139,14 @@ func TestUpdateSourcePrimaryDeniedTables(t *testing.T) {
 	require.NoError(t, addToDenyList(ctx, si, primary, nil, tables2))
 	validateDenyList(t, si, primary, nil, append(tables1, tables2...))
 
-	require.Error(t, addToDenyList(ctx, si, primary, nil, tables2), dlTablesAlreadyPresent)
-	require.Error(t, addToDenyList(ctx, si, primary, nil, []string{t1}), dlTablesAlreadyPresent)
+	require.NoError(t, addToDenyList(ctx, si, primary, nil, tables2))
+	require.NoError(t, addToDenyList(ctx, si, primary, nil, []string{t1}))
 
 	require.NoError(t, removeFromDenyList(ctx, si, primary, nil, tables2))
 	validateDenyList(t, si, primary, nil, tables1)
 
-	require.Error(t, removeFromDenyList(ctx, si, primary, nil, tables2), dlTablesNotPresent)
-	require.Error(t, removeFromDenyList(ctx, si, primary, nil, []string{t3}), dlTablesNotPresent)
+	require.NoError(t, removeFromDenyList(ctx, si, primary, nil, tables2))
+	require.NoError(t, removeFromDenyList(ctx, si, primary, nil, []string{t3}))
 	validateDenyList(t, si, primary, nil, tables1)
 
 	require.NoError(t, removeFromDenyList(ctx, si, primary, nil, []string{t1}))

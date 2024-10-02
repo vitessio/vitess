@@ -21,6 +21,7 @@ import (
 	"math"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -132,6 +133,18 @@ func (bugs) CanCompare(elems ...string) bool {
 		}
 	}
 	return true
+}
+
+// MakeTimeValidHours returns true if the hour input for MAKETIME
+// is not an invalid edge case. Starting with MySQL 8.4.0, it somehow
+// truncates this value to a negative zero. This seems pretty much
+// broken as other large negative values are not truncated.
+func (bugs) MakeTimeValidHours(input string) bool {
+	i, err := strconv.ParseInt(input, 10, 64)
+	if err != nil {
+		return true
+	}
+	return i != math.MinInt64
 }
 
 type Comparison struct {

@@ -128,10 +128,10 @@ update user set nickname='alice' where id in (1,4)
 
 1 ks_sharded/-40: begin
 1 ks_sharded/-40: savepoint x1
-1 ks_sharded/-40: update `user` set nickname = 'alice' where id in (1, 4) limit 10001
+1 ks_sharded/-40: update `user` set nickname = 'alice' where id in (1) limit 10001
 1 ks_sharded/c0-: begin
 1 ks_sharded/c0-: savepoint x1
-1 ks_sharded/c0-: update `user` set nickname = 'alice' where id in (1, 4) limit 10001
+1 ks_sharded/c0-: update `user` set nickname = 'alice' where id in (4) limit 10001
 
 ----------------------------------------------------------------------
 commit

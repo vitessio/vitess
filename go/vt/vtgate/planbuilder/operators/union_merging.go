@@ -200,8 +200,8 @@ func createMergedUnion(
 			continue
 		}
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(rae.Expr))
-		rt, foundR := ctx.SemTable.TypeForExpr(rae.Expr)
-		lt, foundL := ctx.SemTable.TypeForExpr(lae.Expr)
+		rt, foundR := ctx.TypeForExpr(rae.Expr)
+		lt, foundL := ctx.TypeForExpr(lae.Expr)
 		if foundR && foundL {
 			collations := ctx.VSchema.Environment().CollationEnv()
 			var typer evalengine.TypeAggregator
@@ -222,9 +222,9 @@ func createMergedUnion(
 	union := newUnion([]Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, cols, distinct)
 	selectExprs := unionSelects(lhsExprs)
 	return &Route{
-		Source:     union,
-		MergedWith: []*Route{rhsRoute},
-		Routing:    routing,
+		unaryOperator: newUnaryOp(union),
+		MergedWith:    []*Route{rhsRoute},
+		Routing:       routing,
 	}, selectExprs
 }
 

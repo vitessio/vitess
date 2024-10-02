@@ -20,6 +20,9 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -108,7 +111,28 @@ func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock Lo
 	}
 	if dirPath == "error" {
 		return lock, fmt.Errorf("dummy error")
+	}
+	return lock, err
+}
 
+// LockWithTTL is part of the Conn interface.
+func (st *fakeConn) LockWithTTL(ctx context.Context, dirPath, contents string, _ time.Duration) (lock LockDescriptor, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
+	if dirPath == "error" {
+		return lock, fmt.Errorf("dummy error")
+	}
+	return lock, err
+}
+
+// LockName is part of the Conn interface.
+func (st *fakeConn) LockName(ctx context.Context, dirPath, contents string) (lock LockDescriptor, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
+	if dirPath == "error" {
+		return lock, fmt.Errorf("dummy error")
 	}
 	return lock, err
 }
@@ -121,7 +145,6 @@ func (st *fakeConn) TryLock(ctx context.Context, dirPath, contents string) (lock
 	}
 	if dirPath == "error" {
 		return lock, fmt.Errorf("dummy error")
-
 	}
 	return lock, err
 }
@@ -140,7 +163,6 @@ func (st *fakeConn) WatchRecursive(ctx context.Context, path string) (current []
 func (st *fakeConn) NewLeaderParticipation(name, id string) (mp LeaderParticipation, err error) {
 	if name == "error" {
 		return mp, fmt.Errorf("dummy error")
-
 	}
 	return mp, err
 }
@@ -302,23 +324,25 @@ func TestStatsConnTopoLock(t *testing.T) {
 
 	statsConn.Lock(ctx, "", "")
 	timingCounts := topoStatsConnTimings.Counts()["Lock.global"]
-	if got, want := timingCounts, int64(1); got != want {
-		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
-	}
+	require.Equal(t, timingCounts, int64(1))
 
-	// error is zero before getting an error
+	statsConn.LockWithTTL(ctx, "", "", time.Second)
+	timingCounts = topoStatsConnTimings.Counts()["LockWithTTL.global"]
+	require.Equal(t, timingCounts, int64(1))
+
+	statsConn.LockName(ctx, "", "")
+	timingCounts = topoStatsConnTimings.Counts()["LockName.global"]
+	require.Equal(t, timingCounts, int64(1))
+
+	// Error is zero before getting an error.
 	errorCount := topoStatsConnErrors.Counts()["Lock.global"]
-	if got, want := errorCount, int64(0); got != want {
-		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
-	}
+	require.Equal(t, errorCount, int64(0))
 
 	statsConn.Lock(ctx, "error", "")
 
-	// error stats gets emitted
+	// Error stats gets emitted.
 	errorCount = topoStatsConnErrors.Counts()["Lock.global"]
-	if got, want := errorCount, int64(1); got != want {
-		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
-	}
+	require.Equal(t, errorCount, int64(1))
 }
 
 // TestStatsConnTopoWatch emits stats on Watch

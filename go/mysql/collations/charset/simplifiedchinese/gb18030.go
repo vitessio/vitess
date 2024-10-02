@@ -150,7 +150,7 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 				return utf8.RuneError, 1
 			}
 			c2 := src[2]
-			if c2 < 0x81 || 0xff <= c2 {
+			if c2 < 0x81 {
 				return utf8.RuneError, 1
 			}
 			c3 := src[3]

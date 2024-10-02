@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -95,6 +96,9 @@ type FakeMysqlDaemon struct {
 
 	// PrimaryStatusError is used by PrimaryStatus.
 	PrimaryStatusError error
+
+	// GlobalStatusVars is used by GetGlobalStatusVars.
+	GlobalStatusVars map[string]string
 
 	// CurrentSourceHost is returned by ReplicationStatus.
 	CurrentSourceHost string
@@ -419,9 +423,7 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool) (Rese
 
 // GetGlobalStatusVars is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error) {
-	return make(map[string]string), fmd.ExecuteSuperQueryList(ctx, []string{
-		"FAKE " + getGlobalStatusQuery,
-	})
+	return fmd.GlobalStatusVars, nil
 }
 
 // StartReplication is part of the MysqlDaemon interface.
@@ -542,6 +544,11 @@ func (fmd *FakeMysqlDaemon) Promote(ctx context.Context, hookExtraEnv map[string
 		return replication.Position{}, fmd.PromoteError
 	}
 	return fmd.PromoteResult, nil
+}
+
+// ExecuteSuperQuery is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ExecuteSuperQuery(ctx context.Context, query string) error {
+	return fmd.ExecuteSuperQueryList(ctx, []string{query})
 }
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
@@ -735,4 +742,27 @@ func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error
 // GetVersionComment is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
 	return "", nil
+}
+
+func (fmd *FakeMysqlDaemon) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
+	return &mysqlctlpb.HostMetricsResponse{
+		Metrics: map[string]*mysqlctlpb.HostMetricsResponse_Metric{
+			"loadavg": {
+				Value: 1.0,
+			},
+			"datadir-used-ratio": {
+				Value: 0.2,
+			},
+		},
+	}, nil
+}
+
+// AcquireGlobalReadLock is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
+	return errors.New("not implemented")
+}
+
+// ReleaseGlobalReadLock is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
+	return errors.New("not implemented")
 }

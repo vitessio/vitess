@@ -145,7 +145,7 @@ func TestMySQLVersionCapableOf(t *testing.T) {
 			isCapable:  false,
 		},
 		{
-			version:    "5.6.7",
+			version:    "5.7.29",
 			capability: InstantDDLFlavorCapability,
 			isCapable:  false,
 		},
@@ -153,16 +153,6 @@ func TestMySQLVersionCapableOf(t *testing.T) {
 			version:    "5.7.29",
 			capability: TransactionalGtidExecutedFlavorCapability,
 			isCapable:  false,
-		},
-		{
-			version:    "5.6.7",
-			capability: MySQLJSONFlavorCapability,
-			isCapable:  false,
-		},
-		{
-			version:    "5.7.29",
-			capability: MySQLJSONFlavorCapability,
-			isCapable:  true,
 		},
 		{
 			version:    "8.0.30",

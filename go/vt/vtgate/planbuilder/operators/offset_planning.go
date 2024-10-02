@@ -21,25 +21,23 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+type offsettable interface {
+	Operator
+	planOffsets(ctx *plancontext.PlanningContext) Operator
+}
+
 // planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
 func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
-	type offsettable interface {
-		Operator
-		planOffsets(ctx *plancontext.PlanningContext) Operator
-	}
-
 	visitor := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		switch op := in.(type) {
 		case *Horizon:
 			panic(vterrors.VT13001(fmt.Sprintf("should not see %T here", in)))
 		case offsettable:
 			newOp := op.planOffsets(ctx)
-
 			if newOp == nil {
 				newOp = op
 			}
@@ -48,7 +46,13 @@ func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
 				fmt.Println("Planned offsets for:")
 				fmt.Println(ToTree(newOp))
 			}
-			return newOp, nil
+
+			if newOp == op {
+				return newOp, nil
+			} else {
+				// We got a new operator from plan offsets. We should return that something has changed.
+				return newOp, Rewrote("planning offsets introduced a new operator")
+			}
 		}
 		return in, NoRewrite
 	}
@@ -96,62 +100,24 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operat
 	return rewritten.(sqlparser.Expr)
 }
 
-func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator {
-	// addColumnsToInput adds columns needed by an operator to its input.
-	// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
-	addColumnsNeededByFilter := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
-		filter, ok := in.(*Filter)
-		if !ok {
-			return in, NoRewrite
+func findAggregatorInSource(op Operator) *Aggregator {
+	// we'll just loop through the inputs until we find the aggregator
+	for {
+		aggr, ok := op.(*Aggregator)
+		if ok {
+			return aggr
 		}
-
-		proj, areOnTopOfProj := filter.Source.(selectExpressions)
-		if !areOnTopOfProj {
-			// not much we can do here
-			return in, NoRewrite
+		inputs := op.Inputs()
+		if len(inputs) != 1 {
+			panic(vterrors.VT13001("unexpected multiple inputs"))
 		}
-		addedColumns := false
-		found := func(expr sqlparser.Expr, i int) {}
-		notFound := func(e sqlparser.Expr) {
-			_, addToGroupBy := e.(*sqlparser.ColName)
-			proj.addColumnWithoutPushing(ctx, aeWrap(e), addToGroupBy)
-			addedColumns = true
+		src := inputs[0]
+		_, isRoute := src.(*Route)
+		if isRoute {
+			panic(vterrors.VT13001("failed to find the aggregator"))
 		}
-		visitor := getOffsetRewritingVisitor(ctx, proj.FindCol, found, notFound)
-
-		for _, expr := range filter.Predicates {
-			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopySemanticInfo)
-		}
-		if addedColumns {
-			return in, Rewrote("added columns because filter needs it")
-		}
-
-		return in, NoRewrite
+		op = src
 	}
-
-	// while we are out here walking the operator tree, if we find a UDF in an aggregation, we should fail
-	failUDFAggregation := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
-		aggrOp, ok := in.(*Aggregator)
-		if !ok {
-			return in, NoRewrite
-		}
-		for _, aggr := range aggrOp.Aggregations {
-			if aggr.OpCode == opcode.AggregateUDF {
-				// we don't support UDFs in aggregation if it's still above a route
-				message := fmt.Sprintf("Aggregate UDF '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
-				panic(vterrors.VT12001(message))
-			}
-		}
-		return in, NoRewrite
-	}
-
-	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
-		out, res := addColumnsNeededByFilter(in, semantics.EmptyTableSet(), isRoot)
-		failUDFAggregation(in, semantics.EmptyTableSet(), isRoot)
-		return out, res
-	}
-
-	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
 // isolateDistinctFromUnion will pull out the distinct from a union operator
@@ -164,10 +130,7 @@ func isolateDistinctFromUnion(_ *plancontext.PlanningContext, root Operator) Ope
 
 		union.distinct = false
 
-		distinct := &Distinct{
-			Required: true,
-			Source:   union,
-		}
+		distinct := newDistinct(union, nil, true)
 		return distinct, Rewrote("pulled out DISTINCT from union")
 	}
 

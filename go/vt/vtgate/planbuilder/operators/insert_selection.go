@@ -23,8 +23,7 @@ import (
 // InsertSelection operator represents an INSERT into SELECT FROM query.
 // It holds the operators for running the selection and insertion.
 type InsertSelection struct {
-	Select Operator
-	Insert Operator
+	binaryOperator
 
 	// ForceNonStreaming when true, select first then insert, this is to avoid locking rows by select for insert.
 	ForceNonStreaming bool
@@ -33,21 +32,13 @@ type InsertSelection struct {
 	noPredicates
 }
 
+var _ Operator = (*InsertSelection)(nil)
+
 func (is *InsertSelection) Clone(inputs []Operator) Operator {
-	return &InsertSelection{
-		Select:            inputs[0],
-		Insert:            inputs[1],
-		ForceNonStreaming: is.ForceNonStreaming,
-	}
-}
-
-func (is *InsertSelection) Inputs() []Operator {
-	return []Operator{is.Select, is.Insert}
-}
-
-func (is *InsertSelection) SetInputs(inputs []Operator) {
-	is.Select = inputs[0]
-	is.Insert = inputs[1]
+	klone := *is
+	klone.LHS = inputs[0]
+	klone.RHS = inputs[1]
+	return &klone
 }
 
 func (is *InsertSelection) ShortDescription() string {
@@ -61,4 +52,10 @@ func (is *InsertSelection) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-var _ Operator = (*InsertSelection)(nil)
+func (is *InsertSelection) Select() Operator {
+	return is.LHS
+}
+
+func (is *InsertSelection) Insert() Operator {
+	return is.RHS
+}

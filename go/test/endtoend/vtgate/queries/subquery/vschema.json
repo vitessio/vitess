@@ -22,6 +22,9 @@
         "autocommit": "true"
       },
       "owner": "t2"
+    },
+    "xxhash": {
+      "type": "xxhash"
     }
   },
   "tables": {
@@ -64,6 +67,34 @@
           "name": "hash"
         }
       ]
+    },
+    "user_extra": {
+      "name": "user_extra",
+      "column_vindexes": [
+        {
+          "columns": [
+            "user_id",
+            "extra_info"
+          ],
+          "type": "xxhash",
+          "name": "xxhash",
+          "vindex": null
+        }
+      ]
+    },
+    "user": {
+      "name": "user",
+      "column_vindexes": [
+        {
+          "columns": [
+            "id"
+          ],
+          "type": "xxhash",
+          "name": "xxhash",
+          "vindex": null
+        }
+      ]
     }
+
   }
 }
