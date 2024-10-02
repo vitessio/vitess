@@ -65156,6 +65156,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest allow_cross_cell_promotion */
         allow_cross_cell_promotion?: (boolean|null);
+
+        /** PlannedReparentShardRequest expected_primary */
+        expected_primary?: (topodata.ITabletAlias|null);
     }
 
     /** Represents a PlannedReparentShardRequest. */
@@ -65187,6 +65190,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest allow_cross_cell_promotion. */
         public allow_cross_cell_promotion: boolean;
+
+        /** PlannedReparentShardRequest expected_primary. */
+        public expected_primary?: (topodata.ITabletAlias|null);
 
         /**
          * Creates a new PlannedReparentShardRequest instance using the specified properties.

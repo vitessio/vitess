@@ -2510,6 +2510,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		name       string
 		tmc        tmclient.TabletManagerClient
 		tablets    []*topodatapb.Tablet
+		shards     []*vtctldatapb.Shard
 		unlockTopo bool
 
 		ev       *events.Reparent
@@ -3296,6 +3297,73 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "expected primary mismatch",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsPrimaryServing: true,
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				// This is not the shard primary, so it should cause an error.
+				ExpectedPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+
+			shouldErr:     true,
+			expectedEvent: nil,
+		},
 	}
 
 	logger := logutil.NewMemoryLogger()
@@ -3312,8 +3380,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary:  true,
 				ForceSetShardPrimary: true, // Some of our test cases count on having multiple primaries, so let the last one "win".
-				SkipShardCreation:    false,
+				SkipShardCreation:    len(tt.shards) > 0,
 			}, tt.tablets...)
+
+			if len(tt.shards) > 0 {
+				testutil.AddShards(ctx, t, ts, tt.shards...)
+			}
 
 			if !tt.unlockTopo {
 				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "locking for testing")
