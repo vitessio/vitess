@@ -2518,8 +2518,9 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		shard    string
 		opts     PlannedReparentOptions
 
-		shouldErr     bool
-		expectedEvent *events.Reparent
+		shouldErr        bool
+		errShouldContain string
+		expectedEvent    *events.Reparent
 	}{
 		{
 			name: "success: current primary cannot be determined", // "Case (1)"
@@ -3299,23 +3300,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "expected primary mismatch",
-			tmc: &testutil.TabletManagerClient{
-				GetGlobalStatusVarsResults: map[string]struct {
-					Statuses map[string]string
-					Error    error
-				}{
-					"zone1-0000000200": {
-						Statuses: map[string]string{
-							InnodbBufferPoolsDataVar: "123",
-						},
-					},
-					"zone1-0000000100": {
-						Statuses: map[string]string{
-							InnodbBufferPoolsDataVar: "123",
-						},
-					},
-				},
-			},
+			tmc:  &testutil.TabletManagerClient{},
 			shards: []*vtctldatapb.Shard{
 				{
 					Keyspace: "testkeyspace",
@@ -3360,9 +3345,9 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					Uid:  200,
 				},
 			},
-
-			shouldErr:     true,
-			expectedEvent: nil,
+			shouldErr:        true,
+			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000200",
+			expectedEvent:    nil,
 		},
 	}
 
@@ -3410,7 +3395,9 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			err := pr.reparentShardLocked(ctx, tt.ev, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
-
+				if tt.errShouldContain != "" {
+					assert.Contains(t, err.Error(), tt.errShouldContain)
+				}
 				return
 			}
 

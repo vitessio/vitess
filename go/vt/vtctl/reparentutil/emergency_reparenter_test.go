@@ -1816,70 +1816,10 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			emergencyReparentOps: EmergencyReparentOptions{
 				ExpectedPrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
-					Uid:  102,
+					Uid:  101,
 				},
 			},
-			tmc: &testutil.TabletManagerClient{
-				PopulateReparentJournalResults: map[string]error{
-					"zone1-0000000102": nil,
-				},
-				PromoteReplicaResults: map[string]struct {
-					Result string
-					Error  error
-				}{
-					"zone1-0000000102": {
-						Result: "ok",
-						Error:  nil,
-					},
-				},
-				SetReplicationSourceResults: map[string]error{
-					"zone1-0000000100": nil,
-					"zone1-0000000101": nil,
-				},
-				StopReplicationAndGetStatusResults: map[string]struct {
-					StopStatus *replicationdatapb.StopReplicationStatus
-					Error      error
-				}{
-					"zone1-0000000100": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
-							After: &replicationdatapb.Status{
-								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
-							},
-						},
-					},
-					"zone1-0000000101": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
-							After: &replicationdatapb.Status{
-								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
-							},
-						},
-					},
-					"zone1-0000000102": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
-							After: &replicationdatapb.Status{
-								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
-							},
-						},
-					},
-				},
-				WaitForPositionResults: map[string]map[string]error{
-					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
-					},
-					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
-					},
-					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
-					},
-				},
-			},
+			tmc: &testutil.TabletManagerClient{},
 			shards: []*vtctldatapb.Shard{
 				{
 					Keyspace: "testkeyspace",
@@ -1912,22 +1852,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
-				{
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  102,
-					},
-					Type:     topodatapb.TabletType_REPLICA,
-					Keyspace: "testkeyspace",
-					Shard:    "-",
-					Hostname: "proposed primary",
-				},
 			},
 			keyspace:         "testkeyspace",
 			shard:            "-",
 			cells:            []string{"zone1"},
 			shouldErr:        true,
-			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000102",
+			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000101",
 		},
 	}
 
