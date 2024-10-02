@@ -1099,7 +1099,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}()
 
 	br := newBackupReader(name, 0, timedSource)
-	go br.ReportProgress(ctx ,builtinBackupProgress, params.Logger)
+	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger)
 	var reader io.Reader = br
 
 	// Open the destination file for writing.
