@@ -306,6 +306,7 @@ func TestMirror(t *testing.T) {
 		wg.Wait()
 
 		require.Greater(t, *targetExecTime.Load(), *sourceExecTime.Load())
+		require.ErrorContains(t, *targetErr.Load(), "Mirror target query took too long")
 	})
 
 	t.Run("TryStreamExecute success", func(t *testing.T) {
@@ -543,5 +544,6 @@ func TestMirror(t *testing.T) {
 		})
 
 		require.Greater(t, *targetExecTime.Load(), *sourceExecTime.Load())
+		require.ErrorContains(t, *targetErr.Load(), "Mirror target query took too long")
 	})
 }

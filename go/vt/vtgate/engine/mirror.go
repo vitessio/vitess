@@ -23,7 +23,11 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
+
+var errMirrorTargetQueryTookTooLong = vterrors.Errorf(vtrpc.Code_ABORTED, "Mirror target query took too long")
 
 type (
 	// percentBasedMirror represents the instructions to execute an
@@ -33,6 +37,11 @@ type (
 		percent   float32
 		primitive Primitive
 		target    Primitive
+	}
+
+	mirrorResult struct {
+		execTime time.Duration
+		err      error
 	}
 )
 
@@ -74,22 +83,24 @@ func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bi
 		return vcursor.ExecutePrimitive(ctx, m.primitive, bindVars, wantfields)
 	}
 
-	mirrorCh := make(chan time.Duration)
+	mirrorCh := make(chan mirrorResult, 1)
 	mirrorCtx, mirrorCtxCancel := context.WithCancel(ctx)
 	defer mirrorCtxCancel()
-
-	var (
-		sourceExecTime time.Duration
-		targetExecTime time.Duration
-		targetErr      error
-	)
 
 	go func() {
 		mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
 		targetStartTime := time.Now()
-		_, targetErr = mirrorVCursor.ExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields)
-		mirrorCh <- time.Since(targetStartTime)
+		_, targetErr := mirrorVCursor.ExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields)
+		mirrorCh <- mirrorResult{
+			execTime: time.Since(targetStartTime),
+			err:      targetErr,
+		}
 	}()
+
+	var (
+		sourceExecTime, targetExecTime time.Duration
+		targetErr                      error
+	)
 
 	sourceStartTime := time.Now()
 	r, err := vcursor.ExecutePrimitive(ctx, m.primitive, bindVars, wantfields)
@@ -97,13 +108,15 @@ func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bi
 
 	// Cancel the mirror context if it continues executing too long.
 	select {
-	case d := <-mirrorCh:
+	case r := <-mirrorCh:
 		// Mirror target finished on time.
-		targetExecTime = d
+		targetExecTime = r.execTime
+		targetErr = r.err
 	case <-time.After(maxMirrorTargetLag):
 		// Mirror target took too long.
 		mirrorCtxCancel()
 		targetExecTime = sourceExecTime + maxMirrorTargetLag
+		targetErr = errMirrorTargetQueryTookTooLong
 	}
 
 	vcursor.RecordMirrorStats(sourceExecTime, targetExecTime, targetErr)
@@ -116,24 +129,26 @@ func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCurs
 		return vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
 	}
 
-	mirrorCh := make(chan time.Duration)
+	mirrorCh := make(chan mirrorResult, 1)
 	mirrorCtx, mirrorCtxCancel := context.WithCancel(ctx)
 	defer mirrorCtxCancel()
-
-	var (
-		sourceExecTime time.Duration
-		targetExecTime time.Duration
-		targetErr      error
-	)
 
 	go func() {
 		mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
 		mirrorStartTime := time.Now()
-		targetErr = mirrorVCursor.StreamExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields, func(_ *sqltypes.Result) error {
+		targetErr := mirrorVCursor.StreamExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields, func(_ *sqltypes.Result) error {
 			return nil
 		})
-		mirrorCh <- time.Since(mirrorStartTime)
+		mirrorCh <- mirrorResult{
+			execTime: time.Since(mirrorStartTime),
+			err:      targetErr,
+		}
 	}()
+
+	var (
+		sourceExecTime, targetExecTime time.Duration
+		targetErr                      error
+	)
 
 	sourceStartTime := time.Now()
 	err := vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
@@ -141,13 +156,15 @@ func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCurs
 
 	// Cancel the mirror context if it continues executing too long.
 	select {
-	case d := <-mirrorCh:
+	case r := <-mirrorCh:
 		// Mirror target finished on time.
-		targetExecTime = d
+		targetExecTime = r.execTime
+		targetErr = r.err
 	case <-time.After(maxMirrorTargetLag):
 		// Mirror target took too long.
 		mirrorCtxCancel()
 		targetExecTime = sourceExecTime + maxMirrorTargetLag
+		targetErr = errMirrorTargetQueryTookTooLong
 	}
 
 	vcursor.RecordMirrorStats(sourceExecTime, targetExecTime, targetErr)

@@ -3,6 +3,7 @@ package vtgate
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -37,8 +39,7 @@ func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, v
 	panic("implement me")
 }
 
-type fakeTopoServer struct {
-}
+type fakeTopoServer struct{}
 
 // GetTopoServer returns the full topo.Server instance.
 func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {
@@ -78,7 +79,6 @@ func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace st
 // the provided cell.  It will call the callback when
 // a new value or an error occurs.
 func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
-
 }
 
 func TestDestinationKeyspace(t *testing.T) {
@@ -106,12 +106,14 @@ func TestDestinationKeyspace(t *testing.T) {
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			ks1.Name: ks1Schema,
 			ks2.Name: ks2Schema,
-		}}
+		},
+	}
 
 	vschemaWith1KS := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			ks1.Name: ks1Schema,
-		}}
+		},
+	}
 
 	type testCase struct {
 		vschema                 *vindexes.VSchema
@@ -203,20 +205,24 @@ func TestDestinationKeyspace(t *testing.T) {
 	}
 }
 
-var ks1 = &vindexes.Keyspace{Name: "ks1"}
-var ks1Schema = &vindexes.KeyspaceSchema{Keyspace: ks1}
-var ks2 = &vindexes.Keyspace{Name: "ks2"}
-var ks2Schema = &vindexes.KeyspaceSchema{Keyspace: ks2}
-var vschemaWith1KS = &vindexes.VSchema{
-	Keyspaces: map[string]*vindexes.KeyspaceSchema{
-		ks1.Name: ks1Schema,
-	},
-}
+var (
+	ks1            = &vindexes.Keyspace{Name: "ks1"}
+	ks1Schema      = &vindexes.KeyspaceSchema{Keyspace: ks1}
+	ks2            = &vindexes.Keyspace{Name: "ks2"}
+	ks2Schema      = &vindexes.KeyspaceSchema{Keyspace: ks2}
+	vschemaWith1KS = &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1.Name: ks1Schema,
+		},
+	}
+)
+
 var vschemaWith2KS = &vindexes.VSchema{
 	Keyspaces: map[string]*vindexes.KeyspaceSchema{
 		ks1.Name: ks1Schema,
 		ks2.Name: ks2Schema,
-	}}
+	},
+}
 
 func TestSetTarget(t *testing.T) {
 	type testCase struct {
@@ -318,7 +324,8 @@ func TestFirstSortedKeyspace(t *testing.T) {
 			ks1Schema.Keyspace.Name: ks1Schema,
 			ks2Schema.Keyspace.Name: ks2Schema,
 			ks3Schema.Keyspace.Name: ks3Schema,
-		}}
+		},
+	}
 
 	r, _, _, _, _ := createExecutorEnv(t)
 	vc, err := newVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
@@ -371,4 +378,22 @@ func TestSetExecQueryTimeout(t *testing.T) {
 	require.Equal(t, 0*time.Millisecond, vc.queryTimeout)
 	// this should be reset.
 	require.Nil(t, safeSession.Options.Timeout)
+}
+
+func TestRecordMirrorStats(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	safeSession := NewSafeSession(nil)
+	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil)
+	vc, err := newVCursorImpl(safeSession, sqlparser.MarginComments{}, executor, logStats, nil, &vindexes.VSchema{}, nil, nil, false, querypb.ExecuteOptions_Gen4)
+	require.NoError(t, err)
+
+	require.Zero(t, logStats.MirrorSourceExecuteTime)
+	require.Zero(t, logStats.MirrorTargetExecuteTime)
+	require.Nil(t, logStats.MirrorTargetError)
+
+	vc.RecordMirrorStats(10*time.Millisecond, 20*time.Millisecond, errors.New("test error"))
+
+	require.Equal(t, 10*time.Millisecond, logStats.MirrorSourceExecuteTime)
+	require.Equal(t, 20*time.Millisecond, logStats.MirrorTargetExecuteTime)
+	require.ErrorContains(t, logStats.MirrorTargetError, "test error")
 }
