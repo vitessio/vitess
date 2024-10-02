@@ -49325,8 +49325,8 @@ export namespace vtctldata {
         /** WorkflowOptions tenant_id */
         tenant_id?: (string|null);
 
-        /** WorkflowOptions strip_sharded_auto_increment */
-        strip_sharded_auto_increment?: (vtctldata.ShardedAutoIncrementHandling|null);
+        /** WorkflowOptions sharded_auto_increment_handling */
+        sharded_auto_increment_handling?: (vtctldata.ShardedAutoIncrementHandling|null);
 
         /** WorkflowOptions shards */
         shards?: (string[]|null);
@@ -49350,8 +49350,8 @@ export namespace vtctldata {
         /** WorkflowOptions tenant_id. */
         public tenant_id: string;
 
-        /** WorkflowOptions strip_sharded_auto_increment. */
-        public strip_sharded_auto_increment: vtctldata.ShardedAutoIncrementHandling;
+        /** WorkflowOptions sharded_auto_increment_handling. */
+        public sharded_auto_increment_handling: vtctldata.ShardedAutoIncrementHandling;
 
         /** WorkflowOptions shards. */
         public shards: string[];

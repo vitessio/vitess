@@ -111,7 +111,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--config-overrides", mapToCSV(overrides),
-		"--remove-sharded-auto-increment=REPLACE", fmt.Sprintf("--global-keyspace=%s", sourceKeyspace),
+		"--sharded-auto-increment-handling=REPLACE", fmt.Sprintf("--global-keyspace=%s", sourceKeyspace),
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 	switchFlags := []string{}
@@ -592,8 +592,8 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 	require.Equal(t, binlogdatapb.OnDDLAction_STOP, bls.OnDdl)
 	require.True(t, bls.StopAfterCopy)
 
-	// Validate the remove-sharded-auto-increment related value handling.
-	require.Equal(t, vtctldatapb.ShardedAutoIncrementHandling_REPLACE, vtctldatapb.ShardedAutoIncrementHandling(wf.Options.StripShardedAutoIncrement))
+	// Validate the sharded-auto-increment-handling related value handling.
+	require.Equal(t, vtctldatapb.ShardedAutoIncrementHandling_REPLACE, vtctldatapb.ShardedAutoIncrementHandling(wf.Options.ShardedAutoIncrementHandling))
 	require.Equal(t, wf.Source.Keyspace, wf.Options.GlobalKeyspace)
 }
 

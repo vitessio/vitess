@@ -281,7 +281,7 @@ func (mz *materializer) deploySchema() error {
 	var targetVSchema *vschemapb.Keyspace
 	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
-		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().StripShardedAutoIncrement != vtctldatapb.ShardedAutoIncrementHandling_LEAVE) {
+		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling != vtctldatapb.ShardedAutoIncrementHandling_LEAVE) {
 		removeAutoInc = true
 		var err error
 		targetVSchema, err = mz.ts.GetVSchema(mz.ctx, mz.ms.TargetKeyspace)
@@ -373,7 +373,7 @@ func (mz *materializer) deploySchema() error {
 
 				if removeAutoInc {
 					var replaceFunc func(columnName string)
-					if mz.ms.GetWorkflowOptions().StripShardedAutoIncrement == vtctldatapb.ShardedAutoIncrementHandling_REPLACE {
+					if mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling == vtctldatapb.ShardedAutoIncrementHandling_REPLACE {
 						replaceFunc = func(columnName string) {
 							mu.Lock()
 							defer mu.Unlock()

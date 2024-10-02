@@ -109,13 +109,13 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 	}
 
 	type testCase struct {
-		name                           string
-		sourceVSchema                  *vschema.Keyspace
-		targetVSchema                  *vschema.Keyspace
-		options                        *vtctldatapb.WorkflowOptions
-		want                           map[string]*sequenceMetadata
-		expectSourceApplySchemaRequest *applySchemaRequestResponse
-		err                            string
+		name                                   string
+		sourceVSchema                          *vschema.Keyspace
+		targetVSchema                          *vschema.Keyspace
+		options                                *vtctldatapb.WorkflowOptions
+		want                                   map[string]*sequenceMetadata
+		expectSourceApplySchemaRequestResponse *applySchemaRequestResponse
+		err                                    string
 	}
 	tests := []testCase{
 		{
@@ -178,10 +178,10 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 				Tables:   map[string]*vschema.Table{}, // Sequence table will be created
 			},
 			options: &vtctldatapb.WorkflowOptions{
-				StripShardedAutoIncrement: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
-				GlobalKeyspace:            sourceKeyspace.KeyspaceName,
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
 			},
-			expectSourceApplySchemaRequest: &applySchemaRequestResponse{
+			expectSourceApplySchemaRequestResponse: &applySchemaRequestResponse{
 				change: &tmutils.SchemaChange{
 					SQL: sqlparser.BuildParsedQuery(sqlCreateSequenceTable,
 						sqlescape.EscapeID(fmt.Sprintf(autoSequenceTableFormat, unescapedTable))).Query,
@@ -547,8 +547,8 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						Tablet: tablet,
 					},
 				}
-				if tc.expectSourceApplySchemaRequest != nil {
-					env.tmc.expectApplySchemaRequest(tablet.Alias.Uid, tc.expectSourceApplySchemaRequest)
+				if tc.expectSourceApplySchemaRequestResponse != nil {
+					env.tmc.expectApplySchemaRequest(tablet.Alias.Uid, tc.expectSourceApplySchemaRequestResponse)
 				}
 			}
 			for i, shard := range targetKeyspace.ShardNames {

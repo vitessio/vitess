@@ -220,7 +220,7 @@ message WorkflowOptions {
   // Remove auto_increment clauses on tables when moving them to a sharded
   // keyspace and optionally replace them with vschema AutoIncrement
   // definitions.
-  ShardedAutoIncrementHandling strip_sharded_auto_increment = 2;
+  ShardedAutoIncrementHandling sharded_auto_increment_handling = 2;
   // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
   // from the source will be vreplicated.
   repeated string shards = 3;

@@ -40,8 +40,8 @@ var (
 		NoRoutingRules      bool
 		AtomicCopy          bool
 		WorkflowOptions     vtctldatapb.WorkflowOptions
-		// This maps to a WorkflowOptions.StripShardedAutoIncrement ENUM value.
-		StripShardedAutoIncrementStr string
+		// This maps to a WorkflowOptions.ShardedAutoIncrementHandling ENUM value.
+		ShardedAutoIncrementHandlingStr string
 	}{}
 
 	// create makes a MoveTablesCreate gRPC call to a vtctld.
@@ -89,15 +89,16 @@ var (
 				return fmt.Errorf("cannot specify both --tenant-id (i.e. a multi-tenant migration) and --source-shards (i.e. a shard-by-shard migration)")
 			}
 
-			// createOptions.StripShardedAutoIncrementStr is the CLI flag value provided and
-			// we need to map that to the ENUM value for createOptions.WorkflowOptions.StripShardedAutoIncrement
-			// which gets saved in the _vt.vreplication record's options column.
-			createOptions.StripShardedAutoIncrementStr = strings.ToUpper(createOptions.StripShardedAutoIncrementStr)
-			val, ok := vtctldatapb.ShardedAutoIncrementHandling_value[createOptions.StripShardedAutoIncrementStr]
+			// createOptions.ShardedAutoIncrementHandlingStr is the CLI flag value
+			// provided and we need to map that to the ENUM value for
+			// createOptions.WorkflowOptions.ShardedAutoIncrementHandling which
+			// gets saved in the _vt.vreplication record's options column.
+			createOptions.ShardedAutoIncrementHandlingStr = strings.ToUpper(createOptions.ShardedAutoIncrementHandlingStr)
+			val, ok := vtctldatapb.ShardedAutoIncrementHandling_value[createOptions.ShardedAutoIncrementHandlingStr]
 			if !ok {
-				return fmt.Errorf("invalid value provided for --strip-sharded-auto-increment, valid values are: %s", stripShardedAutoIncStrOptions)
+				return fmt.Errorf("invalid value provided for --sharded-auto-increment-handling, valid values are: %s", shardedAutoIncHandlingStrOptions)
 			}
-			createOptions.WorkflowOptions.StripShardedAutoIncrement = vtctldatapb.ShardedAutoIncrementHandling(val)
+			createOptions.WorkflowOptions.ShardedAutoIncrementHandling = vtctldatapb.ShardedAutoIncrementHandling(val)
 			if val == int32(vtctldatapb.ShardedAutoIncrementHandling_REPLACE) && createOptions.WorkflowOptions.GlobalKeyspace == "" {
 				fmt.Println("WARNING: no global-keyspace value provided so all sequence table references not fully qualified must be created manually before switching traffic")
 			}

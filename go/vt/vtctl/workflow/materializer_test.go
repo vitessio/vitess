@@ -898,8 +898,8 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				TargetKeyspace: ms.TargetKeyspace,
 				IncludeTables:  []string{tableName},
 				WorkflowOptions: &vtctldatapb.WorkflowOptions{
-					StripShardedAutoIncrement: tc.value,
-					GlobalKeyspace:            tc.globalKeyspace,
+					ShardedAutoIncrementHandling: tc.value,
+					GlobalKeyspace:               tc.globalKeyspace,
 				},
 			})
 			if tc.expectErr != "" {
