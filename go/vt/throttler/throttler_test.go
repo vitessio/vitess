@@ -411,8 +411,9 @@ func TestThreadFinished_SecondCallPanics(t *testing.T) {
 
 func TestThrottlerMaxLag(t *testing.T) {
 	fc := &fakeClock{}
-	throttler, err := newThrottlerWithClock(t.Name(), "queries", 1, 1, 10, fc.now)
+	th, err := newThrottlerWithClock(t.Name(), "queries", 1, 1, 10, fc.now)
 	require.NoError(t, err)
+	throttler := th.(*ThrottlerImpl)
 	defer throttler.Close()
 
 	require.NotNil(t, throttler)
@@ -442,7 +443,7 @@ func TestThrottlerMaxLag(t *testing.T) {
 		}()
 
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, ctx context.Context, throttler *Throttler, tabletType topodata.TabletType) {
+		go func(wg *sync.WaitGroup, ctx context.Context, throttler *ThrottlerImpl, tabletType topodata.TabletType) {
 			defer wg.Done()
 			for {
 				select {
