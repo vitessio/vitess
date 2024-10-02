@@ -419,6 +419,8 @@ func TestThrottlerMaxLag(t *testing.T) {
 	require.NotNil(t, throttler.maxReplicationLagModule)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var wg sync.WaitGroup
 
 	// run .add() and .MaxLag() concurrently to detect races
@@ -427,7 +429,7 @@ func TestThrottlerMaxLag(t *testing.T) {
 		topodata.TabletType_RDONLY,
 	} {
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, ctx context.Context, t *Throttler, tabletType topodata.TabletType) {
+		go func() {
 			defer wg.Done()
 			for {
 				select {
@@ -437,7 +439,7 @@ func TestThrottlerMaxLag(t *testing.T) {
 					throttler.MaxLag(tabletType)
 				}
 			}
-		}(&wg, ctx, throttler, tabletType)
+		}()
 
 		wg.Add(1)
 		go func(wg *sync.WaitGroup, ctx context.Context, throttler *Throttler, tabletType topodata.TabletType) {
