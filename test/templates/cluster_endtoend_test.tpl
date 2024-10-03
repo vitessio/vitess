@@ -200,6 +200,12 @@ jobs:
         EOF
         {{end}}
 
+        {{if .AllowFKNonStandardKey }}
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
+        restrict_fk_on_non_standard_key=OFF
+        EOF
+        {{end}}
+
         {{if .EnableBinlogTransactionCompression}}
         cat <<-EOF>>./config/mycnf/mysql84.cnf
         binlog-transaction-compression=ON

@@ -135,6 +135,10 @@ jobs:
 
         set -exo pipefail
 
+        cat <<-EOF>>./config/mycnf/mysql84.cnf
+        restrict_fk_on_non_standard_key=OFF
+        EOF
+        
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker=false -follow -shard vtgate_foreignkey_stress | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
