@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -135,11 +136,10 @@ func (ts *tmState) RefreshFromTopo(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	ts.RefreshFromTopoInfo(ctx, shardInfo, srvKeyspace)
-	return nil
+	return ts.RefreshFromTopoInfo(ctx, shardInfo, srvKeyspace)
 }
 
-func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.ShardInfo, srvKeyspace *topodatapb.SrvKeyspace) {
+func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.ShardInfo, srvKeyspace *topodatapb.SrvKeyspace) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
@@ -157,6 +157,7 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 	if srvKeyspace != nil {
 		ts.isShardServing = make(map[topodatapb.TabletType]bool)
 		ts.tabletControls = make(map[topodatapb.TabletType]bool)
+		ts.tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_TabletControls, true)
 
 		for _, partition := range srvKeyspace.GetPartitions() {
 
@@ -169,7 +170,10 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 			for _, tabletControl := range partition.GetShardTabletControls() {
 				if key.KeyRangeEqual(tabletControl.GetKeyRange(), ts.KeyRange()) {
 					if tabletControl.QueryServiceDisabled {
-						ts.tabletControls[partition.GetServedType()] = true
+						err := ts.prepareForDisableQueryService(ctx, partition.GetServedType())
+						if err != nil {
+							return err
+						}
 					}
 					break
 				}
@@ -177,7 +181,20 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		}
 	}
 
-	_ = ts.updateLocked(ctx)
+	return ts.updateLocked(ctx)
+}
+
+// prepareForDisableQueryService prepares the tablet for disabling query service.
+func (ts *tmState) prepareForDisableQueryService(ctx context.Context, servType topodatapb.TabletType) error {
+	if servType == topodatapb.TabletType_PRIMARY {
+		ts.tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_TabletControls, false)
+		err := ts.tm.QueryServiceControl.WaitForPreparedTwoPCTransactions(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	ts.tabletControls[servType] = true
+	return nil
 }
 
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
