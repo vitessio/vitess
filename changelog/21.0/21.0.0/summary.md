@@ -225,7 +225,7 @@ Please note that we have deprecated the [`--remove-sharded-auto-increment` boole
 which takes a string where the valid values today are `LEAVE` (leave the `auto_increment` clauses in place), `REMOVE` (remove the clauses), and `REPLACE` (replace them with sequences). The
 `--remove-sharded-auto-increment[=true]` behavior in v21 is equal to the new `--sharded-auto-increment-handling=remove` behavior in v21+. To use the new support for automatically replacing those
 MySQL `auto_increment` clauses with Vitess Sequences, you would utilize these two
-[`MoveTables create` flags](https://vitess.io/docs/21.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/): `--sharded-auto-increment-handling=remove --global-keyspace=foo`
+[`MoveTables create` flags](https://vitess.io/docs/21.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/): `--sharded-auto-increment-handling=replace --global-keyspace=foo`
 where `foo` is an unsharded keyspace that can be used for sequences, reference tables, etc. That keyspace is where the sequence tables will be created as needed as part of the replacement work.
 Then, when switching the application traffic to the target keyspace you would specify the
 [`--initialize-target-sequences` flag for the `MoveTables switchtraffic` command](https://vitess.io/docs/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_switchtraffic/).
