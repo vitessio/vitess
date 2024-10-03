@@ -611,7 +611,10 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 	defer func() {
 		log.Infof("Keyspace rebuilt: %v", keyspace)
 		if ctx.Err() == nil {
-			_ = tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
+			err := tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
+			if err != nil {
+				log.Errorf("Error refreshing topo information - %v", err)
+			}
 		}
 		close(done)
 	}()

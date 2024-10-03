@@ -96,6 +96,8 @@ type TxEngine struct {
 	dxNotify     func()
 }
 
+// TwoPC can be disallowed for various reasons. These are the reasons we keep track off
+// when deciding if new prepared transactions should be allowed or not.
 const (
 	TwoPCAllowed_SemiSync = iota
 	TwoPCAllowed_TabletControls
@@ -113,7 +115,9 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
 	// We initially allow twoPC (handles vttablet restarts).
-	// We will disallow them, when a new tablet is promoted if semi-sync is turned off.
+	// We will disallow them for a few reasons -
+	//	1. when a new tablet is promoted if semi-sync is turned off.
+	//  2. TabletControls have been set by a Resharding workflow.
 	te.twopcAllowed = make([]bool, TwoPCAllowed_Len)
 	for idx := range te.twopcAllowed {
 		te.twopcAllowed[idx] = true

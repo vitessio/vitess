@@ -232,7 +232,8 @@ func (tqsc *Controller) GetThrottlerStatus(ctx context.Context) *throttle.Thrott
 // RedoPreparedTransactions is part of the tabletserver.Controller interface
 func (tqsc *Controller) RedoPreparedTransactions() {}
 
-// SetTwoPCAllowed sets whether TwoPC is allowed or not.
+// SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
+// The reason should be an enum value defined in the tabletserver.
 func (tqsc *Controller) SetTwoPCAllowed(int, bool) {
 }
 

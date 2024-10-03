@@ -705,12 +705,14 @@ func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) e
 	if tsv.te.preparedPool.IsEmpty() {
 		return nil
 	}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			// Return an error if we run out of time.
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Prepared transactions have not been resolved yet")
-		case <-time.After(100 * time.Millisecond):
+		case <-ticker.C:
 			if tsv.te.preparedPool.IsEmpty() {
 				return nil
 			}
@@ -1717,9 +1719,10 @@ func (tsv *TabletServer) RedoPreparedTransactions() {
 	tsv.te.RedoPreparedTransactions()
 }
 
-// SetTwoPCAllowed sets whether TwoPC is allowed or not.
-func (tsv *TabletServer) SetTwoPCAllowed(twoPCAllowedPosition int, allowed bool) {
-	tsv.te.twopcAllowed[twoPCAllowedPosition] = allowed
+// SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
+// The reason should be an enum value defined in the tabletserver.
+func (tsv *TabletServer) SetTwoPCAllowed(reason int, allowed bool) {
+	tsv.te.twopcAllowed[reason] = allowed
 }
 
 // HandlePanic is part of the queryservice.QueryService interface

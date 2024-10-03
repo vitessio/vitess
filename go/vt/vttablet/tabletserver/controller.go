@@ -97,7 +97,8 @@ type Controller interface {
 	// RedoPreparedTransactions recreates the transactions with stored prepared transaction log.
 	RedoPreparedTransactions()
 
-	// SetTwoPCAllowed sets whether TwoPC is allowed or not.
+	// SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
+	// The reason should be an enum value defined in the tabletserver.
 	SetTwoPCAllowed(int, bool)
 
 	// UnresolvedTransactions returns all unresolved transactions list
