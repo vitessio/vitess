@@ -19,12 +19,13 @@
     - **[Reference Table Materialization](#reference-table-materialization)**
     - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
     - **[Errant GTID Detection on Vttablets](#errant-gtid-vttablet)**
+    - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
 
-## <a id="major-changes"/>Major Changes
+## <a id="major-changes"/>Major Changes</a>
 
-### <a id="deprecations-and-deletions"/>Deprecations and Deletions
+### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
 
-#### <a id="metric-deletion"/>Deletion of deprecated metrics
+#### <a id="metric-deletion"/>Deletion of deprecated metrics</a>
 
 The following metrics that were deprecated in the previous release, have now been deleted.
 
@@ -43,12 +44,12 @@ The following metrics that were deprecated in the previous release, have now bee
 |          `planned_reparent_counts`           |      
 |      `reparent_shard_operation_timings`      |  
 
-#### <a id="vttablet-flags"/>VTTablet Flags
+#### <a id="vttablet-flags"/>VTTablet Flags</a>
 
 - `queryserver-enable-settings-pool` flag, added in v15, has been on by default since v17.
   It is now deprecated and will be removed in a future release.
 
-#### <a id="deprecations-metrics"/>Metrics
+#### <a id="deprecations-metrics"/>Metrics</a>
 
 The following metrics are now deprecated, if provided please use their replacement.
 
@@ -74,7 +75,7 @@ $ vtctldclient --server :15999 MoveTables --target-keyspace customer --workflow 
 
 Mirror rules can be inspected with `GetMirrorRules`.
 
-### <a id="new-vtgate-shutdown-behavior"/>New VTGate Shutdown Behavior
+### <a id="new-vtgate-shutdown-behavior"/>New VTGate Shutdown Behavior</a>
 
 We added a new option to affect the VTGate shutdown process in v21 by using a connection drain timeout rather than the
 older activity drain timeout.
@@ -87,7 +88,7 @@ This new behavior can be enabled by specifying the new `--mysql-server-drain-ont
 
 See more information about this change by [reading its RFC](https://github.com/vitessio/vitess/issues/15971).
 
-### <a id="tablet-throttler"/>Tablet Throttler: Multi-Metric support
+### <a id="tablet-throttler"/>Tablet Throttler: Multi-Metric support</a>
 
 Up till `v20`, the tablet throttler would only monitor and use a single metric. That would be replication lag, by
 default, or could be the result of a custom query. `v21` introduces a major redesign where the throttler monitors and
@@ -114,7 +115,7 @@ Explicit app to metric assignments will override the catch-all configuration.
 Metrics are assigned a default _scope_, which could be `self` (isolated to the tablet) or `shard` (max, aka _worst_
 value among shard tablets). It is further possible to require a different scope for each metric.
 
-### <a id="allow-cross-cell"/>Allow Cross Cell Promotion in PRS
+### <a id="allow-cross-cell"/>Allow Cross Cell Promotion in PRS</a>
 
 Up until now if the users wanted to promote a replica in a different cell than the current primary
 using `PlannedReparentShard`, they had to specify the new primary with the `--new-primary` flag.
@@ -122,12 +123,12 @@ using `PlannedReparentShard`, they had to specify the new primary with the `--ne
 We have now added a new flag `--allow-cross-cell-promotion` that lets `PlannedReparentShard` choose a primary in a
 different cell even if no new primary is provided explicitly.
 
-### <a id="recursive-cte"/>Experimental support for recursive CTEs
+### <a id="recursive-cte"/>Experimental support for recursive CTEs</a>
 
 We have added experimental support for recursive CTEs in Vitess. We are marking it as experimental because it is not yet
 fully tested and may have some limitations. We are looking for feedback from the community to improve this feature.
 
-### <a id="tablet-balancer"/>VTGate Tablet Balancer
+### <a id="tablet-balancer"/>VTGate Tablet Balancer</a>
 
 When a VTGate routes a query and has multiple available tablets for a given shard / tablet type (e.g. REPLICA), the
 current default behavior routes the query with local cell affinity and round robin policy. The VTGate Tablet Balancer
@@ -139,7 +140,7 @@ and `--balancer-keyspaces`.
 
 See [RFC for details](https://github.com/vitessio/vitess/issues/12241).
 
-### <a id="query-timeout"/>Query Timeout Override
+### <a id="query-timeout"/>Query Timeout Override</a>
 
 VTGate sends an authoritative query timeout to VTTablet when the `QUERY_TIMEOUT_MS` comment directive,
 `query_timeout` session system variable, or `query-timeout` flag is set.
@@ -155,26 +156,27 @@ A query can also be set to have no timeout by using the `QUERY_TIMEOUT_MS` comme
 Example usage:
 `select /*vt+ QUERY_TIMEOUT_MS=30 */ col from tbl`
 
-### <a id="new-backup-engine"/>New Backup Engine (EXPERIMENTAL)
+### <a id="new-backup-engine"/>New Backup Engine (EXPERIMENTAL)</a>
 
 We are introducing a backup engine supporting logical backups starting on v21 to support use cases that require something else besides physical backups. This is experimental and is based on the 
 [MySQL Shell](https://dev.mysql.com/doc/mysql-shell/8.0/en/).
 
 The new engine is enabled by using `--backup_engine_implementation=mysqlshell`. There are other options that are required, so [check the docs](https://vitess.io/docs/21.0/user-guides/operating-vitess/backup-and-restore/creating-a-backup/) on which options are required and how to use it.
 
-### <a id="dynamic-vreplication-configuration"/>Dynamic VReplication Configuration
+### <a id="dynamic-vreplication-configuration"/>Dynamic VReplication Configuration</a>
 
 Currently many of the configuration options for VReplication Workflows are vttablet flags. This means that any change
 requires restarts of vttablets. We now allow these to be overridden while creating a workflow or dynamically once
 the workflow is in progress. See https://github.com/vitessio/vitess/pull/16583 for details.
 
-### <a id="reference-table-materialization"/>Reference Table Materialization
+### <a id="reference-table-materialization"/>Reference Table Materialization</a>
 
 There is a new option in [`Materialize` workflows](https://vitess.io/docs/reference/vreplication/materialize/) to keep 
 a synced copy of [reference or lookup tables](https://vitess.io/docs/reference/vreplication/reference_tables/) 
 (countries, states, zip_codes, etc) from an unsharded keyspace, which holds the source of truth for the reference 
 table, to all shards in a sharded keyspace.
-### <a id="new-vexplain-modes"/>New VEXPLAIN Modes: TRACE and KEYS
+
+### <a id="new-vexplain-modes"/>New VEXPLAIN Modes: TRACE and KEYS</a>
 
 #### VEXPLAIN TRACE
 
@@ -199,10 +201,34 @@ KEYS mode analyzes the query structure without executing it, providing JSON outp
 
 These new VEXPLAIN modes enhance Vitess's query analysis capabilities, allowing for more informed decisions about sharding strategies and query optimization.
 
-### <a id="errant-gtid-vttablet"/>Errant GTID Detection on Vttablets
+### <a id="errant-gtid-vttablet"/>Errant GTID Detection on Vttablets</a>
 
 Vttablets now run an errant GTID detection logic before they join the replication stream. So, if a replica has an errant GTID, it will
 not start replicating from the primary. It will fail the call the set its replication source because of the errant GTID. This prevents us 
 from running into situations from which recovery is very hard.
 
 For users running with the vitess operator on kubernetes, this change means that the replicas with errant GTIDs will have broken replication and will report as unready. The users will need to manually clean up these errant replica tablets.
+
+### <a id="auto-replace-mysql-autoinc-with-seq"/>Automatically Replace MySQL auto_increment Clauses with Vitess Sequences</a>
+
+When migrating tables from an unsharded keyspace to a sharded one using the [VReplication `MoveTables` command](https://vitess.io/docs/reference/vreplication/movetables/), we now support
+options for how to handle auto incrementing values for the table(s) being moved. This is important as now that these tables will be sharded in the target keyspace you cannot rely on the
+[MySQL `auto_increment` clauses](https://dev.mysql.com/doc/refman/en/example-auto-increment.html) — as the values will need to be unique across all shards in the sharded target keyspace —
+and you would instead need to rely on [Vitess Sequences](https://vitess.io/docs/reference/features/vitess-sequences/) to achieve the equivalent behavior. In https://github.com/vitessio/vitess/pull/15679
+we added the ability (enabled by default) to remove those MySQL `auto_increment` clauses when moving tables from an unsharded keyspace to a sharded one. And in https://github.com/vitessio/vitess/pull/13656
+we added the ability to automatically initialize the sequences used in the target keyspace so that they can be used without any additional work and picking up right where the MySQL `auto_increment`
+values left off on the source keyspace. This new feature, added in https://github.com/vitessio/vitess/pull/16860, builds on all of that work to support replacing those MySQL `auto_increment`
+clauses with [Vitess Sequences](https://vitess.io/docs/reference/features/vitess-sequences/), performing all of the setup work automatically as part of the workflow.
+
+Please note that we have deprecated the [`--remove-sharded-auto-increment` boolean flag](https://vitess.io/docs/20.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/)
+(added in https://github.com/vitessio/vitess/pull/15679) and it has been replaced with the new [`--sharded-auto-increment-handling` flag](https://vitess.io/docs/21.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/)
+which takes a string where the valid values today are `LEAVE` (leave the `auto_increment` clauses in place), `REMOVE` (remove the clauses), and `REPLACE` (replace them with sequences). The
+`--remove-sharded-auto-increment[=true]` behavior in v21 is equal to the new `--sharded-auto-increment-handling=remove` behavior in v21+. To use the new support for automatically replacing those
+MySQL `auto_increment` clauses with Vitess Sequences, you would utilize these two
+[`MoveTables create` flags](https://vitess.io/docs/21.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/): `--sharded-auto-increment-handling=remove --global-keyspace=foo`
+where `foo` is an unsharded keyspace that can be used for sequences, reference tables, etc. That keyspace is where the sequence tables will be created as needed as part of the replacement work.
+Then, when switching the application traffic to the target keyspace you would specify the
+[`--initialize-target-sequences` flag for the `MoveTables switchtraffic` command](https://vitess.io/docs/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_switchtraffic/).
+It's at this point where the sequence tables will be created, if needed, and the starting value used will be initialized based on the current maximum value used for the table in the unsharded source
+keyspace. This allows us to replace the MySQL feature with the equivalent Vitess one in a way that is entirely transparent to the application and its users — they can continue to elide values for the
+column where auto incrementing values are desired on `INSERT`, and there will be no visible difference in the behavior resulting from the traffic switch.
