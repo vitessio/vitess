@@ -172,6 +172,7 @@ type clusterTest struct {
 	EnableBinlogTransactionCompression bool
 	PartialKeyspace                    bool
 	Cores16                            bool
+	AllowFKNonStandardKey              bool
 }
 
 type vitessTesterTest struct {
@@ -289,6 +290,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true
+			}
+			if strings.Contains(cluster, "foreignkey") {
+				test.AllowFKNonStandardKey = true
 			}
 			if strings.Contains(cluster, "vrepl") {
 				test.EnableBinlogTransactionCompression = true
