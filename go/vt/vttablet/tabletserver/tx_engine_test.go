@@ -678,3 +678,46 @@ func TestCheckReceivedError(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTwoPCAllowed(t *testing.T) {
+	testcases := []struct {
+		semiSyncAllowed        bool
+		tabletControllsAllowed bool
+		wantAllowed            bool
+	}{
+		{
+			semiSyncAllowed:        true,
+			tabletControllsAllowed: true,
+			wantAllowed:            true,
+		},
+		{
+			semiSyncAllowed:        false,
+			tabletControllsAllowed: true,
+			wantAllowed:            false,
+		},
+		{
+			semiSyncAllowed:        true,
+			tabletControllsAllowed: false,
+			wantAllowed:            false,
+		},
+		{
+			semiSyncAllowed:        false,
+			tabletControllsAllowed: false,
+			wantAllowed:            false,
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(fmt.Sprintf("SemiSyncAllowed - %v, TabletControlsAllowed - %v", tt.semiSyncAllowed, tt.tabletControllsAllowed), func(t *testing.T) {
+			te := &TxEngine{
+				twopcAllowed: []bool{true, true},
+			}
+			tsv := TabletServer{
+				te: te,
+			}
+			tsv.SetTwoPCAllowed(TwoPCAllowed_SemiSync, tt.semiSyncAllowed)
+			tsv.SetTwoPCAllowed(TwoPCAllowed_TabletControls, tt.tabletControllsAllowed)
+			require.Equal(t, tt.wantAllowed, te.IsTwoPCAllowed())
+		})
+	}
+}
