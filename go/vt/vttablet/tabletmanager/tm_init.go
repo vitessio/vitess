@@ -348,6 +348,13 @@ func mergeTags(a, b map[string]string) map[string]string {
 	return result
 }
 
+func setTabletTagsStats(tablet *topodatapb.Tablet) {
+	statsTabletTags.ResetAll()
+	for key, val := range tablet.Tags {
+		statsTabletTags.Set([]string{key, val}, 1)
+	}
+}
+
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
 	defer func() {
@@ -894,9 +901,7 @@ func (tm *TabletManager) exportStats() {
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}
 	statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
-	for k, v := range tablet.Tags {
-		statsTabletTags.Set([]string{k, v}, 1)
-	}
+	setTabletTagsStats(tablet)
 }
 
 // withRetry will exponentially back off and retry a function upon

@@ -18,6 +18,7 @@
     - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
     - **[Reference Table Materialization](#reference-table-materialization)**
     - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
+    - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -197,3 +198,22 @@ The KEYS mode for VEXPLAIN offers a concise summary of query structure, highligh
 KEYS mode analyzes the query structure without executing it, providing JSON output that includes grouping columns, join columns, filter columns (potential candidates for indexes, primary keys, or sharding keys), and the statement type.
 
 These new VEXPLAIN modes enhance Vitess's query analysis capabilities, allowing for more informed decisions about sharding strategies and query optimization.
+
+### <a id="vtctldclient-changetablettags"/>`vtctldclient ChangeTabletTags` command and RPCs
+
+The `vtctldclient` command `ChangeTabletTags` was added to allow the tags of a tablet to be changed dynamically.
+
+This command allows one or many tablet tags to be defined using key=value format. The provided tags are merged with existing tags by default. The optional flag `--replace` causes the existing tags to be replaced with the provided tags. To support this, the VTCtld RPC `ChangeTabletTags` and the VTTablet RPC `ChangeTags` were added.
+
+Previous to this release the only way to define tablet tags was the `--init_tags` flag of `vttablet`, which requires a restart for a change to take effect.
+
+Example:
+```bash
+$ vtctldclient $FLAGS ChangeTabletTags --replace zone1-100 hello=world
+- []
++ [hello: "world"]
+$ vtctldclient $FLAGS GetTablet zone1-100 | jq .tags
+{
+  "hello": "world"
+}
+```
