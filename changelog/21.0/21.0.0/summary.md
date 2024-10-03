@@ -218,10 +218,10 @@ Previous to this release the only way to define tablet tags was the `--init_tags
 
 Example:
 ```bash
-$ vtctldclient $FLAGS ChangeTabletTags --replace zone1-100 hello=world
+$ vtctldclient --server :15999 ChangeTabletTags --replace zone1-100 hello=world
 - []
 + [hello: "world"]
-$ vtctldclient $FLAGS GetTablet zone1-100 | jq .tags
+$ vtctldclient --server :15999 GetTablet zone1-100 | jq .tags
 {
   "hello": "world"
 }
