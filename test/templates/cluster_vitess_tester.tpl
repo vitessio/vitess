@@ -110,7 +110,7 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
         
         # install vitess tester
-        go install github.com/vitessio/vitess-tester@89dd933a9ea0e15f69ca58b9c8ea09a358762cca
+        go install github.com/vitessio/vitess-tester@a2bcb1180cb663e388491c66a5f96738e5a94453
 
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
@@ -142,9 +142,9 @@ jobs:
           # We go over all the directories in the given path.
           # If there is a vschema file there, we use it, otherwise we let vitess-tester autogenerate it.
           if [ -f $dir/vschema.json ]; then
-            vitess-tester --xunit --vschema "$dir"vschema.json $dir/*.test
+            vt tester --xunit --vschema "$dir"vschema.json $dir/*.test
           else 
-            vitess-tester --sharded --xunit $dir/*.test
+            vt tester --sharded --xunit $dir/*.test
           fi
           # Number the reports by changing their file names.
           mv report.xml report"$i".xml
