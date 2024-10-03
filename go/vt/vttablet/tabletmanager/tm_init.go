@@ -1028,8 +1028,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	// We will then compare our own position against it to verify that we don't
 	// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
 	// we will not enter the replication graph and instead fail replication.
-	var replicaPos replication.Position
-	replicaPos, err = tm.MysqlDaemon.PrimaryPosition(ctx)
+	replicaPos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -1039,8 +1038,12 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", err
 	}
 
-	var errantGTIDs string
-	errantGTIDs, err = replication.ErrantGTIDsOnReplica(replicaPos, primaryPosStr)
+	primaryPosition, err := replication.DecodePosition(primaryPosStr)
+	if err != nil {
+		return "", err
+	}
+
+	errantGTIDs, err := replication.ErrantGTIDsOnReplica(replicaPos, primaryPosition)
 	if err != nil {
 		return "", err
 	}

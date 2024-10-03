@@ -468,11 +468,7 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 }
 
 // ErrantGTIDsOnReplica gets the errant GTIDs on the replica by comparing against the primary position and UUID.
-func ErrantGTIDsOnReplica(replicaPosition Position, primaryPositionStr string) (string, error) {
-	primaryPosition, err := DecodePosition(primaryPositionStr)
-	if err != nil {
-		return "", err
-	}
+func ErrantGTIDsOnReplica(replicaPosition Position, primaryPosition Position) (string, error) {
 	replicaGTIDSet, replicaOk := replicaPosition.GTIDSet.(Mysql56GTIDSet)
 	primaryGTIDSet, primaryOk := primaryPosition.GTIDSet.(Mysql56GTIDSet)
 

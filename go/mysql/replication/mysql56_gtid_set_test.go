@@ -707,49 +707,46 @@ func BenchmarkMySQL56GTIDParsing(b *testing.B) {
 
 func TestErrantGTIDsOnReplica(t *testing.T) {
 	tests := []struct {
-		name               string
-		replicaPosition    string
-		primaryPositionStr string
-		errantGtidWanted   string
-		wantErr            string
+		name             string
+		replicaPosition  string
+		primaryPosition  string
+		errantGtidWanted string
+		wantErr          string
 	}{
 		{
-			name:               "Empty replica position",
-			replicaPosition:    "MySQL56/",
-			primaryPositionStr: "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			errantGtidWanted:   "",
+			name:             "Empty replica position",
+			replicaPosition:  "MySQL56/",
+			primaryPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			errantGtidWanted: "",
 		}, {
-			name:               "Empty primary position",
-			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
-			primaryPositionStr: "MySQL56/",
-			errantGtidWanted:   "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			name:             "Empty primary position",
+			replicaPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			primaryPosition:  "MySQL56/",
+			errantGtidWanted: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
 		}, {
-			name:               "Empty primary position - with multiple errant gtids",
-			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
-			primaryPositionStr: "MySQL56/",
-			errantGtidWanted:   "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+			name:             "Empty primary position - with multiple errant gtids",
+			replicaPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
+			primaryPosition:  "MySQL56/",
+			errantGtidWanted: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 		}, {
-			name:               "Primary position parse error",
-			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
-			primaryPositionStr: "incorrect position",
-			wantErr:            "unknown GTIDSet flavor",
+			name:             "Single errant GTID",
+			replicaPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
+			primaryPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-50,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-30",
+			errantGtidWanted: "8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
 		}, {
-			name:               "Single errant GTID",
-			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
-			primaryPositionStr: "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-50,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-30",
-			errantGtidWanted:   "8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
-		}, {
-			name:               "Multiple errant GTID",
-			replicaPosition:    "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-32,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-35",
-			primaryPositionStr: "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-50,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-30,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
-			errantGtidWanted:   "8bc65cca-3fe4-11ed-bbfb-091034d48b3e:31-32,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-33:35",
+			name:             "Multiple errant GTID",
+			replicaPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-32,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-35",
+			primaryPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-50,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-30,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
+			errantGtidWanted: "8bc65cca-3fe4-11ed-bbfb-091034d48b3e:31-32,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-33:35",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			replPos, err := DecodePosition(tt.replicaPosition)
 			require.NoError(t, err)
-			errantGTIDs, err := ErrantGTIDsOnReplica(replPos, tt.primaryPositionStr)
+			primaryPos, err := DecodePosition(tt.primaryPosition)
+			require.NoError(t, err)
+			errantGTIDs, err := ErrantGTIDsOnReplica(replPos, primaryPos)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 			} else {
