@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -354,7 +355,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// If semi-sync is enabled, we need to set two pc to be allowed.
 	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
-	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
+	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
 
 	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false); err != nil {
@@ -600,7 +601,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 
 	// If semi-sync is enabled, we need to set two pc to be allowed.
 	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
-	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
+	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
 
 	// If using semi-sync, we need to enable source-side.
 	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
@@ -925,7 +926,7 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 
 	// If semi-sync is enabled, we need to set two pc to be allowed.
 	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
-	tm.QueryServiceControl.SetTwoPCAllowed(semiSyncAction == SemiSyncActionSet)
+	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
 
 	pos, err := tm.MysqlDaemon.Promote(ctx, tm.hookExtraEnv())
 	if err != nil {
