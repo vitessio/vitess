@@ -81,6 +81,9 @@ type FakeMysqlDaemon struct {
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
 
+	// CurrentRelayLogPosition is returned by ReplicationStatus.
+	CurrentRelayLogPosition replication.Position
+
 	// CurrentSourceFilePosition is used to determine the executed
 	// file based positioning of the replication source.
 	CurrentSourceFilePosition replication.Position
@@ -313,6 +316,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 	return replication.ReplicationStatus{
 		Position:                               fmd.CurrentPrimaryPosition,
 		FilePosition:                           fmd.CurrentSourceFilePosition,
+		RelayLogPosition:                       fmd.CurrentRelayLogPosition,
 		RelayLogSourceBinlogEquivalentPosition: fmd.CurrentSourceFilePosition,
 		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// Implemented as AND to avoid changing all tests that were
@@ -742,6 +746,19 @@ func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error
 // GetVersionComment is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
 	return "", nil
+}
+
+func (fmd *FakeMysqlDaemon) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
+	return &mysqlctlpb.HostMetricsResponse{
+		Metrics: map[string]*mysqlctlpb.HostMetricsResponse_Metric{
+			"loadavg": {
+				Value: 1.0,
+			},
+			"datadir-used-ratio": {
+				Value: 0.2,
+			},
+		},
+	}, nil
 }
 
 // AcquireGlobalReadLock is part of the MysqlDaemon interface.

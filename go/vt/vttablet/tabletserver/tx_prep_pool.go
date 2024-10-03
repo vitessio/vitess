@@ -173,7 +173,8 @@ func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	return conns
 }
 
-func (pp *TxPreparedPool) IsEmpty(tableName string) bool {
+// IsEmptyForTable returns true if no prepared transactions are found for the table.
+func (pp *TxPreparedPool) IsEmptyForTable(tableName string) bool {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 	if !pp.twoPCEnabled {
@@ -193,4 +194,18 @@ func (pp *TxPreparedPool) IsEmpty(tableName string) bool {
 		}
 	}
 	return true
+}
+
+// IsEmpty returns true if the pool is empty.
+func (pp *TxPreparedPool) IsEmpty() bool {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	if !pp.twoPCEnabled {
+		return true
+	}
+	// If the pool is shutdown, we do not know the correct state of prepared transactions.
+	if !pp.open {
+		return false
+	}
+	return len(pp.conns) == 0
 }

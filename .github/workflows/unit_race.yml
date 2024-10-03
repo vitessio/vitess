@@ -150,4 +150,4 @@ jobs:
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report.xml"
-        show: "fail, skip"
+        show: "fail"

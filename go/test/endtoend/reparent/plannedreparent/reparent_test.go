@@ -473,7 +473,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Equal(t, "ON", primaryStatus.GtidMode)
 	assert.True(t, primaryStatus.LogReplicaUpdates)
 	assert.True(t, primaryStatus.LogBinEnabled)
-	assert.Regexp(t, `[58]\.[07].*`, primaryStatus.Version)
+	assert.Regexp(t, `[58]\.[074].*`, primaryStatus.Version)
 	assert.NotEmpty(t, primaryStatus.VersionComment)
 
 	replicaTablet := tablets[1]
@@ -527,7 +527,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Equal(t, "ON", replicaStatus.GtidMode)
 	assert.True(t, replicaStatus.LogReplicaUpdates)
 	assert.True(t, replicaStatus.LogBinEnabled)
-	assert.Regexp(t, `[58]\.[07].*`, replicaStatus.Version)
+	assert.Regexp(t, `[58]\.[074].*`, replicaStatus.Version)
 	assert.NotEmpty(t, replicaStatus.VersionComment)
 }
 
