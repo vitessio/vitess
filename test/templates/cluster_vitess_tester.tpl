@@ -110,7 +110,7 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
         
         # install vitess tester
-        go install github.com/vitessio/vitess-tester/go/vt@676663517bff9649ede4304b059c69ac28201944
+        go install github.com/vitessio/vitess-tester/go/vt@37c2b3f1f67ef4f37f5fa191e5de92f48f071f2d
 
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
