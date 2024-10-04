@@ -128,15 +128,10 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 
 func getUniqueColNames(ctx *plancontext.PlanningContext, inCols []*sqlparser.ColName) (columns []Column) {
 	for _, col := range inCols {
-		tableInfo, err := ctx.SemTable.TableInfoForExpr(col)
-		if err != nil {
-			continue
+		column := createColumn(ctx, col)
+		if column != nil {
+			columns = append(columns, *column)
 		}
-		table := tableInfo.GetVindexTable()
-		if table == nil {
-			continue
-		}
-		columns = append(columns, Column{Table: table.Name.String(), Name: col.Name.String()})
 	}
 	sort.Slice(columns, func(i, j int) bool {
 		return columns[i].String() < columns[j].String()
@@ -147,19 +142,10 @@ func getUniqueColNames(ctx *plancontext.PlanningContext, inCols []*sqlparser.Col
 
 func getUniqueColUsages(ctx *plancontext.PlanningContext, inCols []columnUse) (columns []ColumnUse) {
 	for _, col := range inCols {
-		tableInfo, err := ctx.SemTable.TableInfoForExpr(col.col)
-		if err != nil {
-			continue
+		column := createColumn(ctx, col.col)
+		if column != nil {
+			columns = append(columns, ColumnUse{Column: *column, Uses: col.use})
 		}
-		table := tableInfo.GetVindexTable()
-		if table == nil {
-			continue
-		}
-
-		columns = append(columns, ColumnUse{
-			Column: Column{Table: table.Name.String(), Name: col.col.Name.String()},
-			Uses:   col.use,
-		})
 	}
 
 	sort.Slice(columns, func(i, j int) bool {
@@ -168,8 +154,19 @@ func getUniqueColUsages(ctx *plancontext.PlanningContext, inCols []columnUse) (c
 	return slices.Compact(columns)
 }
 
+func createColumn(ctx *plancontext.PlanningContext, col *sqlparser.ColName) *Column {
+	tableInfo, err := ctx.SemTable.TableInfoForExpr(col)
+	if err != nil {
+		return nil
+	}
+	table := tableInfo.GetVindexTable()
+	if table == nil {
+		return nil
+	}
+	return &Column{Table: table.Name.String(), Name: col.Name.String()}
+}
+
 func (v VExplainKeys) MarshalJSON() ([]byte, error) {
-	// Create a custom struct to marshal with conditional fields
 	aux := struct {
 		StatementType   string   `json:"statementType"`
 		TableName       []string `json:"tableName,omitempty"`
@@ -180,12 +177,10 @@ func (v VExplainKeys) MarshalJSON() ([]byte, error) {
 	}{
 		StatementType:   v.StatementType,
 		TableName:       v.TableName,
-		SelectColumns:   slice.Map(v.SelectColumns, func(c Column) string { return c.String() }),
-		GroupingColumns: slice.Map(v.GroupingColumns, func(c Column) string { return c.String() }),
-		JoinColumns:     slice.Map(v.JoinColumns, func(c ColumnUse) string { return c.String() }),
-		FilterColumns:   slice.Map(v.FilterColumns, func(c ColumnUse) string { return c.String() }),
+		SelectColumns:   slice.Map(v.SelectColumns, Column.String),
+		GroupingColumns: slice.Map(v.GroupingColumns, Column.String),
+		JoinColumns:     slice.Map(v.JoinColumns, ColumnUse.String),
+		FilterColumns:   slice.Map(v.FilterColumns, ColumnUse.String),
 	}
-
-	// Marshal the aux struct into JSON
 	return json.Marshal(aux)
 }
