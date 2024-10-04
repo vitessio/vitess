@@ -211,24 +211,8 @@ For users running with the vitess operator on kubernetes, this change means that
 
 ### <a id="auto-replace-mysql-autoinc-with-seq"/>Automatically Replace MySQL auto_increment Clauses with Vitess Sequences</a>
 
-When migrating tables from an unsharded keyspace to a sharded one using the [VReplication `MoveTables` command](https://vitess.io/docs/reference/vreplication/movetables/), we now support
-options for how to handle auto incrementing values for the table(s) being moved. This is important as now that these tables will be sharded in the target keyspace you cannot rely on the
-[MySQL `auto_increment` clauses](https://dev.mysql.com/doc/refman/en/example-auto-increment.html) — as the values will need to be unique across all shards in the sharded target keyspace —
-and you would instead need to rely on [Vitess Sequences](https://vitess.io/docs/reference/features/vitess-sequences/) to achieve the equivalent behavior. In https://github.com/vitessio/vitess/pull/15679
-we added the ability (enabled by default) to remove those MySQL `auto_increment` clauses when moving tables from an unsharded keyspace to a sharded one. And in https://github.com/vitessio/vitess/pull/13656
-we added the ability to automatically initialize the sequences used in the target keyspace so that they can be used without any additional work and picking up right where the MySQL `auto_increment`
-values left off on the source keyspace. This new feature, added in https://github.com/vitessio/vitess/pull/16860, builds on all of that work to support replacing those MySQL `auto_increment`
-clauses with [Vitess Sequences](https://vitess.io/docs/reference/features/vitess-sequences/), performing all of the setup work automatically as part of the workflow.
-
-Please note that we have deprecated the [`--remove-sharded-auto-increment` boolean flag](https://vitess.io/docs/20.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/)
-(added in https://github.com/vitessio/vitess/pull/15679) and it has been replaced with the new [`--sharded-auto-increment-handling` flag](https://vitess.io/docs/21.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/)
-which takes a string where the valid values today are `LEAVE` (leave the `auto_increment` clauses in place), `REMOVE` (remove the clauses), and `REPLACE` (replace them with sequences). The
-`--remove-sharded-auto-increment[=true]` behavior in v21 is equal to the new `--sharded-auto-increment-handling=remove` behavior in v21+. To use the new support for automatically replacing those
-MySQL `auto_increment` clauses with Vitess Sequences, you would utilize these two
-[`MoveTables create` flags](https://vitess.io/docs/21.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/): `--sharded-auto-increment-handling=replace --global-keyspace=foo`
-where `foo` is an unsharded keyspace that can be used for sequences, [reference tables](https://vitess.io/docs/21.0/reference/vreplication/reference_tables/), and other "global" resources. That keyspace is
-where the sequence tables will be created as needed as part of the replacement work. Then, when switching the application traffic to the target keyspace you would specify the
-[`--initialize-target-sequences` flag for the `MoveTables switchtraffic` command](https://vitess.io/docs/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_switchtraffic/).
-It's at this point where the sequence tables will be created, if needed, and the starting value used will be initialized based on the current maximum value used for the table in the unsharded source
-keyspace. This allows us to replace the MySQL feature with the equivalent Vitess one in a way that is entirely transparent to the application and its users — they can continue to elide values for the
-column where auto incrementing values are desired on `INSERT`, and there will be no visible difference in the behavior resulting from the traffic switch.
+In https://github.com/vitessio/vitess/pull/16860 we added support for replacing MySQL `auto_increment` clauses with [Vitess Sequences](https://vitess.io/docs/reference/features/vitess-sequences/), performing all of the setup and initialization
+work automatically during the [`MoveTables`](https://vitess.io/docs/reference/vreplication/movetables/) workflow. As part of that work we have deprecated the
+[`--remove-sharded-auto-increment` boolean flag](https://vitess.io/docs/20.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/) and you should begin using the new
+[`--sharded-auto-increment-handling` flag](https://vitess.io/docs/21.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/) instead. Please see the new
+[`MoveTables` Auto Increment Handling](https://vitess.io/docs/21.0/reference/vreplication/movetables/#auto-increment-handling) documentation for additional details.
