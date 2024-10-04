@@ -49312,20 +49312,30 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** ShardedAutoIncrementHandling enum. */
+    enum ShardedAutoIncrementHandling {
+        LEAVE = 0,
+        REMOVE = 1,
+        REPLACE = 2
+    }
+
     /** Properties of a WorkflowOptions. */
     interface IWorkflowOptions {
 
         /** WorkflowOptions tenant_id */
         tenant_id?: (string|null);
 
-        /** WorkflowOptions strip_sharded_auto_increment */
-        strip_sharded_auto_increment?: (boolean|null);
+        /** WorkflowOptions sharded_auto_increment_handling */
+        sharded_auto_increment_handling?: (vtctldata.ShardedAutoIncrementHandling|null);
 
         /** WorkflowOptions shards */
         shards?: (string[]|null);
 
         /** WorkflowOptions config */
         config?: ({ [k: string]: string }|null);
+
+        /** WorkflowOptions global_keyspace */
+        global_keyspace?: (string|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -49340,14 +49350,17 @@ export namespace vtctldata {
         /** WorkflowOptions tenant_id. */
         public tenant_id: string;
 
-        /** WorkflowOptions strip_sharded_auto_increment. */
-        public strip_sharded_auto_increment: boolean;
+        /** WorkflowOptions sharded_auto_increment_handling. */
+        public sharded_auto_increment_handling: vtctldata.ShardedAutoIncrementHandling;
 
         /** WorkflowOptions shards. */
         public shards: string[];
 
         /** WorkflowOptions config. */
         public config: { [k: string]: string };
+
+        /** WorkflowOptions global_keyspace. */
+        public global_keyspace: string;
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.

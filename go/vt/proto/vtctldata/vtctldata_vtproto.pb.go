@@ -250,7 +250,8 @@ func (m *WorkflowOptions) CloneVT() *WorkflowOptions {
 	}
 	r := new(WorkflowOptions)
 	r.TenantId = m.TenantId
-	r.StripShardedAutoIncrement = m.StripShardedAutoIncrement
+	r.ShardedAutoIncrementHandling = m.ShardedAutoIncrementHandling
+	r.GlobalKeyspace = m.GlobalKeyspace
 	if rhs := m.Shards; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -6655,6 +6656,13 @@ func (m *WorkflowOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.GlobalKeyspace) > 0 {
+		i -= len(m.GlobalKeyspace)
+		copy(dAtA[i:], m.GlobalKeyspace)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.GlobalKeyspace)))
+		i--
+		dAtA[i] = 0x2a
+	}
 	if len(m.Config) > 0 {
 		for k := range m.Config {
 			v := m.Config[k]
@@ -6683,13 +6691,8 @@ func (m *WorkflowOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0x1a
 		}
 	}
-	if m.StripShardedAutoIncrement {
-		i--
-		if m.StripShardedAutoIncrement {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
+	if m.ShardedAutoIncrementHandling != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ShardedAutoIncrementHandling))
 		i--
 		dAtA[i] = 0x10
 	}
@@ -21526,8 +21529,8 @@ func (m *WorkflowOptions) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.StripShardedAutoIncrement {
-		n += 2
+	if m.ShardedAutoIncrementHandling != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.ShardedAutoIncrementHandling))
 	}
 	if len(m.Shards) > 0 {
 		for _, s := range m.Shards {
@@ -21542,6 +21545,10 @@ func (m *WorkflowOptions) SizeVT() (n int) {
 			mapEntrySize := 1 + len(k) + protohelpers.SizeOfVarint(uint64(len(k))) + 1 + len(v) + protohelpers.SizeOfVarint(uint64(len(v)))
 			n += mapEntrySize + 1 + protohelpers.SizeOfVarint(uint64(mapEntrySize))
 		}
+	}
+	l = len(m.GlobalKeyspace)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -29761,9 +29768,9 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StripShardedAutoIncrement", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardedAutoIncrementHandling", wireType)
 			}
-			var v int
+			m.ShardedAutoIncrementHandling = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -29773,12 +29780,11 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				m.ShardedAutoIncrementHandling |= ShardedAutoIncrementHandling(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.StripShardedAutoIncrement = bool(v != 0)
 		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Shards", wireType)
@@ -29937,6 +29943,38 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Config[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GlobalKeyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.GlobalKeyspace = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

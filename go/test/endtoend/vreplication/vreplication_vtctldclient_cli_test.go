@@ -110,8 +110,8 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
-		"--all-cells",
-		"--config-overrides", mapToCSV(overrides),
+		"--all-cells", "--config-overrides", mapToCSV(overrides),
+		"--sharded-auto-increment-handling=REPLACE", fmt.Sprintf("--global-keyspace=%s", sourceKeyspace),
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 	switchFlags := []string{}
@@ -591,6 +591,10 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 	require.Equalf(t, 1, len(bls.Filter.Rules), "Rules are %+v", bls.Filter.Rules) // only customer, customer2 should be excluded
 	require.Equal(t, binlogdatapb.OnDDLAction_STOP, bls.OnDdl)
 	require.True(t, bls.StopAfterCopy)
+
+	// Validate the sharded-auto-increment-handling related value handling.
+	require.Equal(t, vtctldatapb.ShardedAutoIncrementHandling_REPLACE, vtctldatapb.ShardedAutoIncrementHandling(wf.Options.ShardedAutoIncrementHandling))
+	require.Equal(t, wf.Source.Keyspace, wf.Options.GlobalKeyspace)
 }
 
 // Test that routing rules can be applied using the vtctldclient CLI for all types of routing rules.
