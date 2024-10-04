@@ -2466,7 +2466,10 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			vrepExecQueries: []string{"CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)"},
+			vrepExecQueries: []string{
+				"select 1 from `t1_lkp` limit 1",
+				"CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)",
+			},
 			createRequest: &createVReplicationWorkflowRequestResponse{
 				req: nil, // We don't care about defining it in this case
 				res: &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{},
