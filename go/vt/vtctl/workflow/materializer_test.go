@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -1179,13 +1180,16 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 					setStartingVschema()
 				}()
 			}
-			outms, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, tcase.specs, false)
+			outms, _, _, cancelFunc, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, tcase.specs, false)
 			if tcase.err != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.err, "prepareCreateLookup(%s) err: %v, does not contain %v", tcase.description, err, tcase.err)
 				return
 			}
 			require.NoError(t, err)
+			// All of these test cases create a table and thus change the target
+			// vschema.
+			require.NotNil(t, cancelFunc)
 			want := strings.Split(tcase.out, "\n")
 			got := strings.Split(outms.TableSettings[0].CreateDdl, "\n")
 			require.Equal(t, want, got, tcase.description)
@@ -1424,7 +1428,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, got, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, specs, false)
+		_, got, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, specs, false)
 		require.NoError(t, err)
 		if !proto.Equal(got, tcase.out) {
 			t.Errorf("%s: got:\n%v, want\n%v", tcase.description, got, tcase.out)
@@ -1659,7 +1663,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, _, got, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, specs, false)
+		_, _, got, cancelFunc, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, specs, false)
 		if tcase.err != "" {
 			if err == nil || !strings.Contains(err.Error(), tcase.err) {
 				t.Errorf("prepareCreateLookup(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
@@ -1667,6 +1671,9 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			continue
 		}
 		require.NoError(t, err)
+		// withTable is a vschema that already contains the table and thus
+		// we don't make any vschema changes and there's nothing to cancel.
+		require.True(t, (cancelFunc != nil) == (tcase.targetVSchema != withTable))
 		utils.MustMatch(t, tcase.out, got, tcase.description)
 	}
 }
@@ -1777,7 +1784,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, got, _, err := env.ws.prepareCreateLookup(ctx, "keyspace", ms.TargetKeyspace, specs, false)
+	_, got, _, _, err := env.ws.prepareCreateLookup(ctx, "keyspace", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	if !proto.Equal(got, want) {
 		t.Errorf("same keyspace: got:\n%v, want\n%v", got, want)
@@ -1903,7 +1910,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, got, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, false)
+	_, got, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	if !proto.Equal(got, want) {
 		t.Errorf("customize create lookup error same: got:\n%v, want\n%v", got, want)
@@ -2021,7 +2028,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ms, ks, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, false)
+	ms, ks, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	if !proto.Equal(wantKs, ks) {
 		t.Errorf("unexpected keyspace value: got:\n%v, want\n%v", ks, wantKs)
@@ -2101,21 +2108,34 @@ func TestStopAfterCopyFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ms1, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, false)
+	ms1, _, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	require.Equal(t, ms1.StopAfterCopy, true)
 
-	ms2, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, true)
+	ms2, _, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, true)
 	require.NoError(t, err)
 	require.Equal(t, ms2.StopAfterCopy, false)
 }
 
 func TestCreateLookupVindexFailures(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
-		// Keyspace where the vindex is created.
-		SourceKeyspace: "sourceks",
-		// Keyspace where the lookup table and VReplication workflow is created.
+		SourceKeyspace: "sourceks", // Not used
+		// Keyspace where the lookup table, vindex, and VReplication workflow is created.
 		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable: "t1",
+				CreateDdl:   "CREATE TABLE `t1` (\n`c1` INT,\n PRIMARY KEY(`c1`)\n)",
+			},
+			{
+				TargetTable: "t2",
+				CreateDdl:   "CREATE TABLE `t2` (\n`c2` INT,\n PRIMARY KEY(`c2`)\n)",
+			},
+			{
+				TargetTable: "t3",
+				CreateDdl:   "CREATE TABLE `t3` (\n`c3` INT,\n PRIMARY KEY(`c3`)\n)",
+			},
+		},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -2127,7 +2147,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		"v": {
 			Type: "lookup_unique",
 			Params: map[string]string{
-				"table": "targetks.t",
+				"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
 				"from":  "c1",
 				"to":    "c2",
 			},
@@ -2140,10 +2160,10 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			"xxhash": {
 				Type: "xxhash",
 			},
-			"v": {
+			"v1": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":      "targetks.t",
+					"table":      fmt.Sprintf("%s.t", ms.TargetKeyspace),
 					"from":       "c1",
 					"to":         "c2",
 					"write_only": "true",
@@ -2153,8 +2173,14 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "v",
+					Name:   "v1",
 					Column: "c1",
+				}},
+			},
+			"t2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "v2",
+					Column: "c2",
 				}},
 			},
 		},
@@ -2163,9 +2189,12 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	require.NoError(t, err)
 
 	testcases := []struct {
-		description string
-		input       *vschemapb.Keyspace
-		err         string
+		description     string
+		input           *vschemapb.Keyspace
+		createRequest   *createVReplicationWorkflowRequestResponse
+		vrepExecQueries []string
+		schemaAdditions []*tabletmanagerdatapb.TableDefinition
+		err             string
 	}{
 		{
 			description: "dup vindex",
@@ -2213,7 +2242,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table": "targetks.t",
+							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
 							"from":  "c1,c2",
 							"to":    "c3",
 						},
@@ -2229,7 +2258,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup",
 						Params: map[string]string{
-							"table": "targetks.t",
+							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
 							"from":  "c1",
 							"to":    "c2",
 						},
@@ -2245,7 +2274,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup_noexist",
 						Params: map[string]string{
-							"table": "targetks.t",
+							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
 							"from":  "c1,c2",
 							"to":    "c2",
 						},
@@ -2269,7 +2298,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table": "targetks.t",
+							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
 							"from":  "c1",
 							"to":    "c2",
 						},
@@ -2329,7 +2358,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"v": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table": "targetks.t",
+							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
 							"from":  "c1",
 							"to":    "c2",
 						},
@@ -2382,7 +2411,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"xxhash": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table": "targetks.t",
+							"table": fmt.Sprintf("%s.t", ms.TargetKeyspace),
 							"from":  "c1",
 							"to":    "c2",
 						},
@@ -2398,7 +2427,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "a conflicting vindex named xxhash already exists in the targetks keyspace",
+			err: fmt.Sprintf("a conflicting vindex named xxhash already exists in the %s keyspace", ms.TargetKeyspace),
 		},
 		{
 			description: "source table not in vschema",
@@ -2413,7 +2442,37 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "table other not found in the targetks keyspace",
+			err: fmt.Sprintf("table other not found in the %s keyspace", ms.TargetKeyspace),
+		},
+		{
+			description: "workflow creation error",
+			input: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"v2": {
+						Type: "consistent_lookup_unique",
+						Params: map[string]string{
+							"table": fmt.Sprintf("%s.t1_lkp", ms.TargetKeyspace),
+							"from":  "c1",
+							"to":    "keyspace_id",
+						},
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:   "v2",
+							Column: "c2",
+						}},
+					},
+				},
+			},
+			vrepExecQueries: []string{"CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)"},
+			createRequest: &createVReplicationWorkflowRequestResponse{
+				req: nil, // We don't care about defining it in this case
+				res: &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{},
+				err: errors.New("we gots us an error"),
+			},
+			err: "we gots us an error",
 		},
 	}
 	for _, tcase := range testcases {
@@ -2423,10 +2482,40 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				Keyspace: ms.TargetKeyspace,
 				Vindex:   tcase.input,
 			}
+			if len(tcase.schemaAdditions) > 0 {
+				ogs := env.tmc.schema
+				defer func() {
+					env.tmc.schema = ogs
+				}()
+				// The tables are created in the target keyspace.
+				for _, tbl := range tcase.schemaAdditions {
+					env.tmc.schema[ms.TargetKeyspace+"."+tbl.Name] = &tabletmanagerdatapb.SchemaDefinition{
+						TableDefinitions: []*tabletmanagerdatapb.TableDefinition{tbl},
+					}
+				}
+			}
+			for _, tablet := range env.tablets {
+				if tablet.Keyspace == ms.TargetKeyspace {
+					for _, vrq := range tcase.vrepExecQueries {
+						env.tmc.expectVRQuery(int(tablet.Alias.Uid), vrq, &sqltypes.Result{})
+					}
+					if tcase.createRequest != nil {
+						env.tmc.expectCreateVReplicationWorkflowRequest(tablet.Alias.Uid, tcase.createRequest)
+					}
+				}
+			}
 			_, err := env.ws.LookupVindexCreate(ctx, req)
 			if !strings.Contains(err.Error(), tcase.err) {
 				t.Errorf("CreateLookupVindex(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
 			}
+			// Confirm that the original vschema where the vindex would
+			// be created is still in place -- since the workflow
+			// creation failed in each test case. That vindex is created
+			// in the target keyspace based on the MaterializeSettings
+			// definition.
+			cvs, err := env.ws.ts.GetVSchema(ctx, ms.TargetKeyspace)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(vs, cvs), "expected: %+v, got: %+v", vs, cvs)
 		})
 	}
 }
@@ -2702,7 +2791,10 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				if len(tc.moveTablesReq.SourceShards) > 0 && !slices.Contains(tc.moveTablesReq.SourceShards, tablet.Shard) {
 					continue
 				}
-				env.tmc.expectCreateVReplicationWorkflowRequest(tablet.Alias.Uid, tc.wantReqs[tablet.Alias.Uid])
+				reqRes := &createVReplicationWorkflowRequestResponse{
+					req: tc.wantReqs[tablet.Alias.Uid],
+				}
+				env.tmc.expectCreateVReplicationWorkflowRequest(tablet.Alias.Uid, reqRes)
 			}
 
 			mz := &materializer{

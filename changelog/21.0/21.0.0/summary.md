@@ -17,6 +17,8 @@
     - **[New Backup Engine](#new-backup-engine)**
     - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
     - **[Reference Table Materialization](#reference-table-materialization)**
+    - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
+    - **[Errant GTID Detection on Vttablets](#errant-gtid-vttablet)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -172,3 +174,35 @@ There is a new option in [`Materialize` workflows](https://vitess.io/docs/refere
 a synced copy of [reference or lookup tables](https://vitess.io/docs/reference/vreplication/reference_tables/) 
 (countries, states, zip_codes, etc) from an unsharded keyspace, which holds the source of truth for the reference 
 table, to all shards in a sharded keyspace.
+### <a id="new-vexplain-modes"/>New VEXPLAIN Modes: TRACE and KEYS
+
+#### VEXPLAIN TRACE
+
+The new TRACE mode for VEXPLAIN provides a detailed execution trace of queries, showing how they're processed through various operators and interactions with tablets. This mode is particularly useful for:
+
+- Identifying performance bottlenecks
+- Understanding query execution patterns
+- Optimizing complex queries
+- Debugging unexpected query behavior
+
+TRACE mode runs the query and logs all interactions, returning a JSON representation of the query execution plan with additional statistics like number of calls, average rows processed, and number of shards queried.
+
+#### VEXPLAIN KEYS
+
+The KEYS mode for VEXPLAIN offers a concise summary of query structure, highlighting columns used in joins, filters, and grouping operations. This information is crucial for:
+
+- Identifying potential sharding key candidates
+- Optimizing query performance
+- Analyzing query patterns to inform database design decisions
+
+KEYS mode analyzes the query structure without executing it, providing JSON output that includes grouping columns, join columns, filter columns (potential candidates for indexes, primary keys, or sharding keys), and the statement type.
+
+These new VEXPLAIN modes enhance Vitess's query analysis capabilities, allowing for more informed decisions about sharding strategies and query optimization.
+
+### <a id="errant-gtid-vttablet"/>Errant GTID Detection on Vttablets
+
+Vttablets now run an errant GTID detection logic before they join the replication stream. So, if a replica has an errant GTID, it will
+not start replicating from the primary. It will fail the call the set its replication source because of the errant GTID. This prevents us 
+from running into situations from which recovery is very hard.
+
+For users running with the vitess operator on kubernetes, this change means that the replicas with errant GTIDs will have broken replication and will report as unready. The users will need to manually clean up these errant replica tablets.

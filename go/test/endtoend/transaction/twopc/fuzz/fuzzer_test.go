@@ -105,12 +105,12 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			timeForTesting: 5 * time.Second,
 		},
 		{
-			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL, MoveTables disruptions",
+			name:                  "Multiple Threads - Multiple Set - PRS, ERS, and MySQL & Vttablet restart, OnlineDDL, MoveTables, Reshard disruptions",
 			threads:               4,
 			updateSets:            4,
 			timeForTesting:        5 * time.Second,
-			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer, moveTablesFuzzer},
-			disruptionProbability: []int{5, 5, 5, 5, 5, 5},
+			clusterDisruptions:    []func(t *testing.T){prs, ers, mysqlRestarts, vttabletRestarts, onlineDDLFuzzer, moveTablesFuzzer, reshardFuzzer},
+			disruptionProbability: []int{5, 5, 5, 5, 5, 5, 5},
 		},
 	}
 
@@ -484,6 +484,23 @@ func moveTablesFuzzer(t *testing.T) {
 	assert.NoError(t, err, output)
 	output, err = mtw.Complete()
 	assert.NoError(t, err, output)
+}
+
+// reshardFuzzer runs a Reshard workflow.
+func reshardFuzzer(t *testing.T) {
+	var srcShards, targetShards string
+	shardCount := len(clusterInstance.Keyspaces[0].Shards)
+	if shardCount == 2 {
+		srcShards = "40-"
+		targetShards = "40-80,80-"
+	} else {
+		srcShards = "40-80,80-"
+		targetShards = "40-"
+	}
+	log.Errorf("Reshard from - \"%v\" to \"%v\"", srcShards, targetShards)
+	twopcutil.AddShards(t, clusterInstance, keyspaceName, strings.Split(targetShards, ","))
+	err := twopcutil.RunReshard(t, clusterInstance, "TestTwoPCFuzzTest", keyspaceName, srcShards, targetShards)
+	require.NoError(t, err)
 }
 
 func mysqlRestarts(t *testing.T) {

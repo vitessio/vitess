@@ -113,11 +113,9 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
 	}
+
 	err := mz.buildMaterializer()
 	if err != nil {
-		return err
-	}
-	if err := mz.deploySchema(); err != nil {
 		return err
 	}
 
@@ -132,6 +130,10 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 	req.Options = optionsJSON
+
+	if err := mz.deploySchema(); err != nil {
+		return err
+	}
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
@@ -313,7 +315,7 @@ func (mz *materializer) deploySchema() error {
 				continue
 			}
 			if ts.CreateDdl == "" {
-				return fmt.Errorf("target table %v does not exist and there is no create ddl defined", ts.TargetTable)
+				return fmt.Errorf("target table %s does not exist and there is no create ddl defined", ts.TargetTable)
 			}
 
 			var err error
