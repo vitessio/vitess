@@ -69,26 +69,33 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 	addPredicate := func(predicate sqlparser.Expr) {
 		predicates := sqlparser.SplitAndExpression(nil, predicate)
 		for _, expr := range predicates {
-			cmp, ok := expr.(*sqlparser.ComparisonExpr)
-			if !ok {
-				continue
-			}
-			lhs, lhsOK := cmp.Left.(*sqlparser.ColName)
-			rhs, rhsOK := cmp.Right.(*sqlparser.ColName)
+			switch cmp := expr.(type) {
+			case *sqlparser.ComparisonExpr:
+				lhs, lhsOK := cmp.Left.(*sqlparser.ColName)
+				rhs, rhsOK := cmp.Right.(*sqlparser.ColName)
 
-			var output = &filterColumns
-			if lhsOK && rhsOK && ctx.SemTable.RecursiveDeps(lhs) != ctx.SemTable.RecursiveDeps(rhs) {
-				// If the columns are from different tables, they are considered join columns
-				output = &joinColumns
+				var output = &filterColumns
+				if lhsOK && rhsOK && ctx.SemTable.RecursiveDeps(lhs) != ctx.SemTable.RecursiveDeps(rhs) {
+					// If the columns are from different tables, they are considered join columns
+					output = &joinColumns
+				}
+
+				if lhsOK {
+					*output = append(*output, columnUse{lhs, cmp.Operator})
+				}
+
+				if switchedOp, ok := cmp.Operator.SwitchSides(); rhsOK && ok {
+					*output = append(*output, columnUse{rhs, switchedOp})
+				}
+			case *sqlparser.BetweenExpr:
+				if col, ok := cmp.Left.(*sqlparser.ColName); ok {
+					//a BETWEEN 100 AND 200    is equivalent to    a >= 100 AND a <= 200
+					filterColumns = append(filterColumns,
+						columnUse{col, sqlparser.GreaterEqualOp},
+						columnUse{col, sqlparser.LessEqualOp})
+				}
 			}
 
-			if lhsOK {
-				*output = append(*output, columnUse{lhs, cmp.Operator})
-			}
-
-			if switchedOp, ok := cmp.Operator.SwitchSides(); rhsOK && ok {
-				*output = append(*output, columnUse{rhs, switchedOp})
-			}
 		}
 	}
 

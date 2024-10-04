@@ -238,6 +238,16 @@ func TestVExplainKeys(t *testing.T) {
 	]
 }`,
 		},
+		{
+			query: "select * from user where name between 'A' and 'C'",
+			expectedRowString: `{
+	"statementType": "SELECT",
+	"filterColumns": [
+		"user.name ge",
+		"user.name le"
+	]
+}`,
+		},
 	}
 
 	for _, tt := range tests {
