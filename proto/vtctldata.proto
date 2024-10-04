@@ -698,6 +698,9 @@ message EmergencyReparentShardRequest {
   // WaitForAllTablets makes ERS wait for a response from all the tablets before proceeding.
   // Useful when all the tablets are up and reachable.
   bool wait_for_all_tablets = 7;
+  // ExpectedPrimary is the optional alias we expect to be the current primary in order for
+  // the reparent operation to succeed.
+  topodata.TabletAlias expected_primary = 8;
 }
 
 message EmergencyReparentShardResponse {
@@ -1394,6 +1397,9 @@ message PlannedReparentShardRequest {
   vttime.Duration tolerable_replication_lag = 6;
   // AllowCrossCellPromotion allows cross cell promotion,
   bool allow_cross_cell_promotion = 7;
+  // ExpectedPrimary is the optional alias we expect to be the current primary in order for
+  // the reparent operation to succeed.
+  topodata.TabletAlias expected_primary = 8;
 }
 
 message PlannedReparentShardResponse {
