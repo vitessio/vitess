@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -92,18 +93,18 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 	logger := logutil.NewConsoleLogger()
 	require.NoError(t, topoServ.RebuildSrvVSchema(ctx, []string{"cell"}))
 
-	tabletID := 100
+	tabletID := startingSourceTabletUID
 	sourceShardsMap := make(map[string]any)
 	for _, shard := range sourceShards {
 		sourceShardsMap[shard] = nil
 		require.NoError(t, topoServ.CreateShard(ctx, ms.SourceKeyspace, shard))
 		_ = env.addTablet(t, tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
-		tabletID += 10
+		tabletID += tabletUIDStep
 	}
 
 	require.NoError(t, topotools.RebuildKeyspace(ctx, logger, topoServ, ms.SourceKeyspace, []string{"cell"}, false))
 
-	tabletID = 200
+	tabletID = startingTargetTabletUID
 	for _, shard := range targetShards {
 		if ms.SourceKeyspace == ms.TargetKeyspace {
 			if _, ok := sourceShardsMap[shard]; ok {
@@ -112,7 +113,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		}
 		require.NoError(t, topoServ.CreateShard(ctx, ms.TargetKeyspace, shard))
 		_ = env.addTablet(t, tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_PRIMARY)
-		tabletID += 10
+		tabletID += tabletUIDStep
 	}
 
 	for _, ts := range ms.TableSettings {
@@ -230,6 +231,9 @@ type testMaterializerTMClient struct {
 
 	// Used to override the response to ReadVReplicationWorkflow.
 	readVReplicationWorkflow readVReplicationWorkflowFunc
+
+	// Responses to GetSchema RPCs for individual tablets.
+	getSchemaResponses map[uint32]*tabletmanagerdatapb.SchemaDefinition
 }
 
 func newTestMaterializerTMClient(keyspace string, sourceShards []string, tableSettings []*vtctldatapb.TableMaterializeSettings) *testMaterializerTMClient {
@@ -240,6 +244,7 @@ func newTestMaterializerTMClient(keyspace string, sourceShards []string, tableSe
 		tableSettings:                      tableSettings,
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
+		getSchemaResponses:                 make(map[uint32]*tabletmanagerdatapb.SchemaDefinition),
 	}
 }
 
@@ -248,7 +253,8 @@ func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Cont
 	defer tmc.mu.Unlock()
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if expect.req != nil && !proto.Equal(expect.req, request) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", request, expect)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), request, expect)
 		}
 		if expect.res != nil {
 			return expect.res, expect.err
@@ -314,9 +320,23 @@ func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Cont
 	}, nil
 }
 
+func (tmc *testMaterializerTMClient) SetGetSchemaResponse(tabletUID int, res *tabletmanagerdatapb.SchemaDefinition) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.getSchemaResponses == nil {
+		tmc.getSchemaResponses = make(map[uint32]*tabletmanagerdatapb.SchemaDefinition)
+	}
+	tmc.getSchemaResponses[uint32(tabletUID)] = res
+}
+
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
+
+	if tmc.getSchemaResponses != nil && tmc.getSchemaResponses[tablet.Alias.Uid] != nil {
+		return tmc.getSchemaResponses[tablet.Alias.Uid], nil
+	}
 
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range request.Tables {
