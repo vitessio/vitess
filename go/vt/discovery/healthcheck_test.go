@@ -556,6 +556,8 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	createFakeConn(tablet, input)
 	resultChan := hc.Subscribe()
 
+	now := time.Now()
+
 	hc.AddTablet(tablet)
 
 	// Immediately after AddTablet() there will be the first notification.
@@ -581,8 +583,8 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-
 		PrimaryTermStartTime: 0,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	input <- shr
 	result = <-resultChan
