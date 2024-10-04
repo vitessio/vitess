@@ -731,7 +731,7 @@ func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
 // it returns the original operator and false, indicating that switching sides is not valid.
 func (op ComparisonExprOperator) SwitchSides() (ComparisonExprOperator, bool) {
 	switch op {
-	case EqualOp, NotEqualOp, NullSafeEqualOp, LikeOp, NotLikeOp, RegexpOp, NotRegexpOp, InOp, NotInOp:
+	case EqualOp, NotEqualOp, NullSafeEqualOp:
 		// These operators are symmetric, so switching sides has no effect
 		return op, true
 	case LessThanOp:
