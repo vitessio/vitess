@@ -93,7 +93,7 @@ else
     vtctldclient Backup $REPLICA_TABLET || fail "Backup failed for replica tablet"
 fi
 
-# Restore another tablet (tablet 201) from the backup
+# Restore another tablet (tablet 101) from the backup
 RESTORE_TABLET="zone1-0000000102"
 if [ "$RESTORE_TABLET" = "$REPLICA_TABLET" ]; then
     RESTORE_TABLET="zone1-0000000101"
