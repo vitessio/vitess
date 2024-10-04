@@ -41,7 +41,7 @@ const (
 // on a Shard.
 func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string, sources []*topodatapb.TabletAlias, tables []string) error {
 	// Read the source tablets.
-	sourceTablets, err := wr.ts.GetTabletMap(ctx, sources)
+	sourceTablets, err := wr.ts.GetTabletMap(ctx, sources, nil)
 	if err != nil {
 		return err
 	}

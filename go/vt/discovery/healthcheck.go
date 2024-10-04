@@ -25,7 +25,7 @@ limitations under the License.
 // Alternatively, use a Watcher implementation which will constantly watch
 // a source (e.g. the topology) and add and remove tablets as they are
 // added or removed from the source.
-// For a Watcher example have a look at NewCellTabletsWatcher().
+// For a Watcher example have a look at NewTopologyWatcher().
 //
 // Internally, the HealthCheck module is connected to each tablet and has a
 // streaming RPC (StreamHealth) open to receive periodic health infos.
@@ -92,7 +92,7 @@ var (
 	refreshKnownTablets = true
 
 	// topoReadConcurrency tells us how many topo reads are allowed in parallel.
-	topoReadConcurrency = 32
+	topoReadConcurrency int64 = 32
 
 	// healthCheckDialConcurrency tells us how many healthcheck connections can be opened to tablets at once. This should be less than the golang max thread limit of 10000.
 	healthCheckDialConcurrency int64 = 1024
@@ -178,7 +178,7 @@ func registerWebUIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&TabletURLTemplateString, "tablet_url_template", "http://{{.GetTabletHostPort}}", "Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this.")
 	fs.DurationVar(&refreshInterval, "tablet_refresh_interval", 1*time.Minute, "Tablet refresh interval.")
 	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "Whether to reload the tablet's address/port map from topo in case they change.")
-	fs.IntVar(&topoReadConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
+	fs.Int64Var(&topoReadConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
 	fs.Int64Var(&healthCheckDialConcurrency, "healthcheck-dial-concurrency", 1024, "Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000.")
 	ParseTabletURLTemplateFromFlag()
 }
@@ -365,6 +365,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		cellAliases:        make(map[string]string),
 	}
 	var topoWatchers []*TopologyWatcher
+	var filter TabletFilter
 	cells := strings.Split(cellsToWatch, ",")
 	if cellsToWatch == "" {
 		cells = append(cells, localCell)
@@ -375,7 +376,19 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		if c == "" {
 			continue
 		}
-		topoWatchers = append(topoWatchers, NewCellTabletsWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets, topoReadConcurrency))
+		if len(tabletFilters) > 0 {
+			if len(KeyspacesToWatch) > 0 {
+				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
+			}
+			fbs, err := NewFilterByShard(tabletFilters)
+			if err != nil {
+				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
+			}
+			filter = fbs
+		} else if len(KeyspacesToWatch) > 0 {
+			filter = NewFilterByKeyspace(KeyspacesToWatch)
+		}
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topoReadConcurrency))
 	}
 
 	hc.topoWatchers = topoWatchers

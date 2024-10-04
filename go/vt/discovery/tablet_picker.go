@@ -417,7 +417,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 
 	shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
-	tabletMap, err := tp.ts.GetTabletMap(shortCtx, aliases)
+	tabletMap, err := tp.ts.GetTabletMap(shortCtx, aliases, nil)
 	if err != nil {
 		log.Warningf("Error fetching tablets from topo: %v", err)
 		// If we get a partial result we can still use it, otherwise return.

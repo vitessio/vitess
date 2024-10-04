@@ -75,6 +75,9 @@ type Factory struct {
 	// err is used for testing purposes to force queries / watches
 	// to return the given error
 	err error
+	// listErr is used for testing purposed to fake errors from
+	// calls to List.
+	listErr error
 }
 
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.
@@ -341,6 +344,13 @@ func (f *Factory) recursiveDelete(n *node) {
 	if len(parent.children) == 0 {
 		f.recursiveDelete(parent)
 	}
+}
+
+func (f *Factory) SetListError(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.listErr = err
 }
 
 func init() {

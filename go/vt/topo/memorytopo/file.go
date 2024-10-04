@@ -187,6 +187,9 @@ func (c *Conn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, 
 	if c.factory.err != nil {
 		return nil, c.factory.err
 	}
+	if c.factory.listErr != nil {
+		return nil, c.factory.listErr
+	}
 
 	dir, file := path.Split(filePathPrefix)
 	// Get the node to list.

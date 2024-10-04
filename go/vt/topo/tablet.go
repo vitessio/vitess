@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -285,10 +287,17 @@ func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*t
 	return result, nil
 }
 
+// GetTabletsByCellOptions controls the behavior of
+// Server.FindAllShardsInKeyspace.
+type GetTabletsByCellOptions struct {
+	// Concurrency controls the maximum number of concurrent calls to GetTablet.
+	Concurrency int64
+}
+
 // GetTabletsByCell returns all the tablets in the cell.
 // It returns ErrNoNode if the cell doesn't exist.
 // It returns (nil, nil) if the cell exists, but there are no tablets in it.
-func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*TabletInfo, error) {
+func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *GetTabletsByCellOptions) ([]*TabletInfo, error) {
 	// If the cell doesn't exist, this will return ErrNoNode.
 	cellConn, err := ts.ConnForCell(ctx, cellAlias)
 	if err != nil {
@@ -296,10 +305,12 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*Ta
 	}
 	listResults, err := cellConn.List(ctx, TabletsPath)
 	if err != nil || len(listResults) == 0 {
-		// Currently the ZooKeeper and Memory topo implementations do not support scans
+		// Currently the ZooKeeper implementation does not support scans
 		// so we fall back to the more costly method of fetching the tablets one by one.
-		if IsErrType(err, NoImplementation) {
-			return ts.GetTabletsIndividuallyByCell(ctx, cellAlias)
+		// In the etcd case, it is possible that the response is too large. We also fall
+		// back to fetching the tablets one by one in that case.
+		if IsErrType(err, NoImplementation) || IsErrType(err, ResourceExhausted) {
+			return ts.GetTabletsIndividuallyByCell(ctx, cellAlias, opt)
 		}
 		if IsErrType(err, NoNode) {
 			return nil, nil
@@ -323,7 +334,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*Ta
 // directly support the topoConn.List() functionality.
 // It returns ErrNoNode if the cell doesn't exist.
 // It returns (nil, nil) if the cell exists, but there are no tablets in it.
-func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string) ([]*TabletInfo, error) {
+func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string, opt *GetTabletsByCellOptions) ([]*TabletInfo, error) {
 	// If the cell doesn't exist, this will return ErrNoNode.
 	aliases, err := ts.GetTabletAliasesByCell(ctx, cell)
 	if err != nil {
@@ -331,7 +342,7 @@ func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string)
 	}
 	sort.Sort(topoproto.TabletAliasList(aliases))
 
-	tabletMap, err := ts.GetTabletMap(ctx, aliases)
+	tabletMap, err := ts.GetTabletMap(ctx, aliases, opt)
 	if err != nil {
 		// we got another error than topo.ErrNoNode
 		return nil, err
@@ -506,41 +517,62 @@ func DeleteTabletReplicationData(ctx context.Context, ts *Server, tablet *topoda
 }
 
 // GetTabletMap tries to read all the tablets in the provided list,
-// and returns them all in a map.
-// If error is ErrPartialResult, the results in the dictionary are
+// and returns them in a map.
+// If error is ErrPartialResult, the results in the map are
 // incomplete, meaning some tablets couldn't be read.
 // The map is indexed by topoproto.TabletAliasString(tablet alias).
-func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.TabletAlias) (map[string]*TabletInfo, error) {
+func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.TabletAlias, opt *GetTabletsByCellOptions) (map[string]*TabletInfo, error) {
 	span, ctx := trace.NewSpan(ctx, "topo.GetTabletMap")
 	span.Annotate("num_tablets", len(tabletAliases))
 	defer span.Finish()
 
-	wg := sync.WaitGroup{}
-	mutex := sync.Mutex{}
+	var (
+		mu        sync.Mutex
+		wg        sync.WaitGroup
+		tabletMap = make(map[string]*TabletInfo)
+		returnErr error
+		// Previously this was always run with unlimited concurrency, so 32 should be fine.
+		concurrency int64 = 32
+	)
 
-	tabletMap := make(map[string]*TabletInfo)
-	var someError error
+	if opt != nil && opt.Concurrency > 0 {
+		concurrency = opt.Concurrency
+	}
+	var sem = semaphore.NewWeighted(concurrency)
 
 	for _, tabletAlias := range tabletAliases {
 		wg.Add(1)
 		go func(tabletAlias *topodatapb.TabletAlias) {
 			defer wg.Done()
+			if err := sem.Acquire(ctx, 1); err != nil {
+				// Only happens if context is cancelled.
+				mu.Lock()
+				defer mu.Unlock()
+				log.Warningf("%v: %v", tabletAlias, err)
+				// We only need to set this on the first error.
+				if returnErr == nil {
+					returnErr = NewError(PartialResult, tabletAlias.GetCell())
+				}
+				return
+			}
 			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
-			mutex.Lock()
+			sem.Release(1)
+			mu.Lock()
+			defer mu.Unlock()
 			if err != nil {
 				log.Warningf("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
-				if !IsErrType(err, NoNode) {
-					someError = NewError(PartialResult, "")
+				// We only need to set this on first error.
+				if returnErr == nil && !IsErrType(err, NoNode) {
+					returnErr = NewError(PartialResult, tabletAlias.GetCell())
 				}
 			} else {
 				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo
 			}
-			mutex.Unlock()
 		}(tabletAlias)
 	}
 	wg.Wait()
-	return tabletMap, someError
+	return tabletMap, returnErr
 }
 
 // InitTablet creates or updates a tablet. If no parent is specified

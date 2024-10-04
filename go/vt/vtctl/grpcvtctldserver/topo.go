@@ -161,7 +161,7 @@ func deleteShardCell(ctx context.Context, ts *topo.Server, keyspace string, shar
 	// Get all the tablet records for the aliases we've collected. Note that
 	// GetTabletMap ignores ErrNoNode, which is convenient for our purpose; it
 	// means a tablet was deleted but is still referenced.
-	tabletMap, err := ts.GetTabletMap(ctx, aliases)
+	tabletMap, err := ts.GetTabletMap(ctx, aliases, nil)
 	if err != nil {
 		return fmt.Errorf("GetTabletMap() failed: %w", err)
 	}

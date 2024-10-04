@@ -43,7 +43,7 @@ func GetTabletMapForCell(ctx context.Context, ts *topo.Server, cell string) (map
 	if err != nil {
 		return nil, err
 	}
-	tabletMap, err := ts.GetTabletMap(ctx, aliases)
+	tabletMap, err := ts.GetTabletMap(ctx, aliases, nil)
 	if err != nil {
 		// we got another error than topo.ErrNoNode
 		return nil, err
@@ -65,7 +65,7 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts *topo.Server) ([]*topo.Tab
 	wg.Add(len(cells))
 	for i, cell := range cells {
 		go func(i int, cell string) {
-			results[i], errors[i] = ts.GetTabletsByCell(ctx, cell)
+			results[i], errors[i] = ts.GetTabletsByCell(ctx, cell, nil)
 			wg.Done()
 		}(i, cell)
 	}
