@@ -20,6 +20,7 @@
     - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
     - **[Errant GTID Detection on VTTablets](#errant-gtid-vttablet)**
     - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
+    - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
 
 ## <a id="major-changes"/>Major Changes</a>
 
