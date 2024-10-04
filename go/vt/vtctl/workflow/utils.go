@@ -1011,3 +1011,73 @@ func applyTargetShards(ts *trafficSwitcher, targetShards []string) error {
 	}
 	return nil
 }
+
+// validateEmptyTables checks if all specified tables in the keyspace are empty across all shards.
+// It queries each shard's primary tablet and if any non-empty table is found, it returns an error
+// containing a list of non-empty tables.
+func validateEmptyTables(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace string, tables []string) error {
+	if len(tables) == 0 {
+		return nil
+	}
+
+	shards, err := ts.GetServingShards(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	if len(shards) == 0 {
+		return fmt.Errorf("keyspace %s has no shards", keyspace)
+	}
+
+	var selectQueries []string
+	for _, t := range tables {
+		selectQueries = append(selectQueries, fmt.Sprintf("(select '%s' from %s limit 1)", t, t))
+	}
+	query := strings.Join(selectQueries, "union all")
+
+	var mu sync.Mutex
+	isFaultyTable := map[string]bool{}
+
+	err = forAllShards(shards, func(shard *topo.ShardInfo) error {
+		primary := shard.PrimaryAlias
+		if primary == nil {
+			return fmt.Errorf("shard does not have a primary: %v", shard.ShardName())
+		}
+
+		ti, err := ts.GetTablet(ctx, primary)
+		if err != nil {
+			return err
+		}
+
+		res, err := tmc.ExecuteFetchAsDba(ctx, ti.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:   []byte(query),
+			MaxRows: uint64(len(tables)),
+		})
+		if err != nil {
+			return err
+		}
+
+		mu.Lock()
+		for _, row := range res.Rows {
+			isFaultyTable[string(row.Values)] = true
+		}
+		mu.Unlock()
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	faultyTables := make([]string, len(isFaultyTable))
+	i := 0
+	for table := range isFaultyTable {
+		faultyTables[i] = table
+		i++
+	}
+
+	if len(faultyTables) > 0 {
+		return fmt.Errorf("target keyspace contains following non-empty table(s): %s", strings.Join(faultyTables, ", "))
+	}
+	return nil
+}

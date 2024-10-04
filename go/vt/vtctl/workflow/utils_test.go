@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
@@ -21,6 +22,10 @@ import (
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
@@ -242,4 +247,106 @@ func startEtcd(t *testing.T) string {
 	})
 
 	return clientAddr
+}
+
+func TestValidateEmptyTables(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	ks := "test_keyspace"
+	shard1 := "-80"
+	shard2 := "80-"
+	err := ts.CreateKeyspace(ctx, ks, &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
+	err = ts.CreateShard(ctx, ks, shard1)
+	require.NoError(t, err)
+	err = ts.CreateShard(ctx, ks, shard2)
+	require.NoError(t, err)
+
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Keyspace: ks,
+		Shard:    shard1,
+	}
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  200,
+		},
+		Keyspace: ks,
+		Shard:    shard2,
+	}
+	err = ts.CreateTablet(ctx, tablet1)
+	require.NoError(t, err)
+	err = ts.CreateTablet(ctx, tablet2)
+	require.NoError(t, err)
+
+	_, err = ts.UpdateShardFields(ctx, ks, shard1, func(si *topo.ShardInfo) error {
+		si.Shard.PrimaryAlias = tablet1.Alias
+		return nil
+	})
+	require.NoError(t, err)
+	_, err = ts.UpdateShardFields(ctx, ks, shard2, func(si *topo.ShardInfo) error {
+		si.Shard.PrimaryAlias = tablet2.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tmc := &testutil.TabletManagerClient{
+		ExecuteFetchAsDbaResults: map[string]struct {
+			Response *querypb.QueryResult
+			Error    error
+		}{
+			"zone1-0000000100": {
+				Response: &querypb.QueryResult{
+					Fields: []*querypb.Field{
+						{
+							Name: "table_name",
+							Type: querypb.Type_VARCHAR,
+						},
+					},
+					Rows: []*querypb.Row{{
+						Lengths: []int64{6},
+						Values:  []byte("table1"),
+					}, {
+						Lengths: []int64{6},
+						Values:  []byte("table2"),
+					},
+					},
+				},
+			},
+			"zone1-0000000200": {
+				Response: &querypb.QueryResult{
+					Fields: []*querypb.Field{
+						{
+							Name: "table_name",
+							Type: querypb.Type_VARCHAR,
+						},
+					},
+					Rows: []*querypb.Row{{
+						Lengths: []int64{6},
+						Values:  []byte("table2"),
+					}, {
+						Lengths: []int64{6},
+						Values:  []byte("table3"),
+					},
+					},
+				},
+			},
+		},
+	}
+
+	err = validateEmptyTables(ctx, ts, tmc, ks, []string{"table1", "table2", "table3", "table4"})
+	assert.ErrorContains(t, err, "table1")
+	assert.ErrorContains(t, err, "table2")
+	assert.ErrorContains(t, err, "table3")
+
+	err = validateEmptyTables(ctx, ts, tmc, ks, []string{})
+	assert.NoError(t, err, "should not throw any error for empty tables slice")
 }
