@@ -1498,6 +1498,25 @@ func (op ComparisonExprOperator) ToString() string {
 	}
 }
 
+// JSONString returns a string representation for this operator that does not need escaping in JSON
+func (op ComparisonExprOperator) JSONString() string {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp, InOp, NotInOp, LikeOp, NotLikeOp, RegexpOp, NotRegexpOp:
+		// These operators are safe for JSON output, so we delegate to ToString
+		return op.ToString()
+	case LessThanOp:
+		return "lt"
+	case GreaterThanOp:
+		return "gt"
+	case LessEqualOp:
+		return "le"
+	case GreaterEqualOp:
+		return "ge"
+	default:
+		panic("unreachable")
+	}
+}
+
 // ToString returns the operator as a string
 func (op IsExprOperator) ToString() string {
 	switch op {

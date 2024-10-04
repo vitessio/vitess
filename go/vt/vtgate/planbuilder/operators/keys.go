@@ -17,23 +17,54 @@ limitations under the License.
 package operators
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
+	"sort"
+
+	"vitess.io/vitess/go/slice"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-type VExplainKeys struct {
-	GroupingColumns []string `json:"groupingColumns,omitempty"`
-	TableName       []string `json:"tableName,omitempty"`
-	JoinColumns     []string `json:"joinColumns,omitempty"`
-	FilterColumns   []string `json:"filterColumns,omitempty"`
-	StatementType   string   `json:"statementType"`
+type (
+	Column struct {
+		Table string
+		Name  string
+	}
+
+	ColumnUse struct {
+		Column Column
+		Uses   sqlparser.ComparisonExprOperator
+	}
+
+	VExplainKeys struct {
+		StatementType   string
+		TableName       []string
+		GroupingColumns []Column
+		JoinColumns     []ColumnUse
+		FilterColumns   []ColumnUse
+		SelectColumns   []Column
+	}
+)
+
+func (c Column) String() string {
+	return fmt.Sprintf("%s.%s", c.Table, c.Name)
+}
+
+func (c ColumnUse) String() string {
+	return fmt.Sprintf("%s %s", c.Column, c.Uses.JSONString())
+}
+
+type columnUse struct {
+	col *sqlparser.ColName
+	use sqlparser.ComparisonExprOperator
 }
 
 func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result VExplainKeys) {
-	var filterColumns, joinColumns, groupingColumns []*sqlparser.ColName
+	var groupingColumns, selectColumns []*sqlparser.ColName
+	var filterColumns, joinColumns []columnUse
 
 	addPredicate := func(predicate sqlparser.Expr) {
 		predicates := sqlparser.SplitAndExpression(nil, predicate)
@@ -44,15 +75,19 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 			}
 			lhs, lhsOK := cmp.Left.(*sqlparser.ColName)
 			rhs, rhsOK := cmp.Right.(*sqlparser.ColName)
+
+			var output = &filterColumns
 			if lhsOK && rhsOK && ctx.SemTable.RecursiveDeps(lhs) != ctx.SemTable.RecursiveDeps(rhs) {
-				joinColumns = append(joinColumns, lhs, rhs)
-				continue
+				// If the columns are from different tables, they are considered join columns
+				output = &joinColumns
 			}
+
 			if lhsOK {
-				filterColumns = append(filterColumns, lhs)
+				*output = append(*output, columnUse{lhs, cmp.Operator})
 			}
-			if rhsOK {
-				filterColumns = append(filterColumns, rhs)
+
+			if switchedOp, ok := cmp.Operator.SwitchSides(); rhsOK && ok {
+				*output = append(*output, columnUse{rhs, switchedOp})
 			}
 		}
 	}
@@ -65,30 +100,34 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 			addPredicate(node.On)
 		case *sqlparser.GroupBy:
 			for _, expr := range node.Exprs {
-				predicates := sqlparser.SplitAndExpression(nil, expr)
-				for _, expr := range predicates {
-					col, ok := expr.(*sqlparser.ColName)
-					if ok {
-						groupingColumns = append(groupingColumns, col)
-					}
+				col, ok := expr.(*sqlparser.ColName)
+				if ok {
+					groupingColumns = append(groupingColumns, col)
 				}
 			}
+		case *sqlparser.AliasedExpr:
+			_ = sqlparser.VisitSQLNode(node, func(e sqlparser.SQLNode) (kontinue bool, err error) {
+				if col, ok := e.(*sqlparser.ColName); ok {
+					selectColumns = append(selectColumns, col)
+				}
+				return true, nil
+			})
 		}
 
 		return true, nil
 	})
 
 	return VExplainKeys{
+		SelectColumns:   getUniqueColNames(ctx, selectColumns),
 		GroupingColumns: getUniqueColNames(ctx, groupingColumns),
-		JoinColumns:     getUniqueColNames(ctx, joinColumns),
-		FilterColumns:   getUniqueColNames(ctx, filterColumns),
+		JoinColumns:     getUniqueColUsages(ctx, joinColumns),
+		FilterColumns:   getUniqueColUsages(ctx, filterColumns),
 		StatementType:   sqlparser.ASTToStatementType(stmt).String(),
 	}
 }
 
-func getUniqueColNames(ctx *plancontext.PlanningContext, columns []*sqlparser.ColName) []string {
-	var colNames []string
-	for _, col := range columns {
+func getUniqueColNames(ctx *plancontext.PlanningContext, inCols []*sqlparser.ColName) (columns []Column) {
+	for _, col := range inCols {
 		tableInfo, err := ctx.SemTable.TableInfoForExpr(col)
 		if err != nil {
 			continue
@@ -97,9 +136,56 @@ func getUniqueColNames(ctx *plancontext.PlanningContext, columns []*sqlparser.Co
 		if table == nil {
 			continue
 		}
-		colNames = append(colNames, fmt.Sprintf("%s.%s", table.Name.String(), col.Name.String()))
+		columns = append(columns, Column{Table: table.Name.String(), Name: col.Name.String()})
+	}
+	sort.Slice(columns, func(i, j int) bool {
+		return columns[i].String() < columns[j].String()
+	})
+
+	return slices.Compact(columns)
+}
+
+func getUniqueColUsages(ctx *plancontext.PlanningContext, inCols []columnUse) (columns []ColumnUse) {
+	for _, col := range inCols {
+		tableInfo, err := ctx.SemTable.TableInfoForExpr(col.col)
+		if err != nil {
+			continue
+		}
+		table := tableInfo.GetVindexTable()
+		if table == nil {
+			continue
+		}
+
+		columns = append(columns, ColumnUse{
+			Column: Column{Table: table.Name.String(), Name: col.col.Name.String()},
+			Uses:   col.use,
+		})
 	}
 
-	slices.Sort(colNames)
-	return slices.Compact(colNames)
+	sort.Slice(columns, func(i, j int) bool {
+		return columns[i].Column.String() < columns[j].Column.String()
+	})
+	return slices.Compact(columns)
+}
+
+func (v VExplainKeys) MarshalJSON() ([]byte, error) {
+	// Create a custom struct to marshal with conditional fields
+	aux := struct {
+		StatementType   string   `json:"statementType"`
+		TableName       []string `json:"tableName,omitempty"`
+		GroupingColumns []string `json:"groupingColumns,omitempty"`
+		JoinColumns     []string `json:"joinColumns,omitempty"`
+		FilterColumns   []string `json:"filterColumns,omitempty"`
+		SelectColumns   []string `json:"selectColumns,omitempty"`
+	}{
+		StatementType:   v.StatementType,
+		TableName:       v.TableName,
+		SelectColumns:   slice.Map(v.SelectColumns, func(c Column) string { return c.String() }),
+		GroupingColumns: slice.Map(v.GroupingColumns, func(c Column) string { return c.String() }),
+		JoinColumns:     slice.Map(v.JoinColumns, func(c ColumnUse) string { return c.String() }),
+		FilterColumns:   slice.Map(v.FilterColumns, func(c ColumnUse) string { return c.String() }),
+	}
+
+	// Marshal the aux struct into JSON
+	return json.Marshal(aux)
 }

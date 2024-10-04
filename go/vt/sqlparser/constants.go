@@ -724,6 +724,29 @@ func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
 	panic("unreachable")
 }
 
+// SwitchSides returns the reversed comparison operator if applicable, along with a boolean indicating success.
+// For symmetric operators like '=', '!=', and '<=>', it returns the same operator and true.
+// For directional comparison operators ('<', '>', '<=', '>='), it returns the opposite operator and true.
+// For operators that imply directionality or cannot be logically reversed (such as 'IN', 'LIKE', 'REGEXP'),
+// it returns the original operator and false, indicating that switching sides is not valid.
+func (op ComparisonExprOperator) SwitchSides() (ComparisonExprOperator, bool) {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp, LikeOp, NotLikeOp, RegexpOp, NotRegexpOp, InOp, NotInOp:
+		// These operators are symmetric, so switching sides has no effect
+		return op, true
+	case LessThanOp:
+		return GreaterThanOp, true
+	case GreaterThanOp:
+		return LessThanOp, true
+	case LessEqualOp:
+		return GreaterEqualOp, true
+	case GreaterEqualOp:
+		return LessEqualOp, true
+	default:
+		return op, false
+	}
+}
+
 func (op ComparisonExprOperator) IsCommutative() bool {
 	switch op {
 	case EqualOp, NotEqualOp, NullSafeEqualOp:

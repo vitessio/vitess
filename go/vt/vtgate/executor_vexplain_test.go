@@ -122,54 +122,61 @@ func TestVExplainKeys(t *testing.T) {
 		{
 			query: "select count(*), col2 from music group by col2",
 			expectedRowString: `{
+	"statementType": "SELECT",
 	"groupingColumns": [
 		"music.col2"
 	],
-	"statementType": "SELECT"
+	"selectColumns": [
+		"music.col2"
+	]
 }`,
 		}, {
 			query: "select * from user u join user_extra ue on u.id = ue.user_id where u.col1 > 100 and ue.noLimit = 'foo'",
 			expectedRowString: `{
+	"statementType": "SELECT",
 	"joinColumns": [
-		"user.id",
-		"user_extra.user_id"
+		"user.id =",
+		"user_extra.user_id ="
 	],
 	"filterColumns": [
-		"user.col1",
-		"user_extra.noLimit"
-	],
-	"statementType": "SELECT"
+		"user.col1 gt",
+		"user_extra.noLimit ="
+	]
 }`,
 		}, {
 			// same as above, but written differently
 			query: "select * from user_extra ue, user u where ue.noLimit = 'foo' and u.col1 > 100 and ue.user_id = u.id",
 			expectedRowString: `{
+	"statementType": "SELECT",
 	"joinColumns": [
-		"user.id",
-		"user_extra.user_id"
+		"user.id =",
+		"user_extra.user_id ="
 	],
 	"filterColumns": [
-		"user.col1",
-		"user_extra.noLimit"
-	],
-	"statementType": "SELECT"
+		"user.col1 gt",
+		"user_extra.noLimit ="
+	]
 }`,
 		},
 		{
 			query: "select u.foo, ue.bar, count(*) from user u join user_extra ue on u.id = ue.user_id where u.name = 'John Doe' group by 1, 2",
 			expectedRowString: `{
+	"statementType": "SELECT",
 	"groupingColumns": [
 		"user.foo",
 		"user_extra.bar"
 	],
 	"joinColumns": [
-		"user.id",
-		"user_extra.user_id"
+		"user.id =",
+		"user_extra.user_id ="
 	],
 	"filterColumns": [
-		"user.name"
+		"user.name ="
 	],
-	"statementType": "SELECT"
+	"selectColumns": [
+		"user.foo",
+		"user_extra.bar"
+	]
 }`,
 		},
 		{
@@ -181,47 +188,54 @@ func TestVExplainKeys(t *testing.T) {
 		{
 			query: "select name, sum(amount) from user group by name",
 			expectedRowString: `{
+	"statementType": "SELECT",
 	"groupingColumns": [
 		"user.name"
 	],
-	"statementType": "SELECT"
+	"selectColumns": [
+		"user.amount",
+		"user.name"
+	]
 }`,
 		},
 		{
 			query: "select name from user where age > 30",
 			expectedRowString: `{
+	"statementType": "SELECT",
 	"filterColumns": [
-		"user.age"
+		"user.age gt"
 	],
-	"statementType": "SELECT"
+	"selectColumns": [
+		"user.name"
+	]
 }`,
 		},
 		{
 			query: "select * from user where name = 'apa' union select * from user_extra where name = 'monkey'",
 			expectedRowString: `{
+	"statementType": "SELECT",
 	"filterColumns": [
-		"user.name",
-		"user_extra.name"
-	],
-	"statementType": "SELECT"
+		"user.name =",
+		"user_extra.name ="
+	]
 }`,
 		},
 		{
 			query: "update user set name = 'Jane Doe' where id = 1",
 			expectedRowString: `{
+	"statementType": "UPDATE",
 	"filterColumns": [
-		"user.id"
-	],
-	"statementType": "UPDATE"
+		"user.id ="
+	]
 }`,
 		},
 		{
 			query: "delete from user where order_date < '2023-01-01'",
 			expectedRowString: `{
+	"statementType": "DELETE",
 	"filterColumns": [
-		"user.order_date"
-	],
-	"statementType": "DELETE"
+		"user.order_date lt"
+	]
 }`,
 		},
 	}
