@@ -92,8 +92,8 @@ func (c *replicationLagCache) maxLag() (maxLag uint32) {
 			continue
 		}
 
-		entry, ok := c.entries[key]
-		if !ok {
+		entry := c.entries[key]
+		if entry == nil {
 			continue
 		}
 
