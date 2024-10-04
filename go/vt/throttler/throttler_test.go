@@ -30,6 +30,12 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// testTabletTypes is the list of tablet types to test.
+var testTabletTypes = []topodata.TabletType{
+	topodata.TabletType_REPLICA,
+	topodata.TabletType_RDONLY,
+}
+
 // The main purpose of the benchmarks below is to demonstrate the functionality
 // of the throttler in the real-world (using a non-faked time.Now).
 // The benchmark values should be as close as possible to the request interval
@@ -425,10 +431,7 @@ func TestThrottlerMaxLag(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// run .add() and .MaxLag() concurrently to detect races
-	for _, tabletType := range []topodata.TabletType{
-		topodata.TabletType_REPLICA,
-		topodata.TabletType_RDONLY,
-	} {
+	for _, tabletType := range testTabletTypes {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -443,7 +446,7 @@ func TestThrottlerMaxLag(t *testing.T) {
 		}()
 
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, ctx context.Context, throttler *ThrottlerImpl, tabletType topodata.TabletType) {
+		go func() {
 			defer wg.Done()
 			for {
 				select {
@@ -470,17 +473,14 @@ func TestThrottlerMaxLag(t *testing.T) {
 					})
 				}
 			}
-		}(&wg, ctx, throttler, tabletType)
+		}()
 	}
 	time.Sleep(time.Second)
 	cancel()
 	wg.Wait()
 
 	// check .MaxLag()
-	for _, tabletType := range []topodata.TabletType{
-		topodata.TabletType_REPLICA,
-		topodata.TabletType_RDONLY,
-	} {
+	for _, tabletType := range testTabletTypes {
 		require.Equal(t, uint32(5), throttler.MaxLag(tabletType))
 	}
 }
