@@ -19,11 +19,7 @@ package throttler
 import (
 	"context"
 	"runtime"
-<<<<<<< HEAD
 	"strings"
-	"testing"
-	"time"
-=======
 	"sync"
 	"testing"
 	"time"
@@ -33,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
->>>>>>> 9b999b2a00 (Fix race in `replicationLagModule` of `go/vt/throttle` (#16078))
 )
 
 // testTabletTypes is the list of tablet types to test.
@@ -448,9 +443,8 @@ func TestThreadFinished_SecondCallPanics(t *testing.T) {
 
 func TestThrottlerMaxLag(t *testing.T) {
 	fc := &fakeClock{}
-	th, err := newThrottlerWithClock(t.Name(), "queries", 1, 1, 10, fc.now)
+	throttler, err := newThrottlerWithClock(t.Name(), "queries", 1, 1, 10, fc.now)
 	require.NoError(t, err)
-	throttler := th.(*ThrottlerImpl)
 	defer throttler.Close()
 
 	require.NotNil(t, throttler)
