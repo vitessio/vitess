@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWaitlistExpireWithMultipleWaiters(t *testing.T) {
@@ -52,11 +53,13 @@ func TestWaitlistExpireWithMultipleWaiters(t *testing.T) {
 
 	// Wait for the notified goroutines to finish
 	timeout := time.After(1 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
 	for expireCount.Load() != int32(waiterCount) {
 		select {
 		case <-timeout:
-			t.Fatalf("Timed out waiting for all waiters to expire. Wanted %d, got %d", waiterCount, expireCount.Load())
-		case <-time.After(10 * time.Millisecond):
+			require.Failf(t, "Timed out waiting for all waiters to expire", "Wanted %d, got %d", waiterCount, expireCount.Load())
+		case <-ticker.C:
 			// try again
 		}
 	}
