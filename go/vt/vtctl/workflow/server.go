@@ -1358,6 +1358,21 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		sourceTopo   = s.ts
 	)
 
+	if req.GetWorkflowOptions() != nil && req.WorkflowOptions.GlobalKeyspace != "" {
+		// Confirm that the keyspace exists and it is unsharded.
+		gvs, err := s.ts.GetVSchema(ctx, req.WorkflowOptions.GlobalKeyspace)
+		if err != nil {
+			if topo.IsErrType(err, topo.NoNode) {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "global-keyspace %s does not exist", req.WorkflowOptions.GlobalKeyspace)
+			}
+			return nil, vterrors.Wrapf(err, "failed to validate global-keyspace")
+		}
+		if gvs.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "global-keyspace %s is sharded and thus cannot be used for global resources",
+				req.WorkflowOptions.GlobalKeyspace)
+		}
+	}
+
 	// When the source is an external cluster mounted using the Mount command.
 	if req.ExternalClusterName != "" {
 		externalTopo, err = s.ts.OpenExternalVitessClusterServer(ctx, req.ExternalClusterName)
@@ -1425,10 +1440,13 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	s.Logger().Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 	if !vschema.Sharded {
-		// Save the original in case we need to restore it for a late failure
-		// in the defer().
+		// Save the original in case we need to restore it for a late failure in
+		// the defer().
 		origVSchema = vschema.CloneVT()
 		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
+			return nil, err
+		}
+		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
 			return nil, err
 		}
 	}
@@ -1539,11 +1557,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	// routing rules and denied tables entries in place.
 	if externalTopo == nil {
 		if err := s.setupInitialRoutingRules(ctx, req, mz, tables); err != nil {
-			return nil, err
-		}
-
-		// We added to the vschema.
-		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
 			return nil, err
 		}
 	}
