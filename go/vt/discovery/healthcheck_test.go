@@ -149,6 +149,7 @@ func TestHealthCheck(t *testing.T) {
 	input := make(chan *querypb.StreamHealthResponse)
 	conn := createFakeConn(tablet, input)
 	now := time.Now()
+	hc.nowTimeFunc = func() time.Time { return now }
 
 	// create a channel and subscribe to healthcheck
 	resultChan := hc.Subscribe()
@@ -497,6 +498,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 		Serving:              true,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 		PrimaryTermStartTime: 20,
+		Timestamp:            protoutil.TimeToProto(now),
 	}}
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, health, a, "unexpected result")
