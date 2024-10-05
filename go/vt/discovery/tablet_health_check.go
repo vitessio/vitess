@@ -79,6 +79,8 @@ type tabletHealthCheck struct {
 	// possibly delete both these
 	loggedServingState    bool
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
+	// nowTimeFunc provides the current time
+	nowTimeFunc func() time.Time
 }
 
 // String is defined because we want to print a []*tabletHealthCheck array nicely.
@@ -128,7 +130,10 @@ func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 		thc.loggedServingState = true
 	}
 	thc.Serving = serving
-	thc.Timestamp = protoutil.TimeToProto(time.Now())
+
+	if thc.nowTimeFunc != nil {
+		thc.Timestamp = protoutil.TimeToProto(thc.nowTimeFunc())
+	}
 }
 
 // stream streams healthcheck responses to callback.

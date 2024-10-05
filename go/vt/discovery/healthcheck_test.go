@@ -303,6 +303,8 @@ func TestHealthCheckStreamError(t *testing.T) {
 	resultChan := hc.Subscribe()
 	fc := createFakeConn(tablet, input)
 	fc.errCh = make(chan error)
+	now := time.Now()
+	hc.nowTimeFunc = func() time.Time { return now }
 	hc.AddTablet(tablet)
 
 	// Immediately after AddTablet() there will be the first notification.
@@ -311,6 +313,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 		Target:               &querypb.Target{Keyspace: "k", Shard: "s"},
 		Serving:              false,
 		PrimaryTermStartTime: 0,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	result := <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -329,6 +332,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 		Serving:              true,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		PrimaryTermStartTime: 0,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	input <- shr
 	result = <-resultChan
@@ -367,6 +371,8 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 	resultChan := hc.Subscribe()
 	fc := createFakeConn(tablet, input)
 	fc.errCh = make(chan error)
+	now := time.Now()
+	hc.nowTimeFunc = func() time.Time { return now }
 	hc.AddTablet(tablet)
 
 	// Immediately after AddTablet() there will be the first notification.
@@ -375,6 +381,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 		Target:               &querypb.Target{Keyspace: "k", Shard: "s"},
 		Serving:              false,
 		PrimaryTermStartTime: 0,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	result := <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -393,6 +400,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 		Serving:              true,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		PrimaryTermStartTime: 10,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	input <- shr
 	result = <-resultChan
@@ -438,6 +446,8 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	tablet2.Type = topodatapb.TabletType_REPLICA
 	input2 := make(chan *querypb.StreamHealthResponse)
 	createFakeConn(tablet2, input2)
+	now := time.Now()
+	hc.nowTimeFunc = func() time.Time { return now }
 	hc.AddTablet(tablet2)
 	<-resultChan
 
@@ -466,6 +476,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 		Serving:              true,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 		PrimaryTermStartTime: 10,
+		Timestamp:            protoutil.TimeToProto(now),
 	}}
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, health, a, "unexpected result")
@@ -557,6 +568,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	resultChan := hc.Subscribe()
 
 	now := time.Now()
+	hc.nowTimeFunc = func() time.Time { return now }
 
 	hc.AddTablet(tablet)
 
@@ -579,10 +591,10 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
-		Tablet:  tablet,
-		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving: true,
-		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		PrimaryTermStartTime: 0,
 		Timestamp:            protoutil.TimeToProto(now),
 	}
@@ -624,6 +636,8 @@ func TestHealthCheckTimeout(t *testing.T) {
 	input := make(chan *querypb.StreamHealthResponse)
 	fc := createFakeConn(tablet, input)
 	resultChan := hc.Subscribe()
+	now := time.Now()
+	hc.nowTimeFunc = func() time.Time { return now }
 	hc.AddTablet(tablet)
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
@@ -649,6 +663,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 		Serving:              true,
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		PrimaryTermStartTime: 0,
+		Timestamp:            protoutil.TimeToProto(now),
 	}
 	input <- shr
 	result = <-resultChan
