@@ -413,9 +413,8 @@ func TestThreadFinished_SecondCallPanics(t *testing.T) {
 
 func TestThrottlerMaxLag(t *testing.T) {
 	fc := &fakeClock{}
-	th, err := newThrottlerWithClock(t.Name(), "queries", 1, 1, 10, fc.now)
+	throttler, err := newThrottlerWithClock(t.Name(), "queries", 1, 1, 10, fc.now)
 	require.NoError(t, err)
-	throttler := th.(*ThrottlerImpl)
 	defer throttler.Close()
 
 	require.NotNil(t, throttler)
