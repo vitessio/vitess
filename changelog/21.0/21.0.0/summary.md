@@ -20,6 +20,7 @@
     - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
     - **[Errant GTID Detection on VTTablets](#errant-gtid-vttablet)**
     - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
+    - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -218,3 +219,7 @@ work automatically during the [`MoveTables`](https://vitess.io/docs/reference/vr
 [`--remove-sharded-auto-increment` boolean flag](https://vitess.io/docs/20.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/) and you should begin using the new
 [`--sharded-auto-increment-handling` flag](https://vitess.io/docs/21.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/) instead. Please see the new
 [`MoveTables` Auto Increment Handling](https://vitess.io/docs/21.0/reference/vreplication/movetables/#auto-increment-handling) documentation for additional details.
+
+### <a id="experimental-mysql-84"/>Experimental MySQL 8.4 support
+
+We have added experimental support for MySQL 8.4. It passes the Vitess test suite, but it is otherwise not yet tested. We are looking for feedback from the community to improve this to move support out of the experimental phase in a future release.
