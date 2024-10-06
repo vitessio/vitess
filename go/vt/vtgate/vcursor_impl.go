@@ -1535,3 +1535,10 @@ func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
 func (vc *vcursorImpl) GetForeignKeyChecksState() *bool {
 	return vc.fkChecksState
 }
+
+// RecordMirrorStats is used to record stats about a mirror query.
+func (vc *vcursorImpl) RecordMirrorStats(sourceExecTime, targetExecTime time.Duration, targetErr error) {
+	vc.logStats.MirrorSourceExecuteTime = sourceExecTime
+	vc.logStats.MirrorTargetExecuteTime = targetExecTime
+	vc.logStats.MirrorTargetError = targetErr
+}
