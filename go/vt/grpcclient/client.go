@@ -80,9 +80,14 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&credsFile, "grpc_auth_static_client_creds", credsFile, "When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.")
 }
 
-func RegisterDialConcurrencyFlagsHealthcheck(fs *pflag.FlagSet) {
-	// TODO: Deprecate this and rename it to `grpc-dial-concurrency-limit`
+func RegisterDeprecatedDialConcurrencyFlagsHealthcheck(fs *pflag.FlagSet) {
 	fs.Int64Var(&dialConcurrencyLimit, "healthcheck-dial-concurrency", 1024, "Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000.")
+	fs.MarkDeprecated("healthcheck-dial-concurrency", "This option is deprecated and will be removed in a future release. Use --grpc-dial-concurrency-limit instead.")
+}
+
+func RegisterDeprecatedDialConcurrencyFlagsHealthcheckForVtcombo(fs *pflag.FlagSet) {
+	fs.Int64Var(&dialConcurrencyLimit, "healthcheck-dial-concurrency", 1024, "Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000.")
+	fs.MarkDeprecated("healthcheck-dial-concurrency", "This option is deprecated and will be removed in a future release.")
 }
 
 func RegisterDialConcurrencyFlags(fs *pflag.FlagSet) {
@@ -93,12 +98,15 @@ func init() {
 	for _, cmd := range grpcclientBinaries {
 		servenv.OnParseFor(cmd, RegisterFlags)
 
-		if cmd == "vtgate" || cmd == "vtcombo" || cmd == "vtctld" {
-			servenv.OnParseFor(cmd, RegisterDialConcurrencyFlagsHealthcheck)
-		} else {
-			servenv.OnParseFor(cmd, RegisterDialConcurrencyFlags)
+		if cmd == "vtgate" || cmd == "vtctld" {
+			servenv.OnParseFor(cmd, RegisterDeprecatedDialConcurrencyFlagsHealthcheck)
 		}
+
+		servenv.OnParseFor(cmd, RegisterDialConcurrencyFlags)
 	}
+
+	// vtcombo doesn't really use grpc, but we need to expose this flag for backwards compat
+	servenv.OnParseFor("vtcombo", RegisterDeprecatedDialConcurrencyFlagsHealthcheckForVtcombo)
 }
 
 // FailFast is a self-documenting type for the grpc.FailFast.
