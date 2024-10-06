@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/discovery"
 )
 
