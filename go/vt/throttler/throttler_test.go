@@ -17,11 +17,25 @@ limitations under the License.
 package throttler
 
 import (
+	"context"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/topodata"
 )
+
+// testTabletTypes is the list of tablet types to test.
+var testTabletTypes = []topodata.TabletType{
+	topodata.TabletType_REPLICA,
+	topodata.TabletType_RDONLY,
+}
 
 // The main purpose of the benchmarks below is to demonstrate the functionality
 // of the throttler in the real-world (using a non-faked time.Now).
@@ -425,4 +439,73 @@ func TestThreadFinished_SecondCallPanics(t *testing.T) {
 		}
 	}()
 	throttler.ThreadFinished(0)
+}
+
+func TestThrottlerMaxLag(t *testing.T) {
+	fc := &fakeClock{}
+	throttler, err := newThrottlerWithClock(t.Name(), "queries", 1, 1, 10, fc.now)
+	require.NoError(t, err)
+	defer throttler.Close()
+
+	require.NotNil(t, throttler)
+	require.NotNil(t, throttler.maxReplicationLagModule)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	// run .add() and .MaxLag() concurrently to detect races
+	for _, tabletType := range testTabletTypes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					throttler.MaxLag(tabletType)
+				}
+			}
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					cache := throttler.maxReplicationLagModule.lagCacheByType(tabletType)
+					require.NotNil(t, cache)
+					cache.add(replicationLagRecord{
+						time: time.Now(),
+						TabletHealth: discovery.TabletHealth{
+							Serving: true,
+							Stats: &query.RealtimeStats{
+								ReplicationLagSeconds: 5,
+							},
+							Tablet: &topodata.Tablet{
+								Hostname: t.Name(),
+								Type:     tabletType,
+								PortMap: map[string]int32{
+									"test": 15999,
+								},
+							},
+						},
+					})
+				}
+			}
+		}()
+	}
+	time.Sleep(time.Second)
+	cancel()
+	wg.Wait()
+
+	// check .MaxLag()
+	for _, tabletType := range testTabletTypes {
+		require.Equal(t, uint32(5), throttler.MaxLag(tabletType))
+	}
 }
