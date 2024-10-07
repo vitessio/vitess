@@ -2128,24 +2128,48 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		s.optimizeCopyStateTable(tablet.Tablet)
 		return res.Result, err
 	}
-	delCtx, delCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*2)
-	defer delCancel()
-	res, err := vx.CallbackContext(delCtx, callback)
-	if err != nil {
-		return nil, err
+
+	var res map[*topo.TabletInfo]*querypb.QueryResult
+	delFunc := func() error {
+		delCtx, delCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*2)
+		defer delCancel()
+		res, err = vx.CallbackContext(delCtx, callback)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
-	if len(res) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the %s workflow does not exist in the %s keyspace", req.Workflow, req.Keyspace)
-	}
-
-	// Cleanup related data and artifacts. There are none for a LookupVindex workflow.
-	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
-		if _, err := s.DropTargets(delCtx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
-			if topo.IsErrType(err, topo.NoNode) {
-				return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
+	// Multi-tenant migrations delete from the target table in batches and we may not
+	// be able to complete that work before the timeout. So we only delete the workflow
+	// after the cleanup work completes successfully so that the workflow can be
+	// cancelled multiple times if needed.
+	if ts.IsMultiTenantMigration() {
+		if ts.workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables { // Should never happen
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported workflow type %q for multi-tenant migration", ts.workflowType)
+		}
+		// We need to delete the rows that the target tables would have for the tenant.
+		// We don't cleanup other related artifacts since they are not tied to the tenant.
+		if !req.GetKeepData() {
+			if err := s.DeleteTenantData(ctx, ts); err != nil {
+				return nil, err
 			}
+		}
+		if err := delFunc(); err != nil {
 			return nil, err
+		}
+	} else {
+		if err := delFunc(); err != nil {
+			return nil, err
+		}
+		// Cleanup related data and artifacts. There are none for a LookupVindex workflow.
+		if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+			if _, err := s.DropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
+				if topo.IsErrType(err, topo.NoNode) {
+					return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
+				}
+				return nil, err
+			}
 		}
 	}
 
@@ -2709,6 +2733,115 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 		return nil, err
 	}
 	return sw.logs(), nil
+}
+
+func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher) error {
+	var (
+		err error
+		sw  = &switcher{ts: ts, s: s}
+	)
+	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported workflow type %q for multi-tenant migration", ts.workflowType)
+	}
+	if ts.options == nil || strings.TrimSpace(ts.options.TenantId) == "" {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing tenant ID in the workflow options")
+	}
+	if len(ts.tables) == 0 { // Nothing to delete
+		return nil
+	}
+
+	// Lock the workflow along with its target keyspace.
+	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DeleteTenantData")
+	if lockErr != nil {
+		return vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
+	}
+	defer workflowUnlock(&err)
+	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DeleteTenantData")
+	if lockErr != nil {
+		return vterrors.Wrapf(lockErr, "failed to lock the %s keyspace", ts.TargetKeyspaceName())
+	}
+	defer targetUnlock(&err)
+	ctx = lockCtx
+
+	// We need to get the binlogsource filter used for the tenant.
+	wf, err := s.GetWorkflow(ctx, ts.TargetKeyspaceName(), ts.WorkflowName(), false, nil)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get workflow %s", ts.WorkflowName())
+	}
+	// All streams must be using the same filter so we only need look at the first one.
+	var where *sqlparser.Where
+	for _, stream := range maps.Values(wf.ShardStreams) {
+		if len(stream.Streams) == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no streams found in the workflow %s", ts.WorkflowName())
+		}
+		stmt, err := ts.ws.env.Parser().Parse(stream.Streams[0].BinlogSource.Filter.Rules[0].Filter)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to parse query filter for tenant %s", ts.options.TenantId)
+		}
+		sel, ok := stmt.(*sqlparser.Select)
+		if !ok || sel.Where == nil {
+			return vterrors.Wrapf(err, "unexpected query filter for tenant %s: %v",
+				ts.options.TenantId, stream.Streams[0].BinlogSource.Filter.Rules[0].Filter)
+		}
+		exprs := make([]sqlparser.Expr, 0, 1)
+		for _, subexpr := range sqlparser.SplitAndExpression(nil, sel.Where.Expr) {
+			funcExpr, ok := subexpr.(*sqlparser.FuncExpr)
+			if ok && funcExpr.Name.EqualString("in_keyrange") {
+				continue // We do NOT want the in_keyrange filter
+			}
+			exprs = append(exprs, subexpr)
+		}
+		if len(exprs) == 0 {
+			return vterrors.Wrapf(err, "unexpected query filter for tenant %s: %v",
+				ts.options.TenantId, stream.Streams[0].BinlogSource.Filter.Rules[0].Filter)
+		}
+		where = &sqlparser.Where{Expr: sqlparser.AndExpressions(exprs...)}
+		break // We only needed to examine the first stream
+	}
+	if where == nil {
+		return vterrors.Wrapf(err, "no filter found for tenant %s", ts.options.TenantId)
+	}
+
+	err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		for _, table := range ts.tables {
+			stmt, err := s.env.Parser().Parse(fmt.Sprintf("delete from %s", table))
+			if err != nil {
+				return vterrors.Wrapf(err, "unable to build delete query for tenant %s", ts.options.TenantId)
+			}
+			del, ok := stmt.(*sqlparser.Delete)
+			if !ok {
+				return vterrors.Wrapf(err, "unable to build delete query for tenant %s", ts.options.TenantId)
+			}
+			del.Where = where
+			del.Limit = &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1000")}
+			query := sqlparser.String(del)
+			log.Errorf("DEBUG: delete query for tenant %s: %s", ts.options.TenantId, sqlparser.String(del))
+			for {
+				res, err := s.tmc.ExecuteFetchAsAllPrivs(ctx, target.GetPrimary().Tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+					Query:  []byte(query),
+					DbName: target.primary.DbName(),
+				})
+				if err != nil {
+					return err
+				}
+				if res.RowsAffected == 0 { // We're done
+					return nil
+				}
+				select {
+				case <-ctx.Done():
+					return vterrors.Wrapf(ctx.Err(), "context cancelled while deleting data for tenant %s", ts.options.TenantId)
+				default:
+				}
+			}
+		}
+		return err
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to delete data for tenant %s", ts.options.TenantId)
+	}
+
+	return nil
 }
 
 func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {

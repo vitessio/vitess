@@ -225,7 +225,7 @@ type trafficSwitcher struct {
 	logger logutil.Logger
 
 	migrationType      binlogdatapb.MigrationType
-	isPartialMigration bool
+	isPartialMigration bool // Is this on a subset of shards
 	workflow           string
 
 	// Should we continue if we encounter some potentially non-fatal errors such
@@ -295,7 +295,7 @@ func (ts *trafficSwitcher) ForAllSources(f func(source *MigrationSource) error) 
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (ts *trafficSwitcher) ForAllTargets(f func(source *MigrationTarget) error) error {
+func (ts *trafficSwitcher) ForAllTargets(f func(target *MigrationTarget) error) error {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	for _, target := range ts.targets {
