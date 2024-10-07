@@ -166,6 +166,7 @@ Flags:
       --gcs_backup_storage_bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs_backup_storage_root string                                   Root prefix for all backup-related object names.
       --gh-ost-path string                                               override default gh-ost binary full path (default "gh-ost")
+      --grpc-dial-concurrency-limit int                                  Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
