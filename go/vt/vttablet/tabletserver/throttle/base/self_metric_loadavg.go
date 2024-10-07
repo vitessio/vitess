@@ -25,13 +25,6 @@ import (
 	"strings"
 )
 
-var (
-	loadavgOnlyAvailableOnLinuxMetric = &ThrottleMetric{
-		Scope: SelfScope,
-		Err:   fmt.Errorf("loadavg metric is only available on Linux"),
-	}
-)
-
 var _ SelfMetric = registerSelfMetric(&LoadAvgSelfMetric{})
 
 type LoadAvgSelfMetric struct {
@@ -54,11 +47,11 @@ func (m *LoadAvgSelfMetric) RequiresConn() bool {
 }
 
 func (m *LoadAvgSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
-	if runtime.GOOS != "linux" {
-		return loadavgOnlyAvailableOnLinuxMetric
-	}
 	metric := &ThrottleMetric{
 		Scope: SelfScope,
+	}
+	if runtime.GOOS != "linux" {
+		return metric
 	}
 	{
 		content, err := os.ReadFile("/proc/loadavg")
