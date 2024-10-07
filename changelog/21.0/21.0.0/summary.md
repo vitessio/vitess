@@ -21,7 +21,7 @@
     - **[Errant GTID Detection on VTTablets](#errant-gtid-vttablet)**
     - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
-    - **[Errant GTIDs Count Metric](#errant-gtid-metric)**
+    - **[Curreny Errant GTIDs Count Metric](#errant-gtid-metric)**
 
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -226,6 +226,6 @@ work automatically during the [`MoveTables`](https://vitess.io/docs/reference/vr
 
 We have added experimental support for MySQL 8.4. It passes the Vitess test suite, but it is otherwise not yet tested. We are looking for feedback from the community to improve this to move support out of the experimental phase in a future release.
 
-### <a id="errant-gtid-metric"/>Errant GTIDs Count Metric
-A new metric called `ErrantGTIDCounts` has been added to the `VTOrc` component. 
-This metric shows the count of the errant GTIDs in the tablets.
+### <a id="errant-gtid-metric"/>Current Errant GTIDs Count Metric
+A new metric called `CurrentErrantGTIDCount` has been added to the `VTOrc` component. 
+This metric shows the current count of the errant GTIDs in the tablets.
