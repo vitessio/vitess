@@ -96,6 +96,11 @@ func (fra *fakeRPCTM) ResetSequences(ctx context.Context, tables []string) error
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	// TODO implement me
 	panic("implement me")
@@ -106,6 +111,11 @@ func (fra *fakeRPCTM) LockTables(ctx context.Context) error {
 }
 
 func (fra *fakeRPCTM) UnlockTables(ctx context.Context) error {
+	panic("implement me")
+}
+
+func (fra *fakeRPCTM) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	// TODO implement me
 	panic("implement me")
 }
 

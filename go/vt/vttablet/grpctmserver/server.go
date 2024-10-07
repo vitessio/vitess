@@ -315,6 +315,17 @@ func (s *server) ConcludeTransaction(ctx context.Context, request *tabletmanager
 	return &tabletmanagerdatapb.ConcludeTransactionResponse{}, nil
 }
 
+func (s *server) MysqlHostMetrics(ctx context.Context, request *tabletmanagerdatapb.MysqlHostMetricsRequest) (response *tabletmanagerdatapb.MysqlHostMetricsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "MysqlHostMetrics", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+
+	resp, err := s.tm.MysqlHostMetrics(ctx, request)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+	return resp, nil
+}
+
 //
 // Replication related methods
 //
@@ -450,6 +461,14 @@ func (s *server) ReadVReplicationWorkflow(ctx context.Context, request *tabletma
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{}
 	return s.tm.ReadVReplicationWorkflow(ctx, request)
+}
+
+func (s *server) ValidateVReplicationPermissions(ctx context.Context, request *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (response *tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ValidateVReplicationPermissions", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{}
+	response, err = s.tm.ValidateVReplicationPermissions(ctx, request)
+	return response, err
 }
 
 func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {

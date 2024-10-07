@@ -176,7 +176,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias.Cell, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
+	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
@@ -186,7 +186,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tsv.lagThrottler)
-	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks, tsv.te.preparedPool.IsEmpty)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks, tsv.te.preparedPool.IsEmptyForTable)
 
 	tsv.sm = &stateManager{
 		statelessql: tsv.statelessql,
@@ -698,6 +698,26 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 			return txe.RollbackPrepared(dtid, originalID)
 		},
 	)
+}
+
+// WaitForPreparedTwoPCTransactions waits for all the prepared transactions to complete.
+func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) error {
+	if tsv.te.preparedPool.IsEmpty() {
+		return nil
+	}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			// Return an error if we run out of time.
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Prepared transactions have not been resolved yet")
+		case <-ticker.C:
+			if tsv.te.preparedPool.IsEmpty() {
+				return nil
+			}
+		}
+	}
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
@@ -1600,7 +1620,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		sqlerror.ERTooLongString, sqlerror.ERDelayedInsertTableLocked, sqlerror.ERDupUnique, sqlerror.ERRequiresPrimaryKey, sqlerror.ERCantDoThisDuringAnTransaction, sqlerror.ERReadOnlyTransaction,
 		sqlerror.ERCannotAddForeign, sqlerror.ERNoReferencedRow, sqlerror.ERRowIsReferenced, sqlerror.ERCantUpdateWithReadLock, sqlerror.ERNoDefault, sqlerror.EROperandColumns,
 		sqlerror.ERSubqueryNo1Row, sqlerror.ERNonUpdateableTable, sqlerror.ERFeatureDisabled, sqlerror.ERDuplicatedValueInType, sqlerror.ERRowIsReferenced2,
-		sqlerror.ErNoReferencedRow2, sqlerror.ERWarnDataOutOfRange:
+		sqlerror.ErNoReferencedRow2, sqlerror.ERWarnDataOutOfRange, sqlerror.ERInnodbIndexCorrupt:
 		errCode = vtrpcpb.Code_FAILED_PRECONDITION
 	case sqlerror.EROptionPreventsStatement:
 		errCode = vtrpcpb.Code_CLUSTER_EVENT
@@ -1699,9 +1719,10 @@ func (tsv *TabletServer) RedoPreparedTransactions() {
 	tsv.te.RedoPreparedTransactions()
 }
 
-// SetTwoPCAllowed sets whether TwoPC is allowed or not.
-func (tsv *TabletServer) SetTwoPCAllowed(allowed bool) {
-	tsv.te.twopcAllowed = allowed
+// SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
+// The reason should be an enum value defined in the tabletserver.
+func (tsv *TabletServer) SetTwoPCAllowed(reason int, allowed bool) {
+	tsv.te.twopcAllowed[reason] = allowed
 }
 
 // HandlePanic is part of the queryservice.QueryService interface

@@ -36,28 +36,26 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
-	"vitess.io/vitess/go/vt/proto/vttime"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 // This file handles the initial backup restore upon startup.
 // It is only enabled if restore_from_backup is set.
 
 var (
-	restoreFromBackup      bool
-	restoreFromBackupTsStr string
-	restoreConcurrency     = 4
-	waitForBackupInterval  time.Duration
+	restoreFromBackup               bool
+	restoreFromBackupAllowedEngines []string
+	restoreFromBackupTsStr          string
+	restoreConcurrency              = 4
+	waitForBackupInterval           time.Duration
 
 	statsRestoreBackupTime     *stats.String
 	statsRestoreBackupPosition *stats.String
@@ -65,6 +63,7 @@ var (
 
 func registerRestoreFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&restoreFromBackup, "restore_from_backup", restoreFromBackup, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
+	fs.StringSliceVar(&restoreFromBackupAllowedEngines, "restore-from-backup-allowed-engines", restoreFromBackupAllowedEngines, "(init restore parameter) if set, only backups taken with the specified engines are eligible to be restored")
 	fs.StringVar(&restoreFromBackupTsStr, "restore_from_backup_ts", restoreFromBackupTsStr, "(init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'")
 	fs.IntVar(&restoreConcurrency, "restore_concurrency", restoreConcurrency, "(init restore parameter) how many concurrent files to restore at once")
 	fs.DurationVar(&waitForBackupInterval, "wait_for_backup_interval", waitForBackupInterval, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
@@ -132,6 +131,7 @@ func (tm *TabletManager) RestoreData(
 	backupTime time.Time,
 	restoreToTimetamp time.Time,
 	restoreToPos string,
+	allowedBackupEngines []string,
 	mysqlShutdownTimeout time.Duration) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
@@ -177,9 +177,10 @@ func (tm *TabletManager) RestoreData(
 	startTime = time.Now()
 
 	req := &tabletmanagerdatapb.RestoreFromBackupRequest{
-		BackupTime:         protoutil.TimeToProto(backupTime),
-		RestoreToPos:       restoreToPos,
-		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimetamp),
+		BackupTime:           protoutil.TimeToProto(backupTime),
+		RestoreToPos:         restoreToPos,
+		RestoreToTimestamp:   protoutil.TimeToProto(restoreToTimetamp),
+		AllowedBackupEngines: allowedBackupEngines,
 	}
 	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req, mysqlShutdownTimeout)
 	if err != nil {
@@ -231,6 +232,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DryRun:               request.DryRun,
 		Stats:                backupstats.RestoreStats(),
 		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		AllowedBackupEngines: request.AllowedBackupEngines,
 	}
 	restoreToTimestamp := protoutil.TimeFromProto(request.RestoreToTimestamp).UTC()
 	if request.RestoreToPos != "" && !restoreToTimestamp.IsZero() {
@@ -321,7 +323,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		} else if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
 			// Reconnect to primary only for "NORMAL" keyspaces
 			params.Logger.Infof("Restore: starting replication at position %v", pos)
-			if err := tm.startReplication(context.Background(), pos, originalType); err != nil {
+			if err := tm.startReplication(ctx, pos, originalType); err != nil {
 				return err
 			}
 		}
@@ -572,47 +574,30 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 }
 
 func (tm *TabletManager) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType) error {
-	if err := tm.MysqlDaemon.StopReplication(ctx, nil); err != nil {
+	// The first three steps of stopping replication, and setting the replication position,
+	// we want to do even if the context expires, so we use a background context for these tasks.
+	if err := tm.MysqlDaemon.StopReplication(context.Background(), nil); err != nil {
 		return vterrors.Wrap(err, "failed to stop replication")
 	}
-	if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
+	if err := tm.MysqlDaemon.ResetReplicationParameters(context.Background()); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
 	// Set the position at which to resume from the primary.
-	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationPosition(context.Background(), pos); err != nil {
 		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
-	primary, err := tm.initializeReplication(ctx, tabletType)
+	primaryPosStr, err := tm.initializeReplication(ctx, tabletType)
 	// If we ran into an error while initializing replication, then there is no point in waiting for catch-up.
 	// Also, if there is no primary tablet in the shard, we don't need to proceed further.
-	if err != nil || primary == nil {
+	if err != nil || primaryPosStr == "" {
 		return err
 	}
 
-	// wait for reliable replication_lag_seconds
-	// we have pos where we want to resume from
-	// if PrimaryPosition is the same, that means no writes
-	// have happened to primary, so we are up-to-date
-	// otherwise, wait for replica's Position to change from
-	// the initial pos before proceeding
-	tmc := tmclient.NewTabletManagerClient()
-	defer tmc.Close()
-	remoteCtx, remoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer remoteCancel()
-	posStr, err := tmc.PrimaryPosition(remoteCtx, primary.Tablet)
+	primaryPos, err := replication.DecodePosition(primaryPosStr)
 	if err != nil {
-		// It is possible that though PrimaryAlias is set, the primary tablet is unreachable
-		// Log a warning and let tablet restore in that case
-		// If we had instead considered this fatal, all tablets would crash-loop
-		// until a primary appears, which would make it impossible to elect a primary.
-		log.Warningf("Can't get primary replication position after restore: %v", err)
-		return nil
-	}
-	primaryPos, err := replication.DecodePosition(posStr)
-	if err != nil {
-		return vterrors.Wrapf(err, "can't decode primary replication position: %q", posStr)
+		return vterrors.Wrapf(err, "can't decode primary replication position: %q", primaryPos)
 	}
 
 	if !pos.Equal(primaryPos) {

@@ -492,6 +492,46 @@ func TestMultipleDurabilities(t *testing.T) {
 	assert.NotNil(t, primary, "should have elected a primary")
 }
 
+// TestDrainedTablet tests that we don't forget drained tablets and they still show up in the vtorc output.
+func TestDrainedTablet(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	defer cluster.PanicHandler(t)
+
+	// Setup a normal cluster and start vtorc
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{}, 1, "")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+
+	// find any replica tablet other than the current primary
+	var replica *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias != curPrimary.Alias {
+			replica = tablet
+			break
+		}
+	}
+	require.NotNil(t, replica, "could not find any replica tablet")
+
+	output, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"ChangeTabletType", replica.Alias, "DRAINED")
+	require.NoError(t, err, "error in changing tablet type output - %s", output)
+
+	// Make sure VTOrc sees the drained tablets and doesn't forget them.
+	utils.WaitForDrainedTabletInVTOrc(t, vtOrcProcess, 1)
+
+	output, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"ChangeTabletType", replica.Alias, "REPLICA")
+	require.NoError(t, err, "error in changing tablet type output - %s", output)
+
+	// We have no drained tablets anymore. Wait for VTOrc to have processed that.
+	utils.WaitForDrainedTabletInVTOrc(t, vtOrcProcess, 0)
+}
+
 // TestDurabilityPolicySetLater tests that VTOrc works even if the durability policy of the keyspace is
 // set after VTOrc has been started.
 func TestDurabilityPolicySetLater(t *testing.T) {

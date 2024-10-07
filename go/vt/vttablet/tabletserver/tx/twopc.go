@@ -36,4 +36,5 @@ type PreparedTx struct {
 	Dtid    string
 	Queries []string
 	Time    time.Time
+	Message string
 }
