@@ -202,6 +202,7 @@ type TabletManagerClient interface {
 	//
 
 	CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error)
+	DeleteTenantData(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error)
 	DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error)
 	HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error)
 	ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error)

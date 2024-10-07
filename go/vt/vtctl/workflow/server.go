@@ -2740,11 +2740,11 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 	return sw.logs(), nil
 }
 
+// DeleteTenantData attempts to delete all of the tenant's data that was migrated
+// in the workflow that we are cancelling or deleting. This work can take some
+// time so if the context ends then the user will need to retry.
 func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher) error {
-	var (
-		err error
-		sw  = &switcher{ts: ts, s: s}
-	)
+	var err error
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported workflow type %q for multi-tenant migration",
 			ts.workflowType)
@@ -2763,11 +2763,13 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher) erro
 		return vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
 	}
 	defer workflowUnlock(&err)
+	// We need to ensure that we hold the lock for the duration of our operation
+	// which can be a while in this case.
 	deadline, ok := ctx.Deadline()
 	if !ok { // Should never happen
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "missing deadline in the context")
 	}
-	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DeleteTenantData",
+	lockCtx, targetUnlock, lockErr := s.ts.LockKeyspace(ctx, ts.TargetKeyspaceName(), "DeleteTenantData",
 		topo.WithTTL(time.Duration(deadline.UnixNano())))
 	if lockErr != nil {
 		return vterrors.Wrapf(lockErr, "failed to lock the %s keyspace", ts.TargetKeyspaceName())
@@ -2775,83 +2777,12 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher) erro
 	defer targetUnlock(&err)
 	ctx = lockCtx
 
-	// We need to get the binlogsource filter used for the tenant.
-	wf, err := s.GetWorkflow(ctx, ts.TargetKeyspaceName(), ts.WorkflowName(), false, nil)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to get workflow %s", ts.WorkflowName())
-	}
-	// All streams must be using the same filter so we only need look at the first one.
-	var where *sqlparser.Where
-	for _, stream := range maps.Values(wf.ShardStreams) {
-		if len(stream.Streams) == 0 {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no streams found in the workflow %s",
-				ts.WorkflowName())
-		}
-		stmt, err := s.env.Parser().Parse(stream.Streams[0].BinlogSource.Filter.Rules[0].Filter)
-		if err != nil {
-			return vterrors.Wrap(err, "failed to parse query filters")
-		}
-		sel, ok := stmt.(*sqlparser.Select)
-		if !ok || sel.Where == nil {
-			return vterrors.Wrapf(err, "unexpected query filter: %v",
-				stream.Streams[0].BinlogSource.Filter.Rules[0].Filter)
-		}
-		exprs := make([]sqlparser.Expr, 0, 1)
-		for _, subexpr := range sqlparser.SplitAndExpression(nil, sel.Where.Expr) {
-			if funcExpr, ok := subexpr.(*sqlparser.FuncExpr); ok && funcExpr.Name.EqualString("in_keyrange") {
-				continue // We do NOT want the in_keyrange filter
-			}
-			exprs = append(exprs, subexpr)
-		}
-		if len(exprs) == 0 {
-			return vterrors.Wrapf(err, "unexpected query filter: %v",
-				stream.Streams[0].BinlogSource.Filter.Rules[0].Filter)
-		}
-		where = &sqlparser.Where{Expr: sqlparser.AndExpressions(exprs...)}
-		break // We only needed to examine the first stream
-	}
-	if where == nil {
-		return vterrors.Wrap(err, "no delete filter found")
-	}
-
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
-		for _, table := range ts.tables {
-			escapedTable, err := sqlescape.EnsureEscaped(table)
-			if err != nil {
-				return vterrors.Wrapf(err, "unable to escape table name %q", table)
-			}
-			stmt, err := s.env.Parser().Parse(fmt.Sprintf("delete from %s", escapedTable))
-			if err != nil {
-				return vterrors.Wrap(err, "unable to build delete query")
-			}
-			del, ok := stmt.(*sqlparser.Delete)
-			if !ok {
-				return vterrors.Wrap(err, "unable to build delete query")
-			}
-			del.Where = where
-			del.Limit = &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1000")}
-			query := sqlparser.String(del)
-			log.Errorf("DEBUG: delete query for tenant %s: %s", ts.options.TenantId, sqlparser.String(del))
-			for {
-				res, err := s.tmc.ExecuteFetchAsAllPrivs(ctx, target.GetPrimary().Tablet,
-					&tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
-						Query:  []byte(query),
-						DbName: target.primary.DbName(),
-					})
-				if err != nil {
-					return vterrors.Wrapf(err, "error deleting data using query %q", query)
-				}
-				if res.RowsAffected == 0 { // We're done
-					return nil
-				}
-				select {
-				case <-ctx.Done():
-					return vterrors.Wrap(ctx.Err(), "context cancelled while deleting")
-				default:
-				}
-			}
-		}
-		return nil
+		_, err := ts.ws.tmc.DeleteTenantData(ctx, target.GetPrimary().Tablet, &tabletmanagerdatapb.DeleteTenantDataRequest{
+			Workflow:  ts.workflow,
+			BatchSize: 1000,
+		})
+		return err
 	})
 }
 

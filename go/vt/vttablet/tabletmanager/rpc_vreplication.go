@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -137,6 +139,120 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 		res.RowsAffected += streamres.RowsAffected
 	}
 	return &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+}
+
+// DeleteTenantData attempts to delete all of the tenant's data that was migrated
+// in a workflow that is being cancelled or deleted. For multi-tenant migrations
+// this needs to be done instead of simply dropping the table as the table will
+// have data from other tenants.
+func (tm *TabletManager) DeleteTenantData(ctx context.Context, req *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error) {
+	if req == nil || strings.TrimSpace(req.Workflow) == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no workflow provided")
+	}
+
+	// We need to get the binlogsource filter used for the tenant.
+	wf, err := tm.ReadVReplicationWorkflow(ctx, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: req.Workflow})
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read workflow %s", req.Workflow)
+	}
+	if len(wf.Streams) == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no streams found in the workflow %s",
+			req.Workflow)
+	}
+
+	stream := wf.Streams[0] // Everything we care about here is the same across all streams
+	if len(stream.Bls.Filter.Rules) == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no multi-tenant filter rule found in the workflow %s",
+			req.Workflow)
+	}
+	filter := stream.Bls.Filter.Rules[0].Filter // The filters are the same across all tables
+
+	tables := make([]string, len(stream.Bls.Filter.Rules))
+	for i, rule := range stream.Bls.Filter.Rules {
+		escapedTable, err := sqlescape.EnsureEscaped(rule.Match)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "unable to escape table name %q", rule.Match)
+		}
+		tables[i] = escapedTable
+	}
+	if len(tables) == 0 {
+		return &tabletmanagerdatapb.DeleteTenantDataResponse{}, nil
+	}
+	// So that we do them in a predictable and uniform order order across all shards.
+	sort.Strings(tables)
+
+	// All streams must be using the same filter so we only need look at the first one.
+	stmt, err := tm.Env.Parser().Parse(filter)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to parse query filters")
+	}
+	sel, ok := stmt.(*sqlparser.Select)
+	if !ok || sel.Where == nil {
+		return nil, vterrors.Wrapf(err, "unexpected query filter: %v", filter)
+	}
+	exprs := make([]sqlparser.Expr, 0, 1)
+	for _, subexpr := range sqlparser.SplitAndExpression(nil, sel.Where.Expr) {
+		if funcExpr, ok := subexpr.(*sqlparser.FuncExpr); ok && funcExpr.Name.EqualString("in_keyrange") {
+			continue // We do NOT want the in_keyrange filter
+		}
+		exprs = append(exprs, subexpr)
+	}
+	if len(exprs) == 0 {
+		return nil, vterrors.Wrapf(err, "no delete filter found in %q", filter)
+	}
+	where := &sqlparser.Where{Expr: sqlparser.AndExpressions(exprs...)}
+	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", req.BatchSize))}
+
+	checkIfCancelled := func() error {
+		select {
+		case <-ctx.Done():
+			return vterrors.Wrap(ctx.Err(), "context cancelled while deleting data")
+		default:
+			return nil
+		}
+	}
+
+	for _, table := range tables {
+		stmt, err := tm.Env.Parser().Parse(fmt.Sprintf("delete from %s", table))
+		if err != nil {
+			return nil, vterrors.Wrap(err, "unable to build delete query")
+		}
+		del, ok := stmt.(*sqlparser.Delete)
+		if !ok {
+			return nil, vterrors.Wrap(err, "unable to build delete query")
+		}
+		del.Where = where
+		del.Limit = limit
+		query := sqlparser.String(del)
+		// Delete all of the matching rows from the table, in batches, until we've
+		// deleted them all.
+		for {
+			// Back off if we're causing too much load on the database with these
+			// batch deletes.
+			if _, ok := tm.VREngine.ThrottlerClient().ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.VReplicationName); !ok {
+				if err := checkIfCancelled(); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			res, err := tm.ExecuteFetchAsAllPrivs(ctx,
+				&tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+					Query:  []byte(query),
+					DbName: tm.DBConfigs.DBName,
+				})
+			if err != nil {
+				return nil, vterrors.Wrapf(err, "error deleting data using query %q", query)
+			}
+			if res.RowsAffected == 0 { // We're done with this table
+				break
+			}
+			if err := checkIfCancelled(); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return &tabletmanagerdatapb.DeleteTenantDataResponse{}, nil
 }
 
 func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {

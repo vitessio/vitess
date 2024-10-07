@@ -605,6 +605,14 @@ message CreateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
+message DeleteTenantDataRequest {
+  string workflow = 1;
+  int64 batch_size = 2;
+}
+
+message DeleteTenantDataResponse {
+}
+
 message DeleteVReplicationWorkflowRequest {
   string workflow = 1;
 }

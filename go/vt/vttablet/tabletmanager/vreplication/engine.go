@@ -229,6 +229,10 @@ func (vre *Engine) Open(ctx context.Context) {
 	log.Infof("VReplication engine opened successfully")
 }
 
+func (vre *Engine) ThrottlerClient() *throttle.Client {
+	return vre.throttlerClient
+}
+
 func (vre *Engine) openLocked(ctx context.Context) error {
 	rows, err := vre.readAllRows(ctx)
 	if err != nil {

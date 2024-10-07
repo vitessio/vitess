@@ -897,6 +897,19 @@ func (client *Client) CreateVReplicationWorkflow(ctx context.Context, tablet *to
 	return response, nil
 }
 
+func (client *Client) DeleteTenantData(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.DeleteTenantData(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func (client *Client) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
