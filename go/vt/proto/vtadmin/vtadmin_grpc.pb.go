@@ -161,6 +161,8 @@ type VTAdminClient interface {
 	RetrySchemaMigration(ctx context.Context, in *RetrySchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.RetrySchemaMigrationResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
+	// ReshardCreate creates a workflow to reshard a keyspace.
+	ReshardCreate(ctx context.Context, in *ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
 	SetReadOnly(ctx context.Context, in *SetReadOnlyRequest, opts ...grpc.CallOption) (*SetReadOnlyResponse, error)
 	// SetReadWrite sets the tablet to read-write mode.
@@ -670,6 +672,15 @@ func (c *vTAdminClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRe
 	return out, nil
 }
 
+func (c *vTAdminClient) ReshardCreate(ctx context.Context, in *ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReshardCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) SetReadOnly(ctx context.Context, in *SetReadOnlyRequest, opts ...grpc.CallOption) (*SetReadOnlyResponse, error) {
 	out := new(SetReadOnlyResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/SetReadOnly", in, out, opts...)
@@ -920,6 +931,8 @@ type VTAdminServer interface {
 	RetrySchemaMigration(context.Context, *RetrySchemaMigrationRequest) (*vtctldata.RetrySchemaMigrationResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
+	// ReshardCreate creates a workflow to reshard a keyspace.
+	ReshardCreate(context.Context, *ReshardCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
 	SetReadOnly(context.Context, *SetReadOnlyRequest) (*SetReadOnlyResponse, error)
 	// SetReadWrite sets the tablet to read-write mode.
@@ -1119,6 +1132,9 @@ func (UnimplementedVTAdminServer) RetrySchemaMigration(context.Context, *RetrySc
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
+}
+func (UnimplementedVTAdminServer) ReshardCreate(context.Context, *ReshardCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReshardCreate not implemented")
 }
 func (UnimplementedVTAdminServer) SetReadOnly(context.Context, *SetReadOnlyRequest) (*SetReadOnlyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetReadOnly not implemented")
@@ -2087,6 +2103,24 @@ func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_ReshardCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReshardCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ReshardCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ReshardCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ReshardCreate(ctx, req.(*ReshardCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_SetReadOnly_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetReadOnlyRequest)
 	if err := dec(in); err != nil {
@@ -2513,6 +2547,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunHealthCheck",
 			Handler:    _VTAdmin_RunHealthCheck_Handler,
+		},
+		{
+			MethodName: "ReshardCreate",
+			Handler:    _VTAdmin_ReshardCreate_Handler,
 		},
 		{
 			MethodName: "SetReadOnly",

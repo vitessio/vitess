@@ -479,6 +479,23 @@ export const createMoveTables = async ({ clusterID, request }: CreateMoveTablesP
     return vtctldata.WorkflowStatusResponse.create(result);
 };
 
+export interface CreateReshardParams {
+    clusterID: string;
+    request: vtctldata.IReshardCreateRequest;
+}
+
+export const createReshard = async ({ clusterID, request }: CreateReshardParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/reshard`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtctldata.WorkflowStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowStatusResponse.create(result);
+};
+
 export interface WorkflowActionParams {
     clusterID: string;
     keyspace: string;
