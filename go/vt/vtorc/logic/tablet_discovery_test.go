@@ -200,6 +200,8 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 				return nil
 			})
 			tab100.MysqlPort = 100
+			// We refresh once more to ensure we don't affect the next tests since we've made a change again.
+			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {}, false, nil)
 		}()
 		// Let's assume tab100 restarted on a different pod. This would change its tablet hostname and port
 		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
@@ -210,6 +212,26 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		tab100.MysqlPort = 39293
 		// We expect 1 tablet to be refreshed since that is the only one that has changed
 		// Also the old tablet should be forgotten
+		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets, nil)
+	})
+
+	t.Run("Replica becomes a drained tablet", func(t *testing.T) {
+		defer func() {
+			_, err = ts.UpdateTabletFields(context.Background(), tab101.Alias, func(tablet *topodatapb.Tablet) error {
+				tablet.Type = topodatapb.TabletType_REPLICA
+				return nil
+			})
+			tab101.Type = topodatapb.TabletType_REPLICA
+			// We refresh once more to ensure we don't affect the next tests since we've made a change again.
+			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {}, false, nil)
+		}()
+		// A replica tablet can be converted to drained type if it has an errant GTID.
+		_, err = ts.UpdateTabletFields(context.Background(), tab101.Alias, func(tablet *topodatapb.Tablet) error {
+			tablet.Type = topodatapb.TabletType_DRAINED
+			return nil
+		})
+		tab101.Type = topodatapb.TabletType_DRAINED
+		// We expect 1 tablet to be refreshed since its type has been changed.
 		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets, nil)
 	})
 }

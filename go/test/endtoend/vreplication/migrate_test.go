@@ -21,13 +21,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/mysql"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -51,8 +50,15 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 func TestVtctlMigrate(t *testing.T) {
 	vc = NewVitessCluster(t, nil)
 
+	oldDefaultReplicas := defaultReplicas
+	oldDefaultRdonly := defaultRdonly
 	defaultReplicas = 0
 	defaultRdonly = 0
+	defer func() {
+		defaultReplicas = oldDefaultReplicas
+		defaultRdonly = oldDefaultRdonly
+	}()
+
 	defer vc.TearDown()
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
@@ -314,21 +320,23 @@ func TestVtctldMigrateUnsharded(t *testing.T) {
 // doesn't match that of the source cluster. The test migrates from a cluster with keyspace customer to an "external"
 // cluster with keyspace rating.
 func TestVtctldMigrateSharded(t *testing.T) {
+	setSidecarDBName("_vt")
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	oldDefaultReplicas := defaultReplicas
 	oldDefaultRdonly := defaultRdonly
-	defaultReplicas = 1
-	defaultRdonly = 1
+	defaultReplicas = 0
+	defaultRdonly = 0
 	defer func() {
 		defaultReplicas = oldDefaultReplicas
 		defaultRdonly = oldDefaultRdonly
 	}()
 
-	setSidecarDBName("_vt")
-	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	vc = setupCluster(t)
+	defer vc.TearDown()
+
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	defer vc.TearDown()
+
 	setupCustomerKeyspace(t)
 	createMoveTablesWorkflow(t, "customer,Lead,datze,customer2")
 	tstWorkflowSwitchReadsAndWrites(t)
@@ -363,7 +371,7 @@ func TestVtctldMigrateSharded(t *testing.T) {
 	if output, err = extVc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 		"--target-keyspace", "rating", "--workflow", "e1",
 		"create", "--source-keyspace", "customer", "--mount-name", "external", "--all-tables", "--cells=zone1",
-		"--tablet-types=primary,replica"); err != nil {
+		"--tablet-types=primary"); err != nil {
 		require.FailNow(t, "Migrate command failed with %+v : %s\n", err, output)
 	}
 	waitForWorkflowState(t, extVc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
