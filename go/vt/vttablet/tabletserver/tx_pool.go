@@ -230,7 +230,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, savepointQueries []string, setting *smartconnpool.Setting) (*StatefulConnection, string, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, setting *smartconnpool.Setting) (*StatefulConnection, string, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 
@@ -262,7 +262,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	if err != nil {
 		return nil, "", "", err
 	}
-	sql, sessionStateChanges, err := tp.begin(ctx, options, readOnly, conn, savepointQueries)
+	sql, sessionStateChanges, err := tp.begin(ctx, options, readOnly, conn)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
@@ -271,24 +271,14 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	return conn, sql, sessionStateChanges, nil
 }
 
-func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection, savepointQueries []string) (string, string, error) {
+func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection) (string, string, error) {
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-	beginQueries, autocommit, sessionStateChanges, err := createTransaction(ctx, options, conn, readOnly, savepointQueries)
+	beginQueries, autocommit, sessionStateChanges, err := createTransaction(ctx, options, conn, readOnly)
 	if err != nil {
 		return "", "", err
 	}
-
 	conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommit)
-	// for _, savepoint := range savepointQueries {
-	// 	if _, err = conn.Exec(ctx, savepoint, 1, false); err != nil {
-	// 		return "", "", err
-	// 	}
-	// 	// Record the query detail for the savepoint.
-	// 	conn.txProps.RecordQueryDetail(savepoint, nil)
-	// 	beginQueries += ";" + savepoint
-	// }
-
 	return beginQueries, sessionStateChanges, nil
 }
 
@@ -314,7 +304,6 @@ func createTransaction(
 	options *querypb.ExecuteOptions,
 	conn *StatefulConnection,
 	readOnly bool,
-	savepointQueries []string,
 ) (beginQueries string, autocommitTransaction bool, sessionStateChanges string, err error) {
 	switch options.GetTransactionIsolation() {
 	case querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY:

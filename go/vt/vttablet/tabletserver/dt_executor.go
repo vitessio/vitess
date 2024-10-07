@@ -313,7 +313,7 @@ func (dte *DTExecutor) ReadTwopcInflight() (distributed []*tx.DistributedTx, pre
 }
 
 func (dte *DTExecutor) inTransaction(f func(*StatefulConnection) error) error {
-	conn, _, _, err := dte.te.txPool.Begin(dte.ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := dte.te.txPool.Begin(dte.ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		return err
 	}
