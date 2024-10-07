@@ -998,7 +998,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
-		successCount := getIntFromValue(successfulRecoveriesMap[recoveryName])
+		successCount := GetIntFromValue(successfulRecoveriesMap[recoveryName])
 		if successCount == countExpected {
 			return
 		}
@@ -1006,7 +1006,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	}
 	vars := vtorcInstance.GetVars()
 	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
-	successCount := getIntFromValue(successfulRecoveriesMap[recoveryName])
+	successCount := GetIntFromValue(successfulRecoveriesMap[recoveryName])
 	assert.EqualValues(t, countExpected, successCount)
 }
 
@@ -1019,7 +1019,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
-		successCount := getIntFromValue(prsCountsMap[mapKey])
+		successCount := GetIntFromValue(prsCountsMap[mapKey])
 		if successCount == countExpected {
 			return
 		}
@@ -1027,7 +1027,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	}
 	vars := vtorcInstance.GetVars()
 	prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
-	successCount := getIntFromValue(prsCountsMap[mapKey])
+	successCount := GetIntFromValue(prsCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
 }
 
@@ -1040,7 +1040,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
-		successCount := getIntFromValue(ersCountsMap[mapKey])
+		successCount := GetIntFromValue(ersCountsMap[mapKey])
 		if successCount == countExpected {
 			return
 		}
@@ -1048,7 +1048,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	}
 	vars := vtorcInstance.GetVars()
 	ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
-	successCount := getIntFromValue(ersCountsMap[mapKey])
+	successCount := GetIntFromValue(ersCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
 }
 
@@ -1067,10 +1067,10 @@ func CheckMetricExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metric
 	assert.Contains(t, metrics, metricName)
 }
 
-// getIntFromValue is a helper function to get an integer from the given value.
+// GetIntFromValue is a helper function to get an integer from the given value.
 // If it is convertible to a float, then we round the number to the nearest integer.
 // If the value is not numeric at all, we return 0.
-func getIntFromValue(val any) int {
+func GetIntFromValue(val any) int {
 	value := reflect.ValueOf(val)
 	if value.CanFloat() {
 		return int(math.Round(value.Float()))
@@ -1091,7 +1091,7 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		problems := vars["DetectedProblems"].(map[string]interface{})
-		actual := getIntFromValue(problems[key])
+		actual := GetIntFromValue(problems[key])
 		if actual == expect {
 			return
 		}
@@ -1101,7 +1101,7 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	vars := vtorcInstance.GetVars()
 	problems := vars["DetectedProblems"].(map[string]interface{})
 	actual, ok := problems[key]
-	actual = getIntFromValue(actual)
+	actual = GetIntFromValue(actual)
 
 	assert.True(t, ok,
 		"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",

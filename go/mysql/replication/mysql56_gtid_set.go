@@ -715,3 +715,18 @@ func Subtract(lhs, rhs string) (string, error) {
 	diffSet := lhsSet.Difference(rhsSet)
 	return diffSet.String(), nil
 }
+
+// GTIDCount returns the number of GTIDs in a GTID set.
+func GTIDCount(gtidStr string) (int64, error) {
+	gtidSet, err := ParseMysql56GTIDSet(gtidStr)
+	if err != nil {
+		return 0, err
+	}
+	var count int64
+	for _, intervals := range gtidSet {
+		for _, intvl := range intervals {
+			count = count + intvl.end - intvl.start + 1
+		}
+	}
+	return count, nil
+}
