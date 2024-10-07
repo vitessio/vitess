@@ -303,6 +303,8 @@ type HealthCheckImpl struct {
 	loadTabletsTrigger chan struct{}
 	// healthCheckDialSem is used to limit how many healthcheck connections can be opened to tablets at once.
 	healthCheckDialSem *semaphore.Weighted
+	// nowTimeFunc is used to determine the current time.
+	nowTimeFunc func() time.Time
 }
 
 // NewVTGateHealthCheckFilters returns healthcheck filters for vtgate.
@@ -369,6 +371,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		subscribers:        make(map[chan *TabletHealth]struct{}),
 		cellAliases:        make(map[string]string),
 		loadTabletsTrigger: make(chan struct{}),
+		nowTimeFunc:        func() time.Time { return time.Now() },
 	}
 	var topoWatchers []*TopologyWatcher
 	cells := strings.Split(cellsToWatch, ",")
@@ -420,10 +423,11 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 		TabletType: tablet.Type,
 	}
 	thc := &tabletHealthCheck{
-		ctx:        ctx,
-		cancelFunc: cancelFunc,
-		Tablet:     tablet,
-		Target:     target,
+		ctx:         ctx,
+		cancelFunc:  cancelFunc,
+		nowTimeFunc: hc.nowTimeFunc,
+		Tablet:      tablet,
+		Target:      target,
 	}
 
 	// add to our datastore

@@ -26,18 +26,17 @@ import (
 
 	"github.com/spf13/pflag"
 
-	vtschema "vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
-	"vitess.io/vitess/go/vt/servenv"
-
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vtschema "vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -80,6 +79,8 @@ type healthStreamer struct {
 	signalWhenSchemaChange bool
 
 	viewsEnabled bool
+
+	nowTimeFunc func() time.Time
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine *schema.Engine) *healthStreamer {
@@ -100,6 +101,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
 		viewsEnabled:           env.Config().EnableViews,
 		se:                     engine,
+		nowTimeFunc:            func() time.Time { return time.Now() },
 	}
 	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThreshold.Nanoseconds())
 	return hs
@@ -212,6 +214,7 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, ptsTimes
 }
 
 func (hs *healthStreamer) broadCastToClients(shr *querypb.StreamHealthResponse) {
+	shr.Timestamp = protoutil.TimeToProto(hs.nowTimeFunc())
 	for ch := range hs.clients {
 		select {
 		case ch <- shr:
