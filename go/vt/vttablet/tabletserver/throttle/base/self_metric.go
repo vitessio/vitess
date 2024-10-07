@@ -21,14 +21,16 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 type SelfMetricReadParams struct {
-	Throttler ThrottlerMetricsPublisher
-	Conn      *connpool.Conn
-	TmClient  *tmclient.TabletManagerClient
+	Throttler  ThrottlerMetricsPublisher
+	Conn       *connpool.Conn
+	TmClient   tmclient.TabletManagerClient
+	TabletInfo *topo.TabletInfo
 }
 
 type SelfMetric interface {
