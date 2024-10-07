@@ -20,9 +20,8 @@
     - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
     - **[Errant GTID Detection on VTTablets](#errant-gtid-vttablet)**
     - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
-    - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
-    - **[Curreny Errant GTIDs Count Metric](#errant-gtid-metric)**
+    - **[Current Errant GTIDs Count Metric](#errant-gtid-metric)**
     - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
 
 
@@ -232,21 +231,6 @@ We have added experimental support for MySQL 8.4. It passes the Vitess test suit
 A new metric called `CurrentErrantGTIDCount` has been added to the `VTOrc` component. 
 This metric shows the current count of the errant GTIDs in the tablets.
 
-### <a id="vtctldclient-changetablettags"/>`vtctldclient ChangeTabletTags` command and RPCs
+### <a id="vtctldclient-changetablettags"/>`vtctldclient ChangeTabletTags` command
 
 The `vtctldclient` command `ChangeTabletTags` was added to allow the tags of a tablet to be changed dynamically.
-
-This command allows one or many tablet tags to be defined using key=value format. The provided tags are merged with existing tags by default. The optional flag `--replace` causes the existing tags to be replaced with the provided tags. To support this, the VTCtld RPC `ChangeTabletTags` and the VTTablet RPC `ChangeTags` were added.
-
-Previous to this release the only way to define tablet tags was the `--init_tags` flag of `vttablet`, which requires a restart for a change to take effect.
-
-Example:
-```bash
-$ vtctldclient --server :15999 ChangeTabletTags --replace zone1-100 hello=world
-- []
-+ [hello: "world"]
-$ vtctldclient --server :15999 GetTablet zone1-100 | jq .tags
-{
-  "hello": "world"
-}
-```
