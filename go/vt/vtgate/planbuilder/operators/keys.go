@@ -21,8 +21,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-
-	"vitess.io/vitess/go/slice"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -33,28 +32,68 @@ type (
 		Table string
 		Name  string
 	}
-
 	ColumnUse struct {
 		Column Column
 		Uses   sqlparser.ComparisonExprOperator
 	}
-
 	VExplainKeys struct {
-		StatementType   string
-		TableName       []string
-		GroupingColumns []Column
-		JoinColumns     []ColumnUse
-		FilterColumns   []ColumnUse
-		SelectColumns   []Column
+		StatementType   string      `json:"statementType"`
+		TableName       []string    `json:"tableName,omitempty"`
+		GroupingColumns []Column    `json:"groupingColumns,omitempty"`
+		JoinColumns     []ColumnUse `json:"joinColumns,omitempty"`
+		FilterColumns   []ColumnUse `json:"filterColumns,omitempty"`
+		SelectColumns   []Column    `json:"selectColumns,omitempty"`
 	}
 )
+
+func (c Column) MarshalJSON() ([]byte, error) {
+	if c.Table != "" {
+		return json.Marshal(fmt.Sprintf("%s.%s", c.Table, c.Name))
+	}
+	return json.Marshal(c.Name)
+}
+
+func (c *Column) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	parts := strings.Split(s, ".")
+	if len(parts) > 1 {
+		c.Table = parts[0]
+		c.Name = parts[1]
+	} else {
+		c.Name = s
+	}
+	return nil
+}
+
+func (cu ColumnUse) MarshalJSON() ([]byte, error) {
+	return json.Marshal(fmt.Sprintf("%s %s", cu.Column, cu.Uses.JSONString()))
+}
+
+func (cu *ColumnUse) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	parts := strings.Fields(s)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid ColumnUse format: %s", s)
+	}
+	if err := cu.Column.UnmarshalJSON([]byte(`"` + parts[0] + `"`)); err != nil {
+		return err
+	}
+	cu.Uses = sqlparser.ComparisonExprOperatorFromJson(strings.ToLower(parts[1]))
+	return nil
+}
 
 func (c Column) String() string {
 	return fmt.Sprintf("%s.%s", c.Table, c.Name)
 }
 
-func (c ColumnUse) String() string {
-	return fmt.Sprintf("%s %s", c.Column, c.Uses.JSONString())
+func (cu ColumnUse) String() string {
+	return fmt.Sprintf("%s %s", cu.Column, cu.Uses.JSONString())
 }
 
 type columnUse struct {
@@ -89,7 +128,7 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 				}
 			case *sqlparser.BetweenExpr:
 				if col, ok := cmp.Left.(*sqlparser.ColName); ok {
-					//a BETWEEN 100 AND 200    is equivalent to    a >= 100 AND a <= 200
+					// a BETWEEN 100 AND 200    is equivalent to    a >= 100 AND a <= 200
 					filterColumns = append(filterColumns,
 						columnUse{col, sqlparser.GreaterEqualOp},
 						columnUse{col, sqlparser.LessEqualOp})
@@ -171,23 +210,4 @@ func createColumn(ctx *plancontext.PlanningContext, col *sqlparser.ColName) *Col
 		return nil
 	}
 	return &Column{Table: table.Name.String(), Name: col.Name.String()}
-}
-
-func (v VExplainKeys) MarshalJSON() ([]byte, error) {
-	aux := struct {
-		StatementType   string   `json:"statementType"`
-		TableName       []string `json:"tableName,omitempty"`
-		GroupingColumns []string `json:"groupingColumns,omitempty"`
-		JoinColumns     []string `json:"joinColumns,omitempty"`
-		FilterColumns   []string `json:"filterColumns,omitempty"`
-		SelectColumns   []string `json:"selectColumns,omitempty"`
-	}{
-		StatementType:   v.StatementType,
-		TableName:       v.TableName,
-		SelectColumns:   slice.Map(v.SelectColumns, Column.String),
-		GroupingColumns: slice.Map(v.GroupingColumns, Column.String),
-		JoinColumns:     slice.Map(v.JoinColumns, ColumnUse.String),
-		FilterColumns:   slice.Map(v.FilterColumns, ColumnUse.String),
-	}
-	return json.Marshal(aux)
 }

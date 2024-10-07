@@ -1562,6 +1562,46 @@ func (op ComparisonExprOperator) ToString() string {
 	}
 }
 
+func ComparisonExprOperatorFromJson(s string) ComparisonExprOperator {
+	switch s {
+	case EqualStr:
+		return EqualOp
+	case JsonLessThanStr:
+		return LessThanOp
+	case JsonGreaterThanStr:
+		return GreaterThanOp
+	case JsonLessThanOrEqualStr:
+		return LessEqualOp
+	case JsonGreaterThanOrEqualStr:
+		return GreaterEqualOp
+	case NotEqualStr:
+		return NotEqualOp
+	case NullSafeEqualStr:
+		return NullSafeEqualOp
+	case InStr:
+		return InOp
+	case NotInStr:
+		return NotInOp
+	case LikeStr:
+		return LikeOp
+	case NotLikeStr:
+		return NotLikeOp
+	case RegexpStr:
+		return RegexpOp
+	case NotRegexpStr:
+		return NotRegexpOp
+	default:
+		return 0
+	}
+}
+
+const (
+	JsonGreaterThanStr        = "gt"
+	JsonLessThanStr           = "lt"
+	JsonGreaterThanOrEqualStr = "ge"
+	JsonLessThanOrEqualStr    = "le"
+)
+
 // JSONString returns a string representation for this operator that does not need escaping in JSON
 func (op ComparisonExprOperator) JSONString() string {
 	switch op {
@@ -1569,13 +1609,13 @@ func (op ComparisonExprOperator) JSONString() string {
 		// These operators are safe for JSON output, so we delegate to ToString
 		return op.ToString()
 	case LessThanOp:
-		return "lt"
+		return JsonLessThanStr
 	case GreaterThanOp:
-		return "gt"
+		return JsonGreaterThanStr
 	case LessEqualOp:
-		return "le"
+		return JsonLessThanOrEqualStr
 	case GreaterEqualOp:
-		return "ge"
+		return JsonGreaterThanOrEqualStr
 	default:
 		panic("unreachable")
 	}
