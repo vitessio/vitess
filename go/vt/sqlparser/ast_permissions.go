@@ -28,7 +28,7 @@ type AccountName struct {
 }
 
 // String returns the AccountName as a formatted string.
-func (an *AccountName) String() string {
+func (an AccountName) String() string {
 	host := an.Host
 	if an.AnyHost {
 		host = "%"

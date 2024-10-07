@@ -16,7 +16,7 @@ limitations under the License.
 
 package sqlparser
 
-//go:generate goyacc -o sql.go sql.y
+//go:generate goyacc -o sql.go sql3.y
 
 import (
 	"context"
@@ -149,7 +149,7 @@ func ParseOneWithOptions(ctx context.Context, sql string, options ParserOptions)
 		}
 	}
 
-	return tree, tokenizer.Position-1, nil
+	return tree, tokenizer.Position - 1, nil
 }
 
 func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
@@ -599,6 +599,9 @@ func (node *Select) SetInto(into *Into) error {
 	if into == nil {
 		return nil
 	}
+	if into.Variables == nil && into.Dumpfile == "" && into.Outfile == "" {
+		return nil
+	}
 	if node.Into != nil {
 		return fmt.Errorf("Multiple INTO clauses in one query block")
 	}
@@ -865,7 +868,7 @@ type Load struct {
 	*Lines
 	IgnoreNum *SQLVal
 	Columns
-	SetExprs  AssignmentExprs
+	SetExprs        AssignmentExprs
 	IgnoreOrReplace string
 }
 
@@ -3565,12 +3568,12 @@ func (node *AutoIncSpec) walkSubtree(visit Visit) error {
 // ColumnTypeSpec defines a change to a column's type, without fully specifying the column definition.
 type ColumnTypeSpec struct {
 	Column ColIdent
-	Type  ColumnType
+	Type   ColumnType
 }
 
 var _ SQLNode = (*ColumnTypeSpec)(nil)
 
-func (node ColumnTypeSpec)Format(buf *TrackedBuffer) {
+func (node ColumnTypeSpec) Format(buf *TrackedBuffer) {
 	buf.Myprintf("alter column %v type ")
 	node.Type.Format(buf)
 }
@@ -4029,7 +4032,7 @@ type FlushOption struct {
 
 // PurgeBinaryLogs represents a PURGE BINARY LOGS statement.
 type PurgeBinaryLogs struct {
-	To string
+	To     string
 	Before Expr
 }
 
@@ -4806,7 +4809,7 @@ func (node EventName) IsEmpty() bool {
 // This means two TableName vars can be compared for equality
 // and a TableName can also be used as key in a map.
 // SchemaQualifier, if specified, represents a schema name, which is an additional level of namespace supported in
-// other dialects. Supported here so that this AST can act as a translation layer for those dialects, but is unused in 
+// other dialects. Supported here so that this AST can act as a translation layer for those dialects, but is unused in
 // MySQL.
 type TableName struct {
 	Name, DbQualifier, SchemaQualifier TableIdent
@@ -7630,8 +7633,8 @@ func (d InjectedExpr) Format(buf *TrackedBuffer) {
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedStatement struct {
-	Statement  Injectable
-	Children   Exprs
+	Statement Injectable
+	Children  Exprs
 }
 
 var _ Statement = InjectedStatement{}
