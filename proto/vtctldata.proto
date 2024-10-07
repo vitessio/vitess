@@ -209,16 +209,25 @@ message Shard {
   topodata.Shard shard = 3;
 }
 
+enum ShardedAutoIncrementHandling {
+  LEAVE = 0;
+  REMOVE = 1;
+  REPLACE = 2;
+}
+
 message WorkflowOptions {
   string tenant_id = 1;
   // Remove auto_increment clauses on tables when moving them to a sharded
-  // keyspace.
-  bool strip_sharded_auto_increment = 2;
+  // keyspace and optionally replace them with vschema AutoIncrement
+  // definitions.
+  ShardedAutoIncrementHandling sharded_auto_increment_handling = 2;
   // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
   // from the source will be vreplicated.
   repeated string shards = 3;
   map<string, string> config = 4;
-
+  // Where to create any related schema and vschema objects such as
+  // sequence tables.
+  string global_keyspace = 5;
 }
 
 // TODO: comment the hell out of this.
@@ -450,6 +459,8 @@ message BackupRequest {
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 5;
+  // BackupEngine specifies if we want to use a particular backup engine for this backup request
+  optional string backup_engine = 6;
 }
 
 message BackupResponse {
@@ -685,6 +696,9 @@ message EmergencyReparentShardRequest {
   // WaitForAllTablets makes ERS wait for a response from all the tablets before proceeding.
   // Useful when all the tablets are up and reachable.
   bool wait_for_all_tablets = 7;
+  // ExpectedPrimary is the optional alias we expect to be the current primary in order for
+  // the reparent operation to succeed.
+  topodata.TabletAlias expected_primary = 8;
 }
 
 message EmergencyReparentShardResponse {
@@ -1381,6 +1395,9 @@ message PlannedReparentShardRequest {
   vttime.Duration tolerable_replication_lag = 6;
   // AllowCrossCellPromotion allows cross cell promotion,
   bool allow_cross_cell_promotion = 7;
+  // ExpectedPrimary is the optional alias we expect to be the current primary in order for
+  // the reparent operation to succeed.
+  topodata.TabletAlias expected_primary = 8;
 }
 
 message PlannedReparentShardResponse {
@@ -1565,6 +1582,8 @@ message RestoreFromBackupRequest {
   // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
   // RestoreToTimestamp and RestoreToPos are mutually exclusive.
   vttime.Time restore_to_timestamp = 5;
+  // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
+  repeated string allowed_backup_engines = 6;
 }
 
 message RestoreFromBackupResponse {

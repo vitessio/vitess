@@ -97,8 +97,9 @@ type Controller interface {
 	// RedoPreparedTransactions recreates the transactions with stored prepared transaction log.
 	RedoPreparedTransactions()
 
-	// SetTwoPCAllowed sets whether TwoPC is allowed or not.
-	SetTwoPCAllowed(bool)
+	// SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
+	// The reason should be an enum value defined in the tabletserver.
+	SetTwoPCAllowed(int, bool)
 
 	// UnresolvedTransactions returns all unresolved transactions list
 	UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error)
@@ -111,6 +112,9 @@ type Controller interface {
 
 	// RollbackPrepared rolls back the prepared transaction and removes the transaction log.
 	RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) error
+
+	// WaitForPreparedTwoPCTransactions waits for all prepared transactions to be resolved.
+	WaitForPreparedTwoPCTransactions(ctx context.Context) error
 }
 
 // Ensure TabletServer satisfies Controller interface.

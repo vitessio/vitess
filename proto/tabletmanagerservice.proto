@@ -96,6 +96,8 @@ service TabletManager {
 
   rpc ConcludeTransaction(tabletmanagerdata.ConcludeTransactionRequest) returns (tabletmanagerdata.ConcludeTransactionResponse) {};
 
+  rpc MysqlHostMetrics(tabletmanagerdata.MysqlHostMetricsRequest) returns (tabletmanagerdata.MysqlHostMetricsResponse) {};
+
   //
   // Replication related methods
   //

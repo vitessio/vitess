@@ -88,10 +88,13 @@ func (wl *waitlist[C]) expire(force bool) {
 	// or remove everything if force is true
 	for e := wl.list.Front(); e != nil; e = e.Next() {
 		if force || e.Value.ctx.Err() != nil {
-			wl.list.Remove(e)
 			expired = append(expired, e)
 			continue
 		}
+	}
+	// remove the expired waiters from the waitlist after traversing it
+	for _, e := range expired {
+		wl.list.Remove(e)
 	}
 	wl.mu.Unlock()
 

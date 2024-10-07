@@ -51,6 +51,9 @@ const (
 	createDDLAsCopy                = "copy"
 	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
 	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
+	// For automatically created sequence tables, use a standard format
+	// of tableName_seq.
+	autoSequenceTableFormat = "%s_seq"
 )
 
 type materializer struct {
@@ -113,11 +116,9 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
 	}
+
 	err := mz.buildMaterializer()
 	if err != nil {
-		return err
-	}
-	if err := mz.deploySchema(); err != nil {
 		return err
 	}
 
@@ -132,6 +133,10 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 	req.Options = optionsJSON
+
+	if err := mz.deploySchema(); err != nil {
+		return err
+	}
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
@@ -272,13 +277,20 @@ func (mz *materializer) deploySchema() error {
 	// to remove them.
 	// We do, however, allow the user to override this behavior and retain them.
 	removeAutoInc := false
+	updatedVSchema := false
+	var targetVSchema *vschemapb.Keyspace
 	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
-		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().StripShardedAutoIncrement) {
+		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling != vtctldatapb.ShardedAutoIncrementHandling_LEAVE) {
 		removeAutoInc = true
+		var err error
+		targetVSchema, err = mz.ts.GetVSchema(mz.ctx, mz.ms.TargetKeyspace)
+		if err != nil {
+			return err
+		}
 	}
 
-	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
+	err := forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
@@ -304,7 +316,7 @@ func (mz *materializer) deploySchema() error {
 				continue
 			}
 			if ts.CreateDdl == "" {
-				return fmt.Errorf("target table %v does not exist and there is no create ddl defined", ts.TargetTable)
+				return fmt.Errorf("target table %s does not exist and there is no create ddl defined", ts.TargetTable)
 			}
 
 			var err error
@@ -360,7 +372,28 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if removeAutoInc {
-					ddl, err = stripAutoIncrement(ddl, mz.env.Parser())
+					var replaceFunc func(columnName string)
+					if mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling == vtctldatapb.ShardedAutoIncrementHandling_REPLACE {
+						replaceFunc = func(columnName string) {
+							mu.Lock()
+							defer mu.Unlock()
+							// At this point we've already confirmed that the table exists in the target
+							// vschema.
+							table := targetVSchema.Tables[ts.TargetTable]
+							// Don't override or redo anything that already exists.
+							if table != nil && table.AutoIncrement == nil {
+								seqTableName := fmt.Sprintf(autoSequenceTableFormat, ts.TargetTable)
+								// Create a Vitess AutoIncrement definition -- which uses a sequence -- to
+								// replace the MySQL auto_increment definition that we removed.
+								table.AutoIncrement = &vschemapb.AutoIncrement{
+									Column:   columnName,
+									Sequence: seqTableName,
+								}
+								updatedVSchema = true
+							}
+						}
+					}
+					ddl, err = stripAutoIncrement(ddl, mz.env.Parser(), replaceFunc)
 					if err != nil {
 						return err
 					}
@@ -405,6 +438,15 @@ func (mz *materializer) deploySchema() error {
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	if updatedVSchema {
+		return mz.ts.SaveVSchema(mz.ctx, mz.ms.TargetKeyspace, targetVSchema)
+	}
+
+	return nil
 }
 
 func (mz *materializer) buildMaterializer() error {

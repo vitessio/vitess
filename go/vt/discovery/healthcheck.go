@@ -35,6 +35,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"net/http"
@@ -46,7 +47,6 @@ import (
 	"github.com/google/safehtml/template"
 	"github.com/google/safehtml/template/uncheckedconversions"
 	"github.com/spf13/pflag"
-	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
@@ -92,9 +92,6 @@ var (
 	// refreshKnownTablets tells us whether to process all tablets or only new tablets.
 	refreshKnownTablets = true
 
-	// healthCheckDialConcurrency tells us how many healthcheck connections can be opened to tablets at once. This should be less than the golang max thread limit of 10000.
-	healthCheckDialConcurrency int64 = 1024
-
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
 
@@ -105,6 +102,9 @@ var (
 	// HealthCheckHealthyTemplate uses healthCheckTemplate with the `HealthCheck Tablet - Healthy Tablets` title to
 	// create the HTML code required to render the list of healthy tablets from the HealthCheck.
 	HealthCheckHealthyTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck - Healthy Tablets")
+
+	// errKeyspacesToWatchAndTabletFilters is an error for cases where incompatible filters are defined.
+	errKeyspacesToWatchAndTabletFilters = errors.New("only one of --keyspaces_to_watch and --tablet_filters may be specified at a time")
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
@@ -177,7 +177,6 @@ func registerWebUIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&TabletURLTemplateString, "tablet_url_template", "http://{{.GetTabletHostPort}}", "Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this.")
 	fs.DurationVar(&refreshInterval, "tablet_refresh_interval", 1*time.Minute, "Tablet refresh interval.")
 	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "Whether to reload the tablet's address/port map from topo in case they change.")
-	fs.Int64Var(&healthCheckDialConcurrency, "healthcheck-dial-concurrency", 1024, "Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000.")
 	ParseTabletURLTemplateFromFlag()
 }
 
@@ -297,8 +296,27 @@ type HealthCheckImpl struct {
 	subscribers map[chan *TabletHealth]struct{}
 	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
 	loadTabletsTrigger chan struct{}
-	// healthCheckDialSem is used to limit how many healthcheck connections can be opened to tablets at once.
-	healthCheckDialSem *semaphore.Weighted
+}
+
+// NewVTGateHealthCheckFilters returns healthcheck filters for vtgate.
+func NewVTGateHealthCheckFilters() (filters TabletFilters, err error) {
+	if len(tabletFilters) > 0 {
+		if len(KeyspacesToWatch) > 0 {
+			return nil, errKeyspacesToWatchAndTabletFilters
+		}
+
+		fbs, err := NewFilterByShard(tabletFilters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse tablet_filters value %q: %v", strings.Join(tabletFilters, ","), err)
+		}
+		filters = append(filters, fbs)
+	} else if len(KeyspacesToWatch) > 0 {
+		filters = append(filters, NewFilterByKeyspace(KeyspacesToWatch))
+	}
+	if len(tabletFilterTags) > 0 {
+		filters = append(filters, NewFilterByTabletTags(tabletFilterTags))
+	}
+	return filters, nil
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -322,10 +340,14 @@ type HealthCheckImpl struct {
 //
 //	The localCell for this healthcheck
 //
-// callback.
+// cellsToWatch.
 //
-//	A function to call when there is a primary change. Used to notify vtgate's buffer to stop buffering.
-func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string) *HealthCheckImpl {
+//	Is a list of cells to watch for tablets.
+//
+// filters.
+//
+//	Is one or more filters to apply when determining what tablets we want to stream healthchecks from.
+func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filters TabletFilter) *HealthCheckImpl {
 	log.Infof("loading tablets for cells: %v", cellsToWatch)
 
 	hc := &HealthCheckImpl{
@@ -333,7 +355,6 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		cell:               localCell,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
-		healthCheckDialSem: semaphore.NewWeighted(healthCheckDialConcurrency),
 		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
 		healthData:         make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
@@ -348,26 +369,9 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	}
 
 	for _, c := range cells {
-		var filters TabletFilters
 		log.Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {
 			continue
-		}
-		if len(tabletFilters) > 0 {
-			if len(KeyspacesToWatch) > 0 {
-				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
-			}
-
-			fbs, err := NewFilterByShard(tabletFilters)
-			if err != nil {
-				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
-			}
-			filters = append(filters, fbs)
-		} else if len(KeyspacesToWatch) > 0 {
-			filters = append(filters, NewFilterByKeyspace(KeyspacesToWatch))
-		}
-		if len(tabletFilterTags) > 0 {
-			filters = append(filters, NewFilterByTabletTags(tabletFilterTags))
 		}
 		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets, topo.DefaultConcurrency))
 	}
@@ -864,7 +868,7 @@ func (hc *HealthCheckImpl) TabletConnection(ctx context.Context, alias *topodata
 		// TODO: test that throws this error
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
-	return thc.Connection(ctx, hc), nil
+	return thc.Connection(ctx), nil
 }
 
 // getAliasByCell should only be called while holding hc.mu
