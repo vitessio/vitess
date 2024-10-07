@@ -2778,7 +2778,12 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher) erro
 	ctx = lockCtx
 
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
-		_, err := ts.ws.tmc.DeleteTenantData(ctx, target.GetPrimary().Tablet, &tabletmanagerdatapb.DeleteTenantDataRequest{
+		primary := target.GetPrimary()
+		if primary == nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no primary tablet found for target shard %s/%s",
+				ts.targetKeyspace, target.GetShard())
+		}
+		_, err := ts.ws.tmc.DeleteTenantData(ctx, primary.Tablet, &tabletmanagerdatapb.DeleteTenantDataRequest{
 			Workflow:  ts.workflow,
 			BatchSize: 1000,
 		})

@@ -27,8 +27,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -39,6 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
@@ -79,6 +79,7 @@ type testEnv struct {
 	ctx       context.Context
 	ts        *topo.Server
 	cells     []string
+	db        *fakesqldb.DB
 	mysqld    *mysqlctl.FakeMysqlDaemon
 	tmc       *fakeTMClient
 	dbName    string
@@ -115,7 +116,8 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 	})
 	tmclienttest.SetProtocol(fmt.Sprintf("go.vt.vttablet.tabletmanager.framework_test_%s", t.Name()), tenv.protoName)
 
-	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+	tenv.db = fakesqldb.New(t)
+	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(tenv.db)
 	var err error
 	tenv.mysqld.CurrentPrimaryPosition, err = replication.ParsePosition(gtidFlavor, gtidPosition)
 	require.NoError(t, err)
@@ -182,8 +184,11 @@ func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fa
 		DBConfigs: &dbconfigs.DBConfigs{
 			DBName: tenv.dbName,
 		},
+		Env:                    vtenv.NewTestEnv(),
+		_waitForGrantsComplete: make(chan struct{}),
+		MysqlDaemon:            tenv.mysqld,
 	}
-
+	close(tenv.tmc.tablets[id].tm._waitForGrantsComplete) // So that we don't wait for the grants
 	return tenv.tmc.tablets[id]
 }
 
@@ -498,9 +503,8 @@ func (tmc *fakeTMClient) VReplicationWaitForPos(ctx context.Context, tablet *top
 }
 
 func (tmc *fakeTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
-	return &querypb.QueryResult{
-		RowsAffected: 1,
-	}, nil
+	// Reuse VReplicationExec
+	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
 }
 
 func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
@@ -515,6 +519,10 @@ func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 
 func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.CreateVReplicationWorkflow(ctx, req)
+}
+
+func (tmc *fakeTMClient) DeleteTenantData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error) {
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.DeleteTenantData(ctx, req)
 }
 
 func (tmc *fakeTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {

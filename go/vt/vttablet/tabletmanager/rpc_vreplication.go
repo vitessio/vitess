@@ -19,18 +19,22 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sort"
 	"strings"
 
 	"golang.org/x/exp/maps"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -41,6 +45,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -146,14 +151,39 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 // this needs to be done instead of simply dropping the table as the table will
 // have data from other tenants.
 func (tm *TabletManager) DeleteTenantData(ctx context.Context, req *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Errorf("DEBUG: Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+		}
+	}()
 	if req == nil || strings.TrimSpace(req.Workflow) == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no workflow provided")
+	}
+
+	// Let's be sure that the workflow is stopped so that it's not generating more data.
+	_, err := tm.UpdateVReplicationWorkflow(ctx, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+		Workflow: req.Workflow,
+		State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+	})
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to stop workflow %s", req.Workflow)
 	}
 
 	// We need to get the binlogsource filter used for the tenant.
 	wf, err := tm.ReadVReplicationWorkflow(ctx, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: req.Workflow})
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to read workflow %s", req.Workflow)
+	}
+	if wf.WorkflowType != binlogdatapb.VReplicationWorkflowType_MoveTables {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "workflow %s is not a MoveTables workflow", req.Workflow)
+	}
+	var wfOpts vtctldatapb.WorkflowOptions
+	err = protojson.Unmarshal([]byte(wf.Options), &wfOpts)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to unmarshal workflow options for workflow %s", req.Workflow)
+	}
+	if strings.TrimSpace(wfOpts.TenantId) == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "workflow %s does not have a tenant ID", req.Workflow)
 	}
 	if len(wf.Streams) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no streams found in the workflow %s",

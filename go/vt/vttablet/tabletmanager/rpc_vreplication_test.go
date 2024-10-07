@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/ptr"
@@ -3668,6 +3669,120 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 				require.NoError(t, err)
 			}
 			require.Equal(t, tt.want, got, "buildUpdateVReplicationWorkflowsQuery() = %v, want %v", got, tt.want)
+		})
+	}
+}
+
+func TestDeleteTenantData(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	workflow := "testwf"
+	workflowType := ptr.Of(binlogdatapb.VReplicationWorkflowType_MoveTables)
+	workflowOptions := &vtctldatapb.WorkflowOptions{
+		TenantId: "1",
+	}
+	vreplID := 1
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	testCases := []struct {
+		name            string
+		req             *tabletmanagerdatapb.DeleteTenantDataRequest
+		workflowType    *binlogdatapb.VReplicationWorkflowType
+		workflowOptions *vtctldatapb.WorkflowOptions
+		bls             string
+		expectedQueries []string
+		wantErr         string
+	}{
+		{
+			name:    "no workflow",
+			req:     &tabletmanagerdatapb.DeleteTenantDataRequest{},
+			wantErr: "invalid request, no workflow provided",
+		},
+		{
+			name: "wrong workflow type",
+			req: &tabletmanagerdatapb.DeleteTenantDataRequest{
+				Workflow: workflow,
+			},
+			workflowType: ptr.Of(binlogdatapb.VReplicationWorkflowType_Reshard),
+			wantErr:      fmt.Sprintf("workflow %s is not a MoveTables workflow", workflow),
+		},
+		{
+			name: "no tenant ID",
+			req: &tabletmanagerdatapb.DeleteTenantDataRequest{
+				Workflow: workflow,
+			},
+			workflowOptions: &vtctldatapb.WorkflowOptions{},
+			wantErr:         fmt.Sprintf("workflow %s does not have a tenant ID", workflow),
+		},
+		{
+			name: "no filter",
+			req: &tabletmanagerdatapb.DeleteTenantDataRequest{
+				Workflow: workflow,
+			},
+			bls:     fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{}", sourceKs, sourceShard),
+			wantErr: fmt.Sprintf("no multi-tenant filter rule found in the workflow %s", workflow),
+		},
+		{
+			name: "success",
+			req: &tabletmanagerdatapb.DeleteTenantDataRequest{
+				Workflow:  workflow,
+				BatchSize: 1000,
+			},
+			bls: fmt.Sprintf("keyspace:\"%s\" shard:\"%s\"  filter:{rules:{match:\"t1\" filter:\"select * from t1 where tenant_id = 1\"} rules:{match:\"t2\" filter:\"select * from t2\"}}", sourceKs, sourceShard),
+			expectedQueries: []string{
+				"delete from t1 where tenant_id = 1 limit 1000",
+				"delete from t2 where tenant_id = 1 limit 1000",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NotNil(t, tc.req)
+			for _, targetTablet := range targetShards {
+				targetTablet.vrdbClient.AddInvariant("use _vt", &sqltypes.Result{})
+				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("select id, source, cell, tablet_types, state, message from _vt.vreplication where workflow = '%s'", workflow), &sqltypes.Result{}, nil)
+				wfType := workflowType
+				if tc.workflowType != nil {
+					wfType = tc.workflowType
+				}
+				wfOpts := workflowOptions
+				if tc.workflowOptions != nil {
+					wfOpts = tc.workflowOptions
+				}
+				wfOptsStr, err := protojson.Marshal(wfOpts)
+				require.NoError(t, err)
+				targetTablet.vrdbClient.AddInvariant(fmt.Sprintf(readWorkflow, workflow, tenv.dbName), sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
+						"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
+					),
+					fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|%d|0||0|1|%s", vreplID, tc.bls, position, targetKs, *wfType, wfOptsStr),
+				))
+				for _, query := range tc.expectedQueries {
+					tenv.db.AddQuery(query, &sqltypes.Result{})
+				}
+				_, err = tenv.tmc.DeleteTenantData(ctx, targetTablet.tablet, tc.req)
+				if tc.wantErr != "" {
+					require.EqualError(t, err, tc.wantErr)
+				} else {
+					require.NoError(t, err)
+				}
+			}
 		})
 	}
 }
