@@ -204,9 +204,6 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
-		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
-			continue
-		}
 		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
 		latestInstances[tabletAliasString] = true
 		old, err := inst.ReadTablet(tabletAliasString)

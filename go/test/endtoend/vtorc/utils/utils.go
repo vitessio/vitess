@@ -1204,3 +1204,29 @@ func SemiSyncExtensionLoaded(t *testing.T, tablet *cluster.Vttablet) (mysql.Semi
 
 	return conn.SemiSyncExtensionLoaded()
 }
+
+// WaitForDrainedTabletInVTOrc waits for VTOrc to see the specified number of drained tablet.
+func WaitForDrainedTabletInVTOrc(t *testing.T, vtorcInstance *cluster.VTOrcProcess, count int) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			t.Errorf("timed out waiting for drained tablet in VTOrc")
+			return
+		case <-ticker.C:
+			statusCode, res, err := vtorcInstance.MakeAPICall("api/database-state")
+			if err != nil || statusCode != 200 {
+				continue
+			}
+			found := strings.Count(res, fmt.Sprintf(`"tablet_type": "%d"`, topodatapb.TabletType_DRAINED))
+			if found == count {
+				return
+			}
+		}
+	}
+}
