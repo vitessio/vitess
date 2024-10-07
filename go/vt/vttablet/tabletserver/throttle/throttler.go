@@ -95,7 +95,6 @@ const (
 	DefaultThrottleRatio       = 1.0
 
 	defaultReplicationLagQuery = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat"
-	threadsRunningQuery        = "show global status like 'threads_running'"
 
 	inventoryPrefix       = "inventory/"
 	throttlerConfigPrefix = "config/"
@@ -137,6 +136,7 @@ type Throttler struct {
 	keyspace    string
 	shard       string
 	tabletAlias *topodatapb.TabletAlias
+	tabletInfo  atomic.Pointer[topo.TabletInfo]
 
 	check     *ThrottlerCheck
 	isEnabled atomic.Bool
@@ -190,7 +190,7 @@ type Throttler struct {
 	cancelEnableContext context.CancelFunc
 	throttledAppsMutex  sync.Mutex
 
-	readSelfThrottleMetrics func(context.Context) base.ThrottleMetrics // overwritten by unit test
+	readSelfThrottleMetrics func(context.Context, tmclient.TabletManagerClient) base.ThrottleMetrics // overwritten by unit test
 }
 
 // ThrottlerStatus published some status values from the throttler
@@ -262,8 +262,8 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	}
 
 	throttler.StoreMetricsThreshold(base.RegisteredSelfMetrics[base.LagMetricName].DefaultThreshold())
-	throttler.readSelfThrottleMetrics = func(ctx context.Context) base.ThrottleMetrics {
-		return throttler.readSelfThrottleMetricsInternal(ctx)
+	throttler.readSelfThrottleMetrics = func(ctx context.Context, tmClient tmclient.TabletManagerClient) base.ThrottleMetrics {
+		return throttler.readSelfThrottleMetricsInternal(ctx, tmClient)
 	}
 	return throttler
 }
@@ -338,6 +338,15 @@ func (throttler *Throttler) initConfig() {
 
 // readThrottlerConfig proactively reads the throttler's config from SrvKeyspace in local topo
 func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatapb.ThrottlerConfig, error) {
+	// since we're reading from topo, let's seize this opportunity to read table info as well
+	if throttler.tabletInfo.Load() == nil {
+		if ti, err := throttler.ts.GetTablet(ctx, throttler.tabletAlias); err == nil {
+			throttler.tabletInfo.Store(ti)
+		} else {
+			log.Errorf("Throttler: error reading tablet info: %v", err)
+		}
+	}
+
 	srvks, err := throttler.ts.GetSrvKeyspace(ctx, throttler.tabletAlias.Cell, throttler.keyspace)
 	if err != nil {
 		return nil, err
@@ -804,7 +813,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				if throttler.IsOpen() {
 					// frequent
 					// Always collect self metrics:
-					throttler.collectSelfMetrics(ctx)
+					throttler.collectSelfMetrics(ctx, tmClient)
 					if !throttler.isDormant() {
 						throttler.collectShardMetrics(ctx, tmClient)
 					}
@@ -869,7 +878,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	}()
 }
 
-func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClient tmclient.TabletManagerClient, probe *base.Probe) (probeFunc func(context.Context) base.ThrottleMetrics) {
+func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe *base.Probe) (probeFunc func(context.Context, tmclient.TabletManagerClient) base.ThrottleMetrics) {
 	metricsWithError := func(err error) base.ThrottleMetrics {
 		metrics := base.ThrottleMetrics{}
 		for _, metricName := range base.KnownMetricNames {
@@ -882,7 +891,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		}
 		return metrics
 	}
-	return func(ctx context.Context) base.ThrottleMetrics {
+	return func(ctx context.Context, tmClient tmclient.TabletManagerClient) base.ThrottleMetrics {
 		// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
 		ctx, cancel := context.WithTimeout(ctx, 4*activeCollectInterval)
 		defer cancel()
@@ -940,7 +949,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 
 // readSelfThrottleMetricsInternal rreads all registsred self metrics on this tablet (or backend MySQL server).
 // This is the actual place where metrics are read, to be later aggregated and/or propagated to other tablets.
-func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context) base.ThrottleMetrics {
+func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context, tmClient tmclient.TabletManagerClient) base.ThrottleMetrics {
 	result := make(base.ThrottleMetrics, len(base.RegisteredSelfMetrics))
 	writeMetric := func(metric *base.ThrottleMetric) {
 		select {
@@ -951,7 +960,9 @@ func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context)
 	}
 	readMetric := func(selfMetric base.SelfMetric) *base.ThrottleMetric {
 		params := &base.SelfMetricReadParams{
-			Throttler: throttler,
+			Throttler:  throttler,
+			TmClient:   tmClient,
+			TabletInfo: throttler.tabletInfo.Load(),
 		}
 		if selfMetric.RequiresConn() {
 			conn, err := throttler.pool.Get(ctx, nil)
@@ -978,7 +989,7 @@ func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context)
 	return result
 }
 
-func (throttler *Throttler) collectSelfMetrics(ctx context.Context) {
+func (throttler *Throttler) collectSelfMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient) {
 	probe := throttler.inventory.ClustersProbes[throttler.tabletAliasString()]
 	if probe == nil {
 		// probe not created yet
@@ -993,7 +1004,7 @@ func (throttler *Throttler) collectSelfMetrics(ctx context.Context) {
 		defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
 		// Throttler is probing its own tablet's metrics:
-		_ = base.ReadThrottleMetrics(ctx, probe, throttler.readSelfThrottleMetrics)
+		_ = base.ReadThrottleMetrics(ctx, probe, tmClient, throttler.readSelfThrottleMetrics)
 	}()
 }
 
@@ -1014,9 +1025,9 @@ func (throttler *Throttler) collectShardMetrics(ctx context.Context, tmClient tm
 			defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
 			// Throttler probing other tablets:
-			throttleMetricFunc := throttler.generateTabletProbeFunction(base.ShardScope, tmClient, probe)
+			throttleMetricFunc := throttler.generateTabletProbeFunction(base.ShardScope, probe)
 
-			throttleMetrics := base.ReadThrottleMetrics(ctx, probe, throttleMetricFunc)
+			throttleMetrics := base.ReadThrottleMetrics(ctx, probe, tmClient, throttleMetricFunc)
 			for _, metric := range throttleMetrics {
 				select {
 				case <-ctx.Done():
