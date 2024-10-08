@@ -31,10 +31,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -43,6 +45,7 @@ import (
 
 var (
 	clusterInstance   *cluster.LocalProcessCluster
+	mysqlParams       mysql.ConnParams
 	vtParams          mysql.ConnParams
 	vtgateGrpcAddress string
 	keyspaceName      = "ks"
@@ -82,6 +85,8 @@ func TestMain(m *testing.M) {
 			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--queryserver-config-transaction-cap", "3",
+			"--queryserver-config-transaction-timeout", "400s",
+			"--queryserver-config-query-timeout", "9000s",
 		)
 
 		// Start keyspace
@@ -103,6 +108,15 @@ func TestMain(m *testing.M) {
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
+		// create mysql instance and connection parameters
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, SchemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
+
 		return m.Run()
 	}()
 	os.Exit(exitcode)
@@ -122,9 +136,29 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 
 func cleanup(t *testing.T) {
 	cluster.PanicHandler(t)
-	utils.ClearOutTable(t, vtParams, "twopc_user")
-	utils.ClearOutTable(t, vtParams, "twopc_t1")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_user")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_t1")
 	sm.reset()
+}
+
+func startWithMySQL(t *testing.T) (utils.MySQLCompare, func()) {
+	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	require.NoError(t, err)
+
+	deleteAll := func() {
+		tables := []string{"twopc_user"}
+		for _, table := range tables {
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+	}
+
+	deleteAll()
+
+	return mcmp, func() {
+		deleteAll()
+		mcmp.Close()
+		cluster.PanicHandler(t)
+	}
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value

@@ -22,12 +22,11 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/slice"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -59,6 +58,11 @@ type (
 
 		Stats *servenv.TimingsWrapper
 	}
+
+	// Query contains the query and involved tables executed inside transaction.
+	// A savepoint is represented by having only the Savepoint field set.
+	// This is used to rollback to a specific savepoint.
+	// The query log on commit, does not need to store the savepoint.
 	Query struct {
 		Savepoint string
 		Sql       string
@@ -206,6 +210,9 @@ func (p *Properties) String(sanitize bool, parser *sqlparser.Parser) string {
 }
 
 func (p *Properties) GetQueries() []Query {
+	if p == nil {
+		return nil
+	}
 	return slice.Filter(p.Queries, func(q Query) bool {
 		return q.Sql != ""
 	})

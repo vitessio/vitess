@@ -1031,53 +1031,53 @@ func TestReadingUnresolvedTransactions(t *testing.T) {
 	}
 }
 
-// TestDTSavepointWithVanilaMySQL tests distributed transaction should work with savepoint as with vanila MySQL
+// TestDTSavepointWithVanilaMySQL ensures that distributed transactions should work with savepoint as with vanila MySQL
 func TestDTSavepointWithVanilaMySQL(t *testing.T) {
-	conn, closer := start(t)
+	mcmp, closer := startWithMySQL(t)
 	defer closer()
 
 	// internal savepoint
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')")
-	utils.Exec(t, conn, "commit")
-	utils.Exec(t, conn, "select * from twopc_user order by id")
+	mcmp.Exec("begin")
+	mcmp.Exec("insert into twopc_user(id, name) values(7,'foo'), (8,'bar')")
+	mcmp.Exec("commit")
+	mcmp.Exec("select * from twopc_user order by id")
 
 	// external savepoint, single shard transaction.
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "savepoint a")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(9,'baz')")
-	utils.Exec(t, conn, "savepoint b")
-	utils.Exec(t, conn, "rollback to b")
-	utils.Exec(t, conn, "commit")
-	utils.Exec(t, conn, "select * from twopc_user order by id")
+	mcmp.Exec("begin")
+	mcmp.Exec("savepoint a")
+	mcmp.Exec("insert into twopc_user(id, name) values(9,'baz')")
+	mcmp.Exec("savepoint b")
+	mcmp.Exec("rollback to b")
+	mcmp.Exec("commit")
+	mcmp.Exec("select * from twopc_user order by id")
 
 	// external savepoint, multi-shard transaction.
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "savepoint a")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(10,'apa')")
-	utils.Exec(t, conn, "savepoint b")
-	utils.Exec(t, conn, "update twopc_user set name = 'temp' where id = 7")
-	utils.Exec(t, conn, "rollback to a")
-	utils.Exec(t, conn, "commit")
-	utils.Exec(t, conn, "select * from twopc_user order by id")
+	mcmp.Exec("begin")
+	mcmp.Exec("savepoint a")
+	mcmp.Exec("insert into twopc_user(id, name) values(10,'apa')")
+	mcmp.Exec("savepoint b")
+	mcmp.Exec("update twopc_user set name = 'temp' where id = 7")
+	mcmp.Exec("rollback to a")
+	mcmp.Exec("commit")
+	mcmp.Exec("select * from twopc_user order by id")
 
 	// external savepoint, multi-shard transaction.
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "savepoint a")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(10,'apa')")
-	utils.Exec(t, conn, "savepoint b")
-	utils.Exec(t, conn, "update twopc_user set name = 'temp' where id = 7")
-	utils.Exec(t, conn, "rollback to b")
-	utils.Exec(t, conn, "commit")
-	utils.Exec(t, conn, "select * from twopc_user order by id")
+	mcmp.Exec("begin")
+	mcmp.Exec("savepoint a")
+	mcmp.Exec("insert into twopc_user(id, name) values(10,'apa')")
+	mcmp.Exec("savepoint b")
+	mcmp.Exec("update twopc_user set name = 'temp' where id = 7")
+	mcmp.Exec("rollback to b")
+	mcmp.Exec("commit")
+	mcmp.Exec("select * from twopc_user order by id")
 
 	// external savepoint, multi-shard transaction.
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "update twopc_user set name = 'temp1' where id = 10")
-	utils.Exec(t, conn, "savepoint b")
-	utils.Exec(t, conn, "update twopc_user set name = 'temp2' where id = 7")
-	utils.Exec(t, conn, "commit")
-	utils.Exec(t, conn, "select * from twopc_user order by id")
+	mcmp.Exec("begin")
+	mcmp.Exec("update twopc_user set name = 'temp1' where id = 10")
+	mcmp.Exec("savepoint b")
+	mcmp.Exec("update twopc_user set name = 'temp2' where id = 7")
+	mcmp.Exec("commit")
+	mcmp.Exec("select * from twopc_user order by id")
 }
 
 // TestDTSavepoint tests distributed transaction should work with savepoint.
@@ -1267,19 +1267,26 @@ func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
 	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// initial insert
+	for i := 1; i <= 100; i++ {
+		execute(qCtx, t, conn, fmt.Sprintf("insert into twopc_user(id, name) values(%d,'foo')", 10*i))
+	}
+
+	// ignore initial change
+	tableMap := make(map[string][]*querypb.Field)
+	dtMap := make(map[string]string)
+	_ = retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
+
 	// Insert into multiple shards
 	execute(qCtx, t, conn, "begin")
 	execute(qCtx, t, conn, "insert into twopc_user(id, name) values(7,'foo'),(8,'bar')")
 	execute(qCtx, t, conn, "savepoint a")
-	execute(qCtx, t, conn, "insert into twopc_user(id, name) values(9,'baz')")
+	for i := 1; i <= 100; i++ {
+		execute(qCtx, t, conn, fmt.Sprintf("insert ignore into twopc_user(id, name) values(%d,'baz')", 12+i))
+	}
 	execute(qCtx, t, conn, "savepoint b")
-	execute(qCtx, t, conn, "insert into twopc_user(id, name) values(10,'apa')")
+	execute(qCtx, t, conn, "insert into twopc_user(id, name) values(11,'apa')")
 	execute(qCtx, t, conn, "rollback to a")
-
-	// 2nd session to write something on primary key 9,
-	// to check if 2pc resolver do not try to acquire lock on `9` as it is rolled back by savepoint.
-	// conn2 := vtgateConn.Session("", nil)
-	// execute(qCtx, t, conn2, "insert into twopc_user(id, name) values(9,'mysession')")
 
 	// The caller ID is used to simulate the failure at the desired point.
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
@@ -1290,9 +1297,12 @@ func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
 		"distributed transaction ID failed during metadata manager commit; transaction will be committed/rollbacked based on the state on recovery",
 		false, "COMMIT", "ks:40-80,ks:80-")
 
+	// 2nd session to write something on different primary key, this should continue to work.
+	conn2 := vtgateConn.Session("", nil)
+	execute(qCtx, t, conn2, "insert into twopc_user(id, name) values(190001,'mysession')")
+	execute(qCtx, t, conn2, "insert into twopc_user(id, name) values(290001,'mysession')")
+
 	// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
-	tableMap := make(map[string][]*querypb.Field)
-	dtMap := make(map[string]string)
 	logTable := retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
 	expectations := map[string][]string{
 		"ks.dt_participant:-40": {
@@ -1322,8 +1332,16 @@ func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
 		},
-		"ks.twopc_user:40-80": {"insert:[INT64(8) VARCHAR(\"bar\")]"},
-		"ks.twopc_user:80-":   {"insert:[INT64(7) VARCHAR(\"foo\")]"},
+		"ks.twopc_user:-40": {
+			"insert:[INT64(290001) VARCHAR(\"mysession\")]",
+		},
+		"ks.twopc_user:40-80": {
+			"insert:[INT64(190001) VARCHAR(\"mysession\")]",
+			"insert:[INT64(8) VARCHAR(\"bar\")]",
+		},
+		"ks.twopc_user:80-": {
+			"insert:[INT64(7) VARCHAR(\"foo\")]",
+		},
 	}
 	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
