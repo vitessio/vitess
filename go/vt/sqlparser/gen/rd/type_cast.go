@@ -195,6 +195,9 @@ func rewriteTypes(infile io.Reader, outFile io.Writer) (err error) {
 		} else {
 			// var replace
 			line = castVarTypes(line, r.types)
+			if d.name == "comment_opt" {
+				print()
+			}
 			t, ok := funcExprsMap[d.name]
 			if !ok {
 				t = "[]byte"

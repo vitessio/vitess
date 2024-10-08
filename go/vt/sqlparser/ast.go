@@ -1261,7 +1261,7 @@ func (d *Declare) Format(buf *TrackedBuffer) {
 			}
 			buf.Myprintf(" %s", varName.val)
 		}
-		buf.Myprintf(" %v", &d.Variables.VarType)
+		buf.Myprintf(" %v", d.Variables.VarType)
 	}
 }
 
@@ -2745,7 +2745,7 @@ type ColumnDefinition struct {
 
 // Format formats the node.
 func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %v", col.Name, &col.Type)
+	buf.Myprintf("%v %v", col.Name, col.Type)
 }
 
 func (col *ColumnDefinition) walkSubtree(visit Visit) error {
@@ -3241,7 +3241,7 @@ func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
 		if col.Type.Autoincrement {
 			buf.Myprintf("%v %s", col.Name, "FOR ORDINALITY")
 		} else {
-			buf.Myprintf("%v %v%s %s %v", col.Name, &col.Type, exists, keywordStrings[PATH], col.Opts)
+			buf.Myprintf("%v %v%s %s %v", col.Name, col.Type, exists, keywordStrings[PATH], col.Opts)
 		}
 	}
 }
