@@ -3186,16 +3186,46 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	}
 	direction := TrafficSwitchDirection(req.Direction)
 	if direction == DirectionBackward {
+		if ts.IsMultiTenantMigration() {
+			// In a multi-tenant migration, multiple migrations would be writing to the same
+			// table, so we can't stop writes like we do with MoveTables, using denied tables,
+			// since it would block all other migrations as well as traffic for tenants which
+			// have already been migrated.
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse traffic for multi-tenant migrations")
+		}
+		if !startState.WritesSwitched && !slices.Contains(req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+			// We don't need to do anything but update the routing rules in the other direction.
+			ts.targetKeyspace = startState.SourceKeyspace
+			ts.sourceKeyspace = startState.TargetKeyspace
+			var err error
+			if ts.workflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
+				err = ts.switchShardReads(ctx, req.Cells, req.TabletTypes, direction)
+			} else {
+				err = ts.switchTableReads(ctx, req.Cells, req.TabletTypes, true, direction)
+			}
+			if err != nil {
+				return nil, vterrors.Wrapf(err, "failed to reverse traffic for %v tablets in workflow %s",
+					req.TabletTypes, req.Workflow)
+			}
+			resp := &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:    fmt.Sprintf("ReverseTraffic was successful for workflow %s.%s", req.Keyspace, req.Workflow),
+				StartState: startState.String(),
+			}
+			_, currentState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+			if err != nil {
+				resp.CurrentState = fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err)
+			} else {
+				resp.CurrentState = currentState.String()
+			}
+			return resp, nil
+		}
+		// Update the starting state so that we're using the reverse workflow so that we can
+		// move forward with a normal traffic switch operation.
 		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
 		if err != nil {
 			return nil, err
 		}
-		if ts.IsMultiTenantMigration() {
-			// In a multi-tenant migration, multiple migrations would be writing to the same table, so we can't stop writes like
-			// we do with MoveTables, using denied tables, since it would block all other migrations as well as traffic for
-			// tenants which have already been migrated.
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse traffic for multi-tenant migrations")
-		}
+
 	}
 
 	ts.force = req.GetForce()
