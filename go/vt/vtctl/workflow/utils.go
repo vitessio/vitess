@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -1031,21 +1032,30 @@ func validateEmptyTables(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 			return err
 		}
 
+		eg, groupCtx := errgroup.WithContext(ctx)
+		eg.SetLimit(20)
+
 		for _, ts := range tableSettings {
-			query := fmt.Sprintf("select 1 from `%s` limit 1", ts.TargetTable)
-			res, err := tmc.ExecuteFetchAsDba(ctx, ti.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-				Query:   []byte(query),
-				MaxRows: 1,
+			eg.Go(func() error {
+				query := fmt.Sprintf("select 1 from `%s` limit 1", ts.TargetTable)
+				res, err := tmc.ExecuteFetchAsDba(groupCtx, ti.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+					Query:   []byte(query),
+					MaxRows: 1,
+				})
+				// Ignore table not found error
+				if err != nil && !IsTableDidNotExistError(err) {
+					return err
+				}
+				if res != nil && len(res.Rows) > 0 {
+					mu.Lock()
+					isTableFaulty[ts.TargetTable] = true
+					mu.Unlock()
+				}
+				return nil
 			})
-			// Ignore table not found error
-			if err != nil && !IsTableDidNotExistError(err) {
-				return err
-			}
-			if res != nil && len(res.Rows) > 0 {
-				mu.Lock()
-				isTableFaulty[ts.TargetTable] = true
-				mu.Unlock()
-			}
+		}
+		if err = eg.Wait(); err != nil {
+			return err
 		}
 		return nil
 	})
