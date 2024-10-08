@@ -71,13 +71,10 @@ type CheckFlags struct {
 	OverrideThreshold     float64
 	OKIfNotExists         bool
 	SkipRequestHeartbeats bool
-	MultiMetricsEnabled   bool
 }
 
 // selfCheckFlags have no special hints
-var selfCheckFlags = &CheckFlags{
-	MultiMetricsEnabled: true,
-}
+var selfCheckFlags = &CheckFlags{}
 
 // ThrottlerCheck provides methods for an app checking on metrics
 type ThrottlerCheck struct {
@@ -208,11 +205,8 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			Scope:        metricScope.String(), // This reports back the actual scope used for the check
 		}
 		checkResult.Metrics[metricName.String()] = metric
-		if flags.MultiMetricsEnabled && !metricCheckResult.IsOK() && metricName != base.DefaultMetricName {
+		if !metricCheckResult.IsOK() && metricName != base.DefaultMetricName {
 			// If we're checking multiple metrics, and one of them fails, we should return any of the failing metric.
-			// For backwards compatibility, if flags.MultiMetricsEnabled is not set, we do not report back failing
-			// metrics, because a v20 primary would not know how to deal with it, and is not expecting any of those
-			// metrics.
 			// The only metric we ever report back is the default metric, see below.
 			applyMetricToCheckResult(metricName, metric)
 		}

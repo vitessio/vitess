@@ -66,8 +66,7 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 	args = append(args, "CheckThrottler")
 	if flags == nil {
 		flags = &throttle.CheckFlags{
-			Scope:               base.SelfScope,
-			MultiMetricsEnabled: true,
+			Scope: base.SelfScope,
 		}
 	}
 	if appName != "" {

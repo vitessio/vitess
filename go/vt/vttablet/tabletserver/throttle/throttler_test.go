@@ -422,7 +422,6 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 		flags := &CheckFlags{
 			Scope:                 base.SelfScope,
 			SkipRequestHeartbeats: true,
-			MultiMetricsEnabled:   true,
 		}
 		t.Run("check before apply", func(t *testing.T) {
 			checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
@@ -524,7 +523,6 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 		}
 		flags := &CheckFlags{
 			SkipRequestHeartbeats: true,
-			MultiMetricsEnabled:   true,
 		}
 		throttlerConfig := &topodatapb.ThrottlerConfig{
 			Enabled:           true,
@@ -1697,8 +1695,7 @@ func TestDormant(t *testing.T) {
 		assert.True(t, throttler.isDormant())
 		assert.EqualValues(t, 1, heartbeatWriter.Requests()) // once upon Enable()
 		flags := &CheckFlags{
-			Scope:               base.SelfScope,
-			MultiMetricsEnabled: true,
+			Scope: base.SelfScope,
 		}
 		throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 		go func() {
@@ -1797,8 +1794,7 @@ func TestChecks(t *testing.T) {
 		validateAppNames(t)
 		t.Run("checks, self scope", func(t *testing.T) {
 			flags := &CheckFlags{
-				Scope:               base.SelfScope,
-				MultiMetricsEnabled: true,
+				Scope: base.SelfScope,
 			}
 			t.Run("implicit names", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
@@ -1840,7 +1836,6 @@ func TestChecks(t *testing.T) {
 			// "vitess" app always checks all known metrics.
 			flags := &CheckFlags{
 				// scope not important for this test
-				MultiMetricsEnabled: true,
 			}
 			t.Run("implicit names, always all known", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
@@ -1863,8 +1858,7 @@ func TestChecks(t *testing.T) {
 
 		t.Run("checks, shard scope", func(t *testing.T) {
 			flags := &CheckFlags{
-				Scope:               base.ShardScope,
-				MultiMetricsEnabled: true,
+				Scope: base.ShardScope,
 			}
 			t.Run("implicit names", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
@@ -1898,7 +1892,6 @@ func TestChecks(t *testing.T) {
 		t.Run("checks, undefined scope", func(t *testing.T) {
 			flags := &CheckFlags{
 				// Leaving scope undefined, so that each metrics picks its own scope
-				MultiMetricsEnabled: true,
 			}
 			t.Run("implicit names", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
@@ -1930,8 +1923,7 @@ func TestChecks(t *testing.T) {
 		})
 		t.Run("checks, defined scope masks explicit scope metrics", func(t *testing.T) {
 			flags := &CheckFlags{
-				Scope:               base.ShardScope,
-				MultiMetricsEnabled: true,
+				Scope: base.ShardScope,
 			}
 			t.Run("explicit names", func(t *testing.T) {
 				metricNames := base.MetricNames{
@@ -1962,7 +1954,6 @@ func TestChecks(t *testing.T) {
 		t.Run("checks, undefined scope and explicit scope metrics", func(t *testing.T) {
 			flags := &CheckFlags{
 				// Leaving scope undefined
-				MultiMetricsEnabled: true,
 			}
 			t.Run("explicit names", func(t *testing.T) {
 				metricNames := base.MetricNames{
@@ -2011,8 +2002,7 @@ func TestReplica(t *testing.T) {
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		assert.Empty(t, tmClient.AppNames())
 		flags := &CheckFlags{
-			Scope:               base.SelfScope,
-			MultiMetricsEnabled: true,
+			Scope: base.SelfScope,
 		}
 		{
 			checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
@@ -2096,25 +2086,6 @@ func TestReplica(t *testing.T) {
 					assert.EqualValues(t, 2.718, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
 					assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 					assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
-					assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
-				})
-				t.Run("validate v20 non-multi-metric results", func(t *testing.T) {
-					flags := &CheckFlags{
-						Scope:               base.SelfScope,
-						MultiMetricsEnabled: false,
-					}
-					checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
-					require.NotNil(t, checkResult)
-					// loadavg value exceeds threshold. But since "MultiMetricsEnabled: false", the
-					// throttler, acting as a replica, assumes it's being probed by a v20 primary, and
-					// therefore does not report any of the multi-metric errors back. It only ever
-					// reports the default metric.
-					assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
-					assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
-					assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
-					assert.EqualValues(t, 0.75, checkResult.Threshold)
-					// The replica will still report the multi-metrics, and that's fine. As long
-					// as it does not reflect any of their values in the checkResult.Value/StatusCode/Threshold/Error/Message.
 					assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 				})
 			})
