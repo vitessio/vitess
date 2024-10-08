@@ -586,6 +586,39 @@ func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldata
 	return resp, nil
 }
 
+// ChangeTabletTags is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ChangeTabletTags(ctx context.Context, req *vtctldatapb.ChangeTabletTagsRequest) (resp *vtctldatapb.ChangeTabletTagsResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletTags")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("replace", req.Replace)
+
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	span.Annotate("before_tablet_tags", tablet.Tags)
+
+	changeTagsResp, err := s.tmc.ChangeTags(ctx, tablet.Tablet, req.Tags, req.Replace)
+	if err != nil {
+		return nil, err
+	}
+
+	span.Annotate("after_tablet_tags", changeTagsResp.Tags)
+
+	return &vtctldatapb.ChangeTabletTagsResponse{
+		BeforeTags: tablet.Tags,
+		AfterTags:  changeTagsResp.Tags,
+	}, nil
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (resp *vtctldatapb.ChangeTabletTypeResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletType")
@@ -1236,6 +1269,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			WaitAllTablets:            req.WaitForAllTablets,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
+			ExpectedPrimaryAlias:      req.ExpectedPrimary,
 		},
 	)
 
@@ -3071,6 +3105,10 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		span.Annotate("avoid_primary_alias", topoproto.TabletAliasString(req.AvoidPrimary))
 	}
 
+	if req.ExpectedPrimary != nil {
+		span.Annotate("expected_primary_alias", topoproto.TabletAliasString(req.ExpectedPrimary))
+	}
+
 	if req.NewPrimary != nil {
 		span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	}
@@ -3090,6 +3128,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		reparentutil.PlannedReparentOptions{
 			AvoidPrimaryAlias:       req.AvoidPrimary,
 			NewPrimaryAlias:         req.NewPrimary,
+			ExpectedPrimaryAlias:    req.ExpectedPrimary,
 			WaitReplicasTimeout:     waitReplicasTimeout,
 			TolerableReplLag:        tolerableReplLag,
 			AllowCrossCellPromotion: req.AllowCrossCellPromotion,

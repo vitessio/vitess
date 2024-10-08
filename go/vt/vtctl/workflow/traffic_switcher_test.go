@@ -27,11 +27,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type testTrafficSwitcher struct {
@@ -73,6 +78,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 	cell := "cell1"
 	workflow := "wf1"
 	table := "`t1`"
+	tableDDL := "create table t1 (id int not null auto_increment primary key, c1 varchar(10))"
 	table2 := "t2"
 	unescapedTable := "t1"
 	sourceKeyspace := &testKeyspace{
@@ -91,12 +97,25 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 	env := newTestEnv(t, ctx, cell, sourceKeyspace, targetKeyspace)
 	defer env.close()
 
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		unescapedTable: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   unescapedTable,
+					Schema: tableDDL,
+				},
+			},
+		},
+	}
+
 	type testCase struct {
-		name          string
-		sourceVSchema *vschema.Keyspace
-		targetVSchema *vschema.Keyspace
-		want          map[string]*sequenceMetadata
-		err           string
+		name                                   string
+		sourceVSchema                          *vschema.Keyspace
+		targetVSchema                          *vschema.Keyspace
+		options                                *vtctldatapb.WorkflowOptions
+		want                                   map[string]*sequenceMetadata
+		expectSourceApplySchemaRequestResponse *applySchemaRequestResponse
+		err                                    string
 	}
 	tests := []testCase{
 		{
@@ -147,6 +166,66 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "my-col",
 							Sequence: fmt.Sprintf("%s.my-seq1", sourceKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "auto_increment replaced with sequence",
+			sourceVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables:   map[string]*vschema.Table{}, // Sequence table will be created
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
+			},
+			expectSourceApplySchemaRequestResponse: &applySchemaRequestResponse{
+				change: &tmutils.SchemaChange{
+					SQL: sqlparser.BuildParsedQuery(sqlCreateSequenceTable,
+						sqlescape.EscapeID(fmt.Sprintf(autoSequenceTableFormat, unescapedTable))).Query,
+					Force:                   false,
+					AllowReplication:        true,
+					SQLMode:                 vreplication.SQLMode,
+					DisableForeignKeyChecks: true,
+				},
+				res: &tabletmanagerdatapb.SchemaChangeResult{},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					table: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "`my-col`",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf(autoSequenceTableFormat, unescapedTable),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				fmt.Sprintf(autoSequenceTableFormat, unescapedTable): {
+					backingTableName:     fmt.Sprintf(autoSequenceTableFormat, unescapedTable),
+					backingTableKeyspace: "source-ks",
+					backingTableDBName:   "vt_source-ks",
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Column: "my-col",
+								Name:   "xxhash",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf(autoSequenceTableFormat, unescapedTable),
 						},
 					},
 				},
@@ -468,6 +547,9 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						Tablet: tablet,
 					},
 				}
+				if tc.expectSourceApplySchemaRequestResponse != nil {
+					env.tmc.expectApplySchemaRequest(tablet.Alias.Uid, tc.expectSourceApplySchemaRequestResponse)
+				}
 			}
 			for i, shard := range targetKeyspace.ShardNames {
 				tablet := env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+(i*tabletUIDStep)]
@@ -486,6 +568,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 				targetKeyspace: targetKeyspace.KeyspaceName,
 				sources:        sources,
 				targets:        targets,
+				options:        tc.options,
 			}
 			got, err := ts.getTargetSequenceMetadata(ctx)
 			if tc.err != "" {

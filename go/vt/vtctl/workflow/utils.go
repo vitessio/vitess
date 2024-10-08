@@ -125,7 +125,8 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 			}
 			for _, wf := range res.Workflows {
 				if wf.Workflow == workflow {
-					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
+					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %s",
+						workflow, keyspace, topoproto.TabletAliasString(primary.Alias)))
 					return
 				}
 			}
@@ -219,7 +220,11 @@ func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error)
 	return newDDL, nil
 }
 
-func stripAutoIncrement(ddl string, parser *sqlparser.Parser) (string, error) {
+// stripAutoIncrement will strip any MySQL auto_increment clause in the given
+// table definition. If an optional replace function is specified then that
+// callback will be used to e.g. replace the MySQL clause with a Vitess
+// VSchema AutoIncrement definition.
+func stripAutoIncrement(ddl string, parser *sqlparser.Parser, replace func(columnName string)) (string, error) {
 	newDDL, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
@@ -230,6 +235,9 @@ func stripAutoIncrement(ddl string, parser *sqlparser.Parser) (string, error) {
 		case *sqlparser.ColumnDefinition:
 			if node.Type.Options.Autoincrement {
 				node.Type.Options.Autoincrement = false
+				if replace != nil {
+					replace(sqlparser.String(node.Name))
+				}
 			}
 		}
 		return true, nil

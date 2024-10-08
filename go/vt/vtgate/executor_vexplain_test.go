@@ -18,7 +18,10 @@ package vtgate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -115,129 +118,53 @@ func TestSimpleVexplainTrace(t *testing.T) {
 }
 
 func TestVExplainKeys(t *testing.T) {
-	tests := []struct {
-		query             string
-		expectedRowString string
-	}{
-		{
-			query: "select count(*), col2 from music group by col2",
-			expectedRowString: `{
-	"groupingColumns": [
-		"music.col2"
-	],
-	"statementType": "SELECT"
-}`,
-		}, {
-			query: "select * from user u join user_extra ue on u.id = ue.user_id where u.col1 > 100 and ue.noLimit = 'foo'",
-			expectedRowString: `{
-	"joinColumns": [
-		"user.id",
-		"user_extra.user_id"
-	],
-	"filterColumns": [
-		"user.col1",
-		"user_extra.noLimit"
-	],
-	"statementType": "SELECT"
-}`,
-		}, {
-			// same as above, but written differently
-			query: "select * from user_extra ue, user u where ue.noLimit = 'foo' and u.col1 > 100 and ue.user_id = u.id",
-			expectedRowString: `{
-	"joinColumns": [
-		"user.id",
-		"user_extra.user_id"
-	],
-	"filterColumns": [
-		"user.col1",
-		"user_extra.noLimit"
-	],
-	"statementType": "SELECT"
-}`,
-		},
-		{
-			query: "select u.foo, ue.bar, count(*) from user u join user_extra ue on u.id = ue.user_id where u.name = 'John Doe' group by 1, 2",
-			expectedRowString: `{
-	"groupingColumns": [
-		"user.foo",
-		"user_extra.bar"
-	],
-	"joinColumns": [
-		"user.id",
-		"user_extra.user_id"
-	],
-	"filterColumns": [
-		"user.name"
-	],
-	"statementType": "SELECT"
-}`,
-		},
-		{
-			query: "select * from (select * from user) as derived where derived.amount > 1000",
-			expectedRowString: `{
-	"statementType": "SELECT"
-}`,
-		},
-		{
-			query: "select name, sum(amount) from user group by name",
-			expectedRowString: `{
-	"groupingColumns": [
-		"user.name"
-	],
-	"statementType": "SELECT"
-}`,
-		},
-		{
-			query: "select name from user where age > 30",
-			expectedRowString: `{
-	"filterColumns": [
-		"user.age"
-	],
-	"statementType": "SELECT"
-}`,
-		},
-		{
-			query: "select * from user where name = 'apa' union select * from user_extra where name = 'monkey'",
-			expectedRowString: `{
-	"filterColumns": [
-		"user.name",
-		"user_extra.name"
-	],
-	"statementType": "SELECT"
-}`,
-		},
-		{
-			query: "update user set name = 'Jane Doe' where id = 1",
-			expectedRowString: `{
-	"filterColumns": [
-		"user.id"
-	],
-	"statementType": "UPDATE"
-}`,
-		},
-		{
-			query: "delete from user where order_date < '2023-01-01'",
-			expectedRowString: `{
-	"filterColumns": [
-		"user.order_date"
-	],
-	"statementType": "DELETE"
-}`,
-		},
+	type testCase struct {
+		Query    string          `json:"query"`
+		Expected json.RawMessage `json:"expected"`
 	}
 
+	var tests []testCase
+	data, err := os.ReadFile("testdata/executor_vexplain.json")
+	require.NoError(t, err)
+
+	err = json.Unmarshal(data, &tests)
+	require.NoError(t, err)
+
+	var updatedTests []testCase
+
 	for _, tt := range tests {
-		t.Run(tt.query, func(t *testing.T) {
+		t.Run(tt.Query, func(t *testing.T) {
 			executor, _, _, _, _ := createExecutorEnv(t)
 			session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
-			gotResult, err := executor.Execute(context.Background(), nil, "Execute", session, "vexplain keys "+tt.query, nil)
+			gotResult, err := executor.Execute(context.Background(), nil, "Execute", session, "vexplain keys "+tt.Query, nil)
 			require.NoError(t, err)
 
 			gotRowString := gotResult.Rows[0][0].ToString()
-			assert.Equal(t, tt.expectedRowString, gotRowString)
+			assert.JSONEq(t, string(tt.Expected), gotRowString)
+
+			updatedTests = append(updatedTests, testCase{
+				Query:    tt.Query,
+				Expected: json.RawMessage(gotRowString),
+			})
+
 			if t.Failed() {
-				fmt.Println(gotRowString)
+				fmt.Println("Test failed for query:", tt.Query)
+				fmt.Println("Got result:", gotRowString)
 			}
 		})
+	}
+
+	// If anything failed, write the updated test cases to a temp file
+	if t.Failed() {
+		tempFilePath := filepath.Join(os.TempDir(), "updated_vexplain_keys_tests.json")
+		fmt.Println("Writing updated tests to:", tempFilePath)
+
+		updatedTestsData, err := json.MarshalIndent(updatedTests, "", "\t")
+		require.NoError(t, err)
+
+		err = os.WriteFile(tempFilePath, updatedTestsData, 0644)
+		require.NoError(t, err)
+
+		fmt.Println("Updated tests written to:", tempFilePath)
 	}
 }
