@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
-	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -34,7 +33,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -151,11 +149,6 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 // this needs to be done instead of simply dropping the table as the table will
 // have data from other tenants.
 func (tm *TabletManager) DeleteTenantData(ctx context.Context, req *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Errorf("DEBUG: Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
-		}
-	}()
 	if req == nil || strings.TrimSpace(req.Workflow) == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no workflow provided")
 	}
@@ -214,11 +207,11 @@ func (tm *TabletManager) DeleteTenantData(ctx context.Context, req *tabletmanage
 	// All streams must be using the same filter so we only need look at the first one.
 	stmt, err := tm.Env.Parser().Parse(filter)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "failed to parse query filters")
+		return nil, vterrors.Wrapf(err, "failed to parse query filter: %q", filter)
 	}
 	sel, ok := stmt.(*sqlparser.Select)
 	if !ok || sel.Where == nil {
-		return nil, vterrors.Wrapf(err, "unexpected query filter: %v", filter)
+		return nil, vterrors.Wrapf(err, "unexpected query filter: %q", filter)
 	}
 	exprs := make([]sqlparser.Expr, 0, 1)
 	for _, subexpr := range sqlparser.SplitAndExpression(nil, sel.Where.Expr) {

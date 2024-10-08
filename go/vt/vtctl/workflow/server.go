@@ -2101,6 +2101,8 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		return nil, err
 	}
 
+	log.Errorf("DEBUG: traffic switcher: workflowType: %s, options: %s", ts.workflowType.String(), ts.options.String())
+
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
 		// Return an error if the workflow traffic is partially switched.
 		if state.WritesSwitched || len(state.ReplicaCellsSwitched) > 0 || len(state.RdonlyCellsSwitched) > 0 {
@@ -2836,6 +2838,10 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 				}
 			} else if ts.sourceKeyspace != bls.Keyspace {
 				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "source keyspaces are mismatched across streams: %v vs %v", ts.sourceKeyspace, bls.Keyspace)
+			}
+
+			if bls.Filter == nil || bls.Filter.Rules == nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing filters for %s/%s", bls.Keyspace, bls.Shard)
 			}
 
 			if ts.tables == nil {

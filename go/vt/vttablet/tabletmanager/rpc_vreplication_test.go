@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -28,7 +29,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/ptr"
@@ -3673,6 +3673,150 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 	}
 }
 
+func TestMultiTenantWorkflowDelete(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	workflowName := "testwf"
+	workflowType := ptr.Of(binlogdatapb.VReplicationWorkflowType_MoveTables)
+	workflowOptions := &vtctldatapb.WorkflowOptions{
+		TenantId: "1",
+	}
+	vreplID := 1
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	ws := workflow.NewServer(vtenv.NewTestEnv(), tenv.ts, tenv.tmc)
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "xxhash",
+				}},
+			},
+			"t2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c2",
+					Name:   "xxhash",
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
+	err = tenv.ts.SaveVSchema(ctx, sourceKs, &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t1": {},
+			"t2": {},
+		},
+	})
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name            string
+		req             *vtctldatapb.WorkflowDeleteRequest
+		workflowType    *binlogdatapb.VReplicationWorkflowType
+		workflowOptions *vtctldatapb.WorkflowOptions
+		bls             string
+		expectedQueries []string
+		wantErr         string
+	}{
+		{
+			name: "no workflow",
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKs,
+			},
+			wantErr: "invalid request, no workflow provided",
+		},
+		{
+			name: "missing filters",
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Workflow: workflowName,
+				Keyspace: targetKs,
+			},
+			bls:     fmt.Sprintf("keyspace:\"%s\" shard:\"%s\"", sourceKs, sourceShard),
+			wantErr: fmt.Sprintf("missing filters for %s/0", sourceKs),
+		},
+		{
+			name: "wrong workflow type",
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Workflow: workflowName,
+				Keyspace: targetKs,
+			},
+			bls:          fmt.Sprintf("keyspace:\"%s\" shard:\"%s\"  filter:{rules:{match:\"t1\" filter:\"select * from t1 where tenant_id = 1\"} rules:{match:\"t2\" filter:\"select * from t2 where tenant_id = 1\"}}", sourceKs, sourceShard),
+			workflowType: ptr.Of(binlogdatapb.VReplicationWorkflowType_Reshard),
+			wantErr:      fmt.Sprintf("unsupported workflow type \"%s\" for multi-tenant migration", binlogdatapb.VReplicationWorkflowType_Reshard.String()),
+		},
+		{
+			name: "success",
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Workflow: workflowName,
+				Keyspace: targetKs,
+			},
+			bls: fmt.Sprintf("keyspace:\"%s\" shard:\"%s\"  filter:{rules:{match:\"t1\" filter:\"select * from t1 where tenant_id = 1\"} rules:{match:\"t2\" filter:\"select * from t2 where tenant_id = 1\"}}", sourceKs, sourceShard),
+			expectedQueries: []string{
+				"delete from t1 where tenant_id = 1 limit 1000",
+				"delete from t2 where tenant_id = 1 limit 1000",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NotNil(t, tc.req)
+			for _, targetTablet := range targetShards {
+				targetTablet.vrdbClient.AddInvariant("use _vt", &sqltypes.Result{})
+				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("select id, source, cell, tablet_types, state, message from _vt.vreplication where workflow = '%s'", workflowName), &sqltypes.Result{}, nil)
+				wfType := workflowType
+				if tc.workflowType != nil {
+					wfType = tc.workflowType
+				}
+				wfOpts := workflowOptions
+				if tc.workflowOptions != nil {
+					wfOpts = tc.workflowOptions
+				}
+				wfOptsStr, err := json.Marshal(wfOpts)
+				require.NoError(t, err)
+				targetTablet.vrdbClient.AddInvariant(fmt.Sprintf(readWorkflow, workflowName, tenv.dbName), sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
+						"int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64|varchar",
+					),
+					fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Stopped||%s|1||0|%d|0||0|1|%s", vreplID, tc.bls, position, targetKs, *wfType, string(wfOptsStr)),
+				))
+				for _, query := range tc.expectedQueries {
+					tenv.db.AddQuery(query, &sqltypes.Result{})
+				}
+			}
+			_, err := ws.WorkflowDelete(ctx, tc.req)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestDeleteTenantData(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -3764,7 +3908,7 @@ func TestDeleteTenantData(t *testing.T) {
 				if tc.workflowOptions != nil {
 					wfOpts = tc.workflowOptions
 				}
-				wfOptsStr, err := protojson.Marshal(wfOpts)
+				wfOptsStr, err := json.Marshal(wfOpts)
 				require.NoError(t, err)
 				targetTablet.vrdbClient.AddInvariant(fmt.Sprintf(readWorkflow, workflow, tenv.dbName), sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(

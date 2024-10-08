@@ -122,6 +122,9 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 	tenv.mysqld.CurrentPrimaryPosition, err = replication.ParsePosition(gtidFlavor, gtidPosition)
 	require.NoError(t, err)
 
+	err = tenv.ts.RebuildSrvVSchema(ctx, nil)
+	require.NoError(t, err)
+
 	return tenv
 }
 
