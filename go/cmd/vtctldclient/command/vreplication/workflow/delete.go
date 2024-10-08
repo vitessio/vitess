@@ -32,7 +32,7 @@ var (
 	deleteOptions = struct {
 		KeepData         bool
 		KeepRoutingRules bool
-		DeleteBatchSize  int32
+		DeleteBatchSize  int64
 	}{}
 
 	// delete makes a WorkflowDelete gRPC call to a vtctld.

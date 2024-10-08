@@ -75630,7 +75630,7 @@ export namespace vtctldata {
         shards?: (string[]|null);
 
         /** WorkflowDeleteRequest delete_batch_size */
-        delete_batch_size?: (number|null);
+        delete_batch_size?: (number|Long|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -75658,7 +75658,7 @@ export namespace vtctldata {
         public shards: string[];
 
         /** WorkflowDeleteRequest delete_batch_size. */
-        public delete_batch_size: number;
+        public delete_batch_size: (number|Long);
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.

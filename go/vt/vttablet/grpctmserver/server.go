@@ -445,7 +445,7 @@ func (s *server) CreateVReplicationWorkflow(ctx context.Context, request *tablet
 }
 
 func (s *server) DeleteTenantData(ctx context.Context, request *tabletmanagerdatapb.DeleteTenantDataRequest) (response *tabletmanagerdatapb.DeleteTenantDataResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "DeleteVReplicationWorkflow", request, response, true /*verbose*/, &err)
+	defer s.tm.HandleRPCPanic(ctx, "DeleteTenantData", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DeleteTenantDataResponse{}
 	return s.tm.DeleteTenantData(ctx, request)

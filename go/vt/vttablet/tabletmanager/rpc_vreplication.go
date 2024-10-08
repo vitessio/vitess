@@ -18,12 +18,12 @@ package tabletmanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 
 	"golang.org/x/exp/maps"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
@@ -172,7 +172,7 @@ func (tm *TabletManager) DeleteTenantData(ctx context.Context, req *tabletmanage
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "workflow %s is not a MoveTables workflow", req.Workflow)
 	}
 	var wfOpts vtctldatapb.WorkflowOptions
-	err = protojson.Unmarshal([]byte(wf.Options), &wfOpts)
+	err = json.Unmarshal([]byte(wf.Options), &wfOpts)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to unmarshal workflow options for workflow %s", req.Workflow)
 	}
@@ -231,10 +231,10 @@ func (tm *TabletManager) DeleteTenantData(ctx context.Context, req *tabletmanage
 	}
 	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", batchSize))}
 
-	checkIfCancelled := func() error {
+	checkIfCanceled := func() error {
 		select {
 		case <-ctx.Done():
-			return vterrors.Wrap(ctx.Err(), "context cancelled while deleting data")
+			return vterrors.Wrap(ctx.Err(), "context canceled while deleting data")
 		default:
 			return nil
 		}
@@ -258,7 +258,7 @@ func (tm *TabletManager) DeleteTenantData(ctx context.Context, req *tabletmanage
 			// Back off if we're causing too much load on the database with these
 			// batch deletes.
 			if _, ok := tm.VREngine.ThrottlerClient().ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.VReplicationName); !ok {
-				if err := checkIfCancelled(); err != nil {
+				if err := checkIfCanceled(); err != nil {
 					return nil, err
 				}
 				continue
@@ -274,7 +274,7 @@ func (tm *TabletManager) DeleteTenantData(ctx context.Context, req *tabletmanage
 			if res.RowsAffected == 0 { // We're done with this table
 				break
 			}
-			if err := checkIfCancelled(); err != nil {
+			if err := checkIfCanceled(); err != nil {
 				return nil, err
 			}
 		}

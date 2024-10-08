@@ -2101,8 +2101,6 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		return nil, err
 	}
 
-	log.Errorf("DEBUG: traffic switcher: workflowType: %s, options: %s", ts.workflowType.String(), ts.options.String())
-
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
 		// Return an error if the workflow traffic is partially switched.
 		if state.WritesSwitched || len(state.ReplicaCellsSwitched) > 0 || len(state.RdonlyCellsSwitched) > 0 {
@@ -2145,7 +2143,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	// Multi-tenant migrations delete only that tenant's records from the target tables
 	// in batches and we may not be able to complete that work before the timeout. So
 	// we only delete the workflow after the cleanup work completes successfully so that
-	// the workflow can be cancelled multiple times if needed in order to full cleanup
+	// the workflow can be canceled multiple times if needed in order to fully cleanup
 	// all of the tenant's data that we had copied.
 	if ts.IsMultiTenantMigration() {
 		if ts.workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables { // Should never happen
@@ -2155,7 +2153,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		// We need to delete the rows that the target tables would have for the tenant.
 		// We don't cleanup other related artifacts since they are not tied to the tenant.
 		if !req.GetKeepData() {
-			if err := s.DeleteTenantData(ctx, ts); err != nil {
+			if err := s.DeleteTenantData(ctx, ts, req.DeleteBatchSize); err != nil {
 				return nil, vterrors.Wrapf(err, "failed to fully delete all migrated data for tenant %s, please retry the operation",
 					ts.options.TenantId)
 			}
@@ -2681,7 +2679,7 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 }
 
 // DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard
-// is cancelled.
+// is canceled.
 func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
 	var err error
 	ts.keepRoutingRules = keepRoutingRules
@@ -2743,10 +2741,9 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 }
 
 // DeleteTenantData attempts to delete all of the tenant's data that was migrated
-// in the workflow that we are cancelling or deleting. This work can take some
+// in the workflow that we are canceling or deleting. This work can take some
 // time so if the context ends then the user will need to retry.
-func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher) error {
-	var err error
+func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batchSize int64) error {
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported workflow type %q for multi-tenant migration",
 			ts.workflowType)
@@ -2758,6 +2755,7 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher) erro
 		return nil
 	}
 
+	var err error
 	// Lock the workflow along with its target keyspace.
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DeleteTenantData")
@@ -2787,7 +2785,7 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher) erro
 		}
 		_, err := ts.ws.tmc.DeleteTenantData(ctx, primary.Tablet, &tabletmanagerdatapb.DeleteTenantDataRequest{
 			Workflow:  ts.workflow,
-			BatchSize: 1000,
+			BatchSize: batchSize,
 		})
 		return err
 	})

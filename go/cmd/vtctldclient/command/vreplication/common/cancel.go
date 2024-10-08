@@ -31,7 +31,7 @@ var CancelOptions = struct {
 	KeepData         bool
 	KeepRoutingRules bool
 	Shards           []string
-	DeleteBatchSize  int32
+	DeleteBatchSize  int64
 }{}
 
 func GetCancelCommand(opts *SubCommandsOpts) *cobra.Command {

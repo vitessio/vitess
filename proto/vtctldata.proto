@@ -1977,7 +1977,7 @@ message WorkflowDeleteRequest {
   // The max records to delete from the moved tables when cleaning
   // up the migrated data. This is only used with multi-tenant
   // MoveTables migrations.
-  int32 delete_batch_size = 6;
+  int64 delete_batch_size = 6;
 }
 
 message WorkflowDeleteResponse {

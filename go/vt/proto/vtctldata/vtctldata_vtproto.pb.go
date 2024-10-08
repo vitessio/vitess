@@ -63101,7 +63101,7 @@ func (m *WorkflowDeleteRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.DeleteBatchSize |= int32(b&0x7F) << shift
+				m.DeleteBatchSize |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
