@@ -546,7 +546,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> from_database_opt columns_or_fields
 %type <boolean> full_opt
 %type <showFilter> like_or_where_opt
-%type <byt> exists_opt not_exists_opt temp_opt
+%type <int> exists_opt not_exists_opt temp_opt
 %type <queryOpts> query_opts
 %type <str> key_type key_type_opt
 %type <str> flush_type flush_type_opt
@@ -743,14 +743,15 @@ load_statement:
 select_statement:
   with_select order_by_opt limit_opt lock_opt into_opt
   {
-    $1.SetOrderBy($2)
-    $1.SetLimit($3)
-    $1.SetLock($4)
-    if err := $1.SetInto($5); err != nil {
+    s := $1
+    s.SetOrderBy($2)
+    s.SetLimit($3)
+    s.SetLock($4)
+    if err := s.SetInto($5); err != nil {
     	yylex.Error(err.Error())
     	return 1
     }
-    $$ = $1
+    $$ = s
   }
 | SELECT comment_opt query_opts NEXT num_val for_from table_name
   {
@@ -916,11 +917,11 @@ base_select_no_cte:
 
 from_opt:
   {
-    $$ = []byte(nil)
+    $$ = TableExprs(nil)
   }
 | FROM DUAL
   {
-    $$ = []byte(nil)
+    $$ = TableExprs(nil)
   }
 | FROM table_references
   {
@@ -933,7 +934,7 @@ from_opt:
 into_opt:
 %prec INTO
   {
-    $$ = nil
+    $$ = (*Into)(nil)
   }
 | INTO variable_list
   {
@@ -8481,7 +8482,7 @@ asc_desc_opt:
 
 limit_opt:
   {
-    $$ = nil
+    $$ = (*Limit)(nil)
   }
 | LIMIT limit_val
   {

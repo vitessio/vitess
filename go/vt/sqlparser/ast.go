@@ -112,6 +112,7 @@ func Parse(sql string) (Statement, error) {
 // If a DDL statement is partially parsed but contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
 func ParseWithOptions(ctx context.Context, sql string, options ParserOptions) (Statement, error) {
+	fmt.Println(sql)
 	defer trace.StartRegion(ctx, "ParseWithOptions").End()
 
 	tokenizer := NewStringTokenizer(sql)
@@ -6739,7 +6740,9 @@ func (node *Limit) Format(buf *TrackedBuffer) {
 	if node.Offset != nil {
 		buf.Myprintf("%v, ", node.Offset)
 	}
-	buf.Myprintf("%v", node.Rowcount)
+	if node.Rowcount != nil {
+		buf.Myprintf("%v", node.Rowcount)
+	}
 }
 
 func (node *Limit) walkSubtree(visit Visit) error {
