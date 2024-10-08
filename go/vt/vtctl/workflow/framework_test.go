@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -58,6 +60,12 @@ const (
 	tabletUIDStep           = 10
 )
 
+var defaultTabletTypes = []topodatapb.TabletType{
+	topodatapb.TabletType_PRIMARY,
+	topodatapb.TabletType_REPLICA,
+	topodatapb.TabletType_RDONLY,
+}
+
 type testKeyspace struct {
 	KeyspaceName string
 	ShardNames   []string
@@ -66,6 +74,7 @@ type testKeyspace struct {
 type queryResult struct {
 	query  string
 	result *querypb.QueryResult
+	err    error
 }
 
 func TestMain(m *testing.M) {
@@ -140,7 +149,7 @@ func initSrvKeyspace(t *testing.T, topo *topo.Server, keyspace string, sources, 
 		for _, shard := range shards {
 			keyRange, err := key.ParseShardingSpec(shard)
 			require.NoError(t, err)
-			require.Equal(t, 1, len(keyRange))
+			require.Len(t, keyRange, 1)
 			partition.ShardReferences = append(partition.ShardReferences, &topodatapb.ShardReference{
 				Name:     shard,
 				KeyRange: keyRange[0],
@@ -176,6 +185,7 @@ func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspac
 		Shard:    shard,
 		KeyRange: &topodatapb.KeyRange{},
 		Type:     tabletType,
+		Hostname: "localhost", // Without a hostname the RefreshState call is skipped
 		PortMap: map[string]int32{
 			"test": int32(id),
 		},
@@ -197,35 +207,60 @@ func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspac
 	return tablet
 }
 
-// addTableRoutingRules adds routing rules from the test env's source keyspace to
-// its target keyspace for the given tablet types and tables.
-func (env *testEnv) addTableRoutingRules(t *testing.T, ctx context.Context, tabletTypes []topodatapb.TabletType, tables []string) {
-	ks := env.targetKeyspace.KeyspaceName
-	rules := make(map[string][]string, len(tables)*(len(tabletTypes)*3))
+func (env *testEnv) saveRoutingRules(t *testing.T, rules map[string][]string) {
+	err := topotools.SaveRoutingRules(context.Background(), env.ts, rules)
+	require.NoError(t, err)
+	err = env.ts.RebuildSrvVSchema(context.Background(), nil)
+	require.NoError(t, err)
+}
+
+func (env *testEnv) updateTableRoutingRules(t *testing.T, ctx context.Context,
+	tabletTypes []topodatapb.TabletType, tables []string, sourceKeyspace, targetKeyspace, toKeyspace string) {
+
+	if len(tabletTypes) == 0 {
+		tabletTypes = defaultTabletTypes
+	}
+	rr, err := env.ts.GetRoutingRules(ctx)
+	require.NoError(t, err)
+	rules := topotools.GetRoutingRulesMap(rr)
 	for _, tabletType := range tabletTypes {
 		for _, tableName := range tables {
-			toTarget := []string{ks + "." + tableName}
+			toTarget := []string{toKeyspace + "." + tableName}
 			tt := strings.ToLower(tabletType.String())
 			if tabletType == topodatapb.TabletType_PRIMARY {
 				rules[tableName] = toTarget
-				rules[ks+"."+tableName] = toTarget
-				rules[env.sourceKeyspace.KeyspaceName+"."+tableName] = toTarget
+				rules[targetKeyspace+"."+tableName] = toTarget
+				rules[sourceKeyspace+"."+tableName] = toTarget
 			} else {
 				rules[tableName+"@"+tt] = toTarget
-				rules[ks+"."+tableName+"@"+tt] = toTarget
-				rules[env.sourceKeyspace.KeyspaceName+"."+tableName+"@"+tt] = toTarget
+				rules[targetKeyspace+"."+tableName+"@"+tt] = toTarget
+				rules[sourceKeyspace+"."+tableName+"@"+tt] = toTarget
 			}
 		}
 	}
-	err := topotools.SaveRoutingRules(ctx, env.ts, rules)
-	require.NoError(t, err)
-	err = env.ts.RebuildSrvVSchema(ctx, nil)
-	require.NoError(t, err)
+	env.saveRoutingRules(t, rules)
 }
 
 func (env *testEnv) deleteTablet(tablet *topodatapb.Tablet) {
 	_ = env.ts.DeleteTablet(context.Background(), tablet.Alias)
 	delete(env.tablets[tablet.Keyspace], int(tablet.Alias.Uid))
+}
+
+func (env *testEnv) confirmRoutingAllTablesToTarget(t *testing.T) {
+	t.Helper()
+	env.tmc.mu.Lock()
+	defer env.tmc.mu.Unlock()
+	wantRR := make(map[string][]string)
+	for _, sd := range env.tmc.schema {
+		for _, td := range sd.TableDefinitions {
+			for _, tt := range []string{"", "@rdonly", "@replica"} {
+				wantRR[td.Name+tt] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
+				wantRR[fmt.Sprintf("%s.%s", env.sourceKeyspace.KeyspaceName, td.Name+tt)] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
+				wantRR[fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name+tt)] = []string{fmt.Sprintf("%s.%s", env.targetKeyspace.KeyspaceName, td.Name)}
+			}
+		}
+	}
+	checkRouting(t, env.ws, wantRR)
 }
 
 type testTMClient struct {
@@ -234,19 +269,36 @@ type testTMClient struct {
 
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
-	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
+	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
 	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
+	applySchemaRequests                map[uint32]*applySchemaRequestResponse
+	primaryPositions                   map[uint32]string
+	vdiffRequests                      map[uint32]*vdiffRequestResponse
+	refreshStateErrors                 map[uint32]error
+
+	// Stack of ReadVReplicationWorkflowsResponse to return, in order, for each shard
+	readVReplicationWorkflowsResponses map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
 
 	env     *testEnv    // For access to the env config from tmc methods.
 	reverse atomic.Bool // Are we reversing traffic?
+	frozen  atomic.Bool // Are the workflows frozen?
+
+	// Can be used to return an error if an unexpected request is made or
+	// an expected request is NOT made.
+	strict bool
 }
 
 func newTestTMClient(env *testEnv) *testTMClient {
 	return &testTMClient{
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
-		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
+		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
 		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
+		applySchemaRequests:                make(map[uint32]*applySchemaRequestResponse),
+		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
+		primaryPositions:                   make(map[uint32]string),
+		vdiffRequests:                      make(map[uint32]*vdiffRequestResponse),
+		refreshStateErrors:                 make(map[uint32]error),
 		env:                                env,
 	}
 }
@@ -256,21 +308,29 @@ func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 	defer tmc.mu.Unlock()
 
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
-		if !proto.Equal(expect, req) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", req, expect)
+		if expect.req != nil && !proto.Equal(expect.req, req) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, expect)
+		}
+		if expect.res != nil {
+			return expect.res, expect.err
 		}
 	}
 	res := sqltypes.MakeTestResult(sqltypes.MakeTestFields("rowsaffected", "int64"), "1")
 	return &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
+func (tmc *testTMClient) GetWorkflowKey(keyspace, shard string) string {
+	return fmt.Sprintf("%s/%s", keyspace, shard)
+}
+
 func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
-
 	if expect := tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if !proto.Equal(expect, req) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request: got %+v, want %+v", req, expect)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, expect)
 		}
 	}
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
@@ -304,6 +364,9 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 					Rules: rules,
 				},
 			},
+		}
+		if tmc.frozen.Load() {
+			stream.Message = Frozen
 		}
 		res.Streams = append(res.Streams, stream)
 	}
@@ -364,11 +427,20 @@ func (tmc *testTMClient) expectVRQueryResultOnKeyspaceTablets(keyspace string, q
 	}
 }
 
-func (tmc *testTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) {
+func (tmc *testTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *createVReplicationWorkflowRequestResponse) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
 	tmc.createVReplicationWorkflowRequests[tabletID] = req
+}
+
+func (tmc *testTMClient) expectCreateVReplicationWorkflowRequestOnTargetTablets(req *createVReplicationWorkflowRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	for _, tablet := range tmc.env.tablets[tmc.env.targetKeyspace.KeyspaceName] {
+		tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid] = req
+	}
 }
 
 func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
@@ -377,7 +449,7 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 
 	qrs := tmc.vrQueries[int(tablet.Alias.Uid)]
 	if len(qrs) == 0 {
-		return nil, fmt.Errorf("tablet %v does not expect any more queries: %s", tablet, query)
+		return nil, fmt.Errorf("tablet %v does not expect any more queries: %q", tablet, query)
 	}
 	matched := false
 	if qrs[0].query[0] == '/' {
@@ -389,7 +461,7 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 		return nil, fmt.Errorf("tablet %v:\nunexpected query\n%s\nwant:\n%s", tablet, query, qrs[0].query)
 	}
 	tmc.vrQueries[int(tablet.Alias.Uid)] = qrs[1:]
-	return qrs[0].result, nil
+	return qrs[0].result, qrs[0].err
 }
 
 func (tmc *testTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
@@ -401,8 +473,30 @@ func (tmc *testTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *top
 	return nil, nil
 }
 
+func (tmc *testTMClient) expectApplySchemaRequest(tabletID uint32, req *applySchemaRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.applySchemaRequests == nil {
+		tmc.applySchemaRequests = make(map[uint32]*applySchemaRequestResponse)
+	}
+
+	tmc.applySchemaRequests[tabletID] = req
+}
+
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if expect, ok := tmc.applySchemaRequests[tablet.Alias.Uid]; ok {
+		if !reflect.DeepEqual(change, expect.change) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ApplySchema request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), change, expect.change)
+		}
+		return expect.res, expect.err
+	}
+
 	stmts := strings.Split(change.SQL, ";")
 
 	for _, stmt := range stmts {
@@ -419,7 +513,51 @@ func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tab
 	return nil, nil
 }
 
+type vdiffRequestResponse struct {
+	req *tabletmanagerdatapb.VDiffRequest
+	res *tabletmanagerdatapb.VDiffResponse
+	err error
+}
+
+type createVReplicationWorkflowRequestResponse struct {
+	req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest
+	res *tabletmanagerdatapb.CreateVReplicationWorkflowResponse
+	err error
+}
+
+type applySchemaRequestResponse struct {
+	change *tmutils.SchemaChange
+	res    *tabletmanagerdatapb.SchemaChangeResult
+	err    error
+}
+
+func (tmc *testTMClient) expectVDiffRequest(tablet *topodatapb.Tablet, vrr *vdiffRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.vdiffRequests == nil {
+		tmc.vdiffRequests = make(map[uint32]*vdiffRequestResponse)
+	}
+	tmc.vdiffRequests[tablet.Alias.Uid] = vrr
+}
+
 func (tmc *testTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if vrr, ok := tmc.vdiffRequests[tablet.Alias.Uid]; ok {
+		if !proto.Equal(vrr.req, req) {
+			return nil, fmt.Errorf("unexpected VDiff request on tablet %s; got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, vrr.req)
+		}
+		delete(tmc.vdiffRequests, tablet.Alias.Uid)
+		return vrr.res, vrr.err
+	}
+	if tmc.strict {
+		return nil, fmt.Errorf("unexpected VDiff request on tablet %s: %+v",
+			topoproto.TabletAliasString(tablet.Alias), req)
+	}
+
 	return &tabletmanagerdatapb.VDiffResponse{
 		Id:        1,
 		VdiffUuid: req.VdiffUuid,
@@ -427,6 +565,21 @@ func (tmc *testTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 			RowsAffected: 1,
 		},
 	}, nil
+}
+
+func (tmc *testTMClient) confirmVDiffRequests(t *testing.T) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	reqString := func([]*vdiffRequestResponse) string {
+		str := strings.Builder{}
+		for _, vrr := range tmc.vdiffRequests {
+			str.WriteString(fmt.Sprintf("\n%+v", vrr.req))
+		}
+		return str.String()
+	}
+
+	require.Len(t, tmc.vdiffRequests, 0, "expected VDiff requests not made: %s", reqString(maps.Values(tmc.vdiffRequests)))
 }
 
 func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
@@ -439,6 +592,10 @@ func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
+	workflowKey := tmc.GetWorkflowKey(tablet.Keyspace, tablet.Shard)
+	if resp := tmc.getVReplicationWorkflowsResponse(workflowKey); resp != nil {
+		return resp, nil
+	}
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
 	if len(req.IncludeWorkflows) > 0 {
 		for _, wf := range req.IncludeWorkflows {
@@ -470,7 +627,7 @@ func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 									},
 								},
 							},
-							Pos:           "MySQL56/" + position,
+							Pos:           position,
 							TimeUpdated:   protoutil.TimeToProto(time.Now()),
 							TimeHeartbeat: protoutil.TimeToProto(time.Now()),
 						},
@@ -491,7 +648,28 @@ func (tmc *testTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet 
 	}, nil
 }
 
+func (tmc *testTMClient) ValidateVReplicationPermissions(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+		User: "vt_filtered",
+		Ok:   true,
+	}, nil
+}
+
+func (tmc *testTMClient) setPrimaryPosition(tablet *topodatapb.Tablet, position string) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if tmc.primaryPositions == nil {
+		tmc.primaryPositions = make(map[uint32]string)
+	}
+	tmc.primaryPositions[tablet.Alias.Uid] = position
+}
+
 func (tmc *testTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if tmc.primaryPositions != nil && tmc.primaryPositions[tablet.Alias.Uid] != "" {
+		return tmc.primaryPositions[tablet.Alias.Uid], nil
+	}
 	return position, nil
 }
 
@@ -501,4 +679,130 @@ func (tmc *testTMClient) WaitForPosition(ctx context.Context, tablet *topodatapb
 
 func (tmc *testTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	return nil
+}
+
+func (tmc *testTMClient) SetRefreshStateError(tablet *topodatapb.Tablet, err error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.refreshStateErrors == nil {
+		tmc.refreshStateErrors = make(map[uint32]error)
+	}
+	tmc.refreshStateErrors[tablet.Alias.Uid] = err
+}
+
+func (tmc *testTMClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.refreshStateErrors == nil {
+		tmc.refreshStateErrors = make(map[uint32]error)
+	}
+	return tmc.refreshStateErrors[tablet.Alias.Uid]
+}
+
+func (tmc *testTMClient) AddVReplicationWorkflowsResponse(key string, resp *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	tmc.readVReplicationWorkflowsResponses[key] = append(tmc.readVReplicationWorkflowsResponses[key], resp)
+}
+
+func (tmc *testTMClient) getVReplicationWorkflowsResponse(key string) *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse {
+	if len(tmc.readVReplicationWorkflowsResponses) == 0 {
+		return nil
+	}
+	responses, ok := tmc.readVReplicationWorkflowsResponses[key]
+	if !ok || len(responses) == 0 {
+		return nil
+	}
+	resp := tmc.readVReplicationWorkflowsResponses[key][0]
+	tmc.readVReplicationWorkflowsResponses[key] = tmc.readVReplicationWorkflowsResponses[key][1:]
+	return resp
+}
+
+//
+// Utility / helper functions.
+//
+
+func checkRouting(t *testing.T, ws *Server, want map[string][]string) {
+	t.Helper()
+	ctx := context.Background()
+	got, err := topotools.GetRoutingRules(ctx, ws.ts)
+	require.NoError(t, err)
+	require.EqualValues(t, got, want, "routing rules don't match: got: %v, want: %v", got, want)
+	cells, err := ws.ts.GetCellInfoNames(ctx)
+	require.NoError(t, err)
+	for _, cell := range cells {
+		checkCellRouting(t, ws, cell, want)
+	}
+}
+
+func checkCellRouting(t *testing.T, ws *Server, cell string, want map[string][]string) {
+	t.Helper()
+	ctx := context.Background()
+	svs, err := ws.ts.GetSrvVSchema(ctx, cell)
+	require.NoError(t, err)
+	got := make(map[string][]string, len(svs.RoutingRules.Rules))
+	for _, rr := range svs.RoutingRules.Rules {
+		got[rr.FromTable] = append(got[rr.FromTable], rr.ToTables...)
+	}
+	require.EqualValues(t, got, want, "routing rules don't match for cell %s: got: %v, want: %v", cell, got, want)
+}
+
+func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, want []string) {
+	t.Helper()
+	ctx := context.Background()
+	si, err := ts.GetShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+	tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
+	var got []string
+	if tc != nil {
+		got = tc.DeniedTables
+	}
+	require.EqualValues(t, got, want, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, want)
+}
+
+func checkServedTypes(t *testing.T, ts *topo.Server, keyspace, shard string, want int) {
+	t.Helper()
+	ctx := context.Background()
+	si, err := ts.GetShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+	servedTypes, err := ts.GetShardServingTypes(ctx, si)
+	require.NoError(t, err)
+	require.Equal(t, want, len(servedTypes), "shard %s/%s has wrong served types: got: %v, want: %v",
+		keyspace, shard, len(servedTypes), want)
+}
+
+func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspace, shard, cell string, want int) {
+	t.Helper()
+	ctx := context.Background()
+	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+	require.NoError(t, err)
+	count := 0
+outer:
+	for _, partition := range srvKeyspace.GetPartitions() {
+		for _, ref := range partition.ShardReferences {
+			if ref.Name == shard {
+				count++
+				continue outer
+			}
+		}
+	}
+	require.Equal(t, want, count, "serving types for %s/%s in cell %s: got: %d, want: %d", keyspace, shard, cell, count, want)
+}
+
+func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspace, shard string, want bool) {
+	t.Helper()
+	ctx := context.Background()
+	si, err := ts.GetShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+	require.Equal(t, want, si.IsPrimaryServing, "primary serving for %s/%s: got: %v, want: %v", keyspace, shard, si.IsPrimaryServing, want)
+}
+
+func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Server, keyspace, table string) bool {
+	vschema, err := ts.GetVSchema(ctx, keyspace)
+	require.NoError(t, err)
+	require.NotNil(t, vschema)
+	_, ok := vschema.Tables[table]
+	return ok
 }

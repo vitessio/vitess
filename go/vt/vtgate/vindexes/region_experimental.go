@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -61,7 +60,7 @@ type RegionExperimental struct {
 func newRegionExperimental(name string, m map[string]string) (Vindex, error) {
 	rbs, ok := m[regionExperimentalParamRegionBytes]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, fmt.Sprintf("region_experimental missing %s param", regionExperimentalParamRegionBytes))
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_experimental missing %s param", regionExperimentalParamRegionBytes)
 	}
 	var rb int
 	switch rbs {

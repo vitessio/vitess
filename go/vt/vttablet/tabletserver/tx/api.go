@@ -31,11 +31,11 @@ type (
 	// ConnID as type int64
 	ConnID = int64
 
-	//DTID as type string
+	// DTID as type string
 	DTID = string
 
-	//EngineStateMachine is used to control the state the transactional engine -
-	//whether new connections and/or transactions are allowed or not.
+	// EngineStateMachine is used to control the state the transactional engine -
+	// whether new connections and/or transactions are allowed or not.
 	EngineStateMachine interface {
 		Init() error
 		AcceptReadWrite() error
@@ -46,14 +46,14 @@ type (
 	// ReleaseReason as type int
 	ReleaseReason int
 
-	//Properties contains all information that is related to the currently running
-	//transaction on the connection
+	// Properties contains all information that is related to the currently running
+	// transaction on the connection
 	Properties struct {
 		EffectiveCaller *vtrpcpb.CallerID
 		ImmediateCaller *querypb.VTGateCallerID
 		StartTime       time.Time
 		EndTime         time.Time
-		Queries         []string
+		Queries         []Query
 		Autocommit      bool
 		Conclusion      string
 		LogToFile       bool
@@ -61,6 +61,11 @@ type (
 		Stats *servenv.TimingsWrapper
 	}
 )
+
+type Query struct {
+	Sql    string
+	Tables []string
+}
 
 const (
 	// TxClose - connection released on close.
@@ -114,12 +119,33 @@ var txNames = map[ReleaseReason]string{
 	ConnRenewFail: "renewFail",
 }
 
-// RecordQuery records the query against this transaction.
-func (p *Properties) RecordQuery(query string) {
+// RecordQueryDetail records the query and tables against this transaction.
+func (p *Properties) RecordQueryDetail(query string, tables []string) {
 	if p == nil {
 		return
 	}
-	p.Queries = append(p.Queries, query)
+	p.Queries = append(p.Queries, Query{
+		Sql:    query,
+		Tables: tables,
+	})
+}
+
+// RecordQuery records the query and extract tables against this transaction.
+func (p *Properties) RecordQuery(query string, parser *sqlparser.Parser) {
+	if p == nil {
+		return
+	}
+	stmt, err := parser.Parse(query)
+	if err != nil {
+		// This should neven happen, but if it does,
+		// we would not be able to block cut-overs on this query.
+		return
+	}
+	tables := sqlparser.ExtractAllTables(stmt)
+	p.Queries = append(p.Queries, Query{
+		Sql:    query,
+		Tables: tables,
+	})
 }
 
 // InTransaction returns true as soon as this struct is not nil
@@ -134,10 +160,11 @@ func (p *Properties) String(sanitize bool, parser *sqlparser.Parser) string {
 	printQueries := func() string {
 		sb := strings.Builder{}
 		for _, query := range p.Queries {
+			sql := query.Sql
 			if sanitize {
-				query, _ = parser.RedactSQLQuery(query)
+				sql, _ = parser.RedactSQLQuery(sql)
 			}
-			sb.WriteString(query)
+			sb.WriteString(sql)
 			sb.WriteString(";")
 		}
 		return sb.String()

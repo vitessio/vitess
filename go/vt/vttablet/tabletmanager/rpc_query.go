@@ -275,6 +275,18 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	return sqltypes.ResultToProto3(result), err
 }
 
+// MysqlHostMetrics gets system metrics from mysqlctl[d]
+func (tm *TabletManager) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	mysqlResp, err := tm.MysqlDaemon.HostMetrics(ctx, tm.Cnf)
+	if err != nil {
+		return nil, err
+	}
+	resp := &tabletmanagerdatapb.MysqlHostMetricsResponse{
+		HostMetrics: mysqlResp,
+	}
+	return resp, nil
+}
+
 // ExecuteQuery submits a new online DDL request
 func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {

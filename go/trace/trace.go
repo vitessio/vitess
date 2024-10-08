@@ -189,7 +189,7 @@ func StartTracing(serviceName string) io.Closer {
 }
 
 func fail(serviceName string) io.Closer {
-	options := make([]string, len(tracingBackendFactories))
+	options := make([]string, 0, len(tracingBackendFactories))
 	for k := range tracingBackendFactories {
 		options = append(options, k)
 	}

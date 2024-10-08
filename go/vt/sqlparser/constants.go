@@ -276,6 +276,8 @@ const (
 	QueriesStr     = "queries"
 	AllVExplainStr = "all"
 	PlanStr        = "plan"
+	TraceStr       = "trace"
+	KeysStr        = "keys"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -690,47 +692,6 @@ const (
 	All
 )
 
-func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
-	switch op {
-	case EqualOp:
-		return NotEqualOp
-	case LessThanOp:
-		return GreaterEqualOp
-	case GreaterThanOp:
-		return LessEqualOp
-	case LessEqualOp:
-		return GreaterThanOp
-	case GreaterEqualOp:
-		return LessThanOp
-	case NotEqualOp:
-		return EqualOp
-	case NullSafeEqualOp:
-		return NotEqualOp
-	case InOp:
-		return NotInOp
-	case NotInOp:
-		return InOp
-	case LikeOp:
-		return NotLikeOp
-	case NotLikeOp:
-		return LikeOp
-	case RegexpOp:
-		return NotRegexpOp
-	case NotRegexpOp:
-		return RegexpOp
-	}
-	panic("unreachable")
-}
-
-func (op ComparisonExprOperator) IsCommutative() bool {
-	switch op {
-	case EqualOp, NotEqualOp, NullSafeEqualOp:
-		return true
-	default:
-		return false
-	}
-}
-
 // Constant for Enum Type - IsExprOperator
 const (
 	IsNullOp IsExprOperator = iota
@@ -846,6 +807,8 @@ const (
 	QueriesVExplainType VExplainType = iota
 	PlanVExplainType
 	AllVExplainType
+	TraceVExplainType
+	KeysVExplainType
 )
 
 // Constant for Enum Type - SelectIntoType

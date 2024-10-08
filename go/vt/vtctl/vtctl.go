@@ -99,6 +99,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/ptr"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
@@ -2242,24 +2243,24 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			}
 
 			if *atomicCopy {
-				var errors []string
+				var errs []string
 				if !*allTables {
-					errors = append(errors, "atomic copy requires --all.")
+					errs = append(errs, "atomic copy requires --all.")
 				}
 				if *tables != "" {
-					errors = append(errors, "atomic copy does not support specifying tables.")
+					errs = append(errs, "atomic copy does not support specifying tables.")
 				}
 				if *excludes != "" {
-					errors = append(errors, "atomic copy does not support specifying excludes.")
+					errs = append(errs, "atomic copy does not support specifying excludes.")
 				}
-				if len(errors) > 0 {
-					errors = append(errors, "Found options incompatible with atomic copy:")
-					return fmt.Errorf(strings.Join(errors, " "))
+				if len(errs) > 0 {
+					errs = append(errs, "Found options incompatible with atomic copy:")
+					return errors.New(strings.Join(errs, " "))
 				}
 			}
 
 			if !*allTables && *tables == "" {
-				return fmt.Errorf("no tables specified to move")
+				return errors.New("no tables specified to move")
 			}
 			vrwp.SourceKeyspace = *sourceKeyspace
 			vrwp.Tables = *tables
@@ -3740,7 +3741,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf(usage)
+		return errors.New(usage)
 	}
 	if len(*shards) > 0 {
 		log.Infof("Subset of shards specified: %d, %v", len(*shards), strings.Join(*shards, ","))
@@ -3775,7 +3776,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		}
 	} else {
 		if subFlags.NArg() != 2 {
-			return fmt.Errorf(usage)
+			return errors.New(usage)
 		}
 		var rpcReq any = nil
 		if action == "update" {
@@ -3805,7 +3806,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 					}
 				}
 			} else {
-				tabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}
+				tabletTypes = textutil.SimulatedNullTabletTypeSlice
 			}
 			onddl := int32(textutil.SimulatedNullInt) // To signify no value has been provided
 			if subFlags.Lookup("on-ddl").Changed {    // Validate the provided value
@@ -3817,7 +3818,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				onddl = ival
 			}
 			if !changes {
-				return fmt.Errorf(errWorkflowUpdateWithoutChanges)
+				return errors.New(errWorkflowUpdateWithoutChanges)
 			}
 			tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
 			if inorder {
@@ -3827,9 +3828,10 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				Workflow:                  workflow,
 				Cells:                     *cells,
 				TabletTypes:               tabletTypes,
-				TabletSelectionPreference: tsp,
-				OnDdl:                     binlogdatapb.OnDDLAction(onddl),
-				State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt), // We don't allow changing this in the client command
+				TabletSelectionPreference: &tsp,
+			}
+			if onddl != int32(textutil.SimulatedNullInt) {
+				rpcReq.(*tabletmanagerdatapb.UpdateVReplicationWorkflowRequest).OnDdl = ptr.Of(binlogdatapb.OnDDLAction(onddl))
 			}
 		}
 		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq, *shards) // Only update currently uses the new RPC path

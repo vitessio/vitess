@@ -175,6 +175,8 @@ type VtctldClient interface {
 	CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
 	CompleteSchemaMigration(ctx context.Context, in *vtctldata.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error)
+	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
+	ConcludeTransaction(ctx context.Context, in *vtctldata.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldata.ConcludeTransactionResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -274,6 +276,8 @@ type VtctldClient interface {
 	GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
+	// GetTransactions returns the unresolved transactions for the request.
+	GetUnresolvedTransactions(ctx context.Context, in *vtctldata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
 	GetVersion(ctx context.Context, in *vtctldata.GetVersionRequest, opts ...grpc.CallOption) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
@@ -649,6 +653,15 @@ func (c *vtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldat
 	return out, nil
 }
 
+func (c *vtctldClient) ConcludeTransaction(ctx context.Context, in *vtctldata.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldata.ConcludeTransactionResponse, error) {
+	out := new(vtctldata.ConcludeTransactionResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ConcludeTransaction", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) CreateKeyspace(ctx context.Context, in *vtctldata.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.CreateKeyspaceResponse, error) {
 	out := new(vtctldata.CreateKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CreateKeyspace", in, out, opts...)
@@ -994,6 +1007,15 @@ func (c *vtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldata.Get
 func (c *vtctldClient) GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error) {
 	out := new(vtctldata.GetTopologyPathResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTopologyPath", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetUnresolvedTransactions(ctx context.Context, in *vtctldata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
+	out := new(vtctldata.GetUnresolvedTransactionsResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetUnresolvedTransactions", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1660,6 +1682,8 @@ type VtctldServer interface {
 	CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
 	CompleteSchemaMigration(context.Context, *vtctldata.CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error)
+	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
+	ConcludeTransaction(context.Context, *vtctldata.ConcludeTransactionRequest) (*vtctldata.ConcludeTransactionResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -1759,6 +1783,8 @@ type VtctldServer interface {
 	GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
+	// GetTransactions returns the unresolved transactions for the request.
+	GetUnresolvedTransactions(context.Context, *vtctldata.GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
 	GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
@@ -2001,6 +2027,9 @@ func (UnimplementedVtctldServer) CleanupSchemaMigration(context.Context, *vtctld
 func (UnimplementedVtctldServer) CompleteSchemaMigration(context.Context, *vtctldata.CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CompleteSchemaMigration not implemented")
 }
+func (UnimplementedVtctldServer) ConcludeTransaction(context.Context, *vtctldata.ConcludeTransactionRequest) (*vtctldata.ConcludeTransactionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConcludeTransaction not implemented")
+}
 func (UnimplementedVtctldServer) CreateKeyspace(context.Context, *vtctldata.CreateKeyspaceRequest) (*vtctldata.CreateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyspace not implemented")
 }
@@ -2117,6 +2146,9 @@ func (UnimplementedVtctldServer) GetThrottlerStatus(context.Context, *vtctldata.
 }
 func (UnimplementedVtctldServer) GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
+}
+func (UnimplementedVtctldServer) GetUnresolvedTransactions(context.Context, *vtctldata.GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUnresolvedTransactions not implemented")
 }
 func (UnimplementedVtctldServer) GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
@@ -2583,6 +2615,24 @@ func _Vtctld_CompleteSchemaMigration_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).CompleteSchemaMigration(ctx, req.(*vtctldata.CompleteSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ConcludeTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ConcludeTransactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ConcludeTransaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ConcludeTransaction",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ConcludeTransaction(ctx, req.(*vtctldata.ConcludeTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3285,6 +3335,24 @@ func _Vtctld_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetTopologyPath(ctx, req.(*vtctldata.GetTopologyPathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetUnresolvedTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetUnresolvedTransactionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetUnresolvedTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetUnresolvedTransactions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetUnresolvedTransactions(ctx, req.(*vtctldata.GetUnresolvedTransactionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4536,6 +4604,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_CompleteSchemaMigration_Handler,
 		},
 		{
+			MethodName: "ConcludeTransaction",
+			Handler:    _Vtctld_ConcludeTransaction_Handler,
+		},
+		{
 			MethodName: "CreateKeyspace",
 			Handler:    _Vtctld_CreateKeyspace_Handler,
 		},
@@ -4690,6 +4762,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTopologyPath",
 			Handler:    _Vtctld_GetTopologyPath_Handler,
+		},
+		{
+			MethodName: "GetUnresolvedTransactions",
+			Handler:    _Vtctld_GetUnresolvedTransactions_Handler,
 		},
 		{
 			MethodName: "GetVersion",

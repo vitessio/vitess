@@ -364,6 +364,13 @@ func TestExecutorSetOp(t *testing.T) {
 		in:      "set tx_isolation = 'read-committed'",
 		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
 		result:  returnResult("tx_isolation", "varchar", "read-committed"),
+	}, {
+		in:      "set @@innodb_lock_wait_timeout=120",
+		sysVars: map[string]string{"innodb_lock_wait_timeout": "120"},
+		result:  returnResult("innodb_lock_wait_timeout", "int64", "120"),
+	}, {
+		in:     "set @@global.innodb_lock_wait_timeout=120",
+		result: returnResult("innodb_lock_wait_timeout", "int64", "120"),
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
@@ -617,4 +624,23 @@ func TestExecutorSetAndSelect(t *testing.T) {
 			assert.Equal(t, tcase.exp, fmt.Sprintf("%v", qr.Rows))
 		})
 	}
+}
+
+// TestTimeZone verifies that setting different time zones in the session
+// results in different outputs for the `now()` function.
+func TestExecutorTimeZone(t *testing.T) {
+	e, _, _, _, ctx := createExecutorEnv(t)
+
+	session := NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
+	session.SetSystemVariable("time_zone", "'+08:00'")
+
+	qr, err := e.Execute(ctx, nil, "TestExecutorSetAndSelect", session, "select now()", nil)
+
+	require.NoError(t, err)
+	session.SetSystemVariable("time_zone", "'+02:00'")
+
+	qrWith, err := e.Execute(ctx, nil, "TestExecutorSetAndSelect", session, "select now()", nil)
+	require.NoError(t, err)
+
+	assert.False(t, qr.Rows[0][0].Equal(qrWith.Rows[0][0]), "%v vs %v", qr.Rows[0][0].ToString(), qrWith.Rows[0][0].ToString())
 }

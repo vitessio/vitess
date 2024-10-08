@@ -22,16 +22,16 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
-
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -348,6 +348,15 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	if err != nil {
+		return "", err
+	}
+
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
+
 	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false); err != nil {
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
@@ -365,11 +374,6 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
 	}
@@ -544,9 +548,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
+			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// setting read_only OFF will also set super_read_only OFF if it was set
-			if err := tm.MysqlDaemon.SetReadOnly(ctx, false); err != nil {
-				log.Warningf("SetReadOnly(false) failed during revert: %v", err)
+			if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+				log.Warningf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err)
 			}
 		}
 	}()
@@ -594,13 +599,17 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		return err
 	}
 
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
+
 	// If using semi-sync, we need to enable source-side.
 	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return err
 	}
 
-	// Now, set the server read-only false.
-	if err := tm.MysqlDaemon.SetReadOnly(ctx, false); err != nil {
+	// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
+	if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 		return err
 	}
 
@@ -699,6 +708,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	wasReplicating := false
 	shouldbeReplicating := false
 	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+	replicaPosition := status.RelayLogPosition
 	if err == mysql.ErrNotReplica {
 		// This is a special error that means we actually succeeded in reading
 		// the status, but the status is empty because replication is not
@@ -708,6 +718,12 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// Since we continue in the case of this error, make sure 'status' is
 		// in a known, empty state.
 		status = replication.ReplicationStatus{}
+		// The replica position we use for the errant GTID detection should be the executed
+		// GTID set since this tablet is not running replication at all.
+		replicaPosition, err = tm.MysqlDaemon.PrimaryPosition(ctx)
+		if err != nil {
+			return err
+		}
 	} else if err != nil {
 		// Abort on any other non-nil error.
 		return err
@@ -739,11 +755,34 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if err != nil {
 		return err
 	}
+
 	host := parent.Tablet.MysqlHostname
 	port := parent.Tablet.MysqlPort
 	// If host is empty, then we shouldn't even attempt the reparent. That tablet has already shutdown.
 	if host == "" {
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
+	}
+	// Errant GTID detection.
+	{
+		// Find the executed GTID set of the tablet that we are reparenting to.
+		// We will then compare our own position against it to verify that we don't
+		// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
+		// we will not enter the replication graph and instead fail replication.
+		primaryPositionStr, err := tm.tmc.PrimaryPosition(ctx, parent.Tablet)
+		if err != nil {
+			return err
+		}
+		primaryPosition, err := replication.DecodePosition(primaryPositionStr)
+		if err != nil {
+			return err
+		}
+		errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition)
+		if err != nil {
+			return err
+		}
+		if errantGtid != "" {
+			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
+		}
 	}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
@@ -910,12 +949,16 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	}
 	defer tm.unlock()
 
-	pos, err := tm.MysqlDaemon.Promote(ctx, tm.hookExtraEnv())
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
 	}
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	// If semi-sync is enabled, we need to set two pc to be allowed.
+	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
+	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
+
+	pos, err := tm.MysqlDaemon.Promote(ctx, tm.hookExtraEnv())
 	if err != nil {
 		return "", err
 	}

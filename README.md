@@ -3,6 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/vitess.io/vitess)](https://goreportcard.com/report/vitess.io/vitess)
 [![FOSSA Status](https://app.fossa.com/api/projects/custom%2B162%2Fvitess.svg?type=shield&issueType=license)](https://app.fossa.com/projects/custom%2B162%2Fvitess?ref=badge_shield&issueType=license)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1724/badge)](https://bestpractices.coreinfrastructure.org/projects/1724)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/vitessio/vitess/badge)](https://scorecard.dev/viewer/?uri=github.com/vitessio/vitess)
 
 # Vitess 
 

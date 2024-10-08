@@ -22,6 +22,7 @@ import (
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net"
@@ -743,7 +744,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		cConn.Close()
 	}()
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		bytes := make([]byte, rand.IntN(16)+1)
 		_, err := crypto_rand.Read(bytes)
 		require.NoError(t, err, "error doing rand.Read")
@@ -937,7 +938,7 @@ func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	errorString := make([]byte, 17000)
-	handler := &testRun{t: t, err: fmt.Errorf(string(errorString))}
+	handler := &testRun{t: t, err: errors.New(string(errorString))}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -1000,7 +1001,7 @@ func TestPrepareAndExecute(t *testing.T) {
 	// and check that the handler received the correct input
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		startGoRoutine(ctx, t, fmt.Sprintf("%d:%s", i, randSeq(i)))
 	}
 

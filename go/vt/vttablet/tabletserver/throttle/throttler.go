@@ -134,9 +134,9 @@ type throttlerTopoService interface {
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
 // aggregates, reads inventory, provides information, etc.
 type Throttler struct {
-	keyspace string
-	shard    string
-	cell     string
+	keyspace    string
+	shard       string
+	tabletAlias *topodatapb.TabletAlias
 
 	check     *ThrottlerCheck
 	isEnabled atomic.Bool
@@ -159,7 +159,6 @@ type Throttler struct {
 	srvTopoServer    srvtopo.Server
 	heartbeatWriter  heartbeat.HeartbeatWriter
 	overrideTmClient tmclient.TabletManagerClient
-	tabletAlias      string
 
 	recentCheckRateLimiter *timer.RateLimiter
 	recentCheckDormantDiff int64
@@ -219,9 +218,9 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, cell string, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
+func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
-		cell:            cell,
+		tabletAlias:     tabletAlias,
 		env:             env,
 		tabletTypeFunc:  tabletTypeFunc,
 		srvTopoServer:   srvTopoServer,
@@ -267,6 +266,14 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		return throttler.readSelfThrottleMetricsInternal(ctx)
 	}
 	return throttler
+}
+
+// tabletAliasString returns tablet alias as string
+func (throttler *Throttler) tabletAliasString() string {
+	if throttler.tabletAlias == nil {
+		return ""
+	}
+	return topoproto.TabletAliasString(throttler.tabletAlias)
 }
 
 func (throttler *Throttler) StoreMetricsThreshold(threshold float64) {
@@ -331,7 +338,7 @@ func (throttler *Throttler) initConfig() {
 
 // readThrottlerConfig proactively reads the throttler's config from SrvKeyspace in local topo
 func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatapb.ThrottlerConfig, error) {
-	srvks, err := throttler.ts.GetSrvKeyspace(ctx, throttler.cell, throttler.keyspace)
+	srvks, err := throttler.ts.GetSrvKeyspace(ctx, throttler.tabletAlias.Cell, throttler.keyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -578,7 +585,7 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 			go watchSrvKeyspaceOnce.Do(func() {
 				// We start watching SrvKeyspace only after we know it's been created. Now is that time!
 				// We watch using the given ctx, which is cancelled when the throttler is Close()d.
-				throttler.srvTopoServer.WatchSrvKeyspace(ctx, throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
+				throttler.srvTopoServer.WatchSrvKeyspace(ctx, throttler.tabletAlias.Cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
 			})
 			return
 		}
@@ -743,6 +750,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 			primaryStimulatorRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
+			clear(throttler.inventory.TabletMetrics)
 		}()
 		// we do not flush throttler.throttledApps because this is data submitted by the user; the user expects the data to survive a disable+enable
 
@@ -842,7 +850,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				}
 			case probes := <-throttler.clusterProbesChan:
 				// incoming structural update, sparse, as result of refreshInventory()
-				throttler.updateClusterProbes(ctx, probes)
+				throttler.updateClusterProbes(probes)
 			case <-metricsAggregateTicker.C:
 				if throttler.IsOpen() {
 					throttler.aggregateMetrics()
@@ -958,16 +966,17 @@ func (throttler *Throttler) readSelfThrottleMetricsInternal(ctx context.Context)
 		}
 		metric := readMetric(selfMetric)
 		metric.Name = metricName
-		metric.Alias = throttler.tabletAlias
+		metric.Alias = throttler.tabletAliasString()
 
 		go writeMetric(metric)
 		result[metricName] = metric
 	}
+
 	return result
 }
 
 func (throttler *Throttler) collectSelfMetrics(ctx context.Context) {
-	probe := throttler.inventory.ClustersProbes[throttler.tabletAlias]
+	probe := throttler.inventory.ClustersProbes[throttler.tabletAliasString()]
 	if probe == nil {
 		// probe not created yet
 		return
@@ -989,7 +998,7 @@ func (throttler *Throttler) collectShardMetrics(ctx context.Context, tmClient tm
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
 	for _, probe := range throttler.inventory.ClustersProbes {
-		if probe.Alias == throttler.tabletAlias {
+		if probe.Alias == throttler.tabletAliasString() {
 			// We skip collecting our own metrics
 			continue
 		}
@@ -1076,7 +1085,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 			TabletProbes:     base.NewProbes(),
 		}
 		// self tablet
-		addProbe(throttler.tabletAlias, nil, base.SelfScope, &clusterSettingsCopy, clusterProbes.TabletProbes)
+		addProbe(throttler.tabletAliasString(), nil, base.SelfScope, &clusterSettingsCopy, clusterProbes.TabletProbes)
 		if !throttler.isLeader.Load() {
 			// This tablet may have used to be the primary, but it isn't now. It may have a recollection
 			// of previous clusters it used to probe. It may have recollection of specific probes for such clusters.
@@ -1116,10 +1125,25 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 }
 
 // synchronous update of inventory
-func (throttler *Throttler) updateClusterProbes(ctx context.Context, clusterProbes *base.ClusterProbes) error {
+func (throttler *Throttler) updateClusterProbes(clusterProbes *base.ClusterProbes) error {
 	throttler.inventory.ClustersProbes = clusterProbes.TabletProbes
 	throttler.inventory.IgnoreHostsCount = clusterProbes.IgnoreHostsCount
 	throttler.inventory.IgnoreHostsThreshold = clusterProbes.IgnoreHostsThreshold
+
+	for alias := range throttler.inventory.TabletMetrics {
+		if alias == "" {
+			// *this* tablet uses the empty alias to identify itself.
+			continue
+		}
+		if _, found := clusterProbes.TabletProbes[alias]; !found {
+			// There seems to be a metric stored for some alias, say zone1-0000000102,
+			// but there is no alias for this probe in the new clusterProbes. This
+			// suggests that the corresponding tablet has been removed, or its type was changed
+			// (e.g. from REPLICA to RDONLY). We should therefore remove this cached metric.
+			delete(throttler.inventory.TabletMetrics, alias)
+		}
+	}
+
 	return nil
 }
 
@@ -1152,7 +1176,7 @@ func (throttler *Throttler) aggregateMetrics() error {
 			// is to be stored as "default"
 			continue
 		}
-		selfResultsMap, shardResultsMap := throttler.inventory.TabletMetrics.Split(throttler.tabletAlias)
+		selfResultsMap, shardResultsMap := throttler.inventory.TabletMetrics.Split(throttler.tabletAliasString())
 		aggregateTabletsMetrics(base.SelfScope, metricName, selfResultsMap)
 		aggregateTabletsMetrics(base.ShardScope, metricName, shardResultsMap)
 	}

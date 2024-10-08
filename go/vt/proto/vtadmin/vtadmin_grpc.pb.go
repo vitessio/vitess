@@ -104,6 +104,8 @@ type VTAdminClient interface {
 	GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error)
 	// GetTopologyPath returns the cell located at the specified path in the topology server.
 	GetTopologyPath(ctx context.Context, in *GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
+	// GetUnresolvedTransactions returns the unresolved transactions for the request.
+	GetUnresolvedTransactions(ctx context.Context, in *GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
 	// cluster.
 	GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error)
@@ -116,9 +118,18 @@ type VTAdminClient interface {
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
+	// GetWorkflowStatus returns the status for a specific workflow.
+	GetWorkflowStatus(ctx context.Context, in *GetWorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	// StartWorkflow starts a vreplication workflow.
+	StartWorkflow(ctx context.Context, in *StartWorkflowRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
+	// StopWorkflow stops a vreplication workflow.
+	StopWorkflow(ctx context.Context, in *StopWorkflowRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
 	// LaunchSchemaMigration launches one or all migrations in the given
 	// cluster executed with --postpone-launch.
 	LaunchSchemaMigration(ctx context.Context, in *LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	// MoveTablesCreate creates a workflow which moves one or more tables from a
+	// source keyspace to a target keyspace.
+	MoveTablesCreate(ctx context.Context, in *MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
@@ -470,6 +481,15 @@ func (c *vTAdminClient) GetTopologyPath(ctx context.Context, in *GetTopologyPath
 	return out, nil
 }
 
+func (c *vTAdminClient) GetUnresolvedTransactions(ctx context.Context, in *GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
+	out := new(vtctldata.GetUnresolvedTransactionsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetUnresolvedTransactions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error) {
 	out := new(VSchema)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetVSchema", in, out, opts...)
@@ -515,9 +535,45 @@ func (c *vTAdminClient) GetWorkflows(ctx context.Context, in *GetWorkflowsReques
 	return out, nil
 }
 
+func (c *vTAdminClient) GetWorkflowStatus(ctx context.Context, in *GetWorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetWorkflowStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) StartWorkflow(ctx context.Context, in *StartWorkflowRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error) {
+	out := new(vtctldata.WorkflowUpdateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/StartWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) StopWorkflow(ctx context.Context, in *StopWorkflowRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error) {
+	out := new(vtctldata.WorkflowUpdateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/StopWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) LaunchSchemaMigration(ctx context.Context, in *LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error) {
 	out := new(vtctldata.LaunchSchemaMigrationResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/LaunchSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) MoveTablesCreate(ctx context.Context, in *MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/MoveTablesCreate", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -807,6 +863,8 @@ type VTAdminServer interface {
 	GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error)
 	// GetTopologyPath returns the cell located at the specified path in the topology server.
 	GetTopologyPath(context.Context, *GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
+	// GetUnresolvedTransactions returns the unresolved transactions for the request.
+	GetUnresolvedTransactions(context.Context, *GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
 	// cluster.
 	GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error)
@@ -819,9 +877,18 @@ type VTAdminServer interface {
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
+	// GetWorkflowStatus returns the status for a specific workflow.
+	GetWorkflowStatus(context.Context, *GetWorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error)
+	// StartWorkflow starts a vreplication workflow.
+	StartWorkflow(context.Context, *StartWorkflowRequest) (*vtctldata.WorkflowUpdateResponse, error)
+	// StopWorkflow stops a vreplication workflow.
+	StopWorkflow(context.Context, *StopWorkflowRequest) (*vtctldata.WorkflowUpdateResponse, error)
 	// LaunchSchemaMigration launches one or all migrations in the given
 	// cluster executed with --postpone-launch.
 	LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	// MoveTablesCreate creates a workflow which moves one or more tables from a
+	// source keyspace to a target keyspace.
+	MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
@@ -990,6 +1057,9 @@ func (UnimplementedVTAdminServer) GetTablets(context.Context, *GetTabletsRequest
 func (UnimplementedVTAdminServer) GetTopologyPath(context.Context, *GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
 }
+func (UnimplementedVTAdminServer) GetUnresolvedTransactions(context.Context, *GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUnresolvedTransactions not implemented")
+}
 func (UnimplementedVTAdminServer) GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVSchema not implemented")
 }
@@ -1005,8 +1075,20 @@ func (UnimplementedVTAdminServer) GetWorkflow(context.Context, *GetWorkflowReque
 func (UnimplementedVTAdminServer) GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflows not implemented")
 }
+func (UnimplementedVTAdminServer) GetWorkflowStatus(context.Context, *GetWorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflowStatus not implemented")
+}
+func (UnimplementedVTAdminServer) StartWorkflow(context.Context, *StartWorkflowRequest) (*vtctldata.WorkflowUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartWorkflow not implemented")
+}
+func (UnimplementedVTAdminServer) StopWorkflow(context.Context, *StopWorkflowRequest) (*vtctldata.WorkflowUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopWorkflow not implemented")
+}
 func (UnimplementedVTAdminServer) LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LaunchSchemaMigration not implemented")
+}
+func (UnimplementedVTAdminServer) MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
 }
 func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
@@ -1627,6 +1709,24 @@ func _VTAdmin_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetUnresolvedTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUnresolvedTransactionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetUnresolvedTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetUnresolvedTransactions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetUnresolvedTransactions(ctx, req.(*GetUnresolvedTransactionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_GetVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetVSchemaRequest)
 	if err := dec(in); err != nil {
@@ -1717,6 +1817,60 @@ func _VTAdmin_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetWorkflowStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWorkflowStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetWorkflowStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetWorkflowStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetWorkflowStatus(ctx, req.(*GetWorkflowStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_StartWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).StartWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/StartWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).StartWorkflow(ctx, req.(*StartWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_StopWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).StopWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/StopWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).StopWorkflow(ctx, req.(*StopWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_LaunchSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LaunchSchemaMigrationRequest)
 	if err := dec(in); err != nil {
@@ -1731,6 +1885,24 @@ func _VTAdmin_LaunchSchemaMigration_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).LaunchSchemaMigration(ctx, req.(*LaunchSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveTablesCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).MoveTablesCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/MoveTablesCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).MoveTablesCreate(ctx, req.(*MoveTablesCreateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2259,6 +2431,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_GetTopologyPath_Handler,
 		},
 		{
+			MethodName: "GetUnresolvedTransactions",
+			Handler:    _VTAdmin_GetUnresolvedTransactions_Handler,
+		},
+		{
 			MethodName: "GetVSchema",
 			Handler:    _VTAdmin_GetVSchema_Handler,
 		},
@@ -2279,8 +2455,24 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_GetWorkflows_Handler,
 		},
 		{
+			MethodName: "GetWorkflowStatus",
+			Handler:    _VTAdmin_GetWorkflowStatus_Handler,
+		},
+		{
+			MethodName: "StartWorkflow",
+			Handler:    _VTAdmin_StartWorkflow_Handler,
+		},
+		{
+			MethodName: "StopWorkflow",
+			Handler:    _VTAdmin_StopWorkflow_Handler,
+		},
+		{
 			MethodName: "LaunchSchemaMigration",
 			Handler:    _VTAdmin_LaunchSchemaMigration_Handler,
+		},
+		{
+			MethodName: "MoveTablesCreate",
+			Handler:    _VTAdmin_MoveTablesCreate_Handler,
 		},
 		{
 			MethodName: "PingTablet",

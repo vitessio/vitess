@@ -41,6 +41,7 @@ import {
     fetchVtctlds,
     fetchVTExplain,
     fetchWorkflow,
+    fetchWorkflowStatus,
     fetchWorkflows,
     TabletDebugVarsResponse,
     refreshState,
@@ -78,6 +79,11 @@ import {
     GetFullStatusParams,
     validateVersionShard,
     ValidateVersionShardParams,
+    createMoveTables,
+    startWorkflow,
+    stopWorkflow,
+    FetchTransactionsParams,
+    fetchTransactions,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -402,6 +408,16 @@ export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions
     return useQuery(['vschema', params], () => fetchVSchema(params));
 };
 
+/**
+ * useTransactions is a query hook that fetches unresolved transactions for the given keyspace.
+ */
+export const useTransactions = (
+    params: FetchTransactionsParams,
+    options?: UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error> | undefined
+) => {
+    return useQuery(['transactions', params], () => fetchTransactions(params), { ...options });
+};
+
 export const useVTExplain = (
     params: Parameters<typeof fetchVTExplain>[0],
     options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
@@ -447,6 +463,52 @@ export const useWorkflow = (
         },
         ...options,
     });
+};
+
+/**
+ * useWorkflowStatus is a query hook that fetches status for a single workflow.
+ */
+export const useWorkflowStatus = (
+    params: Parameters<typeof fetchWorkflowStatus>[0],
+    options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
+) => {
+    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params));
+};
+
+/**
+ * useCreateMoveTables is a mutation query hook that creates a move tables workflow.
+ */
+export const useCreateMoveTables = (
+    params: Parameters<typeof createMoveTables>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createMoveTables>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createMoveTables>>, Error>(() => {
+        return createMoveTables(params);
+    }, options);
+};
+
+/**
+ * useStartWorkflow is a mutate hook that starts a workflow.
+ */
+export const useStartWorkflow = (
+    params: Parameters<typeof startWorkflow>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof startWorkflow>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof startWorkflow>>, Error>(() => {
+        return startWorkflow(params);
+    }, options);
+};
+
+/**
+ * useStopWorkflow is a mutate hook that stops a workflow.
+ */
+export const useStopWorkflow = (
+    params: Parameters<typeof stopWorkflow>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof stopWorkflow>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof stopWorkflow>>, Error>(() => {
+        return stopWorkflow(params);
+    }, options);
 };
 
 /**

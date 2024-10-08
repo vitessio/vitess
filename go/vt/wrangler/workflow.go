@@ -2,6 +2,7 @@ package wrangler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -114,7 +115,7 @@ func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VR
 		return nil, err
 	}
 	log.Infof("Workflow state is %+v", ws)
-	if ts != nil { //Other than on create we need to get SourceKeyspace from the workflow
+	if ts != nil { // Other than on create we need to get SourceKeyspace from the workflow
 		vrw.params.TargetKeyspace = ts.targetKeyspace
 		vrw.params.Workflow = ts.workflow
 		vrw.params.SourceKeyspace = ts.sourceKeyspace
@@ -379,7 +380,7 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 	}
 
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
-		return nil, fmt.Errorf(ErrWorkflowNotFullySwitched)
+		return nil, errors.New(ErrWorkflowNotFullySwitched)
 	}
 	var renameTable workflow.TableRemovalType
 	if vrw.params.RenameTables {
@@ -404,7 +405,7 @@ func (vrw *VReplicationWorkflow) Cancel() error {
 	}
 
 	if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
-		return fmt.Errorf(ErrWorkflowPartiallySwitched)
+		return errors.New(ErrWorkflowPartiallySwitched)
 	}
 	if _, err := vrw.wr.DropTargets(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, vrw.params.KeepData, vrw.params.KeepRoutingRules, false); err != nil {
 		return err

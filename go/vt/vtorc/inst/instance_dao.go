@@ -61,6 +61,7 @@ var forgetAliases *cache.Cache
 var (
 	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
 	readInstanceCounter         = stats.NewCounter("InstanceRead", "Number of times an instance was read")
+	currentErrantGTIDCount      = stats.NewGaugesWithSingleLabel("CurrentErrantGTIDCount", "Number of errant GTIDs a vttablet currently has", "TabletAlias")
 	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
 	writeBufferLatency          = stopwatch.NewNamedStopwatch()
 )
@@ -141,8 +142,8 @@ func logReadTopologyInstanceError(tabletAlias string, hint string, err error) er
 			strings.Replace(hint, "%", "%%", -1), // escape %
 			err)
 	}
-	log.Errorf(msg)
-	return fmt.Errorf(msg)
+	log.Error(msg)
+	return errors.New(msg)
 }
 
 // RegisterStats registers stats from the inst package
@@ -378,6 +379,11 @@ Cleanup:
 				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
 				instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
+				if err == nil {
+					var gtidCount int64
+					gtidCount, err = replication.GTIDCount(instance.GtidErrant)
+					currentErrantGTIDCount.Set(tabletAlias, gtidCount)
+				}
 			}
 		}
 	}
@@ -933,7 +939,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to build query: %v", err)
 		log.Errorf(errMsg)
-		return sql, args, fmt.Errorf(errMsg)
+		return sql, args, errors.New(errMsg)
 	}
 
 	return sql, args, nil
@@ -1031,10 +1037,13 @@ func ForgetInstance(tabletAlias string) error {
 	if tabletAlias == "" {
 		errMsg := "ForgetInstance(): empty tabletAlias"
 		log.Errorf(errMsg)
-		return fmt.Errorf(errMsg)
+		return errors.New(errMsg)
 	}
 	forgetAliases.Set(tabletAlias, true, cache.DefaultExpiration)
 	log.Infof("Forgetting: %v", tabletAlias)
+
+	// Remove this tablet from errant GTID count metric.
+	currentErrantGTIDCount.Reset(tabletAlias)
 
 	// Delete from the 'vitess_tablet' table.
 	_, err := db.ExecVTOrc(`
@@ -1069,8 +1078,8 @@ func ForgetInstance(tabletAlias string) error {
 	}
 	if rows == 0 {
 		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAlias)
-		log.Errorf(errMsg)
-		return fmt.Errorf(errMsg)
+		log.Error(errMsg)
+		return errors.New(errMsg)
 	}
 	_ = AuditOperation("forget", tabletAlias, "")
 	return nil

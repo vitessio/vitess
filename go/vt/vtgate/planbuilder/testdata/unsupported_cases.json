@@ -296,8 +296,8 @@
   },
   {
     "comment": "Cross keyspace query with subquery",
-    "query": "select 1 from user where id in (select id from t1)",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "query": "select 1 from user where id = (select id from t1 where user.foo = t1.bar)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "multi-shard union",
@@ -328,11 +328,6 @@
     "comment": "CTEs cant use a table with the same name as the CTE alias",
     "query": "with user as (select aa from user where user.id=1) select ref.col from ref join user",
     "plan": "VT12001: unsupported: do not support CTE that use the CTE alias inside the CTE query"
-  },
-  {
-    "comment": "Recursive WITH",
-    "query": "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
-    "plan": "VT12001: unsupported: recursive common table expression"
   },
   {
     "comment": "Alias cannot clash with base tables",

@@ -2,10 +2,14 @@ import React, { Fragment } from 'react';
 import { Icon, Icons } from '../Icon';
 import { Menu, Transition } from '@headlessui/react';
 import style from './Dropdown.module.scss';
+import cx from 'classnames';
+
 interface DropdownProps {
     // Optionally pass in your own button if you don't want it styled like DropdownButton
     dropdownButton: React.FC | Icons;
     position?: 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left';
+    title?: string;
+    className?: string;
 }
 
 const positions: Record<string, string> = {
@@ -16,14 +20,21 @@ const positions: Record<string, string> = {
     default: 'right-0',
 };
 
-export const DropdownButton: React.FC<{ icon: Icons }> = ({ icon }) => (
+export const DropdownButton: React.FC<{ icon: Icons; title?: string; className?: string }> = ({
+    icon,
+    title,
+    className,
+}) => (
     <Menu.Button
         type="button"
-        className="flex relative justify-center items-center border border-gray-300 shadow-sm h-12 w-12 bg-white text-lg font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500 focus:z-10"
+        className={cx(
+            'flex relative justify-center items-center border border-gray-300 shadow-sm h-12 w-12 bg-white text-lg font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500 focus:z-10',
+            className
+        )}
         id="menu-button"
         aria-haspopup="true"
-        aria-label="change"
-        title="change"
+        aria-label={title || 'change'}
+        title={title || 'change'}
     >
         <div className="transform">
             <Icon icon={icon} />
@@ -31,16 +42,16 @@ export const DropdownButton: React.FC<{ icon: Icons }> = ({ icon }) => (
     </Menu.Button>
 );
 
-const Dropdown: React.FC<DropdownProps> = ({ children, dropdownButton, position }) => {
+const Dropdown: React.FC<DropdownProps> = ({ children, dropdownButton, position, title, className }) => {
     let button;
     if (typeof dropdownButton == 'string') {
-        button = <DropdownButton icon={dropdownButton as Icons} />;
+        button = <DropdownButton icon={dropdownButton as Icons} title={title} className={className} />;
     } else {
         const ButtonComponent = dropdownButton as React.FC;
         button = <ButtonComponent />;
     }
     return (
-        <Menu as="div" className="relative inline-block text-left">
+        <Menu as="div" className={'relative inline-block text-left'}>
             {button}
             <Transition
                 as={Fragment}
@@ -54,7 +65,7 @@ const Dropdown: React.FC<DropdownProps> = ({ children, dropdownButton, position 
                 <Menu.Items
                     className={`py-2 z-10 origin-top-right absolute ${
                         positions[position as string] || positions.default
-                    } md:-left-3full mt-2 w-max rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none`}
+                    } mt-2 w-max rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none`}
                     role="menu"
                     aria-orientation="vertical"
                     aria-labelledby="menu-button"

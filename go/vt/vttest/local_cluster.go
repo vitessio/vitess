@@ -292,6 +292,15 @@ func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
 	return connParams
 }
 
+func (db *LocalCluster) MySQLTCPConnParams() mysql.ConnParams {
+	connParams := db.mysql.Params(db.DbName())
+	_, port := db.mysql.Address()
+	connParams.UnixSocket = ""
+	connParams.Host = "127.0.0.1"
+	connParams.Port = port
+	return connParams
+}
+
 // MySQLAppDebugConnParams returns a mysql.ConnParams struct that can be used
 // to connect directly to the mysqld service in the self-contained cluster,
 // using the appdebug user. It's valid only if you used MySQLOnly option.

@@ -96,7 +96,7 @@ func (sf *StatefulConnectionPool) Close() {
 		log.Warningf("killing %s for shutdown: %s", thing, conn.String(sf.env.Config().SanitizeLogMessages, sf.env.Environment().Parser()))
 		sf.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
-		conn.Releasef("pool closed")
+		conn.ReleaseString("pool closed")
 	}
 	sf.conns.Close()
 	sf.foundRowsPool.Close()
@@ -111,7 +111,7 @@ func (sf *StatefulConnectionPool) ShutdownNonTx() {
 		return !sc.(*StatefulConnection).IsInTransaction()
 	}))
 	for _, sc := range conns {
-		sc.Releasef("kill non-tx")
+		sc.ReleaseString("kill non-tx")
 	}
 }
 
@@ -231,14 +231,14 @@ func (sf *StatefulConnectionPool) markAsNotInUse(sc *StatefulConnection, updateT
 	switch sf.state.Load() {
 	case scpKillingNonTx:
 		if !sc.IsInTransaction() {
-			sc.Releasef("kill non-tx")
+			sc.ReleaseString("kill non-tx")
 			return
 		}
 	case scpKillingAll:
 		if sc.IsInTransaction() {
 			sc.Close()
 		}
-		sc.Releasef("kill all")
+		sc.ReleaseString("kill all")
 		return
 	}
 	if updateTime {

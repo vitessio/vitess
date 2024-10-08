@@ -19,6 +19,7 @@ package topo
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path"
 	"slices"
@@ -393,7 +394,7 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 		return err
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY && len(cells) > 0 {
-		return fmt.Errorf(dlNoCellsForPrimary)
+		return errors.New(dlNoCellsForPrimary)
 	}
 	tc := si.GetTabletControl(tabletType)
 	if tc == nil {

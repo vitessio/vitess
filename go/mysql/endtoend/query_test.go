@@ -121,7 +121,7 @@ func TestQueries(t *testing.T) {
 	}
 
 	// Insert a few rows.
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		result, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
 		require.NoError(t, err, "ExecuteFetch(%v) failed: %v", i, err)
 		assert.Equal(t, uint64(1), result.RowsAffected, "insert into returned RowsAffected %v, was expecting 1", result.RowsAffected)
@@ -156,7 +156,7 @@ func TestLargeQueries(t *testing.T) {
 		return string(b)
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		for j := -2; j < 2; j++ {
 			expectedString := randString((i+1)*mysql.MaxPacketSize + j)
 

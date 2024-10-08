@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -135,11 +136,10 @@ func (ts *tmState) RefreshFromTopo(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	ts.RefreshFromTopoInfo(ctx, shardInfo, srvKeyspace)
-	return nil
+	return ts.RefreshFromTopoInfo(ctx, shardInfo, srvKeyspace)
 }
 
-func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.ShardInfo, srvKeyspace *topodatapb.SrvKeyspace) {
+func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.ShardInfo, srvKeyspace *topodatapb.SrvKeyspace) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
@@ -157,6 +157,7 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 	if srvKeyspace != nil {
 		ts.isShardServing = make(map[topodatapb.TabletType]bool)
 		ts.tabletControls = make(map[topodatapb.TabletType]bool)
+		ts.tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_TabletControls, true)
 
 		for _, partition := range srvKeyspace.GetPartitions() {
 
@@ -169,7 +170,10 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 			for _, tabletControl := range partition.GetShardTabletControls() {
 				if key.KeyRangeEqual(tabletControl.GetKeyRange(), ts.KeyRange()) {
 					if tabletControl.QueryServiceDisabled {
-						ts.tabletControls[partition.GetServedType()] = true
+						err := ts.prepareForDisableQueryService(ctx, partition.GetServedType())
+						if err != nil {
+							return err
+						}
 					}
 					break
 				}
@@ -177,7 +181,20 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		}
 	}
 
-	_ = ts.updateLocked(ctx)
+	return ts.updateLocked(ctx)
+}
+
+// prepareForDisableQueryService prepares the tablet for disabling query service.
+func (ts *tmState) prepareForDisableQueryService(ctx context.Context, servType topodatapb.TabletType) error {
+	if servType == topodatapb.TabletType_PRIMARY {
+		ts.tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_TabletControls, false)
+		err := ts.tm.QueryServiceControl.WaitForPreparedTwoPCTransactions(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	ts.tabletControls[servType] = true
+	return nil
 }
 
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
@@ -214,9 +231,10 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		}
 
 		if action == DBActionSetReadWrite {
+			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// We call SetReadOnly only after the topo has been updated to avoid
 			// situations where two tablets are primary at the DB level but not at the vitess level
-			if err := ts.tm.MysqlDaemon.SetReadOnly(ctx, false); err != nil {
+			if err = ts.tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 				return err
 			}
 		}
@@ -281,7 +299,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 			errStr := fmt.Sprintf("SetServingType(serving=false) failed: %v", err)
 			log.Errorf(errStr)
 			// No need to short circuit. Apply all steps and return error in the end.
-			returnErr = vterrors.Wrapf(err, errStr)
+			returnErr = vterrors.Wrap(err, errStr)
 		}
 	}
 
@@ -289,7 +307,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		errStr := fmt.Sprintf("Cannot update denied tables rule: %v", err)
 		log.Errorf(errStr)
 		// No need to short circuit. Apply all steps and return error in the end.
-		returnErr = vterrors.Wrapf(err, errStr)
+		returnErr = vterrors.Wrap(err, errStr)
 	}
 
 	if ts.tm.UpdateStream != nil {
@@ -329,7 +347,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, ptsTime, true, ""); err != nil {
 			errStr := fmt.Sprintf("Cannot start query service: %v", err)
 			log.Errorf(errStr)
-			returnErr = vterrors.Wrapf(err, errStr)
+			returnErr = vterrors.Wrap(err, errStr)
 		}
 	}
 

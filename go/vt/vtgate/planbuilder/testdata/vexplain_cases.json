@@ -69,5 +69,20 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "vexplain keys",
+    "query": "vexplain keys select * from user",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "vexplain keys select * from user",
+      "Instructions": {
+        "OperatorType": "Rows",
+        "Fields": {
+          "ColumnUsage": "VARCHAR"
+        },
+        "RowCount": 1
+      }
+    }
   }
 ]

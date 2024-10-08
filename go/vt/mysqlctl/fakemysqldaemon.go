@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -79,6 +80,9 @@ type FakeMysqlDaemon struct {
 	// CurrentPrimaryPosition is returned by PrimaryPosition
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
+
+	// CurrentRelayLogPosition is returned by ReplicationStatus.
+	CurrentRelayLogPosition replication.Position
 
 	// CurrentSourceFilePosition is used to determine the executed
 	// file based positioning of the replication source.
@@ -312,6 +316,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 	return replication.ReplicationStatus{
 		Position:                               fmd.CurrentPrimaryPosition,
 		FilePosition:                           fmd.CurrentSourceFilePosition,
+		RelayLogPosition:                       fmd.CurrentRelayLogPosition,
 		RelayLogSourceBinlogEquivalentPosition: fmd.CurrentSourceFilePosition,
 		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// Implemented as AND to avoid changing all tests that were
@@ -545,6 +550,11 @@ func (fmd *FakeMysqlDaemon) Promote(ctx context.Context, hookExtraEnv map[string
 	return fmd.PromoteResult, nil
 }
 
+// ExecuteSuperQuery is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ExecuteSuperQuery(ctx context.Context, query string) error {
+	return fmd.ExecuteSuperQueryList(ctx, []string{query})
+}
+
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
 	for _, query := range queryList {
@@ -736,4 +746,27 @@ func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error
 // GetVersionComment is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
 	return "", nil
+}
+
+func (fmd *FakeMysqlDaemon) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
+	return &mysqlctlpb.HostMetricsResponse{
+		Metrics: map[string]*mysqlctlpb.HostMetricsResponse_Metric{
+			"loadavg": {
+				Value: 1.0,
+			},
+			"datadir-used-ratio": {
+				Value: 0.2,
+			},
+		},
+	}, nil
+}
+
+// AcquireGlobalReadLock is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
+	return errors.New("not implemented")
+}
+
+// ReleaseGlobalReadLock is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
+	return errors.New("not implemented")
 }

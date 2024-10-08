@@ -89,3 +89,48 @@ func DateFromDayNumber(daynr int) Date {
 	d.year, d.month, d.day = mysqlDateFromDayNumber(daynr)
 	return d
 }
+
+// ValidatePeriod validates the MySQL period.
+// Returns false if period is non-positive or contains incorrect month value.
+func ValidatePeriod(period int64) bool {
+	if period <= 0 {
+		return false
+	}
+	month := period % 100
+	if month == 0 || month > 12 {
+		return false
+	}
+	return true
+}
+
+// PeriodToMonths converts a MySQL period into number of months.
+// This is an algorithm that has been reverse engineered from MySQL.
+func PeriodToMonths(period int64) int64 {
+	p := uint64(period)
+	if p == 0 {
+		return 0
+	}
+	y := p / 100
+	if y < 70 {
+		y += 2000
+	} else if y < 100 {
+		y += 1900
+	}
+	return int64(y*12 + p%100 - 1)
+}
+
+// MonthsToPeriod converts number of months into MySQL period.
+// This is an algorithm that has been reverse engineered from MySQL.
+func MonthsToPeriod(months int64) int64 {
+	m := uint64(months)
+	if m == 0 {
+		return 0
+	}
+	y := m / 12
+	if y < 70 {
+		y += 2000
+	} else if y < 100 {
+		y += 1900
+	}
+	return int64(y*100 + m%12 + 1)
+}
