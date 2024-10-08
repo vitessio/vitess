@@ -613,6 +613,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 func TestShardedAutoIncHandling(t *testing.T) {
 	tableName := "t1"
 	tableDDL := fmt.Sprintf("create table %s (id int not null auto_increment primary key, c1 varchar(10))", tableName)
+	validateEmptyTableQuery := fmt.Sprintf("select 1 from `%s` limit 1", tableName)
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
@@ -708,6 +709,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{
+				validateEmptyTableQuery,
 				tableDDL, // Unchanged
 			},
 		},
@@ -753,6 +755,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{ // auto_increment clause removed
+				validateEmptyTableQuery,
 				fmt.Sprintf(`create table %s (
 	id int not null primary key,
 	c1 varchar(10)
@@ -809,6 +812,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{ // auto_increment clause removed
+				validateEmptyTableQuery,
 				fmt.Sprintf(`create table %s (
 	id int not null primary key,
 	c1 varchar(10)
@@ -861,6 +865,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{ // auto_increment clause removed
+				validateEmptyTableQuery,
 				fmt.Sprintf(`create table %s (
 	id int not null primary key,
 	c1 varchar(10)
