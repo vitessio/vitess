@@ -1645,7 +1645,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		sqlerror.ERCantAggregate3Collations, sqlerror.ERCantAggregateNCollations, sqlerror.ERVariableIsNotStruct, sqlerror.ERUnknownCollation, sqlerror.ERWrongNameForIndex,
 		sqlerror.ERWrongNameForCatalog, sqlerror.ERBadFTColumn, sqlerror.ERTruncatedWrongValue, sqlerror.ERTooMuchAutoTimestampCols, sqlerror.ERInvalidOnUpdate, sqlerror.ERUnknownTimeZone,
 		sqlerror.ERInvalidCharacterString, sqlerror.ERIllegalReference, sqlerror.ERDerivedMustHaveAlias, sqlerror.ERTableNameNotAllowedHere, sqlerror.ERDataTooLong, sqlerror.ERDataOutOfRange,
-		sqlerror.ERTruncatedWrongValueForField, sqlerror.ERIllegalValueForType:
+		sqlerror.ERTruncatedWrongValueForField, sqlerror.ERIllegalValueForType, sqlerror.ERWrongValue, sqlerror.ERWrongParamcountToNativeFct:
 		errCode = vtrpcpb.Code_INVALID_ARGUMENT
 	case sqlerror.ERSpecifiedAccessDenied:
 		errCode = vtrpcpb.Code_PERMISSION_DENIED
