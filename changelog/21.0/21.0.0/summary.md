@@ -21,7 +21,8 @@
     - **[Errant GTID Detection on VTTablets](#errant-gtid-vttablet)**
     - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
-    - **[Curreny Errant GTIDs Count Metric](#errant-gtid-metric)**
+    - **[Current Errant GTIDs Count Metric](#errant-gtid-metric)**
+    - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
 
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -229,3 +230,7 @@ We have added experimental support for MySQL 8.4. It passes the Vitess test suit
 ### <a id="errant-gtid-metric"/>Current Errant GTIDs Count Metric
 A new metric called `CurrentErrantGTIDCount` has been added to the `VTOrc` component. 
 This metric shows the current count of the errant GTIDs in the tablets.
+
+### <a id="vtctldclient-changetablettags"/>`vtctldclient ChangeTabletTags` command
+
+The `vtctldclient` command `ChangeTabletTags` was added to allow the tags of a tablet to be changed dynamically.
