@@ -1119,10 +1119,8 @@ func TestDTSavepoint(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"savepoint-1\")]",
-			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"savepoint-1\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
 		},
 		"ks.twopc_user:40-80": {"insert:[INT64(8) VARCHAR(\"bar\")]"},
 		"ks.twopc_user:80-":   {"insert:[INT64(7) VARCHAR(\"foo\")]"},
@@ -1164,20 +1162,6 @@ func TestDTSavepoint(t *testing.T) {
 			"update:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
 		},
-		"ks.redo_state:80-": {
-			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
-			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
-		},
-		"ks.redo_statement:80-": {
-			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"savepoint-2\")]",
-			"insert:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"savepoint-3\")]",
-			"insert:[VARCHAR(\"dtid-2\") INT64(3) BLOB(\"update twopc_user set `name` = 'temp' where id = 7 limit 10001 /* INT64 */\")]",
-			"insert:[VARCHAR(\"dtid-2\") INT64(4) BLOB(\"rollback-2\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"savepoint-2\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"savepoint-3\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(3) BLOB(\"update twopc_user set `name` = 'temp' where id = 7 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(4) BLOB(\"rollback-2\")]",
-		},
 	}
 	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
@@ -1201,20 +1185,6 @@ func TestDTSavepoint(t *testing.T) {
 			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
 			"update:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
 			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
-		},
-		"ks.redo_state:80-": {
-			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
-			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
-		},
-		"ks.redo_statement:80-": {
-			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"savepoint-2\")]",
-			"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"savepoint-3\")]",
-			"insert:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"update twopc_user set `name` = 'temp' where id = 7 limit 10001 /* INT64 */\")]",
-			"insert:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"rollback-3\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"savepoint-2\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"savepoint-3\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(3) BLOB(\"update twopc_user set `name` = 'temp' where id = 7 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(4) BLOB(\"rollback-3\")]",
 		},
 		"ks.twopc_user:-40": {"insert:[INT64(10) VARCHAR(\"apa\")]"},
 	}
@@ -1246,11 +1216,7 @@ func TestDTSavepoint(t *testing.T) {
 		},
 		"ks.redo_statement:80-": {
 			"insert:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
-			"insert:[VARCHAR(\"dtid-4\") INT64(2) BLOB(\"savepoint-4\")]",
-			"insert:[VARCHAR(\"dtid-4\") INT64(3) BLOB(\"rollback-4\")]",
 			"delete:[VARCHAR(\"dtid-4\") INT64(1) BLOB(\"update twopc_user set `name` = 'temp1' where id = 7 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-4\") INT64(2) BLOB(\"savepoint-4\")]",
-			"delete:[VARCHAR(\"dtid-4\") INT64(3) BLOB(\"rollback-4\")]",
 		},
 		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"temp1\")]"},
 	}
