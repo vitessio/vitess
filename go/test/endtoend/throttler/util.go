@@ -533,11 +533,11 @@ func WaitForValidData(t *testing.T, tablet *cluster.Vttablet, timeout time.Durat
 
 	for {
 		checkResp, checkErr := http.Get(checkURL)
-		if checkErr != nil {
+		if checkErr == nil {
 			defer checkResp.Body.Close()
 		}
 		selfCheckResp, selfCheckErr := http.Get(selfCheckURL)
-		if selfCheckErr != nil {
+		if selfCheckErr == nil {
 			defer selfCheckResp.Body.Close()
 		}
 		if checkErr == nil && selfCheckErr == nil &&
