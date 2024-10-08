@@ -60,6 +60,16 @@ func yySpecialCommentMode(yylex interface{}) bool {
   return tkn.specialComment != nil
 }
 
+func tryCastExpr(v interface{}) Expr {
+	e, _ := v.(Expr)
+	return e
+}
+
+func tryCastStatement(v interface{}) Statement {
+	e, _ := v.(Statement)
+	return e
+}
+
 %}
 
 %union {
@@ -524,11 +534,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
 any_command:
   command
   {
-    setParseTree(yylex, $1.(Statement))
+    setParseTree(yylex, tryCastStatement($1))
   }
 | command ';'
   {
-    setParseTree(yylex, $1.(Statement))
+    setParseTree(yylex, tryCastStatement($1))
     statementSeen(yylex)
   }
 
@@ -600,21 +610,22 @@ load_statement:
 select_statement:
   with_select order_by_opt limit_opt lock_opt into_opt
   {
-    $1.(SelectStatement).SetOrderBy($2.(OrderBy))
-    $1.(SelectStatement).SetLimit($3.(*Limit))
-    $1.(SelectStatement).SetLock($4.(string))
-    if err := $1.(SelectStatement).SetInto($5.(*Into)); err != nil {
+    s := $1.(SelectStatement)
+    s.SetOrderBy($2.(OrderBy))
+    s.SetLimit($3.(*Limit))
+    s.SetLock($4.(string))
+    if err := s.SetInto($5.(*Into)); err != nil {
     	yylex.Error(err.Error())
     	return 1
     }
-    $$ = $1.(SelectStatement)
+    $$ = s
   }
 | SELECT comment_opt query_opts NEXT num_val for_from table_name
   {
     $$ = &Select{
     	Comments: Comments($2.([][]byte)),
-    	QueryOpts: $3.(QueryOpts),
-    	SelectExprs: SelectExprs{Nextval{Expr: $5.(Expr)}},
+    	QueryOpts: $3.(*QueryOpts),
+    	SelectExprs: SelectExprs{Nextval{Expr: tryCastExpr($5)}},
     	From: TableExprs{&AliasedTableExpr{Expr: $7.(TableName)}},
     }
   }
@@ -752,17 +763,15 @@ with_clause:
 base_select_no_cte:
   SELECT comment_opt query_opts select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
   {
-    wh, _ := $7.(Expr)
-    ha, _ := $9.(Expr)
     $$ = &Select{
     	Comments: Comments($2.([][]byte)),
-    	QueryOpts: $3.(QueryOpts),
+    	QueryOpts: $3.(*QueryOpts),
 	SelectExprs: $4.(SelectExprs),
 	Into: $5.(*Into),
 	From: $6.(TableExprs),
-	Where: NewWhere(WhereStr, wh),
+	Where: NewWhere(WhereStr, tryCastExpr($7)),
 	GroupBy: GroupBy($8.(Exprs)),
-	Having: NewWhere(HavingStr, ha),
+	Having: NewWhere(HavingStr, tryCastExpr($9)),
 	Window: $10.(Window),
     }
   }
@@ -773,11 +782,11 @@ base_select_no_cte:
 
 from_opt:
   {
-    $$ = []byte(nil)
+    $$ = TableExprs(nil)
   }
 | FROM DUAL
   {
-    $$ = []byte(nil)
+    $$ = TableExprs(nil)
   }
 | FROM table_references
   {
@@ -790,7 +799,7 @@ from_opt:
 into_opt:
 %prec INTO
   {
-    $$ = &Into{}
+    $$ = (*Into)(nil)
   }
 | INTO variable_list
   {
@@ -817,7 +826,7 @@ variable_list:
 
 with_clause_opt:
   {
-    $$ = &With{}
+    $$ = (*With)(nil)
   }
 | WITH with_clause
   {
@@ -891,25 +900,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($3.([][]byte)), Ignore: $4.(string), TableExprs: $5.(TableExprs), Exprs: $7.(AssignmentExprs), Where: NewWhere(WhereStr, $8.(Expr)), OrderBy: $9.(OrderBy), Limit: $10.(*Limit), With: $1.(*With)}
+    $$ = &Update{Comments: Comments($3.([][]byte)), Ignore: $4.(string), TableExprs: $5.(TableExprs), Exprs: $7.(AssignmentExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), OrderBy: $9.(OrderBy), Limit: $10.(*Limit), With: $1.(*With)}
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($3.([][]byte)), TableExprs: TableExprs{&AliasedTableExpr{Expr:$5.(TableName)}}, Partitions: $6.(Partitions), Where: NewWhere(WhereStr, $7.(Expr)), OrderBy: $8.(OrderBy), Limit: $9.(*Limit), With: $1.(*With)}
+    $$ = &Delete{Comments: Comments($3.([][]byte)), TableExprs: TableExprs{&AliasedTableExpr{Expr:$5.(TableName)}}, Partitions: $6.(Partitions), Where: NewWhere(WhereStr, tryCastExpr($7)), OrderBy: $8.(OrderBy), Limit: $9.(*Limit), With: $1.(*With)}
   }
 | with_clause_opt DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.([][]byte)), Targets: $5.(TableNames), TableExprs: $7.(TableExprs), Where: NewWhere(WhereStr, $8.(Expr)), With: $1.(*With)}
+    $$ = &Delete{Comments: Comments($3.([][]byte)), Targets: $5.(TableNames), TableExprs: $7.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), With: $1.(*With)}
   }
 | with_clause_opt DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.([][]byte)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, $7.(Expr)), With: $1.(*With)}
+    $$ = &Delete{Comments: Comments($3.([][]byte)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
   }
 | with_clause_opt DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.([][]byte)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, $7.(Expr)), With: $1.(*With)}
+    $$ = &Delete{Comments: Comments($3.([][]byte)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
   }
 
 from_or_using:
@@ -1086,7 +1095,7 @@ create_statement:
 | CREATE DATABASE not_exists_opt ID creation_option_opt
   {
     var ne bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       ne = true
     }
     $$ = &DBDDL{Action: CreateStr, SchemaOrDatabase: "database", DBName: string($4), IfNotExists: ne, CharsetCollate: $5.([]*CharsetAndCollate)}
@@ -1094,23 +1103,23 @@ create_statement:
 | CREATE SCHEMA not_exists_opt ID creation_option_opt
   {
     var ne bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       ne = true
     }
     $$ = &DBDDL{Action: CreateStr, SchemaOrDatabase: "schema", DBName: string($4), IfNotExists: ne, CharsetCollate: $5.([]*CharsetAndCollate)}
   }
 | CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
   {
-    $$ = &DDL{Action: CreateStr, Table: $8.(TableName), TriggerSpec: &TriggerSpec{TrigName: $4.(TriggerName), Definer: $2.(string), Time: $5.(string), Event: $6.(string), Order: $12.(*TriggerOrder), Body: $15.(Statement)}, SpecialCommentMode: $14.(bool), SubStatementPositionStart: $13.(int), SubStatementPositionEnd: $16.(int) - 1}
+    $$ = &DDL{Action: CreateStr, Table: $8.(TableName), TriggerSpec: &TriggerSpec{TrigName: $4.(TriggerName), Definer: $2.(string), Time: $5.(string), Event: $6.(string), Order: $12.(*TriggerOrder), Body: tryCastStatement($15)}, SpecialCommentMode: $14.(bool), SubStatementPositionStart: $13.(int), SubStatementPositionEnd: $16.(int) - 1}
   }
 | CREATE definer_opt PROCEDURE procedure_name '(' proc_param_list_opt ')' characteristic_list_opt lexer_old_position special_comment_mode statement_list_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{ProcName: $4.(ProcedureName), Definer: $2.(string), Params: $6.([]ProcedureParam), Characteristics: $8.([]Characteristic), Body: $11.(Statement)}, SpecialCommentMode: $10.(bool), SubStatementPositionStart: $9.(int), SubStatementPositionEnd: $12.(int) - 1}
+    $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{ProcName: $4.(ProcedureName), Definer: $2.(string), Params: $6.([]ProcedureParam), Characteristics: $8.([]Characteristic), Body: tryCastStatement($11)}, SpecialCommentMode: $10.(bool), SubStatementPositionStart: $9.(int), SubStatementPositionEnd: $12.(int) - 1}
   }
 | CREATE USER not_exists_opt account_with_auth_list default_role_opt tls_options account_limits pass_lock_options user_comment_attribute
   {
     var notExists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       notExists = true
     }
     tlsOptions, err := NewTLSOptions($6.([]TLSOptionItem))
@@ -1129,7 +1138,7 @@ create_statement:
 | CREATE ROLE not_exists_opt role_name_list
   {
     var notExists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       notExists = true
     }
     $$ = &CreateRole{IfNotExists: notExists, Roles: $4.([]AccountName)}
@@ -1137,14 +1146,14 @@ create_statement:
 | CREATE definer_opt EVENT not_exists_opt event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
   {
     var notExists bool
-    if $4.(byte) != 0 {
+    if $4.(int) != 0 {
       notExists = true
     }
-    $$ = &DDL{Action: CreateStr, EventSpec: &EventSpec{EventName: $5.(EventName), Definer: $2.(string), IfNotExists: notExists, OnSchedule: $8.(*EventScheduleSpec), OnCompletionPreserve: $9.(EventOnCompletion), Status: $10.(EventStatus), Comment: $11.(*SQLVal), Body: $14.(Statement)}, SubStatementPositionStart: $13.(int), SubStatementPositionEnd: $15.(int) - 1}
+    $$ = &DDL{Action: CreateStr, EventSpec: &EventSpec{EventName: $5.(EventName), Definer: $2.(string), IfNotExists: notExists, OnSchedule: $8.(*EventScheduleSpec), OnCompletionPreserve: $9.(EventOnCompletion), Status: $10.(EventStatus), Comment: $11.(*SQLVal), Body: tryCastStatement($14)}, SubStatementPositionStart: $13.(int), SubStatementPositionEnd: $15.(int) - 1}
   }
 | create_spatial_ref_sys
   {
-    $$ = $1.(Statement)
+    $$ = tryCastStatement($1)
   }
 
 create_spatial_ref_sys:
@@ -1163,7 +1172,7 @@ create_spatial_ref_sys:
 
 srs_attribute:
   {
-    $$ = &SrsAttribute{}
+    $$ = (*SrsAttribute)(nil)
   }
 | srs_attribute NAME STRING
   {
@@ -1699,7 +1708,7 @@ grant_privilege_level:
 
 grant_assumption:
   {
-    $$ = &GrantUserAssumption{}
+    $$ = (*GrantUserAssumption)(nil)
   }
 | AS account_name
   {
@@ -1793,19 +1802,19 @@ proc_param_list:
 proc_param:
   sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: $1.(ColIdent).String(), Type: $2.(ColumnType)}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: $1.(ColIdent).String(), Type: $2.(*ColumnType)}
   }
 | IN sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: $2.(ColIdent).String(), Type: $3.(ColumnType)}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: $2.(ColIdent).String(), Type: $3.(*ColumnType)}
   }
 | INOUT sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_Inout, Name: $2.(ColIdent).String(), Type: $3.(ColumnType)}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Inout, Name: $2.(ColIdent).String(), Type: $3.(*ColumnType)}
   }
 | OUT sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_Out, Name: $2.(ColIdent).String(), Type: $3.(ColumnType)}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Out, Name: $2.(ColIdent).String(), Type: $3.(*ColumnType)}
   }
 
 characteristic_list_opt:
@@ -2118,11 +2127,11 @@ event_name:
 event_schedule:
   AT timestamp_value event_schedule_intervals_opt
   {
-    $$ = &EventScheduleSpec{At: &EventScheduleTimeSpec{EventTimestamp: $2.(Expr), EventIntervals: $3.([]IntervalExpr)}}
+    $$ = &EventScheduleSpec{At: &EventScheduleTimeSpec{EventTimestamp: tryCastExpr($2), EventIntervals: $3.([]IntervalExpr)}}
   }
 | EVERY value non_microsecond_time_unit event_starts_opt event_ends_opt
   {
-    $$ = &EventScheduleSpec{EveryInterval: IntervalExpr{Expr: $2.(Expr), Unit: string($3)}, Starts: $4.(*EventScheduleTimeSpec), Ends: $5.(*EventScheduleTimeSpec)}
+    $$ = &EventScheduleSpec{EveryInterval: IntervalExpr{Expr: tryCastExpr($2), Unit: string($3)}, Starts: $4.(*EventScheduleTimeSpec), Ends: $5.(*EventScheduleTimeSpec)}
   }
 
 event_schedule_intervals_opt:
@@ -2131,25 +2140,25 @@ event_schedule_intervals_opt:
   }
 | event_schedule_intervals_opt '+' INTERVAL value non_microsecond_time_unit
   {
-    $$ = append($1.([]IntervalExpr), IntervalExpr{Expr: $4.(Expr), Unit: string($5)})
+    $$ = append($1.([]IntervalExpr), IntervalExpr{Expr: tryCastExpr($4), Unit: string($5)})
   }
 
 event_starts_opt:
   {
-    $$ = &EventScheduleTimeSpec{}
+    $$ = (*EventScheduleTimeSpec)(nil)
   }
 | STARTS timestamp_value event_schedule_intervals_opt
   {
-    $$ = &EventScheduleTimeSpec{EventTimestamp: $2.(Expr), EventIntervals: $3.([]IntervalExpr)}
+    $$ = &EventScheduleTimeSpec{EventTimestamp: tryCastExpr($2), EventIntervals: $3.([]IntervalExpr)}
   }
 
 event_ends_opt:
   {
-    $$ = &EventScheduleTimeSpec{}
+    $$ = (*EventScheduleTimeSpec)(nil)
   }
 | ENDS timestamp_value event_schedule_intervals_opt
   {
-    $$ = &EventScheduleTimeSpec{EventTimestamp: $2.(Expr), EventIntervals: $3.([]IntervalExpr)}
+    $$ = &EventScheduleTimeSpec{EventTimestamp: tryCastExpr($2), EventIntervals: $3.([]IntervalExpr)}
   }
 
 event_on_completion_preserve_opt:
@@ -2184,7 +2193,7 @@ event_status_opt:
 
 comment_keyword_opt:
   {
-    $$ = &SQLVal{}
+    $$ = (*SQLVal)(nil)
   }
 | COMMENT_KEYWORD STRING
   {
@@ -2194,11 +2203,11 @@ comment_keyword_opt:
 timestamp_value:
   value
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 | function_call_nonkeyword
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 
 trigger_time:
@@ -2227,7 +2236,7 @@ trigger_event:
 
 trigger_order_opt:
   {
-    $$ = &TriggerOrder{}
+    $$ = (*TriggerOrder)(nil)
   }
 | FOLLOWS ID
   {
@@ -2241,7 +2250,7 @@ trigger_order_opt:
 trigger_body:
   trigger_begin_end_block
   {
-    $$ = $1.(Statement)
+    $$ = tryCastStatement($1)
   }
 | set_statement
 | call_statement
@@ -2262,11 +2271,11 @@ trigger_begin_end_block:
 case_statement:
   CASE expression case_statement_case_list END CASE
   {
-    $$ = &CaseStatement{Expr: $2.(Expr), Cases: $3.([]CaseStatementCase)}
+    $$ = &CaseStatement{Expr: tryCastExpr($2), Cases: $3.([]CaseStatementCase)}
   }
 | CASE expression case_statement_case_list ELSE statement_list ';' END CASE
   {
-    $$ = &CaseStatement{Expr: $2.(Expr), Cases: $3.([]CaseStatementCase), Else: $5.(Statements)}
+    $$ = &CaseStatement{Expr: tryCastExpr($2), Cases: $3.([]CaseStatementCase), Else: $5.(Statements)}
   }
 | CASE case_statement_case_list END CASE
   {
@@ -2290,30 +2299,30 @@ case_statement_case_list:
 case_statement_case:
   WHEN expression THEN statement_list ';'
   {
-    $$ = CaseStatementCase{Case: $2.(Expr), Statements: $4.(Statements)}
+    $$ = CaseStatementCase{Case: tryCastExpr($2), Statements: $4.(Statements)}
   }
 
 if_statement:
   IF expression THEN statement_list ';' END IF
   {
-    conds := []IfStatementCondition{IfStatementCondition{Expr: $2.(Expr), Statements: $4.(Statements)}}
+    conds := []IfStatementCondition{IfStatementCondition{Expr: tryCastExpr($2), Statements: $4.(Statements)}}
     $$ = &IfStatement{Conditions: conds}
   }
 | IF expression THEN statement_list ';' ELSE statement_list ';' END IF
   {
-    conds := []IfStatementCondition{IfStatementCondition{Expr: $2.(Expr), Statements: $4.(Statements)}}
+    conds := []IfStatementCondition{IfStatementCondition{Expr: tryCastExpr($2), Statements: $4.(Statements)}}
     $$ = &IfStatement{Conditions: conds, Else: $7.(Statements)}
   }
 | IF expression THEN statement_list ';' elseif_list END IF
   {
     conds := $6.([]IfStatementCondition)
-    conds = append([]IfStatementCondition{IfStatementCondition{Expr: $2.(Expr), Statements: $4.(Statements)}}, conds...)
+    conds = append([]IfStatementCondition{IfStatementCondition{Expr: tryCastExpr($2), Statements: $4.(Statements)}}, conds...)
     $$ = &IfStatement{Conditions: conds}
   }
 | IF expression THEN statement_list ';' elseif_list ELSE statement_list ';' END IF
   {
     conds := $6.([]IfStatementCondition)
-    conds = append([]IfStatementCondition{IfStatementCondition{Expr: $2.(Expr), Statements: $4.(Statements)}}, conds...)
+    conds = append([]IfStatementCondition{IfStatementCondition{Expr: tryCastExpr($2), Statements: $4.(Statements)}}, conds...)
     $$ = &IfStatement{Conditions: conds, Else: $8.(Statements)}
   }
 
@@ -2330,7 +2339,7 @@ elseif_list:
 elseif_list_item:
   ELSEIF expression THEN statement_list ';'
   {
-    $$ = IfStatementCondition{Expr: $2.(Expr), Statements: $4.(Statements)}
+    $$ = IfStatementCondition{Expr: tryCastExpr($2), Statements: $4.(Statements)}
   }
 
 declare_statement:
@@ -2348,22 +2357,22 @@ declare_statement:
   }
 | DECLARE declare_handler_action HANDLER FOR declare_handler_condition_list statement_list_statement
   {
-    $$ = &Declare{Handler: &DeclareHandler{Action: $2.(DeclareHandlerAction), ConditionValues: $5.([]DeclareHandlerCondition), Statement: $6.(Statement)}}
+    $$ = &Declare{Handler: &DeclareHandler{Action: $2.(DeclareHandlerAction), ConditionValues: $5.([]DeclareHandlerCondition), Statement: tryCastStatement($6)}}
   }
 | DECLARE reserved_sql_id_list column_type charset_opt collate_opt
   {
-    var ct ColumnType
-    ct = $3.(ColumnType)
+    var ct *ColumnType
+    ct = $3.(*ColumnType)
     ct.Charset = $4.(string)
     ct.Collate = $5.(string)
     $$ = &Declare{Variables: &DeclareVariables{Names: $2.([]ColIdent), VarType: ct}}
   }
 | DECLARE reserved_sql_id_list column_type charset_opt collate_opt DEFAULT value_expression
   {
-    ct := $3.(ColumnType)
+    ct := $3.(*ColumnType)
     ct.Charset = $4.(string)
     ct.Collate = $5.(string)
-    ct.Default = $7.(Expr)
+    ct.Default = tryCastExpr($7)
     $$ = &Declare{Variables: &DeclareVariables{Names: $2.([]ColIdent), VarType: ct}}
   }
 
@@ -2473,11 +2482,11 @@ loop_statement:
 repeat_statement:
   REPEAT statement_list ';' UNTIL expression END REPEAT
   {
-    $$ = &Repeat{Label: "", Statements: $2.(Statements), Condition: $5.(Expr)}
+    $$ = &Repeat{Label: "", Statements: $2.(Statements), Condition: tryCastExpr($5)}
   }
 | ID ':' REPEAT statement_list ';' UNTIL expression END REPEAT
   {
-    $$ = &Repeat{Label: string($1), Statements: $4.(Statements), Condition: $7.(Expr)}
+    $$ = &Repeat{Label: string($1), Statements: $4.(Statements), Condition: tryCastExpr($7)}
   }
 | ID ':' REPEAT statement_list ';' UNTIL expression END REPEAT ID
   {
@@ -2486,17 +2495,17 @@ repeat_statement:
       yylex.Error("End-label "+string($10)+" without match")
       return 1
     }
-    $$ = &Repeat{Label: label, Statements: $4.(Statements), Condition: $7.(Expr)}
+    $$ = &Repeat{Label: label, Statements: $4.(Statements), Condition: tryCastExpr($7)}
   }
 
 while_statement:
   WHILE expression DO statement_list ';' END WHILE
   {
-    $$ = &While{Label: "", Condition: $2.(Expr), Statements: $4.(Statements)}
+    $$ = &While{Label: "", Condition: tryCastExpr($2), Statements: $4.(Statements)}
   }
 | ID ':' WHILE expression DO statement_list ';' END WHILE
   {
-    $$ = &While{Label: string($1), Condition: $4.(Expr), Statements: $6.(Statements)}
+    $$ = &While{Label: string($1), Condition: tryCastExpr($4), Statements: $6.(Statements)}
   }
 | ID ':' WHILE expression DO statement_list ';' END WHILE ID
   {
@@ -2505,7 +2514,7 @@ while_statement:
       yylex.Error("End-label "+string($10)+" without match")
       return 1
     }
-    $$ = &While{Label: label, Condition: $4.(Expr), Statements: $6.(Statements)}
+    $$ = &While{Label: label, Condition: tryCastExpr($4), Statements: $6.(Statements)}
   }
 
 leave_statement:
@@ -2523,7 +2532,7 @@ iterate_statement:
 return_statement:
   RETURN value_expression
   {
-    $$ = &Return{Expr: $2.(Expr)}
+    $$ = &Return{Expr: tryCastExpr($2)}
   }
 
 signal_statement:
@@ -2567,7 +2576,7 @@ signal_information_item_list:
 signal_information_item:
   signal_information_name '=' value
   {
-    $$ = SignalInfo{ConditionItemName: $1.(SignalConditionItemName), Value: $3.(Expr).(*SQLVal)}
+    $$ = SignalInfo{ConditionItemName: $1.(SignalConditionItemName), Value: tryCastExpr($3).(*SQLVal)}
   }
 | signal_information_name '=' sql_id
   {
@@ -2653,7 +2662,7 @@ resignal_statement:
 call_statement:
   CALL procedure_name call_param_list_opt as_of_opt
   {
-    $$ = &Call{ProcName: $2.(ProcedureName), Params: $3.(Exprs), AsOf: $4.(Expr)}
+    $$ = &Call{ProcName: $2.(ProcedureName), Params: $3.(Exprs), AsOf: tryCastExpr($4)}
   }
 
 call_param_list_opt:
@@ -2672,11 +2681,11 @@ call_param_list_opt:
 statement_list:
   statement_list_statement
   {
-    $$ = Statements{$1.(Statement)}
+    $$ = Statements{tryCastStatement($1)}
   }
 | statement_list ';' statement_list_statement
   {
-    $$ = append($$.(Statements), $3.(Statement))
+    $$ = append($$.(Statements), tryCastStatement($3))
   }
 
 statement_list_statement:
@@ -2731,12 +2740,12 @@ create_table_prefix:
   CREATE temp_opt TABLE not_exists_opt table_name
   {
     var ne bool
-    if $4.(byte) != 0 {
+    if $4.(int) != 0 {
       ne = true
     }
 
     var neTemp bool
-    if $2.(byte) != 0 {
+    if $2.(int) != 0 {
       neTemp = true
     }
 
@@ -2745,12 +2754,12 @@ create_table_prefix:
 | CREATE temp_opt TABLE not_exists_opt FORMAT
   {
     var ne bool
-    if $4.(byte) != 0 {
+    if $4.(int) != 0 {
       ne = true
     }
 
     var neTemp bool
-    if $2.(byte) != 0 {
+    if $2.(int) != 0 {
       neTemp = true
     }
 
@@ -2798,77 +2807,85 @@ table_column_list:
 column_definition:
   ID column_type column_type_options
   {
-    ct := $2.(ColumnType)
-    if err := ct.merge($3.(ColumnType)); err != nil {
+    ct := $2.(*ColumnType)
+    var err error
+    if ct, err = ct.merge($3.(*ColumnType)); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2.(ColumnType)}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | all_non_reserved column_type column_type_options
   {
-    ct := $2.(ColumnType)
-    if err := ct.merge($3.(ColumnType)); err != nil {
+    ct := $2.(*ColumnType)
+    var err error
+    if ct, err = ct.merge($3.(*ColumnType)); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2.(ColumnType)}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 
 column_definition_for_create:
   sql_id column_type column_type_options
   {
-    ct := $2.(ColumnType)
-    if err := ct.merge($3.(ColumnType)); err != nil {
+    ct := $2.(*ColumnType)
+    var err error
+    if ct, err = ct.merge($3.(*ColumnType)); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: $1.(ColIdent), Type: $2.(ColumnType)}
+    $$ = &ColumnDefinition{Name: $1.(ColIdent), Type: ct}
   }
 | column_name_safe_keyword column_type column_type_options
   {
-    ct := $2.(ColumnType)
-    if err := ct.merge($3.(ColumnType)); err != nil {
+    ct := $2.(*ColumnType)
+    var err error
+    if ct, err = ct.merge($3.(*ColumnType)); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2.(ColumnType)}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | non_reserved_keyword2 column_type column_type_options
   {
-    ct := $2.(ColumnType)
-    if err := ct.merge($3.(ColumnType)); err != nil {
+    ct := $2.(*ColumnType)
+    var err error
+    if ct, err = ct.merge($3.(*ColumnType)); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2.(ColumnType)}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | non_reserved_keyword3 column_type column_type_options
   {
-    ct := $2.(ColumnType)
-    if err := ct.merge($3.(ColumnType)); err != nil {
+    ct := $2.(*ColumnType)
+    var err error
+    if ct, err = ct.merge($3.(*ColumnType)); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2.(ColumnType)}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | ESCAPE column_type column_type_options
   {
-    ct := $2.(ColumnType)
-    if err := ct.merge($3.(ColumnType)); err != nil {
+    ct := $2.(*ColumnType)
+    var err error
+    if ct, err = ct.merge($3.(*ColumnType)); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2.(ColumnType)}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | function_call_keywords column_type column_type_options
   {
-    ct := $2.(ColumnType)
-    if err := ct.merge($3.(ColumnType)); err != nil {
+    ct := $2.(*ColumnType)
+    var err error
+    if ct, err = ct.merge($3.(*ColumnType)); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2.(ColumnType)}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 
 stored_opt:
@@ -2886,168 +2903,183 @@ stored_opt:
 
 column_type_options:
   {
-    $$ = ColumnType{}
+    $$ = (*ColumnType)(nil)
   }
 | column_type_options INVISIBLE
   {
-    $$ = $1.(ColumnType)
+    $$ = $1.(*ColumnType)
   }
 | column_type_options NULL
   {
-    opt := ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options NOT NULL
   {
-    opt := ColumnType{Null: BoolVal(false), NotNull: BoolVal(true), sawnull: true}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{Null: BoolVal(false), NotNull: BoolVal(true), sawnull: true}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options character_set
   {
-    opt := ColumnType{Charset: $2.(string)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{Charset: $2.(string)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options collate
   {
-    opt := ColumnType{Collate: $2.(string)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{Collate: $2.(string)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options BINARY
   {
-    opt := ColumnType{BinaryCollate: true}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{BinaryCollate: true}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options column_default
   {
-    opt := ColumnType{Default: $2.(Expr)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{Default: tryCastExpr($2)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options on_update
   {
-    opt := ColumnType{OnUpdate: $2.(Expr)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{OnUpdate: tryCastExpr($2)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options auto_increment
   {
-    opt := ColumnType{Autoincrement: $2.(BoolVal), sawai: true}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{Autoincrement: $2.(BoolVal), sawai: true}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options column_key
   {
-    opt := ColumnType{KeyOpt: $2.(ColumnKeyOption)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{KeyOpt: $2.(ColumnKeyOption)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options column_comment
   {
-    opt := ColumnType{Comment: $2.(*SQLVal)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{Comment: $2.(*SQLVal)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options AS openb value_expression closeb stored_opt
   {
-    opt := ColumnType{GeneratedExpr: &ParenExpr{$4.(Expr)}, Stored: $6.(BoolVal)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{GeneratedExpr: &ParenExpr{tryCastExpr($4)}, Stored: $6.(BoolVal)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options GENERATED ALWAYS AS openb value_expression closeb stored_opt
   {
-    opt := ColumnType{GeneratedExpr: &ParenExpr{$6.(Expr)}, Stored: $8.(BoolVal)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{GeneratedExpr: &ParenExpr{tryCastExpr($6)}, Stored: $8.(BoolVal)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options SRID INTEGRAL
   {
-    opt := ColumnType{SRID: NewIntVal($3)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{SRID: NewIntVal($3)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options REFERENCES table_name '(' column_list ')'
   // TODO: This still needs support for "ON DELETE" and "ON UPDATE"
   {
-    opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3.(TableName), ReferencedColumns: $5.(Columns)}}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3.(TableName), ReferencedColumns: $5.(Columns)}}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 | column_type_options check_constraint_definition
   {
-    opt := ColumnType{Constraint: $2.(*ConstraintDefinition)}
-    ct := $1.(ColumnType)
-    if err := ct.merge(opt); err != nil {
+    opt := &ColumnType{Constraint: $2.(*ConstraintDefinition)}
+    ct := $1.(*ColumnType)
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1.(ColumnType)
+    $$ = ct
   }
 
 column_type:
   numeric_type signed_or_unsigned_opt zero_fill_opt
   {
-    ct := $1.(ColumnType)
+    ct := $1.(*ColumnType)
     ct.Unsigned = $2.(BoolVal)
     ct.Zerofill = $3.(BoolVal)
     $$ = ct
@@ -3059,130 +3091,130 @@ column_type:
 numeric_type:
   int_type length_opt
   {
-    ct := $1.(ColumnType)
+    ct := $1.(*ColumnType)
     ct.Length = $2.(*SQLVal)
     $$ = ct
   }
 | decimal_type
   {
-    $$ = $1.(ColumnType)
+    $$ = $1.(*ColumnType)
   }
 
 int_type:
   BIT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BOOL
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BOOLEAN
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | SMALLINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | INT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | INTEGER
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BIGINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | SERIAL
   {
-    $$ = ColumnType{Type: "bigint", Unsigned: true, NotNull: true, Autoincrement: true, KeyOpt: colKeyUnique}
+    $$ = &ColumnType{Type: "bigint", Unsigned: true, NotNull: true, Autoincrement: true, KeyOpt: colKeyUnique}
   }
 | INT1
   {
-    $$ = ColumnType{Type: "tinyint"}
+    $$ = &ColumnType{Type: "tinyint"}
   }
 | INT2
   {
-    $$ = ColumnType{Type: "smallint"}
+    $$ = &ColumnType{Type: "smallint"}
   }
 | INT3
   {
-    $$ = ColumnType{Type: "mediumint"}
+    $$ = &ColumnType{Type: "mediumint"}
   }
 | INT4
   {
-    $$ = ColumnType{Type: "int"}
+    $$ = &ColumnType{Type: "int"}
   }
 | INT8
   {
-    $$ = ColumnType{Type: "bigint"}
+    $$ = &ColumnType{Type: "bigint"}
   }
 
 decimal_type:
 REAL float_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
   }
 | DOUBLE float_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
   }
 | DOUBLE PRECISION float_length_opt
   {
-    ct := ColumnType{Type: string($1) + " " + string($2)}
+    ct := &ColumnType{Type: string($1) + " " + string($2)}
     ct.Length = $3.(LengthScaleOption).Length
     ct.Scale = $3.(LengthScaleOption).Scale
     $$ = ct
   }
 | FLOAT_TYPE decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
   }
 | DECIMAL decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
   }
 | NUMERIC decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
   }
 | DEC decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
   }
 | FIXED decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
@@ -3191,164 +3223,164 @@ REAL float_length_opt
 time_type:
   DATE
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TIME length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | TIMESTAMP length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | DATETIME length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | YEAR
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 
 char_type:
   char_or_character char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | NATIONAL char_or_character char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
   }
 | NCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | NCHAR VARCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
   }
 | NCHAR VARYING char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
   }
 | VARCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | CHAR VARYING char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
   }
 | CHARACTER VARYING char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
   }
 | NVARCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | NATIONAL VARCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3.(*SQLVal)}
   }
 | NATIONAL char_or_character VARYING char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4.(*SQLVal)}
   }
 | BINARY char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | VARBINARY char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+    $$ = &ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | TEXT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYTEXT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMTEXT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONGTEXT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONG
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONG VARCHAR
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2)}
+    $$ = &ColumnType{Type: string($1) + " " + string($2)}
   }
 | BLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONGBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | JSON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | ENUM '(' enum_values ')'
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3.([]string)}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3.([]string)}
   }
 // need set_values / SetValues ?
 | SET '(' enum_values ')'
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3.([]string)}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3.([]string)}
   }
 
 spatial_type:
   GEOMETRY
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | POINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LINESTRING
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | POLYGON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | GEOMETRYCOLLECTION
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTIPOINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTILINESTRING
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTIPOLYGON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 
 enum_values:
@@ -3364,7 +3396,7 @@ enum_values:
 
 length_opt:
   {
-    $$ = &SQLVal{}
+    $$ = (*SQLVal)(nil)
   }
 | '(' INTEGRAL ')'
   {
@@ -3373,7 +3405,7 @@ length_opt:
 
 char_length_opt:
   {
-    $$ = &SQLVal{}
+    $$ = (*SQLVal)(nil)
   }
 | '(' INTEGRAL ')'
   {
@@ -3439,11 +3471,11 @@ zero_fill_opt:
 column_default:
   DEFAULT value
   {
-    $$ = $2.(Expr)
+    $$ = tryCastExpr($2)
   }
 | DEFAULT '-' value
   {
-    if num, ok := $3.(Expr).(*SQLVal); ok && num.Type == IntVal {
+    if num, ok := tryCastExpr($3).(*SQLVal); ok && num.Type == IntVal {
       // Handle double negative
       if num.Val[0] == '-' {
         num.Val = num.Val[1:]
@@ -3452,7 +3484,7 @@ column_default:
         $$ = NewIntVal(append([]byte("-"), num.Val...))
       }
     } else {
-      $$ = &UnaryExpr{Operator: UMinusStr, Expr: $3.(Expr)}
+      $$ = &UnaryExpr{Operator: UMinusStr, Expr: tryCastExpr($3)}
     }
   }
 | DEFAULT underscore_charsets STRING
@@ -3465,17 +3497,17 @@ column_default:
   }
 | DEFAULT function_call_nonkeyword
   {
-    $$ = $2.(Expr)
+    $$ = tryCastExpr($2)
   }
 | DEFAULT openb value_expression closeb
   {
-    $$ = &ParenExpr{$3.(Expr)}
+    $$ = &ParenExpr{tryCastExpr($3)}
   }
 
 on_update:
   ON UPDATE function_call_on_update
   {
-    $$ = $3.(Expr)
+    $$ = tryCastExpr($3)
   }
 
 auto_increment:
@@ -3660,7 +3692,7 @@ purge_binary_logs_statement:
   }
 | PURGE BINARY LOGS BEFORE value_expression
   {
-    $$ = &PurgeBinaryLogs{Before: $5.(Expr)}
+    $$ = &PurgeBinaryLogs{Before: tryCastExpr($5)}
   }
 
 flush_statement:
@@ -4089,7 +4121,7 @@ check_constraint_definition:
 check_constraint_info:
   CHECK '(' expression ')' enforced_opt
   {
-    $$ = &CheckConstraintDefinition{Expr: $3.(Expr), Enforced: $5.(bool)}
+    $$ = &CheckConstraintDefinition{Expr: tryCastExpr($3), Enforced: $5.(bool)}
   }
 
 from_or_in:
@@ -4438,7 +4470,7 @@ any_identifier:
 // TODO: partition options for table creation will parse, but do nothing for now
 partition_option_opt:
   {
-    $$ = &PartitionOption{}
+    $$ = (*PartitionOption)(nil)
   }
 | PARTITION BY partition_option partition_num_opt subpartition_opt partition_definitions_opt
   {
@@ -4457,7 +4489,7 @@ partition_option:
   {
     $$ = &PartitionOption {
     	PartitionType: string($1.(string)),
-    	Expr: $3.(Expr),
+    	Expr: tryCastExpr($3),
     }
   }
 | range_or_list COLUMNS openb column_list closeb
@@ -4474,7 +4506,7 @@ linear_partition_opt:
     $$ = &PartitionOption {
     	IsLinear: $1.(bool),
     	PartitionType: string($2),
-    	Expr: $4.(Expr),
+    	Expr: tryCastExpr($4),
     }
   }
 | linear_opt KEY algorithm_part_opt openb column_list closeb
@@ -4517,7 +4549,7 @@ range_or_list:
 
 partition_num_opt:
   {
-    $$ = &SQLVal{}
+    $$ = (*SQLVal)(nil)
   }
 | PARTITIONS INTEGRAL
   {
@@ -4526,14 +4558,14 @@ partition_num_opt:
 
 subpartition_opt:
   {
-    $$ = &SubPartition{}
+    $$ = (*SubPartition)(nil)
   }
 | SUBPARTITION BY linear_opt HASH openb value_expression closeb subpartition_num_opt
   {
     $$ = &SubPartition{
     	IsLinear: $3.(bool),
     	PartitionType: string($4),
-    	Expr: $6.(Expr),
+    	Expr: tryCastExpr($6),
     	SubPartitions: $8.(*SQLVal),
     }
   }
@@ -4543,14 +4575,14 @@ subpartition_opt:
     	IsLinear: $3.(bool),
     	PartitionType: string($4),
     	KeyAlgorithm: $5.(string),
-    	Expr: $7.(Expr),
+    	Expr: tryCastExpr($7),
     	SubPartitions: $9.(*SQLVal),
     }
   }
 
 subpartition_num_opt:
   {
-    $$ = &SQLVal{}
+    $$ = (*SQLVal)(nil)
   }
 | SUBPARTITIONS INTEGRAL
   {
@@ -4785,7 +4817,7 @@ alter_table_statement_part:
 	DefaultSpec: &DefaultSpec{
 		Action: SetStr,
 		Column: $3.(ColIdent),
-		Value: $6.(Expr),
+		Value: tryCastExpr($6),
 	},
     }
   }
@@ -5065,7 +5097,7 @@ alter_table_options:
   }
 | AUTO_INCREMENT equal_opt expression
   {
-    $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3.(Expr)}}
+    $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: tryCastExpr($3)}}
   }
 | AVG_ROW_LENGTH equal_opt table_opt_value
   {
@@ -5218,7 +5250,7 @@ alter_user_statement:
   ALTER USER exists_opt account_name authentication
   {
     var ifExists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       ifExists = true
     }
     $$ = &DDL{Action: AlterStr, User: $4.(AccountName), Authentication: $5.(*Authentication), IfExists: ifExists}
@@ -5226,7 +5258,7 @@ alter_user_statement:
 
 column_order_opt:
   {
-    $$ = &ColumnOrder{}
+    $$ = (*ColumnOrder)(nil)
   }
 | FIRST
   {
@@ -5378,7 +5410,7 @@ partition_definitions:
 partition_definition:
   PARTITION sql_id VALUES LESS THAN openb value_expression closeb
   {
-    $$ = &PartitionDefinition{Name: $2.(ColIdent), Limit: $7.(Expr)}
+    $$ = &PartitionDefinition{Name: $2.(ColIdent), Limit: tryCastExpr($7)}
   }
 | PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb
   {
@@ -5401,11 +5433,11 @@ alter_event_statement:
   }
 | ALTER definer_opt EVENT event_name event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
   {
-    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4.(EventName), Definer: $2.(string), OnCompletionPreserve: $5.(EventOnCompletion), RenameName: $6.(EventName), Status: $7.(EventStatus), Comment: $8.(*SQLVal), Body: $11.(Statement)}, SubStatementPositionStart: $10.(int), SubStatementPositionEnd: $12.(int) - 1}
+    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4.(EventName), Definer: $2.(string), OnCompletionPreserve: $5.(EventOnCompletion), RenameName: $6.(EventName), Status: $7.(EventStatus), Comment: $8.(*SQLVal), Body: tryCastStatement($11)}, SubStatementPositionStart: $10.(int), SubStatementPositionEnd: $12.(int) - 1}
   }
 | ALTER definer_opt EVENT event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
   {
-    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4.(EventName), Definer: $2.(string), OnSchedule: $7.(*EventScheduleSpec), OnCompletionPreserve: $8.(EventOnCompletion), RenameName: $9.(EventName), Status: $10.(EventStatus), Comment: $11.(*SQLVal), Body: $14.(Statement)}, SubStatementPositionStart: $13.(int), SubStatementPositionEnd: $15.(int) - 1}
+    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4.(EventName), Definer: $2.(string), OnSchedule: $7.(*EventScheduleSpec), OnCompletionPreserve: $8.(EventOnCompletion), RenameName: $9.(EventName), Status: $10.(EventStatus), Comment: $11.(*SQLVal), Body: tryCastStatement($14)}, SubStatementPositionStart: $13.(int), SubStatementPositionEnd: $15.(int) - 1}
   }
 
 rename_event_name_opt:
@@ -5453,7 +5485,7 @@ drop_statement:
   DROP TABLE exists_opt table_name_list drop_statement_action
   {
     var exists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       exists = true
     }
     $$ = &DDL{Action: DropStr, FromTables: $4.(TableNames), IfExists: exists}
@@ -5467,7 +5499,7 @@ drop_statement:
 | DROP VIEW exists_opt view_name_list
   {
     var exists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       exists = true
     }
     $$ = &DDL{Action: DropStr, FromViews: $4.(TableNames), IfExists: exists}
@@ -5475,7 +5507,7 @@ drop_statement:
 | DROP DATABASE exists_opt ID
   {
     var exists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       exists = true
     }
     $$ = &DBDDL{Action: DropStr, SchemaOrDatabase: "database", DBName: string($4), IfExists: exists}
@@ -5483,7 +5515,7 @@ drop_statement:
 | DROP SCHEMA exists_opt ID
   {
     var exists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       exists = true
     }
     $$ = &DBDDL{Action: DropStr, SchemaOrDatabase: "schema", DBName: string($4), IfExists: exists}
@@ -5491,7 +5523,7 @@ drop_statement:
 | DROP TRIGGER exists_opt trigger_name
   {
     var exists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       exists = true
     }
     $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{TrigName: $4.(TriggerName)}, IfExists: exists}
@@ -5499,7 +5531,7 @@ drop_statement:
 | DROP PROCEDURE exists_opt procedure_name
   {
     var exists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       exists = true
     }
     $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{ProcName: $4.(ProcedureName)}, IfExists: exists}
@@ -5507,7 +5539,7 @@ drop_statement:
 | DROP USER exists_opt account_name_list
   {
     var exists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       exists = true
     }
     $$ = &DropUser{IfExists: exists, AccountNames: $4.([]AccountName)}
@@ -5515,7 +5547,7 @@ drop_statement:
 | DROP ROLE exists_opt role_name_list
   {
     var exists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       exists = true
     }
     $$ = &DropRole{IfExists: exists, Roles: $4.([]AccountName)}
@@ -5523,7 +5555,7 @@ drop_statement:
 | DROP EVENT exists_opt event_name
   {
     var exists bool
-    if $3.(byte) != 0 {
+    if $3.(int) != 0 {
       exists = true
     }
     $$ = &DDL{Action: DropStr, EventSpec: &EventSpec{EventName: $4.(EventName)}, IfExists: exists}
@@ -5555,13 +5587,13 @@ truncate_statement:
 analyze_statement:
   ANALYZE TABLE analyze_opt
   {
-    $$ = $3.(Statement)
+    $$ = tryCastStatement($3)
   }
 
 analyze_opt:
   table_name UPDATE HISTOGRAM ON paren_column_list USING DATA value_expression
   {
-    $$ = &Analyze{Tables: []TableName{$1.(TableName)}, Action: UpdateStr, Columns: $5.(Columns), Using: $8.(Expr)}
+    $$ = &Analyze{Tables: []TableName{$1.(TableName)}, Action: UpdateStr, Columns: $5.(Columns), Using: tryCastExpr($8)}
   }
 | table_name DROP HISTOGRAM ON paren_column_list
   {
@@ -5669,15 +5701,15 @@ show_statement:
   }
 | SHOW CREATE DATABASE not_exists_opt ID
   {
-    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4.(byte) == 1, Database: string($5)}
+    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4.(int) == 1, Database: string($5)}
   }
 | SHOW CREATE SCHEMA not_exists_opt ID
   {
-    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4.(byte) == 1, Database: string($5)}
+    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4.(int) == 1, Database: string($5)}
   }
 | SHOW CREATE TABLE table_name as_of_opt
   {
-    showTablesOpt := &ShowTablesOpt{AsOf:$5.(Expr)}
+    showTablesOpt := &ShowTablesOpt{AsOf:tryCastExpr($5)}
     $$ = &Show{Type: CreateTableStr, Table: $4.(TableName), ShowTablesOpt: showTablesOpt}
   }
 | SHOW CREATE PROCEDURE table_name
@@ -5710,7 +5742,7 @@ show_statement:
   }
 | SHOW indexes_or_keys from_or_in table_name show_database_opt where_expression_opt
   {
-    $$ = &Show{Type: IndexStr, Table: $4.(TableName), Database: $5.(string), ShowIndexFilterOpt: $6.(Expr)}
+    $$ = &Show{Type: IndexStr, Table: $4.(TableName), Database: $5.(string), ShowIndexFilterOpt: tryCastExpr($6)}
   }
 | SHOW PLUGINS
   {
@@ -5738,12 +5770,12 @@ show_statement:
   }
 | SHOW full_opt columns_or_fields FROM table_name from_database_opt as_of_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{DbName:$6.(string), AsOf:$7.(Expr), Filter:$8.(*ShowFilter)}
+    showTablesOpt := &ShowTablesOpt{DbName:$6.(string), AsOf:tryCastExpr($7), Filter:$8.(*ShowFilter)}
     $$ = &Show{Type: string($3.(string)), ShowTablesOpt: showTablesOpt, Table: $5.(TableName), Full: $2.(bool)}
   }
 | SHOW full_opt TABLES from_database_opt as_of_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{DbName:$4.(string), Filter:$6.(*ShowFilter), AsOf:$5.(Expr)}
+    showTablesOpt := &ShowTablesOpt{DbName: $4.(string), Filter: $6.(*ShowFilter), AsOf: tryCastExpr($5)}
     $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, Full: $2.(bool)}
   }
 | SHOW full_opt PROCESSLIST
@@ -5764,11 +5796,11 @@ show_statement:
   }
 | SHOW COLLATION WHERE expression
   {
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4.(Expr)}
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: tryCastExpr($4)}
   }
 | SHOW COLLATION naked_like
   {
-    cmp := $3.(Expr).(*ComparisonExpr)
+    cmp := tryCastExpr($3).(*ComparisonExpr)
     cmp.Left = &ColName{Name: NewColIdent("collation")}
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: cmp}
   }
@@ -5834,7 +5866,7 @@ show_statement:
 naked_like:
 LIKE value_expression like_escape_opt
   {
-    $$ = &ComparisonExpr{Operator: LikeStr, Right: $2.(Expr), Escape: $3.(Expr)}
+    $$ = &ComparisonExpr{Operator: LikeStr, Right: tryCastExpr($2), Escape: tryCastExpr($3)}
   }
 
 full_opt:
@@ -5874,7 +5906,7 @@ from_database_opt:
 like_or_where_opt:
   /* empty */
   {
-    $$ = &ShowFilter{}
+    $$ = (*ShowFilter)(nil)
   }
 | LIKE STRING
   {
@@ -5886,7 +5918,7 @@ like_or_where_opt:
   }
 | WHERE expression
   {
-    $$ = &ShowFilter{Filter:$2.(Expr)}
+    $$ = &ShowFilter{Filter:tryCastExpr($2)}
   }
 
 show_session_or_global:
@@ -5933,7 +5965,7 @@ begin_statement:
   }
 | start_transaction_statement
   {
-    $$ = $1.(Statement)
+    $$ = tryCastStatement($1)
   }
 
 start_transaction_statement:
@@ -6022,11 +6054,11 @@ release_savepoint_statement:
 explain_statement:
   explain_verb format_opt explainable_statement
   {
-    $$ = &Explain{ExplainFormat: $2.(string), Statement: $3.(Statement)}
+    $$ = &Explain{ExplainFormat: $2.(string), Statement: tryCastStatement($3)}
   }
 | explain_verb EXTENDED format_opt explainable_statement
   {
-    $$ = &Explain{ExplainFormat: $3.(string), Statement: $4.(Statement)}
+    $$ = &Explain{ExplainFormat: $3.(string), Statement: tryCastStatement($4)}
   }
 | explain_verb ANALYZE select_statement_with_no_trailing_into
   {
@@ -6060,7 +6092,7 @@ describe_statement:
   explain_verb table_name as_of_opt
   // rewrite describe table as show columns from table
   {
-    showTablesOpt := &ShowTablesOpt{AsOf:$3.(Expr)}
+    showTablesOpt := &ShowTablesOpt{AsOf:tryCastExpr($3)}
     $$ = &Show{Type: "columns", Table: $2.(TableName), ShowTablesOpt: showTablesOpt}
   }
 
@@ -6127,67 +6159,73 @@ except_op:
 
 query_opts:
   {
-    $$ = QueryOpts{}
+    $$ = (*QueryOpts)(nil)
   }
 | query_opts ALL
   {
-    opt := QueryOpts{All: true}
-    ct := $1.(QueryOpts)
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{All: true}
+    qo := $1.(*QueryOpts)
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1.(QueryOpts)
+    $$ = qo
   }
 | query_opts DISTINCT
   {
-    opt := QueryOpts{Distinct: true}
-    ct := $1.(QueryOpts)
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{Distinct: true}
+    qo := $1.(*QueryOpts)
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1.(QueryOpts)
+    $$ = qo
   }
 | query_opts STRAIGHT_JOIN
   {
-    opt := QueryOpts{StraightJoinHint: true}
-    ct := $1.(QueryOpts)
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{StraightJoinHint: true}
+    qo := $1.(*QueryOpts)
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1.(QueryOpts)
+    $$ = qo
   }
 | query_opts SQL_CALC_FOUND_ROWS
   {
-    opt := QueryOpts{SQLCalcFoundRows: true}
-    ct := $1.(QueryOpts)
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{SQLCalcFoundRows: true}
+    qo := $1.(*QueryOpts)
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1.(QueryOpts)
+    $$ = qo
   }
 | query_opts SQL_CACHE
   {
-    opt := QueryOpts{SQLCache: true}
-    ct := $1.(QueryOpts)
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{SQLCache: true}
+    qo := $1.(*QueryOpts)
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1.(QueryOpts)
+    $$ = qo
   }
 | query_opts SQL_NO_CACHE
   {
-    opt := QueryOpts{SQLNoCache: true}
-    ct := $1.(QueryOpts)
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{SQLNoCache: true}
+    qo := $1.(*QueryOpts)
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1.(QueryOpts)
+    $$ = qo
   }
 
 distinct_opt:
@@ -6229,7 +6267,7 @@ argument_expression:
   }
 | expression
   {
-    $$ = &AliasedExpr{Expr: $1.(Expr)}
+    $$ = &AliasedExpr{Expr: tryCastExpr($1)}
   }
 | table_id '.' '*'
   {
@@ -6247,7 +6285,7 @@ select_expression:
   }
 | expression as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1.(Expr), As: $2.(ColIdent)}
+    $$ = &AliasedExpr{Expr: tryCastExpr($1), As: $2.(ColIdent)}
   }
 | table_id '.' '*'
   {
@@ -6293,7 +6331,7 @@ partition_by_opt:
 
 over_opt:
   {
-    $$ = &Over{}
+    $$ = (*Over)(nil)
   }
 | over
   {
@@ -6302,7 +6340,7 @@ over_opt:
 
 frame_opt:
   {
-    $$ = &Frame{}
+    $$ = (*Frame)(nil)
   }
 | ROWS frame_extent
   {
@@ -6368,14 +6406,14 @@ UNBOUNDED PRECEDING
 | integral_or_interval_expr PRECEDING
   {
     $$ = &FrameBound{
-       Expr: $1.(Expr),
+       Expr: tryCastExpr($1),
        Type: ExprPreceding,
      }
   }
 | integral_or_interval_expr FOLLOWING
   {
     $$ = &FrameBound{
-       Expr: $1.(Expr),
+       Expr: tryCastExpr($1),
        Type: ExprFollowing,
      }
   }
@@ -6444,7 +6482,7 @@ integral_or_interval_expr:
   }
 | INTERVAL value time_unit
   {
-    $$ = &IntervalExpr{Expr: $2.(Expr), Unit: string($3)}
+    $$ = &IntervalExpr{Expr: tryCastExpr($2), Unit: string($3)}
   }
 
 as_ci_opt:
@@ -6615,41 +6653,41 @@ as_of_clause:
 between_times:
   FOR_SYSTEM_TIME BETWEEN value_expression AND value_expression
   {
-    $$ = &AsOf{Start: $3.(Expr), End: $5.(Expr), EndInclusive: true}
+    $$ = &AsOf{Start: tryCastExpr($3), End: tryCastExpr($5), EndInclusive: true}
   }
 | FOR_SYSTEM_TIME FROM value_expression TO value_expression
   {
-    $$ = &AsOf{Start: $3.(Expr), End: $5.(Expr)}
+    $$ = &AsOf{Start: tryCastExpr($3), End: tryCastExpr($5)}
   }
 | FOR_SYSTEM_TIME CONTAINED IN openb value_expression ',' value_expression closeb
   {
-    $$ = &AsOf{Start: $5.(Expr), End: $7.(Expr), StartInclusive: true, EndInclusive: true}
+    $$ = &AsOf{Start: tryCastExpr($5), End: tryCastExpr($7), StartInclusive: true, EndInclusive: true}
   }
 
 between_versions:
   FOR_VERSION BETWEEN value_expression AND value_expression
   {
-    $$ = &AsOf{Start: $3.(Expr), End: $5.(Expr), EndInclusive: true}
+    $$ = &AsOf{Start: tryCastExpr($3), End: tryCastExpr($5), EndInclusive: true}
   }
 | FOR_VERSION FROM value_expression TO value_expression
   {
-    $$ = &AsOf{Start: $3.(Expr), End: $5.(Expr)}
+    $$ = &AsOf{Start: tryCastExpr($3), End: tryCastExpr($5)}
   }
 | FOR_VERSION CONTAINED IN openb value_expression ',' value_expression closeb
   {
-    $$ = &AsOf{Start: $5.(Expr), End: $7.(Expr), StartInclusive: true, EndInclusive: true}
+    $$ = &AsOf{Start: tryCastExpr($5), End: tryCastExpr($7), StartInclusive: true, EndInclusive: true}
   }
 | VERSIONS BETWEEN value_expression AND value_expression
   {
-    $$ = &AsOf{Start: $3.(Expr), End: $5.(Expr), EndInclusive: true}
+    $$ = &AsOf{Start: tryCastExpr($3), End: tryCastExpr($5), EndInclusive: true}
   }
 | VERSIONS FROM value_expression TO value_expression
   {
-    $$ = &AsOf{Start: $3.(Expr), End: $5.(Expr)}
+    $$ = &AsOf{Start: tryCastExpr($3), End: tryCastExpr($5)}
   }
 | VERSIONS CONTAINED IN openb value_expression ',' value_expression closeb
   {
-    $$ = &AsOf{Start: $5.(Expr), End: $7.(Expr), StartInclusive: true, EndInclusive: true}
+    $$ = &AsOf{Start: tryCastExpr($5), End: tryCastExpr($7), StartInclusive: true, EndInclusive: true}
   }
 
 all_times:
@@ -6671,15 +6709,15 @@ all_versions:
 as_of_point_clause:
   AS OF value_expression
   {
-    $$ = &AsOf{Time: $3.(Expr)}
+    $$ = &AsOf{Time: tryCastExpr($3)}
   }
 | FOR_SYSTEM_TIME AS OF value_expression
   {
-    $$ = &AsOf{Time: $4.(Expr)}
+    $$ = &AsOf{Time: tryCastExpr($4)}
   }
 | FOR_VERSION AS OF value_expression
   {
-    $$ = &AsOf{Time: $4.(Expr)}
+    $$ = &AsOf{Time: tryCastExpr($4)}
   }
 
 as_of_opt:
@@ -6768,7 +6806,7 @@ join_table:
 
 join_condition:
   ON expression
-  { $$ = JoinCondition{On: $2.(Expr)} }
+  { $$ = JoinCondition{On: tryCastExpr($2)} }
 | USING '(' column_list ')'
   { $$ = JoinCondition{Using: $3.(Columns)} }
 
@@ -6782,7 +6820,7 @@ on_expression_opt:
 %prec JOIN
   { $$ = JoinCondition{} }
 | ON expression
-  { $$ = JoinCondition{On: $2.(Expr)} }
+  { $$ = JoinCondition{On: tryCastExpr($2)} }
 
 table_alias:
   table_id
@@ -6855,7 +6893,7 @@ json_table:
   JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb as_opt table_alias
   {
     $8.(*JSONTableSpec).Path = string($5)
-    $$ = &JSONTableExpr{Data: $3.(Expr), Spec: $8.(*JSONTableSpec), Alias: $12.(TableIdent)}
+    $$ = &JSONTableExpr{Data: tryCastExpr($3), Spec: $8.(*JSONTableSpec), Alias: $12.(TableIdent)}
   }
 
 json_table_column_list:
@@ -6872,11 +6910,11 @@ json_table_column_list:
 json_table_column_definition:
   reserved_sql_id column_type json_table_column_options
   {
-    $$ = &JSONTableColDef{Name: $1.(ColIdent), Type: $2.(ColumnType), Opts: $3.(JSONTableColOpts)}
+    $$ = &JSONTableColDef{Name: $1.(ColIdent), Type: $2.(*ColumnType), Opts: $3.(JSONTableColOpts)}
   }
 | reserved_sql_id FOR ORDINALITY
   {
-    $$ = &JSONTableColDef{Name: $1.(ColIdent), Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
+    $$ = &JSONTableColDef{Name: $1.(ColIdent), Type: &ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
   }
 | NESTED STRING COLUMNS openb json_table_column_list closeb
   {
@@ -6896,19 +6934,19 @@ json_table_column_options:
   }
 | PATH STRING val_on_empty
   {
-    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $3.(Expr)}
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: tryCastExpr($3)}
   }
 | PATH STRING val_on_error
   {
-    $$ = JSONTableColOpts{Path: string($2), ValOnError: $3.(Expr)}
+    $$ = JSONTableColOpts{Path: string($2), ValOnError: tryCastExpr($3)}
   }
 | PATH STRING val_on_empty val_on_error
   {
-    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $3.(Expr), ValOnError: $4.(Expr)}
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: tryCastExpr($3), ValOnError: tryCastExpr($4)}
   }
 | PATH STRING val_on_error val_on_empty
   {
-    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $4.(Expr), ValOnError: $3.(Expr)}
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: tryCastExpr($4), ValOnError: tryCastExpr($3)}
   }
 | PATH STRING ERROR ON EMPTY
   {
@@ -6938,7 +6976,7 @@ val_on_empty:
   }
 | DEFAULT value ON EMPTY
   {
-    $$ = $2.(Expr)
+    $$ = tryCastExpr($2)
   }
 
 val_on_error:
@@ -6948,7 +6986,7 @@ val_on_error:
   }
 | DEFAULT value ON ERROR
   {
-    $$ = $2.(Expr)
+    $$ = tryCastExpr($2)
   }
 
 trigger_name:
@@ -7021,7 +7059,7 @@ table_id '.' '*'
 
 index_hint_list:
   {
-    $$ = &IndexHints{}
+    $$ = (*IndexHints)(nil)
   }
 | USE INDEX openb column_list closeb
   {
@@ -7042,37 +7080,37 @@ where_expression_opt:
   }
 | WHERE expression
   {
-    $$ = $2.(Expr)
+    $$ = tryCastExpr($2)
   }
 
 expression:
   condition
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 | expression AND expression
   {
-    $$ = &AndExpr{Left: $1.(Expr), Right: $3.(Expr)}
+    $$ = &AndExpr{Left: tryCastExpr($1), Right: tryCastExpr($3)}
   }
 | expression OR expression
   {
-    $$ = &OrExpr{Left: $1.(Expr), Right: $3.(Expr)}
+    $$ = &OrExpr{Left: tryCastExpr($1), Right: tryCastExpr($3)}
   }
 | expression XOR expression
   {
-    $$ = &XorExpr{Left: $1.(Expr), Right: $3.(Expr)}
+    $$ = &XorExpr{Left: tryCastExpr($1), Right: tryCastExpr($3)}
   }
 | NOT expression
   {
-    $$ = &NotExpr{Expr: $2.(Expr)}
+    $$ = &NotExpr{Expr: tryCastExpr($2)}
   }
 | expression IS is_suffix
   {
-    $$ = &IsExpr{Operator: $3.(string), Expr: $1.(Expr)}
+    $$ = &IsExpr{Operator: $3.(string), Expr: tryCastExpr($1)}
   }
 | value_expression
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 | DEFAULT default_opt
   {
@@ -7102,39 +7140,39 @@ boolean_value:
 condition:
   value_expression compare value_expression
   {
-    $$ = &ComparisonExpr{Left: $1.(Expr), Operator: $2.(string), Right: $3.(Expr)}
+    $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: $2.(string), Right: tryCastExpr($3)}
   }
 | value_expression IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1.(Expr), Operator: InStr, Right: $3.(ColTuple)}
+    $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: InStr, Right: $3.(ColTuple)}
   }
 | value_expression NOT IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1.(Expr), Operator: NotInStr, Right: $4.(ColTuple)}
+    $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: NotInStr, Right: $4.(ColTuple)}
   }
 | value_expression LIKE value_expression like_escape_opt
   {
-    $$ = &ComparisonExpr{Left: $1.(Expr), Operator: LikeStr, Right: $3.(Expr), Escape: $4.(Expr)}
+    $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: LikeStr, Right: tryCastExpr($3), Escape: tryCastExpr($4)}
   }
 | value_expression NOT LIKE value_expression like_escape_opt
   {
-    $$ = &ComparisonExpr{Left: $1.(Expr), Operator: NotLikeStr, Right: $4.(Expr), Escape: $5.(Expr)}
+    $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: NotLikeStr, Right: tryCastExpr($4), Escape: tryCastExpr($5)}
   }
 | value_expression REGEXP value_expression
   {
-    $$ = &ComparisonExpr{Left: $1.(Expr), Operator: RegexpStr, Right: $3.(Expr)}
+    $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: RegexpStr, Right: tryCastExpr($3)}
   }
 | value_expression NOT REGEXP value_expression
   {
-    $$ = &ComparisonExpr{Left: $1.(Expr), Operator: NotRegexpStr, Right: $4.(Expr)}
+    $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: NotRegexpStr, Right: tryCastExpr($4)}
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1.(Expr), Operator: BetweenStr, From: $3.(Expr), To: $5.(Expr)}
+    $$ = &RangeCond{Left: tryCastExpr($1), Operator: BetweenStr, From: tryCastExpr($3), To: tryCastExpr($5)}
   }
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1.(Expr), Operator: NotBetweenStr, From: $4.(Expr), To: $6.(Expr)}
+    $$ = &RangeCond{Left: tryCastExpr($1), Operator: NotBetweenStr, From: tryCastExpr($4), To: tryCastExpr($6)}
   }
 | EXISTS subquery
   {
@@ -7203,7 +7241,7 @@ like_escape_opt:
   }
 | ESCAPE value_expression
   {
-    $$ = $2.(Expr)
+    $$ = tryCastExpr($2)
   }
 
 col_tuple:
@@ -7255,17 +7293,17 @@ argument_expression_list:
 expression_list:
   expression
   {
-    $$ = Exprs{$1.(Expr)}
+    $$ = Exprs{tryCastExpr($1)}
   }
 | expression_list ',' expression
   {
-    $$ = append($1.(Exprs), $3.(Expr))
+    $$ = append($1.(Exprs), tryCastExpr($3))
   }
 
 value_expression:
   value
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 | ACCOUNT
   {
@@ -7289,7 +7327,7 @@ value_expression:
   }
 | tuple_expression
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 | subquery
   {
@@ -7297,83 +7335,83 @@ value_expression:
   }
 | value_expression '&' value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: BitAndStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: BitAndStr, Right: tryCastExpr($3)}
   }
 | value_expression '|' value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: BitOrStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: BitOrStr, Right: tryCastExpr($3)}
   }
 | value_expression '^' value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: BitXorStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: BitXorStr, Right: tryCastExpr($3)}
   }
 | value_expression '+' value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: PlusStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: PlusStr, Right: tryCastExpr($3)}
   }
 | value_expression '-' value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: MinusStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: MinusStr, Right: tryCastExpr($3)}
   }
 | value_expression '*' value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: MultStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: MultStr, Right: tryCastExpr($3)}
   }
 | value_expression '/' value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: DivStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: DivStr, Right: tryCastExpr($3)}
   }
 | value_expression DIV value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: IntDivStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: IntDivStr, Right: tryCastExpr($3)}
   }
 | value_expression '%' value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: ModStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: ModStr, Right: tryCastExpr($3)}
   }
 | value_expression MOD value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: ModStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: ModStr, Right: tryCastExpr($3)}
   }
 | value_expression SHIFT_LEFT value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: ShiftLeftStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: ShiftLeftStr, Right: tryCastExpr($3)}
   }
 | value_expression SHIFT_RIGHT value_expression
   {
-    $$ = &BinaryExpr{Left: $1.(Expr), Operator: ShiftRightStr, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: ShiftRightStr, Right: tryCastExpr($3)}
   }
 | column_name JSON_EXTRACT_OP value
   {
-    $$ = &BinaryExpr{Left: $1.(*ColName), Operator: JSONExtractOp, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: $1.(*ColName), Operator: JSONExtractOp, Right: tryCastExpr($3)}
   }
 | column_name JSON_UNQUOTE_EXTRACT_OP value
   {
-    $$ = &BinaryExpr{Left: $1.(*ColName), Operator: JSONUnquoteExtractOp, Right: $3.(Expr)}
+    $$ = &BinaryExpr{Left: $1.(*ColName), Operator: JSONUnquoteExtractOp, Right: tryCastExpr($3)}
   }
 | value_expression COLLATE charset
   {
-    $$ = &CollateExpr{Expr: $1.(Expr), Collation: $3.(string)}
+    $$ = &CollateExpr{Expr: tryCastExpr($1), Collation: $3.(string)}
   }
 | BINARY value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: BinaryStr, Expr: $2.(Expr)}
+    $$ = &UnaryExpr{Operator: BinaryStr, Expr: tryCastExpr($2)}
   }
 | underscore_charsets value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: $1.(string), Expr: $2.(Expr)}
+    $$ = &UnaryExpr{Operator: $1.(string), Expr: tryCastExpr($2)}
   }
 | '+'  value_expression %prec UNARY
   {
-    if num, ok := $2.(Expr).(*SQLVal); ok && num.Type == IntVal {
+    if num, ok := tryCastExpr($2).(*SQLVal); ok && num.Type == IntVal {
       $$ = num
     } else {
-      $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2.(Expr)}
+      $$ = &UnaryExpr{Operator: UPlusStr, Expr: tryCastExpr($2)}
     }
   }
 | '-'  value_expression %prec UNARY
   {
-    if num, ok := $2.(Expr).(*SQLVal); ok && num.Type == IntVal {
+    if num, ok := tryCastExpr($2).(*SQLVal); ok && num.Type == IntVal {
       // Handle double negative
       if num.Val[0] == '-' {
         num.Val = num.Val[1:]
@@ -7382,16 +7420,16 @@ value_expression:
         $$ = NewIntVal(append([]byte("-"), num.Val...))
       }
     } else {
-      $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2.(Expr)}
+      $$ = &UnaryExpr{Operator: UMinusStr, Expr: tryCastExpr($2)}
     }
   }
 | '~'  value_expression
   {
-    $$ = &UnaryExpr{Operator: TildaStr, Expr: $2.(Expr)}
+    $$ = &UnaryExpr{Operator: TildaStr, Expr: tryCastExpr($2)}
   }
 | '!' value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: BangStr, Expr: $2.(Expr)}
+    $$ = &UnaryExpr{Operator: BangStr, Expr: tryCastExpr($2)}
   }
 | INTERVAL value_expression sql_id
   {
@@ -7399,7 +7437,7 @@ value_expression:
     // as a function. If support is needed for that,
     // we'll need to revisit this. The solution
     // will be non-trivial because of grammar conflicts.
-    $$ = &IntervalExpr{Expr: $2.(Expr), Unit: $3.(ColIdent).String()}
+    $$ = &IntervalExpr{Expr: tryCastExpr($2), Unit: $3.(ColIdent).String()}
   }
 | function_call_generic
 | function_call_keyword
@@ -7573,11 +7611,11 @@ function_call_keyword:
   }
 | CONVERT openb expression ',' convert_type closeb
   {
-    $$ = &ConvertExpr{Name: string($1), Expr: $3.(Expr), Type: $5.(*ConvertType)}
+    $$ = &ConvertExpr{Name: string($1), Expr: tryCastExpr($3), Type: $5.(*ConvertType)}
   }
 | CAST openb expression AS convert_type closeb
   {
-    $$ = &ConvertExpr{Name: string($1), Expr: $3.(Expr), Type: $5.(*ConvertType)}
+    $$ = &ConvertExpr{Name: string($1), Expr: tryCastExpr($3), Type: $5.(*ConvertType)}
   }
 | CHAR openb argument_expression_list closeb
   {
@@ -7589,11 +7627,11 @@ function_call_keyword:
   }
 | CONVERT openb expression USING charset closeb
   {
-    $$ = &ConvertUsingExpr{Expr: $3.(Expr), Type: $5.(string)}
+    $$ = &ConvertUsingExpr{Expr: tryCastExpr($3), Type: $5.(string)}
   }
 | POSITION openb value_expression IN value_expression closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("LOCATE"), Exprs: []SelectExpr{&AliasedExpr{Expr: $3.(Expr)}, &AliasedExpr{Expr: $5.(Expr)}}}
+    $$ = &FuncExpr{Name: NewColIdent("LOCATE"), Exprs: []SelectExpr{&AliasedExpr{Expr: tryCastExpr($3)}, &AliasedExpr{Expr: tryCastExpr($5)}}}
   }
 | INSERT openb argument_expression_list closeb
   {
@@ -7601,43 +7639,43 @@ function_call_keyword:
   }
 | SUBSTR openb column_name FROM value_expression FOR value_expression closeb
   {
-    $$ = &SubstrExpr{Name: $3.(*ColName), From: $5.(Expr), To: $7.(Expr)}
+    $$ = &SubstrExpr{Name: $3.(*ColName), From: tryCastExpr($5), To: tryCastExpr($7)}
   }
 | SUBSTRING openb column_name FROM value_expression FOR value_expression closeb
   {
-    $$ = &SubstrExpr{Name: $3.(*ColName), From: $5.(Expr), To: $7.(Expr)}
+    $$ = &SubstrExpr{Name: $3.(*ColName), From: tryCastExpr($5), To: tryCastExpr($7)}
   }
 | SUBSTR openb STRING FROM value_expression FOR value_expression closeb
   {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5.(Expr), To: $7.(Expr)}
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: tryCastExpr($5), To: tryCastExpr($7)}
   }
 | SUBSTRING openb STRING FROM value_expression FOR value_expression closeb
   {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5.(Expr), To: $7.(Expr)}
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: tryCastExpr($5), To: tryCastExpr($7)}
   }
 | TRIM openb value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: $3.(Expr), Dir: Both}
+    $$ = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: tryCastExpr($3), Dir: Both}
   }
 | TRIM openb value_expression FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: $3.(Expr), Str: $5.(Expr), Dir: Both}
+    $$ = &TrimExpr{Pattern: tryCastExpr($3), Str: tryCastExpr($5), Dir: Both}
   }
 | TRIM openb LEADING value_expression FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: $4.(Expr), Str: $6.(Expr), Dir: Leading}
+    $$ = &TrimExpr{Pattern: tryCastExpr($4), Str: tryCastExpr($6), Dir: Leading}
   }
 | TRIM openb TRAILING value_expression FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: $4.(Expr), Str: $6.(Expr), Dir: Trailing}
+    $$ = &TrimExpr{Pattern: tryCastExpr($4), Str: tryCastExpr($6), Dir: Trailing}
   }
 | TRIM openb BOTH value_expression FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: $4.(Expr), Str: $6.(Expr), Dir: Both}
+    $$ = &TrimExpr{Pattern: tryCastExpr($4), Str: tryCastExpr($6), Dir: Both}
   }
 | MATCH openb argument_expression_list closeb AGAINST openb value_expression match_option closeb
   {
-  $$ = &MatchExpr{Columns: $3.(SelectExprs), Expr: $7.(Expr), Option: $8.(string)}
+  $$ = &MatchExpr{Columns: $3.(SelectExprs), Expr: tryCastExpr($7), Option: $8.(string)}
   }
 | FIRST openb argument_expression_list closeb
   {
@@ -7649,7 +7687,7 @@ function_call_keyword:
   }
 | CASE expression_opt when_expression_list else_expression_opt END
   {
-    $$ = &CaseExpr{Expr: $2.(Expr), Whens: $3.([]*When), Else: $4.(Expr)}
+    $$ = &CaseExpr{Expr: tryCastExpr($2), Whens: $3.([]*When), Else: tryCastExpr($4)}
   }
 | VALUES openb column_name closeb
   {
@@ -7690,35 +7728,35 @@ function_call_nonkeyword:
 // functions that can be called with optional second argument
 | function_call_on_update
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 | CURRENT_TIME func_datetime_prec_opt
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2.(Expr)}}}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
   }
 | UTC_TIME func_datetime_prec_opt
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2.(Expr)}}}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
   }
 | UTC_TIMESTAMP func_datetime_prec_opt
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2.(Expr)}}}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
   }
 | TIMESTAMPADD openb time_unit ',' value_expression ',' value_expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:string($3), Expr1:$5.(Expr), Expr2:$7.(Expr)}
+    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:string($3), Expr1:tryCastExpr($5), Expr2:tryCastExpr($7)}
   }
 | TIMESTAMPDIFF openb time_unit ',' value_expression ',' value_expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:string($3), Expr1:$5.(Expr), Expr2:$7.(Expr)}
+    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:string($3), Expr1:tryCastExpr($5), Expr2:tryCastExpr($7)}
   }
 | EXTRACT openb time_unit FROM value_expression closeb
   {
-    $$ = &ExtractFuncExpr{Name: string($1), Unit: string($3), Expr: $5.(Expr)}
+    $$ = &ExtractFuncExpr{Name: string($1), Unit: string($3), Expr: tryCastExpr($5)}
   }
 | GET_FORMAT openb date_datetime_time_timestamp ',' value_expression closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: NewStrVal($3)}, &AliasedExpr{Expr: $5.(Expr)}}}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: NewStrVal($3)}, &AliasedExpr{Expr: tryCastExpr($5)}}}
   }
 
 // functions that can be used with the ON UPDATE clause
@@ -7734,15 +7772,15 @@ function_call_on_update:
   }
 | CURRENT_TIMESTAMP func_datetime_prec_opt
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2.(Expr)}}}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
   }
 | LOCALTIME func_datetime_prec_opt
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2.(Expr)}}}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
   }
 | LOCALTIMESTAMP func_datetime_prec_opt
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2.(Expr)}}}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
   }
 
 // Optional parens for certain keyword functions that don't require them.
@@ -8099,7 +8137,7 @@ expression_opt:
   }
 | expression
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 
 separator_opt:
@@ -8124,7 +8162,7 @@ when_expression_list:
 when_expression:
   WHEN expression THEN expression
   {
-    $$ = &When{Cond: $2.(Expr), Val: $4.(Expr)}
+    $$ = &When{Cond: tryCastExpr($2), Val: tryCastExpr($4)}
   }
 
 else_expression_opt:
@@ -8133,7 +8171,7 @@ else_expression_opt:
   }
 | ELSE expression
   {
-    $$ = $2.(Expr)
+    $$ = tryCastExpr($2)
   }
 
 column_name:
@@ -8270,17 +8308,17 @@ group_by_opt:
 group_by_list:
   group_by
   {
-    $$ = Exprs{$1.(Expr)}
+    $$ = Exprs{tryCastExpr($1)}
   }
 | group_by_list ',' group_by
   {
-    $$ = append($1.(Exprs), $3.(Expr))
+    $$ = append($1.(Exprs), tryCastExpr($3))
   }
 
 group_by:
   expression
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 
 having_opt:
@@ -8289,13 +8327,13 @@ having_opt:
   }
 | HAVING having
   {
-    $$ = $2.(Expr)
+    $$ = tryCastExpr($2)
   }
 
 having:
   expression
   {
-    $$ = $1.(Expr)
+    $$ = tryCastExpr($1)
   }
 
 order_by_opt:
@@ -8320,7 +8358,7 @@ order_list:
 order:
   expression asc_desc_opt
   {
-    $$ = &Order{Expr: $1.(Expr), Direction: $2.(string)}
+    $$ = &Order{Expr: tryCastExpr($1), Direction: $2.(string)}
   }
 
 asc_desc_opt:
@@ -8338,19 +8376,19 @@ asc_desc_opt:
 
 limit_opt:
   {
-    $$ = &Limit{}
+    $$ = (*Limit)(nil)
   }
 | LIMIT limit_val
   {
-    $$ = &Limit{Rowcount: $2.(Expr)}
+    $$ = &Limit{Rowcount: tryCastExpr($2)}
   }
 | LIMIT limit_val ',' limit_val
   {
-    $$ = &Limit{Offset: $2.(Expr), Rowcount: $4.(Expr)}
+    $$ = &Limit{Offset: tryCastExpr($2), Rowcount: tryCastExpr($4)}
   }
 | LIMIT limit_val OFFSET limit_val
   {
-    $$ = &Limit{Offset: $4.(Expr), Rowcount: $2.(Expr)}
+    $$ = &Limit{Offset: tryCastExpr($4), Rowcount: tryCastExpr($2)}
   }
 
 limit_val:
@@ -8561,18 +8599,18 @@ assignment_list:
 assignment_expression:
   column_name assignment_op expression
   {
-    $$ = &AssignmentExpr{Name: $1.(*ColName), Expr: $3.(Expr)}
+    $$ = &AssignmentExpr{Name: $1.(*ColName), Expr: tryCastExpr($3)}
   }
 | column_name_safe_keyword assignment_op expression {
-    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3.(Expr)}
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: tryCastExpr($3)}
   }
 | non_reserved_keyword3 assignment_op expression
   {
-    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3.(Expr)}
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: tryCastExpr($3)}
   }
 | ESCAPE assignment_op expression
   {
-    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3.(Expr)}
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: tryCastExpr($3)}
   }
 
 set_list:
@@ -8625,7 +8663,7 @@ set_expression:
   }
 | charset_or_character_set charset_value collate_opt
   {
-    $$ = &SetVarExpr{Name: NewColName(string($1)), Expr: $2.(Expr), Scope: SetScope_Session}
+    $$ = &SetVarExpr{Name: NewColName(string($1)), Expr: tryCastExpr($2), Scope: SetScope_Session}
   }
 
 set_scope_primary:
@@ -8673,7 +8711,7 @@ set_expression_assignment:
   }
 | column_name assignment_op expression
   {
-    $$ = &SetVarExpr{Name: $1.(*ColName), Expr: $3.(Expr), Scope: SetScope_None}
+    $$ = &SetVarExpr{Name: $1.(*ColName), Expr: tryCastExpr($3), Scope: SetScope_None}
   }
 
 charset_or_character_set:
@@ -8836,7 +8874,7 @@ local_opt:
 
 enclosed_by_opt:
   {
-    $$ = &EnclosedBy{}
+    $$ = (*EnclosedBy)(nil)
   }
 | optionally_opt ENCLOSED BY STRING
   {
@@ -8854,7 +8892,7 @@ optionally_opt:
 
 terminated_by_opt:
   {
-    $$ = &SQLVal{}
+    $$ = (*SQLVal)(nil)
   }
 | TERMINATED BY STRING
   {
@@ -8863,7 +8901,7 @@ terminated_by_opt:
 
 escaped_by_opt:
   {
-    $$ = &SQLVal{}
+    $$ = (*SQLVal)(nil)
   }
 | ESCAPED BY STRING
   {
@@ -8875,7 +8913,7 @@ escaped_by_opt:
 // TODO: escaped_by_opt and enclosed_by_opt can appear in any order
 fields_opt:
   {
-    $$ = &Fields{}
+    $$ = (*Fields)(nil)
   }
 | columns_or_fields terminated_by_opt enclosed_by_opt escaped_by_opt
   {
@@ -8884,7 +8922,7 @@ fields_opt:
 
 lines_opt:
   {
-    $$ = &Lines{}
+    $$ = (*Lines)(nil)
   }
 | LINES starting_by_opt terminated_by_opt
   {
@@ -8893,7 +8931,7 @@ lines_opt:
 
 starting_by_opt:
   {
-    $$ = &SQLVal{}
+    $$ = (*SQLVal)(nil)
   }
 | STARTING BY STRING
   {

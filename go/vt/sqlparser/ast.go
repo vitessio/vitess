@@ -112,7 +112,6 @@ func Parse(sql string) (Statement, error) {
 // If a DDL statement is partially parsed but contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
 func ParseWithOptions(ctx context.Context, sql string, options ParserOptions) (Statement, error) {
-	fmt.Println(sql)
 	defer trace.StartRegion(ctx, "ParseWithOptions").End()
 
 	tokenizer := NewStringTokenizer(sql)
@@ -470,6 +469,7 @@ func (*RollbackSavepoint) iStatement() {}
 func (*ReleaseSavepoint) iStatement()  {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
+func (*Empty) iStatement()             {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -496,6 +496,14 @@ func (*SetOp) iSelectStatement()           {}
 func (*ParenSelect) iSelectStatement()     {}
 func (*ValuesStatement) iSelectStatement() {}
 
+type Empty struct{}
+
+var _ Statement = (*Empty)(nil)
+
+func (e *Empty) Format(buf *TrackedBuffer) {
+	return
+}
+
 type QueryOpts struct {
 	All              bool
 	Distinct         bool
@@ -505,7 +513,13 @@ type QueryOpts struct {
 	SQLNoCache       bool
 }
 
-func (q *QueryOpts) merge(other QueryOpts) error {
+func (q *QueryOpts) merge(other *QueryOpts) (*QueryOpts, error) {
+	if other == nil {
+		return q, nil
+	} else if q == nil {
+		cp := *other
+		return &cp, nil
+	}
 	q.All = q.All || other.All
 	q.Distinct = q.Distinct || other.Distinct
 	q.StraightJoinHint = q.StraightJoinHint || other.StraightJoinHint
@@ -514,17 +528,20 @@ func (q *QueryOpts) merge(other QueryOpts) error {
 	q.SQLNoCache = q.SQLNoCache || other.SQLNoCache
 
 	if q.Distinct && q.All {
-		return errors.New("incorrect usage of DISTINCT and ALL")
+		return q, errors.New("incorrect usage of DISTINCT and ALL")
 	}
 
 	if q.SQLCache && q.SQLNoCache {
-		return errors.New("incorrect usage of SQL_CACHE and SQL_NO_CACHE")
+		return q, errors.New("incorrect usage of SQL_CACHE and SQL_NO_CACHE")
 	}
 
-	return nil
+	return q, nil
 }
 
-func (q QueryOpts) Format(buf *TrackedBuffer) {
+func (q *QueryOpts) Format(buf *TrackedBuffer) {
+	if q == nil {
+		return
+	}
 	if q.All {
 		buf.Myprintf("%s", AllStr)
 	}
@@ -548,7 +565,7 @@ func (q QueryOpts) Format(buf *TrackedBuffer) {
 // Select represents a SELECT statement.
 type Select struct {
 	Comments    Comments
-	QueryOpts   QueryOpts
+	QueryOpts   *QueryOpts
 	With        *With
 	SelectExprs SelectExprs
 	From        TableExprs
@@ -623,7 +640,7 @@ func (node *Select) SetLimit(limit *Limit) {
 func (node *Select) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%vselect %v%v%v",
 		node.With,
-		node.Comments, &node.QueryOpts, node.SelectExprs,
+		node.Comments, node.QueryOpts, node.SelectExprs,
 	)
 
 	if node.From != nil {
@@ -1199,7 +1216,7 @@ type DeclareHandler struct {
 // DeclareVariables represents the DECLARE statement for declaring variables
 type DeclareVariables struct {
 	Names   []ColIdent
-	VarType ColumnType
+	VarType *ColumnType
 }
 
 func (d *Declare) Format(buf *TrackedBuffer) {
@@ -1268,7 +1285,7 @@ func (d *Declare) walkSubtree(visit Visit) error {
 				return err
 			}
 		}
-		if err := Walk(visit, &d.Variables.VarType); err != nil {
+		if err := Walk(visit, d.Variables.VarType); err != nil {
 			return err
 		}
 	}
@@ -1900,7 +1917,7 @@ const (
 type ProcedureParam struct {
 	Direction ProcedureParamDirection
 	Name      string
-	Type      ColumnType
+	Type      *ColumnType
 }
 
 type EventSpec struct {
@@ -2723,7 +2740,7 @@ func (ts *TableSpec) walkSubtree(visit Visit) error {
 // ColumnDefinition describes a column in a CREATE TABLE statement
 type ColumnDefinition struct {
 	Name ColIdent
-	Type ColumnType
+	Type *ColumnType
 }
 
 // Format formats the node.
@@ -2738,7 +2755,7 @@ func (col *ColumnDefinition) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		col.Name,
-		&col.Type,
+		col.Type,
 	)
 }
 
@@ -2792,7 +2809,14 @@ type ColumnType struct {
 	SRID *SQLVal
 }
 
-func (ct *ColumnType) merge(other ColumnType) error {
+func (ct *ColumnType) merge(other *ColumnType) (*ColumnType, error) {
+	if other == nil {
+		return ct, nil
+	}
+	if ct == nil {
+		cp := *other
+		return &cp, nil
+	}
 	if other.sawnull {
 		ct.sawnull = true
 		ct.Null = other.Null
@@ -2801,21 +2825,21 @@ func (ct *ColumnType) merge(other ColumnType) error {
 
 	if other.Default != nil {
 		if ct.Default != nil {
-			return errors.New("cannot include DEFAULT more than once")
+			return nil, errors.New("cannot include DEFAULT more than once")
 		}
 		ct.Default = other.Default
 	}
 
 	if other.OnUpdate != nil {
 		if ct.OnUpdate != nil {
-			return errors.New("cannot include ON UPDATE more than once")
+			return nil, errors.New("cannot include ON UPDATE more than once")
 		}
 		ct.OnUpdate = other.OnUpdate
 	}
 
 	if other.sawai {
 		if ct.sawai {
-			return errors.New("cannot include AUTO_INCREMENT more than once")
+			return nil, errors.New("cannot include AUTO_INCREMENT more than once")
 		}
 		ct.sawai = true
 		ct.Autoincrement = other.Autoincrement
@@ -2836,27 +2860,27 @@ func (ct *ColumnType) merge(other ColumnType) error {
 			ct.KeyOpt = other.KeyOpt
 		} else {
 			// Otherwise throw an error if there are multiple key options that need to be applied.
-			return errors.New("cannot include more than one key option for a column definition")
+			return nil, errors.New("cannot include more than one key option for a column definition")
 		}
 	}
 
 	if other.ForeignKeyDef != nil {
 		if ct.ForeignKeyDef != nil {
-			return errors.New("cannot include more than one foreign key definition in a column definition")
+			return nil, errors.New("cannot include more than one foreign key definition in a column definition")
 		}
 		ct.ForeignKeyDef = other.ForeignKeyDef
 	}
 
 	if other.Constraint != nil {
 		if ct.Constraint != nil {
-			return errors.New("cannot include more than one check constraint in a column definition")
+			return nil, errors.New("cannot include more than one check constraint in a column definition")
 		}
 		ct.Constraint = other.Constraint
 	}
 
 	if other.Comment != nil {
 		if ct.Comment != nil {
-			return errors.New("cannot include more than one comment for a column definition")
+			return nil, errors.New("cannot include more than one comment for a column definition")
 		}
 		ct.Comment = other.Comment
 	}
@@ -2864,7 +2888,7 @@ func (ct *ColumnType) merge(other ColumnType) error {
 	if other.GeneratedExpr != nil {
 		// Generated expression already defined for column
 		if ct.GeneratedExpr != nil {
-			return errors.New("cannot defined GENERATED expression more than once")
+			return nil, errors.New("cannot defined GENERATED expression more than once")
 		}
 		ct.GeneratedExpr = other.GeneratedExpr
 	}
@@ -2875,36 +2899,36 @@ func (ct *ColumnType) merge(other ColumnType) error {
 
 	if other.SRID != nil {
 		if ct.SRID != nil {
-			return errors.New("cannot include SRID more than once")
+			return nil, errors.New("cannot include SRID more than once")
 		}
 		if ct.Type != "" && ct.SQLType() != sqltypes.Geometry {
-			return errors.New("cannot define SRID for non spatial types")
+			return nil, errors.New("cannot define SRID for non spatial types")
 		}
 		ct.SRID = other.SRID
 	}
 
 	if other.Charset != "" {
 		if ct.Charset != "" {
-			return errors.New("cannot include CHARACTER SET more than once")
+			return nil, errors.New("cannot include CHARACTER SET more than once")
 		}
 		ct.Charset = other.Charset
 	}
 
 	if other.Collate != "" {
 		if ct.Collate != "" {
-			return errors.New("cannot include COLLATE more than once")
+			return nil, errors.New("cannot include COLLATE more than once")
 		}
 		ct.Collate = other.Collate
 	}
 
 	if other.BinaryCollate == true {
 		if ct.BinaryCollate == true {
-			return errors.New("cannot include BINARY more than once")
+			return nil, errors.New("cannot include BINARY more than once")
 		}
 		ct.BinaryCollate = other.BinaryCollate
 	}
 
-	return nil
+	return ct, nil
 }
 
 // Format returns a canonical string representation of the type and all relevant options
@@ -3199,7 +3223,7 @@ func (ts *JSONTableSpec) walkSubtree(visit Visit) error {
 // JSONTableColDef describes a column in a JSON_TABLE statement
 type JSONTableColDef struct {
 	Name ColIdent
-	Type ColumnType
+	Type *ColumnType
 	Opts JSONTableColOpts
 	Spec *JSONTableSpec
 }
@@ -3229,7 +3253,7 @@ func (col *JSONTableColDef) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		col.Name,
-		&col.Type,
+		col.Type,
 	)
 }
 

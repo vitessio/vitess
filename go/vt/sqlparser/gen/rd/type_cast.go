@@ -67,7 +67,10 @@ func rewriteTypes(infile io.Reader, outFile io.Writer) (err error) {
 			typ := typs[_int64-1]
 			if typ == "[]byte" {
 				l = fmt.Sprintf("%svarx%s%s", l[:start-1], l[start:end], l[end:])
-
+			} else if typ == "Expr" {
+				l = fmt.Sprintf("%stryCastExpr(varx%s)%s", l[:start-1], l[start:end], l[end:])
+			} else if typ == "Statement" {
+				l = fmt.Sprintf("%stryCastStatement(varx%s)%s", l[:start-1], l[start:end], l[end:])
 			} else {
 				l = fmt.Sprintf("%svarx%s.(%s)%s", l[:start-1], l[start:end], typ, l[end:])
 			}
@@ -196,12 +199,18 @@ func rewriteTypes(infile io.Reader, outFile io.Writer) (err error) {
 			if !ok {
 				t = "[]byte"
 			}
-			line = strings.ReplaceAll(line, "$$.", "$$.("+t+").")
+			if t == "Expr" {
+				line = strings.ReplaceAll(line, "$$.", "tryCastExpr($$).")
+			} else if t == "Statement" {
+				line = strings.ReplaceAll(line, "$$.", "tryCastStatement($$).")
+			} else {
+				line = strings.ReplaceAll(line, "$$.", "$$.("+t+").")
+			}
 			line = strings.ReplaceAll(line, "append($$,", "append($$.("+t+"),")
 			if strings.HasPrefix(t, "[]") || listTypes[t] {
 				line = strings.ReplaceAll(line, "$$ = nil", "$$ = "+t+"(nil)")
 			} else if strings.HasPrefix(t, "*") {
-				line = strings.ReplaceAll(line, "$$ = nil", "$$ = &"+t[1:]+"{}")
+				line = strings.ReplaceAll(line, "$$ = nil", "$$ = ("+t+")(nil)")
 			} else {
 				line = strings.ReplaceAll(line, "$$ = nil", "$$ = "+t+"(nil)")
 			}

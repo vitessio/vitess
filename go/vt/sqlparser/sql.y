@@ -60,6 +60,16 @@ func yySpecialCommentMode(yylex interface{}) bool {
   return tkn.specialComment != nil
 }
 
+func tryCastExpr(v interface{}) Expr {
+	e, _ := v.(Expr)
+	return e
+}
+
+func tryCastStatement(v interface{}) Statement {
+	e, _ := v.(Statement)
+	return e
+}
+
 %}
 
 %union {
@@ -119,8 +129,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
   TableSpec  *TableSpec
-  columnType    ColumnType
-  queryOpts     QueryOpts
+  columnType    *ColumnType
+  queryOpts     *QueryOpts
   JSONTableSpec *JSONTableSpec
   JSONTableColDef *JSONTableColDef
   JSONTableColOpts JSONTableColOpts
@@ -896,17 +906,15 @@ with_clause:
 base_select_no_cte:
   SELECT comment_opt query_opts select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
   {
-    wh, _ := $7
-    ha, _ := $9
     $$ = &Select{
     	Comments: Comments($2),
     	QueryOpts: $3,
 	SelectExprs: $4,
 	Into: $5,
 	From: $6,
-	Where: NewWhere(WhereStr, wh),
+	Where: NewWhere(WhereStr, $7),
 	GroupBy: GroupBy($8),
-	Having: NewWhere(HavingStr, ha),
+	Having: NewWhere(HavingStr, $9),
 	Window: $10,
     }
   }
@@ -1307,7 +1315,7 @@ create_spatial_ref_sys:
 
 srs_attribute:
   {
-    $$ = &SrsAttribute{}
+    $$ = (*SrsAttribute)(nil)
   }
 | srs_attribute NAME STRING
   {
@@ -2496,7 +2504,7 @@ declare_statement:
   }
 | DECLARE reserved_sql_id_list column_type charset_opt collate_opt
   {
-    var ct ColumnType
+    var ct *ColumnType
     ct = $3
     ct.Charset = $4
     ct.Collate = $5
@@ -2943,76 +2951,84 @@ column_definition:
   ID column_type column_type_options
   {
     ct := $2
-    if err := ct.merge($3); err != nil {
+    var err error
+    if ct, err = ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | all_non_reserved column_type column_type_options
   {
     ct := $2
-    if err := ct.merge($3); err != nil {
+    var err error
+    if ct, err = ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 
 column_definition_for_create:
   sql_id column_type column_type_options
   {
     ct := $2
-    if err := ct.merge($3); err != nil {
+    var err error
+    if ct, err = ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: $1, Type: $2}
+    $$ = &ColumnDefinition{Name: $1, Type: ct}
   }
 | column_name_safe_keyword column_type column_type_options
   {
     ct := $2
-    if err := ct.merge($3); err != nil {
+    var err error
+    if ct, err = ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | non_reserved_keyword2 column_type column_type_options
   {
     ct := $2
-    if err := ct.merge($3); err != nil {
+    var err error
+    if ct, err = ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | non_reserved_keyword3 column_type column_type_options
   {
     ct := $2
-    if err := ct.merge($3); err != nil {
+    var err error
+    if ct, err = ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | ESCAPE column_type column_type_options
   {
     ct := $2
-    if err := ct.merge($3); err != nil {
+    var err error
+    if ct, err = ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 | function_call_keywords column_type column_type_options
   {
     ct := $2
-    if err := ct.merge($3); err != nil {
+    var err error
+    if ct, err = ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct}
   }
 
 stored_opt:
@@ -3030,7 +3046,7 @@ stored_opt:
 
 column_type_options:
   {
-    $$ = ColumnType{}
+    $$ = nil
   }
 | column_type_options INVISIBLE
   {
@@ -3038,154 +3054,169 @@ column_type_options:
   }
 | column_type_options NULL
   {
-    opt := ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
+    opt := &ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options NOT NULL
   {
-    opt := ColumnType{Null: BoolVal(false), NotNull: BoolVal(true), sawnull: true}
+    opt := &ColumnType{Null: BoolVal(false), NotNull: BoolVal(true), sawnull: true}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options character_set
   {
-    opt := ColumnType{Charset: $2}
+    opt := &ColumnType{Charset: $2}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options collate
   {
-    opt := ColumnType{Collate: $2}
+    opt := &ColumnType{Collate: $2}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options BINARY
   {
-    opt := ColumnType{BinaryCollate: true}
+    opt := &ColumnType{BinaryCollate: true}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options column_default
   {
-    opt := ColumnType{Default: $2}
+    opt := &ColumnType{Default: $2}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options on_update
   {
-    opt := ColumnType{OnUpdate: $2}
+    opt := &ColumnType{OnUpdate: $2}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options auto_increment
   {
-    opt := ColumnType{Autoincrement: $2, sawai: true}
+    opt := &ColumnType{Autoincrement: $2, sawai: true}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options column_key
   {
-    opt := ColumnType{KeyOpt: $2}
+    opt := &ColumnType{KeyOpt: $2}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options column_comment
   {
-    opt := ColumnType{Comment: $2}
+    opt := &ColumnType{Comment: $2}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options AS openb value_expression closeb stored_opt
   {
-    opt := ColumnType{GeneratedExpr: &ParenExpr{$4}, Stored: $6}
+    opt := &ColumnType{GeneratedExpr: &ParenExpr{$4}, Stored: $6}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options GENERATED ALWAYS AS openb value_expression closeb stored_opt
   {
-    opt := ColumnType{GeneratedExpr: &ParenExpr{$6}, Stored: $8}
+    opt := &ColumnType{GeneratedExpr: &ParenExpr{$6}, Stored: $8}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options SRID INTEGRAL
   {
-    opt := ColumnType{SRID: NewIntVal($3)}
+    opt := &ColumnType{SRID: NewIntVal($3)}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options REFERENCES table_name '(' column_list ')'
   // TODO: This still needs support for "ON DELETE" and "ON UPDATE"
   {
-    opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5}}
+    opt := &ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5}}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 | column_type_options check_constraint_definition
   {
-    opt := ColumnType{Constraint: $2}
+    opt := &ColumnType{Constraint: $2}
     ct := $1
-    if err := ct.merge(opt); err != nil {
+    var err error
+    if ct, err = ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = $1
+    $$ = ct
   }
 
 column_type:
@@ -3215,118 +3246,118 @@ numeric_type:
 int_type:
   BIT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BOOL
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BOOLEAN
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | SMALLINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | INT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | INTEGER
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BIGINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | SERIAL
   {
-    $$ = ColumnType{Type: "bigint", Unsigned: true, NotNull: true, Autoincrement: true, KeyOpt: colKeyUnique}
+    $$ = &ColumnType{Type: "bigint", Unsigned: true, NotNull: true, Autoincrement: true, KeyOpt: colKeyUnique}
   }
 | INT1
   {
-    $$ = ColumnType{Type: "tinyint"}
+    $$ = &ColumnType{Type: "tinyint"}
   }
 | INT2
   {
-    $$ = ColumnType{Type: "smallint"}
+    $$ = &ColumnType{Type: "smallint"}
   }
 | INT3
   {
-    $$ = ColumnType{Type: "mediumint"}
+    $$ = &ColumnType{Type: "mediumint"}
   }
 | INT4
   {
-    $$ = ColumnType{Type: "int"}
+    $$ = &ColumnType{Type: "int"}
   }
 | INT8
   {
-    $$ = ColumnType{Type: "bigint"}
+    $$ = &ColumnType{Type: "bigint"}
   }
 
 decimal_type:
 REAL float_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.Length
     ct.Scale = $2.Scale
     $$ = ct
   }
 | DOUBLE float_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.Length
     ct.Scale = $2.Scale
     $$ = ct
   }
 | DOUBLE PRECISION float_length_opt
   {
-    ct := ColumnType{Type: string($1) + " " + string($2)}
+    ct := &ColumnType{Type: string($1) + " " + string($2)}
     ct.Length = $3.Length
     ct.Scale = $3.Scale
     $$ = ct
   }
 | FLOAT_TYPE decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.Length
     ct.Scale = $2.Scale
     $$ = ct
   }
 | DECIMAL decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.Length
     ct.Scale = $2.Scale
     $$ = ct
   }
 | NUMERIC decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.Length
     ct.Scale = $2.Scale
     $$ = ct
   }
 | DEC decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.Length
     ct.Scale = $2.Scale
     $$ = ct
   }
 | FIXED decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := &ColumnType{Type: string($1)}
     ct.Length = $2.Length
     ct.Scale = $2.Scale
     $$ = ct
@@ -3335,164 +3366,164 @@ REAL float_length_opt
 time_type:
   DATE
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TIME length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | TIMESTAMP length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | DATETIME length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | YEAR
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 
 char_type:
   char_or_character char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | NATIONAL char_or_character char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
 | NCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | NCHAR VARCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
 | NCHAR VARYING char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
 | VARCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | CHAR VARYING char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
 | CHARACTER VARYING char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
 | NVARCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | NATIONAL VARCHAR char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+    $$ = &ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
 | NATIONAL char_or_character VARYING char_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
+    $$ = &ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
   }
 | BINARY char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | VARBINARY char_length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | TEXT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYTEXT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMTEXT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONGTEXT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONG
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONG VARCHAR
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2)}
+    $$ = &ColumnType{Type: string($1) + " " + string($2)}
   }
 | BLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONGBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | JSON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | ENUM '(' enum_values ')'
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3}
   }
 // need set_values / SetValues ?
 | SET '(' enum_values ')'
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3}
   }
 
 spatial_type:
   GEOMETRY
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | POINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LINESTRING
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | POLYGON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | GEOMETRYCOLLECTION
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTIPOINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTILINESTRING
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTIPOLYGON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 
 enum_values:
@@ -5887,7 +5918,7 @@ show_statement:
   }
 | SHOW full_opt TABLES from_database_opt as_of_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{DbName:$4, Filter:$6, AsOf:$5}
+    showTablesOpt := &ShowTablesOpt{DbName: $4, Filter: $6, AsOf: $5}
     $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, Full: $2}
   }
 | SHOW full_opt PROCESSLIST
@@ -6271,67 +6302,73 @@ except_op:
 
 query_opts:
   {
-    $$ = QueryOpts{}
+    $$ = nil
   }
 | query_opts ALL
   {
-    opt := QueryOpts{All: true}
-    ct := $1
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{All: true}
+    qo := $1
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1
+    $$ = qo
   }
 | query_opts DISTINCT
   {
-    opt := QueryOpts{Distinct: true}
-    ct := $1
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{Distinct: true}
+    qo := $1
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1
+    $$ = qo
   }
 | query_opts STRAIGHT_JOIN
   {
-    opt := QueryOpts{StraightJoinHint: true}
-    ct := $1
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{StraightJoinHint: true}
+    qo := $1
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1
+    $$ = qo
   }
 | query_opts SQL_CALC_FOUND_ROWS
   {
-    opt := QueryOpts{SQLCalcFoundRows: true}
-    ct := $1
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{SQLCalcFoundRows: true}
+    qo := $1
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1
+    $$ = qo
   }
 | query_opts SQL_CACHE
   {
-    opt := QueryOpts{SQLCache: true}
-    ct := $1
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{SQLCache: true}
+    qo := $1
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1
+    $$ = qo
   }
 | query_opts SQL_NO_CACHE
   {
-    opt := QueryOpts{SQLNoCache: true}
-    ct := $1
-    if err := ct.merge(opt); err != nil {
+    opt := &QueryOpts{SQLNoCache: true}
+    qo := $1
+    var err error
+    if qo, err = qo.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
-    $$ = $1
+    $$ = qo
   }
 
 distinct_opt:
@@ -7020,7 +7057,7 @@ json_table_column_definition:
   }
 | reserved_sql_id FOR ORDINALITY
   {
-    $$ = &JSONTableColDef{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
+    $$ = &JSONTableColDef{Name: $1, Type: &ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
   }
 | NESTED STRING COLUMNS openb json_table_column_list closeb
   {
