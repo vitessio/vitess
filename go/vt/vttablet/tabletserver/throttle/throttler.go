@@ -175,7 +175,6 @@ type Throttler struct {
 
 	customMetricsQuery atomic.Value
 	MetricsThreshold   atomic.Uint64
-	checkAsCheckSelf   atomic.Bool
 
 	metricThresholds  *cache.Cache
 	aggregatedMetrics *cache.Cache
@@ -428,7 +427,6 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		// require per-metric threshold.
 		throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
 	}
-	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
 	{
 		// Throttled apps/rules
 		for _, appRule := range throttlerConfig.ThrottledApps {
@@ -1525,9 +1523,6 @@ func (throttler *Throttler) Check(ctx context.Context, appName string, metricNam
 	scope := base.UndefinedScope
 	if flags != nil {
 		scope = flags.Scope
-	}
-	if scope == base.ShardScope && throttler.checkAsCheckSelf.Load() {
-		scope = base.SelfScope
 	}
 	return throttler.checkScope(ctx, appName, scope, metricNames, flags)
 }

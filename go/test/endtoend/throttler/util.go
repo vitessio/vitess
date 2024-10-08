@@ -123,11 +123,6 @@ func UpdateThrottlerTopoConfigRaw(
 		args = append(args, "--threshold", fmt.Sprintf("%f", opts.Threshold))
 	}
 	args = append(args, "--custom-query", opts.CustomQuery)
-	if opts.CustomQuery != "" {
-		args = append(args, "--check-as-check-self")
-	} else {
-		args = append(args, "--check-as-check-shard")
-	}
 	if appRule != nil {
 		args = append(args, "--throttle-app", appRule.Name)
 		args = append(args, "--throttle-app-duration", time.Until(protoutil.TimeFromProto(appRule.ExpiresAt).UTC()).String())
