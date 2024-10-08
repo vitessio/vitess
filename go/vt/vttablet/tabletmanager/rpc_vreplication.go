@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
@@ -224,7 +225,11 @@ func (tm *TabletManager) DeleteTenantData(ctx context.Context, req *tabletmanage
 		return nil, vterrors.Wrapf(err, "no delete filter found in %q", filter)
 	}
 	where := &sqlparser.Where{Expr: sqlparser.AndExpressions(exprs...)}
-	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", req.BatchSize))}
+	batchSize := req.BatchSize
+	if batchSize < 1 {
+		batchSize = movetables.DefaultDeleteBatchSize
+	}
+	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", batchSize))}
 
 	checkIfCancelled := func() error {
 		select {

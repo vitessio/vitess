@@ -31,6 +31,7 @@ var CancelOptions = struct {
 	KeepData         bool
 	KeepRoutingRules bool
 	Shards           []string
+	DeleteBatchSize  int32
 }{}
 
 func GetCancelCommand(opts *SubCommandsOpts) *cobra.Command {
@@ -60,6 +61,7 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 		KeepData:         CancelOptions.KeepData,
 		KeepRoutingRules: CancelOptions.KeepRoutingRules,
 		Shards:           CancelOptions.Shards,
+		DeleteBatchSize:  CancelOptions.DeleteBatchSize,
 	}
 	resp, err := GetClient().WorkflowDelete(GetCommandCtx(), req)
 	if err != nil {
