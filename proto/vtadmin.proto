@@ -214,6 +214,10 @@ service VTAdmin {
     // VTExplain provides information on how Vitess plans to execute a
     // particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
+    // WorkflowDelete deletes a vreplication workflow.
+    rpc WorkflowDelete(WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
+    // WorkflowSwitchTraffic switches traffic for a VReplication workflow.
+    rpc WorkflowSwitchTraffic(WorkflowSwitchTrafficRequest) returns (vtctldata.WorkflowSwitchTrafficResponse) {};
 }
 
 /* Data types */
@@ -357,6 +361,16 @@ message Workflow {
     Cluster cluster = 1;
     string keyspace = 2;
     vtctldata.Workflow workflow = 3;
+}
+
+message WorkflowDeleteRequest {
+    string cluster_id = 1;
+    vtctldata.WorkflowDeleteRequest request = 2;
+}
+
+message WorkflowSwitchTrafficRequest {
+    string cluster_id = 1;
+    vtctldata.WorkflowSwitchTrafficRequest request = 2;
 }
 
 /* Request/Response types */

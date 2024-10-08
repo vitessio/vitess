@@ -204,6 +204,10 @@ type VTAdminClient interface {
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
+	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
+	WorkflowSwitchTraffic(ctx context.Context, in *WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 }
 
 type vTAdminClient struct {
@@ -790,6 +794,24 @@ func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opt
 	return out, nil
 }
 
+func (c *vTAdminClient) WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
+	out := new(vtctldata.WorkflowDeleteResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/WorkflowDelete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) WorkflowSwitchTraffic(ctx context.Context, in *WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	out := new(vtctldata.WorkflowSwitchTrafficResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/WorkflowSwitchTraffic", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VTAdminServer is the server API for VTAdmin service.
 // All implementations must embed UnimplementedVTAdminServer
 // for forward compatibility
@@ -975,6 +997,10 @@ type VTAdminServer interface {
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
+	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
+	WorkflowSwitchTraffic(context.Context, *WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 	mustEmbedUnimplementedVTAdminServer()
 }
 
@@ -1173,6 +1199,12 @@ func (UnimplementedVTAdminServer) ValidateVersionShard(context.Context, *Validat
 }
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
+}
+func (UnimplementedVTAdminServer) WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
+}
+func (UnimplementedVTAdminServer) WorkflowSwitchTraffic(context.Context, *WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowSwitchTraffic not implemented")
 }
 func (UnimplementedVTAdminServer) mustEmbedUnimplementedVTAdminServer() {}
 
@@ -2339,6 +2371,42 @@ func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WorkflowDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).WorkflowDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/WorkflowDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).WorkflowDelete(ctx, req.(*WorkflowDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_WorkflowSwitchTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WorkflowSwitchTrafficRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).WorkflowSwitchTraffic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/WorkflowSwitchTraffic",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).WorkflowSwitchTraffic(ctx, req.(*WorkflowSwitchTrafficRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VTAdmin_ServiceDesc is the grpc.ServiceDesc for VTAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2601,6 +2669,14 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VTExplain",
 			Handler:    _VTAdmin_VTExplain_Handler,
+		},
+		{
+			MethodName: "WorkflowDelete",
+			Handler:    _VTAdmin_WorkflowDelete_Handler,
+		},
+		{
+			MethodName: "WorkflowSwitchTraffic",
+			Handler:    _VTAdmin_WorkflowSwitchTraffic_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -85,6 +85,8 @@ import {
     FetchTransactionsParams,
     fetchTransactions,
     completeMoveTables,
+    workflowSwitchTraffic,
+    workflowDelete,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -521,6 +523,30 @@ export const useCompleteMoveTables = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof completeMoveTables>>, Error>(() => {
         return completeMoveTables(params);
+    }, options);
+};
+
+/**
+ * useWorkflowSwitchTraffic is a mutate hook that switches traffic for a workflow.
+ */
+export const useWorkflowSwitchTraffic = (
+    params: Parameters<typeof workflowSwitchTraffic>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>(() => {
+        return workflowSwitchTraffic(params);
+    }, options);
+};
+
+/**
+ * useWorkflowDelete is a mutate hook that deletes a workflow.
+ */
+export const useWorkflowDelete = (
+    params: Parameters<typeof workflowDelete>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof workflowDelete>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof workflowDelete>>, Error>(() => {
+        return workflowDelete(params);
     }, options);
 };
 

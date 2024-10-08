@@ -3,7 +3,13 @@ import Dropdown from '../../dropdown/Dropdown';
 import MenuItem from '../../dropdown/MenuItem';
 import { Icons } from '../../Icon';
 import WorkflowAction from './WorkflowAction';
-import { useCompleteMoveTables, useStartWorkflow, useStopWorkflow } from '../../../hooks/api';
+import {
+    useCompleteMoveTables,
+    useStartWorkflow,
+    useStopWorkflow,
+    useWorkflowDelete,
+    useWorkflowSwitchTraffic,
+} from '../../../hooks/api';
 import Toggle from '../../toggle/Toggle';
 import { success } from '../../Snackbar';
 
@@ -27,6 +33,16 @@ const DefaultCompleteMoveTablesOptions: CompleteMoveTablesOptions = {
     renameTables: false,
 };
 
+interface CancelWorkflowOptions {
+    keepData: boolean;
+    keepRoutingRoules: boolean;
+}
+
+const DefaultCancelWorkflowOptions: CancelWorkflowOptions = {
+    keepData: false,
+    keepRoutingRoules: false,
+};
+
 const WorkflowActions: React.FC<WorkflowActionsProps> = ({
     refetchWorkflows,
     keyspace,
@@ -40,11 +56,49 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
         DefaultCompleteMoveTablesOptions
     );
 
+    const [cancelWorkflowOptions, SetCancelWorkflowOptions] =
+        useState<CancelWorkflowOptions>(DefaultCancelWorkflowOptions);
+
     const closeDialog = () => setCurrentDialog('');
 
     const startWorkflowMutation = useStartWorkflow({ keyspace, clusterID, name });
 
     const stopWorkflowMutation = useStopWorkflow({ keyspace, clusterID, name });
+
+    const switchTrafficMutation = useWorkflowSwitchTraffic({
+        clusterID,
+        request: {
+            keyspace: keyspace,
+            workflow: name,
+            direction: 0,
+        },
+    });
+
+    const reverseTrafficMutation = useWorkflowSwitchTraffic({
+        clusterID,
+        request: {
+            keyspace: keyspace,
+            workflow: name,
+            direction: 1,
+        },
+    });
+
+    const cancelWorkflowMutation = useWorkflowDelete(
+        {
+            clusterID,
+            request: {
+                keyspace: keyspace,
+                workflow: name,
+                keep_data: cancelWorkflowOptions.keepData,
+                keep_routing_rules: cancelWorkflowOptions.keepRoutingRoules,
+            },
+        },
+        {
+            onSuccess: (data) => {
+                success(data.summary, { autoClose: 1600 });
+            },
+        }
+    );
 
     const completeMoveTablesMutation = useCompleteMoveTables(
         {
@@ -70,8 +124,11 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
         <div className="w-min inline-block">
             <Dropdown dropdownButton={Icons.info}>
                 {isMoveTablesWorkflow && (
-                    <MenuItem onClick={() => setCurrentDialog('Complete MoveTables')}>Complete MoveTables</MenuItem>
+                    <MenuItem onClick={() => setCurrentDialog('Complete MoveTables')}>Complete</MenuItem>
                 )}
+                <MenuItem onClick={() => setCurrentDialog('Switch Traffic')}>Switch Traffic</MenuItem>
+                <MenuItem onClick={() => setCurrentDialog('Reverse Traffic')}>Reverse Traffic</MenuItem>
+                <MenuItem onClick={() => setCurrentDialog('Cancel Workflow')}>Cancel Workflow</MenuItem>
                 <MenuItem onClick={() => setCurrentDialog('Start Workflow')}>Start Workflow</MenuItem>
                 <MenuItem onClick={() => setCurrentDialog('Stop Workflow')}>Stop Workflow</MenuItem>
             </Dropdown>
@@ -118,6 +175,111 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 body={
                     <div className="text-sm mt-3">
                         Stop the <span className="font-mono bg-gray-300">{name}</span> workflow.
+                    </div>
+                }
+            />
+            <WorkflowAction
+                title="Switch Traffic"
+                confirmText="Switch"
+                loadingText="Switching"
+                mutation={switchTrafficMutation}
+                successText="Switched Traffic"
+                errorText={`Error occured while switching traffic for workflow ${name}`}
+                closeDialog={closeDialog}
+                isOpen={currentDialog === 'Switch Traffic'}
+                refetchWorkflows={refetchWorkflows}
+                successBody={
+                    <div className="text-sm">
+                        {switchTrafficMutation.data && switchTrafficMutation.data.summary && (
+                            <div className="text-sm">{switchTrafficMutation.data.summary}</div>
+                        )}
+                    </div>
+                }
+                body={
+                    <div className="text-sm mt-3">
+                        Switch traffic for the <span className="font-mono bg-gray-300">{name}</span> workflow.
+                    </div>
+                }
+            />
+            <WorkflowAction
+                title="Reverse Traffic"
+                confirmText="Reverse"
+                loadingText="Reversing"
+                mutation={reverseTrafficMutation}
+                successText="Reversed Traffic"
+                errorText={`Error occured while reversing traffic for workflow ${name}`}
+                closeDialog={closeDialog}
+                isOpen={currentDialog === 'Reverse Traffic'}
+                refetchWorkflows={refetchWorkflows}
+                successBody={
+                    <div className="text-sm">
+                        {reverseTrafficMutation.data && reverseTrafficMutation.data.summary && (
+                            <div className="text-sm">{reverseTrafficMutation.data.summary}</div>
+                        )}
+                    </div>
+                }
+                body={
+                    <div className="text-sm mt-3">
+                        Reverse traffic for the <span className="font-mono bg-gray-300">{name}</span> workflow.
+                    </div>
+                }
+            />
+            <WorkflowAction
+                className="sm:max-w-xl"
+                title="Cancel Workflow"
+                description={`Cancel the ${name} workflow.`}
+                confirmText="Confirm"
+                loadingText="Cancelling"
+                mutation={cancelWorkflowMutation}
+                successText="Cancel Workflow"
+                errorText={`Error occured while cancelling workflow ${name}`}
+                closeDialog={closeDialog}
+                isOpen={currentDialog === 'Cancel Workflow'}
+                refetchWorkflows={refetchWorkflows}
+                successBody={
+                    <div className="text-sm">
+                        {cancelWorkflowMutation.data && cancelWorkflowMutation.data.summary && (
+                            <div className="text-sm">{cancelWorkflowMutation.data.summary}</div>
+                        )}
+                    </div>
+                }
+                body={
+                    <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center w-full p-4 border border-vtblue rounded-md">
+                            <div className="mr-2">
+                                <h5 className="font-medium m-0 mb-2">Keep Data</h5>
+                                <p className="m-0 text-sm">
+                                    Keep the partially copied table data from the MoveTables workflow in the target
+                                    keyspace.
+                                </p>
+                            </div>
+                            <Toggle
+                                enabled={cancelWorkflowOptions.keepData}
+                                onChange={() =>
+                                    SetCancelWorkflowOptions((prevOptions) => ({
+                                        ...prevOptions,
+                                        keepData: !prevOptions.keepData,
+                                    }))
+                                }
+                            />
+                        </div>
+                        <div className="flex justify-between items-center w-full p-4 border border-vtblue rounded-md">
+                            <div className="mr-2">
+                                <h5 className="font-medium m-0 mb-2">Keep Routing Rules</h5>
+                                <p className="m-0 text-sm">
+                                    Keep the routing rules created for the MoveTables workflow.
+                                </p>
+                            </div>
+                            <Toggle
+                                enabled={cancelWorkflowOptions.keepRoutingRoules}
+                                onChange={() =>
+                                    SetCancelWorkflowOptions((prevOptions) => ({
+                                        ...prevOptions,
+                                        keepRoutingRoules: !prevOptions.keepRoutingRoules,
+                                    }))
+                                }
+                            />
+                        </div>
                     </div>
                 }
             />
