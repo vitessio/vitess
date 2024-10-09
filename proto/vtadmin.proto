@@ -44,6 +44,8 @@ service VTAdmin {
     // CompleteSchemaMigration completes one or all migrations in the given
     // cluster executed with --postpone-completion.
     rpc CompleteSchemaMigration(CompleteSchemaMigrationRequest) returns (vtctldata.CompleteSchemaMigrationResponse) {};
+    // ConcludeTransaction concludes a distributed transaction identified by the provided dtid.
+    rpc ConcludeTransaction(ConcludeTransactionRequest) returns (vtctldata.ConcludeTransactionResponse) {};
     // CreateKeyspace creates a new keyspace in the given cluster.
     rpc CreateKeyspace(CreateKeyspaceRequest) returns (CreateKeyspaceResponse) {};
     // CreateShard creates a new shard in the given cluster and keyspace.
@@ -378,6 +380,11 @@ message CompleteSchemaMigrationRequest {
     vtctldata.CompleteSchemaMigrationRequest request = 2;
 }
 
+message ConcludeTransactionRequest {
+    string cluster_id = 1;
+    string dtid = 2;
+}
+
 message CreateKeyspaceRequest {
     string cluster_id = 1;
     vtctldata.CreateKeyspaceRequest options = 2;
@@ -627,6 +634,7 @@ message GetTopologyPathRequest {
 message GetUnresolvedTransactionsRequest {
     string cluster_id = 1;
     string keyspace = 2;
+    int64 abandon_age = 3;
 }
 
 message GetVSchemaRequest {
