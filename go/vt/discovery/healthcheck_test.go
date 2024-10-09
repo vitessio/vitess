@@ -63,6 +63,77 @@ func init() {
 	refreshInterval = time.Minute
 }
 
+func TestNewVTGateHealthCheckFilters(t *testing.T) {
+	defer func() {
+		KeyspacesToWatch = nil
+		tabletFilters = nil
+		tabletFilterTags = nil
+	}()
+
+	testCases := []struct {
+		name                string
+		keyspacesToWatch    []string
+		tabletFilters       []string
+		tabletFilterTags    map[string]string
+		expectedError       string
+		expectedFilterTypes []any
+	}{
+		{
+			name: "noFilters",
+		},
+		{
+			name:                "tabletFilters",
+			tabletFilters:       []string{"ks1|-80"},
+			expectedFilterTypes: []any{&FilterByShard{}},
+		},
+		{
+			name:                "keyspacesToWatch",
+			keyspacesToWatch:    []string{"ks1"},
+			expectedFilterTypes: []any{&FilterByKeyspace{}},
+		},
+		{
+			name:                "tabletFiltersAndTags",
+			tabletFilters:       []string{"ks1|-80"},
+			tabletFilterTags:    map[string]string{"test": "true"},
+			expectedFilterTypes: []any{&FilterByShard{}, &FilterByTabletTags{}},
+		},
+		{
+			name:                "keyspacesToWatchAndTags",
+			tabletFilterTags:    map[string]string{"test": "true"},
+			keyspacesToWatch:    []string{"ks1"},
+			expectedFilterTypes: []any{&FilterByKeyspace{}, &FilterByTabletTags{}},
+		},
+		{
+			name:             "failKeyspacesToWatchAndFilters",
+			tabletFilters:    []string{"ks1|-80"},
+			keyspacesToWatch: []string{"ks1"},
+			expectedError:    errKeyspacesToWatchAndTabletFilters.Error(),
+		},
+		{
+			name:          "failInvalidTabletFilters",
+			tabletFilters: []string{"shouldfail|"},
+			expectedError: "failed to parse tablet_filters value \"shouldfail|\": error parsing shard name : Code: INVALID_ARGUMENT\nempty name\n",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			KeyspacesToWatch = testCase.keyspacesToWatch
+			tabletFilters = testCase.tabletFilters
+			tabletFilterTags = testCase.tabletFilterTags
+
+			filters, err := NewVTGateHealthCheckFilters()
+			if testCase.expectedError != "" {
+				assert.EqualError(t, err, testCase.expectedError)
+			}
+			assert.Len(t, filters, len(testCase.expectedFilterTypes))
+			for i, filter := range filters {
+				assert.IsType(t, testCase.expectedFilterTypes[i], filter)
+			}
+		})
+	}
+}
+
 func TestHealthCheck(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	// reset error counters
@@ -979,7 +1050,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
-	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2", nil)
 	defer hc.Close()
 
 	// add a tablet as primary in different cell
@@ -1039,7 +1110,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
-	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2", nil)
 	defer hc.Close()
 
 	// add a tablet as replica
@@ -1144,7 +1215,7 @@ func TestCellAliases(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
-	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2", nil)
 	defer hc.Close()
 
 	cellsAlias := &topodatapb.CellsAlias{
@@ -1295,7 +1366,7 @@ func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservic
 }
 
 func createTestHc(ctx context.Context, ts *topo.Server) *HealthCheckImpl {
-	return NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell", "")
+	return NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell", "", nil)
 }
 
 type fakeConn struct {

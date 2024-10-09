@@ -35,6 +35,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"net/http"
@@ -105,6 +106,9 @@ var (
 	// HealthCheckHealthyTemplate uses healthCheckTemplate with the `HealthCheck Tablet - Healthy Tablets` title to
 	// create the HTML code required to render the list of healthy tablets from the HealthCheck.
 	HealthCheckHealthyTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck - Healthy Tablets")
+
+	// errKeyspacesToWatchAndTabletFilters is an error for cases where incompatible filters are defined.
+	errKeyspacesToWatchAndTabletFilters = errors.New("only one of --keyspaces_to_watch and --tablet_filters may be specified at a time")
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
@@ -301,6 +305,27 @@ type HealthCheckImpl struct {
 	healthCheckDialSem *semaphore.Weighted
 }
 
+// NewVTGateHealthCheckFilters returns healthcheck filters for vtgate.
+func NewVTGateHealthCheckFilters() (filters TabletFilters, err error) {
+	if len(tabletFilters) > 0 {
+		if len(KeyspacesToWatch) > 0 {
+			return nil, errKeyspacesToWatchAndTabletFilters
+		}
+
+		fbs, err := NewFilterByShard(tabletFilters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse tablet_filters value %q: %v", strings.Join(tabletFilters, ","), err)
+		}
+		filters = append(filters, fbs)
+	} else if len(KeyspacesToWatch) > 0 {
+		filters = append(filters, NewFilterByKeyspace(KeyspacesToWatch))
+	}
+	if len(tabletFilterTags) > 0 {
+		filters = append(filters, NewFilterByTabletTags(tabletFilterTags))
+	}
+	return filters, nil
+}
+
 // NewHealthCheck creates a new HealthCheck object.
 // Parameters:
 // retryDelay.
@@ -322,10 +347,14 @@ type HealthCheckImpl struct {
 //
 //	The localCell for this healthcheck
 //
-// callback.
+// cellsToWatch.
 //
-//	A function to call when there is a primary change. Used to notify vtgate's buffer to stop buffering.
-func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string) *HealthCheckImpl {
+//	Is a list of cells to watch for tablets.
+//
+// filters.
+//
+//	Is one or more filters to apply when determining what tablets we want to stream healthchecks from.
+func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filters TabletFilter) *HealthCheckImpl {
 	log.Infof("loading tablets for cells: %v", cellsToWatch)
 
 	hc := &HealthCheckImpl{
@@ -352,22 +381,6 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		log.Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {
 			continue
-		}
-		if len(tabletFilters) > 0 {
-			if len(KeyspacesToWatch) > 0 {
-				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
-			}
-
-			fbs, err := NewFilterByShard(tabletFilters)
-			if err != nil {
-				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
-			}
-			filters = append(filters, fbs)
-		} else if len(KeyspacesToWatch) > 0 {
-			filters = append(filters, NewFilterByKeyspace(KeyspacesToWatch))
-		}
-		if len(tabletFilterTags) > 0 {
-			filters = append(filters, NewFilterByTabletTags(tabletFilterTags))
 		}
 		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets, topo.DefaultConcurrency))
 	}

@@ -41,7 +41,7 @@ func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
 	factory.AddCell(cell)
 	ts := faketopo.NewFakeTopoServer(ctx, factory)
 	ts2 := &fakeTopoServer{}
-	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, cell, "")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, cell, "", nil)
 	defer hc.Close()
 	kew := NewKeyspaceEventWatcher(ctx, ts2, hc, cell)
 	kss := &keyspaceState{
@@ -80,7 +80,7 @@ func TestKeyspaceEventTypes(t *testing.T) {
 	factory.AddCell(cell)
 	ts := faketopo.NewFakeTopoServer(ctx, factory)
 	ts2 := &fakeTopoServer{}
-	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, cell, "")
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, cell, "", nil)
 	defer hc.Close()
 	kew := NewKeyspaceEventWatcher(ctx, ts2, hc, cell)
 
