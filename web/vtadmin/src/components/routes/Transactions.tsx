@@ -70,7 +70,7 @@ export const Transactions = () => {
 
     const { data: keyspaces = [] } = keyspacesQuery;
 
-    const [params, setParams] = useState<FetchTransactionsParams>({ clusterID: '', keyspace: '' });
+    const [params, setParams] = useState<FetchTransactionsParams>({ clusterID: '', keyspace: '', abandonAge: '900' });
 
     const selectedKeyspace = keyspaces.find(
         (ks) => ks.keyspace?.name === params.keyspace && ks.cluster?.id === params.clusterID
