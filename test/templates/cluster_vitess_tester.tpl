@@ -71,7 +71,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
-        go-version: 1.23.1
+        go-version-file: go.mod
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -110,7 +110,7 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
         
         # install vitess tester
-        go install github.com/vitessio/vitess-tester@89dd933a9ea0e15f69ca58b9c8ea09a358762cca
+        go install github.com/vitessio/vitess-tester/go/vt@374fd9f495c1afd3b6bea9d4ec7728119714055
 
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
@@ -142,9 +142,9 @@ jobs:
           # We go over all the directories in the given path.
           # If there is a vschema file there, we use it, otherwise we let vitess-tester autogenerate it.
           if [ -f $dir/vschema.json ]; then
-            vitess-tester --xunit --vschema "$dir"vschema.json $dir/*.test
+            vt tester --xunit --vschema "$dir"vschema.json $dir/*.test
           else 
-            vitess-tester --sharded --xunit $dir/*.test
+            vt tester --sharded --xunit $dir/*.test
           fi
           # Number the reports by changing their file names.
           mv report.xml report"$i".xml
@@ -167,4 +167,4 @@ jobs:
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report*.xml"
-        show: "fail, skip"
+        show: "fail"

@@ -15920,6 +15920,306 @@ export namespace mysqlctl {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a HostMetricsRequest. */
+    interface IHostMetricsRequest {
+    }
+
+    /** Represents a HostMetricsRequest. */
+    class HostMetricsRequest implements IHostMetricsRequest {
+
+        /**
+         * Constructs a new HostMetricsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IHostMetricsRequest);
+
+        /**
+         * Creates a new HostMetricsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns HostMetricsRequest instance
+         */
+        public static create(properties?: mysqlctl.IHostMetricsRequest): mysqlctl.HostMetricsRequest;
+
+        /**
+         * Encodes the specified HostMetricsRequest message. Does not implicitly {@link mysqlctl.HostMetricsRequest.verify|verify} messages.
+         * @param message HostMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified HostMetricsRequest message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsRequest.verify|verify} messages.
+         * @param message HostMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a HostMetricsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns HostMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsRequest;
+
+        /**
+         * Decodes a HostMetricsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns HostMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsRequest;
+
+        /**
+         * Verifies a HostMetricsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a HostMetricsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns HostMetricsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsRequest;
+
+        /**
+         * Creates a plain object from a HostMetricsRequest message. Also converts values to other types if specified.
+         * @param message HostMetricsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.HostMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this HostMetricsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for HostMetricsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a HostMetricsResponse. */
+    interface IHostMetricsResponse {
+
+        /** HostMetricsResponse metrics */
+        metrics?: ({ [k: string]: mysqlctl.HostMetricsResponse.IMetric }|null);
+    }
+
+    /** Represents a HostMetricsResponse. */
+    class HostMetricsResponse implements IHostMetricsResponse {
+
+        /**
+         * Constructs a new HostMetricsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IHostMetricsResponse);
+
+        /** HostMetricsResponse metrics. */
+        public metrics: { [k: string]: mysqlctl.HostMetricsResponse.IMetric };
+
+        /**
+         * Creates a new HostMetricsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns HostMetricsResponse instance
+         */
+        public static create(properties?: mysqlctl.IHostMetricsResponse): mysqlctl.HostMetricsResponse;
+
+        /**
+         * Encodes the specified HostMetricsResponse message. Does not implicitly {@link mysqlctl.HostMetricsResponse.verify|verify} messages.
+         * @param message HostMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified HostMetricsResponse message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsResponse.verify|verify} messages.
+         * @param message HostMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a HostMetricsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns HostMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsResponse;
+
+        /**
+         * Decodes a HostMetricsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns HostMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsResponse;
+
+        /**
+         * Verifies a HostMetricsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a HostMetricsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns HostMetricsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsResponse;
+
+        /**
+         * Creates a plain object from a HostMetricsResponse message. Also converts values to other types if specified.
+         * @param message HostMetricsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.HostMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this HostMetricsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for HostMetricsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace HostMetricsResponse {
+
+        /** Properties of a Metric. */
+        interface IMetric {
+
+            /** Metric name */
+            name?: (string|null);
+
+            /** Metric value */
+            value?: (number|null);
+
+            /** Metric error */
+            error?: (vtrpc.IRPCError|null);
+        }
+
+        /** Represents a Metric. */
+        class Metric implements IMetric {
+
+            /**
+             * Constructs a new Metric.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: mysqlctl.HostMetricsResponse.IMetric);
+
+            /** Metric name. */
+            public name: string;
+
+            /** Metric value. */
+            public value: number;
+
+            /** Metric error. */
+            public error?: (vtrpc.IRPCError|null);
+
+            /**
+             * Creates a new Metric instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Metric instance
+             */
+            public static create(properties?: mysqlctl.HostMetricsResponse.IMetric): mysqlctl.HostMetricsResponse.Metric;
+
+            /**
+             * Encodes the specified Metric message. Does not implicitly {@link mysqlctl.HostMetricsResponse.Metric.verify|verify} messages.
+             * @param message Metric message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: mysqlctl.HostMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Metric message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsResponse.Metric.verify|verify} messages.
+             * @param message Metric message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: mysqlctl.HostMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Metric message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Metric
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsResponse.Metric;
+
+            /**
+             * Decodes a Metric message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Metric
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsResponse.Metric;
+
+            /**
+             * Verifies a Metric message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Metric message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Metric
+             */
+            public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsResponse.Metric;
+
+            /**
+             * Creates a plain object from a Metric message. Also converts values to other types if specified.
+             * @param message Metric
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: mysqlctl.HostMetricsResponse.Metric, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Metric to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Metric
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
     /** Represents a MysqlCtl */
     class MysqlCtl extends $protobuf.rpc.Service {
 
@@ -16051,6 +16351,20 @@ export namespace mysqlctl {
          * @returns Promise
          */
         public versionString(request: mysqlctl.IVersionStringRequest): Promise<mysqlctl.VersionStringResponse>;
+
+        /**
+         * Calls HostMetrics.
+         * @param request HostMetricsRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and HostMetricsResponse
+         */
+        public hostMetrics(request: mysqlctl.IHostMetricsRequest, callback: mysqlctl.MysqlCtl.HostMetricsCallback): void;
+
+        /**
+         * Calls HostMetrics.
+         * @param request HostMetricsRequest message or plain object
+         * @returns Promise
+         */
+        public hostMetrics(request: mysqlctl.IHostMetricsRequest): Promise<mysqlctl.HostMetricsResponse>;
     }
 
     namespace MysqlCtl {
@@ -16110,6 +16424,13 @@ export namespace mysqlctl {
          * @param [response] VersionStringResponse
          */
         type VersionStringCallback = (error: (Error|null), response?: mysqlctl.VersionStringResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#hostMetrics}.
+         * @param error Error, if any
+         * @param [response] HostMetricsResponse
+         */
+        type HostMetricsCallback = (error: (Error|null), response?: mysqlctl.HostMetricsResponse) => void;
     }
 
     /** Properties of a BackupInfo. */
@@ -18738,6 +19059,251 @@ export namespace topodata {
 
         /**
          * Gets the default type url for ExternalClusters
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace vtrpc. */
+export namespace vtrpc {
+
+    /** Properties of a CallerID. */
+    interface ICallerID {
+
+        /** CallerID principal */
+        principal?: (string|null);
+
+        /** CallerID component */
+        component?: (string|null);
+
+        /** CallerID subcomponent */
+        subcomponent?: (string|null);
+
+        /** CallerID groups */
+        groups?: (string[]|null);
+    }
+
+    /** Represents a CallerID. */
+    class CallerID implements ICallerID {
+
+        /**
+         * Constructs a new CallerID.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtrpc.ICallerID);
+
+        /** CallerID principal. */
+        public principal: string;
+
+        /** CallerID component. */
+        public component: string;
+
+        /** CallerID subcomponent. */
+        public subcomponent: string;
+
+        /** CallerID groups. */
+        public groups: string[];
+
+        /**
+         * Creates a new CallerID instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CallerID instance
+         */
+        public static create(properties?: vtrpc.ICallerID): vtrpc.CallerID;
+
+        /**
+         * Encodes the specified CallerID message. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
+         * @param message CallerID message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CallerID message, length delimited. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
+         * @param message CallerID message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CallerID message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CallerID
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.CallerID;
+
+        /**
+         * Decodes a CallerID message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CallerID
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.CallerID;
+
+        /**
+         * Verifies a CallerID message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CallerID message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CallerID
+         */
+        public static fromObject(object: { [k: string]: any }): vtrpc.CallerID;
+
+        /**
+         * Creates a plain object from a CallerID message. Also converts values to other types if specified.
+         * @param message CallerID
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtrpc.CallerID, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CallerID to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CallerID
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Code enum. */
+    enum Code {
+        OK = 0,
+        CANCELED = 1,
+        UNKNOWN = 2,
+        INVALID_ARGUMENT = 3,
+        DEADLINE_EXCEEDED = 4,
+        NOT_FOUND = 5,
+        ALREADY_EXISTS = 6,
+        PERMISSION_DENIED = 7,
+        RESOURCE_EXHAUSTED = 8,
+        FAILED_PRECONDITION = 9,
+        ABORTED = 10,
+        OUT_OF_RANGE = 11,
+        UNIMPLEMENTED = 12,
+        INTERNAL = 13,
+        UNAVAILABLE = 14,
+        DATA_LOSS = 15,
+        UNAUTHENTICATED = 16,
+        CLUSTER_EVENT = 17,
+        READ_ONLY = 18
+    }
+
+    /** Properties of a RPCError. */
+    interface IRPCError {
+
+        /** RPCError message */
+        message?: (string|null);
+
+        /** RPCError code */
+        code?: (vtrpc.Code|null);
+    }
+
+    /** Represents a RPCError. */
+    class RPCError implements IRPCError {
+
+        /**
+         * Constructs a new RPCError.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtrpc.IRPCError);
+
+        /** RPCError message. */
+        public message: string;
+
+        /** RPCError code. */
+        public code: vtrpc.Code;
+
+        /**
+         * Creates a new RPCError instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RPCError instance
+         */
+        public static create(properties?: vtrpc.IRPCError): vtrpc.RPCError;
+
+        /**
+         * Encodes the specified RPCError message. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
+         * @param message RPCError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RPCError message, length delimited. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
+         * @param message RPCError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RPCError message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RPCError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.RPCError;
+
+        /**
+         * Decodes a RPCError message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RPCError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.RPCError;
+
+        /**
+         * Verifies a RPCError message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RPCError message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RPCError
+         */
+        public static fromObject(object: { [k: string]: any }): vtrpc.RPCError;
+
+        /**
+         * Creates a plain object from a RPCError message. Also converts values to other types if specified.
+         * @param message RPCError
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtrpc.RPCError, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RPCError to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RPCError
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -24191,6 +24757,194 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a MysqlHostMetricsRequest. */
+    interface IMysqlHostMetricsRequest {
+    }
+
+    /** Represents a MysqlHostMetricsRequest. */
+    class MysqlHostMetricsRequest implements IMysqlHostMetricsRequest {
+
+        /**
+         * Constructs a new MysqlHostMetricsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IMysqlHostMetricsRequest);
+
+        /**
+         * Creates a new MysqlHostMetricsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MysqlHostMetricsRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IMysqlHostMetricsRequest): tabletmanagerdata.MysqlHostMetricsRequest;
+
+        /**
+         * Encodes the specified MysqlHostMetricsRequest message. Does not implicitly {@link tabletmanagerdata.MysqlHostMetricsRequest.verify|verify} messages.
+         * @param message MysqlHostMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IMysqlHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MysqlHostMetricsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.MysqlHostMetricsRequest.verify|verify} messages.
+         * @param message MysqlHostMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IMysqlHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MysqlHostMetricsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MysqlHostMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MysqlHostMetricsRequest;
+
+        /**
+         * Decodes a MysqlHostMetricsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MysqlHostMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MysqlHostMetricsRequest;
+
+        /**
+         * Verifies a MysqlHostMetricsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MysqlHostMetricsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MysqlHostMetricsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MysqlHostMetricsRequest;
+
+        /**
+         * Creates a plain object from a MysqlHostMetricsRequest message. Also converts values to other types if specified.
+         * @param message MysqlHostMetricsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.MysqlHostMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MysqlHostMetricsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MysqlHostMetricsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MysqlHostMetricsResponse. */
+    interface IMysqlHostMetricsResponse {
+
+        /** MysqlHostMetricsResponse HostMetrics */
+        HostMetrics?: (mysqlctl.IHostMetricsResponse|null);
+    }
+
+    /** Represents a MysqlHostMetricsResponse. */
+    class MysqlHostMetricsResponse implements IMysqlHostMetricsResponse {
+
+        /**
+         * Constructs a new MysqlHostMetricsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IMysqlHostMetricsResponse);
+
+        /** MysqlHostMetricsResponse HostMetrics. */
+        public HostMetrics?: (mysqlctl.IHostMetricsResponse|null);
+
+        /**
+         * Creates a new MysqlHostMetricsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MysqlHostMetricsResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IMysqlHostMetricsResponse): tabletmanagerdata.MysqlHostMetricsResponse;
+
+        /**
+         * Encodes the specified MysqlHostMetricsResponse message. Does not implicitly {@link tabletmanagerdata.MysqlHostMetricsResponse.verify|verify} messages.
+         * @param message MysqlHostMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IMysqlHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MysqlHostMetricsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.MysqlHostMetricsResponse.verify|verify} messages.
+         * @param message MysqlHostMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IMysqlHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MysqlHostMetricsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MysqlHostMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MysqlHostMetricsResponse;
+
+        /**
+         * Decodes a MysqlHostMetricsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MysqlHostMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MysqlHostMetricsResponse;
+
+        /**
+         * Verifies a MysqlHostMetricsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MysqlHostMetricsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MysqlHostMetricsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MysqlHostMetricsResponse;
+
+        /**
+         * Creates a plain object from a MysqlHostMetricsResponse message. Also converts values to other types if specified.
+         * @param message MysqlHostMetricsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.MysqlHostMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MysqlHostMetricsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MysqlHostMetricsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ReplicationStatusRequest. */
     interface IReplicationStatusRequest {
     }
@@ -28807,6 +29561,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest upgrade_safe */
         upgrade_safe?: (boolean|null);
+
+        /** BackupRequest backup_engine */
+        backup_engine?: (string|null);
     }
 
     /** Represents a BackupRequest. */
@@ -28829,6 +29586,12 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest upgrade_safe. */
         public upgrade_safe: boolean;
+
+        /** BackupRequest backup_engine. */
+        public backup_engine?: (string|null);
+
+        /** BackupRequest _backup_engine. */
+        public _backup_engine?: "backup_engine";
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -29019,6 +29782,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest restore_to_timestamp */
         restore_to_timestamp?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest allowed_backup_engines */
+        allowed_backup_engines?: (string[]|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -29041,6 +29807,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest restore_to_timestamp. */
         public restore_to_timestamp?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest allowed_backup_engines. */
+        public allowed_backup_engines: string[];
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
@@ -30513,6 +31282,200 @@ export namespace tabletmanagerdata {
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
+    }
+
+    /** Properties of a ValidateVReplicationPermissionsRequest. */
+    interface IValidateVReplicationPermissionsRequest {
+    }
+
+    /** Represents a ValidateVReplicationPermissionsRequest. */
+    class ValidateVReplicationPermissionsRequest implements IValidateVReplicationPermissionsRequest {
+
+        /**
+         * Constructs a new ValidateVReplicationPermissionsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IValidateVReplicationPermissionsRequest);
+
+        /**
+         * Creates a new ValidateVReplicationPermissionsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVReplicationPermissionsRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IValidateVReplicationPermissionsRequest): tabletmanagerdata.ValidateVReplicationPermissionsRequest;
+
+        /**
+         * Encodes the specified ValidateVReplicationPermissionsRequest message. Does not implicitly {@link tabletmanagerdata.ValidateVReplicationPermissionsRequest.verify|verify} messages.
+         * @param message ValidateVReplicationPermissionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IValidateVReplicationPermissionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVReplicationPermissionsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ValidateVReplicationPermissionsRequest.verify|verify} messages.
+         * @param message ValidateVReplicationPermissionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IValidateVReplicationPermissionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVReplicationPermissionsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVReplicationPermissionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ValidateVReplicationPermissionsRequest;
+
+        /**
+         * Decodes a ValidateVReplicationPermissionsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVReplicationPermissionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ValidateVReplicationPermissionsRequest;
+
+        /**
+         * Verifies a ValidateVReplicationPermissionsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVReplicationPermissionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVReplicationPermissionsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ValidateVReplicationPermissionsRequest;
+
+        /**
+         * Creates a plain object from a ValidateVReplicationPermissionsRequest message. Also converts values to other types if specified.
+         * @param message ValidateVReplicationPermissionsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ValidateVReplicationPermissionsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVReplicationPermissionsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateVReplicationPermissionsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ValidateVReplicationPermissionsResponse. */
+    interface IValidateVReplicationPermissionsResponse {
+
+        /** ValidateVReplicationPermissionsResponse user */
+        user?: (string|null);
+
+        /** ValidateVReplicationPermissionsResponse ok */
+        ok?: (boolean|null);
+    }
+
+    /** Represents a ValidateVReplicationPermissionsResponse. */
+    class ValidateVReplicationPermissionsResponse implements IValidateVReplicationPermissionsResponse {
+
+        /**
+         * Constructs a new ValidateVReplicationPermissionsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IValidateVReplicationPermissionsResponse);
+
+        /** ValidateVReplicationPermissionsResponse user. */
+        public user: string;
+
+        /** ValidateVReplicationPermissionsResponse ok. */
+        public ok: boolean;
+
+        /**
+         * Creates a new ValidateVReplicationPermissionsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVReplicationPermissionsResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IValidateVReplicationPermissionsResponse): tabletmanagerdata.ValidateVReplicationPermissionsResponse;
+
+        /**
+         * Encodes the specified ValidateVReplicationPermissionsResponse message. Does not implicitly {@link tabletmanagerdata.ValidateVReplicationPermissionsResponse.verify|verify} messages.
+         * @param message ValidateVReplicationPermissionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IValidateVReplicationPermissionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVReplicationPermissionsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ValidateVReplicationPermissionsResponse.verify|verify} messages.
+         * @param message ValidateVReplicationPermissionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IValidateVReplicationPermissionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVReplicationPermissionsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVReplicationPermissionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ValidateVReplicationPermissionsResponse;
+
+        /**
+         * Decodes a ValidateVReplicationPermissionsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVReplicationPermissionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ValidateVReplicationPermissionsResponse;
+
+        /**
+         * Verifies a ValidateVReplicationPermissionsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVReplicationPermissionsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVReplicationPermissionsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ValidateVReplicationPermissionsResponse;
+
+        /**
+         * Creates a plain object from a ValidateVReplicationPermissionsResponse message. Also converts values to other types if specified.
+         * @param message ValidateVReplicationPermissionsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ValidateVReplicationPermissionsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVReplicationPermissionsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateVReplicationPermissionsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VDiffRequest. */
@@ -32934,6 +33897,206 @@ export namespace tabletmanagerdata {
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
+    }
+
+    /** Properties of a ChangeTagsRequest. */
+    interface IChangeTagsRequest {
+
+        /** ChangeTagsRequest tags */
+        tags?: ({ [k: string]: string }|null);
+
+        /** ChangeTagsRequest replace */
+        replace?: (boolean|null);
+    }
+
+    /** Represents a ChangeTagsRequest. */
+    class ChangeTagsRequest implements IChangeTagsRequest {
+
+        /**
+         * Constructs a new ChangeTagsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IChangeTagsRequest);
+
+        /** ChangeTagsRequest tags. */
+        public tags: { [k: string]: string };
+
+        /** ChangeTagsRequest replace. */
+        public replace: boolean;
+
+        /**
+         * Creates a new ChangeTagsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChangeTagsRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IChangeTagsRequest): tabletmanagerdata.ChangeTagsRequest;
+
+        /**
+         * Encodes the specified ChangeTagsRequest message. Does not implicitly {@link tabletmanagerdata.ChangeTagsRequest.verify|verify} messages.
+         * @param message ChangeTagsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IChangeTagsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChangeTagsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ChangeTagsRequest.verify|verify} messages.
+         * @param message ChangeTagsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IChangeTagsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChangeTagsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ChangeTagsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ChangeTagsRequest;
+
+        /**
+         * Decodes a ChangeTagsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ChangeTagsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ChangeTagsRequest;
+
+        /**
+         * Verifies a ChangeTagsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChangeTagsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChangeTagsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ChangeTagsRequest;
+
+        /**
+         * Creates a plain object from a ChangeTagsRequest message. Also converts values to other types if specified.
+         * @param message ChangeTagsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ChangeTagsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChangeTagsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTagsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ChangeTagsResponse. */
+    interface IChangeTagsResponse {
+
+        /** ChangeTagsResponse tags */
+        tags?: ({ [k: string]: string }|null);
+    }
+
+    /** Represents a ChangeTagsResponse. */
+    class ChangeTagsResponse implements IChangeTagsResponse {
+
+        /**
+         * Constructs a new ChangeTagsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IChangeTagsResponse);
+
+        /** ChangeTagsResponse tags. */
+        public tags: { [k: string]: string };
+
+        /**
+         * Creates a new ChangeTagsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChangeTagsResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IChangeTagsResponse): tabletmanagerdata.ChangeTagsResponse;
+
+        /**
+         * Encodes the specified ChangeTagsResponse message. Does not implicitly {@link tabletmanagerdata.ChangeTagsResponse.verify|verify} messages.
+         * @param message ChangeTagsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IChangeTagsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChangeTagsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ChangeTagsResponse.verify|verify} messages.
+         * @param message ChangeTagsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IChangeTagsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChangeTagsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ChangeTagsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ChangeTagsResponse;
+
+        /**
+         * Decodes a ChangeTagsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ChangeTagsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ChangeTagsResponse;
+
+        /**
+         * Verifies a ChangeTagsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChangeTagsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChangeTagsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ChangeTagsResponse;
+
+        /**
+         * Creates a plain object from a ChangeTagsResponse message. Also converts values to other types if specified.
+         * @param message ChangeTagsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ChangeTagsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChangeTagsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTagsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -36870,251 +38033,6 @@ export namespace binlogdata {
 
         /**
          * Gets the default type url for VStreamResultsResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-}
-
-/** Namespace vtrpc. */
-export namespace vtrpc {
-
-    /** Properties of a CallerID. */
-    interface ICallerID {
-
-        /** CallerID principal */
-        principal?: (string|null);
-
-        /** CallerID component */
-        component?: (string|null);
-
-        /** CallerID subcomponent */
-        subcomponent?: (string|null);
-
-        /** CallerID groups */
-        groups?: (string[]|null);
-    }
-
-    /** Represents a CallerID. */
-    class CallerID implements ICallerID {
-
-        /**
-         * Constructs a new CallerID.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtrpc.ICallerID);
-
-        /** CallerID principal. */
-        public principal: string;
-
-        /** CallerID component. */
-        public component: string;
-
-        /** CallerID subcomponent. */
-        public subcomponent: string;
-
-        /** CallerID groups. */
-        public groups: string[];
-
-        /**
-         * Creates a new CallerID instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns CallerID instance
-         */
-        public static create(properties?: vtrpc.ICallerID): vtrpc.CallerID;
-
-        /**
-         * Encodes the specified CallerID message. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
-         * @param message CallerID message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified CallerID message, length delimited. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
-         * @param message CallerID message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a CallerID message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns CallerID
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.CallerID;
-
-        /**
-         * Decodes a CallerID message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns CallerID
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.CallerID;
-
-        /**
-         * Verifies a CallerID message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a CallerID message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns CallerID
-         */
-        public static fromObject(object: { [k: string]: any }): vtrpc.CallerID;
-
-        /**
-         * Creates a plain object from a CallerID message. Also converts values to other types if specified.
-         * @param message CallerID
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtrpc.CallerID, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this CallerID to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for CallerID
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Code enum. */
-    enum Code {
-        OK = 0,
-        CANCELED = 1,
-        UNKNOWN = 2,
-        INVALID_ARGUMENT = 3,
-        DEADLINE_EXCEEDED = 4,
-        NOT_FOUND = 5,
-        ALREADY_EXISTS = 6,
-        PERMISSION_DENIED = 7,
-        RESOURCE_EXHAUSTED = 8,
-        FAILED_PRECONDITION = 9,
-        ABORTED = 10,
-        OUT_OF_RANGE = 11,
-        UNIMPLEMENTED = 12,
-        INTERNAL = 13,
-        UNAVAILABLE = 14,
-        DATA_LOSS = 15,
-        UNAUTHENTICATED = 16,
-        CLUSTER_EVENT = 17,
-        READ_ONLY = 18
-    }
-
-    /** Properties of a RPCError. */
-    interface IRPCError {
-
-        /** RPCError message */
-        message?: (string|null);
-
-        /** RPCError code */
-        code?: (vtrpc.Code|null);
-    }
-
-    /** Represents a RPCError. */
-    class RPCError implements IRPCError {
-
-        /**
-         * Constructs a new RPCError.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtrpc.IRPCError);
-
-        /** RPCError message. */
-        public message: string;
-
-        /** RPCError code. */
-        public code: vtrpc.Code;
-
-        /**
-         * Creates a new RPCError instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RPCError instance
-         */
-        public static create(properties?: vtrpc.IRPCError): vtrpc.RPCError;
-
-        /**
-         * Encodes the specified RPCError message. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
-         * @param message RPCError message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RPCError message, length delimited. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
-         * @param message RPCError message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RPCError message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RPCError
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.RPCError;
-
-        /**
-         * Decodes a RPCError message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RPCError
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.RPCError;
-
-        /**
-         * Verifies a RPCError message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RPCError message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RPCError
-         */
-        public static fromObject(object: { [k: string]: any }): vtrpc.RPCError;
-
-        /**
-         * Creates a plain object from a RPCError message. Also converts values to other types if specified.
-         * @param message RPCError
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtrpc.RPCError, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RPCError to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for RPCError
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -47919,6 +48837,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings workflow_options */
         workflow_options?: (vtctldata.IWorkflowOptions|null);
+
+        /** MaterializeSettings reference_tables */
+        reference_tables?: (string[]|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -47980,6 +48901,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings workflow_options. */
         public workflow_options?: (vtctldata.IWorkflowOptions|null);
+
+        /** MaterializeSettings reference_tables. */
+        public reference_tables: string[];
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -48718,20 +49642,30 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** ShardedAutoIncrementHandling enum. */
+    enum ShardedAutoIncrementHandling {
+        LEAVE = 0,
+        REMOVE = 1,
+        REPLACE = 2
+    }
+
     /** Properties of a WorkflowOptions. */
     interface IWorkflowOptions {
 
         /** WorkflowOptions tenant_id */
         tenant_id?: (string|null);
 
-        /** WorkflowOptions strip_sharded_auto_increment */
-        strip_sharded_auto_increment?: (boolean|null);
+        /** WorkflowOptions sharded_auto_increment_handling */
+        sharded_auto_increment_handling?: (vtctldata.ShardedAutoIncrementHandling|null);
 
         /** WorkflowOptions shards */
         shards?: (string[]|null);
 
         /** WorkflowOptions config */
         config?: ({ [k: string]: string }|null);
+
+        /** WorkflowOptions global_keyspace */
+        global_keyspace?: (string|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -48746,14 +49680,17 @@ export namespace vtctldata {
         /** WorkflowOptions tenant_id. */
         public tenant_id: string;
 
-        /** WorkflowOptions strip_sharded_auto_increment. */
-        public strip_sharded_auto_increment: boolean;
+        /** WorkflowOptions sharded_auto_increment_handling. */
+        public sharded_auto_increment_handling: vtctldata.ShardedAutoIncrementHandling;
 
         /** WorkflowOptions shards. */
         public shards: string[];
 
         /** WorkflowOptions config. */
         public config: { [k: string]: string };
+
+        /** WorkflowOptions global_keyspace. */
+        public global_keyspace: string;
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.
@@ -51353,6 +52290,9 @@ export namespace vtctldata {
 
         /** BackupRequest upgrade_safe */
         upgrade_safe?: (boolean|null);
+
+        /** BackupRequest backup_engine */
+        backup_engine?: (string|null);
     }
 
     /** Represents a BackupRequest. */
@@ -51378,6 +52318,12 @@ export namespace vtctldata {
 
         /** BackupRequest upgrade_safe. */
         public upgrade_safe: boolean;
+
+        /** BackupRequest backup_engine. */
+        public backup_engine?: (string|null);
+
+        /** BackupRequest _backup_engine. */
+        public _backup_engine?: "backup_engine";
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -51893,6 +52839,218 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for CancelSchemaMigrationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ChangeTabletTagsRequest. */
+    interface IChangeTabletTagsRequest {
+
+        /** ChangeTabletTagsRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ChangeTabletTagsRequest tags */
+        tags?: ({ [k: string]: string }|null);
+
+        /** ChangeTabletTagsRequest replace */
+        replace?: (boolean|null);
+    }
+
+    /** Represents a ChangeTabletTagsRequest. */
+    class ChangeTabletTagsRequest implements IChangeTabletTagsRequest {
+
+        /**
+         * Constructs a new ChangeTabletTagsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IChangeTabletTagsRequest);
+
+        /** ChangeTabletTagsRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ChangeTabletTagsRequest tags. */
+        public tags: { [k: string]: string };
+
+        /** ChangeTabletTagsRequest replace. */
+        public replace: boolean;
+
+        /**
+         * Creates a new ChangeTabletTagsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChangeTabletTagsRequest instance
+         */
+        public static create(properties?: vtctldata.IChangeTabletTagsRequest): vtctldata.ChangeTabletTagsRequest;
+
+        /**
+         * Encodes the specified ChangeTabletTagsRequest message. Does not implicitly {@link vtctldata.ChangeTabletTagsRequest.verify|verify} messages.
+         * @param message ChangeTabletTagsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IChangeTabletTagsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChangeTabletTagsRequest message, length delimited. Does not implicitly {@link vtctldata.ChangeTabletTagsRequest.verify|verify} messages.
+         * @param message ChangeTabletTagsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IChangeTabletTagsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChangeTabletTagsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ChangeTabletTagsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ChangeTabletTagsRequest;
+
+        /**
+         * Decodes a ChangeTabletTagsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ChangeTabletTagsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ChangeTabletTagsRequest;
+
+        /**
+         * Verifies a ChangeTabletTagsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChangeTabletTagsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChangeTabletTagsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ChangeTabletTagsRequest;
+
+        /**
+         * Creates a plain object from a ChangeTabletTagsRequest message. Also converts values to other types if specified.
+         * @param message ChangeTabletTagsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ChangeTabletTagsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChangeTabletTagsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTabletTagsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ChangeTabletTagsResponse. */
+    interface IChangeTabletTagsResponse {
+
+        /** ChangeTabletTagsResponse before_tags */
+        before_tags?: ({ [k: string]: string }|null);
+
+        /** ChangeTabletTagsResponse after_tags */
+        after_tags?: ({ [k: string]: string }|null);
+    }
+
+    /** Represents a ChangeTabletTagsResponse. */
+    class ChangeTabletTagsResponse implements IChangeTabletTagsResponse {
+
+        /**
+         * Constructs a new ChangeTabletTagsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IChangeTabletTagsResponse);
+
+        /** ChangeTabletTagsResponse before_tags. */
+        public before_tags: { [k: string]: string };
+
+        /** ChangeTabletTagsResponse after_tags. */
+        public after_tags: { [k: string]: string };
+
+        /**
+         * Creates a new ChangeTabletTagsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChangeTabletTagsResponse instance
+         */
+        public static create(properties?: vtctldata.IChangeTabletTagsResponse): vtctldata.ChangeTabletTagsResponse;
+
+        /**
+         * Encodes the specified ChangeTabletTagsResponse message. Does not implicitly {@link vtctldata.ChangeTabletTagsResponse.verify|verify} messages.
+         * @param message ChangeTabletTagsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IChangeTabletTagsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChangeTabletTagsResponse message, length delimited. Does not implicitly {@link vtctldata.ChangeTabletTagsResponse.verify|verify} messages.
+         * @param message ChangeTabletTagsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IChangeTabletTagsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChangeTabletTagsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ChangeTabletTagsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ChangeTabletTagsResponse;
+
+        /**
+         * Decodes a ChangeTabletTagsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ChangeTabletTagsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ChangeTabletTagsResponse;
+
+        /**
+         * Verifies a ChangeTabletTagsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChangeTabletTagsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChangeTabletTagsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ChangeTabletTagsResponse;
+
+        /**
+         * Creates a plain object from a ChangeTabletTagsResponse message. Also converts values to other types if specified.
+         * @param message ChangeTabletTagsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ChangeTabletTagsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChangeTabletTagsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTabletTagsResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -54394,6 +55552,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest wait_for_all_tablets */
         wait_for_all_tablets?: (boolean|null);
+
+        /** EmergencyReparentShardRequest expected_primary */
+        expected_primary?: (topodata.ITabletAlias|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -54425,6 +55586,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest wait_for_all_tablets. */
         public wait_for_all_tablets: boolean;
+
+        /** EmergencyReparentShardRequest expected_primary. */
+        public expected_primary?: (topodata.ITabletAlias|null);
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
@@ -65056,6 +66220,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest allow_cross_cell_promotion */
         allow_cross_cell_promotion?: (boolean|null);
+
+        /** PlannedReparentShardRequest expected_primary */
+        expected_primary?: (topodata.ITabletAlias|null);
     }
 
     /** Represents a PlannedReparentShardRequest. */
@@ -65087,6 +66254,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest allow_cross_cell_promotion. */
         public allow_cross_cell_promotion: boolean;
+
+        /** PlannedReparentShardRequest expected_primary. */
+        public expected_primary?: (topodata.ITabletAlias|null);
 
         /**
          * Creates a new PlannedReparentShardRequest instance using the specified properties.
@@ -67697,6 +68867,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest restore_to_timestamp */
         restore_to_timestamp?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest allowed_backup_engines */
+        allowed_backup_engines?: (string[]|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -67722,6 +68895,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest restore_to_timestamp. */
         public restore_to_timestamp?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest allowed_backup_engines. */
+        public allowed_backup_engines: string[];
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.

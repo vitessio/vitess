@@ -17,7 +17,14 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
@@ -108,4 +115,56 @@ func TestSimpleVexplainTrace(t *testing.T) {
 
 	gotRowString := gotResult.Rows[0][0].ToString()
 	require.Equal(t, expectedRowString, gotRowString)
+}
+
+func TestVExplainKeys(t *testing.T) {
+	type testCase struct {
+		Query    string          `json:"query"`
+		Expected json.RawMessage `json:"expected"`
+	}
+
+	var tests []testCase
+	data, err := os.ReadFile("testdata/executor_vexplain.json")
+	require.NoError(t, err)
+
+	err = json.Unmarshal(data, &tests)
+	require.NoError(t, err)
+
+	var updatedTests []testCase
+
+	for _, tt := range tests {
+		t.Run(tt.Query, func(t *testing.T) {
+			executor, _, _, _, _ := createExecutorEnv(t)
+			session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+			gotResult, err := executor.Execute(context.Background(), nil, "Execute", session, "vexplain keys "+tt.Query, nil)
+			require.NoError(t, err)
+
+			gotRowString := gotResult.Rows[0][0].ToString()
+			assert.JSONEq(t, string(tt.Expected), gotRowString)
+
+			updatedTests = append(updatedTests, testCase{
+				Query:    tt.Query,
+				Expected: json.RawMessage(gotRowString),
+			})
+
+			if t.Failed() {
+				fmt.Println("Test failed for query:", tt.Query)
+				fmt.Println("Got result:", gotRowString)
+			}
+		})
+	}
+
+	// If anything failed, write the updated test cases to a temp file
+	if t.Failed() {
+		tempFilePath := filepath.Join(os.TempDir(), "updated_vexplain_keys_tests.json")
+		fmt.Println("Writing updated tests to:", tempFilePath)
+
+		updatedTestsData, err := json.MarshalIndent(updatedTests, "", "\t")
+		require.NoError(t, err)
+
+		err = os.WriteFile(tempFilePath, updatedTestsData, 0644)
+		require.NoError(t, err)
+
+		fmt.Println("Updated tests written to:", tempFilePath)
+	}
 }

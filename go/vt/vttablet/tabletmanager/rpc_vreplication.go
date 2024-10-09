@@ -62,6 +62,26 @@ const (
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
 	// Check if workflow is still copying.
 	sqlGetVReplicationCopyStatus = "select distinct vrepl_id from %s.copy_state where vrepl_id = %d"
+	// Validate the minimum set of permissions needed to manage vreplication metadata.
+	// This is a simple check for a matching user rather than any specific user@host
+	// combination.
+	sqlValidateVReplicationPermissions = `
+select count(*)>0 as good from mysql.user as u
+  left join mysql.db as d on (u.user = d.user)
+  left join mysql.tables_priv as t on (u.user = t.user)
+where u.user = %a
+  and (
+    (u.select_priv = 'y' and u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y') /* user has global privs */
+    or (d.db = %a and d.select_priv = 'y' and d.insert_priv = 'y' and d.update_priv = 'y' and d.delete_priv = 'y') /* user has db privs */
+    or (t.db = %a and t.table_name = 'vreplication' /* user has table privs */
+      and find_in_set('select', t.table_priv)
+      and find_in_set('insert', t.table_priv)
+      and find_in_set('update', t.table_priv)
+      and find_in_set('delete', t.table_priv)
+    )
+  )
+limit 1
+`
 )
 
 var (
@@ -577,6 +597,42 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 		Result: &querypb.QueryResult{
 			RowsAffected: res.RowsAffected,
 		},
+	}, nil
+}
+
+// ValidateVReplicationPermissions validates that the --db_filtered_user has
+// the minimum permissions required on the sidecardb vreplication table
+// needed in order to manage vreplication metadata.
+func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	query, err := sqlparser.ParseAndBind(sqlValidateVReplicationPermissions,
+		sqltypes.StringBindVariable(tm.DBConfigs.Filtered.User),
+		sqltypes.StringBindVariable(sidecar.GetName()),
+		sqltypes.StringBindVariable(sidecar.GetName()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch(query, 1, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) != 1 { // Should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected response to query %s: expected 1 row with 1 column, got: %+v",
+			query, qr)
+	}
+	val, err := qr.Rows[0][0].ToBool()
+	if err != nil { // Should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for query %s: expected boolean-like value, got: %q",
+			query, qr.Rows[0][0].ToString())
+	}
+	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+		User: tm.DBConfigs.Filtered.User,
+		Ok:   val,
 	}, nil
 }
 

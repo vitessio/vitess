@@ -57,6 +57,9 @@ service TabletManager {
 
   rpc SetReadWrite(tabletmanagerdata.SetReadWriteRequest) returns (tabletmanagerdata.SetReadWriteResponse) {};
 
+  // ChangeTags asks the remote tablet to change its tags
+  rpc ChangeTags(tabletmanagerdata.ChangeTagsRequest) returns (tabletmanagerdata.ChangeTagsResponse) {};
+
   // ChangeType asks the remote tablet to change its type
   rpc ChangeType(tabletmanagerdata.ChangeTypeRequest) returns (tabletmanagerdata.ChangeTypeResponse) {};
 
@@ -95,6 +98,8 @@ service TabletManager {
   rpc ReadTransaction(tabletmanagerdata.ReadTransactionRequest) returns (tabletmanagerdata.ReadTransactionResponse) {};
 
   rpc ConcludeTransaction(tabletmanagerdata.ConcludeTransactionRequest) returns (tabletmanagerdata.ConcludeTransactionResponse) {};
+
+  rpc MysqlHostMetrics(tabletmanagerdata.MysqlHostMetricsRequest) returns (tabletmanagerdata.MysqlHostMetricsResponse) {};
 
   //
   // Replication related methods
@@ -135,10 +140,11 @@ service TabletManager {
   rpc HasVReplicationWorkflows(tabletmanagerdata.HasVReplicationWorkflowsRequest) returns(tabletmanagerdata.HasVReplicationWorkflowsResponse) {};
   rpc ReadVReplicationWorkflow(tabletmanagerdata.ReadVReplicationWorkflowRequest) returns(tabletmanagerdata.ReadVReplicationWorkflowResponse) {};
   rpc ReadVReplicationWorkflows(tabletmanagerdata.ReadVReplicationWorkflowsRequest) returns(tabletmanagerdata.ReadVReplicationWorkflowsResponse) {};
-  rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
-  rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
   rpc UpdateVReplicationWorkflow(tabletmanagerdata.UpdateVReplicationWorkflowRequest) returns(tabletmanagerdata.UpdateVReplicationWorkflowResponse) {};
   rpc UpdateVReplicationWorkflows(tabletmanagerdata.UpdateVReplicationWorkflowsRequest) returns(tabletmanagerdata.UpdateVReplicationWorkflowsResponse) {};
+  rpc ValidateVReplicationPermissions(tabletmanagerdata.ValidateVReplicationPermissionsRequest) returns(tabletmanagerdata.ValidateVReplicationPermissionsResponse) {};
+  rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
+  rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
 
   // VDiff API
   rpc VDiff(tabletmanagerdata.VDiffRequest) returns(tabletmanagerdata.VDiffResponse) {};

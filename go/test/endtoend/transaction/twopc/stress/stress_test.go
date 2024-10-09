@@ -47,6 +47,7 @@ func TestDisruptions(t *testing.T) {
 	testcases := []struct {
 		disruptionName  string
 		commitDelayTime string
+		setupFunc       func(t *testing.T)
 		disruption      func(t *testing.T) error
 		resetFunc       func(t *testing.T)
 	}{
@@ -56,6 +57,13 @@ func TestDisruptions(t *testing.T) {
 			disruption: func(t *testing.T) error {
 				return nil
 			},
+		},
+		{
+			disruptionName:  "Resharding",
+			commitDelayTime: "20",
+			setupFunc:       createShard,
+			disruption:      mergeShards,
+			resetFunc:       splitShardsBack,
 		},
 		{
 			disruptionName:  "PlannedReparentShard",
@@ -98,6 +106,9 @@ func TestDisruptions(t *testing.T) {
 		t.Run(fmt.Sprintf("%s-%ss delay", tt.disruptionName, tt.commitDelayTime), func(t *testing.T) {
 			// Reparent all the shards to first tablet being the primary.
 			reparentToFirstTablet(t)
+			if tt.setupFunc != nil {
+				tt.setupFunc(t)
+			}
 			// cleanup all the old data.
 			conn, closer := start(t)
 			defer closer()
@@ -154,6 +165,23 @@ func TestDisruptions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mergeShards(t *testing.T) error {
+	return twopcutil.RunReshard(t, clusterInstance, "TestDisruptions", keyspaceName, "40-80,80-", "40-")
+}
+
+func splitShardsBack(t *testing.T) {
+	t.Helper()
+	twopcutil.AddShards(t, clusterInstance, keyspaceName, []string{"40-80", "80-"})
+	err := twopcutil.RunReshard(t, clusterInstance, "TestDisruptions", keyspaceName, "40-", "40-80,80-")
+	require.NoError(t, err)
+}
+
+// createShard creates a new shard in the keyspace that we'll use for Resharding.
+func createShard(t *testing.T) {
+	t.Helper()
+	twopcutil.AddShards(t, clusterInstance, keyspaceName, []string{"40-"})
 }
 
 // threadToWrite is a helper function to write to the database in a loop.

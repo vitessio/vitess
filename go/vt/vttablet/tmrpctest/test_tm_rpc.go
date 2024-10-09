@@ -96,6 +96,11 @@ func (fra *fakeRPCTM) ResetSequences(ctx context.Context, tables []string) error
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	// TODO implement me
 	panic("implement me")
@@ -106,6 +111,11 @@ func (fra *fakeRPCTM) LockTables(ctx context.Context) error {
 }
 
 func (fra *fakeRPCTM) UnlockTables(ctx context.Context) error {
+	panic("implement me")
+}
+
+func (fra *fakeRPCTM) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -459,6 +469,30 @@ func tmRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "SetReadOnly", true /*verbose*/, err)
 	err = client.SetReadWrite(ctx, tablet)
 	expectHandleRPCPanic(t, "SetReadWrite", true /*verbose*/, err)
+}
+
+var testChangeTagsValue = map[string]string{
+	"test": "12345",
+}
+
+func (fra *fakeRPCTM) ChangeTags(ctx context.Context, tabletTags map[string]string, replace bool) (map[string]string, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "ChangeTags tabletType", tabletTags, testChangeTagsValue)
+	return tabletTags, nil
+}
+
+func tmRPCTestChangeTags(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ChangeTags(ctx, tablet, testChangeTagsValue, false)
+	if err != nil {
+		t.Errorf("ChangeTags failed: %v", err)
+	}
+}
+
+func tmRPCTestChangeTagsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ChangeTags(ctx, tablet, testChangeTagsValue, false)
+	expectHandleRPCPanic(t, "ChangeTags", true /*verbose*/, err)
 }
 
 var testChangeTypeValue = topodatapb.TabletType_REPLICA

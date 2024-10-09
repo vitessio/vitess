@@ -811,6 +811,20 @@ func (itmc *internalTabletManagerClient) SetReadWrite(ctx context.Context, table
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet, tabletTags map[string]string, replace bool) (*tabletmanagerdatapb.ChangeTagsResponse, error) {
+	t, ok := tabletMap[tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
+	}
+	afterTags, err := t.tm.ChangeTags(ctx, tabletTags, replace)
+	if err != nil {
+		return nil, err
+	}
+	return &tabletmanagerdatapb.ChangeTagsResponse{
+		Tags: afterTags,
+	}, nil
+}
+
 func (itmc *internalTabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType, semiSync bool) error {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
@@ -902,6 +916,10 @@ func (itmc *internalTabletManagerClient) ConcludeTransaction(ctx context.Context
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) MysqlHostMetrics(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
@@ -939,6 +957,10 @@ func (itmc *internalTabletManagerClient) ReadVReplicationWorkflows(context.Conte
 }
 
 func (itmc *internalTabletManagerClient) ReadVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ValidateVReplicationPermissions(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

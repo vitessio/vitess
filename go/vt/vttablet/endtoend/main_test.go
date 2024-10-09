@@ -343,7 +343,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess_twopc",
-      "table_names_or_prefixes": ["dt_state"],
+      "table_names_or_prefixes": ["dt_state", "redo_state"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
