@@ -2778,10 +2778,11 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 	defer targetUnlock(&err)
 	ctx = lockCtx
 
-	deleteFilter, err := ts.addTenantFilter(ctx, "")
+	tenantPredicate, err := ts.buildTenantPredicate(ctx)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to build delete filter")
 	}
+	deleteFilter := sqlparser.String(&sqlparser.Where{Expr: *tenantPredicate})
 
 	tableFilters := make(map[string]string, len(ts.tables))
 	for _, table := range ts.tables {

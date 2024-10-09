@@ -974,15 +974,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 
 func (ts *trafficSwitcher) addTenantFilter(ctx context.Context, filter string) (string, error) {
 	parser := ts.ws.env.Parser()
-	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
-	if err != nil {
-		return "", err
-	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ts.targetKeyspace, parser)
-	if err != nil {
-		return "", err
-	}
-	tenantClause, err := getTenantClause(ts.options, targetVSchema, parser)
+	tenantClause, err := ts.buildTenantPredicate(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -997,6 +989,23 @@ func (ts *trafficSwitcher) addTenantFilter(ctx context.Context, filter string) (
 	addFilter(sel, *tenantClause)
 	filter = sqlparser.String(sel)
 	return filter, nil
+}
+
+func (ts *trafficSwitcher) buildTenantPredicate(ctx context.Context) (*sqlparser.Expr, error) {
+	parser := ts.ws.env.Parser()
+	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
+	if err != nil {
+		return nil, err
+	}
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ts.targetKeyspace, parser)
+	if err != nil {
+		return nil, err
+	}
+	tenantPredicate, err := getTenantClause(ts.options, targetVSchema, parser)
+	if err != nil {
+		return nil, err
+	}
+	return tenantPredicate, nil
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
