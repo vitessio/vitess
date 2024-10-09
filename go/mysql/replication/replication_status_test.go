@@ -331,3 +331,270 @@ func TestFilePosShouldGetPosition(t *testing.T) {
 	assert.Equalf(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
 	assert.Equalf(t, got.Position.GTIDSet, got.FilePosition.GTIDSet, "FilePosition and Position don't match when they should for the FilePos flavor")
 }
+
+func TestEvaluateErsReplicas(t *testing.T) {
+	uuids := map[string]string{
+		"old":      "00000000-0000-0000-0000-707070707070",
+		"primary":  "00000000-0000-0000-0000-000000008000",
+		"replica1": "00000000-0000-0000-0000-000000008001",
+		"replica2": "00000000-0000-0000-0000-000000008002",
+		"replica3": "00000000-0000-0000-0000-000000008003",
+	}
+	tcases := []struct {
+		name         string
+		gtidExecuted map[string]string // @@gtid_executed per replica server
+		gtidPurged   map[string]string // @@gtid_purged per replica server
+		// output:
+		softErrants []string // servers with errant GTID, where the errant transactions are still available. MySQL allows replicating from these servers, although we consider this undesired.
+		hardErrants []string // servers with errant GTID transactions that have been purged. It is impossible to replicate from these servers.
+		discarded   []string // servers which ERS should throw away and which will not participate in the refactored cluster
+		chosen      string   // replica chosen to be promoted
+		errMessage  string   // Expected error, or empty if expecting no error
+	}{
+		{
+			name: "can't be empty",
+			gtidExecuted: map[string]string{
+				"replica1": "",
+				"replica2": "00000000-0000-0000-0000-000000008000:1-90",
+			},
+			errMessage: "<fill in the expected error text>",
+		},
+		{
+			name: "parse error",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-000000008000:1-90",
+				"replica2": "00000000-0000-0000-0000-000000008000:1-90",
+			},
+			errMessage: "<fill in the expected error text>",
+		},
+		{
+			name: "identical",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008000:1-90",
+				"replica2": "00000000-0000-0000-0000-000000008000:1-90",
+			},
+			chosen: "replica1",
+		},
+		{
+			name: "identical, with old uuid",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-90",
+				"replica2": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-90",
+			},
+			chosen: "replica1",
+		},
+		{
+			name: "common valid diff",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008000:1-90",
+				"replica2": "00000000-0000-0000-0000-000000008000:1-92",
+			},
+			chosen: "replica2",
+		},
+		{
+			name: "common valid diff, with old uuid",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-90",
+				"replica2": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-92",
+			},
+			chosen: "replica2",
+		},
+		{
+			// Looks funny, but maybe replica1 was primary in the past. This is perfectly normal
+			name: "common valid diff, with replica uuid",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008001:1-300,00000000-0000-0000-0000-000000008000:1-90",
+				"replica2": "00000000-0000-0000-0000-000000008001:1-300,00000000-0000-0000-0000-000000008000:1-92",
+			},
+			chosen: "replica2",
+		},
+		{
+			name: "common valid diff, but with purged gtids so cannot promote",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-90",
+				"replica2": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-92",
+			},
+			gtidPurged: map[string]string{
+				"replica2": "00000000-0000-0000-0000-000000008000:1-91",
+			},
+			// replica2 doesn't have an errant GTID per se, but it has purged transactions that replica1 doesn't have.
+			// It can therefore cannot be promoted. We prefer to lose data and promote replica1. It might seem funny in this
+			// 2 replica setup, but in a 3+ replica setup, we retain more availability if we lose data! See next test.
+			softErrants: []string{},
+			hardErrants: []string{},
+			discarded:   []string{"replica2"},
+			chosen:      "replica1",
+		},
+		{
+			name: "common valid diff, but with purged gtids so cannot promote, 3 replicas",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-90",
+				"replica2": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-92",
+				"replica3": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-85",
+			},
+			gtidPurged: map[string]string{
+				"replica2": "00000000-0000-0000-0000-000000008000:1-91",
+			},
+			// replica2 doesn't have errant GTIDs per-se (it replicated from the primary just fine),
+			// but it did purge some of its binary logs.
+			// If we promote replica2 then we lose both replica1 and replica3. However, if we promote replica1
+			// we lose one transaction and replica2. We prefer more availability over more transactions.
+			softErrants: []string{},
+			hardErrants: []string{},
+			discarded:   []string{"replica2"},
+			chosen:      "replica1",
+		},
+		{
+			name: "common valid diff, but with purged gtids so cannot promote, 3 replicas, another order",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-85",
+				"replica2": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-92",
+				"replica3": "00000000-0000-0000-0000-707070707070:1-3,00000000-0000-0000-0000-000000008000:1-90",
+			},
+			gtidPurged: map[string]string{
+				"replica2": "00000000-0000-0000-0000-000000008000:1-91",
+			},
+			// If we promote replica3, we get to keep both replica3 and replica1, and lose one transaction.
+			// We prefer this over promoting replica2 and lose both other replicas.
+			softErrants: []string{},
+			hardErrants: []string{},
+			discarded:   []string{"replica2"},
+			chosen:      "replica3",
+		},
+		// Errant scenarios
+		{
+			// replica1 used to be primary, but then on top of that, it has errant GTIDs (:301-307)
+			name: "common valid diff, with replica uuid",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008001:1-307,00000000-0000-0000-0000-000000008000:1-90",
+				"replica2": "00000000-0000-0000-0000-000000008001:1-300,00000000-0000-0000-0000-000000008000:1-92",
+			},
+			softErrants: []string{"replica1"},
+			discarded:   []string{"replica1"},
+			chosen:      "replica2",
+		},
+		{
+			// Looks funny, but maybe replica1 was primary in the past. This is perfectly normal
+			name: "common valid diff, with replica uuid",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008001:1-307,00000000-0000-0000-0000-000000008000:1-92",
+				"replica2": "00000000-0000-0000-0000-000000008001:1-300,00000000-0000-0000-0000-000000008000:1-90",
+			},
+			softErrants: []string{"replica1"},
+			discarded:   []string{"replica1"},
+			chosen:      "replica2",
+		},
+
+		{
+			name: "soft errant, we choose to reject errant server",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008000:1-93,00000000-0000-0000-0000-000000008001:1",
+				"replica2": "00000000-0000-0000-0000-000000008000:1-90",
+				"replica3": "00000000-0000-0000-0000-000000008000:1-92",
+			},
+			// replica1 still has the errant GTID in the binary logs, but we don't like it and prefer to ignore it.
+			// Are we losing data? No, because the old primary never had this data in the first place and we don't
+			// trust the data change. If anything, we are more assured that by rejecting replica1 we *don't* lose any data.
+			softErrants: []string{"replica1"},
+			hardErrants: []string{},
+			discarded:   []string{"replica1"},
+			chosen:      "replica3",
+		},
+		{
+			name: "hard errant, errant server strictly rejected",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008000:1-93,00000000-0000-0000-0000-000000008001:1",
+				"replica2": "00000000-0000-0000-0000-000000008000:1-90",
+				"replica3": "00000000-0000-0000-0000-000000008000:1-92",
+			},
+			gtidPurged: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008001:1",
+			},
+			// MySQL will never let replica2 and replica3 to replicate from replica1, because the errant GTID has been purged.
+			// We thus absolutely want to ignore replica2, even though we lose an actual transaction (":93").
+			softErrants: []string{},
+			hardErrants: []string{"replica1"},
+			discarded:   []string{"replica1"},
+			chosen:      "replica3",
+		},
+		{
+			name: "soft errant allowed as replica",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008000:1-92,00000000-0000-0000-0000-000000008001:1",
+				"replica2": "00000000-0000-0000-0000-000000008000:1-90",
+				"replica3": "00000000-0000-0000-0000-000000008000:1-93",
+			},
+			// replica3 is unquestionably our chosen replica. But how about replica1? It has an errant GTID,
+			// and MySQL-wise it is allowed to replicate from replica1!
+			// We support this at this time. In general, replica1 should be destroyed and rebuilt from backup,
+			// but it is NOT the duty of ERS to do so.
+			softErrants: []string{"replica1"},
+			hardErrants: []string{},
+			discarded:   []string{},
+			chosen:      "replica3",
+		},
+		{
+			name: "hard errant allowed as replica",
+			gtidExecuted: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008000:1-92,00000000-0000-0000-0000-000000008001:1",
+				"replica2": "00000000-0000-0000-0000-000000008000:1-90",
+				"replica3": "00000000-0000-0000-0000-000000008000:1-93",
+			},
+			gtidPurged: map[string]string{
+				"replica1": "00000000-0000-0000-0000-000000008001:1",
+			},
+			// replica3 is unquestionably our chosen replica. But how about replica1? It has an errant GTID,
+			// and MySQL-wise it is allowed to replicate from replica1!
+			// We support this at this time. In general, replica1 should be destroyed and rebuilt from backup,
+			// but it is NOT the duty of ERS to do so.
+			softErrants: []string{},
+			hardErrants: []string{"replica1"},
+			discarded:   []string{},
+			chosen:      "replica3",
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			if tcase.gtidPurged == nil {
+				tcase.gtidPurged = map[string]string{}
+			}
+			if tcase.softErrants == nil {
+				tcase.softErrants = []string{}
+			}
+			if tcase.hardErrants == nil {
+				tcase.hardErrants = []string{}
+			}
+			if tcase.discarded == nil {
+				tcase.discarded = []string{}
+			}
+
+			for _, gtid := range tcase.softErrants {
+				_, err := ParsePosition(Mysql56FlavorID, gtid)
+				require.NoError(t, err)
+			}
+			for _, gtid := range tcase.hardErrants {
+				_, err := ParsePosition(Mysql56FlavorID, gtid)
+				require.NoError(t, err)
+			}
+
+			// Replace this function with an actual implementation!
+			dummyCompute := func(
+				uuids map[string]string,
+				gtidExecuted map[string]string,
+				gtidPurged map[string]string,
+			) (softErrants []string, hardErrants []string, discarded []string, chosen string, err error) {
+				return nil, nil, nil, "", nil
+			}
+			softErrants, hardErrants, discarded, chosen, err := dummyCompute(uuids, tcase.gtidExecuted, tcase.gtidPurged)
+			if tcase.errMessage != "" {
+				assert.ErrorContains(t, err, tcase.errMessage)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tcase.softErrants, softErrants)
+			assert.Equal(t, tcase.hardErrants, hardErrants)
+			assert.Equal(t, tcase.discarded, discarded)
+			assert.Equal(t, tcase.chosen, chosen)
+		})
+	}
+}
