@@ -61,7 +61,7 @@ func (fra *fakeRPCTM) CreateVReplicationWorkflow(ctx context.Context, req *table
 	panic("implement me")
 }
 
-func (fra *fakeRPCTM) DeleteTenantData(ctx context.Context, req *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error) {
+func (fra *fakeRPCTM) DeleteTableData(ctx context.Context, req *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }

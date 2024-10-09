@@ -66,7 +66,7 @@ func (client *FakeTabletManagerClient) CreateVReplicationWorkflow(ctx context.Co
 	return nil, nil
 }
 
-func (client *FakeTabletManagerClient) DeleteTenantData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error) {
+func (client *FakeTabletManagerClient) DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
 	return nil, nil
 }
 

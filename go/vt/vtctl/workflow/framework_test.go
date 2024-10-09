@@ -377,8 +377,8 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 	return res, nil
 }
 
-func (tmc *testTMClient) DeleteTenantData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTenantDataRequest) (response *tabletmanagerdatapb.DeleteTenantDataResponse, err error) {
-	return &tabletmanagerdatapb.DeleteTenantDataResponse{}, nil
+func (tmc *testTMClient) DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTableDataRequest) (response *tabletmanagerdatapb.DeleteTableDataResponse, err error) {
+	return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
 }
 
 func (tmc *testTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {

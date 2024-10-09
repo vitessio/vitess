@@ -944,7 +944,7 @@ func (itmc *internalTabletManagerClient) CreateVReplicationWorkflow(context.Cont
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) DeleteTenantData(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error) {
+func (itmc *internalTabletManagerClient) DeleteTableData(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

@@ -524,8 +524,8 @@ func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.CreateVReplicationWorkflow(ctx, req)
 }
 
-func (tmc *fakeTMClient) DeleteTenantData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTenantDataRequest) (*tabletmanagerdatapb.DeleteTenantDataResponse, error) {
-	return tmc.tablets[int(tablet.Alias.Uid)].tm.DeleteTenantData(ctx, req)
+func (tmc *fakeTMClient) DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.DeleteTableData(ctx, req)
 }
 
 func (tmc *fakeTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {

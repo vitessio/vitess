@@ -39,6 +39,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
@@ -2777,15 +2778,36 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 	defer targetUnlock(&err)
 	ctx = lockCtx
 
+	deleteFilter, err := ts.addTenantFilter(ctx, "")
+	if err != nil {
+		return vterrors.Wrap(err, "failed to build delete filter")
+	}
+
+	tableFilters := make(map[string]string, len(ts.tables))
+	for _, table := range ts.tables {
+		tableFilters[table] = deleteFilter
+	}
+
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		primary := target.GetPrimary()
 		if primary == nil {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no primary tablet found for target shard %s/%s",
 				ts.targetKeyspace, target.GetShard())
 		}
-		_, err := ts.ws.tmc.DeleteTenantData(ctx, primary.Tablet, &tabletmanagerdatapb.DeleteTenantDataRequest{
-			Workflow:  ts.workflow,
-			BatchSize: batchSize,
+
+		// TODO: Write to _vt.vreplication_log about the delete.
+
+		// Let's be sure that the workflow is stopped so that it's not generating more data.
+		_, err := ts.ws.tmc.UpdateVReplicationWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: ts.workflow,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+		})
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to stop workflow %s", ts.workflow)
+		}
+		_, err = ts.ws.tmc.DeleteTableData(ctx, primary.Tablet, &tabletmanagerdatapb.DeleteTableDataRequest{
+			TableFilters: tableFilters,
+			BatchSize:    batchSize,
 		})
 		return err
 	})

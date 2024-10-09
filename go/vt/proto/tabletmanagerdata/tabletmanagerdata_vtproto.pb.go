@@ -2079,13 +2079,19 @@ func (m *CreateVReplicationWorkflowResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *DeleteTenantDataRequest) CloneVT() *DeleteTenantDataRequest {
+func (m *DeleteTableDataRequest) CloneVT() *DeleteTableDataRequest {
 	if m == nil {
-		return (*DeleteTenantDataRequest)(nil)
+		return (*DeleteTableDataRequest)(nil)
 	}
-	r := new(DeleteTenantDataRequest)
-	r.Workflow = m.Workflow
+	r := new(DeleteTableDataRequest)
 	r.BatchSize = m.BatchSize
+	if rhs := m.TableFilters; rhs != nil {
+		tmpContainer := make(map[string]string, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v
+		}
+		r.TableFilters = tmpContainer
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2093,15 +2099,15 @@ func (m *DeleteTenantDataRequest) CloneVT() *DeleteTenantDataRequest {
 	return r
 }
 
-func (m *DeleteTenantDataRequest) CloneMessageVT() proto.Message {
+func (m *DeleteTableDataRequest) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *DeleteTenantDataResponse) CloneVT() *DeleteTenantDataResponse {
+func (m *DeleteTableDataResponse) CloneVT() *DeleteTableDataResponse {
 	if m == nil {
-		return (*DeleteTenantDataResponse)(nil)
+		return (*DeleteTableDataResponse)(nil)
 	}
-	r := new(DeleteTenantDataResponse)
+	r := new(DeleteTableDataResponse)
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2109,7 +2115,7 @@ func (m *DeleteTenantDataResponse) CloneVT() *DeleteTenantDataResponse {
 	return r
 }
 
-func (m *DeleteTenantDataResponse) CloneMessageVT() proto.Message {
+func (m *DeleteTableDataResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -7851,7 +7857,7 @@ func (m *CreateVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte)
 	return len(dAtA) - i, nil
 }
 
-func (m *DeleteTenantDataRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *DeleteTableDataRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -7864,12 +7870,12 @@ func (m *DeleteTenantDataRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *DeleteTenantDataRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *DeleteTableDataRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *DeleteTenantDataRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *DeleteTableDataRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -7886,17 +7892,29 @@ func (m *DeleteTenantDataRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		i--
 		dAtA[i] = 0x10
 	}
-	if len(m.Workflow) > 0 {
-		i -= len(m.Workflow)
-		copy(dAtA[i:], m.Workflow)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Workflow)))
-		i--
-		dAtA[i] = 0xa
+	if len(m.TableFilters) > 0 {
+		for k := range m.TableFilters {
+			v := m.TableFilters[k]
+			baseI := i
+			i -= len(v)
+			copy(dAtA[i:], v)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(v)))
+			i--
+			dAtA[i] = 0x12
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0xa
+		}
 	}
 	return len(dAtA) - i, nil
 }
 
-func (m *DeleteTenantDataResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *DeleteTableDataResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -7909,12 +7927,12 @@ func (m *DeleteTenantDataResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *DeleteTenantDataResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *DeleteTableDataResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *DeleteTenantDataResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *DeleteTableDataResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -11969,15 +11987,19 @@ func (m *CreateVReplicationWorkflowResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *DeleteTenantDataRequest) SizeVT() (n int) {
+func (m *DeleteTableDataRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	l = len(m.Workflow)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	if len(m.TableFilters) > 0 {
+		for k, v := range m.TableFilters {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + protohelpers.SizeOfVarint(uint64(len(k))) + 1 + len(v) + protohelpers.SizeOfVarint(uint64(len(v)))
+			n += mapEntrySize + 1 + protohelpers.SizeOfVarint(uint64(mapEntrySize))
+		}
 	}
 	if m.BatchSize != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.BatchSize))
@@ -11986,7 +12008,7 @@ func (m *DeleteTenantDataRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *DeleteTenantDataResponse) SizeVT() (n int) {
+func (m *DeleteTableDataResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -23265,7 +23287,7 @@ func (m *CreateVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *DeleteTenantDataRequest) UnmarshalVT(dAtA []byte) error {
+func (m *DeleteTableDataRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -23288,17 +23310,17 @@ func (m *DeleteTenantDataRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: DeleteTenantDataRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: DeleteTableDataRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: DeleteTenantDataRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: DeleteTableDataRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Workflow", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TableFilters", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -23308,23 +23330,118 @@ func (m *DeleteTenantDataRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return protohelpers.ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Workflow = string(dAtA[iNdEx:postIndex])
+			if m.TableFilters == nil {
+				m.TableFilters = make(map[string]string)
+			}
+			var mapkey string
+			var mapvalue string
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return protohelpers.ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return protohelpers.ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return protohelpers.ErrInvalidLength
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return protohelpers.ErrInvalidLength
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var stringLenmapvalue uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return protohelpers.ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapvalue |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapvalue := int(stringLenmapvalue)
+					if intStringLenmapvalue < 0 {
+						return protohelpers.ErrInvalidLength
+					}
+					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
+					if postStringIndexmapvalue < 0 {
+						return protohelpers.ErrInvalidLength
+					}
+					if postStringIndexmapvalue > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
+					iNdEx = postStringIndexmapvalue
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
+						return protohelpers.ErrInvalidLength
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.TableFilters[mapkey] = mapvalue
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
@@ -23367,7 +23484,7 @@ func (m *DeleteTenantDataRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *DeleteTenantDataResponse) UnmarshalVT(dAtA []byte) error {
+func (m *DeleteTableDataResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -23390,10 +23507,10 @@ func (m *DeleteTenantDataResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: DeleteTenantDataResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: DeleteTableDataResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: DeleteTenantDataResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: DeleteTableDataResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:

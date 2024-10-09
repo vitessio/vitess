@@ -30110,194 +30110,194 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a DeleteTenantDataRequest. */
-    interface IDeleteTenantDataRequest {
+    /** Properties of a DeleteTableDataRequest. */
+    interface IDeleteTableDataRequest {
 
-        /** DeleteTenantDataRequest workflow */
-        workflow?: (string|null);
+        /** DeleteTableDataRequest table_filters */
+        table_filters?: ({ [k: string]: string }|null);
 
-        /** DeleteTenantDataRequest batch_size */
+        /** DeleteTableDataRequest batch_size */
         batch_size?: (number|Long|null);
     }
 
-    /** Represents a DeleteTenantDataRequest. */
-    class DeleteTenantDataRequest implements IDeleteTenantDataRequest {
+    /** Represents a DeleteTableDataRequest. */
+    class DeleteTableDataRequest implements IDeleteTableDataRequest {
 
         /**
-         * Constructs a new DeleteTenantDataRequest.
+         * Constructs a new DeleteTableDataRequest.
          * @param [properties] Properties to set
          */
-        constructor(properties?: tabletmanagerdata.IDeleteTenantDataRequest);
+        constructor(properties?: tabletmanagerdata.IDeleteTableDataRequest);
 
-        /** DeleteTenantDataRequest workflow. */
-        public workflow: string;
+        /** DeleteTableDataRequest table_filters. */
+        public table_filters: { [k: string]: string };
 
-        /** DeleteTenantDataRequest batch_size. */
+        /** DeleteTableDataRequest batch_size. */
         public batch_size: (number|Long);
 
         /**
-         * Creates a new DeleteTenantDataRequest instance using the specified properties.
+         * Creates a new DeleteTableDataRequest instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns DeleteTenantDataRequest instance
+         * @returns DeleteTableDataRequest instance
          */
-        public static create(properties?: tabletmanagerdata.IDeleteTenantDataRequest): tabletmanagerdata.DeleteTenantDataRequest;
+        public static create(properties?: tabletmanagerdata.IDeleteTableDataRequest): tabletmanagerdata.DeleteTableDataRequest;
 
         /**
-         * Encodes the specified DeleteTenantDataRequest message. Does not implicitly {@link tabletmanagerdata.DeleteTenantDataRequest.verify|verify} messages.
-         * @param message DeleteTenantDataRequest message or plain object to encode
+         * Encodes the specified DeleteTableDataRequest message. Does not implicitly {@link tabletmanagerdata.DeleteTableDataRequest.verify|verify} messages.
+         * @param message DeleteTableDataRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: tabletmanagerdata.IDeleteTenantDataRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: tabletmanagerdata.IDeleteTableDataRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified DeleteTenantDataRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.DeleteTenantDataRequest.verify|verify} messages.
-         * @param message DeleteTenantDataRequest message or plain object to encode
+         * Encodes the specified DeleteTableDataRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.DeleteTableDataRequest.verify|verify} messages.
+         * @param message DeleteTableDataRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: tabletmanagerdata.IDeleteTenantDataRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: tabletmanagerdata.IDeleteTableDataRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a DeleteTenantDataRequest message from the specified reader or buffer.
+         * Decodes a DeleteTableDataRequest message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns DeleteTenantDataRequest
+         * @returns DeleteTableDataRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.DeleteTenantDataRequest;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.DeleteTableDataRequest;
 
         /**
-         * Decodes a DeleteTenantDataRequest message from the specified reader or buffer, length delimited.
+         * Decodes a DeleteTableDataRequest message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns DeleteTenantDataRequest
+         * @returns DeleteTableDataRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.DeleteTenantDataRequest;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.DeleteTableDataRequest;
 
         /**
-         * Verifies a DeleteTenantDataRequest message.
+         * Verifies a DeleteTableDataRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a DeleteTenantDataRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates a DeleteTableDataRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns DeleteTenantDataRequest
+         * @returns DeleteTableDataRequest
          */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.DeleteTenantDataRequest;
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.DeleteTableDataRequest;
 
         /**
-         * Creates a plain object from a DeleteTenantDataRequest message. Also converts values to other types if specified.
-         * @param message DeleteTenantDataRequest
+         * Creates a plain object from a DeleteTableDataRequest message. Also converts values to other types if specified.
+         * @param message DeleteTableDataRequest
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: tabletmanagerdata.DeleteTenantDataRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: tabletmanagerdata.DeleteTableDataRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this DeleteTenantDataRequest to JSON.
+         * Converts this DeleteTableDataRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for DeleteTenantDataRequest
+         * Gets the default type url for DeleteTableDataRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a DeleteTenantDataResponse. */
-    interface IDeleteTenantDataResponse {
+    /** Properties of a DeleteTableDataResponse. */
+    interface IDeleteTableDataResponse {
     }
 
-    /** Represents a DeleteTenantDataResponse. */
-    class DeleteTenantDataResponse implements IDeleteTenantDataResponse {
+    /** Represents a DeleteTableDataResponse. */
+    class DeleteTableDataResponse implements IDeleteTableDataResponse {
 
         /**
-         * Constructs a new DeleteTenantDataResponse.
+         * Constructs a new DeleteTableDataResponse.
          * @param [properties] Properties to set
          */
-        constructor(properties?: tabletmanagerdata.IDeleteTenantDataResponse);
+        constructor(properties?: tabletmanagerdata.IDeleteTableDataResponse);
 
         /**
-         * Creates a new DeleteTenantDataResponse instance using the specified properties.
+         * Creates a new DeleteTableDataResponse instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns DeleteTenantDataResponse instance
+         * @returns DeleteTableDataResponse instance
          */
-        public static create(properties?: tabletmanagerdata.IDeleteTenantDataResponse): tabletmanagerdata.DeleteTenantDataResponse;
+        public static create(properties?: tabletmanagerdata.IDeleteTableDataResponse): tabletmanagerdata.DeleteTableDataResponse;
 
         /**
-         * Encodes the specified DeleteTenantDataResponse message. Does not implicitly {@link tabletmanagerdata.DeleteTenantDataResponse.verify|verify} messages.
-         * @param message DeleteTenantDataResponse message or plain object to encode
+         * Encodes the specified DeleteTableDataResponse message. Does not implicitly {@link tabletmanagerdata.DeleteTableDataResponse.verify|verify} messages.
+         * @param message DeleteTableDataResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: tabletmanagerdata.IDeleteTenantDataResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: tabletmanagerdata.IDeleteTableDataResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified DeleteTenantDataResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.DeleteTenantDataResponse.verify|verify} messages.
-         * @param message DeleteTenantDataResponse message or plain object to encode
+         * Encodes the specified DeleteTableDataResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.DeleteTableDataResponse.verify|verify} messages.
+         * @param message DeleteTableDataResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: tabletmanagerdata.IDeleteTenantDataResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: tabletmanagerdata.IDeleteTableDataResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a DeleteTenantDataResponse message from the specified reader or buffer.
+         * Decodes a DeleteTableDataResponse message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns DeleteTenantDataResponse
+         * @returns DeleteTableDataResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.DeleteTenantDataResponse;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.DeleteTableDataResponse;
 
         /**
-         * Decodes a DeleteTenantDataResponse message from the specified reader or buffer, length delimited.
+         * Decodes a DeleteTableDataResponse message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns DeleteTenantDataResponse
+         * @returns DeleteTableDataResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.DeleteTenantDataResponse;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.DeleteTableDataResponse;
 
         /**
-         * Verifies a DeleteTenantDataResponse message.
+         * Verifies a DeleteTableDataResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a DeleteTenantDataResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates a DeleteTableDataResponse message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns DeleteTenantDataResponse
+         * @returns DeleteTableDataResponse
          */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.DeleteTenantDataResponse;
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.DeleteTableDataResponse;
 
         /**
-         * Creates a plain object from a DeleteTenantDataResponse message. Also converts values to other types if specified.
-         * @param message DeleteTenantDataResponse
+         * Creates a plain object from a DeleteTableDataResponse message. Also converts values to other types if specified.
+         * @param message DeleteTableDataResponse
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: tabletmanagerdata.DeleteTenantDataResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: tabletmanagerdata.DeleteTableDataResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this DeleteTenantDataResponse to JSON.
+         * Converts this DeleteTableDataResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for DeleteTenantDataResponse
+         * Gets the default type url for DeleteTableDataResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

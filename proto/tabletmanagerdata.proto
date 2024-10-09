@@ -605,12 +605,16 @@ message CreateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
-message DeleteTenantDataRequest {
-  string workflow = 1;
+message DeleteTableDataRequest {
+  // The key is the table that we want to delete data from.
+  // The value is the filter or WHERE clause to use when deleting
+  // data in the table.
+  map <string, string> table_filters = 1;
+  // BatchSize is the number of rows to delete in a single batch.
   int64 batch_size = 2;
 }
 
-message DeleteTenantDataResponse {
+message DeleteTableDataResponse {
 }
 
 message DeleteVReplicationWorkflowRequest {
