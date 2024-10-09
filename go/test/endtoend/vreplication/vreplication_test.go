@@ -1197,6 +1197,10 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled) {
 					t.Logf("Throttler status: %v", status)
 				}
+			}
+			for _, tab := range customerTablets {
+				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				assert.NoError(t, err)
 				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
 					t.Logf("Throttler status: %v", status)
 				}
@@ -1242,6 +1246,11 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled) {
 					t.Logf("Throttler status: %v", status)
 				}
+			}
+			for _, tab := range productTablets {
+				// Give time for unthrottling to take effect and for targets to fetch data.
+				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				assert.NoError(t, err)
 				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
 					t.Logf("Throttler status: %v", status)
 				}
