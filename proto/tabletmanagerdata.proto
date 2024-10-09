@@ -798,8 +798,7 @@ enum CheckThrottlerResponseCode {
 }
 
 message CheckThrottlerResponse {
-  // StatusCode is HTTP compliant response code (e.g. 200 for OK)
-  int32 status_code = 1;
+  reserved 1; // was `status_code`, HTTP compliant, deprecated
   // Value is the metric value collected by the tablet
   double value = 2;
   // Threshold is the throttling threshold the table was comparing the value with
@@ -815,8 +814,7 @@ message CheckThrottlerResponse {
   message Metric {
     // Name of the metric
     string name = 1;
-    // StatusCode is HTTP compliant response code (e.g. 200 for OK)
-    int32 status_code = 2;
+    reserved 2; // was `status_code`, HTTP compliant, deprecated
     // Value is the metric value collected by the tablet
     double value = 3;
     // Threshold is the throttling threshold the table was comparing the value with
@@ -899,7 +897,7 @@ message GetThrottlerStatusResponse {
 
   message RecentApp {
     vttime.Time checked_at = 1;
-    int32 status_code = 2;
+    reserved 2; // was HTTP `status_code`, deprecated
     // ResponseCode is the enum representation of the response
     CheckThrottlerResponseCode response_code = 3;
   }
