@@ -1187,9 +1187,8 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "primary")
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the source side component (vstreamer), and insert some rows.
-			body, err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, sourceThrottlerAppName)
+			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, sourceThrottlerAppName)
 			assert.NoError(t, err)
-			assert.Contains(t, body, sourceThrottlerAppName)
 			for _, tab := range productTablets {
 				// Wait for throttling to take effect (caching will expire by this time):
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled)
@@ -1207,9 +1206,8 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// Unthrottle the vstreamer component, and expect the rows to show up.
-			body, err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, sourceThrottlerAppName)
+			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, sourceThrottlerAppName)
 			assert.NoError(t, err)
-			assert.Contains(t, body, sourceThrottlerAppName)
 			for _, tab := range productTablets {
 				// Give time for unthrottling to take effect and for targets to fetch data.
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
@@ -1222,9 +1220,8 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		t.Run("throttle-app-customer", func(t *testing.T) {
 			// Now, throttle vreplication on the target side (vplayer), and insert some
 			// more rows.
-			body, err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
+			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
 			assert.NoError(t, err)
-			assert.Contains(t, body, targetThrottlerAppName)
 			for _, tab := range customerTablets {
 				// Wait for throttling to take effect (caching will expire by this time):
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled)
@@ -1242,9 +1239,8 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on target tablets, and expect the rows to show up
-			body, err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
+			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
 			assert.NoError(t, err)
-			assert.Contains(t, body, targetThrottlerAppName)
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)

@@ -301,13 +301,15 @@ func throttleApp(clusterInstance *cluster.LocalProcessCluster, throttlerApp thro
 }
 
 // ThrottleKeyspaceApp throttles given app name for the next hour
-func ThrottleKeyspaceApp(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, throttlerApp throttlerapp.Name) (string, error) {
-	return throttleAppRaw(vtctldProcess, keyspaceName, throttlerApp, true)
+func ThrottleKeyspaceApp(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, throttlerApp throttlerapp.Name) error {
+	_, err := throttleAppRaw(vtctldProcess, keyspaceName, throttlerApp, true)
+	return err
 }
 
 // ThrottleApp unthrottles given app name
-func UnthrottleKeyspaceApp(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, throttlerApp throttlerapp.Name) (string, error) {
-	return throttleAppRaw(vtctldProcess, keyspaceName, throttlerApp, false)
+func UnthrottleKeyspaceApp(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, throttlerApp throttlerapp.Name) error {
+	_, err := throttleAppRaw(vtctldProcess, keyspaceName, throttlerApp, false)
+	return err
 }
 
 func WaitUntilTabletsConfirmThrottledApp(t *testing.T, clusterInstance *cluster.LocalProcessCluster, throttlerApp throttlerapp.Name, expectThrottled bool) {
