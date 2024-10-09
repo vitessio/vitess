@@ -827,7 +827,6 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		_ = inst.AuditOperation(string(analysisEntry.Analysis), analysisEntry.AnalyzedInstanceAlias, message)
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%+v: successfully promoted %+v", analysisEntry.Analysis, promotedReplica.InstanceAlias))
-		vtopsExec.RaiseProblem(analysisEntry.AnalyzedInstanceHostname, "orc-dead-tablet", true)
 	}
 }
 
