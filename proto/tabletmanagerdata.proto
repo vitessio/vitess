@@ -615,6 +615,9 @@ message DeleteTableDataRequest {
 }
 
 message DeleteTableDataResponse {
+  // The key is the table that we deleted data from.
+  // The value is the number of rows deleted from the table.
+  map <string, uint64> table_results = 1;
 }
 
 message DeleteVReplicationWorkflowRequest {

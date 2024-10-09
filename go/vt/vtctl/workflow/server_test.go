@@ -851,6 +851,43 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 		},
 		{
+			name: "multi-tenant workflow with keep-data",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+				KeepData: true,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			want: &vtctldatapb.WorkflowDeleteResponse{
+				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+				Details: []*vtctldatapb.WorkflowDeleteResponse_TabletInfo{
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
+						Deleted: true,
+					},
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
+						Deleted: true,
+					},
+				},
+			},
+		},
+		{
 			name: "multi-tenant reshard",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
@@ -911,7 +948,7 @@ func TestWorkflowDelete(t *testing.T) {
 			wantErr: "unsupported workflow type \"Reshard\" for multi-tenant migration",
 		},
 		{
-			name: "multi-tenant reshard",
+			name: "multi-tenant workflow without predicate ",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
 				ShardNames:   []string{"0"},

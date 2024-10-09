@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -160,10 +162,15 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 	}
 	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", batchSize))}
 
+	tableResults := make(map[string]uint64) // Track the number of rows deleted from each table
+	throttledLogger := logutil.NewThrottledLogger("DeleteTableData", 1*time.Minute)
+	resp := &tabletmanagerdatapb.DeleteTableDataResponse{
+		TableResults: tableResults,
+	}
 	checkIfCanceled := func() error {
 		select {
 		case <-ctx.Done():
-			return vterrors.Wrap(ctx.Err(), "context canceled while deleting data")
+			return vterrors.Wrap(ctx.Err(), "context ended while deleting data")
 		default:
 			return nil
 		}
@@ -172,25 +179,24 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 	for _, table := range tables {
 		stmt, err := tm.Env.Parser().Parse(fmt.Sprintf("delete from %s %s", table, req.TableFilters[table]))
 		if err != nil {
-			return nil, vterrors.Wrap(err, "unable to build delete query")
+			return resp, vterrors.Wrapf(err, "unable to build delete query for table %s", table)
 		}
 		del, ok := stmt.(*sqlparser.Delete)
 		if !ok {
-			return nil, vterrors.Wrap(err, "unable to build delete query")
+			return resp, vterrors.Wrapf(err, "unable to build delete query for table %s", table)
 		}
 		del.Limit = limit
 		query := sqlparser.String(del)
 		// Delete all of the matching rows from the table, in batches, until we've
 		// deleted them all.
 		for {
-			// TODO: add some kind of progress tracking here so that we can gauge
-			// progress, see if we're getting throttled a lot, etc.
-
 			// Back off if we're causing too much load on the database with these
 			// batch deletes.
 			if _, ok := tm.VREngine.ThrottlerClient().ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.VReplicationName); !ok {
+				throttledLogger.Infof("throttling bulk data delete for table %s using query %s",
+					table, query)
 				if err := checkIfCanceled(); err != nil {
-					return nil, err
+					return resp, err
 				}
 				continue
 			}
@@ -199,19 +205,23 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 					Query:  []byte(query),
 					DbName: tm.DBConfigs.DBName,
 				})
+			if res != nil {
+				tableResults[table] += res.RowsAffected
+			}
 			if err != nil {
-				return nil, vterrors.Wrapf(err, "error deleting data using query %q", query)
+				return resp, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error deleting data using query %q: %v",
+					query, err)
 			}
 			if res.RowsAffected == 0 { // We're done with this table
 				break
 			}
 			if err := checkIfCanceled(); err != nil {
-				return nil, err
+				return resp, err
 			}
 		}
 	}
 
-	return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
+	return resp, nil
 }
 
 func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {

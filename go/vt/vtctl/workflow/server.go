@@ -2155,6 +2155,8 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		// We don't cleanup other related artifacts since they are not tied to the tenant.
 		if !req.GetKeepData() {
 			if err := s.DeleteTenantData(ctx, ts, req.DeleteBatchSize); err != nil {
+				log.Errorf("DEBUG: %v", vterrors.Wrapf(err, "failed to fully delete all migrated data for tenant %s, please retry the operation",
+					ts.options.TenantId))
 				return nil, vterrors.Wrapf(err, "failed to fully delete all migrated data for tenant %s, please retry the operation",
 					ts.options.TenantId)
 			}
@@ -2756,7 +2758,7 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 		return nil
 	}
 
-	var err error
+	var err error // This should be used from here on out
 	// Lock the workflow along with its target keyspace.
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DeleteTenantData")
@@ -2778,7 +2780,8 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 	defer targetUnlock(&err)
 	ctx = lockCtx
 
-	tenantPredicate, err := ts.buildTenantPredicate(ctx)
+	var tenantPredicate *sqlparser.Expr
+	tenantPredicate, err = ts.buildTenantPredicate(ctx)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to build delete filter")
 	}
@@ -2789,29 +2792,53 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 		tableFilters[table] = deleteFilter
 	}
 
-	return ts.ForAllTargets(func(target *MigrationTarget) error {
+	// Track the number of rows deleted per table.
+	results := make(map[string]uint64, len(ts.targets))
+	resultsMu := sync.Mutex{}
+
+	if err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		primary := target.GetPrimary()
 		if primary == nil {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no primary tablet found for target shard %s/%s",
 				ts.targetKeyspace, target.GetShard())
 		}
 
-		// TODO: Write to _vt.vreplication_log about the delete.
-
 		// Let's be sure that the workflow is stopped so that it's not generating more data.
-		_, err := ts.ws.tmc.UpdateVReplicationWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+		_, ierr := ts.ws.tmc.UpdateVReplicationWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow: ts.workflow,
 			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
 		})
-		if err != nil {
+		if ierr != nil {
 			return vterrors.Wrapf(err, "failed to stop workflow %s", ts.workflow)
 		}
-		_, err = ts.ws.tmc.DeleteTableData(ctx, primary.Tablet, &tabletmanagerdatapb.DeleteTableDataRequest{
+		s.Logger().Infof("Deleting tenant %s data that was migrated in mulit-tenant workflow %s",
+			ts.workflow, ts.options.TenantId)
+		res, ierr := ts.ws.tmc.DeleteTableData(ctx, primary.Tablet, &tabletmanagerdatapb.DeleteTableDataRequest{
 			TableFilters: tableFilters,
 			BatchSize:    batchSize,
 		})
+		if res != nil {
+			log.Errorf("DEBUG: vtctld side deleteTableData results: %v", res.TableResults)
+			resultsMu.Lock()
+			defer resultsMu.Unlock()
+			for table, count := range res.TableResults {
+				results[table] += count
+			}
+		}
+		return ierr
+	}); err != nil {
+		// Include info on what was deleted.
+		var msg string
+		if len(results) > 0 {
+			msg = fmt.Sprintf("table data deletion progress (rows per table): %v", results)
+			err = vterrors.Wrap(err, msg)
+		}
+		s.Logger().Infof("Data deletion for tenant %s did not complete successfully due to error: %v. %s",
+			ts.options.TenantId, err, msg)
 		return err
-	})
+	}
+
+	return nil
 }
 
 func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {

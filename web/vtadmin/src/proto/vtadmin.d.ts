@@ -30215,6 +30215,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a DeleteTableDataResponse. */
     interface IDeleteTableDataResponse {
+
+        /** DeleteTableDataResponse table_results */
+        table_results?: ({ [k: string]: (number|Long) }|null);
     }
 
     /** Represents a DeleteTableDataResponse. */
@@ -30225,6 +30228,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IDeleteTableDataResponse);
+
+        /** DeleteTableDataResponse table_results. */
+        public table_results: { [k: string]: (number|Long) };
 
         /**
          * Creates a new DeleteTableDataResponse instance using the specified properties.
