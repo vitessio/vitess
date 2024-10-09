@@ -98,14 +98,12 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 
 	// start an incomplete transaction
 	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into buffer(id, msg) values(33,'mark')")
+	utils.Exec(t, conn, "select * from buffer where id = 3 for update")
 
 	// Enforce a restart to enforce rollback
 	if err = clusterInstance.RestartVtgate(); err != nil {
 		t.Errorf("Fail to re-start vtgate: %v", err)
 	}
-
-	want := ""
 
 	// Make a new mysql connection to vtGate
 	vtParams = clusterInstance.GetVTParams(keyspaceName)
@@ -113,12 +111,13 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	require.NoError(t, err)
 	defer conn2.Close()
 
-	vtParams = clusterInstance.GetVTParams(keyspaceName)
-	// Verify that rollback worked
-	qr := utils.Exec(t, conn2, "select id from buffer where msg='mark'")
-	got := fmt.Sprintf("%v", qr.Rows)
-	want = `[[INT64(3)]]`
-	assert.Equal(t, want, got)
+	// Start a new transaction
+	utils.Exec(t, conn2, "begin")
+	defer utils.Exec(t, conn2, "rollback")
+	// Verify previous transaction was rolled back. Row lock should be available, otherwise we'll get an error.
+	qr := utils.Exec(t, conn2, "select * from buffer where id = 3 for update nowait")
+	assert.Equal(t, 1, len(qr.Rows))
+
 }
 
 func TestErrorInAutocommitSession(t *testing.T) {
