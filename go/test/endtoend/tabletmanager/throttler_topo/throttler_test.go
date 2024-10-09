@@ -195,7 +195,7 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 	_ = warmUpHeartbeat(t)
 
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: true}
-	_, ok := throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, tablet, throttlerapp.OnlineDDLName, flags, wantCode, onDemandHeartbeatDuration*4)
+	_, ok := throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, tablet, throttlerapp.TestingName, flags, wantCode, onDemandHeartbeatDuration*4)
 	return ok
 }
 
