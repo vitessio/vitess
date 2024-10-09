@@ -1,0 +1,132 @@
+[
+	{
+		"query": "select count(*), col2 from music group by col2",
+		"expected": {
+			"statementType": "SELECT",
+			"groupingColumns": [
+				"music.col2"
+			],
+			"selectColumns": [
+				"music.col2"
+			]
+		}
+	},
+	{
+		"query": "select * from user u join user_extra ue on u.id = ue.user_id where u.col1 \u003e 100 and ue.noLimit = 'foo'",
+		"expected": {
+			"statementType": "SELECT",
+			"joinColumns": [
+				"`user`.id =",
+				"user_extra.user_id ="
+			],
+			"filterColumns": [
+				"`user`.col1 gt",
+				"user_extra.noLimit ="
+			]
+		}
+	},
+	{
+		"query": "select * from user_extra ue, user u where ue.noLimit = 'foo' and u.col1 \u003e 100 and ue.user_id = u.id",
+		"expected": {
+			"statementType": "SELECT",
+			"joinColumns": [
+				"`user`.id =",
+				"user_extra.user_id ="
+			],
+			"filterColumns": [
+				"`user`.col1 gt",
+				"user_extra.noLimit ="
+			]
+		}
+	},
+	{
+		"query": "select u.foo, ue.bar, count(*) from user u join user_extra ue on u.id = ue.user_id where u.name = 'John Doe' group by 1, 2",
+		"expected": {
+			"statementType": "SELECT",
+			"groupingColumns": [
+				"`user`.foo",
+				"user_extra.bar"
+			],
+			"joinColumns": [
+				"`user`.id =",
+				"user_extra.user_id ="
+			],
+			"filterColumns": [
+				"`user`.`name` ="
+			],
+			"selectColumns": [
+				"`user`.foo",
+				"user_extra.bar"
+			]
+		}
+	},
+	{
+		"query": "select * from (select * from user) as derived where derived.amount \u003e 1000",
+		"expected": {
+			"statementType": "SELECT"
+		}
+	},
+	{
+		"query": "select name, sum(amount) from user group by name",
+		"expected": {
+			"statementType": "SELECT",
+			"groupingColumns": [
+				"`user`.`name`"
+			],
+			"selectColumns": [
+				"`user`.`name`",
+				"`user`.amount"
+			]
+		}
+	},
+	{
+		"query": "select name from user where age \u003e 30",
+		"expected": {
+			"statementType": "SELECT",
+			"filterColumns": [
+				"`user`.age gt"
+			],
+			"selectColumns": [
+				"`user`.`name`"
+			]
+		}
+	},
+	{
+		"query": "select * from user where name = 'apa' union select * from user_extra where name = 'monkey'",
+		"expected": {
+			"statementType": "SELECT",
+			"filterColumns": [
+				"`user`.`name` =",
+				"user_extra.`name` ="
+			]
+		}
+	},
+	{
+		"query": "update user set name = 'Jane Doe' where id = 1",
+		"expected": {
+			"statementType": "UPDATE",
+			"filterColumns": [
+				"`user`.id ="
+			]
+		}
+	},
+	{
+		"query": "delete from user where order_date \u003c '2023-01-01'",
+		"expected": {
+			"statementType": "DELETE",
+			"filterColumns": [
+				"`user`.order_date lt"
+			]
+		}
+	},
+	{
+		"query": "select * from user where name between 'A' and 'C'",
+		"expected": {
+			"statementType": "SELECT",
+			"filterColumns": [
+				"`user`.`name` ge",
+				"`user`.`name` le"
+			]
+		}
+	}
+]

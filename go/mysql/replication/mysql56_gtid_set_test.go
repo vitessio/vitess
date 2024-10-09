@@ -705,6 +705,52 @@ func BenchmarkMySQL56GTIDParsing(b *testing.B) {
 	}
 }
 
+func TestGTIDCount(t *testing.T) {
+	tests := []struct {
+		name      string
+		gtidStr   string
+		wantCount int64
+		wantErr   string
+	}{
+		{
+			name:      "Empty GTID String",
+			gtidStr:   "",
+			wantCount: 0,
+		}, {
+			name:      "Single GTID",
+			gtidStr:   "00010203-0405-0607-0809-0a0b0c0d0e0f:12",
+			wantCount: 1,
+		}, {
+			name:      "Single GTID Interval",
+			gtidStr:   "00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
+			wantCount: 5,
+		}, {
+			name:      "Single UUID",
+			gtidStr:   "00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:11-20",
+			wantCount: 15,
+		}, {
+			name:      "Multiple UUIDs",
+			gtidStr:   "00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50",
+			wantCount: 22,
+		}, {
+			name:    "Parsing error",
+			gtidStr: "incorrect set",
+			wantErr: "invalid MySQL 5.6 GTID set",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := GTIDCount(tt.gtidStr)
+			require.EqualValues(t, tt.wantCount, count)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestErrantGTIDsOnReplica(t *testing.T) {
 	tests := []struct {
 		name             string

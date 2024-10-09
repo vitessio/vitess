@@ -424,15 +424,32 @@ export const fetchVSchema = async ({ clusterID, keyspace }: FetchVSchemaParams) 
 export interface FetchTransactionsParams {
     clusterID: string;
     keyspace: string;
+    abandonAge?: string;
 }
 
-export const fetchTransactions = async ({ clusterID, keyspace }: FetchTransactionsParams) => {
-    const { result } = await vtfetch(`/api/transactions/${clusterID}/${keyspace}`);
+export const fetchTransactions = async ({ clusterID, keyspace, abandonAge = '' }: FetchTransactionsParams) => {
+    const req = new URLSearchParams();
+    req.append('abandon_age', abandonAge);
+
+    const { result } = await vtfetch(`/api/transactions/${clusterID}/${keyspace}?${req}`);
 
     const err = vtctldata.GetUnresolvedTransactionsResponse.verify(result);
     if (err) throw Error(err);
 
     return vtctldata.GetUnresolvedTransactionsResponse.create(result);
+};
+
+export interface ConcludeTransactionParams {
+    clusterID: string;
+    dtid: string;
+}
+
+export const concludeTransaction = async ({ clusterID, dtid }: ConcludeTransactionParams) => {
+    const { result } = await vtfetch(`/api/transaction/${clusterID}/${dtid}/conclude`);
+    const err = vtctldata.ConcludeTransactionResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ConcludeTransactionResponse.create(result);
 };
 
 export const fetchWorkflows = async () => {
