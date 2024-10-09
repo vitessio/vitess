@@ -81,7 +81,7 @@ func tryCastStatement(v interface{}) Statement {
   ins           *Insert
   byt           byte
   bytes         []byte
-  bytes2        [][]byte
+  comments      Comments
   str           string
   int           int
   strs          []string
@@ -476,7 +476,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last
-%type <bytes2> comment_opt comment_list
+%type <comments> comment_opt comment_list
 %type <str> distinct_opt union_op intersect_op except_op insert_or_replace
 %type <str> match_option format_opt
 %type <separator> separator_opt
@@ -1315,7 +1315,7 @@ create_spatial_ref_sys:
 
 srs_attribute:
   {
-    $$ = (*SrsAttribute)(nil)
+    $$ = new(SrsAttribute)
   }
 | srs_attribute NAME STRING
   {
@@ -6243,16 +6243,16 @@ comment_opt:
   {
     setAllowComments(yylex, true)
   }
-  comment_list
+ comment_list
   {
-    $$ = nil
+    $$ = $2
     setAllowComments(yylex, false)
   }
 
 comment_list:
-  {
-    $$ = nil
-  }
+ {
+    $$ = Comments(nil)
+ }
 | comment_list COMMENT
   {
     $$ = append($1, $2)
@@ -8904,7 +8904,7 @@ ignore_opt:
   { $$ = IgnoreStr }
 
 ignore_number_opt:
-  { $$ = nil }
+  { $$ = (*SQLVal)(nil) }
 | IGNORE INTEGRAL LINES
   { $$ = NewIntVal($2) }
 | IGNORE INTEGRAL ROWS

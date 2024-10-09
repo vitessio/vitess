@@ -623,7 +623,7 @@ select_statement:
 | SELECT comment_opt query_opts NEXT num_val for_from table_name
   {
     $$ = &Select{
-    	Comments: Comments($2.([][]byte)),
+    	Comments: Comments($2.(Comments)),
     	QueryOpts: $3.(*QueryOpts),
     	SelectExprs: SelectExprs{Nextval{Expr: tryCastExpr($5)}},
     	From: TableExprs{&AliasedTableExpr{Expr: $7.(TableName)}},
@@ -658,7 +658,7 @@ select_statement_with_no_trailing_into:
 stream_statement:
   STREAM comment_opt select_expression FROM table_name
   {
-    $$ = &Stream{Comments: Comments($2.([][]byte)), SelectExpr: $3.(SelectExpr), Table: $5.(TableName)}
+    $$ = &Stream{Comments: Comments($2.(Comments)), SelectExpr: $3.(SelectExpr), Table: $5.(TableName)}
   }
 
 // select_or_set_op is an unparenthesized SELECT without an order by clause or UNION/INTERSECT/EXCEPT operation
@@ -764,7 +764,7 @@ base_select_no_cte:
   SELECT comment_opt query_opts select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
   {
     $$ = &Select{
-    	Comments: Comments($2.([][]byte)),
+    	Comments: Comments($2.(Comments)),
     	QueryOpts: $3.(*QueryOpts),
 	SelectExprs: $4.(SelectExprs),
 	Into: $5.(*Into),
@@ -855,7 +855,7 @@ insert_statement:
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7.(*Insert)
     ins.Action = $2.(string)
-    ins.Comments = $3.([][]byte)
+    ins.Comments = $3.(Comments)
     ins.Ignore = $4.(string)
     ins.Table = $5.(TableName)
     ins.Partitions = $6.(Partitions)
@@ -868,7 +868,7 @@ insert_statement:
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7.(*Insert)
     ins.Action = $2.(string)
-    ins.Comments = $3.([][]byte)
+    ins.Comments = $3.(Comments)
     ins.Ignore = $4.(string)
     ins.Table = $5.(TableName)
     ins.Partitions = $6.(Partitions)
@@ -884,7 +884,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $2.(string), Comments: Comments($3.([][]byte)), Ignore: $4.(string), Table: $5.(TableName), Partitions: $6.(Partitions), Columns: cols, Rows: &AliasedValues{Values: Values{vals}}, OnDup: OnDup($9.(AssignmentExprs)), With: $1.(*With)}
+    $$ = &Insert{Action: $2.(string), Comments: Comments($3.(Comments)), Ignore: $4.(string), Table: $5.(TableName), Partitions: $6.(Partitions), Columns: cols, Rows: &AliasedValues{Values: Values{vals}}, OnDup: OnDup($9.(AssignmentExprs)), With: $1.(*With)}
   }
 
 insert_or_replace:
@@ -900,25 +900,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($3.([][]byte)), Ignore: $4.(string), TableExprs: $5.(TableExprs), Exprs: $7.(AssignmentExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), OrderBy: $9.(OrderBy), Limit: $10.(*Limit), With: $1.(*With)}
+    $$ = &Update{Comments: Comments($3.(Comments)), Ignore: $4.(string), TableExprs: $5.(TableExprs), Exprs: $7.(AssignmentExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), OrderBy: $9.(OrderBy), Limit: $10.(*Limit), With: $1.(*With)}
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($3.([][]byte)), TableExprs: TableExprs{&AliasedTableExpr{Expr:$5.(TableName)}}, Partitions: $6.(Partitions), Where: NewWhere(WhereStr, tryCastExpr($7)), OrderBy: $8.(OrderBy), Limit: $9.(*Limit), With: $1.(*With)}
+    $$ = &Delete{Comments: Comments($3.(Comments)), TableExprs: TableExprs{&AliasedTableExpr{Expr:$5.(TableName)}}, Partitions: $6.(Partitions), Where: NewWhere(WhereStr, tryCastExpr($7)), OrderBy: $8.(OrderBy), Limit: $9.(*Limit), With: $1.(*With)}
   }
 | with_clause_opt DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.([][]byte)), Targets: $5.(TableNames), TableExprs: $7.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), With: $1.(*With)}
+    $$ = &Delete{Comments: Comments($3.(Comments)), Targets: $5.(TableNames), TableExprs: $7.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), With: $1.(*With)}
   }
 | with_clause_opt DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.([][]byte)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
+    $$ = &Delete{Comments: Comments($3.(Comments)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
   }
 | with_clause_opt DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.([][]byte)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
+    $$ = &Delete{Comments: Comments($3.(Comments)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
   }
 
 from_or_using:
@@ -967,21 +967,21 @@ opt_partition_clause:
 set_statement:
   SET comment_opt set_list
   {
-    $$ = &Set{Comments: Comments($2.([][]byte)), Exprs: $3.(SetVarExprs)}
+    $$ = &Set{Comments: Comments($2.(Comments)), Exprs: $3.(SetVarExprs)}
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
     for i := 0; i < len($4.(SetVarExprs)); i++ {
       $4.(SetVarExprs)[i].Scope = SetScope_None
     }
-    $$ = &Set{Comments: Comments($2.([][]byte)), Exprs: $4.(SetVarExprs)}
+    $$ = &Set{Comments: Comments($2.(Comments)), Exprs: $4.(SetVarExprs)}
   }
 | SET comment_opt set_scope_primary TRANSACTION transaction_chars
   {
     for i := 0; i < len($5.(SetVarExprs)); i++ {
       $5.(SetVarExprs)[i].Scope = $3.(SetScope)
     }
-    $$ = &Set{Comments: Comments($2.([][]byte)), Exprs: $5.(SetVarExprs)}
+    $$ = &Set{Comments: Comments($2.(Comments)), Exprs: $5.(SetVarExprs)}
   }
 
 transaction_chars:
@@ -1172,7 +1172,7 @@ create_spatial_ref_sys:
 
 srs_attribute:
   {
-    $$ = (*SrsAttribute)(nil)
+    $$ = new(SrsAttribute)
   }
 | srs_attribute NAME STRING
   {
@@ -6100,19 +6100,19 @@ comment_opt:
   {
     setAllowComments(yylex, true)
   }
-  comment_list
+ comment_list
   {
-    $$ = [][]byte(nil)
+    $$ = $2
     setAllowComments(yylex, false)
   }
 
 comment_list:
-  {
-    $$ = [][]byte(nil)
-  }
+ {
+    $$ = Comments(nil)
+ }
 | comment_list COMMENT
   {
-    $$ = append($1.([][]byte), $2)
+    $$ = append($1.(Comments), $2)
   }
 
 union_op:
@@ -8761,7 +8761,7 @@ ignore_opt:
   { $$ = IgnoreStr }
 
 ignore_number_opt:
-  { $$ = nil }
+  { $$ = (*SQLVal)(nil) }
 | IGNORE INTEGRAL LINES
   { $$ = NewIntVal($2) }
 | IGNORE INTEGRAL ROWS
