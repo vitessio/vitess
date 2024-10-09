@@ -195,8 +195,8 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 	_ = warmUpHeartbeat(t)
 
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: true}
-	_, err := throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, tablet, throttlerapp.OnlineDDLName, flags, wantCode, onDemandHeartbeatDuration*4)
-	return err == nil
+	_, ok := throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, tablet, throttlerapp.OnlineDDLName, flags, wantCode, onDemandHeartbeatDuration*4)
+	return ok
 }
 
 func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
