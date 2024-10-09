@@ -178,32 +178,34 @@ export const CreateReshard = () => {
                             inputClassName="block w-full"
                             itemToString={(ks) => ks?.keyspace?.name || ''}
                             items={clusterKeyspaces}
-                            label="Source Keyspace"
+                            label="Keyspace"
                             onChange={(ks) => setFormData({ ...formData, keyspace: ks?.keyspace?.name || '' })}
                             placeholder={keyspacesQuery.isLoading ? 'Loading keyspaces...' : 'Select a keyspace'}
                             renderItem={(ks) => `${ks?.keyspace?.name}`}
                             selectedItem={selectedKeyspace}
                         />
-                        <Label
-                            className="block grow min-w-[300px]"
-                            label="Source Shards"
-                            helpText={'Comma separated source shards'}
-                        >
-                            <TextInput
-                                onChange={(e) => setFormData({ ...formData, sourceShards: e.target.value })}
-                                value={formData.sourceShards || ''}
-                            />
-                        </Label>
-                        <Label
-                            className="block grow min-w-[300px]"
-                            label="Target Shards"
-                            helpText={'Comma separated target shards'}
-                        >
-                            <TextInput
-                                onChange={(e) => setFormData({ ...formData, targetShards: e.target.value })}
-                                value={formData.targetShards || ''}
-                            />
-                        </Label>
+                        <div className="flex grow flex-row gap-4 flex-wrap">
+                            <Label
+                                className="block grow min-w-[300px]"
+                                label="Source Shards"
+                                helpText={'Comma separated source shards'}
+                            >
+                                <TextInput
+                                    onChange={(e) => setFormData({ ...formData, sourceShards: e.target.value })}
+                                    value={formData.sourceShards || ''}
+                                />
+                            </Label>
+                            <Label
+                                className="block grow min-w-[300px]"
+                                label="Target Shards"
+                                helpText={'Comma separated target shards'}
+                            >
+                                <TextInput
+                                    onChange={(e) => setFormData({ ...formData, targetShards: e.target.value })}
+                                    value={formData.targetShards || ''}
+                                />
+                            </Label>
+                        </div>
                     </div>
 
                     <div className="my-2 mt-4">
