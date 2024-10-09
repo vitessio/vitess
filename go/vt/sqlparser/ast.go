@@ -3946,6 +3946,7 @@ func (node *Show) walkSubtree(visit Visit) error {
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
 	DbName string
+	SchemaName string
 	Filter *ShowFilter
 	AsOf   Expr
 }
@@ -3955,9 +3956,15 @@ func (node *ShowTablesOpt) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	if node.DbName != "" {
+	
+	if node.SchemaName != "" && node.DbName != "" { 
+		buf.Myprintf(" from %s.%s", node.DbName, node.SchemaName)
+	} else if node.DbName != "" {
 		buf.Myprintf(" from %s", node.DbName)
+	} else if node.SchemaName != "" {
+		buf.Myprintf(" from %s", node.SchemaName)
 	}
+	
 	if node.AsOf != nil {
 		buf.Myprintf(" as of ")
 		node.AsOf.Format(buf)
