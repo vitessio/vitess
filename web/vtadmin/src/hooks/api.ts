@@ -84,6 +84,7 @@ import {
     stopWorkflow,
     FetchTransactionsParams,
     fetchTransactions,
+    concludeTransaction,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -416,6 +417,18 @@ export const useTransactions = (
     options?: UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error> | undefined
 ) => {
     return useQuery(['transactions', params], () => fetchTransactions(params), { ...options });
+};
+
+/**
+ * useConcludeTransaction is a mutate hook that concludes a transaction.
+ */
+export const useConcludeTransaction = (
+    params: Parameters<typeof concludeTransaction>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof concludeTransaction>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof concludeTransaction>>, Error>(() => {
+        return concludeTransaction(params);
+    }, options);
 };
 
 export const useVTExplain = (
