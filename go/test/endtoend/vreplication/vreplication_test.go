@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -80,30 +81,6 @@ const (
 func init() {
 	defaultRdonly = 0
 	defaultReplicas = 1
-}
-
-func throttleResponse(tablet *cluster.VttabletProcess, path string) (respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/%s", tablet.TabletHostname, tablet.Port, path)
-	resp, err := httpClient.Get(apiURL)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	respBody = string(b)
-	return respBody, err
-}
-
-func throttleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerApp.String()))
-}
-
-func unthrottleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
-	// clusterInstance :=&cluster.LocalProcessCluster{
-	// 	Keyspaces: []*cluster.Keyspace{},
-	// 	VtctldProcess: ,
-	// }
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerApp.String()))
 }
 
 // TestVReplicationDDLHandling tests the DDL handling in
@@ -1210,11 +1187,10 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "primary")
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the source side component (vstreamer), and insert some rows.
+			body, err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, sourceThrottlerAppName)
+			assert.NoError(t, err)
+			assert.Contains(t, body, sourceThrottlerAppName)
 			for _, tab := range productTablets {
-				body, err := throttleApp(tab, sourceThrottlerAppName)
-				assert.NoError(t, err)
-				assert.Contains(t, body, sourceThrottlerAppName)
-
 				// Wait for throttling to take effect (caching will expire by this time):
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled)
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
@@ -1231,10 +1207,10 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// Unthrottle the vstreamer component, and expect the rows to show up.
+			body, err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, sourceThrottlerAppName)
+			assert.NoError(t, err)
+			assert.Contains(t, body, sourceThrottlerAppName)
 			for _, tab := range productTablets {
-				body, err := unthrottleApp(tab, sourceThrottlerAppName)
-				assert.NoError(t, err)
-				assert.Contains(t, body, sourceThrottlerAppName)
 				// Give time for unthrottling to take effect and for targets to fetch data.
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
 			}
@@ -1246,10 +1222,10 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		t.Run("throttle-app-customer", func(t *testing.T) {
 			// Now, throttle vreplication on the target side (vplayer), and insert some
 			// more rows.
+			body, err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
+			assert.NoError(t, err)
+			assert.Contains(t, body, targetThrottlerAppName)
 			for _, tab := range customerTablets {
-				body, err := throttleApp(tab, targetThrottlerAppName)
-				assert.NoError(t, err)
-				assert.Contains(t, body, targetThrottlerAppName)
 				// Wait for throttling to take effect (caching will expire by this time):
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled)
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
@@ -1266,11 +1242,9 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on target tablets, and expect the rows to show up
-			for _, tab := range customerTablets {
-				body, err := unthrottleApp(tab, targetThrottlerAppName)
-				assert.NoError(t, err)
-				assert.Contains(t, body, targetThrottlerAppName)
-			}
+			body, err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
+			assert.NoError(t, err)
+			assert.Contains(t, body, targetThrottlerAppName)
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
