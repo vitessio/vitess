@@ -104,7 +104,10 @@ func (e *Executor) newExecute(
 			// based on the buffering configuration. This way we should be able to perform the max retries
 			// within the given window of time for most queries and we should not end up waiting too long
 			// after the traffic switch fails or the buffer window has ended, retrying old queries.
-			timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / (MaxBufferingRetries - 1)
+			timeout := 30 * time.Second
+			if e.resolver.scatterConn.gateway.buffer != nil {
+				timeout = e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / (MaxBufferingRetries - 1)
+			}
 			if waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout) {
 				vs = e.VSchema()
 				lastVSchemaCreated = vs.GetCreated()
