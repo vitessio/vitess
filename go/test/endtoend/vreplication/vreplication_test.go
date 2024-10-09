@@ -74,7 +74,7 @@ const (
 	merchantKeyspace            = "merchant-type"
 	maxWait                     = 60 * time.Second
 	BypassLagCheck              = true // temporary fix for flakiness seen only in CI when lag check is introduced
-	throttlerStatusThrottled    = tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED
+	throttlerStatusThrottled    = tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED
 	throttlerStatusNotThrottled = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 )
 
@@ -1187,12 +1187,19 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "primary")
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the source side component (vstreamer), and insert some rows.
-			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, sourceThrottlerAppName)
+			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, "product", sourceThrottlerAppName)
 			assert.NoError(t, err)
 			for _, tab := range productTablets {
+				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				assert.NoError(t, err)
+				assert.Contains(t, status.ThrottledApps, sourceThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled)
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
+				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled) {
+					t.Logf("Throttler status: %v", status)
+				}
+				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
+					t.Logf("Throttler status: %v", status)
+				}
 			}
 			insertMoreProductsForSourceThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We
@@ -1206,11 +1213,16 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// Unthrottle the vstreamer component, and expect the rows to show up.
-			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, sourceThrottlerAppName)
+			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, "product", sourceThrottlerAppName)
 			assert.NoError(t, err)
 			for _, tab := range productTablets {
 				// Give time for unthrottling to take effect and for targets to fetch data.
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
+				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
+					status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+					assert.NoError(t, err)
+					assert.NotContains(t, status.ThrottledApps, sourceThrottlerAppName.String())
+					t.Logf("Throttler status: %v", status)
+				}
 			}
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
@@ -1223,9 +1235,16 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
 			assert.NoError(t, err)
 			for _, tab := range customerTablets {
+				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				assert.NoError(t, err)
+				assert.Contains(t, status.ThrottledApps, targetThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled)
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
+				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled) {
+					t.Logf("Throttler status: %v", status)
+				}
+				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
+					t.Logf("Throttler status: %v", status)
+				}
 			}
 			insertMoreProductsForTargetThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes.
@@ -1243,7 +1262,12 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			assert.NoError(t, err)
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
+				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
+					status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+					assert.NoError(t, err)
+					assert.NotContains(t, status.ThrottledApps, targetThrottlerAppName.String())
+					t.Logf("Throttler status: %v", status)
+				}
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 11)
 			}
 		})

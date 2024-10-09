@@ -180,9 +180,9 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 
 // waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
 // the provided app name in its self check.
-func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) {
-	_, err := throttler.WaitForCheckThrottlerResult(t, vc.VtctldClient, &cluster.Vttablet{Alias: tablet.Name}, throttlerApp, nil, wantCode, defaultTimeout)
-	require.NoError(t, err)
+func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) bool {
+	_, ok := throttler.WaitForCheckThrottlerResult(t, vc.VtctldClient, &cluster.Vttablet{Alias: tablet.Name}, throttlerApp, nil, wantCode, defaultTimeout)
+	return ok
 }
 
 // waitForNoWorkflowLag waits for the VReplication workflow's MaxVReplicationTransactionLag

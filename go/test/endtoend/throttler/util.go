@@ -460,7 +460,7 @@ func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.L
 	}
 }
 
-func WaitForCheckThrottlerResult(t *testing.T, vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
+func WaitForCheckThrottlerResult(t *testing.T, vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
@@ -469,11 +469,12 @@ func WaitForCheckThrottlerResult(t *testing.T, vtctldProcess *cluster.VtctldClie
 		resp, err := CheckThrottler(vtctldProcess, tablet, appName, flags)
 		require.NoError(t, err)
 		if resp.Check.ResponseCode == wantCode {
-			return resp, nil
+			return resp, true
 		}
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("timed out waiting for %s tablet's throttler to return a valid result after %v; last seen value: %+v", tablet.Alias, timeout, resp.Check.ResponseCode)
+			assert.Failf(t, "timeout", "waiting for %s tablet's throttler to return a %v check result after %v; last seen value: %+v", tablet.Alias, wantCode, timeout, resp.Check.ResponseCode)
+			return resp, false
 		case <-ticker.C:
 		}
 	}
