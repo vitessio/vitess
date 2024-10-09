@@ -47,7 +47,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
-	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -905,9 +904,6 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		if resp.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR {
 			throttleMetric.Err = fmt.Errorf("response code: %d", resp.ResponseCode)
 		}
-		if resp.StatusCode == http.StatusInternalServerError {
-			throttleMetric.Err = fmt.Errorf("status code: %d", resp.StatusCode)
-		}
 		if resp.RecentlyChecked {
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
 			// We therefore renew the heartbeats lease.
@@ -1386,8 +1382,8 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 }
 
 // markRecentApp takes note that an app has just asked about throttling, making it "recent"
-func (throttler *Throttler) markRecentApp(appName string, statusCode int, responseCode tabletmanagerdatapb.CheckThrottlerResponseCode) {
-	recentApp := base.NewRecentApp(appName, statusCode, responseCode)
+func (throttler *Throttler) markRecentApp(appName string, responseCode tabletmanagerdatapb.CheckThrottlerResponseCode) {
+	recentApp := base.NewRecentApp(appName, responseCode)
 	throttler.recentApps.Set(appName, recentApp, cache.DefaultExpiration)
 }
 

@@ -44,7 +44,6 @@ package throttle
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"vitess.io/vitess/go/stats"
@@ -99,42 +98,34 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 	}
 	value, err := metricResult.Get()
 	if appName == "" {
-		return NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, http.StatusExpectationFailed, value, threshold, "", fmt.Errorf("no app indicated"))
+		return NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, value, threshold, "", fmt.Errorf("no app indicated"))
 	}
 
-	var statusCode int
 	var responseCode tabletmanagerdatapb.CheckThrottlerResponseCode
-
 	switch {
 	case err == base.ErrAppDenied:
 		// app specifically not allowed to get metrics
-		statusCode = http.StatusExpectationFailed // 417
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED
 	case err == base.ErrNoSuchMetric:
 		// not collected yet, or metric does not exist
-		statusCode = http.StatusNotFound // 404
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC
 	case err != nil:
 		// any error
-		statusCode = http.StatusInternalServerError // 500
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR
 	case value > threshold:
 		// casual throttling
-		statusCode = http.StatusTooManyRequests // 429
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED
 		err = base.ErrThresholdExceeded
 	default:
 		// all good!
-		statusCode = http.StatusOK // 200
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 	}
-	return NewCheckResult(responseCode, statusCode, value, threshold, matchedApp, err)
+	return NewCheckResult(responseCode, value, threshold, matchedApp, err)
 }
 
 // Check is the core function that runs when a user wants to check a metric
 func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope base.Scope, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
 	checkResult = &CheckResult{
-		StatusCode:   http.StatusOK,
 		ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
 		Metrics:      make(map[string]*MetricResult),
 	}
@@ -143,7 +134,6 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 	}
 	metricNames = metricNames.Unique()
 	applyMetricToCheckResult := func(metricName base.MetricName, metric *MetricResult) {
-		checkResult.StatusCode = metric.StatusCode
 		checkResult.ResponseCode = metric.ResponseCode
 		checkResult.Value = metric.Value
 		checkResult.Threshold = metric.Threshold
@@ -195,7 +185,6 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			checkResult.RecentlyChecked = true
 		}
 		metric := &MetricResult{
-			StatusCode:   metricCheckResult.StatusCode,
 			ResponseCode: metricCheckResult.ResponseCode,
 			Value:        metricCheckResult.Value,
 			Threshold:    metricCheckResult.Threshold,
@@ -227,7 +216,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			statsThrottlerCheckAnyError.Add(1)
 		}
 	}(checkResult)
-	go check.throttler.markRecentApp(appName, checkResult.StatusCode, checkResult.ResponseCode)
+	go check.throttler.markRecentApp(appName, checkResult.ResponseCode)
 	return checkResult
 }
 
