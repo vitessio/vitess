@@ -92,13 +92,7 @@ func (e *Executor) newExecute(
 		cancel             context.CancelFunc
 	)
 
-	maxAttempts := MaxBufferingRetries
-	bufferingConfig := e.resolver.scatterConn.gateway.buffer.GetConfig()
-	if bufferingConfig == nil {
-		maxAttempts = 1
-	}
-
-	for try := 0; try < maxAttempts; try++ {
+	for try := 0; try < MaxBufferingRetries; try++ {
 		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
 			// Without a wait we fail non-deterministically since the previous vschema will not have
 			// the updated routing rules.
@@ -110,7 +104,7 @@ func (e *Executor) newExecute(
 			// based on the buffering configuration. This way we should be able to perform the max retries
 			// within the given window of time for most queries and we should not end up waiting too long
 			// after the traffic switch fails or the buffer window has ended, retrying old queries.
-			timeout := bufferingConfig.MaxFailoverDuration / (MaxBufferingRetries - 1)
+			timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / (MaxBufferingRetries - 1)
 			if waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout) {
 				vs = e.VSchema()
 				lastVSchemaCreated = vs.GetCreated()

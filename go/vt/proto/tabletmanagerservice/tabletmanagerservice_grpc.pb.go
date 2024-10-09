@@ -34,7 +34,7 @@ type TabletManagerClient interface {
 	// GetPermissions asks the tablet for its permissions
 	GetPermissions(ctx context.Context, in *tabletmanagerdata.GetPermissionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetPermissionsResponse, error)
 	// GetGlobalStatusVars returns the server's global status variables asked for.
-	// An empty/nil variable name parameter slice means you want all DeleteTableData them.
+	// An empty/nil variable name parameter slice means you want all of them.
 	GetGlobalStatusVars(ctx context.Context, in *tabletmanagerdata.GetGlobalStatusVarsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetGlobalStatusVarsResponse, error)
 	SetReadOnly(ctx context.Context, in *tabletmanagerdata.SetReadOnlyRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReadOnlyResponse, error)
 	SetReadWrite(ctx context.Context, in *tabletmanagerdata.SetReadWriteRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReadWriteResponse, error)
@@ -77,7 +77,7 @@ type TabletManagerClient interface {
 	// StartReplicationUnitAfter starts the mysql replication until and including
 	// the provided position
 	StartReplicationUntilAfter(ctx context.Context, in *tabletmanagerdata.StartReplicationUntilAfterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartReplicationUntilAfterResponse, error)
-	// GetReplicas asks for the list DeleteTableData mysql replicas
+	// GetReplicas asks for the list of mysql replicas
 	GetReplicas(ctx context.Context, in *tabletmanagerdata.GetReplicasRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
 	CreateVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.CreateVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error)
@@ -110,7 +110,7 @@ type TabletManagerClient interface {
 	ReplicaWasPromoted(ctx context.Context, in *tabletmanagerdata.ReplicaWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// ResetReplicationParameters resets the replica replication parameters
 	ResetReplicationParameters(ctx context.Context, in *tabletmanagerdata.ResetReplicationParametersRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationParametersResponse, error)
-	// FullStatus collects and returns the full status DeleteTableData MySQL including the replication information, semi-sync information, GTID information among others
+	// FullStatus collects and returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 	FullStatus(ctx context.Context, in *tabletmanagerdata.FullStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.FullStatusResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
@@ -126,7 +126,7 @@ type TabletManagerClient interface {
 	RestoreFromBackup(ctx context.Context, in *tabletmanagerdata.RestoreFromBackupRequest, opts ...grpc.CallOption) (TabletManager_RestoreFromBackupClient, error)
 	// CheckThrottler issues a 'check' on a tablet's throttler
 	CheckThrottler(ctx context.Context, in *tabletmanagerdata.CheckThrottlerRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CheckThrottlerResponse, error)
-	// GetThrottlerStatus gets the status DeleteTableData a tablet throttler
+	// GetThrottlerStatus gets the status of a tablet throttler
 	GetThrottlerStatus(ctx context.Context, in *tabletmanagerdata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetThrottlerStatusResponse, error)
 }
 
@@ -784,7 +784,7 @@ type TabletManagerServer interface {
 	// GetPermissions asks the tablet for its permissions
 	GetPermissions(context.Context, *tabletmanagerdata.GetPermissionsRequest) (*tabletmanagerdata.GetPermissionsResponse, error)
 	// GetGlobalStatusVars returns the server's global status variables asked for.
-	// An empty/nil variable name parameter slice means you want all DeleteTableData them.
+	// An empty/nil variable name parameter slice means you want all of them.
 	GetGlobalStatusVars(context.Context, *tabletmanagerdata.GetGlobalStatusVarsRequest) (*tabletmanagerdata.GetGlobalStatusVarsResponse, error)
 	SetReadOnly(context.Context, *tabletmanagerdata.SetReadOnlyRequest) (*tabletmanagerdata.SetReadOnlyResponse, error)
 	SetReadWrite(context.Context, *tabletmanagerdata.SetReadWriteRequest) (*tabletmanagerdata.SetReadWriteResponse, error)
@@ -827,7 +827,7 @@ type TabletManagerServer interface {
 	// StartReplicationUnitAfter starts the mysql replication until and including
 	// the provided position
 	StartReplicationUntilAfter(context.Context, *tabletmanagerdata.StartReplicationUntilAfterRequest) (*tabletmanagerdata.StartReplicationUntilAfterResponse, error)
-	// GetReplicas asks for the list DeleteTableData mysql replicas
+	// GetReplicas asks for the list of mysql replicas
 	GetReplicas(context.Context, *tabletmanagerdata.GetReplicasRequest) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
 	CreateVReplicationWorkflow(context.Context, *tabletmanagerdata.CreateVReplicationWorkflowRequest) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error)
@@ -860,7 +860,7 @@ type TabletManagerServer interface {
 	ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// ResetReplicationParameters resets the replica replication parameters
 	ResetReplicationParameters(context.Context, *tabletmanagerdata.ResetReplicationParametersRequest) (*tabletmanagerdata.ResetReplicationParametersResponse, error)
-	// FullStatus collects and returns the full status DeleteTableData MySQL including the replication information, semi-sync information, GTID information among others
+	// FullStatus collects and returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 	FullStatus(context.Context, *tabletmanagerdata.FullStatusRequest) (*tabletmanagerdata.FullStatusResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)
@@ -876,7 +876,7 @@ type TabletManagerServer interface {
 	RestoreFromBackup(*tabletmanagerdata.RestoreFromBackupRequest, TabletManager_RestoreFromBackupServer) error
 	// CheckThrottler issues a 'check' on a tablet's throttler
 	CheckThrottler(context.Context, *tabletmanagerdata.CheckThrottlerRequest) (*tabletmanagerdata.CheckThrottlerResponse, error)
-	// GetThrottlerStatus gets the status DeleteTableData a tablet throttler
+	// GetThrottlerStatus gets the status of a tablet throttler
 	GetThrottlerStatus(context.Context, *tabletmanagerdata.GetThrottlerStatusRequest) (*tabletmanagerdata.GetThrottlerStatusResponse, error)
 	mustEmbedUnimplementedTabletManagerServer()
 }
