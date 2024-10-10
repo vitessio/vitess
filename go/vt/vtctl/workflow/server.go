@@ -3188,43 +3188,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
 	}
 
-	buildResponse := func() *vtctldatapb.WorkflowSwitchTrafficResponse {
-		if wrDryRunResults != nil {
-			dryRunResults = append(dryRunResults, *wrDryRunResults...)
-		}
-		if req.DryRun && len(dryRunResults) == 0 {
-			dryRunResults = append(dryRunResults, "No changes required")
-		}
-
-		cmd := "SwitchTraffic"
-		// We must check the original direction requested.
-		if TrafficSwitchDirection(req.Direction) == DirectionBackward {
-			cmd = "ReverseTraffic"
-		}
-		s.Logger().Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
-		resp := &vtctldatapb.WorkflowSwitchTrafficResponse{}
-		if req.DryRun {
-			resp.Summary = fmt.Sprintf("%s dry run results for workflow %s.%s at %v",
-				cmd, req.Keyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
-			resp.DryRunResults = dryRunResults
-		} else {
-			s.Logger().Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
-			resp.Summary = fmt.Sprintf("%s was successful for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
-			// Reload the state after the SwitchTraffic operation and return that
-			// as a string.
-			resp.StartState = startState.String()
-			s.Logger().Infof("Before reloading workflow state after switching traffic: %+v\n", resp.StartState)
-			_, currentState, err := s.getWorkflowState(ctx, ts.targetKeyspace, ts.workflow)
-			if err != nil {
-				resp.CurrentState = fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err)
-			} else {
-				resp.CurrentState = currentState.String()
-			}
-			s.Logger().Infof("%s done for workflow %s.%s, returning response %v", cmd, req.Keyspace, req.Workflow, resp)
-		}
-		return resp
-	}
-
 	if direction == DirectionBackward && !onlySwitchingReads {
 		// Update the starting state so that we're using the reverse workflow so that we can
 		// move forward with a normal traffic switch forward operation, from the _reverse
@@ -3264,7 +3227,41 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		s.Logger().Infof("Switch Writes done for workflow %s.%s", req.Keyspace, req.Workflow)
 	}
 
-	return buildResponse(), nil
+	if wrDryRunResults != nil {
+		dryRunResults = append(dryRunResults, *wrDryRunResults...)
+	}
+	if req.DryRun && len(dryRunResults) == 0 {
+		dryRunResults = append(dryRunResults, "No changes required")
+	}
+
+	cmd := "SwitchTraffic"
+	// We must check the original direction requested.
+	if TrafficSwitchDirection(req.Direction) == DirectionBackward {
+		cmd = "ReverseTraffic"
+	}
+	s.Logger().Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
+	resp := &vtctldatapb.WorkflowSwitchTrafficResponse{}
+	if req.DryRun {
+		resp.Summary = fmt.Sprintf("%s dry run results for workflow %s.%s at %v",
+			cmd, req.Keyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
+		resp.DryRunResults = dryRunResults
+	} else {
+		s.Logger().Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
+		resp.Summary = fmt.Sprintf("%s was successful for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
+		// Reload the state after the SwitchTraffic operation and return that
+		// as a string.
+		resp.StartState = startState.String()
+		s.Logger().Infof("Before reloading workflow state after switching traffic: %+v\n", resp.StartState)
+		_, currentState, err := s.getWorkflowState(ctx, ts.targetKeyspace, ts.workflow)
+		if err != nil {
+			resp.CurrentState = fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err)
+		} else {
+			resp.CurrentState = currentState.String()
+		}
+		s.Logger().Infof("%s done for workflow %s.%s, returning response %v", cmd, req.Keyspace, req.Workflow, resp)
+	}
+
+	return resp, nil
 }
 
 // switchReads is a generic way of switching read traffic for a workflow.
