@@ -469,7 +469,6 @@ func (*RollbackSavepoint) iStatement() {}
 func (*ReleaseSavepoint) iStatement()  {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
-func (*Empty) iStatement()             {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -495,14 +494,6 @@ func (*Select) iSelectStatement()          {}
 func (*SetOp) iSelectStatement()           {}
 func (*ParenSelect) iSelectStatement()     {}
 func (*ValuesStatement) iSelectStatement() {}
-
-type Empty struct{}
-
-var _ Statement = (*Empty)(nil)
-
-func (e *Empty) Format(buf *TrackedBuffer) {
-	return
-}
 
 type QueryOpts struct {
 	All              bool
@@ -3945,10 +3936,10 @@ func (node *Show) walkSubtree(visit Visit) error {
 
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
-	DbName string
+	DbName     string
 	SchemaName string
-	Filter *ShowFilter
-	AsOf   Expr
+	Filter     *ShowFilter
+	AsOf       Expr
 }
 
 // Format formats the node.
@@ -3956,15 +3947,15 @@ func (node *ShowTablesOpt) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	
-	if node.SchemaName != "" && node.DbName != "" { 
+
+	if node.SchemaName != "" && node.DbName != "" {
 		buf.Myprintf(" from %s.%s", node.DbName, node.SchemaName)
 	} else if node.DbName != "" {
 		buf.Myprintf(" from %s", node.DbName)
 	} else if node.SchemaName != "" {
 		buf.Myprintf(" from %s", node.SchemaName)
 	}
-	
+
 	if node.AsOf != nil {
 		buf.Myprintf(" as of ")
 		node.AsOf.Format(buf)
