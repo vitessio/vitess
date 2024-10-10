@@ -127,7 +127,18 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			fz.start(t)
 
 			// Wait for the timeForTesting so that the threads continue to run.
-			time.Sleep(tt.timeForTesting)
+			timeout := time.After(tt.timeForTesting)
+			loop := true
+			for loop {
+				select {
+				case <-timeout:
+					loop = false
+				case <-time.After(1 * time.Second):
+					if t.Failed() {
+						loop = false
+					}
+				}
+			}
 
 			// Signal the fuzzer to stop.
 			fz.stop()
