@@ -1178,20 +1178,25 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
 				env.updateTableRoutingRules(t, ctx, tc.req.TabletTypes, []string{tableName},
 					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
+				if !slices.Contains(tc.req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, journalQR)
+					}
+				} else {
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
+					}
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
+					}
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
+					}
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, deleteWFQR)
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createWFQR)
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createJournalQR)
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, freezeReverseWFQR)
 				}
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
-				}
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
-				}
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, deleteWFQR)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createWFQR)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createJournalQR)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, freezeReverseWFQR)
 			}
 			if tc.preFunc != nil {
 				tc.preFunc(env)
