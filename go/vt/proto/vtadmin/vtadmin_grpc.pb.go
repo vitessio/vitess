@@ -34,6 +34,8 @@ type VTAdminClient interface {
 	// CompleteSchemaMigration completes one or all migrations in the given
 	// cluster executed with --postpone-completion.
 	CompleteSchemaMigration(ctx context.Context, in *CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error)
+	// ConcludeTransaction concludes a distributed transaction identified by the provided dtid.
+	ConcludeTransaction(ctx context.Context, in *ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldata.ConcludeTransactionResponse, error)
 	// CreateKeyspace creates a new keyspace in the given cluster.
 	CreateKeyspace(ctx context.Context, in *CreateKeyspaceRequest, opts ...grpc.CallOption) (*CreateKeyspaceResponse, error)
 	// CreateShard creates a new shard in the given cluster and keyspace.
@@ -248,6 +250,15 @@ func (c *vTAdminClient) CleanupSchemaMigration(ctx context.Context, in *CleanupS
 func (c *vTAdminClient) CompleteSchemaMigration(ctx context.Context, in *CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error) {
 	out := new(vtctldata.CompleteSchemaMigrationResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/CompleteSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) ConcludeTransaction(ctx context.Context, in *ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldata.ConcludeTransactionResponse, error) {
+	out := new(vtctldata.ConcludeTransactionResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ConcludeTransaction", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -827,6 +838,8 @@ type VTAdminServer interface {
 	// CompleteSchemaMigration completes one or all migrations in the given
 	// cluster executed with --postpone-completion.
 	CompleteSchemaMigration(context.Context, *CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error)
+	// ConcludeTransaction concludes a distributed transaction identified by the provided dtid.
+	ConcludeTransaction(context.Context, *ConcludeTransactionRequest) (*vtctldata.ConcludeTransactionResponse, error)
 	// CreateKeyspace creates a new keyspace in the given cluster.
 	CreateKeyspace(context.Context, *CreateKeyspaceRequest) (*CreateKeyspaceResponse, error)
 	// CreateShard creates a new shard in the given cluster and keyspace.
@@ -1019,6 +1032,9 @@ func (UnimplementedVTAdminServer) CleanupSchemaMigration(context.Context, *Clean
 }
 func (UnimplementedVTAdminServer) CompleteSchemaMigration(context.Context, *CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CompleteSchemaMigration not implemented")
+}
+func (UnimplementedVTAdminServer) ConcludeTransaction(context.Context, *ConcludeTransactionRequest) (*vtctldata.ConcludeTransactionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConcludeTransaction not implemented")
 }
 func (UnimplementedVTAdminServer) CreateKeyspace(context.Context, *CreateKeyspaceRequest) (*CreateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyspace not implemented")
@@ -1287,6 +1303,24 @@ func _VTAdmin_CompleteSchemaMigration_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).CompleteSchemaMigration(ctx, req.(*CompleteSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_ConcludeTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConcludeTransactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ConcludeTransaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ConcludeTransaction",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ConcludeTransaction(ctx, req.(*ConcludeTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2429,6 +2463,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CompleteSchemaMigration",
 			Handler:    _VTAdmin_CompleteSchemaMigration_Handler,
+		},
+		{
+			MethodName: "ConcludeTransaction",
+			Handler:    _VTAdmin_ConcludeTransaction_Handler,
 		},
 		{
 			MethodName: "CreateKeyspace",
