@@ -6102,7 +6102,6 @@ describe_statement:
 // always reduce, and the skipped delimiter acts as a entry/
 // exit for enabling COMMENT tokens to be consumed rather
 // than skipped.
- */
 comment_opt:
   {
     setAllowComments(yylex, true)
