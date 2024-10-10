@@ -112,10 +112,11 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	defer ts.Close()
 	fhc := NewFakeHealthCheck(nil)
 	defer fhc.Close()
+	filter := NewFilterByKeyspace([]string{"keyspace"})
 	logger := logutil.NewMemoryLogger()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, nil, "aa", 10*time.Minute, refreshKnownTablets, 5)
+	tw := NewTopologyWatcher(context.Background(), ts, fhc, filter, "aa", 10*time.Minute, refreshKnownTablets, 5)
 
 	counts = checkOpCounts(t, counts, map[string]int64{})
 	checkChecksum(t, tw, 0)
@@ -162,10 +163,31 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	require.NoError(t, ts.CreateTablet(context.Background(), tablet2), "CreateTablet failed for %v", tablet2.Alias)
 	tw.loadTablets()
 
+	// Confirm second tablet triggers ListTablets + AddTablet calls.
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
 	checkChecksum(t, tw, 2762153755)
 
-	// Check the new tablet is returned by GetAllTablets().
+	// Add a third tablet in a filtered keyspace to the topology.
+	tablet3 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "aa",
+			Uid:  3,
+		},
+		Hostname: "host3",
+		PortMap: map[string]int32{
+			"vt": 789,
+		},
+		Keyspace: "excluded",
+		Shard:    "shard",
+	}
+	require.NoError(t, ts.CreateTablet(context.Background(), tablet3), "CreateTablet failed for %v", tablet3.Alias)
+	tw.loadTablets()
+
+	// Confirm filtered tablet did not trigger an AddTablet call.
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 0})
+	checkChecksum(t, tw, 3177315266)
+
+	// Check the second tablet is returned by GetAllTablets(). This should not contain the filtered tablet.
 	allTablets = fhc.GetAllTablets()
 	key = TabletToMapKey(tablet2)
 	assert.Len(t, allTablets, 2)
@@ -197,14 +219,14 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		assert.Contains(t, allTablets, key)
 		assert.True(t, proto.Equal(tablet, allTablets[key]))
 		assert.NotContains(t, allTablets, origKey)
-		checkChecksum(t, tw, 2762153755)
+		checkChecksum(t, tw, 3177315266)
 	} else {
 		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "ReplaceTablet": 0})
 		assert.Len(t, allTablets, 2)
 		assert.Contains(t, allTablets, origKey)
 		assert.True(t, proto.Equal(origTablet, allTablets[origKey]))
 		assert.NotContains(t, allTablets, key)
-		checkChecksum(t, tw, 2762153755)
+		checkChecksum(t, tw, 3177315266)
 	}
 
 	// Both tablets restart on different hosts.
@@ -260,7 +282,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	require.Nil(t, err, "FixShardReplication failed")
 	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
-	checkChecksum(t, tw, 789108290)
+	checkChecksum(t, tw, 852159264)
 
 	allTablets = fhc.GetAllTablets()
 	assert.Len(t, allTablets, 1)
@@ -271,8 +293,10 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	assert.Contains(t, allTablets, key)
 	assert.True(t, proto.Equal(tablet2, allTablets[key]))
 
-	// Remove the other and check that it is detected as being gone.
+	// Remove the other tablets and check that it is detected as being gone.
+	// Deleting the filtered tablet should not trigger a RemoveTablet call.
 	require.NoError(t, ts.DeleteTablet(context.Background(), tablet2.Alias))
+	require.NoError(t, ts.DeleteTablet(context.Background(), tablet3.Alias))
 	_, err = topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard")
 	require.Nil(t, err, "FixShardReplication failed")
 	tw.loadTablets()

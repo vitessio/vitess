@@ -365,7 +365,6 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		cellAliases:        make(map[string]string),
 	}
 	var topoWatchers []*TopologyWatcher
-	var filter TabletFilter
 	cells := strings.Split(cellsToWatch, ",")
 	if cellsToWatch == "" {
 		cells = append(cells, localCell)
@@ -376,19 +375,8 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		if c == "" {
 			continue
 		}
-		if len(tabletFilters) > 0 {
-			if len(KeyspacesToWatch) > 0 {
-				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
-			}
-			fbs, err := NewFilterByShard(tabletFilters)
-			if err != nil {
-				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
-			}
-			filter = fbs
-		} else if len(KeyspacesToWatch) > 0 {
-			filter = NewFilterByKeyspace(KeyspacesToWatch)
-		}
-		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topoReadConcurrency))
+
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets, topoReadConcurrency))
 	}
 
 	hc.topoWatchers = topoWatchers
