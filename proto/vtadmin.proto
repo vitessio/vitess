@@ -173,6 +173,8 @@ service VTAdmin {
     rpc RetrySchemaMigration(RetrySchemaMigrationRequest) returns (vtctldata.RetrySchemaMigrationResponse) {};
     // RunHealthCheck runs a healthcheck on the tablet.
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
+    // ReshardCreate creates a workflow to reshard a keyspace.
+    rpc ReshardCreate(ReshardCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
     // SetReadOnly sets the tablet to read-only mode.
     rpc SetReadOnly(SetReadOnlyRequest) returns (SetReadOnlyResponse) {};
     // SetReadWrite sets the tablet to read-write mode.
@@ -915,6 +917,11 @@ message RunHealthCheckRequest {
 message RunHealthCheckResponse {
     string status = 1;
     Cluster cluster = 2;
+}
+
+message ReshardCreateRequest {
+    string cluster_id = 1;
+    vtctldata.ReshardCreateRequest request = 2;
 }
 
 message SetReadOnlyRequest {

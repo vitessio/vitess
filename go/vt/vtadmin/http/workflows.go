@@ -145,3 +145,27 @@ func MoveTablesCreate(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(res, err)
 }
+
+// ReshardCreate implements the http wrapper for the VTAdminServer.ReshardCreate
+// method.
+//
+// Its route is /workflow/{cluster_id}/reshard
+func ReshardCreate(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var req vtctldatapb.ReshardCreateRequest
+	if err := decoder.Decode(&req); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.ReshardCreate(ctx, &vtadminpb.ReshardCreateRequest{
+		ClusterId: vars["cluster_id"],
+		Request:   &req,
+	})
+
+	return NewJSONResponse(res, err)
+}

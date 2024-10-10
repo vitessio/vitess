@@ -128,7 +128,7 @@ export const CreateMoveTables = () => {
 
     const isValid =
         !!selectedCluster &&
-        !!formData.targetKeyspace &&
+        !!formData.sourceKeyspace &&
         !!formData.targetKeyspace &&
         !!formData.workflow &&
         !!formData.onDDL;

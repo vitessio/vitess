@@ -42,6 +42,7 @@ import { Topology } from './routes/topology/Topology';
 import { ClusterTopology } from './routes/topology/ClusterTopology';
 import { CreateMoveTables } from './routes/createWorkflow/CreateMoveTables';
 import { Transactions } from './routes/Transactions';
+import { CreateReshard } from './routes/createWorkflow/CreateReshard';
 
 export const App = () => {
     return (
@@ -114,6 +115,12 @@ export const App = () => {
                         {!isReadOnlyMode() && (
                             <Route exact path="/workflows/movetables/create">
                                 <CreateMoveTables />
+                            </Route>
+                        )}
+
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/workflows/reshard/create">
+                                <CreateReshard />
                             </Route>
                         )}
 

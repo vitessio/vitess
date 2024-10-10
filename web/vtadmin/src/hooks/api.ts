@@ -84,6 +84,7 @@ import {
     stopWorkflow,
     FetchTransactionsParams,
     fetchTransactions,
+    createReshard,
     concludeTransaction,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
@@ -497,6 +498,18 @@ export const useCreateMoveTables = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof createMoveTables>>, Error>(() => {
         return createMoveTables(params);
+    }, options);
+};
+
+/**
+ * useCreateReshard is a mutation query hook that creates a reshard workflow.
+ */
+export const useCreateReshard = (
+    params: Parameters<typeof createReshard>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createReshard>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createReshard>>, Error>(() => {
+        return createReshard(params);
     }, options);
 };
 
