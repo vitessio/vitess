@@ -3164,15 +3164,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if timeout.Seconds() < 1 {
 		return nil, vterrors.Wrap(err, "timeout must be at least 1 second")
 	}
-	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
-	if err != nil {
-		return nil, err
-	}
-
-	if startState.WorkflowType == TypeMigrate {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
-	}
-
 	maxReplicationLagAllowed, set, err := protoutil.DurationFromProto(req.MaxReplicationLagAllowed)
 	if err != nil {
 		err = vterrors.Wrapf(err, "unable to parse MaxReplicationLagAllowed into a valid duration")
@@ -3182,16 +3173,29 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		maxReplicationLagAllowed = DefaultTimeout
 	}
 	direction := TrafficSwitchDirection(req.Direction)
-	if direction == DirectionBackward {
+	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
+	if err != nil {
+		return nil, err
+	}
+
+	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+	onlySwitchingReads := !startState.WritesSwitched && !hasPrimary
+
+	if startState.WorkflowType == TypeMigrate {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
+	}
+
+	if direction == DirectionBackward && !onlySwitchingReads {
+		// Update the starting state so that we're using the reverse workflow so that we can
+		// move forward with a normal traffic switch forward operation, from the _reverse
+		// workflow's perspective.
+		direction = DirectionForward
 		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
 		if err != nil {
 			return nil, err
-		}
-		if ts.IsMultiTenantMigration() {
-			// In a multi-tenant migration, multiple migrations would be writing to the same table, so we can't stop writes like
-			// we do with MoveTables, using denied tables, since it would block all other migrations as well as traffic for
-			// tenants which have already been migrated.
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse traffic for multi-tenant migrations")
 		}
 	}
 
@@ -3204,10 +3208,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if reason != "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot switch traffic for workflow %s at this time: %s",
 			startState.Workflow, reason)
-	}
-	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
-	if err != nil {
-		return nil, err
 	}
 	if hasReplica || hasRdonly {
 		// If we're going to switch writes immediately after then we don't need to
@@ -3233,8 +3233,10 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if req.DryRun && len(dryRunResults) == 0 {
 		dryRunResults = append(dryRunResults, "No changes required")
 	}
+
 	cmd := "SwitchTraffic"
-	if direction == DirectionBackward {
+	// We must check the original direction requested.
+	if TrafficSwitchDirection(req.Direction) == DirectionBackward {
 		cmd = "ReverseTraffic"
 	}
 	s.Logger().Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
@@ -3246,17 +3248,11 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	} else {
 		s.Logger().Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
 		resp.Summary = fmt.Sprintf("%s was successful for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
-		// Reload the state after the SwitchTraffic operation
-		// and return that as a string.
-		keyspace := req.Keyspace
-		workflow := req.Workflow
-		if direction == DirectionBackward {
-			keyspace = startState.SourceKeyspace
-			workflow = ts.reverseWorkflow
-		}
+		// Reload the state after the SwitchTraffic operation and return that
+		// as a string.
 		resp.StartState = startState.String()
 		s.Logger().Infof("Before reloading workflow state after switching traffic: %+v\n", resp.StartState)
-		_, currentState, err := s.getWorkflowState(ctx, keyspace, workflow)
+		_, currentState, err := s.getWorkflowState(ctx, ts.targetKeyspace, ts.workflow)
 		if err != nil {
 			resp.CurrentState = fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err)
 		} else {
@@ -3264,6 +3260,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 		s.Logger().Infof("%s done for workflow %s.%s, returning response %v", cmd, req.Keyspace, req.Workflow, resp)
 	}
+
 	return resp, nil
 }
 

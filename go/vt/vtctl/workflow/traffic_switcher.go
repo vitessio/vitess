@@ -648,17 +648,20 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	// targetKeyspace.table -> sourceKeyspace.table
 	// For forward migration, we add tablet type specific rules to redirect traffic to the target.
 	// For backward, we redirect to source.
+	targetKeyspace := ts.targetKeyspace
+	if direction == DirectionBackward {
+		targetKeyspace = ts.sourceKeyspace
+	}
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet type specified when switching reads: %v", servedType)
 		}
-
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.Tables() {
-			toTarget := []string{ts.TargetKeyspaceName() + "." + table}
+			toTarget := []string{targetKeyspace + "." + table}
 			rules[table+"@"+tt] = toTarget
-			rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
-			rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toTarget
+			rules[ts.targetKeyspace+"."+table+"@"+tt] = toTarget
+			rules[ts.sourceKeyspace+"."+table+"@"+tt] = toTarget
 		}
 	}
 	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
