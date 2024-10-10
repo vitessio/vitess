@@ -652,13 +652,12 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet type specified when switching reads: %v", servedType)
 		}
-
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.Tables() {
-			toTarget := []string{ts.TargetKeyspaceName() + "." + table}
+			toTarget := []string{ts.targetKeyspace + "." + table}
 			rules[table+"@"+tt] = toTarget
-			rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
-			rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toTarget
+			rules[ts.targetKeyspace+"."+table+"@"+tt] = toTarget
+			rules[ts.sourceKeyspace+"."+table+"@"+tt] = toTarget
 		}
 	}
 	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {

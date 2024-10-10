@@ -3192,21 +3192,33 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 		if !startState.WritesSwitched && !slices.Contains(req.TabletTypes, topodatapb.TabletType_PRIMARY) {
 			// We don't need to do anything but update the routing rules in the other direction.
-			ts.targetKeyspace = startState.SourceKeyspace
-			ts.sourceKeyspace = startState.TargetKeyspace
+			var sw iswitcher
+			if req.DryRun {
+				sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
+			} else {
+				ts.targetKeyspace = startState.SourceKeyspace
+				ts.sourceKeyspace = startState.TargetKeyspace
+				sw = &switcher{ts: ts, s: s}
+			}
 			var err error
 			if ts.workflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
-				err = ts.switchShardReads(ctx, req.Cells, req.TabletTypes, direction)
+				err = sw.switchShardReads(ctx, req.Cells, req.TabletTypes, direction)
 			} else {
-				err = ts.switchTableReads(ctx, req.Cells, req.TabletTypes, true, direction)
+				err = sw.switchTableReads(ctx, req.Cells, req.TabletTypes, true, direction)
 			}
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to reverse traffic for %v tablets in workflow %s",
 					req.TabletTypes, req.Workflow)
 			}
 			resp := &vtctldatapb.WorkflowSwitchTrafficResponse{
-				Summary:    fmt.Sprintf("ReverseTraffic was successful for workflow %s.%s", req.Keyspace, req.Workflow),
 				StartState: startState.String(),
+			}
+			if req.DryRun {
+				resp.Summary = fmt.Sprintf("ReverseTraffic dry run results for workflow %s.%s at %v",
+					req.Keyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
+				resp.DryRunResults = *sw.logs()
+			} else {
+				resp.Summary = fmt.Sprintf("ReverseTraffic was successful for workflow %s.%s", req.Keyspace, req.Workflow)
 			}
 			_, currentState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 			if err != nil {
@@ -3263,6 +3275,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if req.DryRun && len(dryRunResults) == 0 {
 		dryRunResults = append(dryRunResults, "No changes required")
 	}
+
 	cmd := "SwitchTraffic"
 	if direction == DirectionBackward {
 		cmd = "ReverseTraffic"

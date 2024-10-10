@@ -1233,19 +1233,21 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				}
 			}
 			// Confirm that we have the expected denied tables entries.
-			for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
-				for _, shardName := range keyspace.ShardNames {
-					si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
-					require.NoError(t, err)
-					switch {
-					case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionForward):
-						require.True(t, hasDeniedTableEntry(si))
-					case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionBackward):
-						require.False(t, hasDeniedTableEntry(si))
-					case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionForward):
-						require.False(t, hasDeniedTableEntry(si))
-					case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionBackward):
-						require.True(t, hasDeniedTableEntry(si))
+			if slices.Contains(tc.req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
+					for _, shardName := range keyspace.ShardNames {
+						si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
+						require.NoError(t, err)
+						switch {
+						case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionForward):
+							require.True(t, hasDeniedTableEntry(si))
+						case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionBackward):
+							require.False(t, hasDeniedTableEntry(si))
+						case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionForward):
+							require.False(t, hasDeniedTableEntry(si))
+						case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionBackward):
+							require.True(t, hasDeniedTableEntry(si))
+						}
 					}
 				}
 			}
