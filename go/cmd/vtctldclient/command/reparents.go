@@ -306,7 +306,7 @@ func commandTabletExternallyReparented(cmd *cobra.Command, args []string) error 
 func init() {
 	EmergencyReparentShard.Flags().DurationVar(&emergencyReparentShardOptions.WaitReplicasTimeout, "wait-replicas-timeout", topo.RemoteOperationTimeout, "Time to wait for replicas to catch up in reparenting.")
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.NewPrimaryAliasStr, "new-primary", "", "Alias of a tablet that should be the new primary. If not specified, the vtctld will select the best candidate to promote.")
-	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.NewPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
+	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.ExpectedPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
@@ -320,7 +320,7 @@ func init() {
 	PlannedReparentShard.Flags().DurationVar(&plannedReparentShardOptions.TolerableReplicationLag, "tolerable-replication-lag", 0, "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.")
 	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.NewPrimaryAliasStr, "new-primary", "", "Alias of a tablet that should be the new primary.")
 	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.AvoidPrimaryAliasStr, "avoid-primary", "", "Alias of a tablet that should not be the primary; i.e. \"reparent to any other tablet if this one is the primary\".")
-	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.NewPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
+	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.ExpectedPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
 	PlannedReparentShard.Flags().BoolVar(&plannedReparentShardOptions.AllowCrossCellPromotion, "allow-cross-cell-promotion", false, "Allow cross cell promotion")
 	Root.AddCommand(PlannedReparentShard)
 
