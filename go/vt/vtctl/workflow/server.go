@@ -3138,6 +3138,10 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.WorkflowSwitchTraffic")
 	defer span.Finish()
 
+	if req == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid nil request")
+	}
+
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("tablet-types", req.TabletTypes)
@@ -3192,11 +3196,11 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		// Update the starting state so that we're using the reverse workflow so that we can
 		// move forward with a normal traffic switch forward operation, from the _reverse
 		// workflow's perspective.
-		direction = DirectionForward
 		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
 		if err != nil {
 			return nil, err
 		}
+		direction = DirectionForward
 	}
 
 	ts.force = req.GetForce()
