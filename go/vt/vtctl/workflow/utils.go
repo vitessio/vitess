@@ -1027,7 +1027,7 @@ func applyTargetShards(ts *trafficSwitcher, targetShards []string) error {
 // containing a list of non-empty tables.
 func validateEmptyTables(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, shards []*topo.ShardInfo, tableSettings []*vtctldatapb.TableMaterializeSettings) error {
 	var mu sync.Mutex
-	isTableFaulty := map[string]bool{}
+	isNonEmptyTable := map[string]bool{}
 
 	err := forAllShards(shards, func(shard *topo.ShardInfo) error {
 		primary := shard.PrimaryAlias
@@ -1056,7 +1056,7 @@ func validateEmptyTables(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 				}
 				if res != nil && len(res.Rows) > 0 {
 					mu.Lock()
-					isTableFaulty[ts.TargetTable] = true
+					isNonEmptyTable[ts.TargetTable] = true
 					mu.Unlock()
 				}
 				return nil
@@ -1071,9 +1071,9 @@ func validateEmptyTables(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 		return err
 	}
 
-	faultyTables := maps.Keys(isTableFaulty)
-	if len(faultyTables) > 0 {
-		return fmt.Errorf("non-empty tables found in target keyspace: %s", strings.Join(faultyTables, ", "))
+	nonEmptyTables := maps.Keys(isNonEmptyTable)
+	if len(nonEmptyTables) > 0 {
+		return fmt.Errorf("non-empty tables found in target keyspace: %s", strings.Join(nonEmptyTables, ", "))
 	}
 	return nil
 }
