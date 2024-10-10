@@ -510,10 +510,7 @@ type QueryOpts struct {
 	SQLNoCache       bool
 }
 
-func (q *QueryOpts) merge(other QueryOpts) (QueryOpts, error) {
-	if q == nil {
-		return other, nil
-	}
+func (q *QueryOpts) merge(other QueryOpts) error {
 	q.All = q.All || other.All
 	q.Distinct = q.Distinct || other.Distinct
 	q.StraightJoinHint = q.StraightJoinHint || other.StraightJoinHint
@@ -522,14 +519,14 @@ func (q *QueryOpts) merge(other QueryOpts) (QueryOpts, error) {
 	q.SQLNoCache = q.SQLNoCache || other.SQLNoCache
 
 	if q.Distinct && q.All {
-		return *q, errors.New("incorrect usage of DISTINCT and ALL")
+		return errors.New("incorrect usage of DISTINCT and ALL")
 	}
 
 	if q.SQLCache && q.SQLNoCache {
-		return *q, errors.New("incorrect usage of SQL_CACHE and SQL_NO_CACHE")
+		return errors.New("incorrect usage of SQL_CACHE and SQL_NO_CACHE")
 	}
 
-	return *q, nil
+	return nil
 }
 
 func (q *QueryOpts) Format(buf *TrackedBuffer) {
@@ -2803,10 +2800,7 @@ type ColumnType struct {
 	SRID *SQLVal
 }
 
-func (ct *ColumnType) merge(other ColumnType) (ColumnType, error) {
-	if ct == nil {
-		return other, nil
-	}
+func (ct *ColumnType) merge(other ColumnType) error {
 	if other.sawnull {
 		ct.sawnull = true
 		ct.Null = other.Null
@@ -2815,21 +2809,21 @@ func (ct *ColumnType) merge(other ColumnType) (ColumnType, error) {
 
 	if other.Default != nil {
 		if ct.Default != nil {
-			return ColumnType{}, errors.New("cannot include DEFAULT more than once")
+			return errors.New("cannot include DEFAULT more than once")
 		}
 		ct.Default = other.Default
 	}
 
 	if other.OnUpdate != nil {
 		if ct.OnUpdate != nil {
-			return ColumnType{}, errors.New("cannot include ON UPDATE more than once")
+			return errors.New("cannot include ON UPDATE more than once")
 		}
 		ct.OnUpdate = other.OnUpdate
 	}
 
 	if other.sawai {
 		if ct.sawai {
-			return ColumnType{}, errors.New("cannot include AUTO_INCREMENT more than once")
+			return errors.New("cannot include AUTO_INCREMENT more than once")
 		}
 		ct.sawai = true
 		ct.Autoincrement = other.Autoincrement
@@ -2850,27 +2844,27 @@ func (ct *ColumnType) merge(other ColumnType) (ColumnType, error) {
 			ct.KeyOpt = other.KeyOpt
 		} else {
 			// Otherwise throw an error if there are multiple key options that need to be applied.
-			return ColumnType{}, errors.New("cannot include more than one key option for a column definition")
+			return errors.New("cannot include more than one key option for a column definition")
 		}
 	}
 
 	if other.ForeignKeyDef != nil {
 		if ct.ForeignKeyDef != nil {
-			return ColumnType{}, errors.New("cannot include more than one foreign key definition in a column definition")
+			return errors.New("cannot include more than one foreign key definition in a column definition")
 		}
 		ct.ForeignKeyDef = other.ForeignKeyDef
 	}
 
 	if other.Constraint != nil {
 		if ct.Constraint != nil {
-			return ColumnType{}, errors.New("cannot include more than one check constraint in a column definition")
+			return errors.New("cannot include more than one check constraint in a column definition")
 		}
 		ct.Constraint = other.Constraint
 	}
 
 	if other.Comment != nil {
 		if ct.Comment != nil {
-			return ColumnType{}, errors.New("cannot include more than one comment for a column definition")
+			return errors.New("cannot include more than one comment for a column definition")
 		}
 		ct.Comment = other.Comment
 	}
@@ -2878,7 +2872,7 @@ func (ct *ColumnType) merge(other ColumnType) (ColumnType, error) {
 	if other.GeneratedExpr != nil {
 		// Generated expression already defined for column
 		if ct.GeneratedExpr != nil {
-			return ColumnType{}, errors.New("cannot defined GENERATED expression more than once")
+			return errors.New("cannot defined GENERATED expression more than once")
 		}
 		ct.GeneratedExpr = other.GeneratedExpr
 	}
@@ -2889,36 +2883,36 @@ func (ct *ColumnType) merge(other ColumnType) (ColumnType, error) {
 
 	if other.SRID != nil {
 		if ct.SRID != nil {
-			return ColumnType{}, errors.New("cannot include SRID more than once")
+			return errors.New("cannot include SRID more than once")
 		}
 		if ct.Type != "" && ct.SQLType() != sqltypes.Geometry {
-			return ColumnType{}, errors.New("cannot define SRID for non spatial types")
+			return errors.New("cannot define SRID for non spatial types")
 		}
 		ct.SRID = other.SRID
 	}
 
 	if other.Charset != "" {
 		if ct.Charset != "" {
-			return ColumnType{}, errors.New("cannot include CHARACTER SET more than once")
+			return errors.New("cannot include CHARACTER SET more than once")
 		}
 		ct.Charset = other.Charset
 	}
 
 	if other.Collate != "" {
 		if ct.Collate != "" {
-			return ColumnType{}, errors.New("cannot include COLLATE more than once")
+			return errors.New("cannot include COLLATE more than once")
 		}
 		ct.Collate = other.Collate
 	}
 
 	if other.BinaryCollate == true {
 		if ct.BinaryCollate == true {
-			return ColumnType{}, errors.New("cannot include BINARY more than once")
+			return errors.New("cannot include BINARY more than once")
 		}
 		ct.BinaryCollate = other.BinaryCollate
 	}
 
-	return *ct, nil
+	return nil
 }
 
 // Format returns a canonical string representation of the type and all relevant options

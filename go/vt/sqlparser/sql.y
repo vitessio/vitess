@@ -70,22 +70,6 @@ func tryCastStatement(v interface{}) Statement {
 	return e
 }
 
-func columnTypeMerge(a *ColumnType ,b ColumnType) (ColumnType, error) {
-	if ct, err := a.merge(b); err != nil {
-		return ColumnType{}, err
-	} else {
-		return ct, nil
-	}
-}
-
-func queryOptsMerge(a *QueryOpts, b QueryOpts) (QueryOpts, error) {
-	if qo, err := a.merge(b); err != nil {
-		return QueryOpts{}, err
-	} else {
-		return qo, nil
-	}
-}
-
 %}
 
 %union {
@@ -2824,23 +2808,23 @@ column_definition:
   {
     ct1 := $2.(ColumnType)
     ct2 := $3.(ColumnType)
-    var err error
-    if ct1, err = columnTypeMerge(&ct1, ct2); err != nil {
+    ctp := &ct1
+    if err := ctp.merge(ct2); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct1}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: *ctp}
   }
 | all_non_reserved column_type column_type_options
   {
     ct1 := $2.(ColumnType)
     ct2 := $3.(ColumnType)
-    var err error
-    if ct1, err = columnTypeMerge(&ct1, ct2); err != nil {
+    ctp := &ct1
+    if err := ctp.merge(ct2); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct1}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: *ctp}
   }
 
 column_definition_for_create:
@@ -2848,67 +2832,67 @@ column_definition_for_create:
   {
     ct1 := $2.(ColumnType)
     ct2 := $3.(ColumnType)
-    var err error
-    if ct1, err = columnTypeMerge(&ct1, ct2); err != nil {
+    ctp := &ct1
+    if err := ctp.merge(ct2); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: $1.(ColIdent), Type: ct1}
+    $$ = &ColumnDefinition{Name: $1.(ColIdent), Type: *ctp}
   }
 | column_name_safe_keyword column_type column_type_options
   {
     ct1 := $2.(ColumnType)
     ct2 := $3.(ColumnType)
-    var err error
-    if ct1, err = columnTypeMerge(&ct1, ct2); err != nil {
+    ctp := &ct1
+    if err := ctp.merge(ct2); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct1}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: *ctp}
   }
 | non_reserved_keyword2 column_type column_type_options
   {
     ct1 := $2.(ColumnType)
     ct2 := $3.(ColumnType)
-    var err error
-    if ct1, err = columnTypeMerge(&ct1, ct2); err != nil {
+    ctp := &ct1
+    if err := ctp.merge(ct2); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct1}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: *ctp}
   }
 | non_reserved_keyword3 column_type column_type_options
   {
     ct1 := $2.(ColumnType)
     ct2 := $3.(ColumnType)
-    var err error
-    if ct1, err = columnTypeMerge(&ct1, ct2); err != nil {
+    ctp := &ct1
+    if err := ctp.merge(ct2); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct1}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: *ctp}
   }
 | ESCAPE column_type column_type_options
   {
     ct1 := $2.(ColumnType)
     ct2 := $3.(ColumnType)
-    var err error
-    if ct1, err = columnTypeMerge(&ct1, ct2); err != nil {
+    ctp := &ct1
+    if err := ctp.merge(ct2); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct1}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: *ctp}
   }
 | function_call_keywords column_type column_type_options
   {
     ct1 := $2.(ColumnType)
     ct2 := $3.(ColumnType)
-    var err error
-    if ct1, err = columnTypeMerge(&ct1, ct2); err != nil {
+    ctp := &ct1
+    if err := ctp.merge(ct2); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: ct1}
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: *ctp}
   }
 
 stored_opt:
@@ -2936,30 +2920,29 @@ column_type_options:
   {
     opt := ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options NOT NULL
   {
     opt := ColumnType{Null: BoolVal(false), NotNull: BoolVal(true), sawnull: true}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options character_set
   {
     opt := ColumnType{Charset: $2.(string)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = ct.merge(opt); err != nil {
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -2969,134 +2952,134 @@ column_type_options:
   {
     opt := ColumnType{Collate: $2.(string)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options BINARY
   {
     opt := ColumnType{BinaryCollate: true}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options column_default
   {
     opt := ColumnType{Default: tryCastExpr($2)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options on_update
   {
     opt := ColumnType{OnUpdate: tryCastExpr($2)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options auto_increment
   {
     opt := ColumnType{Autoincrement: $2.(BoolVal), sawai: true}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options column_key
   {
     opt := ColumnType{KeyOpt: $2.(ColumnKeyOption)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options column_comment
   {
     opt := ColumnType{Comment: $2.(*SQLVal)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options AS openb value_expression closeb stored_opt
   {
     opt := ColumnType{GeneratedExpr: &ParenExpr{tryCastExpr($4)}, Stored: $6.(BoolVal)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options GENERATED ALWAYS AS openb value_expression closeb stored_opt
   {
     opt := ColumnType{GeneratedExpr: &ParenExpr{tryCastExpr($6)}, Stored: $8.(BoolVal)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options SRID INTEGRAL
   {
     opt := ColumnType{SRID: NewIntVal($3)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options REFERENCES table_name '(' column_list ')'
   // TODO: This still needs support for "ON DELETE" and "ON UPDATE"
   {
     opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3.(TableName), ReferencedColumns: $5.(Columns)}}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 | column_type_options check_constraint_definition
   {
     opt := ColumnType{Constraint: $2.(*ConstraintDefinition)}
     ct := $1.(ColumnType)
-    var err error
-    if ct, err = columnTypeMerge(&ct, opt); err != nil {
+    ctp := &ct
+    if err := ctp.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = ct
+    $$ = *ctp
   }
 
 column_type:
@@ -6196,8 +6179,8 @@ query_opts:
   {
     opt := QueryOpts{All: true}
     qo := $1.(QueryOpts)
-    var err error
-    if qo, err = queryOptsMerge(&qo, opt); err != nil {
+    qop := &qo
+    if err := qop.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6207,8 +6190,8 @@ query_opts:
   {
     opt := QueryOpts{Distinct: true}
     qo := $1.(QueryOpts)
-    var err error
-    if qo, err = queryOptsMerge(&qo, opt); err != nil {
+    qop := &qo
+    if err := qop.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6218,8 +6201,8 @@ query_opts:
   {
     opt := QueryOpts{StraightJoinHint: true}
     qo := $1.(QueryOpts)
-    var err error
-    if qo, err = queryOptsMerge(&qo, opt); err != nil {
+    qop := &qo
+    if err := qop.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6229,8 +6212,8 @@ query_opts:
   {
     opt := QueryOpts{SQLCalcFoundRows: true}
     qo := $1.(QueryOpts)
-    var err error
-    if qo, err = queryOptsMerge(&qo, opt); err != nil {
+    qop := &qo
+    if err := qop.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6240,8 +6223,8 @@ query_opts:
   {
     opt := QueryOpts{SQLCache: true}
     qo := $1.(QueryOpts)
-    var err error
-    if qo, err = queryOptsMerge(&qo, opt); err != nil {
+    qop := &qo
+    if err := qop.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6251,8 +6234,8 @@ query_opts:
   {
     opt := QueryOpts{SQLNoCache: true}
     qo := $1.(QueryOpts)
-    var err error
-    if qo, err = queryOptsMerge(&qo, opt); err != nil {
+    qop := &qo
+    if err := qop.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
