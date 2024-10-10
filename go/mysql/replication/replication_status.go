@@ -181,8 +181,8 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 // provided as a list of ReplicationStatus's. This method only works if the flavor for all retrieved ReplicationStatus's is MySQL.
 // The result is returned as a Mysql56GTIDSet, each of whose elements is a found errant GTID.
 // This function is best effort in nature. If it marks something as errant, then it is for sure errant. But there may be cases of errant GTIDs, which aren't caught by this function.
-func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationStatus) (Mysql56GTIDSet, error) {
-	if len(otherReplicaStatuses) == 0 {
+func (s *ReplicationStatus) FindErrantGTIDs(otherPositions []Position) (Mysql56GTIDSet, error) {
+	if len(otherPositions) == 0 {
 		// If there is nothing to compare this replica against, then we must assume that its GTID set is the correct one.
 		return nil, nil
 	}
@@ -192,21 +192,13 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 		return nil, fmt.Errorf("errant GTIDs can only be computed on the MySQL flavor")
 	}
 
-	otherSets := make([]Mysql56GTIDSet, 0, len(otherReplicaStatuses))
-	for _, status := range otherReplicaStatuses {
-		otherSet, ok := status.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
+	otherSets := make([]Mysql56GTIDSet, 0, len(otherPositions))
+	for _, pos := range otherPositions {
+		otherSet, ok := pos.GTIDSet.(Mysql56GTIDSet)
 		if !ok {
 			panic("The receiver ReplicationStatus contained a Mysql56GTIDSet in its relay log, but a replica's ReplicationStatus is of another flavor. This should never happen.")
 		}
 		otherSets = append(otherSets, otherSet)
-	}
-
-	if len(otherSets) == 1 {
-		// If there is only one replica to compare against, and one is a subset of the other, then we consider them not to be errant.
-		// It simply means that one replica might be behind on replication.
-		if relayLogSet.Contains(otherSets[0]) || otherSets[0].Contains(relayLogSet) {
-			return nil, nil
-		}
 	}
 
 	// Copy set for final diffSet so we don't mutate receiver.
