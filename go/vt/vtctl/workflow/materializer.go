@@ -290,6 +290,15 @@ func (mz *materializer) deploySchema() error {
 		}
 	}
 
+	// Check if any table being moved is already non-empty in the target keyspace.
+	// Skip this check for multi-tenant migrations.
+	if !mz.IsMultiTenantMigration() {
+		err := validateEmptyTables(mz.ctx, mz.ts, mz.tmc, mz.targetShards, mz.ms.TableSettings)
+		if err != nil {
+			return err
+		}
+	}
+
 	err := forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
 

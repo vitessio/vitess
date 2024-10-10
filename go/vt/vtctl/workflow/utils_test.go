@@ -11,16 +11,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
@@ -242,4 +247,122 @@ func startEtcd(t *testing.T) string {
 	})
 
 	return clientAddr
+}
+
+func TestValidateEmptyTables(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	ks := "test_keyspace"
+	shard1 := "-40"
+	shard2 := "40-80"
+	shard3 := "80-"
+	err := ts.CreateKeyspace(ctx, ks, &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
+	err = ts.CreateShard(ctx, ks, shard1)
+	require.NoError(t, err)
+	err = ts.CreateShard(ctx, ks, shard2)
+	require.NoError(t, err)
+	err = ts.CreateShard(ctx, ks, shard3)
+	require.NoError(t, err)
+
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Keyspace: ks,
+		Shard:    shard1,
+	}
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  200,
+		},
+		Keyspace: ks,
+		Shard:    shard2,
+	}
+	tablet3 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  300,
+		},
+		Keyspace: ks,
+		Shard:    shard3,
+	}
+	err = ts.CreateTablet(ctx, tablet1)
+	require.NoError(t, err)
+	err = ts.CreateTablet(ctx, tablet2)
+	require.NoError(t, err)
+	err = ts.CreateTablet(ctx, tablet3)
+	require.NoError(t, err)
+
+	s1, err := ts.UpdateShardFields(ctx, ks, shard1, func(si *topo.ShardInfo) error {
+		si.Shard.PrimaryAlias = tablet1.Alias
+		return nil
+	})
+	require.NoError(t, err)
+	s2, err := ts.UpdateShardFields(ctx, ks, shard2, func(si *topo.ShardInfo) error {
+		si.Shard.PrimaryAlias = tablet2.Alias
+		return nil
+	})
+	require.NoError(t, err)
+	s3, err := ts.UpdateShardFields(ctx, ks, shard3, func(si *topo.ShardInfo) error {
+		si.Shard.PrimaryAlias = tablet3.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tmc := &testutil.TabletManagerClient{
+		ExecuteFetchAsDbaResults: map[string]struct {
+			Response *querypb.QueryResult
+			Error    error
+		}{
+			"zone1-0000000100": {
+				Response: &querypb.QueryResult{
+					Rows: []*querypb.Row{{
+						Lengths: []int64{1},
+						Values:  []byte("1"),
+					},
+					},
+				},
+			},
+			"zone1-0000000200": {
+				Response: &querypb.QueryResult{
+					Rows: []*querypb.Row{{
+						Lengths: []int64{1},
+						Values:  []byte("1"),
+					},
+					},
+				},
+			},
+			"zone1-0000000300": {
+				Response: &querypb.QueryResult{
+					Rows: []*querypb.Row{{}},
+				},
+			},
+		},
+	}
+
+	tableSettings := []*vtctldata.TableMaterializeSettings{
+		{
+			TargetTable: "table1",
+		},
+		{
+			TargetTable: "table2",
+		},
+		{
+			TargetTable: "table3",
+		},
+	}
+	err = validateEmptyTables(ctx, ts, tmc, []*topo.ShardInfo{s1, s2, s3}, tableSettings)
+	assert.ErrorContains(t, err, "table1")
+	assert.ErrorContains(t, err, "table2")
+	assert.ErrorContains(t, err, "table3")
+
+	err = validateEmptyTables(ctx, ts, tmc, []*topo.ShardInfo{s1, s2, s3}, []*vtctldata.TableMaterializeSettings{})
+	assert.NoError(t, err, "should not throw any error for empty table settings slice")
 }

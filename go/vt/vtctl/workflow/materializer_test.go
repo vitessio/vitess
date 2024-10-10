@@ -51,6 +51,7 @@ const (
 	mzGetCopyState       = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
 	mzGetLatestCopyState = "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)"
 	insertPrefix         = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options\) values `
+	getNonEmptyTable     = "select 1 from `t1` limit 1"
 )
 
 var (
@@ -520,6 +521,7 @@ func TestMigrateVSchema(t *testing.T) {
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, getNonEmptyTable, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
@@ -578,6 +580,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			// a circular dependency.
 			// The TabletManager portion is tested in rpc_vreplication_test.go.
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, getNonEmptyTable, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
@@ -610,6 +613,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 func TestShardedAutoIncHandling(t *testing.T) {
 	tableName := "t1"
 	tableDDL := fmt.Sprintf("create table %s (id int not null auto_increment primary key, c1 varchar(10))", tableName)
+	validateEmptyTableQuery := fmt.Sprintf("select 1 from `%s` limit 1", tableName)
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
@@ -705,6 +709,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{
+				validateEmptyTableQuery,
 				tableDDL, // Unchanged
 			},
 		},
@@ -750,6 +755,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{ // auto_increment clause removed
+				validateEmptyTableQuery,
 				fmt.Sprintf(`create table %s (
 	id int not null primary key,
 	c1 varchar(10)
@@ -806,6 +812,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{ // auto_increment clause removed
+				validateEmptyTableQuery,
 				fmt.Sprintf(`create table %s (
 	id int not null primary key,
 	c1 varchar(10)
@@ -858,6 +865,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				},
 			},
 			expectQueries: []string{ // auto_increment clause removed
+				validateEmptyTableQuery,
 				fmt.Sprintf(`create table %s (
 	id int not null primary key,
 	c1 varchar(10)
@@ -943,6 +951,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	// a circular dependency.
 	// The TabletManager portion is tested in rpc_vreplication_test.go.
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, getNonEmptyTable, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
@@ -1061,6 +1070,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	}
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "select 1 from `lookup` limit 1", &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`", &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
@@ -2777,7 +2787,10 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			vrepExecQueries: []string{"CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)"},
+			vrepExecQueries: []string{
+				"select 1 from `t1_lkp` limit 1",
+				"CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)",
+			},
 			createRequest: &createVReplicationWorkflowRequestResponse{
 				req: nil, // We don't care about defining it in this case
 				res: &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{},
@@ -3096,6 +3109,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				if tablet.Keyspace != targetKs || tablet.Type != topodatapb.TabletType_PRIMARY {
 					continue
 				}
+				env.tmc.expectVRQuery(int(tablet.Alias.Uid), getNonEmptyTable, &sqltypes.Result{})
 				// If we are doing a partial MoveTables, we will only perform the workflow
 				// stream creation / INSERT statment on the shard(s) we're migrating.
 				if len(tc.moveTablesReq.SourceShards) > 0 && !slices.Contains(tc.moveTablesReq.SourceShards, tablet.Shard) {
