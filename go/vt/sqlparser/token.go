@@ -87,6 +87,11 @@ type Tokenizer struct {
 	queryBuf []byte
 }
 
+var defaultIdQuotes = map[uint16]struct{}{backtickQuote: {}}
+var defaultStrLitQuotes = map[uint16]struct{}{doubleQuote: {}, singleQuote: {}}
+var ansiIdQuotes = map[uint16]struct{}{backtickQuote: {}, doubleQuote: {}}
+var ansiStrLitQuotes = map[uint16]struct{}{singleQuote: {}}
+
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
 func NewStringTokenizer(sql string) *Tokenizer {
@@ -94,8 +99,8 @@ func NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{
 		buf:                 buf,
 		bufSize:             len(buf),
-		identifierQuotes:    map[uint16]struct{}{backtickQuote: {}},
-		stringLiteralQuotes: map[uint16]struct{}{doubleQuote: {}, singleQuote: {}},
+		identifierQuotes:    defaultIdQuotes,
+		stringLiteralQuotes: defaultStrLitQuotes,
 	}
 }
 
@@ -186,7 +191,7 @@ func (tkn *Tokenizer) digestedToken() (token int, value []byte) {
 	}
 	length := len(tkn.digestedTokens)
 	tokenAndValue := tkn.digestedTokens[length-1]
-	tkn.digestedTokens = tkn.digestedTokens[0:length-1]
+	tkn.digestedTokens = tkn.digestedTokens[0 : length-1]
 
 	if len(tkn.digestedTokens) == 0 {
 		tkn.digestedTokens = nil

@@ -56,7 +56,7 @@ var zeroParser = *(yyNewParser().(*yyParserImpl))
 //
 //	showCollationFilterOpt := $4
 //	$$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
-func yyParsePooled(yylex yyLexer) int {
+func yyParsePooled(yylex yyLexer) (ret int) {
 	// Being very particular about using the base type and not an interface type b/c we depend on
 	// the implementation to know how to reinitialize the parser.
 	var parser *yyParserImpl
@@ -71,6 +71,12 @@ func yyParsePooled(yylex yyLexer) int {
 	defer func() {
 		*parser = zeroParser
 		parserPool.Put(parser)
+	}()
+	defer func() {
+		if recoveredPanic := recover(); recoveredPanic != nil {
+			yylex.Error(fmt.Sprintf("handler caught panic: %v", recoveredPanic))
+			ret = 1
+		}
 	}()
 	return parser.Parse(yylex)
 }
@@ -149,7 +155,7 @@ func ParseOneWithOptions(ctx context.Context, sql string, options ParserOptions)
 		}
 	}
 
-	return tree, tokenizer.Position-1, nil
+	return tree, tokenizer.Position - 1, nil
 }
 
 func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
@@ -523,7 +529,10 @@ func (q *QueryOpts) merge(other QueryOpts) error {
 	return nil
 }
 
-func (q QueryOpts) Format(buf *TrackedBuffer) {
+func (q *QueryOpts) Format(buf *TrackedBuffer) {
+	if q == nil {
+		return
+	}
 	if q.All {
 		buf.Myprintf("%s", AllStr)
 	}
@@ -597,6 +606,9 @@ func (node *Select) SetLock(lock string) {
 
 func (node *Select) SetInto(into *Into) error {
 	if into == nil {
+		return nil
+	}
+	if into.Variables == nil && into.Dumpfile == "" && into.Outfile == "" {
 		return nil
 	}
 	if node.Into != nil {
@@ -865,7 +877,7 @@ type Load struct {
 	*Lines
 	IgnoreNum *SQLVal
 	Columns
-	SetExprs  AssignmentExprs
+	SetExprs        AssignmentExprs
 	IgnoreOrReplace string
 }
 
@@ -1264,7 +1276,7 @@ func (d *Declare) walkSubtree(visit Visit) error {
 				return err
 			}
 		}
-		if err := Walk(visit, &d.Variables.VarType); err != nil {
+		if err := Walk(visit, d.Variables.VarType); err != nil {
 			return err
 		}
 	}
@@ -2724,7 +2736,7 @@ type ColumnDefinition struct {
 
 // Format formats the node.
 func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %v", col.Name, &col.Type)
+	buf.Myprintf("%v %v", col.Name, col.Type)
 }
 
 func (col *ColumnDefinition) walkSubtree(visit Visit) error {
@@ -2734,7 +2746,7 @@ func (col *ColumnDefinition) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		col.Name,
-		&col.Type,
+		col.Type,
 	)
 }
 
@@ -2904,7 +2916,7 @@ func (ct *ColumnType) merge(other ColumnType) error {
 }
 
 // Format returns a canonical string representation of the type and all relevant options
-func (ct *ColumnType) Format(buf *TrackedBuffer) {
+func (ct ColumnType) Format(buf *TrackedBuffer) {
 	if stringer, ok := ct.ResolvedType.(fmt.Stringer); ok {
 		buf.WriteString(stringer.String())
 	} else {
@@ -2999,7 +3011,7 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 }
 
 // String returns a canonical string representation of the type and all relevant options
-func (ct *ColumnType) String() string {
+func (ct ColumnType) String() string {
 	buf := NewTrackedBuffer(nil)
 	ct.Format(buf)
 	return buf.String()
@@ -3007,7 +3019,7 @@ func (ct *ColumnType) String() string {
 
 // DescribeType returns the abbreviated type information as required for
 // describe table
-func (ct *ColumnType) DescribeType() string {
+func (ct ColumnType) DescribeType() string {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf("%s", ct.Type)
 	if ct.Length != nil && ct.Scale != nil {
@@ -3030,7 +3042,7 @@ func (ct *ColumnType) DescribeType() string {
 }
 
 // SQLType returns the sqltypes type code for the given column
-func (ct *ColumnType) SQLType() querypb.Type {
+func (ct ColumnType) SQLType() querypb.Type {
 	switch strings.ToLower(ct.Type) {
 	case keywordStrings[TINYINT]:
 		if ct.Unsigned {
@@ -3213,7 +3225,7 @@ func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
 		if col.Type.Autoincrement {
 			buf.Myprintf("%v %s", col.Name, "FOR ORDINALITY")
 		} else {
-			buf.Myprintf("%v %v%s %s %v", col.Name, &col.Type, exists, keywordStrings[PATH], col.Opts)
+			buf.Myprintf("%v %v%s %s %v", col.Name, col.Type, exists, keywordStrings[PATH], col.Opts)
 		}
 	}
 }
@@ -3225,7 +3237,7 @@ func (col *JSONTableColDef) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		col.Name,
-		&col.Type,
+		col.Type,
 	)
 }
 
@@ -3565,12 +3577,12 @@ func (node *AutoIncSpec) walkSubtree(visit Visit) error {
 // ColumnTypeSpec defines a change to a column's type, without fully specifying the column definition.
 type ColumnTypeSpec struct {
 	Column ColIdent
-	Type  ColumnType
+	Type   ColumnType
 }
 
 var _ SQLNode = (*ColumnTypeSpec)(nil)
 
-func (node ColumnTypeSpec)Format(buf *TrackedBuffer) {
+func (node ColumnTypeSpec) Format(buf *TrackedBuffer) {
 	buf.Myprintf("alter column %v type ")
 	node.Type.Format(buf)
 }
@@ -3917,10 +3929,10 @@ func (node *Show) walkSubtree(visit Visit) error {
 
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
-	DbName string
+	DbName     string
 	SchemaName string
-	Filter *ShowFilter
-	AsOf   Expr
+	Filter     *ShowFilter
+	AsOf       Expr
 }
 
 // Format formats the node.
@@ -3928,15 +3940,15 @@ func (node *ShowTablesOpt) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	
-	if node.SchemaName != "" && node.DbName != "" { 
+
+	if node.SchemaName != "" && node.DbName != "" {
 		buf.Myprintf(" from %s.%s", node.DbName, node.SchemaName)
 	} else if node.DbName != "" {
 		buf.Myprintf(" from %s", node.DbName)
 	} else if node.SchemaName != "" {
 		buf.Myprintf(" from %s", node.SchemaName)
 	}
-	
+
 	if node.AsOf != nil {
 		buf.Myprintf(" as of ")
 		node.AsOf.Format(buf)
@@ -4036,7 +4048,7 @@ type FlushOption struct {
 
 // PurgeBinaryLogs represents a PURGE BINARY LOGS statement.
 type PurgeBinaryLogs struct {
-	To string
+	To     string
 	Before Expr
 }
 
@@ -4813,7 +4825,7 @@ func (node EventName) IsEmpty() bool {
 // This means two TableName vars can be compared for equality
 // and a TableName can also be used as key in a map.
 // SchemaQualifier, if specified, represents a schema name, which is an additional level of namespace supported in
-// other dialects. Supported here so that this AST can act as a translation layer for those dialects, but is unused in 
+// other dialects. Supported here so that this AST can act as a translation layer for those dialects, but is unused in
 // MySQL.
 type TableName struct {
 	Name, DbQualifier, SchemaQualifier TableIdent
@@ -6743,7 +6755,9 @@ func (node *Limit) Format(buf *TrackedBuffer) {
 	if node.Offset != nil {
 		buf.Myprintf("%v, ", node.Offset)
 	}
-	buf.Myprintf("%v", node.Rowcount)
+	if node.Rowcount != nil {
+		buf.Myprintf("%v", node.Rowcount)
+	}
 }
 
 func (node *Limit) walkSubtree(visit Visit) error {
@@ -7637,8 +7651,8 @@ func (d InjectedExpr) Format(buf *TrackedBuffer) {
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedStatement struct {
-	Statement  Injectable
-	Children   Exprs
+	Statement Injectable
+	Children  Exprs
 }
 
 var _ Statement = InjectedStatement{}
