@@ -98,5 +98,5 @@ mysql --table < ../common/select_customer80-_data.sql
 
 ./306_down_shard_0.sh
 
-./401_teardown.sh
+./501_teardown.sh
 
