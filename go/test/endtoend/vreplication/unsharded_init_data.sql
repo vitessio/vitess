@@ -50,3 +50,6 @@ insert into reftable (id, val1) values (2, 'b')
 insert into reftable (id, val1) values (3, 'c')
 insert into reftable (id, val1) values (4, 'd')
 insert into reftable (id, val1) values (5, 'e')
+
+insert into admins(team_id, email) values(1, 'a@example.com')
+insert into admins(team_id, email) values(2, 'b@example.com')

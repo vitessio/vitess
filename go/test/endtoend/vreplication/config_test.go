@@ -69,6 +69,7 @@ create table  `+"`blüb_tbl`"+` (id int, val1 varchar(20), `+"`blöb1`"+` blob, 
 create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
 create table loadtest (id int, name varchar(256), primary key(id), key(name));
 create table nopk (name varchar(128), age int unsigned);
+ create table admins(team_id int, email varchar(128), primary key(team_id), unique key(email));
 `, strings.Join(customerTypes, ","))
 	// These should always be ignored in vreplication
 	internalSchema = `
@@ -85,6 +86,7 @@ create table nopk (name varchar(128), age int unsigned);
   "tables": {
     "product": {},
     "merchant": {},
+    "admins": {},
     "orders": {},
     "loadtest": {},
     "customer": {},
@@ -158,8 +160,16 @@ create table nopk (name varchar(128), age int unsigned);
         }
       ]
     },
-    "enterprise_customer": {
+	"admins": {
       "column_vindexes": [
+			{
+			  "column": "team_id",
+			  "name": "reverse_bits"
+			}
+		  ]
+    },    
+	"enterprise_customer": {
+	  "column_vindexes": [
         {
           "column": "cid",
           "name": "xxhash"
