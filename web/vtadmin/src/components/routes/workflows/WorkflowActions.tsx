@@ -133,26 +133,42 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
         !(streamsByState['Copying'] && streamsByState['Copying'].length) &&
         !(streamsByState['Stopped'] && streamsByState['Stopped'].length);
 
+    const isStopped =
+        !(streamsByState['Error'] && streamsByState['Error'].length) &&
+        !(streamsByState['Copying'] && streamsByState['Copying'].length) &&
+        !(streamsByState['Running'] && streamsByState['Running'].length);
+
     const isSwitched =
         workflows &&
+        isStopped &&
         !!getReverseWorkflow(
             workflows,
             workflows.find((w) => w.workflow?.name === name && w.cluster?.id === clusterID)
         );
 
+    const isReverseWorkflow = name.endsWith('_reverse');
+
     return (
         <div className="w-min inline-block">
             <Dropdown dropdownButton={Icons.info}>
-                {isMoveTablesWorkflow && isSwitched && (
-                    <MenuItem onClick={() => setCurrentDialog('Complete MoveTables')}>Complete</MenuItem>
+                {!isReverseWorkflow && (
+                    <>
+                        {isMoveTablesWorkflow && isSwitched && (
+                            <MenuItem onClick={() => setCurrentDialog('Complete MoveTables')}>Complete</MenuItem>
+                        )}
+                        {isRunning && (
+                            <MenuItem onClick={() => setCurrentDialog('Switch Traffic')}>Switch Traffic</MenuItem>
+                        )}
+                        {isSwitched && (
+                            <MenuItem onClick={() => setCurrentDialog('Reverse Traffic')}>Reverse Traffic</MenuItem>
+                        )}
+                        {!isSwitched && (
+                            <MenuItem onClick={() => setCurrentDialog('Cancel Workflow')}>Cancel Workflow</MenuItem>
+                        )}
+                    </>
                 )}
-                {isRunning && <MenuItem onClick={() => setCurrentDialog('Switch Traffic')}>Switch Traffic</MenuItem>}
-                {isSwitched && <MenuItem onClick={() => setCurrentDialog('Reverse Traffic')}>Reverse Traffic</MenuItem>}
-                {!isSwitched && (
-                    <MenuItem onClick={() => setCurrentDialog('Cancel Workflow')}>Cancel Workflow</MenuItem>
-                )}
-                <MenuItem onClick={() => setCurrentDialog('Start Workflow')}>Start Workflow</MenuItem>
-                <MenuItem onClick={() => setCurrentDialog('Stop Workflow')}>Stop Workflow</MenuItem>
+                {!isRunning && <MenuItem onClick={() => setCurrentDialog('Start Workflow')}>Start Workflow</MenuItem>}
+                {!isStopped && <MenuItem onClick={() => setCurrentDialog('Stop Workflow')}>Stop Workflow</MenuItem>}
             </Dropdown>
             <WorkflowAction
                 title="Start Workflow"
