@@ -37704,6 +37704,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest prevent_cross_cell_promotion */
         prevent_cross_cell_promotion?: (boolean|null);
+
+        /** EmergencyReparentShardRequest expected_primary */
+        expected_primary?: (topodata.ITabletAlias|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -37732,6 +37735,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest prevent_cross_cell_promotion. */
         public prevent_cross_cell_promotion: boolean;
+
+        /** EmergencyReparentShardRequest expected_primary. */
+        public expected_primary?: (topodata.ITabletAlias|null);
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
@@ -43314,6 +43320,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest wait_replicas_timeout */
         wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest expected_primary */
+        expected_primary?: (topodata.ITabletAlias|null);
     }
 
     /** Represents a PlannedReparentShardRequest. */
@@ -43339,6 +43348,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest wait_replicas_timeout. */
         public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest expected_primary. */
+        public expected_primary?: (topodata.ITabletAlias|null);
 
         /**
          * Creates a new PlannedReparentShardRequest instance using the specified properties.

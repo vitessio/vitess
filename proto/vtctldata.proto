@@ -447,6 +447,9 @@ message EmergencyReparentShardRequest {
   // PreventCrossCellPromotion is used to only promote the new primary from the same cell
   // as the failed primary.
   bool prevent_cross_cell_promotion = 6;
+  // ExpectedPrimary is the optional alias we expect to be the current primary in order for
+  // the reparent operation to succeed.
+  topodata.TabletAlias expected_primary = 8;
 }
 
 message EmergencyReparentShardResponse {
@@ -807,6 +810,9 @@ message PlannedReparentShardRequest {
   // WaitReplicasTimeout time to catch up before the reparent, and an additional
   // WaitReplicasTimeout time to catch up after the reparent.
   vttime.Duration wait_replicas_timeout = 5;
+  // ExpectedPrimary is the optional alias we expect to be the current primary in order for
+  // the reparent operation to succeed.
+  topodata.TabletAlias expected_primary = 8;
 }
 
 message PlannedReparentShardResponse {

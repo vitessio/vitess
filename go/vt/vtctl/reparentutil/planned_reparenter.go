@@ -50,9 +50,10 @@ type PlannedReparenter struct {
 // operations. Options are passed by value, so it is safe for callers to mutate
 // resue options structs for multiple calls.
 type PlannedReparentOptions struct {
-	NewPrimaryAlias     *topodatapb.TabletAlias
-	AvoidPrimaryAlias   *topodatapb.TabletAlias
-	WaitReplicasTimeout time.Duration
+	NewPrimaryAlias      *topodatapb.TabletAlias
+	AvoidPrimaryAlias    *topodatapb.TabletAlias
+	ExpectedPrimaryAlias *topodatapb.TabletAlias
+	WaitReplicasTimeout  time.Duration
 
 	// Private options managed internally. We use value-passing semantics to
 	// set these options inside a PlannedReparent without leaking these details
@@ -522,6 +523,13 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	shardInfo, err := pr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
+	}
+
+	if opts.ExpectedPrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.ExpectedPrimaryAlias, shardInfo.PrimaryAlias) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %s is not equal to expected alias %s",
+			topoproto.TabletAliasString(shardInfo.PrimaryAlias),
+			topoproto.TabletAliasString(opts.ExpectedPrimaryAlias),
+		)
 	}
 
 	keyspaceDurability, err := pr.ts.GetKeyspaceDurability(ctx, keyspace)
