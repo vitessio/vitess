@@ -8,12 +8,15 @@ interface WorkflowActionProps {
     mutation: UseMutationResult<any, any, any>;
     title: string;
     confirmText: string;
-    successText: string;
+    successText?: string;
     errorText: string;
+    errorDescription?: string;
     loadingText: string;
     description?: string;
+    className?: string;
     body?: JSX.Element;
     successBody?: JSX.Element;
+    hideSuccessDialog?: boolean;
     refetchWorkflows: Function;
     closeDialog: () => void;
 }
@@ -29,8 +32,11 @@ const WorkflowAction: React.FC<WorkflowActionProps> = ({
     successBody,
     loadingText,
     errorText,
+    errorDescription,
     refetchWorkflows,
+    hideSuccessDialog,
     body,
+    className,
 }) => {
     const onCloseDialog = () => {
         setTimeout(mutation.reset, 500);
@@ -43,6 +49,9 @@ const WorkflowAction: React.FC<WorkflowActionProps> = ({
             {},
             {
                 onSuccess: () => {
+                    if (hideSuccessDialog) {
+                        closeDialog();
+                    }
                     refetchWorkflows();
                 },
             }
@@ -61,10 +70,11 @@ const WorkflowAction: React.FC<WorkflowActionProps> = ({
             hideCancel={hasRun}
             title={hasRun ? undefined : title}
             description={hasRun ? undefined : description}
+            className={className}
         >
             <div className="w-full">
                 {!hasRun && body}
-                {mutation.data && !mutation.error && (
+                {!hideSuccessDialog && mutation.data && !mutation.error && (
                     <div className="w-full flex flex-col justify-center items-center">
                         <span className="flex h-12 w-12 relative items-center justify-center">
                             <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
@@ -79,6 +89,7 @@ const WorkflowAction: React.FC<WorkflowActionProps> = ({
                             <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
                         </span>
                         <div className="text-lg mt-3 font-bold text-center">{errorText}</div>
+                        {errorDescription && <div className="text-sm mt-1">{errorDescription}</div>}
                     </div>
                 )}
             </div>
