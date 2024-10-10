@@ -121,7 +121,7 @@ func TestFindErrantGTIDs(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run("", func(t *testing.T) {
-			got, err := testcase.mainRepStatus.FindErrantGTIDs(testcase.otherPositions)
+			got, err := FindErrantGTIDs(testcase.mainRepStatus.RelayLogPosition, testcase.mainRepStatus.SourceUUID, testcase.otherPositions)
 			require.NoError(t, err)
 			require.Equal(t, testcase.want, got)
 		})

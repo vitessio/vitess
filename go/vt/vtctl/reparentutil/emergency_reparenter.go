@@ -772,7 +772,6 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 }
 
 // findErrantGTIDs tries to find errant GTIDs for the valid candidates and returns the updated list of valid candidates.
-// TODO: Comment
 func (erp *EmergencyReparenter) findErrantGTIDs(
 	ctx context.Context,
 	validCandidates map[string]replication.Position,
@@ -780,16 +779,21 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
 ) (map[string]replication.Position, error) {
+	// First we need to collect the reparent journal length for all the candidates.
+	// This will tell us, which of the tablets are severly lagged, and haven't even seen all the primary promotions.
+	// These tablets cannot be trusted for errant GTID detection.
 	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout)
 	if err != nil {
 		return nil, err
 	}
 
+	// Find the maximum length of the reparent journal among all the candidates.
 	var maxLen int
 	for _, length := range reparentJournalLen {
 		maxLen = max(maxLen, length)
 	}
 
+	// Find the candidates with the maximum length of the reparent journal.
 	var maxLenCandidates []string
 	for alias, length := range reparentJournalLen {
 		if length == maxLen {
@@ -797,15 +801,19 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		}
 	}
 
+	// We use all the candidates with the maximum length of the reparent journal to find the errant GTIDs amongst them.
 	var maxLenPositions []replication.Position
 	updatedValidCandidates := make(map[string]replication.Position)
 	for _, candidate := range maxLenCandidates {
 		status, ok := statusMap[candidate]
 		if !ok {
+			// If the tablet is not in the status map, and has the maximum length of the reparent journal,
+			// then it is probably the latest primary and we don't need to run any errant GTID detection on it!
 			maxLenPositions = append(maxLenPositions, validCandidates[candidate])
 			updatedValidCandidates[candidate] = validCandidates[candidate]
 			continue
 		}
+		// Store all the other candidate's positions so that we can run errant GTID detection using them.
 		otherPositions := make([]replication.Position, 0, len(maxLenCandidates)-1)
 		for _, otherCandidate := range maxLenCandidates {
 			if otherCandidate == candidate {
@@ -813,8 +821,9 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			}
 			otherPositions = append(otherPositions, validCandidates[otherCandidate])
 		}
+		// Run errant GTID detection and throw away any tablet that has errant GTIDs.
 		afterStatus := replication.ProtoToReplicationStatus(status.After)
-		errantGTIDs, err := afterStatus.FindErrantGTIDs(otherPositions)
+		errantGTIDs, err := replication.FindErrantGTIDs(afterStatus.RelayLogPosition, afterStatus.SourceUUID, otherPositions)
 		if err != nil {
 			return nil, err
 		}
@@ -826,19 +835,21 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		updatedValidCandidates[candidate] = validCandidates[candidate]
 	}
 
+	// For all the other tablets, that are lagged enough that they haven't seen all the reparent journal entries,
+	// we run errant GTID detection by using the tablets with the maximum length of the reparent journal.
+	// We throw away any tablet that has errant GTIDs.
 	for alias, length := range reparentJournalLen {
 		if length == maxLen {
 			continue
 		}
-		afterStatus := replication.ReplicationStatus{
-			RelayLogPosition: validCandidates[alias],
-		}
-		errantGTIDs, err := afterStatus.FindErrantGTIDs(maxLenPositions)
+		// Here we don't want to send the source UUID. The reason is that all of these tablets are lagged,
+		// so we don't need to use the source UUID to discount any GTIDs.
+		errantGTIDs, err := replication.FindErrantGTIDs(validCandidates[alias], replication.SID{}, maxLenPositions)
 		if err != nil {
 			return nil, err
 		}
 		if errantGTIDs != nil {
-			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs)
+			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, validCandidates[alias], errantGTIDs)
 			continue
 		}
 		updatedValidCandidates[alias] = validCandidates[alias]
@@ -847,7 +858,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	return updatedValidCandidates, nil
 }
 
-// TODO: Comment
+// gatherReparenJournalInfo reads the reparent journal information from all the tablets in the valid candidates list.
 func (erp *EmergencyReparenter) gatherReparenJournalInfo(
 	ctx context.Context,
 	validCandidates map[string]replication.Position,
