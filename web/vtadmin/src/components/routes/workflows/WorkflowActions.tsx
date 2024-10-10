@@ -12,8 +12,14 @@ import {
 } from '../../../hooks/api';
 import Toggle from '../../toggle/Toggle';
 import { success } from '../../Snackbar';
+import { vtadmin, vtctldata } from '../../../proto/vtadmin';
+import { getReverseWorkflow } from '../../../util/workflows';
 
 interface WorkflowActionsProps {
+    streamsByState: {
+        [index: string]: vtctldata.Workflow.IStream[];
+    };
+    workflows?: vtadmin.Workflow[];
     refetchWorkflows: Function;
     keyspace: string;
     clusterID: string;
@@ -44,6 +50,8 @@ const DefaultCancelWorkflowOptions: CancelWorkflowOptions = {
 };
 
 const WorkflowActions: React.FC<WorkflowActionsProps> = ({
+    streamsByState,
+    workflows,
     refetchWorkflows,
     keyspace,
     clusterID,
@@ -120,15 +128,29 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
 
     const isMoveTablesWorkflow = workflowType === 'MoveTables';
 
+    const isRunning =
+        !(streamsByState['Error'] && streamsByState['Error'].length) &&
+        !(streamsByState['Copying'] && streamsByState['Copying'].length) &&
+        !(streamsByState['Stopped'] && streamsByState['Stopped'].length);
+
+    const isSwitched =
+        workflows &&
+        !!getReverseWorkflow(
+            workflows,
+            workflows.find((w) => w.workflow?.name === name && w.cluster?.id === clusterID)
+        );
+
     return (
         <div className="w-min inline-block">
             <Dropdown dropdownButton={Icons.info}>
-                {isMoveTablesWorkflow && (
+                {isMoveTablesWorkflow && isSwitched && (
                     <MenuItem onClick={() => setCurrentDialog('Complete MoveTables')}>Complete</MenuItem>
                 )}
-                <MenuItem onClick={() => setCurrentDialog('Switch Traffic')}>Switch Traffic</MenuItem>
-                <MenuItem onClick={() => setCurrentDialog('Reverse Traffic')}>Reverse Traffic</MenuItem>
-                <MenuItem onClick={() => setCurrentDialog('Cancel Workflow')}>Cancel Workflow</MenuItem>
+                {isRunning && <MenuItem onClick={() => setCurrentDialog('Switch Traffic')}>Switch Traffic</MenuItem>}
+                {isSwitched && <MenuItem onClick={() => setCurrentDialog('Reverse Traffic')}>Reverse Traffic</MenuItem>}
+                {!isSwitched && (
+                    <MenuItem onClick={() => setCurrentDialog('Cancel Workflow')}>Cancel Workflow</MenuItem>
+                )}
                 <MenuItem onClick={() => setCurrentDialog('Start Workflow')}>Start Workflow</MenuItem>
                 <MenuItem onClick={() => setCurrentDialog('Stop Workflow')}>Stop Workflow</MenuItem>
             </Dropdown>
@@ -139,6 +161,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 mutation={startWorkflowMutation}
                 successText="Started workflow"
                 errorText={`Error occured while starting workflow ${name}`}
+                errorDescription={startWorkflowMutation.error ? startWorkflowMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Start Workflow'}
                 refetchWorkflows={refetchWorkflows}
@@ -162,6 +185,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 mutation={stopWorkflowMutation}
                 successText="Stopped workflow"
                 errorText={`Error occured while stopping workflow ${name}`}
+                errorDescription={stopWorkflowMutation.error ? stopWorkflowMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Stop Workflow'}
                 refetchWorkflows={refetchWorkflows}
@@ -185,6 +209,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 mutation={switchTrafficMutation}
                 successText="Switched Traffic"
                 errorText={`Error occured while switching traffic for workflow ${name}`}
+                errorDescription={switchTrafficMutation.error ? switchTrafficMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Switch Traffic'}
                 refetchWorkflows={refetchWorkflows}
@@ -208,6 +233,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 mutation={reverseTrafficMutation}
                 successText="Reversed Traffic"
                 errorText={`Error occured while reversing traffic for workflow ${name}`}
+                errorDescription={reverseTrafficMutation.error ? reverseTrafficMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Reverse Traffic'}
                 refetchWorkflows={refetchWorkflows}
@@ -233,6 +259,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 mutation={cancelWorkflowMutation}
                 successText="Cancel Workflow"
                 errorText={`Error occured while cancelling workflow ${name}`}
+                errorDescription={cancelWorkflowMutation.error ? cancelWorkflowMutation.error.message : ''}
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Cancel Workflow'}
                 refetchWorkflows={refetchWorkflows}
