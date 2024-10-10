@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 var (
@@ -65,6 +64,6 @@ func (m *LagSelfMetric) RequiresConn() bool {
 	return true
 }
 
-func (m *LagSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
-	return ReadSelfMySQLThrottleMetric(ctx, conn, m.GetQuery())
+func (m *LagSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
+	return ReadSelfMySQLThrottleMetric(ctx, params.Conn, m.GetQuery())
 }

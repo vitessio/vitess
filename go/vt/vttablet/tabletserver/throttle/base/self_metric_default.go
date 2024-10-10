@@ -19,8 +19,6 @@ package base
 import (
 	"context"
 	"fmt"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 var _ SelfMetric = registerSelfMetric(&DefaultSelfMetric{})
@@ -44,7 +42,7 @@ func (m *DefaultSelfMetric) RequiresConn() bool {
 	return false
 }
 
-func (m *DefaultSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
+func (m *DefaultSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
 	return &ThrottleMetric{
 		Err: fmt.Errorf("unexpected direct call to DefaultSelfMetric.Read"),
 	}

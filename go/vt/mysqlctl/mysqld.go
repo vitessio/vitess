@@ -1333,7 +1333,7 @@ func hostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsRespon
 	_ = func() error {
 		metric := newMetric("loadavg")
 		if runtime.GOOS != "linux" {
-			return withError(metric, fmt.Errorf("loadavg metric is only available on Linux"))
+			return nil
 		}
 		content, err := os.ReadFile("/proc/loadavg")
 		if err != nil {
