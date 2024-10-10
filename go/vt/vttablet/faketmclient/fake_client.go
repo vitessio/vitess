@@ -349,6 +349,11 @@ func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Conte
 	return nil
 }
 
+// ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+	return 10, nil
+}
+
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, nil
