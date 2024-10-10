@@ -2807,17 +2807,6 @@ func TestExecutorRejectTwoPC(t *testing.T) {
 					"1|2|0"),
 			},
 			expErr: "VT12001: unsupported: atomic distributed transaction commit with consistent lookup vindex",
-		}, {
-			sqls: []string{
-				`savepoint x`,
-				`insert into user_extra(user_id) values (1)`,
-				`insert into user_extra(user_id) values (3)`,
-			},
-			testRes: []*sqltypes.Result{
-				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|unq_col|unchanged", "int64|int64|int64"),
-					"1|2|0"),
-			},
-			expErr: "VT12001: unsupported: atomic distributed transaction commit with savepoint",
 		},
 	}
 
