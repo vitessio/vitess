@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Vitess Authors.
+# Copyright 2024 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,21 +17,16 @@ source ../common/env.sh
 KEYSPACE="customer"
 SHARDS=("-80" "80-")
 
-# Helper function for logging messages with timestamps
-log() {
-    echo "$(date +'%Y-%m-%d %H:%M:%S') - $1"
-}
-
 # Ensure the keyspace and shards are healthy
-log "Ensuring keyspace $KEYSPACE exists and shards are healthy..."
-for SHARD in "${SHARDS[@]}"; do
-    wait_for_healthy_shard $KEYSPACE $SHARD || exit 1
+echo "Ensuring keyspace $KEYSPACE exists and shards are healthy..."
+for shard in "${shards[@]}"; do
+    wait_for_healthy_shard "$KEYSPACE" "$shard" || exit 1
 done
 
 # Backup all shards of the customer keyspace
-for SHARD in "${SHARDS[@]}"; do
-    log "Backing up shard $SHARD in keyspace $KEYSPACE..."
-    vtctldclient BackupShard $KEYSPACE/$SHARD || fail "Backup failed for shard $SHARD"
+for shard in "${shards[@]}"; do
+    echo "Backing up shard $shard in keyspace $KEYSPACE..."
+    vtctldclient BackupShard "$KEYSPACE/$shard" || fail "Backup failed for shard $shard"
 done
 
-log "Backup process completed successfully for all shards in $KEYSPACE."
+echo "Backup process completed successfully for all shards in $KEYSPACE."
