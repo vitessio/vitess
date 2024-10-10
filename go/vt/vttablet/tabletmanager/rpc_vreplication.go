@@ -143,6 +143,11 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 	return &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
+// DeleteTableData will delete data from the given tables (keys in the
+// req.Tabletfilters map) using the given filter or WHERE clauses (values
+// in the map). It will perform this work in batches of req.BatchSize
+// until all matching rows have been deleted in all tables, or the context
+// expires.
 func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
 	if req == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid nil request")
@@ -166,7 +171,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 	checkIfCanceled := func() error {
 		select {
 		case <-ctx.Done():
-			return vterrors.Wrap(ctx.Err(), "context ended while deleting data")
+			return vterrors.Wrap(ctx.Err(), "context expired while deleting data")
 		default:
 			return nil
 		}

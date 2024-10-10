@@ -2756,7 +2756,7 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 		return nil
 	}
 
-	var err error // This should be used from here on out
+	var err error
 	// Lock the workflow along with its target keyspace.
 	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "DeleteTenantData")
@@ -2771,7 +2771,7 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "missing deadline in the context")
 	}
 	lockCtx, targetUnlock, lockErr := s.ts.LockKeyspace(ctx, ts.TargetKeyspaceName(), "DeleteTenantData",
-		topo.WithTTL(time.Duration(deadline.UnixNano())))
+		topo.WithTTL(time.Duration(deadline.UnixNano()+int64(time.Millisecond*1))))
 	if lockErr != nil {
 		return vterrors.Wrapf(lockErr, "failed to lock the %s keyspace", ts.TargetKeyspaceName())
 	}
@@ -2798,20 +2798,20 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 		}
 
 		// Let's be sure that the workflow is stopped so that it's not generating more data.
-		_, ierr := ts.ws.tmc.UpdateVReplicationWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+		_, err := ts.ws.tmc.UpdateVReplicationWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow: ts.workflow,
 			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
 		})
-		if ierr != nil {
+		if err != nil {
 			return vterrors.Wrapf(err, "failed to stop workflow %s", ts.workflow)
 		}
 		s.Logger().Infof("Deleting tenant %s data that was migrated in mulit-tenant workflow %s",
 			ts.workflow, ts.options.TenantId)
-		_, ierr = ts.ws.tmc.DeleteTableData(ctx, primary.Tablet, &tabletmanagerdatapb.DeleteTableDataRequest{
+		_, err = ts.ws.tmc.DeleteTableData(ctx, primary.Tablet, &tabletmanagerdatapb.DeleteTableDataRequest{
 			TableFilters: tableFilters,
 			BatchSize:    batchSize,
 		})
-		return ierr
+		return err
 	})
 }
 
