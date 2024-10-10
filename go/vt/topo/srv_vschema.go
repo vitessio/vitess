@@ -121,6 +121,7 @@ func (ts *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.Sr
 	nodePath := SrvVSchemaFile
 	data, _, err := conn.Get(ctx, nodePath)
 	if err != nil {
+		log.Warningf("GetSrvVSchema failed for cell %s: %v", cell, err)
 		return nil, err
 	}
 	srvVSchema := &vschemapb.SrvVSchema{}

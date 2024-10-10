@@ -23,6 +23,7 @@ import (
 	"path"
 	"sync"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -686,6 +687,7 @@ func (ts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*t
 	nodePath := srvKeyspaceFileName(keyspace)
 	data, _, err := conn.Get(ctx, nodePath)
 	if err != nil {
+		log.Warningf("GetSrvKeyspace failed for cell %s, keyspace %s: %v", cell, keyspace, err)
 		return nil, err
 	}
 	srvKeyspace := &topodatapb.SrvKeyspace{}

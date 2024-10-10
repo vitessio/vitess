@@ -21,6 +21,7 @@ import (
 	"path"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/events"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -72,6 +73,7 @@ func (ts *Server) GetExternalVitessCluster(ctx context.Context, clusterName stri
 		return nil, nil
 	case err == nil:
 	default:
+		log.Warningf("GetExternalVitessCluster failed for cluster %s: %v", clusterName, err)
 		return nil, err
 	}
 	vc := &topodatapb.ExternalVitessCluster{}

@@ -196,6 +196,7 @@ func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceIn
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
 	data, version, err := ts.globalCell.Get(ctx, keyspacePath)
 	if err != nil {
+		log.Warningf("GetKeyspace failed for keyspace %s: %v", keyspace, err)
 		return nil, err
 	}
 

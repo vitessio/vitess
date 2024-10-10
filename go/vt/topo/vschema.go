@@ -58,6 +58,7 @@ func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.K
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
 	data, _, err := ts.globalCell.Get(ctx, nodePath)
 	if err != nil {
+		log.Warningf("GetVSchema failed for keyspace %s: %v", keyspace, err)
 		return nil, err
 	}
 	var vs vschemapb.Keyspace
@@ -115,6 +116,7 @@ func (ts *Server) GetRoutingRules(ctx context.Context) (*vschemapb.RoutingRules,
 		if IsErrType(err, NoNode) {
 			return rr, nil
 		}
+		log.Warningf("GetRoutingRules failed for cell %s: %v", ts.globalCell, err)
 		return nil, err
 	}
 	err = rr.UnmarshalVT(data)
@@ -150,6 +152,7 @@ func (ts *Server) GetShardRoutingRules(ctx context.Context) (*vschemapb.ShardRou
 		if IsErrType(err, NoNode) {
 			return srr, nil
 		}
+		log.Warningf("GetShardRoutingRules failed for cell %s: %v", ts.globalCell, err)
 		return nil, err
 	}
 	err = srr.UnmarshalVT(data)

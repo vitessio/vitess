@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -109,6 +110,7 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	bytes, version, err := st.conn.Get(ctx, filePath)
 	if err != nil {
+		log.Warningf("Get failed for cell %s, filePath %s: %v", st.cell, filePath, err)
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return bytes, version, err
 	}

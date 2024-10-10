@@ -22,6 +22,7 @@ import (
 
 	"context"
 
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -56,6 +57,7 @@ func (ts *Server) GetCellsAliases(ctx context.Context, strongRead bool) (ret map
 			aliasPath := pathForCellsAlias(alias)
 			contents, _, err := conn.Get(ctx, aliasPath)
 			if err != nil {
+				log.Warningf("GetCellsAliases failed for alias %s: %v", alias, err)
 				return nil, err
 			}
 
@@ -83,6 +85,7 @@ func (ts *Server) GetCellsAlias(ctx context.Context, name string, strongRead boo
 	aliasPath := pathForCellsAlias(name)
 	contents, _, err := conn.Get(ctx, aliasPath)
 	if err != nil {
+		log.Warningf("GetCellsAlias failed for alias %s: %v", name, err)
 		return nil, err
 	}
 
@@ -146,6 +149,7 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 		case IsErrType(err, NoNode):
 			// Nothing to do.
 		default:
+			log.Warningf("GetCellsAlias failed for alias %s: %v", alias, err)
 			return err
 		}
 

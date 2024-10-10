@@ -21,6 +21,7 @@ import (
 
 	"context"
 
+	"vitess.io/vitess/go/vt/log"
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
 
@@ -83,6 +84,7 @@ func (ts *Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, 
 	filePath := pathForWorkflow(uuid)
 	contents, version, err := ts.globalCell.Get(ctx, filePath)
 	if err != nil {
+		log.Warningf("GetWorkflow failed for cell %s, filePath %s: %v", ts.globalCell, filePath, err)
 		return nil, err
 	}
 

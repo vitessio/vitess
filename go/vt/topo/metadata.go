@@ -20,6 +20,7 @@ import (
 	"context"
 	"path"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/event"
@@ -35,6 +36,7 @@ func (ts *Server) UpsertMetadata(ctx context.Context, key string, val string) er
 
 	if err != nil {
 		if !IsErrType(err, NoNode) {
+			log.Warningf("UpsertMetadata failed for key %s: %v", key, err)
 			return err
 		}
 
@@ -92,6 +94,7 @@ func (ts *Server) getMetadata(ctx context.Context, key string) (string, error) {
 	keyPath := path.Join(MetadataPath, key)
 	contents, _, err := ts.globalCell.Get(ctx, keyPath)
 	if err != nil {
+		log.Warningf("getMetadata failed for key %s: %v", key, err)
 		return "", err
 	}
 

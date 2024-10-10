@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -70,6 +71,7 @@ func (ts *Server) GetCellInfo(ctx context.Context, cell string, strongRead bool)
 	filePath := pathForCellInfo(cell)
 	contents, _, err := conn.Get(ctx, filePath)
 	if err != nil {
+		log.Warningf("GetCellInfo failed for cell %s: %v", cell, err)
 		return nil, err
 	}
 
@@ -115,6 +117,7 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 		case IsErrType(err, NoNode):
 			// Nothing to do.
 		default:
+			log.Warningf("GetCellInfo failed for cell %s: %v", cell, err)
 			return err
 		}
 

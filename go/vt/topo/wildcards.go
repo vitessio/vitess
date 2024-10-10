@@ -288,5 +288,6 @@ func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []str
 		// The path doesn't exist, don't return anything.
 		return nil, nil
 	}
+	log.Warningf("Get failed for cell %s, filePath %s: %v", cell, p, err)
 	return nil, err
 }

@@ -190,6 +190,7 @@ func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 				return vterrors.Wrap(err, "bad ShardReplication data")
 			}
 		default:
+			log.Warningf("GetShardReplication failed for cell %s, keyspace %s, shard %s: %v", cell, keyspace, shard, err)
 			return err
 		}
 
@@ -239,6 +240,7 @@ func (ts *Server) GetShardReplication(ctx context.Context, cell, keyspace, shard
 	nodePath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardReplicationFile)
 	data, _, err := conn.Get(ctx, nodePath)
 	if err != nil {
+		log.Warningf("GetShardReplication failed for cell %s, keyspace %s, shard %s: %v", cell, keyspace, shard, err)
 		return nil, err
 	}
 
