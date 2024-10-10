@@ -2102,11 +2102,8 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	}
 
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
-		// Return an error if the read-write traffic for the workflow is switched.
-		// If any or all read-only traffic has been switched, then we can still
-		// cancel as the routing rules, denied table entries, etc will be cleaned up
-		// and things will be back in the original state before the workflow was created.
-		if state.WritesSwitched {
+		// Return an error if the workflow traffic is partially switched.
+		if state.WritesSwitched || len(state.ReplicaCellsSwitched) > 0 || len(state.RdonlyCellsSwitched) > 0 {
 			return nil, ErrWorkflowPartiallySwitched
 		}
 	}
