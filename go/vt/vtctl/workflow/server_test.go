@@ -949,8 +949,12 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 	targetKeyspaceName := "targetks"
 	vrID := 1
 
-	tabletTypes := []topodatapb.TabletType{
+	allTabletTypes := []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
+	roTabletTypes := []topodatapb.TabletType{
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
@@ -1044,7 +1048,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 			},
 			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
 				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
@@ -1066,11 +1070,33 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionBackward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 			},
 			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
 				Summary:      fmt.Sprintf("ReverseTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
 				StartState:   "All Reads Switched. Writes Switched",
+				CurrentState: "Reads Not Switched. Writes Not Switched",
+			},
+		},
+		{
+			name: "backward for read-only tablets",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionBackward),
+				TabletTypes: roTabletTypes,
+			},
+			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:      fmt.Sprintf("ReverseTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
+				StartState:   "All Reads Switched. Writes Not Switched",
 				CurrentState: "Reads Not Switched. Writes Not Switched",
 			},
 		},
@@ -1088,7 +1114,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 			},
 			preFunc: func(env *testEnv) {
 				env.tmc.SetRefreshStateError(env.tablets[sourceKeyspaceName][startingSourceTabletUID], errors.New("tablet refresh error"))
@@ -1110,7 +1136,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 				Force:       true,
 			},
 			preFunc: func(env *testEnv) {
@@ -1150,7 +1176,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.updateTableRoutingRules(t, ctx, tabletTypes, []string{tableName},
+				env.updateTableRoutingRules(t, ctx, tc.req.TabletTypes, []string{tableName},
 					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
@@ -1181,13 +1207,29 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			// Confirm that we have the expected routing rules.
 			rr, err := env.ts.GetRoutingRules(ctx)
 			require.NoError(t, err)
-			to := fmt.Sprintf("%s.%s", tc.targetKeyspace.KeyspaceName, tableName)
-			if tc.req.Direction == int32(DirectionBackward) {
-				to = fmt.Sprintf("%s.%s", tc.sourceKeyspace.KeyspaceName, tableName)
-			}
 			for _, rr := range rr.Rules {
+				_, rrTabletType, found := strings.Cut(rr.FromTable, "@")
+				if !found { // No @<tablet_typeL> is primary
+					rrTabletType = topodatapb.TabletType_PRIMARY.String()
+				}
+				tabletType, err := topoproto.ParseTabletType(rrTabletType)
+				require.NoError(t, err)
+
+				var to string
+				if slices.Contains(tc.req.TabletTypes, tabletType) {
+					to = fmt.Sprintf("%s.%s", tc.targetKeyspace.KeyspaceName, tableName)
+					if tc.req.Direction == int32(DirectionBackward) {
+						to = fmt.Sprintf("%s.%s", tc.sourceKeyspace.KeyspaceName, tableName)
+					}
+				} else {
+					to = fmt.Sprintf("%s.%s", tc.sourceKeyspace.KeyspaceName, tableName)
+					if tc.req.Direction == int32(DirectionBackward) {
+						to = fmt.Sprintf("%s.%s", tc.targetKeyspace.KeyspaceName, tableName)
+					}
+				}
 				for _, tt := range rr.ToTables {
-					require.Equal(t, to, tt)
+					require.Equal(t, to, tt, "Additional info: tablet type: %s, rr.FromTable: %s, rr.ToTables: %v, to string: %s",
+						tabletType.String(), rr.FromTable, rr.ToTables, to)
 				}
 			}
 			// Confirm that we have the expected denied tables entries.
