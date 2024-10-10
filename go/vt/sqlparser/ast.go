@@ -16,7 +16,7 @@ limitations under the License.
 
 package sqlparser
 
-//go:generate goyacc -o sql.go sql3.y
+//go:generate goyacc -o sql.go sql.y
 
 import (
 	"context"
