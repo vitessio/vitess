@@ -18,20 +18,25 @@ KEYSPACE="customer"  # Define the keyspace to work with
 SHARDS=("-80" "80-")  # Define the shards within the keyspace to restore
 
 # Restore all shards of the customer keyspace from backups
-for SHARD in "${SHARDS[@]}"; do  # Loop through each shard defined earlier
-    echo "Finding replica tablets for shard $SHARD..."  # Log the start of the tablet search
-    REPLICA_TABLETS=$(vtctldclient GetTablets --keyspace=$KEYSPACE --shard=$SHARD --tablet-type=replica | awk '{print $1}')  # Fetch replica tablets for the current shard
+for shard in "${SHARDS[@]}"; do  # Loop through each shard defined earlier
+    echo "Finding replica tablets for shard $shard..."  # Log the start of the tablet search
+
+    # Fetch the list of replica tablets for the current shard
+    REPLICA_TABLETS=$(vtctldclient GetTablets --keyspace="$KEYSPACE" --shard="$shard" --tablet-type=replica | awk '{print $1}')  # Extract the first column containing tablet names
     REPLICA_COUNT=$(echo "$REPLICA_TABLETS" | wc -l)  # Count the number of replica tablets found
 
-    if [ "$REPLICA_COUNT" -lt 1 ]; then  # Check if no replica tablets were found
-        echo "No replica tablets found for shard $SHARD. Exiting..."  # Log a message and exit if none are found
+    # Check if any replica tablets were found
+    if [ "$REPLICA_COUNT" -lt 1 ]; then  # If the count is less than 1, no replicas were found
+        echo "No replica tablets found for shard $shard. Exiting..."  # Log a message and exit if none are found
         exit 1  # Exit the script with an error code
     fi
 
     # Choose the first replica for restoration
     RESTORE_TABLET=$(echo "$REPLICA_TABLETS" | head -n 1)  # Select the first replica tablet from the list
-    echo "Restoring tablet $RESTORE_TABLET from backup for shard $SHARD..."  # Log the restoration action
-    vtctldclient RestoreFromBackup $RESTORE_TABLET || fail "Restore failed for tablet $RESTORE_TABLET"  # Restore from backup and handle any failures
+    echo "Restoring tablet $RESTORE_TABLET from backup for shard $shard..."  # Log the restoration action
+
+    # Restore from backup and handle any failures
+    vtctldclient RestoreFromBackup "$RESTORE_TABLET" || fail "Restore failed for tablet $RESTORE_TABLET"  # Attempt to restore from backup and log an error message if it fails
 done
 
 echo "Restore process completed successfully for $KEYSPACE."  # Log completion of the restore process

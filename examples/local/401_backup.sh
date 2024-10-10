@@ -19,14 +19,22 @@ SHARDS=("-80" "80-")
 
 # Ensure the keyspace and shards are healthy
 echo "Ensuring keyspace $KEYSPACE exists and shards are healthy..."
-for shard in "${shards[@]}"; do
-    wait_for_healthy_shard "$KEYSPACE" "$shard" || exit 1
+for shard in "${SHARDS[@]}"; do
+    if ! wait_for_healthy_shard "$KEYSPACE" "$shard"; then
+        echo "Shard $shard is not healthy. Exiting..."
+        exit 1
+    fi
 done
 
 # Backup all shards of the customer keyspace
-for shard in "${shards[@]}"; do
+for shard in "${SHARDS[@]}"; do
     echo "Backing up shard $shard in keyspace $KEYSPACE..."
-    vtctldclient BackupShard "$KEYSPACE/$shard" || fail "Backup failed for shard $shard"
+    if vtctldclient BackupShard "$KEYSPACE/$shard"; then
+        echo "Backup succeeded for shard $shard."
+    else
+        echo "Backup failed for shard $shard."
+        exit 1
+    fi
 done
 
 echo "Backup process completed successfully for all shards in $KEYSPACE."
