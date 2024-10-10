@@ -3671,3 +3671,81 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteTableData(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	tablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(tablet.tablet)
+
+	testCases := []struct {
+		name            string
+		req             *tabletmanagerdatapb.DeleteTableDataRequest
+		workflowType    *binlogdatapb.VReplicationWorkflowType
+		expectedQueries []string
+		wantErr         string
+	}{
+		{
+			name:    "no request",
+			req:     nil,
+			wantErr: "invalid nil request",
+		},
+		{
+			name: "one table",
+			req: &tabletmanagerdatapb.DeleteTableDataRequest{
+				TableFilters: map[string]string{
+					"t1": "where tenant_id = 1",
+				},
+				BatchSize: 100,
+			},
+			expectedQueries: []string{
+				"delete from t1 where tenant_id = 1 limit 100",
+			},
+		},
+		{
+			name: "one table without batch size",
+			req: &tabletmanagerdatapb.DeleteTableDataRequest{
+				TableFilters: map[string]string{
+					"t1": "where tenant_id = 1",
+				},
+			},
+			expectedQueries: []string{
+				"delete from t1 where tenant_id = 1 limit 1000", // Default batch size of 1,000
+			},
+		},
+		{
+			name: "multiple tables",
+			req: &tabletmanagerdatapb.DeleteTableDataRequest{
+				TableFilters: map[string]string{
+					"t1": "where tenant_id = 1",
+					"t2": "where foo = 2",
+				},
+				BatchSize: 500,
+			},
+			expectedQueries: []string{
+				"delete from t1 where tenant_id = 1 limit 500",
+				"delete from t2 where foo = 2 limit 500",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tenv.db.AddQuery(fmt.Sprintf("use `%s`", tenv.dbName), &sqltypes.Result{})
+			for _, query := range tc.expectedQueries {
+				tenv.db.AddQuery(query, &sqltypes.Result{})
+			}
+			_, err := tenv.tmc.DeleteTableData(ctx, tablet.tablet, tc.req)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
