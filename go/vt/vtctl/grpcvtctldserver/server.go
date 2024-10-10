@@ -1174,6 +1174,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			WaitAllTablets:            req.WaitForAllTablets,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
+			ExpectedPrimaryAlias:      req.ExpectedPrimary,
 		},
 	)
 
@@ -2823,6 +2824,10 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		span.Annotate("avoid_primary_alias", topoproto.TabletAliasString(req.AvoidPrimary))
 	}
 
+	if req.ExpectedPrimary != nil {
+		span.Annotate("expected_primary_alias", topoproto.TabletAliasString(req.ExpectedPrimary))
+	}
+
 	if req.NewPrimary != nil {
 		span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	}
@@ -2840,10 +2845,11 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		req.Keyspace,
 		req.Shard,
 		reparentutil.PlannedReparentOptions{
-			AvoidPrimaryAlias:   req.AvoidPrimary,
-			NewPrimaryAlias:     req.NewPrimary,
-			WaitReplicasTimeout: waitReplicasTimeout,
-			TolerableReplLag:    tolerableReplLag,
+			AvoidPrimaryAlias:    req.AvoidPrimary,
+			NewPrimaryAlias:      req.NewPrimary,
+			ExpectedPrimaryAlias: req.ExpectedPrimary,
+			WaitReplicasTimeout:  waitReplicasTimeout,
+			TolerableReplLag:     tolerableReplLag,
 		},
 	)
 

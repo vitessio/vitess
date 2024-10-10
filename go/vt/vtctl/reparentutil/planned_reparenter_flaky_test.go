@@ -2432,6 +2432,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		name       string
 		tmc        tmclient.TabletManagerClient
 		tablets    []*topodatapb.Tablet
+		shards     []*vtctldatapb.Shard
 		unlockTopo bool
 
 		ev       *events.Reparent
@@ -2439,8 +2440,9 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		shard    string
 		opts     PlannedReparentOptions
 
-		shouldErr     bool
-		expectedEvent *events.Reparent
+		shouldErr        bool
+		errShouldContain string
+		expectedEvent    *events.Reparent
 	}{
 		{
 			name: "success: current primary cannot be determined", // "Case (1)"
@@ -3191,6 +3193,57 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "expected primary mismatch",
+			tmc:  &testutil.TabletManagerClient{},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsPrimaryServing: true,
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: PlannedReparentOptions{
+				// This is not the shard primary, so it should cause an error.
+				ExpectedPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			shouldErr:        true,
+			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000200",
+			expectedEvent:    nil,
+		},
 	}
 
 	logger := logutil.NewMemoryLogger()
@@ -3209,8 +3262,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary:  true,
 				ForceSetShardPrimary: true, // Some of our test cases count on having multiple primaries, so let the last one "win".
-				SkipShardCreation:    false,
+				SkipShardCreation:    len(tt.shards) > 0,
 			}, tt.tablets...)
+
+			if len(tt.shards) > 0 {
+				testutil.AddShards(ctx, t, ts, tt.shards...)
+			}
 
 			if !tt.unlockTopo {
 				lctx, unlock, err := ts.LockShard(ctx, tt.keyspace, tt.shard, "locking for testing")
@@ -3235,7 +3292,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			err := pr.reparentShardLocked(ctx, tt.ev, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
-
+				assert.ErrorContains(t, err, tt.errShouldContain)
 				return
 			}
 
