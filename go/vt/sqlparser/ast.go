@@ -56,7 +56,7 @@ var zeroParser = *(yyNewParser().(*yyParserImpl))
 //
 //	showCollationFilterOpt := $4
 //	$$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
-func yyParsePooled(yylex yyLexer) int {
+func yyParsePooled(yylex yyLexer) (ret int) {
 	// Being very particular about using the base type and not an interface type b/c we depend on
 	// the implementation to know how to reinitialize the parser.
 	var parser *yyParserImpl
@@ -71,6 +71,12 @@ func yyParsePooled(yylex yyLexer) int {
 	defer func() {
 		*parser = zeroParser
 		parserPool.Put(parser)
+	}()
+	defer func() {
+		if recoveredPanic := recover(); recoveredPanic != nil {
+			yylex.Error(fmt.Sprintf("handler caught panic: %v", recoveredPanic))
+			ret = 1
+		}
 	}()
 	return parser.Parse(yylex)
 }
@@ -504,12 +510,9 @@ type QueryOpts struct {
 	SQLNoCache       bool
 }
 
-func (q *QueryOpts) merge(other *QueryOpts) (*QueryOpts, error) {
-	if other == nil {
-		return q, nil
-	} else if q == nil {
-		cp := *other
-		return &cp, nil
+func (q *QueryOpts) merge(other QueryOpts) (QueryOpts, error) {
+	if q == nil {
+		return other, nil
 	}
 	q.All = q.All || other.All
 	q.Distinct = q.Distinct || other.Distinct
@@ -519,14 +522,14 @@ func (q *QueryOpts) merge(other *QueryOpts) (*QueryOpts, error) {
 	q.SQLNoCache = q.SQLNoCache || other.SQLNoCache
 
 	if q.Distinct && q.All {
-		return q, errors.New("incorrect usage of DISTINCT and ALL")
+		return *q, errors.New("incorrect usage of DISTINCT and ALL")
 	}
 
 	if q.SQLCache && q.SQLNoCache {
-		return q, errors.New("incorrect usage of SQL_CACHE and SQL_NO_CACHE")
+		return *q, errors.New("incorrect usage of SQL_CACHE and SQL_NO_CACHE")
 	}
 
-	return q, nil
+	return *q, nil
 }
 
 func (q *QueryOpts) Format(buf *TrackedBuffer) {
@@ -556,7 +559,7 @@ func (q *QueryOpts) Format(buf *TrackedBuffer) {
 // Select represents a SELECT statement.
 type Select struct {
 	Comments    Comments
-	QueryOpts   *QueryOpts
+	QueryOpts   QueryOpts
 	With        *With
 	SelectExprs SelectExprs
 	From        TableExprs
@@ -631,7 +634,7 @@ func (node *Select) SetLimit(limit *Limit) {
 func (node *Select) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%vselect %v%v%v",
 		node.With,
-		node.Comments, node.QueryOpts, node.SelectExprs,
+		node.Comments, &node.QueryOpts, node.SelectExprs,
 	)
 
 	if node.From != nil {
@@ -1207,7 +1210,7 @@ type DeclareHandler struct {
 // DeclareVariables represents the DECLARE statement for declaring variables
 type DeclareVariables struct {
 	Names   []ColIdent
-	VarType *ColumnType
+	VarType ColumnType
 }
 
 func (d *Declare) Format(buf *TrackedBuffer) {
@@ -1252,7 +1255,7 @@ func (d *Declare) Format(buf *TrackedBuffer) {
 			}
 			buf.Myprintf(" %s", varName.val)
 		}
-		buf.Myprintf(" %v", d.Variables.VarType)
+		buf.Myprintf(" %v", &d.Variables.VarType)
 	}
 }
 
@@ -1908,7 +1911,7 @@ const (
 type ProcedureParam struct {
 	Direction ProcedureParamDirection
 	Name      string
-	Type      *ColumnType
+	Type      ColumnType
 }
 
 type EventSpec struct {
@@ -2731,7 +2734,7 @@ func (ts *TableSpec) walkSubtree(visit Visit) error {
 // ColumnDefinition describes a column in a CREATE TABLE statement
 type ColumnDefinition struct {
 	Name ColIdent
-	Type *ColumnType
+	Type ColumnType
 }
 
 // Format formats the node.
@@ -2800,13 +2803,9 @@ type ColumnType struct {
 	SRID *SQLVal
 }
 
-func (ct *ColumnType) merge(other *ColumnType) (*ColumnType, error) {
-	if other == nil {
-		return ct, nil
-	}
+func (ct *ColumnType) merge(other ColumnType) (ColumnType, error) {
 	if ct == nil {
-		cp := *other
-		return &cp, nil
+		return other, nil
 	}
 	if other.sawnull {
 		ct.sawnull = true
@@ -2816,21 +2815,21 @@ func (ct *ColumnType) merge(other *ColumnType) (*ColumnType, error) {
 
 	if other.Default != nil {
 		if ct.Default != nil {
-			return nil, errors.New("cannot include DEFAULT more than once")
+			return ColumnType{}, errors.New("cannot include DEFAULT more than once")
 		}
 		ct.Default = other.Default
 	}
 
 	if other.OnUpdate != nil {
 		if ct.OnUpdate != nil {
-			return nil, errors.New("cannot include ON UPDATE more than once")
+			return ColumnType{}, errors.New("cannot include ON UPDATE more than once")
 		}
 		ct.OnUpdate = other.OnUpdate
 	}
 
 	if other.sawai {
 		if ct.sawai {
-			return nil, errors.New("cannot include AUTO_INCREMENT more than once")
+			return ColumnType{}, errors.New("cannot include AUTO_INCREMENT more than once")
 		}
 		ct.sawai = true
 		ct.Autoincrement = other.Autoincrement
@@ -2851,27 +2850,27 @@ func (ct *ColumnType) merge(other *ColumnType) (*ColumnType, error) {
 			ct.KeyOpt = other.KeyOpt
 		} else {
 			// Otherwise throw an error if there are multiple key options that need to be applied.
-			return nil, errors.New("cannot include more than one key option for a column definition")
+			return ColumnType{}, errors.New("cannot include more than one key option for a column definition")
 		}
 	}
 
 	if other.ForeignKeyDef != nil {
 		if ct.ForeignKeyDef != nil {
-			return nil, errors.New("cannot include more than one foreign key definition in a column definition")
+			return ColumnType{}, errors.New("cannot include more than one foreign key definition in a column definition")
 		}
 		ct.ForeignKeyDef = other.ForeignKeyDef
 	}
 
 	if other.Constraint != nil {
 		if ct.Constraint != nil {
-			return nil, errors.New("cannot include more than one check constraint in a column definition")
+			return ColumnType{}, errors.New("cannot include more than one check constraint in a column definition")
 		}
 		ct.Constraint = other.Constraint
 	}
 
 	if other.Comment != nil {
 		if ct.Comment != nil {
-			return nil, errors.New("cannot include more than one comment for a column definition")
+			return ColumnType{}, errors.New("cannot include more than one comment for a column definition")
 		}
 		ct.Comment = other.Comment
 	}
@@ -2879,7 +2878,7 @@ func (ct *ColumnType) merge(other *ColumnType) (*ColumnType, error) {
 	if other.GeneratedExpr != nil {
 		// Generated expression already defined for column
 		if ct.GeneratedExpr != nil {
-			return nil, errors.New("cannot defined GENERATED expression more than once")
+			return ColumnType{}, errors.New("cannot defined GENERATED expression more than once")
 		}
 		ct.GeneratedExpr = other.GeneratedExpr
 	}
@@ -2890,40 +2889,40 @@ func (ct *ColumnType) merge(other *ColumnType) (*ColumnType, error) {
 
 	if other.SRID != nil {
 		if ct.SRID != nil {
-			return nil, errors.New("cannot include SRID more than once")
+			return ColumnType{}, errors.New("cannot include SRID more than once")
 		}
 		if ct.Type != "" && ct.SQLType() != sqltypes.Geometry {
-			return nil, errors.New("cannot define SRID for non spatial types")
+			return ColumnType{}, errors.New("cannot define SRID for non spatial types")
 		}
 		ct.SRID = other.SRID
 	}
 
 	if other.Charset != "" {
 		if ct.Charset != "" {
-			return nil, errors.New("cannot include CHARACTER SET more than once")
+			return ColumnType{}, errors.New("cannot include CHARACTER SET more than once")
 		}
 		ct.Charset = other.Charset
 	}
 
 	if other.Collate != "" {
 		if ct.Collate != "" {
-			return nil, errors.New("cannot include COLLATE more than once")
+			return ColumnType{}, errors.New("cannot include COLLATE more than once")
 		}
 		ct.Collate = other.Collate
 	}
 
 	if other.BinaryCollate == true {
 		if ct.BinaryCollate == true {
-			return nil, errors.New("cannot include BINARY more than once")
+			return ColumnType{}, errors.New("cannot include BINARY more than once")
 		}
 		ct.BinaryCollate = other.BinaryCollate
 	}
 
-	return ct, nil
+	return *ct, nil
 }
 
 // Format returns a canonical string representation of the type and all relevant options
-func (ct *ColumnType) Format(buf *TrackedBuffer) {
+func (ct ColumnType) Format(buf *TrackedBuffer) {
 	if stringer, ok := ct.ResolvedType.(fmt.Stringer); ok {
 		buf.WriteString(stringer.String())
 	} else {
@@ -3018,7 +3017,7 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 }
 
 // String returns a canonical string representation of the type and all relevant options
-func (ct *ColumnType) String() string {
+func (ct ColumnType) String() string {
 	buf := NewTrackedBuffer(nil)
 	ct.Format(buf)
 	return buf.String()
@@ -3026,7 +3025,7 @@ func (ct *ColumnType) String() string {
 
 // DescribeType returns the abbreviated type information as required for
 // describe table
-func (ct *ColumnType) DescribeType() string {
+func (ct ColumnType) DescribeType() string {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf("%s", ct.Type)
 	if ct.Length != nil && ct.Scale != nil {
@@ -3049,7 +3048,7 @@ func (ct *ColumnType) DescribeType() string {
 }
 
 // SQLType returns the sqltypes type code for the given column
-func (ct *ColumnType) SQLType() querypb.Type {
+func (ct ColumnType) SQLType() querypb.Type {
 	switch strings.ToLower(ct.Type) {
 	case keywordStrings[TINYINT]:
 		if ct.Unsigned {
@@ -3214,7 +3213,7 @@ func (ts *JSONTableSpec) walkSubtree(visit Visit) error {
 // JSONTableColDef describes a column in a JSON_TABLE statement
 type JSONTableColDef struct {
 	Name ColIdent
-	Type *ColumnType
+	Type ColumnType
 	Opts JSONTableColOpts
 	Spec *JSONTableSpec
 }

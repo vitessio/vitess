@@ -206,7 +206,7 @@ func TestDDL(t *testing.T) {
 			Table:  TableName{Name: NewTableIdent("a")},
 			TableSpec: &TableSpec{
 				Columns: []*ColumnDefinition{
-					{Name: NewColIdent("id"), Type: &ColumnType{Type: "int"}},
+					{Name: NewColIdent("id"), Type: ColumnType{Type: "int"}},
 				},
 			},
 		},
