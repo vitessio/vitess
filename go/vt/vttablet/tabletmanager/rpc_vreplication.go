@@ -162,11 +162,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 	}
 	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", batchSize))}
 
-	tableResults := make(map[string]uint64) // Track the number of rows deleted from each table
 	throttledLogger := logutil.NewThrottledLogger("DeleteTableData", 1*time.Minute)
-	resp := &tabletmanagerdatapb.DeleteTableDataResponse{
-		TableResults: tableResults,
-	}
 	checkIfCanceled := func() error {
 		select {
 		case <-ctx.Done():
@@ -179,11 +175,11 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 	for _, table := range tables {
 		stmt, err := tm.Env.Parser().Parse(fmt.Sprintf("delete from %s %s", table, req.TableFilters[table]))
 		if err != nil {
-			return resp, vterrors.Wrapf(err, "unable to build delete query for table %s", table)
+			return nil, vterrors.Wrapf(err, "unable to build delete query for table %s", table)
 		}
 		del, ok := stmt.(*sqlparser.Delete)
 		if !ok {
-			return resp, vterrors.Wrapf(err, "unable to build delete query for table %s", table)
+			return nil, vterrors.Wrapf(err, "unable to build delete query for table %s", table)
 		}
 		del.Limit = limit
 		query := sqlparser.String(del)
@@ -196,7 +192,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 				throttledLogger.Infof("throttling bulk data delete for table %s using query %s",
 					table, query)
 				if err := checkIfCanceled(); err != nil {
-					return resp, err
+					return nil, err
 				}
 				continue
 			}
@@ -205,23 +201,20 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 					Query:  []byte(query),
 					DbName: tm.DBConfigs.DBName,
 				})
-			if res != nil {
-				tableResults[table] += res.RowsAffected
-			}
 			if err != nil {
-				return resp, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error deleting data using query %q: %v",
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error deleting data using query %q: %v",
 					query, err)
 			}
 			if res.RowsAffected == 0 { // We're done with this table
 				break
 			}
 			if err := checkIfCanceled(); err != nil {
-				return resp, err
+				return nil, err
 			}
 		}
 	}
 
-	return resp, nil
+	return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
 }
 
 func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
