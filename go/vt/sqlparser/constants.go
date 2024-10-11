@@ -715,8 +715,6 @@ const (
 	ModOp
 	ShiftLeftOp
 	ShiftRightOp
-	JSONExtractOp
-	JSONUnquoteExtractOp
 )
 
 // Constant for Enum Type - UnaryExprOperator

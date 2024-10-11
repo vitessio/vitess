@@ -18305,7 +18305,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5597
 		{
-			yyLOCAL = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: JSONUnquoteExtractOp, Right: yyDollar[3].exprUnion()}
+			yyLOCAL = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: yyDollar[1].exprUnion(), PathList: []Expr{yyDollar[3].exprUnion()}}}
 		}
 		yyVAL.union = yyLOCAL
 	case 1082:

@@ -1008,7 +1008,8 @@ var (
 		input:  "select /* -> */ a.b -> 'ab' from t",
 		output: "select /* -> */ json_extract(a.b, 'ab') from t",
 	}, {
-		input: "select /* -> */ a.b ->> 'ab' from t",
+		input:  "select /* -> */ a.b ->> 'ab' from t",
+		output: "select /* -> */ json_unquote(json_extract(a.b, 'ab')) from t",
 	}, {
 		input: "select /* empty function */ 1 from t where a = b()",
 	}, {
