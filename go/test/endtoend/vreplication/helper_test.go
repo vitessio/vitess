@@ -334,8 +334,8 @@ func assertQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster
 	rr, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
 	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
-	assert.Equalf(t, count0+1, count1, "query %q did not execute on target %s:%s@%s tablet;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\nrouting rules:\n%s\n\n",
-		query, tablet.Keyspace, tablet.Shard, tablet.TabletType, matchQuery, body0, body1, rr)
+	require.Equalf(t, count0+1, count1, "query %q did not execute on destination %s (%s-%d);\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\nrouting rules:\n%s\n\n",
+		query, ksName, tablet.Cell, tablet.TabletUID, matchQuery, body0, body1, rr)
 }
 
 func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
