@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/olekukonko/tablewriter"
 	"github.com/stretchr/testify/require"
 
@@ -129,10 +131,19 @@ func TestCompilerReference(t *testing.T) {
 					return
 				}
 
-				expected, evalErr := env.EvaluateAST(converted)
+				var expected evalengine.EvalResult
+				var evalErr error
+				assert.NotPanics(t, func() {
+					expected, evalErr = env.EvaluateAST(converted)
+				})
 				total++
 
-				res, vmErr := env.Evaluate(converted)
+				var res evalengine.EvalResult
+				var vmErr error
+				assert.NotPanics(t, func() {
+					res, vmErr = env.Evaluate(converted)
+				})
+
 				if vmErr != nil {
 					switch {
 					case evalErr == nil:

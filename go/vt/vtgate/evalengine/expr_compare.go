@@ -607,14 +607,17 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
+	lbytes, lok := left.(*evalBytes)
+	rbytes, rok := right.(*evalBytes)
+
 	var matched bool
 	switch {
-	case typeIsTextual(left.SQLType()) && typeIsTextual(right.SQLType()):
-		matched = l.matchWildcard(left.(*evalBytes).bytes, right.(*evalBytes).bytes, col.Collation)
-	case typeIsTextual(right.SQLType()):
-		matched = l.matchWildcard(left.ToRawBytes(), right.(*evalBytes).bytes, col.Collation)
-	case typeIsTextual(left.SQLType()):
-		matched = l.matchWildcard(left.(*evalBytes).bytes, right.ToRawBytes(), col.Collation)
+	case lok && rok:
+		matched = l.matchWildcard(lbytes.bytes, rbytes.bytes, col.Collation)
+	case rok:
+		matched = l.matchWildcard(left.ToRawBytes(), rbytes.bytes, col.Collation)
+	case lok:
+		matched = l.matchWildcard(lbytes.bytes, right.ToRawBytes(), col.Collation)
 	default:
 		matched = l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), collations.CollationBinaryID)
 	}
