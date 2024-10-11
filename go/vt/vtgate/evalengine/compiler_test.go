@@ -144,8 +144,10 @@ func TestCompilerReference(t *testing.T) {
 					res, vmErr = env.Evaluate(converted)
 				})
 
-				if vmErr != nil {
+				if vmErr != nil || evalErr != nil {
 					switch {
+					case vmErr == nil:
+						t.Errorf("failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
 					case evalErr == nil:
 						t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
 					case evalErr.Error() != vmErr.Error():
