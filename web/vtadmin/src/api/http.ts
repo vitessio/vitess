@@ -487,9 +487,9 @@ export interface CreateMaterializeParams {
 
 export const createMaterialize = async ({ clusterID, tableSettings, request }: CreateMaterializeParams) => {
     const body = {
-        "table_settings": tableSettings,
-        "request": request
-    }
+        table_settings: tableSettings,
+        request: request,
+    };
 
     const { result } = await vtfetch(`/api/workflow/${clusterID}/materialize`, {
         body: JSON.stringify(body),

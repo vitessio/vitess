@@ -40,9 +40,9 @@ interface FormData {
     sourceKeyspace: string;
     tableSettings: string;
     cells: string;
-    referenceTables: string[],
+    referenceTables: string[];
     tabletTypes: number[];
-    stopAfterCopy: boolean,
+    stopAfterCopy: boolean;
     tabletSelectionPreference: boolean;
 }
 
@@ -90,15 +90,18 @@ export const CreateMaterialize = () => {
                     source_keyspace: formData.sourceKeyspace,
                     target_keyspace: formData.targetKeyspace,
                     reference_tables: formData.referenceTables,
-                    cell: formData.cells.split(',').map((cell) => cell.trim()).join(","),
-                    tablet_types: formData.tabletTypes.map(tt => TABLET_TYPES[tt]).join(","),
+                    cell: formData.cells
+                        .split(',')
+                        .map((cell) => cell.trim())
+                        .join(','),
+                    tablet_types: formData.tabletTypes.map((tt) => TABLET_TYPES[tt]).join(','),
                     stop_after_copy: formData.stopAfterCopy,
                     tablet_selection_preference: formData.tabletSelectionPreference
                         ? tabletmanagerdata.TabletSelectionPreference.INORDER
                         : tabletmanagerdata.TabletSelectionPreference.ANY,
                     // Default Value
                     materialization_intent: vtctldata.MaterializationIntent.CUSTOM,
-                }
+                },
             },
         },
         {
@@ -194,7 +197,9 @@ export const CreateMaterialize = () => {
                             itemToString={(ks) => ks?.keyspace?.name || ''}
                             items={clusterKeyspaces}
                             label="Source Keyspace"
-                            helpText={"Keyspace where the tables queried in the 'source_expression' values within table-settings live"}
+                            helpText={
+                                "Keyspace where the tables queried in the 'source_expression' values within table-settings live"
+                            }
                             onChange={(ks) => setFormData({ ...formData, sourceKeyspace: ks?.keyspace?.name || '' })}
                             placeholder={keyspacesQuery.isLoading ? 'Loading keyspaces...' : 'Select a keyspace'}
                             renderItem={(ks) => `${ks?.keyspace?.name}`}
@@ -212,7 +217,11 @@ export const CreateMaterialize = () => {
                             renderItem={(ks) => `${ks?.keyspace?.name}`}
                             selectedItem={selectedTargetKeyspace}
                         />
-                        <Label className="block grow min-w-[300px]" label="Table Settings" helpText={"A JSON array defining what tables to materialize using what select statements."}>
+                        <Label
+                            className="block grow min-w-[300px]"
+                            label="Table Settings"
+                            helpText={'A JSON array defining what tables to materialize using what select statements.'}
+                        >
                             <TextInput
                                 onChange={(e) => setFormData({ ...formData, tableSettings: e.target.value })}
                                 value={formData.tableSettings || ''}
