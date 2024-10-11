@@ -77,6 +77,10 @@ var (
 	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 
+	// commitMode records the timing of the commit phase of a transaction.
+	// It also tracks between different transaction mode i.e. Single, Multi and TwoPC
+	commitMode = stats.NewTimings("CommitModeTimings", "Commit Mode Time", "mode")
+
 	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
 
 	errorTransform errorTransformer = nullErrorTransformer{}
