@@ -169,3 +169,32 @@ func ReshardCreate(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(res, err)
 }
+
+// MaterializeCreate implements the http wrapper for the VTAdminServer.MaterializeCreate
+// method.
+//
+// Its route is /workflow/{cluster_id}/materialize
+func MaterializeCreate(ctx context.Context, r Request, api *API) *JSONResponse {
+	var req struct {
+		TableSettings string                               `json:"table_settings"`
+		Request       vtctldatapb.MaterializeCreateRequest `json:"request"`
+	}
+
+	vars := r.Vars()
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	if err := decoder.Decode(&req); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.MaterializeCreate(ctx, &vtadminpb.MaterializeCreateRequest{
+		ClusterId:     vars["cluster_id"],
+		TableSettings: req.TableSettings,
+		Request:       &req.Request,
+	})
+
+	return NewJSONResponse(res, err)
+}
