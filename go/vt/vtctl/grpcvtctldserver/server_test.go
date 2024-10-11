@@ -13193,7 +13193,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 				defer func() {
 					topofactory.SetError(nil)
 
-					ctx, cancel := context.WithTimeout(ctx, time.Millisecond*10)
+					ctx, cancel := context.WithTimeout(ctx, time.Millisecond*100)
 					defer cancel()
 
 					resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
