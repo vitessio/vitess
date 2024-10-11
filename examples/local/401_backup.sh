@@ -33,12 +33,8 @@ done
 # Backup all shards of the customer keyspace
 for shard in "${SHARDS[@]}"; do
     echo "Backing up shard $shard in keyspace $KEYSPACE..."
-    if vtctldclient BackupShard "$KEYSPACE/$shard"; then
-        echo "Backup succeeded for shard $shard."
-    else
-        echo "Backup failed for shard $shard."
-        exit 1
-    fi
+    vtctldclient BackupShard "$KEYSPACE/$shard" || fail "Backup failed for shard $shard."
+    echo "Backup succeeded for shard $shard."
 done
 
 echo "Backup process completed successfully for all shards in $KEYSPACE."
