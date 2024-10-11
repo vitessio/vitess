@@ -36,6 +36,8 @@ import (
 type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
 type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
+var vschemaWaitTimeout = 30 * time.Second
+
 func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time, timeout time.Duration) bool {
 	pollingInterval := 10 * time.Millisecond
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -104,7 +106,7 @@ func (e *Executor) newExecute(
 			// based on the buffering configuration. This way we should be able to perform the max retries
 			// within the given window of time for most queries and we should not end up waiting too long
 			// after the traffic switch fails or the buffer window has ended, retrying old queries.
-			timeout := 30 * time.Second
+			timeout := vschemaWaitTimeout
 			if e.resolver.scatterConn.gateway.buffer != nil && e.resolver.scatterConn.gateway.buffer.GetConfig() != nil {
 				timeout = e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / (MaxBufferingRetries - 1)
 			}
