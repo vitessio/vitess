@@ -1520,6 +1520,20 @@ func TestExecutorUnrecognized(t *testing.T) {
 	require.Error(t, err, "unrecognized statement: invalid statement'")
 }
 
+func TestExecutorDeniedErrorNoBuffer(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+	sbc1.EphemeralShardErr = errors.New("enforce denied tables")
+
+	vschemaWaitTimeout = 500 * time.Millisecond
+
+	session := NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	startExec := time.Now()
+	_, err := executor.Execute(ctx, nil, "TestExecutorDeniedErrorNoBuffer", session, "select * from user", nil)
+	require.NoError(t, err, "enforce denied tables not buffered")
+	endExec := time.Now()
+	require.GreaterOrEqual(t, endExec.Sub(startExec).Milliseconds(), int64(500))
+}
+
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
