@@ -5591,7 +5591,7 @@ function_call_keyword
   }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
-    $$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
+    $$ = &JSONExtractExpr{JSONDoc: $1, PathList: []Expr{$3}}
   }
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
