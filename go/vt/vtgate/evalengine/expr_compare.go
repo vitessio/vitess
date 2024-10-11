@@ -592,7 +592,7 @@ func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
 	}
 	fullColl := colldata.Lookup(coll)
 	wc := fullColl.Wildcard(right, 0, 0, 0)
-	return wc.Match(left)
+	return wc.Match(left) == !l.Negate
 }
 
 func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
@@ -618,7 +618,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	default:
 		matched = l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), collations.CollationBinaryID)
 	}
-	return newEvalBool(matched == !l.Negate), nil
+	return newEvalBool(matched), nil
 }
 
 func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
@@ -627,12 +627,14 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
+	skip1 := c.compileNullCheck1(lt)
+
 	rt, err := expr.Right.compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
 
-	skip := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1(rt)
 
 	if !lt.isTextual() {
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
@@ -684,6 +686,7 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 		})
 	}
 
-	c.asm.jumpDestination(skip)
+	c.asm.jumpDestination(skip1)
+	c.asm.jumpDestination(skip2)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }
