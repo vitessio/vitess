@@ -596,11 +596,16 @@ func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
 }
 
 func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
-	left, right, err := l.arguments(env)
+	left, err := l.Left.eval(env)
+	if err != nil {
+		return nil, err
+	}
+
 	if left == nil {
 		return nil, nil
 	}
 
+	right, err := l.Right.eval(env)
 	if err != nil {
 		return nil, err
 	}

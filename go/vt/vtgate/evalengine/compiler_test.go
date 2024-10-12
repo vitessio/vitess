@@ -97,6 +97,7 @@ func (s *Tracker) String() string {
 }
 
 func TestCompilerReference(t *testing.T) {
+	// This test runs a lot of queries and compares the results of the evalengine in eval mode to the results of the compiler.
 	now := time.Now()
 	evalengine.SystemTime = func() time.Time { return now }
 	defer func() { evalengine.SystemTime = time.Now }()
@@ -144,29 +145,19 @@ func TestCompilerReference(t *testing.T) {
 					res, vmErr = env.Evaluate(converted)
 				})
 
-				if vmErr != nil || evalErr != nil {
-					switch {
-					case vmErr == nil:
-						t.Errorf("failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
-					case evalErr == nil:
-						t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
-					case evalErr.Error() != vmErr.Error():
-						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
-					default:
-						supported++
-					}
-					return
+				switch {
+				case vmErr == nil && evalErr == nil:
+					eval := expected.String()
+					comp := res.String()
+					assert.Equalf(t, eval, comp, "bad evaluation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, eval, comp)
+					supported++
+				case vmErr == nil:
+					t.Errorf("failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
+				case evalErr == nil:
+					t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
+				case evalErr.Error() != vmErr.Error():
+					t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
 				}
-
-				eval := expected.String()
-				comp := res.String()
-
-				if eval != comp {
-					t.Errorf("bad evaluation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, eval, comp)
-					return
-				}
-
-				supported++
 			})
 
 			track.Add(tc.Name(), supported, total)
