@@ -609,28 +609,35 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	cellsStr := strings.Join(cells, ",")
 	ts.Logger().Infof("switchShardReads: cells: %s, tablet types: %+v, direction %d", cellsStr, servedTypes, direction)
+
+	targetKeyspace, sourceKeyspace := ts.targetKeyspace, ts.sourceKeyspace
 	fromShards, toShards := ts.SourceShards(), ts.TargetShards()
-	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
+	if direction == DirectionBackward {
+		targetKeyspace, sourceKeyspace = ts.sourceKeyspace, ts.targetKeyspace
+		fromShards, toShards = ts.TargetShards(), ts.SourceShards()
+	}
+
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, targetKeyspace, cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.TargetKeyspaceName(), cellsStr)
+			targetKeyspace, cellsStr)
 		ts.Logger().Errorf("%w", err2)
 		return err2
 	}
 	for _, servedType := range servedTypes {
-		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */, ts.Logger()); err != nil {
+		if err := ts.ws.updateShardRecords(ctx, sourceKeyspace, fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */, ts.Logger()); err != nil {
 			return err
 		}
-		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), toShards, cells, servedType, false, false, ts.Logger()); err != nil {
+		if err := ts.ws.updateShardRecords(ctx, sourceKeyspace, toShards, cells, servedType, false, false, ts.Logger()); err != nil {
 			return err
 		}
-		err := ts.TopoServer().MigrateServedType(ctx, ts.SourceKeyspaceName(), toShards, fromShards, servedType, cells)
+		err := ts.TopoServer().MigrateServedType(ctx, sourceKeyspace, toShards, fromShards, servedType, cells)
 		if err != nil {
 			return err
 		}
 	}
-	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, targetKeyspace, cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.TargetKeyspaceName(), cellsStr)
+			targetKeyspace, cellsStr)
 		ts.Logger().Errorf("%w", err2)
 		return err2
 	}
