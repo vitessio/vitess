@@ -288,6 +288,26 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 	}
 }
 
+func waitForResult(t *testing.T, vttablet *cluster.VttabletProcess, database string, query string, want string, timeout time.Duration) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		qr, err := vttablet.QueryTablet(query, database, true)
+		require.NoError(t, err)
+		require.NotNil(t, qr)
+		if want == fmt.Sprintf("%v", qr.Rows) {
+			return
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("query %q did not reach the expected result (%s) on tablet %q before the timeout of %s; last seen result: %s",
+				query, want, vttablet.Name, timeout, qr.Rows))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
 // waitForSequenceValue queries the provided sequence name in the
 // provided database using the provided vtgate connection until
 // we get a next value from it. This allows us to move forward
