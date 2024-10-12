@@ -1217,7 +1217,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			require.NoError(t, err)
 			for _, rr := range rr.Rules {
 				_, rrTabletType, found := strings.Cut(rr.FromTable, "@")
-				if !found { // No @<tablet_typeL> is primary
+				if !found { // No @<tablet_type> is primary
 					rrTabletType = topodatapb.TabletType_PRIMARY.String()
 				}
 				tabletType, err := topoproto.ParseTabletType(rrTabletType)

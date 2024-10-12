@@ -3181,7 +3181,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if err != nil {
 		return nil, err
 	}
-
 	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
 		return nil, err
@@ -3193,9 +3192,9 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	}
 
 	if direction == DirectionBackward && !onlySwitchingReads {
-		// Update the starting state so that we're using the reverse workflow so that we can
-		// move forward with a normal traffic switch forward operation, from the _reverse
-		// workflow's perspective.
+		// This means that the reverse workflow exists. So we update the starting state
+		// so that we're using the reverse workflow and we can move forward with a normal
+		// traffic switch forward operation, from the reverse workflow's perspective.
 		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
 		if err != nil {
 			return nil, err
