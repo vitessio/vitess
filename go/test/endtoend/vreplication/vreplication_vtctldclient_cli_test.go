@@ -457,15 +457,33 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	}
 	vdiff(t, keyspace, workflowName, "zone1", false, true, nil)
 
+	shardReadsRouteToSource := func() {
+		require.True(t, getShardRoute(t, keyspace, "-80", "primary"))
+	}
+
+	shardReadsRouteToTarget := func() {
+		require.True(t, getShardRoute(t, keyspace, "-40", "primary"))
+	}
+
+	shardWritesRouteToSource := func() {
+		require.True(t, getShardRoute(t, keyspace, "-80", "primary"))
+	}
+
+	shardWritesRouteToTarget := func() {
+		require.True(t, getShardRoute(t, keyspace, "-40", "primary"))
+	}
+
 	rs.SwitchReadsAndWrites()
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
 	vdiff(t, keyspace, workflowName+"_reverse", "zone1", true, false, nil)
-	require.True(t, getShardRoute(t, keyspace, "-40", "primary"))
+	shardReadsRouteToTarget()
+	shardWritesRouteToTarget()
 
 	rs.ReverseReadsAndWrites()
 	waitForLowLag(t, keyspace, workflowName)
 	vdiff(t, keyspace, workflowName, "zone1", false, true, nil)
-	require.False(t, getShardRoute(t, keyspace, "-40", "primary"))
+	shardReadsRouteToSource()
+	shardWritesRouteToSource()
 
 	rs.SwitchReads()
 
