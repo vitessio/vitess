@@ -64,7 +64,19 @@ func TestVtctldclientCLI(t *testing.T) {
 	targetKeyspaceName := "customer"
 	var mt iMoveTables
 	workflowName := "wf1"
+
+	sourceReplicaTab = vc.Cells["zone1"].Keyspaces[sourceKeyspaceName].Shards["0"].Tablets["zone1-101"].Vttablet
+	require.NotNil(t, sourceReplicaTab)
+	sourceTab = vc.Cells["zone1"].Keyspaces[sourceKeyspaceName].Shards["0"].Tablets["zone1-100"].Vttablet
+	require.NotNil(t, sourceTab)
+
 	targetTabs := setupMinimalCustomerKeyspace(t)
+	targetTab1 = targetTabs["-80"]
+	require.NotNil(t, targetTab1)
+	targetTab2 = targetTabs["80-"]
+	require.NotNil(t, targetTab2)
+	targetReplicaTab1 = vc.Cells["zone1"].Keyspaces[targetKeyspaceName].Shards["-80"].Tablets["zone1-201"].Vttablet
+	require.NotNil(t, targetReplicaTab1)
 
 	t.Run("RoutingRulesApply", func(t *testing.T) {
 		testRoutingRulesApplyCommands(t)
@@ -163,7 +175,71 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	for _, tab := range targetTabs {
 		catchup(t, tab, workflowName, "MoveTables")
 	}
+
+	(*mt).SwitchReads()
+	validateReadsRouteToTarget(t, "replica")
+	validateRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateRoutingRule(t, "customer", "", targetKs, sourceKs)
+
+	(*mt).ReverseReads()
+	validateReadsRouteToSource(t, "replica")
+	validateRoutingRule(t, "customer", "replica", targetKs, sourceKs)
+	validateRoutingRule(t, "customer", "", targetKs, sourceKs)
+
 	(*mt).SwitchReadsAndWrites()
+	validateReadsRouteToTarget(t, "replica")
+	validateRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateWritesRouteToTarget(t)
+	validateRoutingRule(t, "customer", "", sourceKs, targetKs)
+
+	(*mt).ReverseReadsAndWrites()
+	validateReadsRouteToSource(t, "replica")
+	validateRoutingRule(t, "customer", "replica", targetKs, sourceKs)
+	validateWritesRouteToSource(t)
+	validateRoutingRule(t, "customer", "", targetKs, sourceKs)
+
+	(*mt).SwitchReadsAndWrites()
+	validateReadsRouteToTarget(t, "replica")
+	validateRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateWritesRouteToTarget(t)
+	validateRoutingRule(t, "customer", "", sourceKs, targetKs)
+
+	(*mt).ReverseReads()
+	validateReadsRouteToSource(t, "replica")
+	validateRoutingRule(t, "customer", "replica", targetKs, sourceKs)
+	validateWritesRouteToTarget(t)
+	validateRoutingRule(t, "customer", "", sourceKs, targetKs)
+
+	(*mt).ReverseWrites()
+	validateReadsRouteToSource(t, "replica")
+	validateRoutingRule(t, "customer", "replica", targetKs, sourceKs)
+	validateWritesRouteToSource(t)
+	validateRoutingRule(t, "customer", "", targetKs, sourceKs)
+
+	(*mt).SwitchReadsAndWrites()
+	validateReadsRouteToTarget(t, "replica")
+	validateRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateWritesRouteToTarget(t)
+	validateRoutingRule(t, "customer", "", sourceKs, targetKs)
+
+	(*mt).ReverseWrites()
+	validateReadsRouteToTarget(t, "replica")
+	validateRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateWritesRouteToSource(t)
+	validateRoutingRule(t, "customer", "", targetKs, sourceKs)
+
+	(*mt).ReverseReads()
+	validateReadsRouteToSource(t, "replica")
+	validateRoutingRule(t, "customer", "replica", targetKs, sourceKs)
+	validateWritesRouteToSource(t)
+	validateRoutingRule(t, "customer", "", targetKs, sourceKs)
+
+	(*mt).SwitchReadsAndWrites()
+	validateReadsRouteToTarget(t, "replica")
+	validateRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateWritesRouteToTarget(t)
+	validateRoutingRule(t, "customer", "", sourceKs, targetKs)
+
 	(*mt).Complete()
 	confirmRoutingRulesExist(t)
 	// Confirm that --keep-data was honored.

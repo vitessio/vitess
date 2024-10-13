@@ -352,6 +352,23 @@ func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.Vttabl
 	}
 }
 
+func validateRoutingRule(t *testing.T, table, tabletType, from, to string) bool {
+	rr := getRoutingRules(t)
+	for _, r := range rr.GetRules() {
+		s := fmt.Sprintf("%s.%s", from, table)
+		if tabletType != "" && tabletType != "primary" {
+			s = fmt.Sprintf("%s@%s", s, tabletType)
+		}
+		if r.FromTable == s {
+			toTable := r.ToTables[0]
+			if toTable == to {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func validateReadsRouteToSource(t *testing.T, tabletTypes string) {
 	if sourceReplicaTab != nil {
 		validateReadsRoute(t, tabletTypes, sourceReplicaTab)
@@ -899,7 +916,7 @@ func setupMinimalCluster(t *testing.T) *VitessCluster {
 
 	zone1 := vc.Cells["zone1"]
 
-	vc.AddKeyspace(t, []*Cell{zone1}, "product", "0", initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+	vc.AddKeyspace(t, []*Cell{zone1}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
@@ -912,7 +929,7 @@ func setupMinimalCluster(t *testing.T) *VitessCluster {
 func setupMinimalCustomerKeyspace(t *testing.T) map[string]*cluster.VttabletProcess {
 	tablets := make(map[string]*cluster.VttabletProcess)
 	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, "customer", "-80,80-",
-		customerVSchema, customerSchema, 0, 0, 200, nil); err != nil {
+		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, nil); err != nil {
 		t.Fatal(err)
 	}
 	defaultCell := vc.Cells[vc.CellNames[0]]
