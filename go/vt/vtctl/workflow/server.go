@@ -3183,10 +3183,19 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	}
 	direction := TrafficSwitchDirection(req.Direction)
 	if direction == DirectionBackward {
-		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
-		if err != nil {
+		// It is possible that only reads have been switched. In that case we don't have a reverseWorkflow and hence
+		// use the state and trafficSwitcher objects from the original workflow
+		ts2, startState2, err := s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
+		switch {
+		case err == nil:
+			ts = ts2
+			startState = startState2
+		case strings.Contains(err.Error(), ErrNoStreams.Error()):
+			// No reverse streams found, continue with the original workflow
+		default:
 			return nil, err
 		}
+
 		if ts.IsMultiTenantMigration() {
 			// In a multi-tenant migration, multiple migrations would be writing to the same table, so we can't stop writes like
 			// we do with MoveTables, using denied tables, since it would block all other migrations as well as traffic for
