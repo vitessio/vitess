@@ -460,12 +460,75 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	rs.SwitchReadsAndWrites()
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
 	vdiff(t, keyspace, workflowName+"_reverse", "zone1", true, false, nil)
+	require.True(t, getShardRoute(t, keyspace, "-40", "primary"))
 
 	rs.ReverseReadsAndWrites()
 	waitForLowLag(t, keyspace, workflowName)
 	vdiff(t, keyspace, workflowName, "zone1", false, true, nil)
+	require.False(t, getShardRoute(t, keyspace, "-40", "primary"))
+
+	rs.SwitchReads()
+
+	rs.ReverseReads()
+
 	rs.SwitchReadsAndWrites()
+
+	rs.ReverseReadsAndWrites()
+
+	rs.SwitchReadsAndWrites()
+
+	rs.ReverseReads()
+
+	rs.ReverseWrites()
+
+	rs.SwitchReadsAndWrites()
+
+	rs.ReverseWrites()
+
+	rs.ReverseReads()
+
+	rs.SwitchReadsAndWrites()
+	require.True(t, getShardRoute(t, keyspace, "-40", "primary"))
+
 	rs.Complete()
+}
+
+func getSrvKeyspace(t *testing.T, keyspace string) *topodatapb.SrvKeyspace {
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetSrvKeyspaces", keyspace, "zone1")
+	require.NoError(t, err)
+	var srvKeyspaces map[string]*topodatapb.SrvKeyspace
+	err = json2.Unmarshal([]byte(output), &srvKeyspaces)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(srvKeyspaces))
+	return srvKeyspaces["zone1"]
+}
+
+func getTabletType(t *testing.T, tabletTypeString string) topodatapb.TabletType {
+	switch tabletTypeString {
+	case "primary":
+		return topodatapb.TabletType_PRIMARY
+	case "replica":
+		return topodatapb.TabletType_REPLICA
+	case "rdonly":
+		return topodatapb.TabletType_RDONLY
+	default:
+		require.FailNow(t, "unknown tablet type")
+		return topodatapb.TabletType_UNKNOWN
+	}
+}
+
+func getShardRoute(t *testing.T, keyspace, shard string, tabletType string) bool {
+	srvKeyspace := getSrvKeyspace(t, keyspace)
+	for _, partition := range srvKeyspace.Partitions {
+		if partition.ServedType == getTabletType(t, tabletType) {
+			for _, shardReference := range partition.ShardReferences {
+				if shardReference.Name == shard {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func getReshardShowResponse(rs *iReshard) *vtctldatapb.GetWorkflowsResponse {
