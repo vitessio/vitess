@@ -458,11 +458,11 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	vdiff(t, keyspace, workflowName, "zone1", false, true, nil)
 
 	shardReadsRouteToSource := func() {
-		require.True(t, getShardRoute(t, keyspace, "-80", "primary"))
+		require.True(t, getShardRoute(t, keyspace, "-80", "replica"))
 	}
 
 	shardReadsRouteToTarget := func() {
-		require.True(t, getShardRoute(t, keyspace, "-40", "primary"))
+		require.True(t, getShardRoute(t, keyspace, "-40", "replica"))
 	}
 
 	shardWritesRouteToSource := func() {
@@ -486,27 +486,48 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	shardWritesRouteToSource()
 
 	rs.SwitchReads()
+	shardReadsRouteToTarget()
+	shardWritesRouteToSource()
 
 	rs.ReverseReads()
+	shardReadsRouteToSource()
+	shardWritesRouteToSource()
 
 	rs.SwitchReadsAndWrites()
+	shardReadsRouteToTarget()
+	shardWritesRouteToTarget()
 
 	rs.ReverseReadsAndWrites()
+	shardReadsRouteToSource()
+	shardWritesRouteToSource()
 
 	rs.SwitchReadsAndWrites()
+	shardReadsRouteToTarget()
+	shardWritesRouteToTarget()
 
 	rs.ReverseReads()
+	shardReadsRouteToSource()
+	shardWritesRouteToTarget()
 
 	rs.ReverseWrites()
+	shardReadsRouteToSource()
+	shardWritesRouteToSource()
 
 	rs.SwitchReadsAndWrites()
+	shardReadsRouteToTarget()
+	shardWritesRouteToTarget()
 
 	rs.ReverseWrites()
+	shardReadsRouteToTarget()
+	shardWritesRouteToSource()
 
 	rs.ReverseReads()
+	shardReadsRouteToSource()
+	shardWritesRouteToSource()
 
 	rs.SwitchReadsAndWrites()
-	require.True(t, getShardRoute(t, keyspace, "-40", "primary"))
+	shardReadsRouteToTarget()
+	shardWritesRouteToTarget()
 
 	rs.Complete()
 }
