@@ -31,6 +31,7 @@ import { Tab } from '../../tabs/Tab';
 import { getStreams } from '../../../util/workflows';
 import { Code } from '../../Code';
 import { ShardLink } from '../../links/ShardLink';
+import { WorkflowVDiff } from './WorkflowVDiff';
 
 interface RouteParams {
     clusterID: string;
@@ -124,6 +125,7 @@ export const Workflow = () => {
                 <TabContainer>
                     <Tab text="Streams" to={`${url}/streams`} count={streams.length} />
                     <Tab text="Details" to={detailsURL} />
+                    <Tab text="VDiff" to={`${url}/vdiff`} />
                     <Tab text="JSON" to={`${url}/json`} />
                 </TabContainer>
 
@@ -134,6 +136,10 @@ export const Workflow = () => {
 
                     <Route path={`${path}/details`}>
                         <WorkflowDetails clusterID={clusterID} keyspace={keyspace} name={name} />
+                    </Route>
+
+                    <Route path={`${path}/vdiff`}>
+                        <WorkflowVDiff clusterID={clusterID} keyspace={keyspace} name={name} />
                     </Route>
 
                     <Route path={`${path}/json`}>

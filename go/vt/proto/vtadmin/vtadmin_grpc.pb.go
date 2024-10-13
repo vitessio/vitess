@@ -202,6 +202,8 @@ type VTAdminClient interface {
 	ValidateVersionKeyspace(ctx context.Context, in *ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
 	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
 	ValidateVersionShard(ctx context.Context, in *ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
+	VDiffCreate(ctx context.Context, in *VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffCreateResponse, error)
+	VDiffShow(ctx context.Context, in *VDiffShowRequest, opts ...grpc.CallOption) (*VDiffShowResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
@@ -791,6 +793,24 @@ func (c *vTAdminClient) ValidateVersionShard(ctx context.Context, in *ValidateVe
 	return out, nil
 }
 
+func (c *vTAdminClient) VDiffCreate(ctx context.Context, in *VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffCreateResponse, error) {
+	out := new(vtctldata.VDiffCreateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VDiffCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VDiffShow(ctx context.Context, in *VDiffShowRequest, opts ...grpc.CallOption) (*VDiffShowResponse, error) {
+	out := new(VDiffShowResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VDiffShow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error) {
 	out := new(VTExplainResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VTExplain", in, out, opts...)
@@ -983,6 +1003,8 @@ type VTAdminServer interface {
 	ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
 	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
 	ValidateVersionShard(context.Context, *ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
+	VDiffCreate(context.Context, *VDiffCreateRequest) (*vtctldata.VDiffCreateResponse, error)
+	VDiffShow(context.Context, *VDiffShowRequest) (*VDiffShowResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
@@ -1184,6 +1206,12 @@ func (UnimplementedVTAdminServer) ValidateVersionKeyspace(context.Context, *Vali
 }
 func (UnimplementedVTAdminServer) ValidateVersionShard(context.Context, *ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionShard not implemented")
+}
+func (UnimplementedVTAdminServer) VDiffCreate(context.Context, *VDiffCreateRequest) (*vtctldata.VDiffCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VDiffCreate not implemented")
+}
+func (UnimplementedVTAdminServer) VDiffShow(context.Context, *VDiffShowRequest) (*VDiffShowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VDiffShow not implemented")
 }
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
@@ -2353,6 +2381,42 @@ func _VTAdmin_ValidateVersionShard_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_VDiffCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VDiffCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VDiffCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VDiffCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VDiffCreate(ctx, req.(*VDiffCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VDiffShow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VDiffShowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VDiffShow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VDiffShow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VDiffShow(ctx, req.(*VDiffShowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VTExplainRequest)
 	if err := dec(in); err != nil {
@@ -2633,6 +2697,14 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVersionShard",
 			Handler:    _VTAdmin_ValidateVersionShard_Handler,
+		},
+		{
+			MethodName: "VDiffCreate",
+			Handler:    _VTAdmin_VDiffCreate_Handler,
+		},
+		{
+			MethodName: "VDiffShow",
+			Handler:    _VTAdmin_VDiffShow_Handler,
 		},
 		{
 			MethodName: "VTExplain",

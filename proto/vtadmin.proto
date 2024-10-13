@@ -212,6 +212,8 @@ service VTAdmin {
     rpc ValidateVersionKeyspace(ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
     // ValidateVersionShard validates that the version on the primary matches all of the replicas.
     rpc ValidateVersionShard(ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
+    rpc VDiffCreate(VDiffCreateRequest) returns (vtctldata.VDiffCreateResponse) {};
+    rpc VDiffShow(VDiffShowRequest) returns (VDiffShowResponse) {};
     // VTExplain provides information on how Vitess plans to execute a
     // particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
@@ -1012,6 +1014,34 @@ message ValidateVersionShardRequest {
   string cluster_id = 1;
   string keyspace = 2;
   string shard = 3;
+}
+
+message VDiffCreateRequest {
+    string cluster_id = 1;
+    vtctldata.VDiffCreateRequest request = 2;
+}
+
+message VDiffShowRequest {
+    string cluster_id = 1;
+    vtctldata.VDiffShowRequest request = 2;
+}
+
+message VDiffProgress {
+    double percentage = 1;
+    string eta = 2;
+}
+
+message VDiffShardReport {
+    string state = 1;
+    int64 rows_compared = 2;
+    bool has_mismatch = 3;
+    string started_at = 4;
+    string completed_at = 5;
+    VDiffProgress progress = 6;
+}
+
+message VDiffShowResponse {
+    map<string, VDiffShardReport> shard_report = 1;
 }
 
 message VTExplainRequest {
