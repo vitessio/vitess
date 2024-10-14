@@ -415,6 +415,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/externally_promoted", httpAPI.Adapt(vtadminhttp.TabletExternallyPromoted)).Name("API.TabletExternallyPromoted").Methods("POST")
 	router.HandleFunc("/transactions/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetUnresolvedTransactions)).Name("API.GetUnresolvedTransactions").Methods("GET")
+	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -529,6 +530,27 @@ func (api *API) CompleteSchemaMigration(ctx context.Context, req *vtadminpb.Comp
 	}
 
 	return c.CompleteSchemaMigration(ctx, req.Request)
+}
+
+// ConcludeTransaction is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ConcludeTransaction(ctx context.Context, req *vtadminpb.ConcludeTransactionRequest) (*vtctldatapb.ConcludeTransactionResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ConcludeTransaction")
+	defer span.Finish()
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	return c.Vtctld.ConcludeTransaction(ctx, &vtctldatapb.ConcludeTransactionRequest{
+		Dtid: req.Dtid,
+	})
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
@@ -1501,7 +1523,8 @@ func (api *API) GetUnresolvedTransactions(ctx context.Context, req *vtadminpb.Ge
 	}
 
 	return c.Vtctld.GetUnresolvedTransactions(ctx, &vtctldatapb.GetUnresolvedTransactionsRequest{
-		Keyspace: req.Keyspace,
+		Keyspace:   req.Keyspace,
+		AbandonAge: req.AbandonAge,
 	})
 }
 
