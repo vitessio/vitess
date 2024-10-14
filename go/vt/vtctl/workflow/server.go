@@ -3197,9 +3197,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	// We need this for idempotency and to avoid unnecessary work and resulting risk.
 	writesAlreadySwitched := (direction == DirectionForward && startState.WritesSwitched) ||
 		(direction == DirectionBackward && !startState.WritesSwitched)
-	readsAlreadySwitched := (direction == DirectionForward && len(startState.ReplicaCellsNotSwitched) == 0 && len(startState.RdonlyCellsNotSwitched) == 0) ||
-		(direction == DirectionBackward && len(startState.ReplicaCellsSwitched) == 0 && len(startState.RdonlyCellsSwitched) == 0)
-	needToSwitchWrites := switchPrimary && !writesAlreadySwitched
 
 	if direction == DirectionBackward && !onlySwitchingReads {
 		// This means that the reverse workflow exists. So we update the starting state
@@ -3228,10 +3225,10 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 	}
 
-	if (switchReplica || switchRdonly) && !readsAlreadySwitched {
+	if switchReplica || switchRdonly {
 		// If we're going to switch writes immediately after then we don't need to
 		// rebuild the SrvVSchema here as we will do it after switching writes.
-		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !needToSwitchWrites /* rebuildSrvVSchema */, direction); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !switchPrimary /* rebuildSrvVSchema */, direction); err != nil {
 			return nil, err
 		}
 		s.Logger().Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
@@ -3240,7 +3237,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
 	}
 
-	if needToSwitchWrites {
+	if switchPrimary {
 		if _, wrDryRunResults, err = s.switchWrites(ctx, req, ts, timeout, false); err != nil {
 			return nil, err
 		}
