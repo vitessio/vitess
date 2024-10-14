@@ -19,6 +19,7 @@ package vreplication
 import (
 	"math/rand/v2"
 	"strconv"
+	"strings"
 
 	"github.com/stretchr/testify/require"
 
@@ -446,6 +447,7 @@ func (v VtctldReshard) exec(args ...string) {
 	args2 := []string{"Reshard", "--workflow=" + v.workflowName, "--target-keyspace=" + v.targetKeyspace}
 	args2 = append(args2, args...)
 	var err error
+	v.vc.t.Logf("Executing command: vtctldclient %s", strings.Join(args2, " "))
 	v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...)
 	require.NoError(v.vc.t, err, "failed to create Reshard workflow: %v: %s", err, v.lastOutput)
 }

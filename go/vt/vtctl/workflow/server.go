@@ -3147,6 +3147,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	span.Annotate("tablet-types", req.TabletTypes)
 	span.Annotate("direction", req.Direction)
 	span.Annotate("enable-reverse-replication", req.EnableReverseReplication)
+	span.Annotate("shards", req.GetShards)
 	span.Annotate("force", req.Force)
 
 	var (
@@ -3204,13 +3205,18 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	ts.force = req.GetForce()
 
-	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.GetShards())
-	if err != nil {
-		return nil, err
-	}
-	if reason != "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot switch traffic for workflow %s at this time: %s",
-			startState.Workflow, reason)
+	if onlySwitchingReads {
+		s.Logger().Infof("Writes already switched no need to check lag for the %s.%s workflow",
+			ts.targetKeyspace, ts.workflow)
+	} else {
+		reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.GetShards())
+		if err != nil {
+			return nil, err
+		}
+		if reason != "" {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot switch traffic for workflow %s at this time: %s",
+				startState.Workflow, reason)
+		}
 	}
 	if hasReplica || hasRdonly {
 		// If we're going to switch writes immediately after then we don't need to
@@ -3711,11 +3717,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *State, direction TrafficSwitchDirection,
 	maxAllowedReplLagSecs int64, shards []string) (reason string, err error) {
-	if direction == DirectionForward && state.WritesSwitched ||
-		direction == DirectionBackward && !state.WritesSwitched {
-		s.Logger().Infof("writes already switched no need to check lag")
-		return "", nil
-	}
 	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow, false, shards)
 	if err != nil {
 		return "", err
