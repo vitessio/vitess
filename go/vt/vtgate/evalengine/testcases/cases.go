@@ -1065,24 +1065,26 @@ func CollationOperations(yield Query) {
 }
 
 func LikeComparison(yield Query) {
-	var left = []string{
+	var left = append(inputConversions,
 		`'foobar'`, `'FOOBAR'`,
 		`'1234'`, `1234`,
 		`_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs`,
-		`_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs`,
-	}
-	var right = append([]string{
+		`_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs`)
+
+	var right = append(left,
+		`NULL`, `1`, `0`,
 		`'foo%'`, `'FOO%'`, `'foo_ar'`, `'FOO_AR'`,
 		`'12%'`, `'12_4'`,
 		`_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs`,
 		`_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs`,
 		`_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs`,
-		`_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs`,
-	}, left...)
+		`_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs`)
 
 	for _, lhs := range left {
 		for _, rhs := range right {
-			yield(fmt.Sprintf("%s LIKE %s", lhs, rhs), nil)
+			for _, op := range []string{"LIKE", "NOT LIKE"} {
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+			}
 		}
 	}
 }

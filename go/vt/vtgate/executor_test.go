@@ -2280,7 +2280,7 @@ func TestExecutorVExplain(t *testing.T) {
 
 	result, err = executorExec(ctx, executor, session, "vexplain plan select 42", bindVars)
 	require.NoError(t, err)
-	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"42 as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
+	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\":vtg1 as :vtg1 /* INT64 */\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
 	require.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 
