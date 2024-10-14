@@ -3151,9 +3151,9 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	span.Annotate("force", req.Force)
 
 	var (
-		dryRunResults                     []string
-		rdDryRunResults, wrDryRunResults  *[]string
-		hasReplica, hasRdonly, hasPrimary bool
+		dryRunResults                              []string
+		rdDryRunResults, wrDryRunResults           *[]string
+		switchReplica, switchRdonly, switchPrimary bool
 	)
 	timeout, set, err := protoutil.DurationFromProto(req.GetTimeout())
 	if err != nil {
@@ -3178,7 +3178,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		maxReplicationLagAllowed = DefaultTimeout
 	}
 	direction := TrafficSwitchDirection(req.Direction)
-	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
+	switchReplica, switchRdonly, switchPrimary, err = parseTabletTypes(req.TabletTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -3186,11 +3186,20 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if err != nil {
 		return nil, err
 	}
-	onlySwitchingReads := !startState.WritesSwitched && !hasPrimary
 
 	if startState.WorkflowType == TypeMigrate {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
 	}
+
+	// We need this to know when there isn't a reverse workflow to use.
+	onlySwitchingReads := !startState.WritesSwitched && !switchPrimary
+
+	// We need this for idempotency and to avoid unnecessary work and resulting risk.
+	writesAlreadySwitched := (direction == DirectionForward && startState.WritesSwitched) ||
+		(direction == DirectionBackward && !startState.WritesSwitched)
+	readsAlreadySwitched := (direction == DirectionForward && len(startState.ReplicaCellsNotSwitched) == 0 && len(startState.RdonlyCellsNotSwitched) == 0) ||
+		(direction == DirectionBackward && len(startState.ReplicaCellsSwitched) == 0 && len(startState.RdonlyCellsSwitched) == 0)
+	needToSwitchWrites := switchPrimary && !writesAlreadySwitched
 
 	if direction == DirectionBackward && !onlySwitchingReads {
 		// This means that the reverse workflow exists. So we update the starting state
@@ -3205,11 +3214,11 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	ts.force = req.GetForce()
 
-	if onlySwitchingReads {
+	if writesAlreadySwitched {
 		s.Logger().Infof("Writes already switched no need to check lag for the %s.%s workflow",
 			ts.targetKeyspace, ts.workflow)
 	} else {
-		reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.GetShards())
+		reason, err := s.canSwitch(ctx, ts, int64(maxReplicationLagAllowed.Seconds()), req.GetShards())
 		if err != nil {
 			return nil, err
 		}
@@ -3218,10 +3227,11 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 				startState.Workflow, reason)
 		}
 	}
-	if hasReplica || hasRdonly {
+
+	if (switchReplica || switchRdonly) && !readsAlreadySwitched {
 		// If we're going to switch writes immediately after then we don't need to
 		// rebuild the SrvVSchema here as we will do it after switching writes.
-		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !hasPrimary /* rebuildSrvVSchema */, direction); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !needToSwitchWrites /* rebuildSrvVSchema */, direction); err != nil {
 			return nil, err
 		}
 		s.Logger().Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
@@ -3229,7 +3239,8 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if rdDryRunResults != nil {
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
 	}
-	if hasPrimary {
+
+	if needToSwitchWrites {
 		if _, wrDryRunResults, err = s.switchWrites(ctx, req, ts, timeout, false); err != nil {
 			return nil, err
 		}
@@ -3715,9 +3726,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	return ts.id, sw.logs(), nil
 }
 
-func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *State, direction TrafficSwitchDirection,
-	maxAllowedReplLagSecs int64, shards []string) (reason string, err error) {
-	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow, false, shards)
+func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedReplLagSecs int64, shards []string) (reason string, err error) {
+	wf, err := s.GetWorkflow(ctx, ts.targetKeyspace, ts.workflow, false, shards)
 	if err != nil {
 		return "", err
 	}

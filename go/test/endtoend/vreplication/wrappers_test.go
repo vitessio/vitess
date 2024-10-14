@@ -219,9 +219,9 @@ func (v VtctldMoveTables) exec(args ...string) {
 	args2 := []string{"MoveTables", "--workflow=" + v.workflowName, "--target-keyspace=" + v.targetKeyspace}
 	args2 = append(args2, args...)
 	var err error
-	if v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...); err != nil {
-		require.FailNowf(v.vc.t, "failed MoveTables action", "%v: %s", err, v.lastOutput)
-	}
+	v.vc.t.Logf("Executing command: vtctldclient %s", strings.Join(args2, " "))
+	v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...)
+	require.NoError(v.vc.t, err, "failed MoveTables action, error: %v: output: %s", err, v.lastOutput)
 }
 
 func (v VtctldMoveTables) Create() {
@@ -449,7 +449,7 @@ func (v VtctldReshard) exec(args ...string) {
 	var err error
 	v.vc.t.Logf("Executing command: vtctldclient %s", strings.Join(args2, " "))
 	v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...)
-	require.NoError(v.vc.t, err, "failed to create Reshard workflow: %v: %s", err, v.lastOutput)
+	require.NoError(v.vc.t, err, "failed Reshard action, error: %v: output: %s", err, v.lastOutput)
 }
 
 func (v VtctldReshard) Create() {
