@@ -42,6 +42,7 @@ type iWorkflow interface {
 	Flavor() string
 	GetLastOutput() string
 	Start()
+	Status()
 	Stop()
 }
 
@@ -147,6 +148,11 @@ func (vmt *VtctlMoveTables) ReverseReadsAndWrites() {
 func (vmt *VtctlMoveTables) Show() {
 	// TODO implement me
 	panic("implement me")
+}
+
+func (vmt *VtctlMoveTables) Status() {
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
+	vmt.exec("Status")
 }
 
 func (vmt *VtctlMoveTables) exec(action string) {
@@ -261,6 +267,10 @@ func (v VtctldMoveTables) Show() {
 	args := []string{"Show"}
 	args = append(args, v.showFlags...)
 	v.exec(args...)
+}
+
+func (v VtctldMoveTables) Status() {
+	v.exec("Status")
 }
 
 func (v VtctldMoveTables) SwitchReads() {
@@ -379,6 +389,11 @@ func (vrs *VtctlReshard) MirrorTraffic() {
 	panic("implement me")
 }
 
+func (vrs *VtctlReshard) Status() {
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
+	vrs.exec("Status")
+}
+
 func (vrs *VtctlReshard) SwitchReadsAndWrites() {
 	vrs.exec(workflowActionSwitchTraffic)
 }
@@ -484,6 +499,10 @@ func (v VtctldReshard) ReverseReadsAndWrites() {
 
 func (v VtctldReshard) Show() {
 	v.exec("Show")
+}
+
+func (v *VtctldReshard) Status() {
+	v.exec("Status")
 }
 
 func (v VtctldReshard) SwitchReads() {
