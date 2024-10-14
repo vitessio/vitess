@@ -12,7 +12,14 @@ import (
 )
 
 func TestMoveTablesBuffering(t *testing.T) {
-	defaultRdonly = 1
+	ogReplicas := defaultReplicas
+	ogRdOnly := defaultRdonly
+	defer func() {
+		defaultReplicas = ogReplicas
+		defaultRdonly = ogRdOnly
+	}()
+	defaultRdonly = 0
+	defaultReplicas = 0
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
 
@@ -32,11 +39,14 @@ func TestMoveTablesBuffering(t *testing.T) {
 
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
-	vdiffSideBySide(t, ksWorkflow, "")
 	waitForLowLag(t, "customer", workflowName)
+	vdiffSideBySide(t, ksWorkflow, "")
+	reverseWorkflowName := workflowName + "_reverse"
 	for i := 0; i < 10; i++ {
+		waitForLowLag(t, "customer", workflowName)
 		tstWorkflowSwitchReadsAndWrites(t)
 		time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
+		waitForLowLag(t, "customer", reverseWorkflowName)
 		tstWorkflowReverseReadsAndWrites(t)
 		time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 	}

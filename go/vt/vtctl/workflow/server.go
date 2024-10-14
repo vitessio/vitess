@@ -3202,7 +3202,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		// This means that the reverse workflow exists. So we update the starting state
 		// so that we're using the reverse workflow and we can move forward with a normal
 		// traffic switch forward operation, from the reverse workflow's perspective.
-		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
+		ts, startState, err = s.getWorkflowState(ctx, ts.sourceKeyspace, ts.reverseWorkflow)
 		if err != nil {
 			return nil, err
 		}
