@@ -612,20 +612,8 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	lbytes, lok := left.(*evalBytes)
-	rbytes, rok := right.(*evalBytes)
+	matched := l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), col.Collation)
 
-	var matched bool
-	switch {
-	case lok && rok:
-		matched = l.matchWildcard(lbytes.bytes, rbytes.bytes, col.Collation)
-	case rok:
-		matched = l.matchWildcard(left.ToRawBytes(), rbytes.bytes, col.Collation)
-	case lok:
-		matched = l.matchWildcard(lbytes.bytes, right.ToRawBytes(), col.Collation)
-	default:
-		matched = l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), collations.CollationBinaryID)
-	}
 	return newEvalBool(matched), nil
 }
 
