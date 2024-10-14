@@ -597,21 +597,13 @@ func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
 
 func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	left, err := l.Left.eval(env)
-	if err != nil {
-		return nil, err
-	}
-
-	if left == nil {
-		return nil, nil
+	if err != nil || left == nil {
+		return left, err
 	}
 
 	right, err := l.Right.eval(env)
-	if err != nil {
-		return nil, err
-	}
-
-	if right == nil {
-		return nil, nil
+	if err != nil || right == nil {
+		return right, err
 	}
 
 	var col collations.TypedCollation
@@ -702,7 +694,6 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 		})
 	}
 
-	c.asm.jumpDestination(skip1)
-	c.asm.jumpDestination(skip2)
+	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }
