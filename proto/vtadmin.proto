@@ -142,6 +142,9 @@ service VTAdmin {
     // MoveTablesCreate creates a workflow which moves one or more tables from a
     // source keyspace to a target keyspace.
     rpc MoveTablesCreate(MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
+    // MaterializeCreate creates a workflow to materialize one or more tables
+    // from a source keyspace to a target keyspace using a provided expressions.
+    rpc MaterializeCreate(MaterializeCreateRequest) returns (vtctldata.MaterializeCreateResponse) {};
     // PingTablet checks that the specified tablet is awake and responding to
     // RPCs. This command can be blocked by other in-flight operations.
     rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
@@ -714,6 +717,14 @@ message GetWorkflowsResponse {
 message LaunchSchemaMigrationRequest {
     string cluster_id = 1;
     vtctldata.LaunchSchemaMigrationRequest request = 2;
+}
+
+message MaterializeCreateRequest {
+    string cluster_id = 1;
+    // TableSettings is a JSON string defining what tables to materialize using
+    // what select statements.
+    string table_settings = 2;
+    vtctldata.MaterializeCreateRequest request = 3;
 }
 
 message MoveTablesCreateRequest {
