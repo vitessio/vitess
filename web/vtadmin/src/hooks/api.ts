@@ -90,7 +90,7 @@ import {
     showVDiff,
     ShowVDiffParams,
 } from '../api/http';
-import { vtadmin as pb, vtadmin, vtctldata } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
 
 /**
@@ -728,7 +728,7 @@ export const useCreateVDiff = (
  */
 export const useShowVDiff = (
     params: ShowVDiffParams,
-    options?: UseQueryOptions<vtadmin.VDiffShowResponse, Error> | undefined
+    options?: UseQueryOptions<pb.VDiffShowResponse, Error> | undefined
 ) => {
     return useQuery(['vdiff_show', params], () => showVDiff(params), { ...options });
 };
