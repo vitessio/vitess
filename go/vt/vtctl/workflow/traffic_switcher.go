@@ -610,10 +610,13 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	cellsStr := strings.Join(cells, ",")
 	ts.Logger().Infof("switchShardReads: cells: %s, tablet types: %+v, direction %d", cellsStr, servedTypes, direction)
 
-	fromShards, toShards := ts.SourceShards(), ts.TargetShards()
-	if direction == DirectionBackward {
+	var fromShards, toShards []*topo.ShardInfo
+	if direction == DirectionForward {
+		fromShards, toShards = ts.SourceShards(), ts.TargetShards()
+	} else {
 		fromShards, toShards = ts.TargetShards(), ts.SourceShards()
 	}
+
 	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.TargetKeyspaceName(), cellsStr)
@@ -652,20 +655,25 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	// targetKeyspace.table -> sourceKeyspace.table
 	// For forward migration, we add tablet type specific rules to redirect traffic to the target.
 	// For backward, we redirect to source.
-	targetKeyspace := ts.targetKeyspace
-	if direction == DirectionBackward {
-		targetKeyspace = ts.sourceKeyspace
-	}
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet type specified when switching reads: %v", servedType)
 		}
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.Tables() {
-			toTarget := []string{targetKeyspace + "." + table}
-			rules[table+"@"+tt] = toTarget
-			rules[ts.targetKeyspace+"."+table+"@"+tt] = toTarget
-			rules[ts.sourceKeyspace+"."+table+"@"+tt] = toTarget
+			if direction == DirectionForward {
+				log.Infof("Route direction forward")
+				toTarget := []string{ts.TargetKeyspaceName() + "." + table}
+				rules[table+"@"+tt] = toTarget
+				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
+				rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toTarget
+			} else {
+				log.Infof("Route direction backwards")
+				toSource := []string{ts.SourceKeyspaceName() + "." + table}
+				rules[table+"@"+tt] = toSource
+				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toSource
+				rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toSource
+			}
 		}
 	}
 	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
