@@ -39,14 +39,11 @@ func TestMoveTablesBuffering(t *testing.T) {
 
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
-	waitForLowLag(t, "customer", workflowName)
 	vdiffSideBySide(t, ksWorkflow, "")
-	reverseWorkflowName := workflowName + "_reverse"
+	waitForLowLag(t, "customer", workflowName)
 	for i := 0; i < 10; i++ {
-		waitForLowLag(t, "customer", workflowName)
 		tstWorkflowSwitchReadsAndWrites(t)
 		time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
-		waitForLowLag(t, "customer", reverseWorkflowName)
 		tstWorkflowReverseReadsAndWrites(t)
 		time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 	}
