@@ -56,7 +56,7 @@ func (expr *BinaryExpr) arguments(env *ExpressionEnv) (eval, eval, error) {
 	}
 	right, err := expr.Right.eval(env)
 	if err != nil {
-		return nil, nil, err
+		return left, nil, err
 	}
 	return left, right, nil
 }
