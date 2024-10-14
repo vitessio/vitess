@@ -426,6 +426,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow")
 	router.HandleFunc("/workflow/{cluster_id}/movetables", httpAPI.Adapt(vtadminhttp.MoveTablesCreate)).Name("API.MoveTablesCreate").Methods("POST")
+	router.HandleFunc("/workflow/{cluster_id}/reshard", httpAPI.Adapt(vtadminhttp.ReshardCreate)).Name("API.ReshardCreate").Methods("POST")
 
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
@@ -1886,6 +1887,25 @@ func (api *API) MoveTablesCreate(ctx context.Context, req *vtadminpb.MoveTablesC
 	}
 
 	return c.Vtctld.MoveTablesCreate(ctx, req.Request)
+}
+
+// ReshardCreate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ReshardCreate(ctx context.Context, req *vtadminpb.ReshardCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ReshardCreate")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.ReshardCreate(ctx, req.Request)
 }
 
 // PingTablet is part of the vtadminpb.VTAdminServer interface.
