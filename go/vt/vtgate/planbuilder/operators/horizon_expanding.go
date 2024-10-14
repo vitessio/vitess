@@ -88,7 +88,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		// if we are dealing with a derived table, we need to make sure that the ordering columns
 		// are available outside the derived table
 		for _, order := range horizon.Query.GetOrderBy() {
-			qp.addColumn(ctx, order.Expr)
+			qp.addDerivedColumn(ctx, order.Expr)
 		}
 	}
 
@@ -121,9 +121,9 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if len(qp.OrderExprs) > 0 {
-		op = &Ordering{
-			Source: op,
-			Order:  qp.OrderExprs,
+		op, err = expandOrderBy(ctx, op, qp, horizon.Alias)
+		if err != nil {
+			return nil, nil, err
 		}
 		extracted = append(extracted, "Ordering")
 	}
@@ -137,6 +137,76 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	return op, rewrite.NewTree(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")), op), nil
+}
+
+func expandOrderBy(ctx *plancontext.PlanningContext, op ops.Operator, qp *QueryProjection, derived string) (ops.Operator, error) {
+	var newOrder []ops.OrderBy
+	sqc := &SubQueryBuilder{}
+	proj, ok := op.(*Projection)
+
+	for _, expr := range qp.OrderExprs {
+		// Attempt to extract any subqueries within the expression
+		newExpr, subqs, err := sqc.pullOutValueSubqueries(ctx, expr.SimplifiedExpr, TableID(op), false)
+		if err != nil {
+			return nil, err
+		}
+		if newExpr == nil {
+			// If no subqueries are found, retain the original order expression
+			if derived != "" {
+				expr = exposeOrderingColumn(ctx, qp, expr, derived)
+			}
+			newOrder = append(newOrder, expr)
+			continue
+		}
+
+		// If the operator is not a projection, we cannot handle subqueries with aggregation
+		if !ok {
+			return nil, vterrors.VT12001("subquery with aggregation in order by")
+		}
+
+		// Add the new subquery expression to the projection
+		if err := proj.addSubqueryExpr(aeWrap(newExpr), newExpr, subqs...); err != nil {
+			return nil, err
+		}
+		// Replace the original order expression with the new expression containing subqueries
+		newOrder = append(newOrder, ops.OrderBy{
+			Inner: &sqlparser.Order{
+				Expr:      newExpr,
+				Direction: expr.Inner.Direction,
+			},
+			SimplifiedExpr: newExpr,
+		})
+	}
+
+	// Update the source of the projection if we have it
+	if proj != nil {
+		proj.Source = sqc.getRootOperator(proj.Source)
+	}
+
+	// Return the updated operator with the new order by expressions
+	return &Ordering{
+		Source: op,
+		Order:  newOrder,
+	}, nil
+}
+
+// exposeOrderingColumn will expose the ordering column to the outer query
+func exposeOrderingColumn(ctx *plancontext.PlanningContext, qp *QueryProjection, orderBy ops.OrderBy, derived string) ops.OrderBy {
+	for _, se := range qp.SelectExprs {
+		aliasedExpr, err := se.GetAliasedExpr()
+		if err != nil {
+			panic(vterrors.VT13001("unexpected expression in select"))
+		}
+		if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, orderBy.SimplifiedExpr) {
+			newExpr := sqlparser.NewColNameWithQualifier(aliasedExpr.ColumnName(), sqlparser.NewTableName(derived))
+			ctx.SemTable.CopySemanticInfo(orderBy.SimplifiedExpr, newExpr)
+			orderBy.SimplifiedExpr = newExpr
+			orderBy.Inner = &sqlparser.Order{Expr: newExpr, Direction: orderBy.Inner.Direction}
+			break
+		}
+	}
+
+	return orderBy
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator, err error) {

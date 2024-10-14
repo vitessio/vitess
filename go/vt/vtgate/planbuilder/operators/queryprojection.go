@@ -807,8 +807,9 @@ func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningCont
 	return true, nil
 }
 
-// addColumn adds a column to the QueryProjection if it is not already present
-func (qp *QueryProjection) addColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+// addColumn adds a column to the QueryProjection if it is not already present.
+// It will use a column name that is available on the outside of the derived table
+func (qp *QueryProjection) addDerivedColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	for _, selectExpr := range qp.SelectExprs {
 		getExpr, err := selectExpr.GetExpr()
 		if err != nil {
