@@ -79,7 +79,8 @@ var (
 
 	// commitMode records the timing of the commit phase of a transaction.
 	// It also tracks between different transaction mode i.e. Single, Multi and TwoPC
-	commitMode = stats.NewTimings("CommitModeTimings", "Commit Mode Time", "mode")
+	commitMode       = stats.NewTimings("CommitModeTimings", "Commit Mode Time", "mode")
+	commitUnresolved = stats.NewCounter("CommitUnresolved", "Atomic Commit failed to conclude after commit decision is made")
 
 	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
 

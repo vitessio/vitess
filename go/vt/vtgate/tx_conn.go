@@ -313,6 +313,8 @@ func (txc *TxConn) errActionAndLogWarn(ctx context.Context, session *SafeSession
 		if resumeErr := txc.rollbackTx(ctx, dtid, mmShard, rmShards, session.logging); resumeErr != nil {
 			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
 		}
+	case Commit2pcStartCommit, Commit2pcPrepareCommit:
+		commitUnresolved.Add(1)
 	}
 	session.RecordWarning(&querypb.QueryWarning{
 		Code:    uint32(sqlerror.ERInAtomicRecovery),

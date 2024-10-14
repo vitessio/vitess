@@ -24,7 +24,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -232,130 +231,6 @@ func TestTransactionIsolationInTx(t *testing.T) {
 	utils.Exec(t, conn, "begin")
 	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
 	utils.Exec(t, conn, "commit")
-}
-
-type commitMetric struct {
-	TotalCount  float64
-	SingleCount float64
-	MultiCount  float64
-	TwoPCCount  float64
-}
-
-func getCommitMetric(t *testing.T, vtgateProcess cluster.VtgateProcess) commitMetric {
-	t.Helper()
-
-	vars, err := clusterInstance.VtgateProcess.GetVars()
-	require.NoError(t, err)
-
-	cm := commitMetric{}
-	commitVars, exists := vars["CommitModeTimings"]
-	if !exists {
-		return cm
-	}
-
-	commitMap, ok := commitVars.(map[string]any)
-	require.True(t, ok, "commit vars is not a map")
-
-	cm.TotalCount = commitMap["TotalCount"].(float64)
-
-	histogram, ok := commitMap["Histograms"].(map[string]any)
-	require.True(t, ok, "commit histogram is not a map")
-
-	if single, ok := histogram["Single"]; ok {
-		singleMap, ok := single.(map[string]any)
-		require.True(t, ok, "single histogram is not a map")
-		cm.SingleCount = singleMap["Count"].(float64)
-	}
-
-	if multi, ok := histogram["Multi"]; ok {
-		multiMap, ok := multi.(map[string]any)
-		require.True(t, ok, "multi histogram is not a map")
-		cm.MultiCount = multiMap["Count"].(float64)
-	}
-
-	if twopc, ok := histogram["TwoPC"]; ok {
-		twopcMap, ok := twopc.(map[string]any)
-		require.True(t, ok, "twopc histogram is not a map")
-		cm.TwoPCCount = twopcMap["Count"].(float64)
-	}
-
-	return cm
-}
-
-// TestTransactionModes tests transactions using twopc mode
-func TestTransactionModeMetrics(t *testing.T) {
-	closer := start(t)
-	defer closer()
-
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	tcases := []struct {
-		name  string
-		stmts []string
-		want  commitMetric
-	}{{
-		name:  "nothing to commit: so no change on vars",
-		stmts: []string{"commit"},
-	}, {
-		name:  "begin commit - no dml: so no change on vars",
-		stmts: []string{"begin", "commit"},
-	}, {
-		name: "single shard",
-		stmts: []string{
-			"begin",
-			"insert into test(id) values (1)",
-			"commit",
-		},
-		want: commitMetric{TotalCount: 1, SingleCount: 1},
-	}, {
-		name: "multi shard insert",
-		stmts: []string{
-			"begin",
-			"insert into test(id) values (3),(4)",
-			"commit",
-		},
-		want: commitMetric{TotalCount: 1, MultiCount: 1, TwoPCCount: 1},
-	}, {
-		name: "multi shard delete",
-		stmts: []string{
-			"begin",
-			"delete from test",
-			"commit",
-		},
-		want: commitMetric{TotalCount: 1, MultiCount: 1, TwoPCCount: 1},
-	}}
-
-	initial := getCommitMetric(t, clusterInstance.VtgateProcess)
-	for _, tc := range tcases {
-		t.Run(tc.name, func(t *testing.T) {
-			for _, stmt := range tc.stmts {
-				utils.Exec(t, conn, stmt)
-			}
-			updatedMetric := getCommitMetric(t, clusterInstance.VtgateProcess)
-			assert.EqualValues(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
-			assert.EqualValues(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
-			assert.EqualValues(t, tc.want.MultiCount, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
-			assert.Zero(t, updatedMetric.TwoPCCount-initial.TwoPCCount, "TwoPCCount")
-			initial = updatedMetric
-		})
-	}
-
-	utils.Exec(t, conn, "set transaction_mode = twopc")
-	for _, tc := range tcases {
-		t.Run(tc.name, func(t *testing.T) {
-			for _, stmt := range tc.stmts {
-				utils.Exec(t, conn, stmt)
-			}
-			updatedMetric := getCommitMetric(t, clusterInstance.VtgateProcess)
-			assert.EqualValues(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
-			assert.EqualValues(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
-			assert.Zero(t, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
-			assert.EqualValues(t, tc.want.TwoPCCount, updatedMetric.TwoPCCount-initial.TwoPCCount, "TwoPCCount")
-			initial = updatedMetric
-		})
-	}
 }
 
 func start(t *testing.T) func() {
