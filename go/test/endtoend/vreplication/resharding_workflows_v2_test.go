@@ -425,6 +425,12 @@ func getCurrentStatus(t *testing.T) string {
 // but CI currently fails on creating multiple clusters even after the previous ones are torn down
 
 func TestBasicV2Workflows(t *testing.T) {
+	ogReplicas := defaultReplicas
+	ogRdOnly := defaultRdonly
+	defer func() {
+		defaultReplicas = ogReplicas
+		defaultRdonly = ogRdOnly
+	}()
 	defaultReplicas = 1
 	defaultRdonly = 1
 	extraVTTabletArgs = []string{
