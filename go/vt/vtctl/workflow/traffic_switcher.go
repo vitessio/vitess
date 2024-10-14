@@ -607,7 +607,8 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	ts.Logger().Infof("switchShardReads: cells: %v, tablet types: %v, direction %s", cells, servedTypes, direction.String())
+	ts.Logger().Infof("switchShardReads: workflow: %s, direction: %s, cells: %v, tablet types: %v",
+		ts.workflow, direction.String(), cells, servedTypes)
 
 	var fromShards, toShards []*topo.ShardInfo
 	if direction == DirectionForward {
@@ -645,7 +646,8 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 }
 
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {
-	ts.Logger().Infof("switchTableReads: cells: %v, tablet types: %v, direction: %s", cells, servedTypes, direction.String())
+	ts.Logger().Infof("switchTableReads: workflow: %s, direction: %s, cells: %v, tablet types: %v",
+		ts.workflow, direction.String(), cells, servedTypes)
 
 	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
