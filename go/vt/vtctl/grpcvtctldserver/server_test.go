@@ -5370,6 +5370,16 @@ func TestExecuteHook(t *testing.T) {
 
 func TestGetUnresolvedTransactions(t *testing.T) {
 	ks := "testkeyspace"
+	shard1Target := &querypb.Target{
+		Keyspace:   ks,
+		Shard:      "-80",
+		TabletType: topodatapb.TabletType_PRIMARY,
+	}
+	shard2Target := &querypb.Target{
+		Keyspace:   ks,
+		Shard:      "80-",
+		TabletType: topodatapb.TabletType_PRIMARY,
+	}
 
 	tests := []struct {
 		name      string
@@ -5382,24 +5392,25 @@ func TestGetUnresolvedTransactions(t *testing.T) {
 			name: "unresolved transaction on both shards",
 			tmc: &testutil.TabletManagerClient{
 				GetUnresolvedTransactionsResults: map[string][]*querypb.TransactionMetadata{
-					"-80": {{Dtid: "aa"}},
-					"80-": {{Dtid: "bb"}},
+					"-80": {{Dtid: "aa", Participants: []*querypb.Target{shard2Target}}},
+					"80-": {{Dtid: "bb", Participants: []*querypb.Target{shard1Target}}},
 				},
 			},
 			keyspace: "testkeyspace",
 			expected: []*querypb.TransactionMetadata{
-				{Dtid: "aa"}, {Dtid: "bb"},
+				{Dtid: "aa", Participants: []*querypb.Target{shard2Target, shard1Target}},
+				{Dtid: "bb", Participants: []*querypb.Target{shard1Target, shard2Target}},
 			},
 		}, {
-			name: "unresolved transaction on one sharda",
+			name: "unresolved transaction on one shard",
 			tmc: &testutil.TabletManagerClient{
 				GetUnresolvedTransactionsResults: map[string][]*querypb.TransactionMetadata{
-					"80-": {{Dtid: "bb"}},
+					"80-": {{Dtid: "bb", Participants: []*querypb.Target{shard1Target}}},
 				},
 			},
 			keyspace: "testkeyspace",
 			expected: []*querypb.TransactionMetadata{
-				{Dtid: "bb"},
+				{Dtid: "bb", Participants: []*querypb.Target{shard1Target, shard2Target}},
 			},
 		},
 		{
