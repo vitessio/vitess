@@ -86,6 +86,7 @@ import {
     fetchTransactions,
     createReshard,
     concludeTransaction,
+    createMaterialize,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -487,6 +488,18 @@ export const useWorkflowStatus = (
     options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
 ) => {
     return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params));
+};
+
+/**
+ * useCreateMaterialize is a mutation query hook that creates a materialize workflow.
+ */
+export const useCreateMaterialize = (
+    params: Parameters<typeof createMaterialize>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createMaterialize>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createMaterialize>>, Error>(() => {
+        return createMaterialize(params);
+    }, options);
 };
 
 /**

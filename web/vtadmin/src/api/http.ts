@@ -479,6 +479,29 @@ export const fetchWorkflowStatus = async (params: { clusterID: string; keyspace:
     return vtctldata.WorkflowStatusResponse.create(result);
 };
 
+export interface CreateMaterializeParams {
+    clusterID: string;
+    tableSettings: string;
+    request: vtctldata.IMaterializeCreateRequest;
+}
+
+export const createMaterialize = async ({ clusterID, tableSettings, request }: CreateMaterializeParams) => {
+    const body = {
+        table_settings: tableSettings,
+        request: request,
+    };
+
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/materialize`, {
+        body: JSON.stringify(body),
+        method: 'post',
+    });
+
+    const err = vtctldata.MaterializeCreateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.MaterializeCreateResponse.create(result);
+};
+
 export interface CreateMoveTablesParams {
     clusterID: string;
     request: vtctldata.IMoveTablesCreateRequest;
