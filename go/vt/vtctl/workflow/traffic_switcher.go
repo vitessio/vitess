@@ -607,8 +607,7 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	cellsStr := strings.Join(cells, ",")
-	ts.Logger().Infof("switchShardReads: cells: %s, tablet types: %+v, direction %d", cellsStr, servedTypes, direction)
+	ts.Logger().Infof("switchShardReads: cells: %v, tablet types: %v, direction %s", cells, servedTypes, direction.String())
 
 	var fromShards, toShards []*topo.ShardInfo
 	if direction == DirectionForward {
@@ -617,6 +616,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 		fromShards, toShards = ts.TargetShards(), ts.SourceShards()
 	}
 
+	cellsStr := strings.Join(cells, ",")
 	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.TargetKeyspaceName(), cellsStr)
@@ -645,7 +645,8 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 }
 
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {
-	ts.Logger().Infof("switchTableReads: cells: %s, tablet types: %+v, direction: %s", strings.Join(cells, ","), servedTypes, direction)
+	ts.Logger().Infof("switchTableReads: cells: %v, tablet types: %v, direction: %s", cells, servedTypes, direction.String())
+
 	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
@@ -662,13 +663,11 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.Tables() {
 			if direction == DirectionForward {
-				log.Infof("Route direction forward")
 				toTarget := []string{ts.TargetKeyspaceName() + "." + table}
 				rules[table+"@"+tt] = toTarget
 				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
 				rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toTarget
 			} else {
-				log.Infof("Route direction backwards")
 				toSource := []string{ts.SourceKeyspaceName() + "." + table}
 				rules[table+"@"+tt] = toSource
 				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toSource
