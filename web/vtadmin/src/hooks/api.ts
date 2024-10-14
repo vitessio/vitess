@@ -487,7 +487,7 @@ export const useWorkflowStatus = (
     params: Parameters<typeof fetchWorkflowStatus>[0],
     options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
 ) => {
-    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params));
+    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params), options);
 };
 
 /**

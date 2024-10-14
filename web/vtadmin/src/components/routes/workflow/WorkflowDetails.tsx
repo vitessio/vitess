@@ -43,6 +43,7 @@ interface Props {
     clusterID: string;
     keyspace: string;
     name: string;
+    refetchInterval: number;
 }
 
 const SUMMARY_COLUMNS = ['Stream Status', 'Traffic Status', 'Max VReplication Lag', 'Reverse Workflow'];
@@ -53,16 +54,21 @@ const TABLE_COPY_STATE_COLUMNS = ['Table Name', 'Total Bytes', 'Bytes Copied', '
 
 const STREAM_COLUMNS = ['Stream', 'Source Shard', 'Target Shard', 'Message', 'Transaction Timestamp', 'Database Name'];
 
-export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
+export const WorkflowDetails = ({ clusterID, keyspace, name, refetchInterval }: Props) => {
     const { data: workflowData } = useWorkflow({ clusterID, keyspace, name });
 
-    const { data: workflowsData = [] } = useWorkflows();
+    const { data: workflowsData = [] } = useWorkflows({ refetchInterval });
 
-    const { data: workflowStatus } = useWorkflowStatus({
-        clusterID,
-        keyspace,
-        name,
-    });
+    const { data: workflowStatus } = useWorkflowStatus(
+        {
+            clusterID,
+            keyspace,
+            name,
+        },
+        {
+            refetchInterval,
+        }
+    );
 
     const reverseWorkflow = getReverseWorkflow(workflowsData, workflowData);
 
