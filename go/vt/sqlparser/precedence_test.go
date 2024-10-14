@@ -158,6 +158,8 @@ func TestParens(t *testing.T) {
 		{in: "(10 - 2) - 1", expected: "10 - 2 - 1"},
 		{in: "10 - (2 - 1)", expected: "10 - (2 - 1)"},
 		{in: "0 <=> (1 and 0)", expected: "0 <=> (1 and 0)"},
+		{in: "1 not like ('a' is null)", expected: "1 not like ('a' is null)"},
+		{in: ":vtg1 not like (:vtg2 is null)", expected: ":vtg1 not like (:vtg2 is null)"},
 	}
 
 	parser := NewTestParser()

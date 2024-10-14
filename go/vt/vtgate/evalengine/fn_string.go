@@ -1651,24 +1651,17 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
+	skip1 := c.compileNullCheck1(substr)
 	str, err := call.Arguments[1].compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
 
-	skip1 := c.compileNullCheck2(substr, str)
-	var skip2 *jump
-	if len(call.Arguments) > 2 {
-		l, err := call.Arguments[2].compile(c)
-		if err != nil {
-			return ctype{}, err
-		}
-		skip2 = c.compileNullCheck2(str, l)
-		_ = c.compileToInt64(l, 1)
-	}
+	skip2 := c.compileNullCheck1(str)
+	var skip3 *jump
 
 	if !str.isTextual() {
-		c.asm.Convert_xce(len(call.Arguments)-1, sqltypes.VarChar, c.collation)
+		c.asm.Convert_xce(1, sqltypes.VarChar, c.collation)
 		str.Col = collations.TypedCollation{
 			Collation:    c.collation,
 			Coercibility: collations.CoerceCoercible,
@@ -1679,12 +1672,21 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 	fromCharset := colldata.Lookup(substr.Col.Collation).Charset()
 	toCharset := colldata.Lookup(str.Col.Collation).Charset()
 	if !substr.isTextual() || (fromCharset != toCharset && !toCharset.IsSuperset(fromCharset)) {
-		c.asm.Convert_xce(len(call.Arguments), sqltypes.VarChar, str.Col.Collation)
+		c.asm.Convert_xce(2, sqltypes.VarChar, str.Col.Collation)
 		substr.Col = collations.TypedCollation{
 			Collation:    str.Col.Collation,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireASCII,
 		}
+	}
+
+	if len(call.Arguments) > 2 {
+		l, err := call.Arguments[2].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skip3 = c.compileNullCheck1(l)
+		_ = c.compileToInt64(l, 1)
 	}
 
 	var coll colldata.Collation
@@ -1700,7 +1702,7 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		c.asm.Locate2(coll)
 	}
 
-	c.asm.jumpDestination(skip1, skip2)
+	c.asm.jumpDestination(skip1, skip2, skip3)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}, nil
 }
 
