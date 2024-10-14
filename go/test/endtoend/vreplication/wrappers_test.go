@@ -33,6 +33,8 @@ type iWorkflow interface {
 	SwitchReads()
 	SwitchWrites()
 	SwitchReadsAndWrites()
+	ReverseReads()
+	ReverseWrites()
 	ReverseReadsAndWrites()
 	Cancel()
 	Complete()
@@ -156,13 +158,26 @@ func (vmt *VtctlMoveTables) exec(action string) {
 	require.NoError(vmt.vc.t, err)
 }
 func (vmt *VtctlMoveTables) SwitchReads() {
-	// TODO implement me
-	panic("implement me")
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+		vmt.tables, workflowActionSwitchTraffic, "replica,rdonly", "", "", defaultWorkflowExecOptions)
+	require.NoError(vmt.vc.t, err)
 }
 
 func (vmt *VtctlMoveTables) SwitchWrites() {
-	// TODO implement me
-	panic("implement me")
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+		vmt.tables, workflowActionSwitchTraffic, "primary", "", "", defaultWorkflowExecOptions)
+	require.NoError(vmt.vc.t, err)
+}
+func (vmt *VtctlMoveTables) ReverseReads() {
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+		vmt.tables, workflowActionReverseTraffic, "replica,rdonly", "", "", defaultWorkflowExecOptions)
+	require.NoError(vmt.vc.t, err)
+}
+
+func (vmt *VtctlMoveTables) ReverseWrites() {
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+		vmt.tables, workflowActionReverseTraffic, "primary", "", "", defaultWorkflowExecOptions)
+	require.NoError(vmt.vc.t, err)
 }
 
 func (vmt *VtctlMoveTables) Cancel() {
@@ -259,6 +274,18 @@ func (v VtctldMoveTables) SwitchWrites() {
 	v.exec(args...)
 }
 
+func (v VtctldMoveTables) ReverseReads() {
+	args := []string{"ReverseTraffic", "--tablet-types=rdonly,replica"}
+	args = append(args, v.switchFlags...)
+	v.exec(args...)
+}
+
+func (v VtctldMoveTables) ReverseWrites() {
+	args := []string{"ReverseTraffic", "--tablet-types=primary"}
+	args = append(args, v.switchFlags...)
+	v.exec(args...)
+}
+
 func (v VtctldMoveTables) Cancel() {
 	v.exec("Cancel")
 }
@@ -321,6 +348,16 @@ func newReshard(vc *VitessCluster, rs *reshardWorkflow, flavor workflowFlavor) i
 
 type VtctlReshard struct {
 	*reshardWorkflow
+}
+
+func (vrs *VtctlReshard) ReverseReads() {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (vrs *VtctlReshard) ReverseWrites() {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (vrs *VtctlReshard) Flavor() string {
@@ -409,9 +446,8 @@ func (v VtctldReshard) exec(args ...string) {
 	args2 := []string{"Reshard", "--workflow=" + v.workflowName, "--target-keyspace=" + v.targetKeyspace}
 	args2 = append(args2, args...)
 	var err error
-	if v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...); err != nil {
-		v.vc.t.Fatalf("failed to create Reshard workflow: %v: %s", err, v.lastOutput)
-	}
+	v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...)
+	require.NoError(v.vc.t, err, "failed to create Reshard workflow: %v: %s", err, v.lastOutput)
 }
 
 func (v VtctldReshard) Create() {
@@ -449,13 +485,31 @@ func (v VtctldReshard) Show() {
 }
 
 func (v VtctldReshard) SwitchReads() {
-	// TODO implement me
-	panic("implement me")
+	args := []string{"SwitchTraffic"}
+	args = append(args, v.switchFlags...)
+	args = append(args, "--tablet-types=rdonly,replica")
+	v.exec(args...)
 }
 
 func (v VtctldReshard) SwitchWrites() {
-	// TODO implement me
-	panic("implement me")
+	args := []string{"SwitchTraffic"}
+	args = append(args, v.switchFlags...)
+	args = append(args, "--tablet-types=primary")
+	v.exec(args...)
+}
+
+func (v VtctldReshard) ReverseReads() {
+	args := []string{"ReverseTraffic"}
+	args = append(args, v.switchFlags...)
+	args = append(args, "--tablet-types=rdonly,replica")
+	v.exec(args...)
+}
+
+func (v VtctldReshard) ReverseWrites() {
+	args := []string{"ReverseTraffic"}
+	args = append(args, v.switchFlags...)
+	args = append(args, "--tablet-types=primary")
+	v.exec(args...)
 }
 
 func (v VtctldReshard) Cancel() {
