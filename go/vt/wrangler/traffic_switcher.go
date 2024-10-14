@@ -1117,7 +1117,7 @@ func (ts *trafficSwitcher) validate(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
-	log.Infof("switchTableReads: for tablet types: %+v", servedTypes)
+	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
 	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
