@@ -6,6 +6,7 @@ name: Release
 on:
   release:
     types: [created]
+  pull_request: # So it can run on this PR
 
 permissions: read-all
 
@@ -18,16 +19,13 @@ jobs:
     steps:
     - name: Check out code
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      with:
+        ref: v21.0.0-rc1 # Explicit checkout to v21.0.0-rc1
 
     - name: Set up Go
       uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
         go-version-file: go.mod
-
-    - name: Setup node
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.12.2'
 
     - name: Tune the OS
       run: |
@@ -49,3 +47,4 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         pattern: "releases/*.{tar.gz,rpm,deb}"
+        release-url: https://uploads.github.com/repos/vitessio/vitess/releases/179932186/assets{?name,label} # Adding this line will update this release directly and not depend on the workflow to ran from a 'release' event
