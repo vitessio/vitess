@@ -558,6 +558,54 @@ export const stopWorkflow = async ({ clusterID, keyspace, name }: WorkflowAction
     return vtctldata.WorkflowUpdateResponse.create(result);
 };
 
+export interface MoveTablesCompleteParams {
+    clusterID: string;
+    request: vtctldata.IMoveTablesCompleteRequest;
+}
+
+export const completeMoveTables = async ({ clusterID, request }: MoveTablesCompleteParams) => {
+    const { result } = await vtfetch(`/api/movetables/${clusterID}/complete`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+    const err = vtctldata.MoveTablesCompleteResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.MoveTablesCompleteResponse.create(result);
+};
+
+export interface WorkflowSwitchTrafficParams {
+    clusterID: string;
+    request: vtctldata.IWorkflowSwitchTrafficRequest;
+}
+
+export const workflowSwitchTraffic = async ({ clusterID, request }: WorkflowSwitchTrafficParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/switchtraffic`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+    const err = vtctldata.WorkflowSwitchTrafficResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowSwitchTrafficResponse.create(result);
+};
+
+export interface WorkflowDeleteParams {
+    clusterID: string;
+    request: vtctldata.IWorkflowDeleteRequest;
+}
+
+export const workflowDelete = async ({ clusterID, request }: WorkflowDeleteParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/delete`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+    const err = vtctldata.WorkflowDeleteResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowDeleteResponse.create(result);
+};
+
 export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {
     // As an easy enhancement for later, we can also validate the request parameters on the front-end
     // instead of defaulting to '', to save a round trip.

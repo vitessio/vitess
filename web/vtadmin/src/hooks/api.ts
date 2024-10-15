@@ -84,6 +84,9 @@ import {
     stopWorkflow,
     FetchTransactionsParams,
     fetchTransactions,
+    completeMoveTables,
+    workflowSwitchTraffic,
+    workflowDelete,
     createReshard,
     concludeTransaction,
     createMaterialize,
@@ -547,6 +550,42 @@ export const useStopWorkflow = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof stopWorkflow>>, Error>(() => {
         return stopWorkflow(params);
+    }, options);
+};
+
+/**
+ * useCompleteMoveTables is a mutate hook that completes a MoveTables workflow.
+ */
+export const useCompleteMoveTables = (
+    params: Parameters<typeof completeMoveTables>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof completeMoveTables>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof completeMoveTables>>, Error>(() => {
+        return completeMoveTables(params);
+    }, options);
+};
+
+/**
+ * useWorkflowSwitchTraffic is a mutate hook that switches traffic for a workflow.
+ */
+export const useWorkflowSwitchTraffic = (
+    params: Parameters<typeof workflowSwitchTraffic>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>(() => {
+        return workflowSwitchTraffic(params);
+    }, options);
+};
+
+/**
+ * useWorkflowDelete is a mutate hook that deletes a workflow.
+ */
+export const useWorkflowDelete = (
+    params: Parameters<typeof workflowDelete>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof workflowDelete>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof workflowDelete>>, Error>(() => {
+        return workflowDelete(params);
     }, options);
 };
 

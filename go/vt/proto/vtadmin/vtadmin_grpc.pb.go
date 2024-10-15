@@ -129,6 +129,9 @@ type VTAdminClient interface {
 	// LaunchSchemaMigration launches one or all migrations in the given
 	// cluster executed with --postpone-launch.
 	LaunchSchemaMigration(ctx context.Context, in *LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	// MoveTablesComplete completes the move and cleans up the workflow and
+	// its related artifacts.
+	MoveTablesComplete(ctx context.Context, in *MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(ctx context.Context, in *MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
@@ -208,6 +211,10 @@ type VTAdminClient interface {
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
+	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
+	WorkflowSwitchTraffic(ctx context.Context, in *WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 }
 
 type vTAdminClient struct {
@@ -587,6 +594,15 @@ func (c *vTAdminClient) LaunchSchemaMigration(ctx context.Context, in *LaunchSch
 	return out, nil
 }
 
+func (c *vTAdminClient) MoveTablesComplete(ctx context.Context, in *MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error) {
+	out := new(vtctldata.MoveTablesCompleteResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/MoveTablesComplete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) MoveTablesCreate(ctx context.Context, in *MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
 	out := new(vtctldata.WorkflowStatusResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/MoveTablesCreate", in, out, opts...)
@@ -812,6 +828,24 @@ func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opt
 	return out, nil
 }
 
+func (c *vTAdminClient) WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
+	out := new(vtctldata.WorkflowDeleteResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/WorkflowDelete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) WorkflowSwitchTraffic(ctx context.Context, in *WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	out := new(vtctldata.WorkflowSwitchTrafficResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/WorkflowSwitchTraffic", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VTAdminServer is the server API for VTAdmin service.
 // All implementations must embed UnimplementedVTAdminServer
 // for forward compatibility
@@ -922,6 +956,9 @@ type VTAdminServer interface {
 	// LaunchSchemaMigration launches one or all migrations in the given
 	// cluster executed with --postpone-launch.
 	LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	// MoveTablesComplete completes the move and cleans up the workflow and
+	// its related artifacts.
+	MoveTablesComplete(context.Context, *MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
@@ -1001,6 +1038,10 @@ type VTAdminServer interface {
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
+	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
+	WorkflowSwitchTraffic(context.Context, *WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 	mustEmbedUnimplementedVTAdminServer()
 }
 
@@ -1131,6 +1172,9 @@ func (UnimplementedVTAdminServer) StopWorkflow(context.Context, *StopWorkflowReq
 func (UnimplementedVTAdminServer) LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LaunchSchemaMigration not implemented")
 }
+func (UnimplementedVTAdminServer) MoveTablesComplete(context.Context, *MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesComplete not implemented")
+}
 func (UnimplementedVTAdminServer) MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
 }
@@ -1205,6 +1249,12 @@ func (UnimplementedVTAdminServer) ValidateVersionShard(context.Context, *Validat
 }
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
+}
+func (UnimplementedVTAdminServer) WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
+}
+func (UnimplementedVTAdminServer) WorkflowSwitchTraffic(context.Context, *WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowSwitchTraffic not implemented")
 }
 func (UnimplementedVTAdminServer) mustEmbedUnimplementedVTAdminServer() {}
 
@@ -1957,6 +2007,24 @@ func _VTAdmin_LaunchSchemaMigration_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_MoveTablesComplete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveTablesCompleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).MoveTablesComplete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/MoveTablesComplete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).MoveTablesComplete(ctx, req.(*MoveTablesCompleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MoveTablesCreateRequest)
 	if err := dec(in); err != nil {
@@ -2407,6 +2475,42 @@ func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WorkflowDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).WorkflowDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/WorkflowDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).WorkflowDelete(ctx, req.(*WorkflowDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_WorkflowSwitchTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WorkflowSwitchTrafficRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).WorkflowSwitchTraffic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/WorkflowSwitchTraffic",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).WorkflowSwitchTraffic(ctx, req.(*WorkflowSwitchTrafficRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VTAdmin_ServiceDesc is the grpc.ServiceDesc for VTAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2579,6 +2683,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_LaunchSchemaMigration_Handler,
 		},
 		{
+			MethodName: "MoveTablesComplete",
+			Handler:    _VTAdmin_MoveTablesComplete_Handler,
+		},
+		{
 			MethodName: "MoveTablesCreate",
 			Handler:    _VTAdmin_MoveTablesCreate_Handler,
 		},
@@ -2677,6 +2785,14 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VTExplain",
 			Handler:    _VTAdmin_VTExplain_Handler,
+		},
+		{
+			MethodName: "WorkflowDelete",
+			Handler:    _VTAdmin_WorkflowDelete_Handler,
+		},
+		{
+			MethodName: "WorkflowSwitchTraffic",
+			Handler:    _VTAdmin_WorkflowSwitchTraffic_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
