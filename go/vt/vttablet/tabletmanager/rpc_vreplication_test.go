@@ -472,7 +472,6 @@ func TestMoveTablesUnsharded(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, ftc := range targetShards {
-		ftc.vrdbClient.Reset()
 		ftc.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",
@@ -732,7 +731,6 @@ func TestMoveTablesSharded(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for _, ftc := range targetShards {
-		ftc.vrdbClient.Reset()
 		ftc.vrdbClient.AddInvariant(binlogplayer.TestGetWorkflowQueryId1, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys|options",

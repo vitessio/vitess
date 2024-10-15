@@ -270,7 +270,7 @@ func (te *TxEngine) isTxPoolAvailable(addToWaitGroup func(int)) error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, savepointQueries []string, reservedID int64, setting *smartconnpool.Setting, options *querypb.ExecuteOptions) (int64, string, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, reservedID int64, setting *smartconnpool.Setting, options *querypb.ExecuteOptions) (int64, string, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 
@@ -285,7 +285,7 @@ func (te *TxEngine) Begin(ctx context.Context, savepointQueries []string, reserv
 	}
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, savepointQueries, setting)
+	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, setting)
 	if err != nil {
 		return 0, "", "", err
 	}
@@ -516,7 +516,7 @@ func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, re
 	// Update the state of the transaction in the redo log.
 	// Retryable Error: Update the message with error message.
 	// Non-retryable Error: Along with message, update the state as RedoStateFailed.
-	conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
 		return
@@ -608,7 +608,7 @@ func (te *TxEngine) stopTransactionWatcher() {
 }
 
 // ReserveBegin creates a reserved connection, and in it opens a transaction
-func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string, savepointQueries []string) (int64, string, error) {
+func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
@@ -622,7 +622,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 		return 0, "", err
 	}
 	defer conn.UnlockUpdateTime()
-	_, sessionStateChanges, err := te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, savepointQueries)
+	_, sessionStateChanges, err := te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
@@ -720,7 +720,7 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context) (*StatefulConnect
 		env: te.env,
 	}
 
-	_, _, err = te.txPool.begin(ctx, nil, false, sc, nil)
+	_, _, err = te.txPool.begin(ctx, nil, false, sc)
 	return sc, err
 }
 

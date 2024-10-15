@@ -37,6 +37,7 @@ interface Props<T> {
     size?: 'large';
     description?: string;
     required?: boolean;
+    disableClearSelection?: boolean;
 }
 
 /**
@@ -60,6 +61,7 @@ export const Select = <T,>({
     size,
     description,
     required,
+    disableClearSelection,
 }: Props<T>) => {
     const _itemToString = React.useCallback(
         (item: T | null): string => {
@@ -146,7 +148,7 @@ export const Select = <T,>({
             </button>
             <div className={style.dropdown} hidden={!isOpen}>
                 {content}
-                {selectedItem && (
+                {selectedItem && !disableClearSelection && (
                     <button className={style.clear} onClick={() => selectItem(null as any)} type="button">
                         Clear selection
                     </button>
