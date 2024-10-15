@@ -19,6 +19,7 @@ package common
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -141,6 +143,50 @@ func ParseTabletTypes(cmd *cobra.Command) error {
 		return fmt.Errorf("invalid tablet-types value, at least one valid tablet type must be specified")
 	}
 	return nil
+}
+
+func ParseTableMaterializeSettings(tableSettings string, parser *sqlparser.Parser) ([]*vtctldatapb.TableMaterializeSettings, error) {
+	tableMaterializeSettings := make([]*vtctldatapb.TableMaterializeSettings, 0)
+	err := json.Unmarshal([]byte(tableSettings), &tableMaterializeSettings)
+	if err != nil {
+		return tableMaterializeSettings, fmt.Errorf("table-settings is not valid JSON")
+	}
+	if len(tableMaterializeSettings) == 0 {
+		return tableMaterializeSettings, fmt.Errorf("empty table-settings")
+	}
+
+	// Validate the provided queries.
+	seenSourceTables := make(map[string]bool)
+	for _, tms := range tableMaterializeSettings {
+		if tms.TargetTable == "" || tms.SourceExpression == "" {
+			return tableMaterializeSettings, fmt.Errorf("missing target_table or source_expression")
+		}
+		// Validate that the query is valid.
+		stmt, err := parser.Parse(tms.SourceExpression)
+		if err != nil {
+			return tableMaterializeSettings, fmt.Errorf("invalid source_expression: %q", tms.SourceExpression)
+		}
+		// Validate that each source-expression uses a different table.
+		// If any of them query the same table the materialize workflow
+		// will fail.
+		err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case sqlparser.TableName:
+				if node.Name.NotEmpty() {
+					if seenSourceTables[node.Name.String()] {
+						return false, fmt.Errorf("multiple source_expression queries use the same table: %q", node.Name.String())
+					}
+					seenSourceTables[node.Name.String()] = true
+				}
+			}
+			return true, nil
+		}, stmt)
+		if err != nil {
+			return tableMaterializeSettings, err
+		}
+	}
+
+	return tableMaterializeSettings, nil
 }
 
 func validateOnDDL(cmd *cobra.Command) error {

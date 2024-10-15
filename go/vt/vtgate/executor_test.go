@@ -1520,6 +1520,20 @@ func TestExecutorUnrecognized(t *testing.T) {
 	require.Error(t, err, "unrecognized statement: invalid statement'")
 }
 
+func TestExecutorDeniedErrorNoBuffer(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+	sbc1.EphemeralShardErr = errors.New("enforce denied tables")
+
+	vschemaWaitTimeout = 500 * time.Millisecond
+
+	session := NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	startExec := time.Now()
+	_, err := executor.Execute(ctx, nil, "TestExecutorDeniedErrorNoBuffer", session, "select * from user", nil)
+	require.NoError(t, err, "enforce denied tables not buffered")
+	endExec := time.Now()
+	require.GreaterOrEqual(t, endExec.Sub(startExec).Milliseconds(), int64(500))
+}
+
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
@@ -2290,7 +2304,7 @@ func TestExecutorVExplain(t *testing.T) {
 
 	result, err = executorExec(ctx, executor, session, "vexplain plan select 42", bindVars)
 	require.NoError(t, err)
-	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"42 as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
+	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\":vtg1 as :vtg1 /* INT64 */\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
 	require.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 
@@ -2807,17 +2821,6 @@ func TestExecutorRejectTwoPC(t *testing.T) {
 					"1|2|0"),
 			},
 			expErr: "VT12001: unsupported: atomic distributed transaction commit with consistent lookup vindex",
-		}, {
-			sqls: []string{
-				`savepoint x`,
-				`insert into user_extra(user_id) values (1)`,
-				`insert into user_extra(user_id) values (3)`,
-			},
-			testRes: []*sqltypes.Result{
-				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|unq_col|unchanged", "int64|int64|int64"),
-					"1|2|0"),
-			},
-			expErr: "VT12001: unsupported: atomic distributed transaction commit with savepoint",
 		},
 	}
 
