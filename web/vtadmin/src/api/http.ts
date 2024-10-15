@@ -1020,3 +1020,37 @@ export const validateVersionShard = async (params: ValidateVersionShardParams) =
 
     return vtctldata.ValidateVersionShardResponse.create(result);
 };
+
+export interface CreateVDiffParams {
+    clusterID: string;
+    request: vtctldata.IVDiffCreateRequest;
+}
+
+export const createVDiff = async ({ clusterID, request }: CreateVDiffParams) => {
+    const { result } = await vtfetch(`/api/vdiff/${clusterID}/`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtctldata.VDiffCreateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.VDiffCreateResponse.create(result);
+};
+
+export interface ShowVDiffParams {
+    clusterID: string;
+    request: vtctldata.IVDiffShowRequest;
+}
+
+export const showVDiff = async ({ clusterID, request }: ShowVDiffParams) => {
+    const { result } = await vtfetch(`/api/vdiff/${clusterID}/show`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtadmin.VDiffShowResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtadmin.VDiffShowResponse.create(result);
+};

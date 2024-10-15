@@ -46,7 +46,7 @@ import (
 )
 
 var (
-	tabletTypesDefault = []topodatapb.TabletType{
+	TabletTypesDefault = []topodatapb.TabletType{
 		topodatapb.TabletType_RDONLY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_PRIMARY,
@@ -102,7 +102,7 @@ var (
 			createOptions.UUID = uuid.New()
 		}
 		if !cmd.Flags().Lookup("tablet-types").Changed {
-			createOptions.TabletTypes = tabletTypesDefault
+			createOptions.TabletTypes = TabletTypesDefault
 		}
 		if cmd.Flags().Lookup("source-cells").Changed {
 			for i, cell := range createOptions.SourceCells {
@@ -790,7 +790,7 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 
 	// If the vdiff has been started then we can calculate the progress.
 	if summary.State == vdiff.StartedState {
-		buildProgressReport(summary, totalRowsToCompare)
+		summary.Progress = BuildProgressReport(summary.RowsCompared, totalRowsToCompare, summary.StartedAt)
 	}
 
 	sort.Strings(shards) // Sort for predictable output
@@ -809,17 +809,17 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 	return summary, nil
 }
 
-func buildProgressReport(summary *summary, rowsToCompare int64) {
+func BuildProgressReport(rowsCompared int64, rowsToCompare int64, startedAt string) *vdiff.ProgressReport {
 	report := &vdiff.ProgressReport{}
-	if summary.RowsCompared >= 1 {
+	if rowsCompared >= 1 {
 		// Round to 2 decimal points.
-		report.Percentage = math.Round(math.Min((float64(summary.RowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
+		report.Percentage = math.Round(math.Min((float64(rowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
 	}
 	if math.IsNaN(report.Percentage) {
 		report.Percentage = 0
 	}
 	pctToGo := math.Abs(report.Percentage - 100.00)
-	startTime, _ := time.Parse(vdiff.TimestampFormat, summary.StartedAt)
+	startTime, _ := time.Parse(vdiff.TimestampFormat, startedAt)
 	curTime := time.Now().UTC()
 	runTime := curTime.Unix() - startTime.Unix()
 	if report.Percentage >= 1 {
@@ -830,7 +830,7 @@ func buildProgressReport(summary *summary, rowsToCompare int64) {
 			report.ETA = eta.Format(vdiff.TimestampFormat)
 		}
 	}
-	summary.Progress = report
+	return report
 }
 
 func commandShow(cmd *cobra.Command, args []string) error {

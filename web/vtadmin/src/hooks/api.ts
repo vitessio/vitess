@@ -89,6 +89,9 @@ import {
     workflowDelete,
     createReshard,
     concludeTransaction,
+    createVDiff,
+    showVDiff,
+    ShowVDiffParams,
     createMaterialize,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
@@ -758,4 +761,26 @@ export const useValidateVersionShard = (
     return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>(() => {
         return validateVersionShard(params);
     }, options);
+};
+
+/**
+ * useCreateVDiff is a mutation query hook that creates a VDiff.
+ */
+export const useCreateVDiff = (
+    params: Parameters<typeof createVDiff>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createVDiff>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createVDiff>>, Error>(() => {
+        return createVDiff(params);
+    }, options);
+};
+
+/**
+ * useShowVDiff is a query hook fetches VDiff status.
+ */
+export const useShowVDiff = (
+    params: ShowVDiffParams,
+    options?: UseQueryOptions<pb.VDiffShowResponse, Error> | undefined
+) => {
+    return useQuery(['vdiff_show', params], () => showVDiff(params), { ...options });
 };

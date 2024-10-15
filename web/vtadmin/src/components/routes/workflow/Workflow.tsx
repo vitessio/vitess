@@ -32,6 +32,7 @@ import { Tab } from '../../tabs/Tab';
 import { getStreams } from '../../../util/workflows';
 import { Code } from '../../Code';
 import { ShardLink } from '../../links/ShardLink';
+import { WorkflowVDiff } from './WorkflowVDiff';
 import { Select } from '../../inputs/Select';
 import { formatDateTimeShort } from '../../../util/time';
 
@@ -165,6 +166,7 @@ export const Workflow = () => {
                 <TabContainer>
                     <Tab text="Streams" to={`${url}/streams`} count={streams.length} />
                     <Tab text="Details" to={`${url}/details`} />
+                    <Tab text="VDiff" to={`${url}/vdiff`} />
                     <Tab text="JSON" to={`${url}/json`} />
                 </TabContainer>
 
@@ -180,6 +182,10 @@ export const Workflow = () => {
                             name={name}
                             refetchInterval={refetchInterval}
                         />
+                    </Route>
+
+                    <Route path={`${path}/vdiff`}>
+                        <WorkflowVDiff clusterID={clusterID} keyspace={keyspace} name={name} />
                     </Route>
 
                     <Route path={`${path}/json`}>
