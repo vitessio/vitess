@@ -96,7 +96,7 @@ func TestPlannedReparentShardNoPrimaryProvided(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ReadOnly = false
 	oldPrimary.FakeMysqlDaemon.Replicating = false
 	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0]
+	oldPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0])
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
@@ -213,7 +213,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ReadOnly = false
 	oldPrimary.FakeMysqlDaemon.Replicating = false
 	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0]
+	oldPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0])
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
@@ -434,7 +434,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ReadOnly = false
 	oldPrimary.FakeMysqlDaemon.Replicating = false
 	// set to incorrect value to make promote fail on WaitForReplicationPos
-	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = newPrimary.FakeMysqlDaemon.PromoteResult
+	oldPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(newPrimary.FakeMysqlDaemon.PromoteResult)
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
@@ -542,7 +542,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	// old primary
 	oldPrimary.FakeMysqlDaemon.ReadOnly = false
 	oldPrimary.FakeMysqlDaemon.Replicating = false
-	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0]
+	oldPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0])
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
@@ -616,7 +616,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
 	primary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			7: replication.MariadbGTID{
 				Domain:   7,
@@ -624,7 +624,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 				Sequence: 990,
 			},
 		},
-	}
+	})
 	primary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
@@ -697,7 +697,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
 	primary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			7: replication.MariadbGTID{
 				Domain:   7,
@@ -705,7 +705,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 				Sequence: 990,
 			},
 		},
-	}
+	})
 	primary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
@@ -815,7 +815,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ReadOnly = false
 	oldPrimary.FakeMysqlDaemon.Replicating = false
 	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0]
+	oldPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0])
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
@@ -823,7 +823,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		// We call a SetReplicationSource explicitly
 		"FAKE SET MASTER",
 		"START SLAVE",
-		// extra SetReplicationSource call due to retry
+		// extra SetReplicationSource call due to retry)
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -885,7 +885,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 
 	// retrying should work
 	newPrimary.FakeMysqlDaemon.PromoteError = nil
-	newPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0]
+	newPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions[0])
 
 	// run PlannedReparentShard
 	err = vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
@@ -922,7 +922,7 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ReadOnly = true
 	oldPrimary.FakeMysqlDaemon.Replicating = false
 	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	oldPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			7: replication.MariadbGTID{
 				Domain:   7,
@@ -930,7 +930,7 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 				Sequence: 990,
 			},
 		},
-	}
+	})
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}

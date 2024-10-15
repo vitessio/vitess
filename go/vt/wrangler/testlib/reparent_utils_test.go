@@ -67,7 +67,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}
 
 	// primary action loop (to initialize host and port)
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			5: replication.MariadbGTID{
 				Domain:   5,
@@ -75,12 +75,12 @@ func TestShardReplicationStatuses(t *testing.T) {
 				Sequence: 892,
 			},
 		},
-	}
+	})
 	primary.StartActionLoop(t, wr)
 	defer primary.StopActionLoop(t)
 
 	// replica loop
-	replica.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	replica.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			5: replication.MariadbGTID{
 				Domain:   5,
@@ -88,7 +88,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 				Sequence: 890,
 			},
 		},
-	}
+	})
 	replica.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
 	replica.FakeMysqlDaemon.CurrentSourcePort = primary.Tablet.MysqlPort
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
