@@ -2130,21 +2130,10 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		return res.Result, err
 	}
 
-	var res map[*topo.TabletInfo]*querypb.QueryResult
-	delFunc := func() error {
-		delCtx, delCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*2)
-		defer delCancel()
-		res, err = vx.CallbackContext(delCtx, callback)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
 	// Multi-tenant migrations delete only that tenant's records from the target tables
-	// in batches and we may not be able to complete that work before the timeout. So
-	// we only delete the workflow after the cleanup work completes successfully so that
-	// the workflow can be canceled multiple times if needed in order to fully cleanup
+	// in batches and we may not be able to complete that work before the timeout. We
+	// delete the workflow only after the cleanup work completes successfully so the
+	// workflow can be canceled multiple times if needed in order to fully cleanup
 	// all of the tenant's data that we had copied.
 	if ts.IsMultiTenantMigration() {
 		if ts.workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables { // Should never happen
@@ -2159,20 +2148,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 					ts.options.TenantId)
 			}
 		}
-		if err := delFunc(); err != nil {
-			return nil, err
-		}
 	} else {
-		// TODO (mlord): We should delete the workflow at the end in the non-multi-tenant
-		// cases too. To do this we should first stop the workflow streams — so that the
-		// workflow is not still trying to run and producing errors when related artifacts
-		// like the target tables are gone — then clean up the related artifacts before
-		// finally deleting the workflow. This also allows for multiple cancel/delete
-		// attempts if we get an error for any reason at some point during the artifact
-		// cleanup work (otherwise any remaining cleanup work has to be done manually).
-		if err := delFunc(); err != nil {
-			return nil, err
-		}
 		// Cleanup related data and artifacts. There are none for a LookupVindex workflow.
 		if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
 			if _, err := s.DropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
@@ -2182,6 +2158,15 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 				return nil, err
 			}
 		}
+	}
+
+	// Now that we've succesfully cleaned up everything else, we can finally delete
+	// the workflow.
+	delCtx, delCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*2)
+	defer delCancel()
+	res, err := vx.CallbackContext(delCtx, callback)
+	if err != nil {
+		return nil, err
 	}
 
 	response := &vtctldatapb.WorkflowDeleteResponse{}
@@ -2721,6 +2706,26 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 		ctx = lockCtx
 	}
 
+	// Stop the workflow before we delete the artifacts so that it doesn't try and
+	// continue doing work, and producing errors, as we delete the related artifacts.
+	if err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		primary := target.GetPrimary()
+		if primary == nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no primary tablet found for target shard %s/%s",
+				ts.targetKeyspace, target.GetShard())
+		}
+		_, err := ts.ws.tmc.UpdateVReplicationWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: ts.workflow,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+		})
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", ts.workflow, primary.Keyspace, primary.Shard)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
 	if !keepData {
 		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
@@ -2803,14 +2808,13 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no primary tablet found for target shard %s/%s",
 				ts.targetKeyspace, target.GetShard())
 		}
-
 		// Let's be sure that the workflow is stopped so that it's not generating more data.
 		_, err := ts.ws.tmc.UpdateVReplicationWorkflow(ctx, primary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow: ts.workflow,
 			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
 		})
 		if err != nil {
-			return vterrors.Wrapf(err, "failed to stop workflow %s", ts.workflow)
+			return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", ts.workflow, primary.Keyspace, primary.Shard)
 		}
 		s.Logger().Infof("Deleting tenant %s data that was migrated in mulit-tenant workflow %s",
 			ts.workflow, ts.options.TenantId)
