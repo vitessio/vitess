@@ -1445,7 +1445,7 @@ func waitForConnRefuse(t *testing.T, valWanted int64) {
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("connRefuse did not reach %v", valWanted)
+			require.FailNow(t, "connRefuse did not reach %v", valWanted)
 		case <-tick.C:
 			if connRefuse.Get() == valWanted {
 				return
