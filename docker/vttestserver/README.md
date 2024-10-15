@@ -8,6 +8,7 @@ there is a way of building it by hand. Here is how it goes:
 ```bash
 docker login
 
+# we first checkout to the git tag of the release we want to build
 # we assume in this example that we are releasing v21.0.0-rc1, but replace this by any other tag
 git checkout v21.0.0-rc1
 
