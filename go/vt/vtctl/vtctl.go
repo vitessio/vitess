@@ -707,7 +707,7 @@ var commands = []commandGroup{
 			{
 				name:   "UpdateThrottlerConfig",
 				method: commandUpdateThrottlerConfig,
-				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] [--throttle-app|unthrottle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] [--throttle-app-exempt] <keyspace>",
+				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--throttle-app|unthrottle-app=<name>] [--throttle-app-ratio=<float, range [0..1]>] [--throttle-app-duration=<duration>] [--throttle-app-exempt] <keyspace>",
 				help:   "Update the table throttler configuration for all cells and tablets of a given keyspace",
 			},
 			{
@@ -3600,8 +3600,6 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	disable := subFlags.Bool("disable", false, "Disable the throttler")
 	threshold := subFlags.Float64("threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
 	customQuery := subFlags.String("custom-query", "", "custom throttler check query")
-	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
-	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
 	unthrottledApp := subFlags.String("unthrottle-app", "", "an app name to unthrottle")
 	throttledApp := subFlags.String("throttle-app", "", "an app name to throttle")
 	throttledAppRatio := subFlags.Float64("throttle-app-ratio", throttle.DefaultThrottleRatio, "ratio to throttle app (app specififed in --throttled-app)")
@@ -3616,9 +3614,6 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	}
 	if *enable && *disable {
 		return fmt.Errorf("--enable and --disable are mutually exclusive")
-	}
-	if *checkAsCheckSelf && *checkAsCheckShard {
-		return fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
 	if *throttledApp != "" && *unthrottledApp != "" {
@@ -3637,14 +3632,12 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	keyspace := subFlags.Arg(0)
 
 	req := &vtctldatapb.UpdateThrottlerConfigRequest{
-		Keyspace:          keyspace,
-		Enable:            *enable,
-		Disable:           *disable,
-		CustomQuery:       *customQuery,
-		CustomQuerySet:    customQuerySet,
-		Threshold:         *threshold,
-		CheckAsCheckSelf:  *checkAsCheckSelf,
-		CheckAsCheckShard: *checkAsCheckShard,
+		Keyspace:       keyspace,
+		Enable:         *enable,
+		Disable:        *disable,
+		CustomQuery:    *customQuery,
+		CustomQuerySet: customQuerySet,
+		Threshold:      *threshold,
 	}
 	if *throttledApp != "" {
 		req.ThrottledApp = &topodatapb.ThrottledAppRule{

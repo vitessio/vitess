@@ -33135,9 +33135,6 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists */
         ok_if_not_exists?: (boolean|null);
-
-        /** CheckThrottlerRequest multi_metrics_enabled */
-        multi_metrics_enabled?: (boolean|null);
     }
 
     /** Represents a CheckThrottlerRequest. */
@@ -33160,9 +33157,6 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists. */
         public ok_if_not_exists: boolean;
-
-        /** CheckThrottlerRequest multi_metrics_enabled. */
-        public multi_metrics_enabled: boolean;
 
         /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.
@@ -33255,9 +33249,6 @@ export namespace tabletmanagerdata {
     /** Properties of a CheckThrottlerResponse. */
     interface ICheckThrottlerResponse {
 
-        /** CheckThrottlerResponse status_code */
-        status_code?: (number|null);
-
         /** CheckThrottlerResponse value */
         value?: (number|null);
 
@@ -33294,9 +33285,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.ICheckThrottlerResponse);
-
-        /** CheckThrottlerResponse status_code. */
-        public status_code: number;
 
         /** CheckThrottlerResponse value. */
         public value: number;
@@ -33411,9 +33399,6 @@ export namespace tabletmanagerdata {
             /** Metric name */
             name?: (string|null);
 
-            /** Metric status_code */
-            status_code?: (number|null);
-
             /** Metric value */
             value?: (number|null);
 
@@ -33444,9 +33429,6 @@ export namespace tabletmanagerdata {
 
             /** Metric name. */
             public name: string;
-
-            /** Metric status_code. */
-            public status_code: number;
 
             /** Metric value. */
             public value: number;
@@ -34049,9 +34031,6 @@ export namespace tabletmanagerdata {
             /** RecentApp checked_at */
             checked_at?: (vttime.ITime|null);
 
-            /** RecentApp status_code */
-            status_code?: (number|null);
-
             /** RecentApp response_code */
             response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
         }
@@ -34067,9 +34046,6 @@ export namespace tabletmanagerdata {
 
             /** RecentApp checked_at. */
             public checked_at?: (vttime.ITime|null);
-
-            /** RecentApp status_code. */
-            public status_code: number;
 
             /** RecentApp response_code. */
             public response_code: tabletmanagerdata.CheckThrottlerResponseCode;
