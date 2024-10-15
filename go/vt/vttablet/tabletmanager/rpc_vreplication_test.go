@@ -128,11 +128,10 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 	ws := workflow.NewServer(vtenv.NewTestEnv(), tenv.ts, tenv.tmc)
 
 	tests := []struct {
-		name               string
-		req                *vtctldatapb.MoveTablesCreateRequest
-		schema             *tabletmanagerdatapb.SchemaDefinition
-		query              string
-		selectTableQueries []string
+		name   string
+		req    *vtctldatapb.MoveTablesCreateRequest
+		schema *tabletmanagerdatapb.SchemaDefinition
+		query  string
 	}{
 		{
 			name: "defaults",
@@ -145,7 +144,6 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			},
 			query: fmt.Sprintf(`%s values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0, '{}')`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
-			selectTableQueries: []string{"select 1 from `t1` limit 1"},
 		},
 		{
 			name: "all values",
@@ -181,7 +179,6 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			},
 			query: fmt.Sprintf(`%s values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1"}} on_ddl:EXEC stop_after_copy:true source_time_zone:"EDT" target_time_zone:"UTC"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1, '{}')`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
-			selectTableQueries: []string{"select 1 from `t1` limit 1"},
 		},
 		{
 			name: "binlog source order with include",
@@ -222,11 +219,6 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			},
 			query: fmt.Sprintf(`%s values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1"} rules:{match:"wut" filter:"select * from wut"} rules:{match:"zt" filter:"select * from zt"}} on_ddl:EXEC stop_after_copy:true source_time_zone:"EDT" target_time_zone:"UTC"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1, '{}')`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
-			selectTableQueries: []string{
-				"select 1 from `t1` limit 1",
-				"select 1 from `zt` limit 1",
-				"select 1 from `wut` limit 1",
-			},
 		},
 		{
 			name: "binlog source order with all-tables",
@@ -267,11 +259,6 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			},
 			query: fmt.Sprintf(`%s values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1"} rules:{match:"wut" filter:"select * from wut"} rules:{match:"zt" filter:"select * from zt"}} on_ddl:EXEC stop_after_copy:true source_time_zone:"EDT" target_time_zone:"UTC"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1, '{}')`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
-			selectTableQueries: []string{
-				"select 1 from `t1` limit 1",
-				"select 1 from `zt` limit 1",
-				"select 1 from `wut` limit 1",
-			},
 		},
 	}
 
@@ -302,9 +289,6 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 			targetTablet.vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{}, errShortCircuit)
-			for _, q := range tt.selectTableQueries {
-				tenv.tmc.setVReplicationExecResults(targetTablet.tablet, q, &sqltypes.Result{})
-			}
 			_, err := ws.MoveTablesCreate(ctx, tt.req)
 			tenv.tmc.tablets[targetTabletUID].vrdbClient.Wait()
 			require.ErrorIs(t, err, errShortCircuit)
@@ -728,7 +712,6 @@ func TestMoveTablesSharded(t *testing.T) {
 			fmt.Sprintf("%s|%d|%s|%s|NULL|0|0|||1686577659|0|Running||%s|1||0|0|0||0|1|{}", wf, vreplID, bls, position, targetKs),
 		), nil)
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, fmt.Sprintf(getLatestCopyState, vreplID, vreplID), &sqltypes.Result{})
-		tenv.tmc.setVReplicationExecResults(ftc.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 	}
 
 	// We use the tablet's UID in the mocked results for the max value used on each target shard.
@@ -1351,7 +1334,6 @@ func TestSourceShardSelection(t *testing.T) {
 				tt := targetTablets[uid]
 				tt.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 				tt.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-				tenv.tmc.setVReplicationExecResults(tt.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 				for i, sourceShard := range streams {
 					var err error
 					if i == len(streams)-1 {
@@ -1491,7 +1473,6 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 			"NULL",
 		),
 	)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 
 	// We expect the workflow creation to fail due to the invalid time
 	// zone and thus the workflow itself to be cleaned up.
@@ -2131,9 +2112,6 @@ func TestMaterializerOneToOne(t *testing.T) {
 		fmt.Sprintf(` values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1"} rules:{match:"t2" filter:"select * from t3"} rules:{match:"t4"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
 	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t2` limit 1", &sqltypes.Result{})
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t4` limit 1", &sqltypes.Result{})
 
 	err := ws.Materialize(ctx, ms)
 	targetTablet.vrdbClient.Wait()
@@ -2220,9 +2198,6 @@ func TestMaterializerManyToOne(t *testing.T) {
 		} else {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
 		}
-
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t2` limit 1", &sqltypes.Result{})
 	}
 
 	err := ws.Materialize(ctx, ms)
@@ -2325,7 +2300,6 @@ func TestMaterializerOneToMany(t *testing.T) {
 		} else {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
 		}
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 	}
 
 	err = ws.Materialize(ctx, ms)
@@ -2435,7 +2409,6 @@ func TestMaterializerManyToMany(t *testing.T) {
 					), nil)
 			}
 		}
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 	}
 
 	err = ws.Materialize(ctx, ms)
@@ -2543,7 +2516,6 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 		} else {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
 		}
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 	}
 
 	err = ws.Materialize(ctx, ms)
@@ -2607,8 +2579,6 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, `t2ddl`, &sqltypes.Result{}) // Execute the fake CreateDdl
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t2` limit 1", &sqltypes.Result{})
 
 	// This is our expected query, which will also short circuit
 	// the test with an error as at this point we've tested what
@@ -2679,8 +2649,6 @@ func TestMaterializerCopySchema(t *testing.T) {
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t2` limit 1", &sqltypes.Result{})
 
 	// This is our expected query, which will also short circuit
 	// the test with an error as at this point we've tested what
@@ -2795,7 +2763,6 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 		} else {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
 		}
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 	}
 
 	err = ws.Materialize(ctx, ms)
@@ -2903,7 +2870,6 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 		} else {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
 		}
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 	}
 
 	err = ws.Materialize(ctx, ms)
@@ -2966,8 +2932,6 @@ func TestMaterializerStopAfterCopy(t *testing.T) {
 		fmt.Sprintf(` values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1"} rules:{match:"t2" filter:"select * from t3"}} stop_after_copy:true', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
 	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t2` limit 1", &sqltypes.Result{})
 
 	err := ws.Materialize(ctx, ms)
 	targetTablet.vrdbClient.Wait()
@@ -3063,7 +3027,6 @@ func TestMaterializerNoDDL(t *testing.T) {
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
@@ -3161,7 +3124,6 @@ func TestMaterializerTableMismatchNonCopy(t *testing.T) {
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
@@ -3208,7 +3170,6 @@ func TestMaterializerTableMismatchCopy(t *testing.T) {
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "source and target table names must match for copying schema: t2 vs t1")
@@ -3251,7 +3212,6 @@ func TestMaterializerNoSourceTable(t *testing.T) {
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "source table t1 does not exist")
@@ -3300,7 +3260,6 @@ func TestMaterializerSyntaxError(t *testing.T) {
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, ms.TableSettings[0].CreateDdl, &sqltypes.Result{})
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "syntax error at position 4 near 'bad'")
@@ -3349,7 +3308,6 @@ func TestMaterializerNotASelect(t *testing.T) {
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, ms.TableSettings[0].CreateDdl, &sqltypes.Result{})
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "unrecognized statement: update t1 set val=1")
@@ -3428,7 +3386,6 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 		errs = append(errs, errNoVindex)
 	}
 
@@ -3504,7 +3461,6 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 		errs = append(errs, errNoVindex)
 	}
 
@@ -3580,7 +3536,6 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-		tenv.tmc.setVReplicationExecResults(targetTablet.tablet, "select 1 from `t1` limit 1", &sqltypes.Result{})
 		errs = append(errs, errNoVindex)
 	}
 
