@@ -21,6 +21,8 @@ import (
 	"io"
 	"strconv"
 
+	"vitess.io/vitess/go/slice"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -104,7 +106,16 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushUpdate(in)
 		case *RecurseCTE:
 			return tryMergeRecurse(ctx, in)
-
+		case *ApplyJoin:
+			predicates := slice.Map(in.JoinPredicates.columns, func(j applyJoinColumn) sqlparser.Expr {
+				return j.Original
+			})
+			jm := newJoinMerge(predicates, in.JoinType)
+			newPlan := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
+			if newPlan == nil {
+				return in, NoRewrite
+			}
+			return newPlan, Rewrote("merge routes into single operator")
 		default:
 			return in, NoRewrite
 		}
