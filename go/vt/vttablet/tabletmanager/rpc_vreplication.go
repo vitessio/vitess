@@ -218,7 +218,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 			// work we've done, how much is left, and how long it may take (considering
 			// throttling, system performance, etc).
 			if rowsDeleted%1e5 == 0 {
-				log.Infof("Successfully deleted %d rows from table %s so far, using query %q",
+				log.Infof("Successfully deleted %d rows of multi-tenant data from table %s so far, using query %q",
 					rowsDeleted, table, query)
 			}
 			if res.RowsAffected == 0 { // We're done with this table
