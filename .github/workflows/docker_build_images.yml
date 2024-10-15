@@ -1,5 +1,6 @@
 name: Build Docker Images
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -28,12 +29,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
-      - name: Login to Docker Hub
-        if: needs.push.outputs.push == 'true'
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Login to Docker Hub
+#        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+#        with:
+#          username: ${{ secrets.DOCKERHUB_USERNAME }}
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set Dockerfile path
         run: |
@@ -45,7 +45,7 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: false
           tags: vitess/vttestserver:${{ matrix.branch }}
 
       ######
@@ -66,21 +66,8 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: false
           tags: ${{ env.DOCKER_TAG }}
-
-      #####
-      # Slack notification if vttestserver build fails
-      #####
-      - name: Slack Workflow Notification
-        if: startsWith(github.ref, 'refs/tags/') == false && failure()
-        uses: Gamesight/slack-workflow-status@68bf00d0dbdbcb206c278399aa1ef6c14f74347a # v1.3.0
-        with:
-          repo_token: ${{secrets.GITHUB_TOKEN}}
-          slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
-          channel: '#docker-build-notifications'
-          name: 'Docker Build Notification'
-
 
   build_and_push_lite:
     name: Build and push lite
@@ -96,12 +83,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
-      - name: Login to Docker Hub
-        if: needs.push.outputs.push == 'true'
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Login to Docker Hub
+#        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+#        with:
+#          username: ${{ secrets.DOCKERHUB_USERNAME }}
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set Dockerfile path
         run: |
@@ -117,7 +103,7 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: false
           tags: vitess/lite:${{ matrix.branch }}
 
       ######
@@ -142,20 +128,8 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: false
           tags: ${{ env.DOCKER_TAG }}
-
-      #####
-      # Slack notification if lite build fails
-      #####
-      - name: Slack Workflow Notification
-        if: failure()
-        uses: Gamesight/slack-workflow-status@68bf00d0dbdbcb206c278399aa1ef6c14f74347a # v1.3.0
-        with:
-          repo_token: ${{secrets.GITHUB_TOKEN}}
-          slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
-          channel: '#docker-build-notifications'
-          name: 'Docker Build Notification'
 
   build_and_push_components:
     name: Build and push
@@ -174,12 +148,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
-      - name: Login to Docker Hub
-        if: needs.push.outputs.push == 'true'
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Login to Docker Hub
+#        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+#        with:
+#          username: ${{ secrets.DOCKERHUB_USERNAME }}
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set Docker context path
         run: |
@@ -190,7 +163,7 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: false
           tags: vitess/${{ matrix.component }}:latest
           build-args: |
             VT_BASE_VER=latest
@@ -201,7 +174,7 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: false
           tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args: |
             VT_BASE_VER=latest
@@ -233,7 +206,7 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: false
           tags: ${{ env.DOCKER_TAG }}
           build-args: |
             VT_BASE_VER=${{ env.TAG_NAME }}
@@ -246,20 +219,26 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: false
           tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
           build-args: |
             VT_BASE_VER=${{ env.TAG_NAME }}
             DEBIAN_VER=${{ matrix.debian }}-slim
 
-      #####
-      # Slack notification if component build fails
-      #####
-      - name: Slack Workflow Notification
-        if: failure()
-        uses: Gamesight/slack-workflow-status@68bf00d0dbdbcb206c278399aa1ef6c14f74347a # v1.3.0
-        with:
-          repo_token: ${{secrets.GITHUB_TOKEN}}
-          slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
-          channel: '#docker-build-notifications'
-          name: 'Docker Build Notification'
+  slack_notification:
+    name: Slack Notification if failed
+    runs-on: ubuntu-latest
+    needs:
+      - build_and_push_vttestserver
+      - build_and_push_lite
+      - build_and_push_components
+    if: ${{ failure() }}
+    steps:
+    - name: Slack Workflow Notification
+      uses: Gamesight/slack-workflow-status@68bf00d0dbdbcb206c278399aa1ef6c14f74347a # v1.3.0
+      with:
+        repo_token: ${{secrets.GITHUB_TOKEN}}
+        slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
+        channel: '#docker-build-notifications'
+        name: 'Docker Build Notification'
+        icon_url: https://avatars.githubusercontent.com/u/33043890?s=96&v=4

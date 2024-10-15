@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+TEST WIP, this will fail the build
+
 FROM --platform=linux/amd64 golang:1.23.2-bullseye AS builder
 
 # Allows docker builds to set the BUILD_NUMBER
