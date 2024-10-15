@@ -192,7 +192,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 		rowsDeleted := uint64(0)
 		// Delete all of the matching rows from the table, in batches, until we've
 		// deleted them all.
-		log.Infof("Starting deletion of multi-tenant data from table %s using query %q", table, query)
+		log.Infof("Starting deletion of data from table %s using query %q", table, query)
 		for {
 			// Back off if we're causing too much load on the database with these
 			// batch deletes.
@@ -218,7 +218,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 			// work we've done, how much is left, and how long it may take (considering
 			// throttling, system performance, etc).
 			if rowsDeleted%1e5 == 0 {
-				log.Infof("Successfully deleted %d rows of multi-tenant data from table %s so far, using query %q",
+				log.Infof("Successfully deleted %d rows of data from table %s so far, using query %q",
 					rowsDeleted, table, query)
 			}
 			if res.RowsAffected == 0 { // We're done with this table
@@ -228,7 +228,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 				return nil, err
 			}
 		}
-		log.Infof("Completed deletion of multi-tenant data (%d rows) from table %s using query %q",
+		log.Infof("Completed deletion of data (%d rows) from table %s using query %q",
 			rowsDeleted, table, query)
 	}
 
