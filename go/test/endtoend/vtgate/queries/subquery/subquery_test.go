@@ -173,3 +173,16 @@ func TestSubqueryInAggregation(t *testing.T) {
 	// This fails as the planner adds `weight_string` method which make the query fail on MySQL.
 	// mcmp.Exec(`SELECT max((select min(id2) from t1 where t1.id1 = t.id1)) FROM t1 t`)
 }
+
+// TestSubqueryInDerivedTable tests that subqueries and derived tables
+// are handled correctly when there are joins inside the derived table
+func TestSubqueryInDerivedTable(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("INSERT INTO t1 (id1, id2) VALUES (1, 100), (2, 200), (3, 300), (4, 400), (5, 500);")
+	mcmp.Exec("INSERT INTO t2 (id3, id4) VALUES (10, 1), (20, 2), (30, 3), (40, 4), (50, 99)")
+	mcmp.Exec(`select t.a from (select t1.id2, t2.id3, (select id2 from t1 order by id2 limit 1) as a from t1 join t2 on t1.id1 = t2.id4) t`)
+	mcmp.Exec(`SELECT COUNT(*) FROM (SELECT DISTINCT t1.id1 FROM t1 JOIN t2 ON t1.id1 = t2.id4) dt`)
+}

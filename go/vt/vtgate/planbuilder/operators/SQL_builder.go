@@ -21,6 +21,8 @@ import (
 	"slices"
 	"sort"
 
+	"vitess.io/vitess/go/slice"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -562,6 +564,13 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 }
 
 func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) error {
+	predicates := slice.Map(op.JoinPredicates, func(jc JoinColumn) sqlparser.Expr {
+		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
+		qb.ctx.SkipPredicates[jc.RHSExpr] = nil
+
+		return jc.Original.Expr
+	})
+	pred := sqlparser.AndExpressions(predicates...)
 	err := buildQuery(op.LHS, qb)
 	if err != nil {
 		return err
@@ -569,8 +578,8 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) error {
 	// If we are going to add the predicate used in join here
 	// We should not add the predicate's copy of when it was split into
 	// two parts. To avoid this, we use the SkipPredicates map.
-	for _, expr := range qb.ctx.JoinPredicates[op.Predicate] {
-		qb.ctx.SkipPredicates[expr] = nil
+	for _, pred := range op.JoinPredicates {
+		qb.ctx.SkipPredicates[pred.RHSExpr] = nil
 	}
 	qbR := &queryBuilder{ctx: qb.ctx}
 	err = buildQuery(op.RHS, qbR)
@@ -578,9 +587,9 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) error {
 		return err
 	}
 	if op.LeftJoin {
-		qb.joinOuterWith(qbR, op.Predicate)
+		qb.joinOuterWith(qbR, pred)
 	} else {
-		qb.joinInnerWith(qbR, op.Predicate)
+		qb.joinInnerWith(qbR, pred)
 	}
 	return nil
 }

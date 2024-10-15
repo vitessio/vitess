@@ -38,9 +38,6 @@ type (
 		// LeftJoin will be true in the case of an outer join
 		LeftJoin bool
 
-		// Before offset planning
-		Predicate sqlparser.Expr
-
 		// JoinColumns keeps track of what AST expression is represented in the Columns array
 		JoinColumns []JoinColumn
 
@@ -86,14 +83,19 @@ type (
 	}
 )
 
-func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
-	return &ApplyJoin{
-		LHS:       lhs,
-		RHS:       rhs,
-		Vars:      map[string]int{},
-		Predicate: predicate,
-		LeftJoin:  leftOuterJoin,
+func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) (*ApplyJoin, error) {
+	aj := &ApplyJoin{
+		LHS:      lhs,
+		RHS:      rhs,
+		Vars:     map[string]int{},
+		LeftJoin: leftOuterJoin,
 	}
+	err := aj.AddJoinPredicate(ctx, predicate)
+	if err != nil {
+		return nil, err
+	}
+
+	return aj, nil
 }
 
 // Clone implements the Operator interface
@@ -105,7 +107,6 @@ func (aj *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	kopy.JoinColumns = slices.Clone(aj.JoinColumns)
 	kopy.JoinPredicates = slices.Clone(aj.JoinPredicates)
 	kopy.Vars = maps.Clone(aj.Vars)
-	kopy.Predicate = sqlparser.CloneExpr(aj.Predicate)
 	kopy.ExtraLHSVars = slices.Clone(aj.ExtraLHSVars)
 	return &kopy
 }
@@ -149,8 +150,9 @@ func (aj *ApplyJoin) IsInner() bool {
 }
 
 func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
-	aj.Predicate = ctx.SemTable.AndExpressions(expr, aj.Predicate)
-
+	if expr == nil {
+		return nil
+	}
 	col, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(aj.LHS))
 	if err != nil {
 		return err
@@ -312,11 +314,15 @@ func (aj *ApplyJoin) addOffset(offset int) {
 }
 
 func (aj *ApplyJoin) ShortDescription() string {
-	pred := sqlparser.String(aj.Predicate)
-	columns := slice.Map(aj.JoinColumns, func(from JoinColumn) string {
-		return sqlparser.String(from.Original)
-	})
-	firstPart := fmt.Sprintf("on %s columns: %s", pred, strings.Join(columns, ", "))
+	fn := func(cols []JoinColumn) string {
+		out := slice.Map(cols, func(jc JoinColumn) string {
+			return jc.String()
+		})
+		return strings.Join(out, ", ")
+	}
+
+	firstPart := fmt.Sprintf("on %s columns: %s", fn(aj.JoinPredicates), fn(aj.JoinColumns))
+
 	if len(aj.ExtraLHSVars) == 0 {
 		return firstPart
 	}
@@ -417,6 +423,14 @@ func (jc JoinColumn) IsPureRight() bool {
 
 func (jc JoinColumn) IsMixedLeftAndRight() bool {
 	return len(jc.LHSExprs) > 0 && jc.RHSExpr != nil
+}
+
+func (jc JoinColumn) String() string {
+	rhs := sqlparser.String(jc.RHSExpr)
+	lhs := slice.Map(jc.LHSExprs, func(e BindVarExpr) string {
+		return sqlparser.String(e.Expr)
+	})
+	return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
 }
 
 func (bve BindVarExpr) String() string {
