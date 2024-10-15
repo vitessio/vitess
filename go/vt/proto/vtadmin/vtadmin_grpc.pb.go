@@ -135,6 +135,9 @@ type VTAdminClient interface {
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(ctx context.Context, in *MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	// MaterializeCreate creates a workflow to materialize one or more tables
+	// from a source keyspace to a target keyspace using a provided expressions.
+	MaterializeCreate(ctx context.Context, in *MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeCreateResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
@@ -166,6 +169,8 @@ type VTAdminClient interface {
 	RetrySchemaMigration(ctx context.Context, in *RetrySchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.RetrySchemaMigrationResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
+	// ReshardCreate creates a workflow to reshard a keyspace.
+	ReshardCreate(ctx context.Context, in *ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
 	SetReadOnly(ctx context.Context, in *SetReadOnlyRequest, opts ...grpc.CallOption) (*SetReadOnlyResponse, error)
 	// SetReadWrite sets the tablet to read-write mode.
@@ -607,6 +612,15 @@ func (c *vTAdminClient) MoveTablesCreate(ctx context.Context, in *MoveTablesCrea
 	return out, nil
 }
 
+func (c *vTAdminClient) MaterializeCreate(ctx context.Context, in *MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeCreateResponse, error) {
+	out := new(vtctldata.MaterializeCreateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/MaterializeCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error) {
 	out := new(PingTabletResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/PingTablet", in, out, opts...)
@@ -691,6 +705,15 @@ func (c *vTAdminClient) RetrySchemaMigration(ctx context.Context, in *RetrySchem
 func (c *vTAdminClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error) {
 	out := new(RunHealthCheckResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RunHealthCheck", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) ReshardCreate(ctx context.Context, in *ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReshardCreate", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -939,6 +962,9 @@ type VTAdminServer interface {
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
+	// MaterializeCreate creates a workflow to materialize one or more tables
+	// from a source keyspace to a target keyspace using a provided expressions.
+	MaterializeCreate(context.Context, *MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
@@ -970,6 +996,8 @@ type VTAdminServer interface {
 	RetrySchemaMigration(context.Context, *RetrySchemaMigrationRequest) (*vtctldata.RetrySchemaMigrationResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
+	// ReshardCreate creates a workflow to reshard a keyspace.
+	ReshardCreate(context.Context, *ReshardCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
 	SetReadOnly(context.Context, *SetReadOnlyRequest) (*SetReadOnlyResponse, error)
 	// SetReadWrite sets the tablet to read-write mode.
@@ -1150,6 +1178,9 @@ func (UnimplementedVTAdminServer) MoveTablesComplete(context.Context, *MoveTable
 func (UnimplementedVTAdminServer) MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
 }
+func (UnimplementedVTAdminServer) MaterializeCreate(context.Context, *MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MaterializeCreate not implemented")
+}
 func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
 }
@@ -1179,6 +1210,9 @@ func (UnimplementedVTAdminServer) RetrySchemaMigration(context.Context, *RetrySc
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
+}
+func (UnimplementedVTAdminServer) ReshardCreate(context.Context, *ReshardCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReshardCreate not implemented")
 }
 func (UnimplementedVTAdminServer) SetReadOnly(context.Context, *SetReadOnlyRequest) (*SetReadOnlyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetReadOnly not implemented")
@@ -2009,6 +2043,24 @@ func _VTAdmin_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_MaterializeCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).MaterializeCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/MaterializeCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).MaterializeCreate(ctx, req.(*MaterializeCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PingTabletRequest)
 	if err := dec(in); err != nil {
@@ -2185,6 +2237,24 @@ func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).RunHealthCheck(ctx, req.(*RunHealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_ReshardCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReshardCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ReshardCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ReshardCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ReshardCreate(ctx, req.(*ReshardCreateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2621,6 +2691,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_MoveTablesCreate_Handler,
 		},
 		{
+			MethodName: "MaterializeCreate",
+			Handler:    _VTAdmin_MaterializeCreate_Handler,
+		},
+		{
 			MethodName: "PingTablet",
 			Handler:    _VTAdmin_PingTablet_Handler,
 		},
@@ -2659,6 +2733,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunHealthCheck",
 			Handler:    _VTAdmin_RunHealthCheck_Handler,
+		},
+		{
+			MethodName: "ReshardCreate",
+			Handler:    _VTAdmin_ReshardCreate_Handler,
 		},
 		{
 			MethodName: "SetReadOnly",

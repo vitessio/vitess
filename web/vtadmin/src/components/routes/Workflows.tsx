@@ -222,8 +222,12 @@ export const Workflows = () => {
                                 <Link to="/workflows/movetables/create">
                                     <MenuItem>MoveTables</MenuItem>
                                 </Link>
-                                <MenuItem disabled>Reshard</MenuItem>
-                                <MenuItem disabled>Materialize</MenuItem>
+                                <Link to="/workflows/reshard/create">
+                                    <MenuItem>Reshard</MenuItem>
+                                </Link>
+                                <Link to="/workflows/materialize/create">
+                                    <MenuItem>Materialize</MenuItem>
+                                </Link>
                             </Dropdown>
                         </div>
                     </ReadOnlyGate>

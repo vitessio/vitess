@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -430,7 +431,9 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow")
 	router.HandleFunc("/workflow/{cluster_id}/switchtraffic", httpAPI.Adapt(vtadminhttp.WorkflowSwitchTraffic)).Name("API.WorkflowSwitchTraffic")
 	router.HandleFunc("/workflow/{cluster_id}/delete", httpAPI.Adapt(vtadminhttp.WorkflowDelete)).Name("API.WorkflowDelete")
+	router.HandleFunc("/workflow/{cluster_id}/materialize", httpAPI.Adapt(vtadminhttp.MaterializeCreate)).Name("API.MaterializeCreate").Methods("POST")
 	router.HandleFunc("/workflow/{cluster_id}/movetables", httpAPI.Adapt(vtadminhttp.MoveTablesCreate)).Name("API.MoveTablesCreate").Methods("POST")
+	router.HandleFunc("/workflow/{cluster_id}/reshard", httpAPI.Adapt(vtadminhttp.ReshardCreate)).Name("API.ReshardCreate").Methods("POST")
 
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
@@ -1874,6 +1877,38 @@ func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.Launch
 	return c.LaunchSchemaMigration(ctx, req.Request)
 }
 
+// MaterializeCreate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) MaterializeCreate(ctx context.Context, req *vtadminpb.MaterializeCreateRequest) (*vtctldatapb.MaterializeCreateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.MaterializeCreate")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parser with default options. New() itself initializes with default MySQL version.
+	parser, err := sqlparser.New(sqlparser.Options{
+		TruncateUILen:  512,
+		TruncateErrLen: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+	req.Request.Settings.TableSettings, err = vreplcommon.ParseTableMaterializeSettings(req.TableSettings, parser)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.MaterializeCreate(ctx, req.Request)
+}
+
 // MoveTablesComplete is part of the vtadminpb.VTAdminServer interface.
 func (api *API) MoveTablesComplete(ctx context.Context, req *vtadminpb.MoveTablesCompleteRequest) (*vtctldatapb.MoveTablesCompleteResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.MoveTablesComplete")
@@ -1910,6 +1945,25 @@ func (api *API) MoveTablesCreate(ctx context.Context, req *vtadminpb.MoveTablesC
 	}
 
 	return c.Vtctld.MoveTablesCreate(ctx, req.Request)
+}
+
+// ReshardCreate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ReshardCreate(ctx context.Context, req *vtadminpb.ReshardCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ReshardCreate")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.ReshardCreate(ctx, req.Request)
 }
 
 // PingTablet is part of the vtadminpb.VTAdminServer interface.

@@ -626,6 +626,20 @@ export namespace vtadmin {
         public moveTablesCreate(request: vtadmin.IMoveTablesCreateRequest): Promise<vtctldata.WorkflowStatusResponse>;
 
         /**
+         * Calls MaterializeCreate.
+         * @param request MaterializeCreateRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and MaterializeCreateResponse
+         */
+        public materializeCreate(request: vtadmin.IMaterializeCreateRequest, callback: vtadmin.VTAdmin.MaterializeCreateCallback): void;
+
+        /**
+         * Calls MaterializeCreate.
+         * @param request MaterializeCreateRequest message or plain object
+         * @returns Promise
+         */
+        public materializeCreate(request: vtadmin.IMaterializeCreateRequest): Promise<vtctldata.MaterializeCreateResponse>;
+
+        /**
          * Calls PingTablet.
          * @param request PingTabletRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and PingTabletResponse
@@ -764,6 +778,20 @@ export namespace vtadmin {
          * @returns Promise
          */
         public runHealthCheck(request: vtadmin.IRunHealthCheckRequest): Promise<vtadmin.RunHealthCheckResponse>;
+
+        /**
+         * Calls ReshardCreate.
+         * @param request ReshardCreateRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and WorkflowStatusResponse
+         */
+        public reshardCreate(request: vtadmin.IReshardCreateRequest, callback: vtadmin.VTAdmin.ReshardCreateCallback): void;
+
+        /**
+         * Calls ReshardCreate.
+         * @param request ReshardCreateRequest message or plain object
+         * @returns Promise
+         */
+        public reshardCreate(request: vtadmin.IReshardCreateRequest): Promise<vtctldata.WorkflowStatusResponse>;
 
         /**
          * Calls SetReadOnly.
@@ -1266,6 +1294,13 @@ export namespace vtadmin {
         type MoveTablesCreateCallback = (error: (Error|null), response?: vtctldata.WorkflowStatusResponse) => void;
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#materializeCreate}.
+         * @param error Error, if any
+         * @param [response] MaterializeCreateResponse
+         */
+        type MaterializeCreateCallback = (error: (Error|null), response?: vtctldata.MaterializeCreateResponse) => void;
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#pingTablet}.
          * @param error Error, if any
          * @param [response] PingTabletResponse
@@ -1334,6 +1369,13 @@ export namespace vtadmin {
          * @param [response] RunHealthCheckResponse
          */
         type RunHealthCheckCallback = (error: (Error|null), response?: vtadmin.RunHealthCheckResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#reshardCreate}.
+         * @param error Error, if any
+         * @param [response] WorkflowStatusResponse
+         */
+        type ReshardCreateCallback = (error: (Error|null), response?: vtctldata.WorkflowStatusResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#setReadOnly}.
@@ -9865,6 +9907,115 @@ export namespace vtadmin {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a MaterializeCreateRequest. */
+    interface IMaterializeCreateRequest {
+
+        /** MaterializeCreateRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** MaterializeCreateRequest table_settings */
+        table_settings?: (string|null);
+
+        /** MaterializeCreateRequest request */
+        request?: (vtctldata.IMaterializeCreateRequest|null);
+    }
+
+    /** Represents a MaterializeCreateRequest. */
+    class MaterializeCreateRequest implements IMaterializeCreateRequest {
+
+        /**
+         * Constructs a new MaterializeCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IMaterializeCreateRequest);
+
+        /** MaterializeCreateRequest cluster_id. */
+        public cluster_id: string;
+
+        /** MaterializeCreateRequest table_settings. */
+        public table_settings: string;
+
+        /** MaterializeCreateRequest request. */
+        public request?: (vtctldata.IMaterializeCreateRequest|null);
+
+        /**
+         * Creates a new MaterializeCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MaterializeCreateRequest instance
+         */
+        public static create(properties?: vtadmin.IMaterializeCreateRequest): vtadmin.MaterializeCreateRequest;
+
+        /**
+         * Encodes the specified MaterializeCreateRequest message. Does not implicitly {@link vtadmin.MaterializeCreateRequest.verify|verify} messages.
+         * @param message MaterializeCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IMaterializeCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MaterializeCreateRequest message, length delimited. Does not implicitly {@link vtadmin.MaterializeCreateRequest.verify|verify} messages.
+         * @param message MaterializeCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IMaterializeCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MaterializeCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MaterializeCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.MaterializeCreateRequest;
+
+        /**
+         * Decodes a MaterializeCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MaterializeCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.MaterializeCreateRequest;
+
+        /**
+         * Verifies a MaterializeCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MaterializeCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MaterializeCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.MaterializeCreateRequest;
+
+        /**
+         * Creates a plain object from a MaterializeCreateRequest message. Also converts values to other types if specified.
+         * @param message MaterializeCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.MaterializeCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MaterializeCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MaterializeCreateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a MoveTablesCompleteRequest. */
     interface IMoveTablesCompleteRequest {
 
@@ -12436,6 +12587,109 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for RunHealthCheckResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReshardCreateRequest. */
+    interface IReshardCreateRequest {
+
+        /** ReshardCreateRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** ReshardCreateRequest request */
+        request?: (vtctldata.IReshardCreateRequest|null);
+    }
+
+    /** Represents a ReshardCreateRequest. */
+    class ReshardCreateRequest implements IReshardCreateRequest {
+
+        /**
+         * Constructs a new ReshardCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IReshardCreateRequest);
+
+        /** ReshardCreateRequest cluster_id. */
+        public cluster_id: string;
+
+        /** ReshardCreateRequest request. */
+        public request?: (vtctldata.IReshardCreateRequest|null);
+
+        /**
+         * Creates a new ReshardCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReshardCreateRequest instance
+         */
+        public static create(properties?: vtadmin.IReshardCreateRequest): vtadmin.ReshardCreateRequest;
+
+        /**
+         * Encodes the specified ReshardCreateRequest message. Does not implicitly {@link vtadmin.ReshardCreateRequest.verify|verify} messages.
+         * @param message ReshardCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IReshardCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReshardCreateRequest message, length delimited. Does not implicitly {@link vtadmin.ReshardCreateRequest.verify|verify} messages.
+         * @param message ReshardCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IReshardCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReshardCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReshardCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReshardCreateRequest;
+
+        /**
+         * Decodes a ReshardCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReshardCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReshardCreateRequest;
+
+        /**
+         * Verifies a ReshardCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReshardCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReshardCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ReshardCreateRequest;
+
+        /**
+         * Creates a plain object from a ReshardCreateRequest message. Also converts values to other types if specified.
+         * @param message ReshardCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ReshardCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReshardCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReshardCreateRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

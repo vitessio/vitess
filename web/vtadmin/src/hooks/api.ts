@@ -87,7 +87,9 @@ import {
     completeMoveTables,
     workflowSwitchTraffic,
     workflowDelete,
+    createReshard,
     concludeTransaction,
+    createMaterialize,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -488,7 +490,19 @@ export const useWorkflowStatus = (
     params: Parameters<typeof fetchWorkflowStatus>[0],
     options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
 ) => {
-    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params));
+    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params), options);
+};
+
+/**
+ * useCreateMaterialize is a mutation query hook that creates a materialize workflow.
+ */
+export const useCreateMaterialize = (
+    params: Parameters<typeof createMaterialize>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createMaterialize>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createMaterialize>>, Error>(() => {
+        return createMaterialize(params);
+    }, options);
 };
 
 /**
@@ -500,6 +514,18 @@ export const useCreateMoveTables = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof createMoveTables>>, Error>(() => {
         return createMoveTables(params);
+    }, options);
+};
+
+/**
+ * useCreateReshard is a mutation query hook that creates a reshard workflow.
+ */
+export const useCreateReshard = (
+    params: Parameters<typeof createReshard>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createReshard>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createReshard>>, Error>(() => {
+        return createReshard(params);
     }, options);
 };
 

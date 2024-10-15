@@ -194,6 +194,30 @@ func WorkflowSwitchTraffic(ctx context.Context, r Request, api *API) *JSONRespon
 	return NewJSONResponse(res, err)
 }
 
+// ReshardCreate implements the http wrapper for the VTAdminServer.ReshardCreate
+// method.
+//
+// Its route is /workflow/{cluster_id}/reshard
+func ReshardCreate(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var req vtctldatapb.ReshardCreateRequest
+	if err := decoder.Decode(&req); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.ReshardCreate(ctx, &vtadminpb.ReshardCreateRequest{
+		ClusterId: vars["cluster_id"],
+		Request:   &req,
+	})
+
+	return NewJSONResponse(res, err)
+}
+
 // WorkflowDelete implements the http wrapper for the VTAdminServer.WorkflowDelete
 // method.
 //
@@ -213,6 +237,35 @@ func WorkflowDelete(ctx context.Context, r Request, api *API) *JSONResponse {
 	res, err := api.server.WorkflowDelete(ctx, &vtadminpb.WorkflowDeleteRequest{
 		ClusterId: vars["cluster_id"],
 		Request:   &req,
+	})
+
+	return NewJSONResponse(res, err)
+}
+
+// MaterializeCreate implements the http wrapper for the VTAdminServer.MaterializeCreate
+// method.
+//
+// Its route is /workflow/{cluster_id}/materialize
+func MaterializeCreate(ctx context.Context, r Request, api *API) *JSONResponse {
+	var req struct {
+		TableSettings string                               `json:"table_settings"`
+		Request       vtctldatapb.MaterializeCreateRequest `json:"request"`
+	}
+
+	vars := r.Vars()
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	if err := decoder.Decode(&req); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.MaterializeCreate(ctx, &vtadminpb.MaterializeCreateRequest{
+		ClusterId:     vars["cluster_id"],
+		TableSettings: req.TableSettings,
+		Request:       &req.Request,
 	})
 
 	return NewJSONResponse(res, err)
