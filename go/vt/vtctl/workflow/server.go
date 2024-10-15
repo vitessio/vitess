@@ -2163,6 +2163,13 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 			return nil, err
 		}
 	} else {
+		// TODO (mlord): We should delete the workflow at the end in the non-multi-tenant
+		// cases too. To do this we should first stop the workflow streams — so that the
+		// workflow is not still trying to run and producing errors when related artifacts
+		// like the target tables are gone — then clean up the related artifacts before
+		// finally deleting the workflow. This also allows for multiple cancel/delete
+		// attempts if we get an error for any reason at some point during the artifact
+		// cleanup work (otherwise any remaining cleanup work has to be done manually).
 		if err := delFunc(); err != nil {
 			return nil, err
 		}

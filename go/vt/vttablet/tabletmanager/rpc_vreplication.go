@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -190,11 +191,12 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 		query := sqlparser.String(del)
 		// Delete all of the matching rows from the table, in batches, until we've
 		// deleted them all.
+		log.Infof("Starting deletion of multi-tenant data from table %s using query %q", table, query)
 		for {
 			// Back off if we're causing too much load on the database with these
 			// batch deletes.
 			if _, ok := tm.VREngine.ThrottlerClient().ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.VReplicationName); !ok {
-				throttledLogger.Infof("throttling bulk data delete for table %s using query %s",
+				throttledLogger.Infof("throttling bulk data delete for table %s using query %q",
 					table, query)
 				if err := checkIfCanceled(); err != nil {
 					return nil, err
@@ -217,6 +219,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 				return nil, err
 			}
 		}
+		log.Infof("Completed deletion of multi-tenant data from table %s using query %q", table, query)
 	}
 
 	return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
