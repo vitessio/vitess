@@ -1,6 +1,5 @@
 name: Build Docker Images
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -29,11 +28,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
-#      - name: Login to Docker Hub
-#        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-#        with:
-#          username: ${{ secrets.DOCKERHUB_USERNAME }}
-#          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to Docker Hub
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set Dockerfile path
         run: |
@@ -45,7 +44,7 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: false
+          push: true
           tags: vitess/vttestserver:${{ matrix.branch }}
 
       ######
@@ -66,7 +65,7 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: false
+          push: true
           tags: ${{ env.DOCKER_TAG }}
 
   build_and_push_lite:
@@ -83,11 +82,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
-#      - name: Login to Docker Hub
-#        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-#        with:
-#          username: ${{ secrets.DOCKERHUB_USERNAME }}
-#          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to Docker Hub
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set Dockerfile path
         run: |
@@ -103,7 +102,7 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: false
+          push: true
           tags: vitess/lite:${{ matrix.branch }}
 
       ######
@@ -128,7 +127,7 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: false
+          push: true
           tags: ${{ env.DOCKER_TAG }}
 
   build_and_push_components:
@@ -148,11 +147,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
-#      - name: Login to Docker Hub
-#        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-#        with:
-#          username: ${{ secrets.DOCKERHUB_USERNAME }}
-#          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to Docker Hub
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set Docker context path
         run: |
@@ -163,7 +162,7 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: false
+          push: true
           tags: vitess/${{ matrix.component }}:latest
           build-args: |
             VT_BASE_VER=latest
@@ -174,7 +173,7 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: false
+          push: true
           tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args: |
             VT_BASE_VER=latest
@@ -206,7 +205,7 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: false
+          push: true
           tags: ${{ env.DOCKER_TAG }}
           build-args: |
             VT_BASE_VER=${{ env.TAG_NAME }}
@@ -219,7 +218,7 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: false
+          push: true
           tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
           build-args: |
             VT_BASE_VER=${{ env.TAG_NAME }}

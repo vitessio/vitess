@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-TEST WIP, this will fail the build
-
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
