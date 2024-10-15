@@ -580,13 +580,18 @@ func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
 	}
 	fullColl := colldata.Lookup(coll)
 	wc := fullColl.Wildcard(right, 0, 0, 0)
-	return wc.Match(left)
+	return wc.Match(left) == !l.Negate
 }
 
 func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
-	left, right, err := l.arguments(env)
-	if left == nil || right == nil || err != nil {
-		return nil, err
+	left, err := l.Left.eval(env)
+	if err != nil || left == nil {
+		return left, err
+	}
+
+	right, err := l.Right.eval(env)
+	if err != nil || right == nil {
+		return right, err
 	}
 
 	var col collations.TypedCollation
@@ -595,18 +600,9 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	var matched bool
-	switch {
-	case typeIsTextual(left.SQLType()) && typeIsTextual(right.SQLType()):
-		matched = l.matchWildcard(left.(*evalBytes).bytes, right.(*evalBytes).bytes, col.Collation)
-	case typeIsTextual(right.SQLType()):
-		matched = l.matchWildcard(left.ToRawBytes(), right.(*evalBytes).bytes, col.Collation)
-	case typeIsTextual(left.SQLType()):
-		matched = l.matchWildcard(left.(*evalBytes).bytes, right.ToRawBytes(), col.Collation)
-	default:
-		matched = l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), collations.CollationBinaryID)
-	}
-	return newEvalBool(matched == !l.Negate), nil
+	matched := l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), col.Collation)
+
+	return newEvalBool(matched), nil
 }
 
 func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
@@ -615,12 +611,14 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
+	skip1 := c.compileNullCheck1(lt)
+
 	rt, err := expr.Right.compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
 
-	skip := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1(rt)
 
 	if !lt.isTextual() {
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
@@ -672,6 +670,6 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 		})
 	}
 
-	c.asm.jumpDestination(skip)
+	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }

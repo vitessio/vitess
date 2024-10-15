@@ -1005,9 +1005,11 @@ var (
 	}, {
 		input: "select /* u~ */ 1 from t where a = ~b",
 	}, {
-		input: "select /* -> */ a.b -> 'ab' from t",
+		input:  "select /* -> */ a.b -> 'ab' from t",
+		output: "select /* -> */ json_extract(a.b, 'ab') from t",
 	}, {
-		input: "select /* -> */ a.b ->> 'ab' from t",
+		input:  "select /* -> */ a.b ->> 'ab' from t",
+		output: "select /* -> */ json_unquote(json_extract(a.b, 'ab')) from t",
 	}, {
 		input: "select /* empty function */ 1 from t where a = b()",
 	}, {
@@ -5772,7 +5774,7 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		},
 		{
 			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
-			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(info -> '$.field' as unsigned array)))\n)",
+			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(json_extract(info, '$.field') as unsigned array)))\n)",
 		},
 	}
 	parser := NewTestParser()
