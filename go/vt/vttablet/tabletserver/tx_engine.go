@@ -83,7 +83,6 @@ type TxEngine struct {
 	//  2. TabletControls have been set in the tablet record, and Query service is going to be disabled.
 	twopcAllowed        []bool
 	shutdownGracePeriod time.Duration
-	coordinatorAddress  string
 	abandonAge          time.Duration
 	ticks               *timer.Timer
 
@@ -454,6 +453,9 @@ func (te *TxEngine) prepareFromRedo() error {
 			allErrs = append(allErrs, vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
 			if prepFailed {
 				failedCounter++
+				te.env.Stats().RedoPreparedFail.Add("NonRetryable", 1)
+			} else {
+				te.env.Stats().RedoPreparedFail.Add("Retryable", 1)
 			}
 		} else {
 			preparedCounter++
@@ -580,14 +582,13 @@ func (te *TxEngine) startTransactionWatcher() {
 		ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), te.abandonAge/4)
 		defer cancel()
 
-		// Raise alerts on prepares that have been unresolved for too long.
-		// Use 5x abandonAge to give opportunity for transaction coordinator to resolve these redo logs.
-		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
+		// Track unresolved redo logs.
+		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
 			te.env.Stats().InternalErrors.Add("RedoWatcherFail", 1)
 			log.Errorf("Error reading prepared transactions: %v", err)
 		}
-		te.env.Stats().Unresolved.Set("Prepares", count)
+		te.env.Stats().Unresolved.Set("ResourceManager", count)
 
 		// Notify lingering distributed transactions.
 		count, err = te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(-te.abandonAge))
@@ -596,6 +597,7 @@ func (te *TxEngine) startTransactionWatcher() {
 			log.Errorf("Error reading unresolved transactions: %v", err)
 			return
 		}
+		te.env.Stats().Unresolved.Set("MetadataManager", count)
 		if count > 0 {
 			te.dxNotify()
 		}
