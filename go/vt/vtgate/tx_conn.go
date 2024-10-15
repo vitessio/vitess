@@ -280,9 +280,6 @@ func (txc *TxConn) checkValidCondition(session *SafeSession) error {
 	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
 		return vterrors.VT12001("atomic distributed transaction commit with consistent lookup vindex")
 	}
-	if session.GetInReservedConn() {
-		return vterrors.VT12001("atomic distributed transaction commit with system settings")
-	}
 	return nil
 }
 
