@@ -1,0 +1,18 @@
+{
+  "sharded":true,
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+    "twopc_user":{
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    }
+  }
+}

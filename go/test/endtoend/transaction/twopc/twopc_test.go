@@ -899,21 +899,6 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
-type warn struct {
-	level string
-	code  uint16
-	msg   string
-}
-
-func toWarn(row sqltypes.Row) warn {
-	code, _ := row[1].ToUint16()
-	return warn{
-		level: row[0].ToString(),
-		code:  code,
-		msg:   row[2].ToString(),
-	}
-}
-
 type txStatus struct {
 	dtid         string
 	state        string
@@ -939,15 +924,15 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 	require.Len(t, qr.Rows, 1)
 
 	// validate warning output
-	w := toWarn(qr.Rows[0])
-	assert.Equal(t, "Warning", w.level)
-	assert.EqualValues(t, 302, w.code)
-	assert.Contains(t, w.msg, warnMsg)
+	w := twopcutil.ToWarn(qr.Rows[0])
+	assert.Equal(t, "Warning", w.Level)
+	assert.EqualValues(t, 302, w.Code)
+	assert.Contains(t, w.Msg, warnMsg)
 
 	// extract transaction ID
-	indx := strings.Index(w.msg, " ")
+	indx := strings.Index(w.Msg, " ")
 	require.Greater(t, indx, 0)
-	dtid := w.msg[:indx]
+	dtid := w.Msg[:indx]
 
 	qr, err = conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil)
 	require.NoError(t, err)

@@ -221,3 +221,18 @@ func AddShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keysp
 		clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, *shard)
 	}
 }
+
+type Warn struct {
+	Level string
+	Code  uint16
+	Msg   string
+}
+
+func ToWarn(row sqltypes.Row) Warn {
+	code, _ := row[1].ToUint16()
+	return Warn{
+		Level: row[0].ToString(),
+		Code:  code,
+		Msg:   row[2].ToString(),
+	}
+}
