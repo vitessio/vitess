@@ -776,7 +776,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 
 func (tme *testMigraterEnv) setPrimaryPositions() {
 	for _, primary := range tme.sourcePrimaries {
-		primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 			GTIDSet: replication.MariadbGTIDSet{
 				5: replication.MariadbGTID{
 					Domain:   5,
@@ -784,10 +784,10 @@ func (tme *testMigraterEnv) setPrimaryPositions() {
 					Sequence: 892,
 				},
 			},
-		}
+		})
 	}
 	for _, primary := range tme.targetPrimaries {
-		primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 			GTIDSet: replication.MariadbGTIDSet{
 				5: replication.MariadbGTID{
 					Domain:   5,
@@ -795,7 +795,7 @@ func (tme *testMigraterEnv) setPrimaryPositions() {
 					Sequence: 893,
 				},
 			},
-		}
+		})
 	}
 }
 
