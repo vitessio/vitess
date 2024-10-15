@@ -173,6 +173,7 @@ func DefaultConfig() *Config {
 		string(CreateAction),
 		string(DeleteAction),
 		string(PutAction),
+		string(CompleteAction),
 		string(PingAction),
 		string(ReloadAction),
 		string(EmergencyFailoverShardAction),

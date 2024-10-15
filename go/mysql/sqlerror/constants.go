@@ -247,6 +247,7 @@ const (
 	ERNoSuchUser                   = ErrorCode(1449)
 	ERForbidSchemaChange           = ErrorCode(1450)
 	ERWrongValue                   = ErrorCode(1525)
+	ERWrongParamcountToNativeFct   = ErrorCode(1582)
 	ERDataOutOfRange               = ErrorCode(1690)
 	ERInvalidJSONText              = ErrorCode(3140)
 	ERInvalidJSONTextInParams      = ErrorCode(3141)

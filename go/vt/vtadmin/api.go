@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -391,6 +392,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/launch", httpAPI.Adapt(vtadminhttp.LaunchSchemaMigration)).Name("API.LaunchSchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/retry", httpAPI.Adapt(vtadminhttp.RetrySchemaMigration)).Name("API.RetrySchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migrations/", httpAPI.Adapt(vtadminhttp.GetSchemaMigrations)).Name("API.GetSchemaMigrations")
+	router.HandleFunc("/movetables/{cluster_id}/complete", httpAPI.Adapt(vtadminhttp.MoveTablesComplete)).Name("API.MoveTablesComplete")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
@@ -434,6 +436,9 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/status", httpAPI.Adapt(vtadminhttp.GetWorkflowStatus)).Name("API.GetWorkflowStatus")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow")
+	router.HandleFunc("/workflow/{cluster_id}/switchtraffic", httpAPI.Adapt(vtadminhttp.WorkflowSwitchTraffic)).Name("API.WorkflowSwitchTraffic")
+	router.HandleFunc("/workflow/{cluster_id}/delete", httpAPI.Adapt(vtadminhttp.WorkflowDelete)).Name("API.WorkflowDelete")
+	router.HandleFunc("/workflow/{cluster_id}/materialize", httpAPI.Adapt(vtadminhttp.MaterializeCreate)).Name("API.MaterializeCreate").Methods("POST")
 	router.HandleFunc("/workflow/{cluster_id}/movetables", httpAPI.Adapt(vtadminhttp.MoveTablesCreate)).Name("API.MoveTablesCreate").Methods("POST")
 	router.HandleFunc("/workflow/{cluster_id}/reshard", httpAPI.Adapt(vtadminhttp.ReshardCreate)).Name("API.ReshardCreate").Methods("POST")
 
@@ -1973,6 +1978,57 @@ func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.Launch
 	return c.LaunchSchemaMigration(ctx, req.Request)
 }
 
+// MaterializeCreate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) MaterializeCreate(ctx context.Context, req *vtadminpb.MaterializeCreateRequest) (*vtctldatapb.MaterializeCreateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.MaterializeCreate")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parser with default options. New() itself initializes with default MySQL version.
+	parser, err := sqlparser.New(sqlparser.Options{
+		TruncateUILen:  512,
+		TruncateErrLen: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+	req.Request.Settings.TableSettings, err = vreplcommon.ParseTableMaterializeSettings(req.TableSettings, parser)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.MaterializeCreate(ctx, req.Request)
+}
+
+// MoveTablesComplete is part of the vtadminpb.VTAdminServer interface.
+func (api *API) MoveTablesComplete(ctx context.Context, req *vtadminpb.MoveTablesCompleteRequest) (*vtctldatapb.MoveTablesCompleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.MoveTablesComplete")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CompleteAction) {
+		return nil, fmt.Errorf("%w: cannot complete workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.MoveTablesComplete(ctx, req.Request)
+}
+
 // MoveTablesCreate is part of the vtadminpb.VTAdminServer interface.
 func (api *API) MoveTablesCreate(ctx context.Context, req *vtadminpb.MoveTablesCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.MoveTablesCreate")
@@ -2684,6 +2740,55 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil
+}
+
+// WorkflowDelete is part of the vtadminpb.VTAdminServer interface.
+func (api *API) WorkflowDelete(ctx context.Context, req *vtadminpb.WorkflowDeleteRequest) (*vtctldatapb.WorkflowDeleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.WorkflowDelete")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.DeleteAction) {
+		return nil, fmt.Errorf("%w: cannot delete workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set the default options which are not supported in VTAdmin Web.
+	return c.Vtctld.WorkflowDelete(ctx, req.Request)
+}
+
+// WorkflowSwitchTraffic is part of the vtadminpb.VTAdminServer interface.
+func (api *API) WorkflowSwitchTraffic(ctx context.Context, req *vtadminpb.WorkflowSwitchTrafficRequest) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.WorkflowSwitchTraffic")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot switch traffic for workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set the default options which are not supported in VTAdmin Web.
+	req.Request.TabletTypes = []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
+	req.Request.Timeout = protoutil.DurationToProto(workflow.DefaultTimeout)
+	req.Request.MaxReplicationLagAllowed = protoutil.DurationToProto(vreplcommon.MaxReplicationLagDefault)
+	req.Request.EnableReverseReplication = true
+
+	return c.Vtctld.WorkflowSwitchTraffic(ctx, req.Request)
 }
 
 func (api *API) getClusterForRequest(id string) (*cluster.Cluster, error) {
