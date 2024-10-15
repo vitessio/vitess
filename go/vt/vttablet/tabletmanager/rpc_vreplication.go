@@ -167,6 +167,8 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 		batchSize = movetables.DefaultDeleteBatchSize
 	}
 	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", batchSize))}
+	// We will log some progress info every 100 delete batches.
+	progressRows := uint64(batchSize * 100)
 
 	throttledLogger := logutil.NewThrottledLogger("DeleteTableData", 1*time.Minute)
 	checkIfCanceled := func() error {
@@ -214,10 +216,10 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 					query, err)
 			}
 			rowsDeleted += res.RowsAffected
-			// Log some progress info periodically to give the operator some idea of how much
-			// work we've done, how much is left, and how long it may take (considering
-			// throttling, system performance, etc).
-			if rowsDeleted%1e5 == 0 {
+			// Log some progress info periodically to give the operator some idea of
+			// how much work we've done, how much is left, and how long it may take
+			// (considering throttling, system performance, etc).
+			if rowsDeleted%progressRows == 0 {
 				log.Infof("Successfully deleted %d rows of data from table %s so far, using query %q",
 					rowsDeleted, table, query)
 			}
