@@ -139,6 +139,9 @@ service VTAdmin {
     // LaunchSchemaMigration launches one or all migrations in the given
     // cluster executed with --postpone-launch.
     rpc LaunchSchemaMigration(LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
+    // MoveTablesComplete completes the move and cleans up the workflow and
+    // its related artifacts.
+    rpc MoveTablesComplete(MoveTablesCompleteRequest) returns (vtctldata.MoveTablesCompleteResponse) {};
     // MoveTablesCreate creates a workflow which moves one or more tables from a
     // source keyspace to a target keyspace.
     rpc MoveTablesCreate(MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
@@ -218,6 +221,10 @@ service VTAdmin {
     // VTExplain provides information on how Vitess plans to execute a
     // particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
+    // WorkflowDelete deletes a vreplication workflow.
+    rpc WorkflowDelete(WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
+    // WorkflowSwitchTraffic switches traffic for a VReplication workflow.
+    rpc WorkflowSwitchTraffic(WorkflowSwitchTrafficRequest) returns (vtctldata.WorkflowSwitchTrafficResponse) {};
 }
 
 /* Data types */
@@ -361,6 +368,16 @@ message Workflow {
     Cluster cluster = 1;
     string keyspace = 2;
     vtctldata.Workflow workflow = 3;
+}
+
+message WorkflowDeleteRequest {
+    string cluster_id = 1;
+    vtctldata.WorkflowDeleteRequest request = 2;
+}
+
+message WorkflowSwitchTrafficRequest {
+    string cluster_id = 1;
+    vtctldata.WorkflowSwitchTrafficRequest request = 2;
 }
 
 /* Request/Response types */
@@ -725,6 +742,11 @@ message MaterializeCreateRequest {
     // what select statements.
     string table_settings = 2;
     vtctldata.MaterializeCreateRequest request = 3;
+}
+
+message MoveTablesCompleteRequest {
+    string cluster_id = 1;
+    vtctldata.MoveTablesCompleteRequest request = 2;
 }
 
 message MoveTablesCreateRequest {

@@ -122,6 +122,30 @@ func StopWorkflow(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(res, err)
 }
 
+// MoveTablesComplete implements the http wrapper for the VTAdminServer.MoveTablesComplete
+// method.
+//
+// Its route is /movetables/{cluster_id}/complete
+func MoveTablesComplete(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var req vtctldatapb.MoveTablesCompleteRequest
+	if err := decoder.Decode(&req); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.MoveTablesComplete(ctx, &vtadminpb.MoveTablesCompleteRequest{
+		ClusterId: vars["cluster_id"],
+		Request:   &req,
+	})
+
+	return NewJSONResponse(res, err)
+}
+
 // MoveTablesCreate implements the http wrapper for the VTAdminServer.MoveTablesCreate
 // method.
 //
@@ -146,6 +170,30 @@ func MoveTablesCreate(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(res, err)
 }
 
+// WorkflowSwitchTraffic implements the http wrapper for the VTAdminServer.WorkflowSwitchTraffic
+// method.
+//
+// Its route is /workflow/{cluster_id}/switchtraffic
+func WorkflowSwitchTraffic(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var req vtctldatapb.WorkflowSwitchTrafficRequest
+	if err := decoder.Decode(&req); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.WorkflowSwitchTraffic(ctx, &vtadminpb.WorkflowSwitchTrafficRequest{
+		ClusterId: vars["cluster_id"],
+		Request:   &req,
+	})
+
+	return NewJSONResponse(res, err)
+}
+
 // ReshardCreate implements the http wrapper for the VTAdminServer.ReshardCreate
 // method.
 //
@@ -163,6 +211,30 @@ func ReshardCreate(ctx context.Context, r Request, api *API) *JSONResponse {
 	}
 
 	res, err := api.server.ReshardCreate(ctx, &vtadminpb.ReshardCreateRequest{
+		ClusterId: vars["cluster_id"],
+		Request:   &req,
+	})
+
+	return NewJSONResponse(res, err)
+}
+
+// WorkflowDelete implements the http wrapper for the VTAdminServer.WorkflowDelete
+// method.
+//
+// Its route is /workflow/{cluster_id}/delete
+func WorkflowDelete(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var req vtctldatapb.WorkflowDeleteRequest
+	if err := decoder.Decode(&req); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	res, err := api.server.WorkflowDelete(ctx, &vtadminpb.WorkflowDeleteRequest{
 		ClusterId: vars["cluster_id"],
 		Request:   &req,
 	})
