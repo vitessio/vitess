@@ -111,8 +111,8 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 	tmclienttest.SetProtocol(fmt.Sprintf("go.vt.vttablet.tabletmanager.framework_test_%s", t.Name()), tenv.protoName)
 
 	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
-	var err error
-	tenv.mysqld.CurrentPrimaryPosition, err = replication.ParsePosition(gtidFlavor, gtidPosition)
+	curPosition, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+	tenv.mysqld.SetPrimaryPositionLocked(curPosition)
 	require.NoError(t, err)
 
 	return tenv
