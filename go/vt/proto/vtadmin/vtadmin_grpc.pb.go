@@ -129,9 +129,15 @@ type VTAdminClient interface {
 	// LaunchSchemaMigration launches one or all migrations in the given
 	// cluster executed with --postpone-launch.
 	LaunchSchemaMigration(ctx context.Context, in *LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	// MoveTablesComplete completes the move and cleans up the workflow and
+	// its related artifacts.
+	MoveTablesComplete(ctx context.Context, in *MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(ctx context.Context, in *MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	// MaterializeCreate creates a workflow to materialize one or more tables
+	// from a source keyspace to a target keyspace using a provided expressions.
+	MaterializeCreate(ctx context.Context, in *MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeCreateResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
@@ -202,9 +208,15 @@ type VTAdminClient interface {
 	ValidateVersionKeyspace(ctx context.Context, in *ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
 	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
 	ValidateVersionShard(ctx context.Context, in *ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
+	VDiffCreate(ctx context.Context, in *VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffCreateResponse, error)
+	VDiffShow(ctx context.Context, in *VDiffShowRequest, opts ...grpc.CallOption) (*VDiffShowResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
+	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
+	WorkflowSwitchTraffic(ctx context.Context, in *WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 }
 
 type vTAdminClient struct {
@@ -584,9 +596,27 @@ func (c *vTAdminClient) LaunchSchemaMigration(ctx context.Context, in *LaunchSch
 	return out, nil
 }
 
+func (c *vTAdminClient) MoveTablesComplete(ctx context.Context, in *MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error) {
+	out := new(vtctldata.MoveTablesCompleteResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/MoveTablesComplete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) MoveTablesCreate(ctx context.Context, in *MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
 	out := new(vtctldata.WorkflowStatusResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/MoveTablesCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) MaterializeCreate(ctx context.Context, in *MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeCreateResponse, error) {
+	out := new(vtctldata.MaterializeCreateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/MaterializeCreate", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -791,9 +821,45 @@ func (c *vTAdminClient) ValidateVersionShard(ctx context.Context, in *ValidateVe
 	return out, nil
 }
 
+func (c *vTAdminClient) VDiffCreate(ctx context.Context, in *VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffCreateResponse, error) {
+	out := new(vtctldata.VDiffCreateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VDiffCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VDiffShow(ctx context.Context, in *VDiffShowRequest, opts ...grpc.CallOption) (*VDiffShowResponse, error) {
+	out := new(VDiffShowResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VDiffShow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error) {
 	out := new(VTExplainResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VTExplain", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
+	out := new(vtctldata.WorkflowDeleteResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/WorkflowDelete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) WorkflowSwitchTraffic(ctx context.Context, in *WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	out := new(vtctldata.WorkflowSwitchTrafficResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/WorkflowSwitchTraffic", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -910,9 +976,15 @@ type VTAdminServer interface {
 	// LaunchSchemaMigration launches one or all migrations in the given
 	// cluster executed with --postpone-launch.
 	LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	// MoveTablesComplete completes the move and cleans up the workflow and
+	// its related artifacts.
+	MoveTablesComplete(context.Context, *MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
+	// MaterializeCreate creates a workflow to materialize one or more tables
+	// from a source keyspace to a target keyspace using a provided expressions.
+	MaterializeCreate(context.Context, *MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
@@ -983,9 +1055,15 @@ type VTAdminServer interface {
 	ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
 	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
 	ValidateVersionShard(context.Context, *ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
+	VDiffCreate(context.Context, *VDiffCreateRequest) (*vtctldata.VDiffCreateResponse, error)
+	VDiffShow(context.Context, *VDiffShowRequest) (*VDiffShowResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
+	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
+	WorkflowSwitchTraffic(context.Context, *WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 	mustEmbedUnimplementedVTAdminServer()
 }
 
@@ -1116,8 +1194,14 @@ func (UnimplementedVTAdminServer) StopWorkflow(context.Context, *StopWorkflowReq
 func (UnimplementedVTAdminServer) LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LaunchSchemaMigration not implemented")
 }
+func (UnimplementedVTAdminServer) MoveTablesComplete(context.Context, *MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesComplete not implemented")
+}
 func (UnimplementedVTAdminServer) MoveTablesCreate(context.Context, *MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
+}
+func (UnimplementedVTAdminServer) MaterializeCreate(context.Context, *MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MaterializeCreate not implemented")
 }
 func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
@@ -1185,8 +1269,20 @@ func (UnimplementedVTAdminServer) ValidateVersionKeyspace(context.Context, *Vali
 func (UnimplementedVTAdminServer) ValidateVersionShard(context.Context, *ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionShard not implemented")
 }
+func (UnimplementedVTAdminServer) VDiffCreate(context.Context, *VDiffCreateRequest) (*vtctldata.VDiffCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VDiffCreate not implemented")
+}
+func (UnimplementedVTAdminServer) VDiffShow(context.Context, *VDiffShowRequest) (*VDiffShowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VDiffShow not implemented")
+}
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
+}
+func (UnimplementedVTAdminServer) WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
+}
+func (UnimplementedVTAdminServer) WorkflowSwitchTraffic(context.Context, *WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowSwitchTraffic not implemented")
 }
 func (UnimplementedVTAdminServer) mustEmbedUnimplementedVTAdminServer() {}
 
@@ -1939,6 +2035,24 @@ func _VTAdmin_LaunchSchemaMigration_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_MoveTablesComplete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveTablesCompleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).MoveTablesComplete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/MoveTablesComplete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).MoveTablesComplete(ctx, req.(*MoveTablesCompleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MoveTablesCreateRequest)
 	if err := dec(in); err != nil {
@@ -1953,6 +2067,24 @@ func _VTAdmin_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).MoveTablesCreate(ctx, req.(*MoveTablesCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_MaterializeCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).MaterializeCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/MaterializeCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).MaterializeCreate(ctx, req.(*MaterializeCreateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2353,6 +2485,42 @@ func _VTAdmin_ValidateVersionShard_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_VDiffCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VDiffCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VDiffCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VDiffCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VDiffCreate(ctx, req.(*VDiffCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VDiffShow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VDiffShowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VDiffShow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VDiffShow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VDiffShow(ctx, req.(*VDiffShowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VTExplainRequest)
 	if err := dec(in); err != nil {
@@ -2367,6 +2535,42 @@ func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).VTExplain(ctx, req.(*VTExplainRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WorkflowDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).WorkflowDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/WorkflowDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).WorkflowDelete(ctx, req.(*WorkflowDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_WorkflowSwitchTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WorkflowSwitchTrafficRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).WorkflowSwitchTraffic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/WorkflowSwitchTraffic",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).WorkflowSwitchTraffic(ctx, req.(*WorkflowSwitchTrafficRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2543,8 +2747,16 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_LaunchSchemaMigration_Handler,
 		},
 		{
+			MethodName: "MoveTablesComplete",
+			Handler:    _VTAdmin_MoveTablesComplete_Handler,
+		},
+		{
 			MethodName: "MoveTablesCreate",
 			Handler:    _VTAdmin_MoveTablesCreate_Handler,
+		},
+		{
+			MethodName: "MaterializeCreate",
+			Handler:    _VTAdmin_MaterializeCreate_Handler,
 		},
 		{
 			MethodName: "PingTablet",
@@ -2635,8 +2847,24 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_ValidateVersionShard_Handler,
 		},
 		{
+			MethodName: "VDiffCreate",
+			Handler:    _VTAdmin_VDiffCreate_Handler,
+		},
+		{
+			MethodName: "VDiffShow",
+			Handler:    _VTAdmin_VDiffShow_Handler,
+		},
+		{
 			MethodName: "VTExplain",
 			Handler:    _VTAdmin_VTExplain_Handler,
+		},
+		{
+			MethodName: "WorkflowDelete",
+			Handler:    _VTAdmin_WorkflowDelete_Handler,
+		},
+		{
+			MethodName: "WorkflowSwitchTraffic",
+			Handler:    _VTAdmin_WorkflowSwitchTraffic_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

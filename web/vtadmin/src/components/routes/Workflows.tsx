@@ -193,10 +193,13 @@ export const Workflows = () => {
                     <ReadOnlyGate>
                         <DataCell>
                             <WorkflowActions
+                                workflows={workflowsQuery.data}
+                                streamsByState={row.streams}
                                 refetchWorkflows={workflowsQuery.refetch}
                                 keyspace={row.keyspace as string}
                                 clusterID={row.clusterID as string}
                                 name={row.name as string}
+                                workflowType={row.workflowType as string}
                             />
                         </DataCell>
                     </ReadOnlyGate>
@@ -222,7 +225,9 @@ export const Workflows = () => {
                                 <Link to="/workflows/reshard/create">
                                     <MenuItem>Reshard</MenuItem>
                                 </Link>
-                                <MenuItem disabled>Materialize</MenuItem>
+                                <Link to="/workflows/materialize/create">
+                                    <MenuItem>Materialize</MenuItem>
+                                </Link>
                             </Dropdown>
                         </div>
                     </ReadOnlyGate>

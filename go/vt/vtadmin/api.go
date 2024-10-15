@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -28,17 +29,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
 
 	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	vdiffcmd "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/vdiff"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -53,9 +59,11 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtexplain"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -384,6 +392,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/launch", httpAPI.Adapt(vtadminhttp.LaunchSchemaMigration)).Name("API.LaunchSchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/retry", httpAPI.Adapt(vtadminhttp.RetrySchemaMigration)).Name("API.RetrySchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migrations/", httpAPI.Adapt(vtadminhttp.GetSchemaMigrations)).Name("API.GetSchemaMigrations")
+	router.HandleFunc("/movetables/{cluster_id}/complete", httpAPI.Adapt(vtadminhttp.MoveTablesComplete)).Name("API.MoveTablesComplete")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
@@ -418,6 +427,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
+	router.HandleFunc("/vdiff/{cluster_id}/", httpAPI.Adapt(vtadminhttp.VDiffCreate)).Name("API.VDiffCreate").Methods("POST")
+	router.HandleFunc("/vdiff/{cluster_id}/show", httpAPI.Adapt(vtadminhttp.VDiffShow)).Name("API.VDiffShow")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
 	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
@@ -425,6 +436,9 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/status", httpAPI.Adapt(vtadminhttp.GetWorkflowStatus)).Name("API.GetWorkflowStatus")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow")
+	router.HandleFunc("/workflow/{cluster_id}/switchtraffic", httpAPI.Adapt(vtadminhttp.WorkflowSwitchTraffic)).Name("API.WorkflowSwitchTraffic")
+	router.HandleFunc("/workflow/{cluster_id}/delete", httpAPI.Adapt(vtadminhttp.WorkflowDelete)).Name("API.WorkflowDelete")
+	router.HandleFunc("/workflow/{cluster_id}/materialize", httpAPI.Adapt(vtadminhttp.MaterializeCreate)).Name("API.MaterializeCreate").Methods("POST")
 	router.HandleFunc("/workflow/{cluster_id}/movetables", httpAPI.Adapt(vtadminhttp.MoveTablesCreate)).Name("API.MoveTablesCreate").Methods("POST")
 	router.HandleFunc("/workflow/{cluster_id}/reshard", httpAPI.Adapt(vtadminhttp.ReshardCreate)).Name("API.ReshardCreate").Methods("POST")
 
@@ -1645,6 +1659,100 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 	}, nil
 }
 
+// VDiffCreate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateRequest) (*vtctldatapb.VDiffCreateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VDiffCreate")
+	defer span.Finish()
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	// Set the default options
+	req.Request.Uuid = uuid.New().String()
+	req.Request.TabletTypes = vdiffcmd.TabletTypesDefault
+	req.Request.TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	req.Request.FilteredReplicationWaitTime = protoutil.DurationToProto(workflow.DefaultTimeout)
+	req.Request.Limit = math.MaxInt64
+	req.Request.MaxReportSampleRows = 10
+	req.Request.MaxExtraRowsToCompare = 1000
+	req.Request.WaitUpdateInterval = protoutil.DurationToProto(time.Duration(1 * time.Minute))
+	req.Request.AutoRetry = true
+	req.Request.RowDiffColumnTruncateAt = 128
+
+	defaultAutoStart := true
+	req.Request.AutoStart = &defaultAutoStart
+
+	return c.Vtctld.VDiffCreate(ctx, req.Request)
+}
+
+// VDiffShow is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VDiffShow(ctx context.Context, req *vtadminpb.VDiffShowRequest) (*vtadminpb.VDiffShowResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VDiffShow")
+	defer span.Finish()
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	res, err := c.Vtctld.VDiffShow(ctx, req.Request)
+	if err != nil {
+		return nil, err
+	}
+
+	shardReports := map[string]*vtadminpb.VDiffShardReport{}
+	for shard, resp := range res.TabletResponses {
+		report := &vtadminpb.VDiffShardReport{}
+		totalRowsToCompare := int64(0)
+		first := true
+		if resp != nil && resp.Output != nil {
+			qr := sqltypes.Proto3ToResult(resp.Output)
+			for _, row := range qr.Named().Rows {
+				// Since these values will be the same for all subsequent rows we only use
+				// the first row.
+				if first {
+					first = false
+					report.StartedAt = row.AsString("started_at", "")
+					report.CompletedAt = row.AsString("completed_at", "")
+					report.State = strings.ToLower(row.AsString("vdiff_state", ""))
+				}
+
+				report.RowsCompared += row.AsInt64("rows_compared", 0)
+				totalRowsToCompare += row.AsInt64("table_rows", 0)
+				if mm, _ := row.ToBool("has_mismatch"); mm {
+					report.HasMismatch = true
+				}
+			}
+		}
+		if report.State == string(vdiff.StartedState) {
+			progress := vdiffcmd.BuildProgressReport(report.RowsCompared, totalRowsToCompare, report.StartedAt)
+			report.Progress = &vtadminpb.VDiffProgress{
+				Percentage: progress.Percentage,
+				Eta:        progress.ETA,
+			}
+		}
+		shardReports[shard] = report
+	}
+
+	return &vtadminpb.VDiffShowResponse{
+		ShardReport: shardReports,
+	}, nil
+}
+
 // GetVtctlds is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetVtctlds(ctx context.Context, req *vtadminpb.GetVtctldsRequest) (*vtadminpb.GetVtctldsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetVtctlds")
@@ -1868,6 +1976,57 @@ func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.Launch
 	}
 
 	return c.LaunchSchemaMigration(ctx, req.Request)
+}
+
+// MaterializeCreate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) MaterializeCreate(ctx context.Context, req *vtadminpb.MaterializeCreateRequest) (*vtctldatapb.MaterializeCreateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.MaterializeCreate")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parser with default options. New() itself initializes with default MySQL version.
+	parser, err := sqlparser.New(sqlparser.Options{
+		TruncateUILen:  512,
+		TruncateErrLen: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+	req.Request.Settings.TableSettings, err = vreplcommon.ParseTableMaterializeSettings(req.TableSettings, parser)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.MaterializeCreate(ctx, req.Request)
+}
+
+// MoveTablesComplete is part of the vtadminpb.VTAdminServer interface.
+func (api *API) MoveTablesComplete(ctx context.Context, req *vtadminpb.MoveTablesCompleteRequest) (*vtctldatapb.MoveTablesCompleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.MoveTablesComplete")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CompleteAction) {
+		return nil, fmt.Errorf("%w: cannot complete workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.MoveTablesComplete(ctx, req.Request)
 }
 
 // MoveTablesCreate is part of the vtadminpb.VTAdminServer interface.
@@ -2581,6 +2740,55 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil
+}
+
+// WorkflowDelete is part of the vtadminpb.VTAdminServer interface.
+func (api *API) WorkflowDelete(ctx context.Context, req *vtadminpb.WorkflowDeleteRequest) (*vtctldatapb.WorkflowDeleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.WorkflowDelete")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.DeleteAction) {
+		return nil, fmt.Errorf("%w: cannot delete workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set the default options which are not supported in VTAdmin Web.
+	return c.Vtctld.WorkflowDelete(ctx, req.Request)
+}
+
+// WorkflowSwitchTraffic is part of the vtadminpb.VTAdminServer interface.
+func (api *API) WorkflowSwitchTraffic(ctx context.Context, req *vtadminpb.WorkflowSwitchTrafficRequest) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.WorkflowSwitchTraffic")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot switch traffic for workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set the default options which are not supported in VTAdmin Web.
+	req.Request.TabletTypes = []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
+	req.Request.Timeout = protoutil.DurationToProto(workflow.DefaultTimeout)
+	req.Request.MaxReplicationLagAllowed = protoutil.DurationToProto(vreplcommon.MaxReplicationLagDefault)
+	req.Request.EnableReverseReplication = true
+
+	return c.Vtctld.WorkflowSwitchTraffic(ctx, req.Request)
 }
 
 func (api *API) getClusterForRequest(id string) (*cluster.Cluster, error) {
