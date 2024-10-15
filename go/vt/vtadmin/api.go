@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -28,14 +29,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
 
 	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	vdiffcmd "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/vdiff"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -59,6 +63,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtexplain"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -422,6 +427,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
+	router.HandleFunc("/vdiff/{cluster_id}/", httpAPI.Adapt(vtadminhttp.VDiffCreate)).Name("API.VDiffCreate").Methods("POST")
+	router.HandleFunc("/vdiff/{cluster_id}/show", httpAPI.Adapt(vtadminhttp.VDiffShow)).Name("API.VDiffShow")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
 	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
@@ -1649,6 +1656,100 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 
 	return &vtadminpb.GetVSchemasResponse{
 		VSchemas: vschemas,
+	}, nil
+}
+
+// VDiffCreate is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateRequest) (*vtctldatapb.VDiffCreateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VDiffCreate")
+	defer span.Finish()
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	// Set the default options
+	req.Request.Uuid = uuid.New().String()
+	req.Request.TabletTypes = vdiffcmd.TabletTypesDefault
+	req.Request.TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	req.Request.FilteredReplicationWaitTime = protoutil.DurationToProto(workflow.DefaultTimeout)
+	req.Request.Limit = math.MaxInt64
+	req.Request.MaxReportSampleRows = 10
+	req.Request.MaxExtraRowsToCompare = 1000
+	req.Request.WaitUpdateInterval = protoutil.DurationToProto(time.Duration(1 * time.Minute))
+	req.Request.AutoRetry = true
+	req.Request.RowDiffColumnTruncateAt = 128
+
+	defaultAutoStart := true
+	req.Request.AutoStart = &defaultAutoStart
+
+	return c.Vtctld.VDiffCreate(ctx, req.Request)
+}
+
+// VDiffShow is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VDiffShow(ctx context.Context, req *vtadminpb.VDiffShowRequest) (*vtadminpb.VDiffShowResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VDiffShow")
+	defer span.Finish()
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	res, err := c.Vtctld.VDiffShow(ctx, req.Request)
+	if err != nil {
+		return nil, err
+	}
+
+	shardReports := map[string]*vtadminpb.VDiffShardReport{}
+	for shard, resp := range res.TabletResponses {
+		report := &vtadminpb.VDiffShardReport{}
+		totalRowsToCompare := int64(0)
+		first := true
+		if resp != nil && resp.Output != nil {
+			qr := sqltypes.Proto3ToResult(resp.Output)
+			for _, row := range qr.Named().Rows {
+				// Since these values will be the same for all subsequent rows we only use
+				// the first row.
+				if first {
+					first = false
+					report.StartedAt = row.AsString("started_at", "")
+					report.CompletedAt = row.AsString("completed_at", "")
+					report.State = strings.ToLower(row.AsString("vdiff_state", ""))
+				}
+
+				report.RowsCompared += row.AsInt64("rows_compared", 0)
+				totalRowsToCompare += row.AsInt64("table_rows", 0)
+				if mm, _ := row.ToBool("has_mismatch"); mm {
+					report.HasMismatch = true
+				}
+			}
+		}
+		if report.State == string(vdiff.StartedState) {
+			progress := vdiffcmd.BuildProgressReport(report.RowsCompared, totalRowsToCompare, report.StartedAt)
+			report.Progress = &vtadminpb.VDiffProgress{
+				Percentage: progress.Percentage,
+				Eta:        progress.ETA,
+			}
+		}
+		shardReports[shard] = report
+	}
+
+	return &vtadminpb.VDiffShowResponse{
+		ShardReport: shardReports,
 	}, nil
 }
 
