@@ -165,19 +165,17 @@ const (
 	IsNotFalseStr = "is not false"
 
 	// BinaryExpr.Operator
-	BitAndStr               = "&"
-	BitOrStr                = "|"
-	BitXorStr               = "^"
-	PlusStr                 = "+"
-	MinusStr                = "-"
-	MultStr                 = "*"
-	DivStr                  = "/"
-	IntDivStr               = "div"
-	ModStr                  = "%"
-	ShiftLeftStr            = "<<"
-	ShiftRightStr           = ">>"
-	JSONExtractOpStr        = "->"
-	JSONUnquoteExtractOpStr = "->>"
+	BitAndStr     = "&"
+	BitOrStr      = "|"
+	BitXorStr     = "^"
+	PlusStr       = "+"
+	MinusStr      = "-"
+	MultStr       = "*"
+	DivStr        = "/"
+	IntDivStr     = "div"
+	ModStr        = "%"
+	ShiftLeftStr  = "<<"
+	ShiftRightStr = ">>"
 
 	// UnaryExpr.Operator
 	UPlusStr    = "+"
@@ -741,8 +739,6 @@ const (
 	ModOp
 	ShiftLeftOp
 	ShiftRightOp
-	JSONExtractOp
-	JSONUnquoteExtractOp
 )
 
 // Constant for Enum Type - UnaryExprOperator
