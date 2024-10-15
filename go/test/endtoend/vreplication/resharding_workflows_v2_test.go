@@ -172,9 +172,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		args = append(args, "--tablet-types", tabletTypes)
 	}
 	args = append(args, "--action_timeout=10m") // At this point something is up so fail the test
-	if debugMode {
-		t.Logf("Executing workflow command: vtctldclient %v", strings.Join(args, " "))
-	}
+	t.Logf("Executing workflow command: vtctldclient %s", strings.Join(args, " "))
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
 	lastOutput = output
 	if err != nil {
@@ -745,6 +743,12 @@ func testPartialSwitches(t *testing.T) {
 
 	tstWorkflowSwitchReads(t, "", "")
 	checkStates(t, nextState, nextState) // idempotency
+
+	tstWorkflowReverseReads(t, "replica,rdonly", "")
+	checkStates(t, wrangler.WorkflowStateReadsSwitched, wrangler.WorkflowStateNotSwitched)
+
+	tstWorkflowSwitchReads(t, "", "")
+	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
 
 	tstWorkflowSwitchWrites(t)
 	currentState = nextState

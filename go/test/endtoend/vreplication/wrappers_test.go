@@ -225,7 +225,7 @@ func (v VtctldMoveTables) exec(args ...string) {
 	args2 := []string{"MoveTables", "--workflow=" + v.workflowName, "--target-keyspace=" + v.targetKeyspace}
 	args2 = append(args2, args...)
 	var err error
-	v.vc.t.Logf("Executing command: vtctldclient %s", strings.Join(args2, " "))
+	v.vc.t.Logf("Executing workflow command: vtctldclient %s", strings.Join(args2, " "))
 	v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...)
 	require.NoError(v.vc.t, err, "failed MoveTables action, error: %v: output: %s", err, v.lastOutput)
 }
