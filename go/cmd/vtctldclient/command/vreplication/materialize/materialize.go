@@ -47,11 +47,11 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringVar(&createOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables queried in the 'source_expression' values within table-settings live.")
 	create.MarkFlagRequired("source-keyspace")
 	create.Flags().Var(&createOptions.TableSettings, "table-settings", "A JSON array defining what tables to materialize using what select statements. See the --help output for more details.")
-	create.MarkFlagRequired("table-settings")
 	create.Flags().BoolVar(&common.CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
 	create.Flags().StringVar(&common.CreateOptions.MySQLServerVersion, "mysql_server_version", fmt.Sprintf("%s-Vitess", config.DefaultMySQLVersion), "Configure the MySQL version to use for example for the parser.")
 	create.Flags().IntVar(&common.CreateOptions.TruncateUILen, "sql-max-length-ui", 512, "truncate queries in debug UIs to the given length (default 512)")
 	create.Flags().IntVar(&common.CreateOptions.TruncateErrLen, "sql-max-length-errors", 0, "truncate queries in error logs to the given length (default unlimited)")
+	create.Flags().StringSliceVarP(&common.CreateOptions.ReferenceTables, "reference-tables", "r", nil, "Used to specify the reference tables to materialize on every target shard.")
 	base.AddCommand(create)
 
 	// Generic workflow commands.

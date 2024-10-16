@@ -1458,6 +1458,206 @@ func TestCancelSchemaMigration(t *testing.T) {
 	}
 }
 
+func TestChangeTabletTags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		cells     []string
+		tablet    *topodatapb.Tablet
+		req       *vtctldatapb.ChangeTabletTagsRequest
+		expected  *vtctldatapb.ChangeTabletTagsResponse
+		shouldErr bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone1"},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Keyspace: "ks",
+				Shard:    "0",
+			},
+			req: &vtctldatapb.ChangeTabletTagsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Tags: map[string]string{
+					"test": t.Name(),
+				},
+			},
+			expected: &vtctldatapb.ChangeTabletTagsResponse{
+				AfterTags: map[string]string{
+					"test": t.Name(),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "success with existing",
+			cells: []string{"zone1"},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Keyspace: "ks",
+				Shard:    "0",
+				Tags: map[string]string{
+					"delete": "me",
+					"hello":  "world!",
+				},
+			},
+			req: &vtctldatapb.ChangeTabletTagsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Tags: map[string]string{
+					"delete": "",
+					"test":   t.Name(),
+				},
+			},
+			expected: &vtctldatapb.ChangeTabletTagsResponse{
+				BeforeTags: map[string]string{
+					"delete": "me",
+					"hello":  "world!",
+				},
+				AfterTags: map[string]string{
+					"hello": "world!",
+					"test":  t.Name(),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "success with replace",
+			cells: []string{"zone1"},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Keyspace: "ks",
+				Shard:    "0",
+				Tags: map[string]string{
+					"hello": "world!",
+				},
+			},
+			req: &vtctldatapb.ChangeTabletTagsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Tags: map[string]string{
+					"test": t.Name(),
+				},
+				Replace: true,
+			},
+			expected: &vtctldatapb.ChangeTabletTagsResponse{
+				BeforeTags: map[string]string{
+					"hello": "world!",
+				},
+				AfterTags: map[string]string{
+					"test": t.Name(),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "tablet not found",
+			cells: []string{"zone1"},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+				Keyspace: "ks",
+				Shard:    "0",
+			},
+			req: &vtctldatapb.ChangeTabletTagsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Tags: map[string]string{
+					"test": t.Name(),
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, tt.cells...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
+				TopoServer: ts,
+			}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				AlsoSetShardPrimary: true,
+			}, tt.tablet)
+
+			resp, err := vtctld.ChangeTabletTags(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+
+			tablet, err := ts.GetTablet(ctx, tt.req.TabletAlias)
+			assert.NoError(t, err)
+			utils.MustMatch(t, resp.AfterTags, tablet.Tags)
+		})
+	}
+
+	t.Run("tabletmanager failure", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ts := memorytopo.NewServer(ctx, "zone1")
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
+			TopoServer: nil,
+		}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Keyspace: "ks",
+			Shard:    "0",
+			Type:     topodatapb.TabletType_REPLICA,
+		}, nil)
+
+		_, err := vtctld.ChangeTabletTags(ctx, &vtctldatapb.ChangeTabletTagsRequest{
+			TabletAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Tags: map[string]string{
+				"test": t.Name(),
+			},
+		})
+		assert.Error(t, err)
+	})
+}
+
 func TestChangeTabletType(t *testing.T) {
 	t.Parallel()
 
@@ -5257,34 +5457,47 @@ func TestConcludeTransaction(t *testing.T) {
 		dtid        string
 		expErr      string
 		participant []*querypb.Target
-	}{
-		{
-			name:   "invalid dtid",
-			tmc:    &testutil.TabletManagerClient{},
-			dtid:   "dtid01",
-			expErr: "invalid parts in dtid: dtid01",
-		}, {
-			name:   "invalid transaction id",
-			tmc:    &testutil.TabletManagerClient{},
-			dtid:   "ks:80-:013c",
-			expErr: "invalid transaction id in dtid: ks:80-:013c",
-		}, {
-			name: "only dtid",
-			tmc:  &testutil.TabletManagerClient{},
-			dtid: "testkeyspace:80-:1234",
-		}, {
-			name:        "with participant",
-			tmc:         &testutil.TabletManagerClient{},
-			dtid:        "testkeyspace:80-:1234",
-			participant: []*querypb.Target{{Keyspace: ks, Shard: "-80"}},
-		}, {
-			name:        "call error",
-			tmc:         &testutil.TabletManagerClient{CallError: true},
-			dtid:        "testkeyspace:80-:1234",
-			participant: []*querypb.Target{{Keyspace: ks, Shard: "-80"}},
-			expErr:      "blocked call for ConcludeTransaction on fake TabletManagerClient",
+	}{{
+		name:   "invalid dtid",
+		tmc:    &testutil.TabletManagerClient{},
+		dtid:   "dtid01",
+		expErr: "invalid parts in dtid: dtid01",
+	}, {
+		name:   "invalid transaction id",
+		tmc:    &testutil.TabletManagerClient{},
+		dtid:   "ks:80-:013c",
+		expErr: "invalid transaction id in dtid: ks:80-:013c",
+	}, {
+		name: "only dtid",
+		tmc: &testutil.TabletManagerClient{
+			ReadTransactionResult: map[string]*querypb.TransactionMetadata{
+				"80-": {Dtid: "bb"},
+			},
 		},
-	}
+		dtid: "testkeyspace:80-:1234",
+	}, {
+		name: "only dtid - empty metadata",
+		tmc: &testutil.TabletManagerClient{
+			ReadTransactionResult: map[string]*querypb.TransactionMetadata{},
+		},
+		dtid: "testkeyspace:80-:1234",
+	}, {
+		name:   "only dtid - fail",
+		tmc:    &testutil.TabletManagerClient{},
+		dtid:   "testkeyspace:80-:1234",
+		expErr: "no ReadTransaction result on fake TabletManagerClient",
+	}, {
+		name:        "with participant",
+		tmc:         &testutil.TabletManagerClient{},
+		dtid:        "testkeyspace:80-:1234",
+		participant: []*querypb.Target{{Keyspace: ks, Shard: "-80"}},
+	}, {
+		name:        "call error",
+		tmc:         &testutil.TabletManagerClient{CallError: true},
+		dtid:        "testkeyspace:80-:1234",
+		participant: []*querypb.Target{{Keyspace: ks, Shard: "-80"}},
+		expErr:      "blocked call for ConcludeTransaction on fake TabletManagerClient",
+	}}
 
 	tablets := []*topodatapb.Tablet{{
 		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
@@ -12980,7 +13193,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 				defer func() {
 					topofactory.SetError(nil)
 
-					ctx, cancel := context.WithTimeout(ctx, time.Millisecond*10)
+					ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 					defer cancel()
 
 					resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})

@@ -480,6 +480,7 @@ message MinimalSchema {
 
 message VStreamOptions {
   repeated string internal_tables = 1;
+  map<string, string> config_overrides = 2;
 }
 
 // VStreamRequest is the payload for VStreamer
@@ -508,6 +509,7 @@ message VStreamRowsRequest {
 
   string query = 4;
   query.QueryResult lastpk = 5;
+  VStreamOptions options = 6;
 }
 
 // VStreamRowsResponse is the response from VStreamRows
@@ -531,6 +533,7 @@ message VStreamTablesRequest {
   vtrpc.CallerID effective_caller_id = 1;
   query.VTGateCallerID immediate_caller_id = 2;
   query.Target target = 3;
+  VStreamOptions options = 4;
 }
 
 // VStreamTablesResponse is the response from VStreamTables

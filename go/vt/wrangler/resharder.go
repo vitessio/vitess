@@ -341,7 +341,7 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes,
 				binlogdatapb.VReplicationWorkflowType_Reshard,
 				binlogdatapb.VReplicationWorkflowSubType_None,
-				rs.deferSecondaryKeys)
+				rs.deferSecondaryKeys, "")
 		}
 
 		for _, rstream := range rs.refStreams {
@@ -349,7 +349,7 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				//todo: fix based on original stream
 				binlogdatapb.VReplicationWorkflowType_Reshard,
 				binlogdatapb.VReplicationWorkflowSubType_None,
-				rs.deferSecondaryKeys)
+				rs.deferSecondaryKeys, "")
 		}
 		query := ig.String()
 		if _, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {

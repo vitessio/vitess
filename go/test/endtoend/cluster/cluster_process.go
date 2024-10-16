@@ -170,6 +170,17 @@ func (shard *Shard) PrimaryTablet() *Vttablet {
 	return shard.Vttablets[0]
 }
 
+// FindPrimaryTablet finds the primary tablet in the shard.
+func (shard *Shard) FindPrimaryTablet() *Vttablet {
+	for _, vttablet := range shard.Vttablets {
+		tabletType := vttablet.VttabletProcess.GetTabletType()
+		if tabletType == "primary" {
+			return vttablet
+		}
+	}
+	return nil
+}
+
 // Rdonly get the last tablet which is rdonly
 func (shard *Shard) Rdonly() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
@@ -378,103 +389,9 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	// Create the keyspace if it doesn't already exist.
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
 	for _, shardName := range shardNames {
-		shard := &Shard{
-			Name: shardName,
-		}
-		log.Infof("Starting shard: %v", shardName)
-		var mysqlctlProcessList []*exec.Cmd
-		for i := 0; i < totalTabletsRequired; i++ {
-			// instantiate vttablet object with reserved ports
-			tabletUID := cluster.GetAndReserveTabletUID()
-			tablet := &Vttablet{
-				TabletUID: tabletUID,
-				Type:      "replica",
-				HTTPPort:  cluster.GetAndReservePort(),
-				GrpcPort:  cluster.GetAndReservePort(),
-				MySQLPort: cluster.GetAndReservePort(),
-				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
-			}
-			if i == 0 { // Make the first one as primary
-				tablet.Type = "primary"
-			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
-				tablet.Type = "rdonly"
-			}
-			// Start Mysqlctl process
-			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
-			mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
-			if err != nil {
-				return err
-			}
-			switch tablet.Type {
-			case "primary":
-				mysqlctlProcess.Binary += os.Getenv("PRIMARY_TABLET_BINARY_SUFFIX")
-			case "replica":
-				mysqlctlProcess.Binary += os.Getenv("REPLICA_TABLET_BINARY_SUFFIX")
-			}
-			tablet.MysqlctlProcess = *mysqlctlProcess
-			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
-				return err
-			}
-			mysqlctlProcessList = append(mysqlctlProcessList, proc)
-
-			// start vttablet process
-			tablet.VttabletProcess = VttabletProcessInstance(
-				tablet.HTTPPort,
-				tablet.GrpcPort,
-				tablet.TabletUID,
-				cluster.Cell,
-				shardName,
-				keyspace.Name,
-				cluster.VtctldProcess.Port,
-				tablet.Type,
-				cluster.TopoProcess.Port,
-				cluster.Hostname,
-				cluster.TmpDirectory,
-				cluster.VtTabletExtraArgs,
-				cluster.DefaultCharset)
-			switch tablet.Type {
-			case "primary":
-				tablet.VttabletProcess.Binary += os.Getenv("PRIMARY_TABLET_BINARY_SUFFIX")
-			case "replica":
-				tablet.VttabletProcess.Binary += os.Getenv("REPLICA_TABLET_BINARY_SUFFIX")
-			}
-			tablet.Alias = tablet.VttabletProcess.TabletPath
-			if cluster.ReusingVTDATAROOT {
-				tablet.VttabletProcess.ServingStatus = "SERVING"
-			}
-			shard.Vttablets = append(shard.Vttablets, tablet)
-			// Apply customizations
-			for _, customizer := range customizers {
-				if f, ok := customizer.(func(*VttabletProcess)); ok {
-					f(tablet.VttabletProcess)
-				} else {
-					return fmt.Errorf("type mismatch on customizer: %T", customizer)
-				}
-			}
-		}
-
-		// wait till all mysqlctl is instantiated
-		for _, proc := range mysqlctlProcessList {
-			if err = proc.Wait(); err != nil {
-				log.Errorf("unable to start mysql process %v: %v", proc, err)
-				return err
-			}
-		}
-		for _, tablet := range shard.Vttablets {
-			log.Infof("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort)
-
-			if err = tablet.VttabletProcess.Setup(); err != nil {
-				log.Errorf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err)
-				return
-			}
-		}
-
-		// Make first tablet as primary
-		if err = cluster.VtctldClientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
-			log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
-			return
+		shard, err := cluster.AddShard(keyspace.Name, shardName, totalTabletsRequired, rdonly, customizers)
+		if err != nil {
+			return err
 		}
 		keyspace.Shards = append(keyspace.Shards, *shard)
 	}
@@ -488,33 +405,135 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	}
 	if !existingKeyspace {
 		cluster.Keyspaces = append(cluster.Keyspaces, keyspace)
-	}
 
-	// Apply Schema SQL
-	if keyspace.SchemaSQL != "" {
-		if err = cluster.VtctldClientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
-			log.Errorf("error applying schema: %v, %v", keyspace.SchemaSQL, err)
-			return
+		// Apply Schema SQL
+		if keyspace.SchemaSQL != "" {
+			if err = cluster.VtctldClientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
+				log.Errorf("error applying schema: %v, %v", keyspace.SchemaSQL, err)
+				return
+			}
 		}
-	}
 
-	// Apply VSchema
-	if keyspace.VSchema != "" {
-		if err = cluster.VtctldClientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
-			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
-			return
+		// Apply VSchema
+		if keyspace.VSchema != "" {
+			if err = cluster.VtctldClientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
+				log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
+				return
+			}
 		}
-	}
 
-	log.Infof("Done creating keyspace: %v ", keyspace.Name)
+		log.Infof("Done creating keyspace: %v ", keyspace.Name)
 
-	err = cluster.StartVTOrc(keyspace.Name)
-	if err != nil {
-		log.Errorf("Error starting VTOrc - %v", err)
-		return err
+		err = cluster.StartVTOrc(keyspace.Name)
+		if err != nil {
+			log.Errorf("Error starting VTOrc - %v", err)
+			return err
+		}
 	}
 
 	return
+}
+
+func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName string, totalTabletsRequired int, rdonly bool, customizers []any) (*Shard, error) {
+	shard := &Shard{
+		Name: shardName,
+	}
+	log.Infof("Starting shard: %v", shardName)
+	var mysqlctlProcessList []*exec.Cmd
+	for i := 0; i < totalTabletsRequired; i++ {
+		// instantiate vttablet object with reserved ports
+		tabletUID := cluster.GetAndReserveTabletUID()
+		tablet := &Vttablet{
+			TabletUID: tabletUID,
+			Type:      "replica",
+			HTTPPort:  cluster.GetAndReservePort(),
+			GrpcPort:  cluster.GetAndReservePort(),
+			MySQLPort: cluster.GetAndReservePort(),
+			Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
+		}
+		if i == 0 { // Make the first one as primary
+			tablet.Type = "primary"
+		} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
+			tablet.Type = "rdonly"
+		}
+		// Start Mysqlctl process
+		log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
+		mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+		if err != nil {
+			return nil, err
+		}
+		switch tablet.Type {
+		case "primary":
+			mysqlctlProcess.Binary += os.Getenv("PRIMARY_TABLET_BINARY_SUFFIX")
+		case "replica":
+			mysqlctlProcess.Binary += os.Getenv("REPLICA_TABLET_BINARY_SUFFIX")
+		}
+		tablet.MysqlctlProcess = *mysqlctlProcess
+		proc, err := tablet.MysqlctlProcess.StartProcess()
+		if err != nil {
+			log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
+			return nil, err
+		}
+		mysqlctlProcessList = append(mysqlctlProcessList, proc)
+
+		// start vttablet process
+		tablet.VttabletProcess = VttabletProcessInstance(
+			tablet.HTTPPort,
+			tablet.GrpcPort,
+			tablet.TabletUID,
+			cluster.Cell,
+			shardName,
+			keyspaceName,
+			cluster.VtctldProcess.Port,
+			tablet.Type,
+			cluster.TopoProcess.Port,
+			cluster.Hostname,
+			cluster.TmpDirectory,
+			cluster.VtTabletExtraArgs,
+			cluster.DefaultCharset)
+		switch tablet.Type {
+		case "primary":
+			tablet.VttabletProcess.Binary += os.Getenv("PRIMARY_TABLET_BINARY_SUFFIX")
+		case "replica":
+			tablet.VttabletProcess.Binary += os.Getenv("REPLICA_TABLET_BINARY_SUFFIX")
+		}
+		tablet.Alias = tablet.VttabletProcess.TabletPath
+		if cluster.ReusingVTDATAROOT {
+			tablet.VttabletProcess.ServingStatus = "SERVING"
+		}
+		shard.Vttablets = append(shard.Vttablets, tablet)
+		// Apply customizations
+		for _, customizer := range customizers {
+			if f, ok := customizer.(func(*VttabletProcess)); ok {
+				f(tablet.VttabletProcess)
+			} else {
+				return nil, fmt.Errorf("type mismatch on customizer: %T", customizer)
+			}
+		}
+	}
+
+	// wait till all mysqlctl is instantiated
+	for _, proc := range mysqlctlProcessList {
+		if err := proc.Wait(); err != nil {
+			log.Errorf("unable to start mysql process %v: %v", proc, err)
+			return nil, err
+		}
+	}
+	for _, tablet := range shard.Vttablets {
+		log.Infof("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort)
+
+		if err := tablet.VttabletProcess.Setup(); err != nil {
+			log.Errorf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err)
+			return nil, err
+		}
+	}
+
+	// Make first tablet as primary
+	if err := cluster.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+		log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspaceName, shardName, err)
+		return nil, err
+	}
+	return shard, nil
 }
 
 // StartUnshardedKeyspaceLegacy starts unshared keyspace with shard name as "0"

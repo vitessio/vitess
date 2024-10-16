@@ -274,7 +274,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
 %token <str> BOTH LEADING TRAILING
-%token <str> KILL
+%token <str> KILL TRACE
 
 %left EMPTY_FROM_CLAUSE
 %right INTO
@@ -4500,6 +4500,14 @@ vexplain_type_opt:
   {
     $$ = QueriesVExplainType
   }
+| TRACE
+  {
+    $$ = TraceVExplainType
+  }
+| KEYS
+  {
+    $$ = KeysVExplainType
+  }
 
 explain_synonyms:
   EXPLAIN
@@ -5583,11 +5591,11 @@ function_call_keyword
   }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
-    $$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
+    $$ = &JSONExtractExpr{JSONDoc: $1, PathList: []Expr{$3}}
   }
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
-    $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
+    $$ = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: $1, PathList: []Expr{$3}}}
   }
 
 column_names_opt_paren:
@@ -8641,6 +8649,7 @@ non_reserved_keyword:
 | TINYBLOB
 | TINYINT
 | TINYTEXT
+| TRACE
 | TRADITIONAL
 | TRANSACTION
 | TRANSACTIONS

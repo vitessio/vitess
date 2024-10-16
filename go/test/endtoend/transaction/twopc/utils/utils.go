@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,5 +170,54 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, ks string,
 		if countMatchedShards == len(shards) {
 			return schema.OnlineDDLStatus(lastKnownStatus)
 		}
+	}
+}
+
+func RunReshard(t *testing.T, clusterInstance *cluster.LocalProcessCluster, workflowName, keyspaceName string, sourceShards, targetShards string) error {
+	rw := cluster.NewReshard(t, clusterInstance, workflowName, keyspaceName, targetShards, sourceShards)
+	// Initiate Reshard.
+	output, err := rw.Create()
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	rw.WaitForVreplCatchup(10 * time.Second)
+	// SwitchTraffic
+	output, err = rw.SwitchReadsAndWrites()
+	require.NoError(t, err, output)
+	output, err = rw.Complete()
+	require.NoError(t, err, output)
+
+	// When Reshard completes, it has already deleted the source shards from the topo server.
+	// We just need to shutdown the vttablets, and remove them from the cluster.
+	removeShards(t, clusterInstance, keyspaceName, sourceShards)
+	return nil
+}
+
+func removeShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName string, shards string) {
+	sourceShardsList := strings.Split(shards, ",")
+	var remainingShards []cluster.Shard
+	for idx, keyspace := range clusterInstance.Keyspaces {
+		if keyspace.Name != keyspaceName {
+			continue
+		}
+		for _, shard := range keyspace.Shards {
+			if slices.Contains(sourceShardsList, shard.Name) {
+				for _, vttablet := range shard.Vttablets {
+					err := vttablet.VttabletProcess.TearDown()
+					require.NoError(t, err)
+				}
+				continue
+			}
+			remainingShards = append(remainingShards, shard)
+		}
+		clusterInstance.Keyspaces[idx].Shards = remainingShards
+	}
+}
+
+func AddShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName string, shardNames []string) {
+	for _, shardName := range shardNames {
+		t.Helper()
+		shard, err := clusterInstance.AddShard(keyspaceName, shardName, 3, false, nil)
+		require.NoError(t, err)
+		clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, *shard)
 	}
 }

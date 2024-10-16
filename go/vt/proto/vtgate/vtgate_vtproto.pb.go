@@ -348,6 +348,7 @@ func (m *VStreamFlags) CloneVT() *VStreamFlags {
 	r.CellPreference = m.CellPreference
 	r.TabletOrder = m.TabletOrder
 	r.StreamKeyspaceHeartbeats = m.StreamKeyspaceHeartbeats
+	r.IncludeReshardJournalEvents = m.IncludeReshardJournalEvents
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1463,6 +1464,16 @@ func (m *VStreamFlags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.IncludeReshardJournalEvents {
+		i--
+		if m.IncludeReshardJournalEvents {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
 	if m.StreamKeyspaceHeartbeats {
 		i--
 		if m.StreamKeyspaceHeartbeats {
@@ -2261,6 +2272,9 @@ func (m *VStreamFlags) SizeVT() (n int) {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.StreamKeyspaceHeartbeats {
+		n += 2
+	}
+	if m.IncludeReshardJournalEvents {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -5222,6 +5236,26 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.StreamKeyspaceHeartbeats = bool(v != 0)
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeReshardJournalEvents", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeReshardJournalEvents = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

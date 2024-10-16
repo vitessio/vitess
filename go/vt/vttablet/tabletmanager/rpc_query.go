@@ -275,29 +275,16 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	return sqltypes.ResultToProto3(result), err
 }
 
-// GetUnresolvedTransactions returns the unresolved distributed transactions list for the Metadata manager.
-func (tm *TabletManager) GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error) {
-	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
+// MysqlHostMetrics gets system metrics from mysqlctl[d]
+func (tm *TabletManager) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	mysqlResp, err := tm.MysqlDaemon.HostMetrics(ctx, tm.Cnf)
+	if err != nil {
 		return nil, err
 	}
-
-	tablet := tm.Tablet()
-	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	return tm.QueryServiceControl.UnresolvedTransactions(ctx, target)
-}
-
-// ConcludeTransaction concludes the given distributed transaction.
-func (tm *TabletManager) ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error {
-	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
-		return err
+	resp := &tabletmanagerdatapb.MysqlHostMetricsResponse{
+		HostMetrics: mysqlResp,
 	}
-
-	tablet := tm.Tablet()
-	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	if req.Mm {
-		return tm.QueryServiceControl.ConcludeTransaction(ctx, target, req.Dtid)
-	}
-	return tm.QueryServiceControl.RollbackPrepared(ctx, target, req.Dtid, 0)
+	return resp, nil
 }
 
 // ExecuteQuery submits a new online DDL request

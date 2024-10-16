@@ -1660,7 +1660,7 @@ func TestProbesPostDisable(t *testing.T) {
 		localTabletFound := 0
 		for _, probe := range probes {
 			require.NotNil(t, probe)
-			if probe.Alias == throttler.tabletAlias {
+			if probe.Alias == throttler.tabletAliasString() {
 				localTabletFound++
 			} else {
 				assert.NotEmpty(t, probe.Alias)

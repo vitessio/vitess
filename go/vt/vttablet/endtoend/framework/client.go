@@ -180,7 +180,7 @@ func (client *QueryClient) ReadTransaction(dtid string) (*querypb.TransactionMet
 
 // UnresolvedTransactions invokes the UnresolvedTransactions API of TabletServer.
 func (client *QueryClient) UnresolvedTransactions() ([]*querypb.TransactionMetadata, error) {
-	return client.server.UnresolvedTransactions(client.ctx, client.target)
+	return client.server.UnresolvedTransactions(client.ctx, client.target, 0 /* abandonAgeSeconds */)
 }
 
 // SetServingType is for testing transitions.

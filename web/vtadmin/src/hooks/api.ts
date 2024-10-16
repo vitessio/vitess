@@ -79,8 +79,20 @@ import {
     GetFullStatusParams,
     validateVersionShard,
     ValidateVersionShardParams,
+    createMoveTables,
     startWorkflow,
     stopWorkflow,
+    FetchTransactionsParams,
+    fetchTransactions,
+    completeMoveTables,
+    workflowSwitchTraffic,
+    workflowDelete,
+    createReshard,
+    concludeTransaction,
+    createVDiff,
+    showVDiff,
+    ShowVDiffParams,
+    createMaterialize,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -405,6 +417,28 @@ export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions
     return useQuery(['vschema', params], () => fetchVSchema(params));
 };
 
+/**
+ * useTransactions is a query hook that fetches unresolved transactions for the given keyspace.
+ */
+export const useTransactions = (
+    params: FetchTransactionsParams,
+    options?: UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error> | undefined
+) => {
+    return useQuery(['transactions', params], () => fetchTransactions(params), { ...options });
+};
+
+/**
+ * useConcludeTransaction is a mutate hook that concludes a transaction.
+ */
+export const useConcludeTransaction = (
+    params: Parameters<typeof concludeTransaction>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof concludeTransaction>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof concludeTransaction>>, Error>(() => {
+        return concludeTransaction(params);
+    }, options);
+};
+
 export const useVTExplain = (
     params: Parameters<typeof fetchVTExplain>[0],
     options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
@@ -459,7 +493,43 @@ export const useWorkflowStatus = (
     params: Parameters<typeof fetchWorkflowStatus>[0],
     options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
 ) => {
-    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params));
+    return useQuery(['workflow_status', params], () => fetchWorkflowStatus(params), options);
+};
+
+/**
+ * useCreateMaterialize is a mutation query hook that creates a materialize workflow.
+ */
+export const useCreateMaterialize = (
+    params: Parameters<typeof createMaterialize>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createMaterialize>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createMaterialize>>, Error>(() => {
+        return createMaterialize(params);
+    }, options);
+};
+
+/**
+ * useCreateMoveTables is a mutation query hook that creates a move tables workflow.
+ */
+export const useCreateMoveTables = (
+    params: Parameters<typeof createMoveTables>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createMoveTables>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createMoveTables>>, Error>(() => {
+        return createMoveTables(params);
+    }, options);
+};
+
+/**
+ * useCreateReshard is a mutation query hook that creates a reshard workflow.
+ */
+export const useCreateReshard = (
+    params: Parameters<typeof createReshard>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createReshard>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createReshard>>, Error>(() => {
+        return createReshard(params);
+    }, options);
 };
 
 /**
@@ -483,6 +553,42 @@ export const useStopWorkflow = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof stopWorkflow>>, Error>(() => {
         return stopWorkflow(params);
+    }, options);
+};
+
+/**
+ * useCompleteMoveTables is a mutate hook that completes a MoveTables workflow.
+ */
+export const useCompleteMoveTables = (
+    params: Parameters<typeof completeMoveTables>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof completeMoveTables>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof completeMoveTables>>, Error>(() => {
+        return completeMoveTables(params);
+    }, options);
+};
+
+/**
+ * useWorkflowSwitchTraffic is a mutate hook that switches traffic for a workflow.
+ */
+export const useWorkflowSwitchTraffic = (
+    params: Parameters<typeof workflowSwitchTraffic>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof workflowSwitchTraffic>>, Error>(() => {
+        return workflowSwitchTraffic(params);
+    }, options);
+};
+
+/**
+ * useWorkflowDelete is a mutate hook that deletes a workflow.
+ */
+export const useWorkflowDelete = (
+    params: Parameters<typeof workflowDelete>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof workflowDelete>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof workflowDelete>>, Error>(() => {
+        return workflowDelete(params);
     }, options);
 };
 
@@ -655,4 +761,26 @@ export const useValidateVersionShard = (
     return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>(() => {
         return validateVersionShard(params);
     }, options);
+};
+
+/**
+ * useCreateVDiff is a mutation query hook that creates a VDiff.
+ */
+export const useCreateVDiff = (
+    params: Parameters<typeof createVDiff>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof createVDiff>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createVDiff>>, Error>(() => {
+        return createVDiff(params);
+    }, options);
+};
+
+/**
+ * useShowVDiff is a query hook fetches VDiff status.
+ */
+export const useShowVDiff = (
+    params: ShowVDiffParams,
+    options?: UseQueryOptions<pb.VDiffShowResponse, Error> | undefined
+) => {
+    return useQuery(['vdiff_show', params], () => showVDiff(params), { ...options });
 };

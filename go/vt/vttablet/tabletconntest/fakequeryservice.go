@@ -360,7 +360,7 @@ func (f *FakeQueryService) ReadTransaction(ctx context.Context, target *querypb.
 }
 
 // UnresolvedTransactions is part of the queryservice.QueryService interface
-func (f *FakeQueryService) UnresolvedTransactions(ctx context.Context, target *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+func (f *FakeQueryService) UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error) {
 	if f.HasError {
 		return nil, f.TabletError
 	}

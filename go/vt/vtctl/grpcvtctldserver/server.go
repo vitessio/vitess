@@ -438,6 +438,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
+	span.Annotate("backup_engine", req.BackupEngine)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -524,6 +525,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		AllowPrimary:       req.AllowPrimary,
 		IncrementalFromPos: req.IncrementalFromPos,
 		UpgradeSafe:        req.UpgradeSafe,
+		BackupEngine:       req.BackupEngine,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -582,6 +584,39 @@ func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldata
 		RowsAffectedByShard: qr.RowsAffectedByShard,
 	}
 	return resp, nil
+}
+
+// ChangeTabletTags is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ChangeTabletTags(ctx context.Context, req *vtctldatapb.ChangeTabletTagsRequest) (resp *vtctldatapb.ChangeTabletTagsResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletTags")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("replace", req.Replace)
+
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	span.Annotate("before_tablet_tags", tablet.Tags)
+
+	changeTagsResp, err := s.tmc.ChangeTags(ctx, tablet.Tablet, req.Tags, req.Replace)
+	if err != nil {
+		return nil, err
+	}
+
+	span.Annotate("after_tablet_tags", changeTagsResp.Tags)
+
+	return &vtctldatapb.ChangeTabletTagsResponse{
+		BeforeTags: tablet.Tags,
+		AfterTags:  changeTagsResp.Tags,
+	}, nil
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
@@ -1234,6 +1269,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			WaitAllTablets:            req.WaitForAllTablets,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
+			ExpectedPrimaryAlias:      req.ExpectedPrimary,
 		},
 	)
 
@@ -2458,9 +2494,20 @@ func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb
 		return nil, err
 	}
 
+	participants := req.Participants
+	if len(participants) == 0 {
+		// Read the transaction metadata if participating resource manager list is not provided in the request.
+		transaction, err := s.tmc.ReadTransaction(ctx, primary.Tablet, req.Dtid)
+		if transaction == nil || err != nil {
+			// no transaction record for the given ID. It is already concluded or does not exist.
+			return nil, err
+		}
+		participants = transaction.Participants
+	}
+
 	eg, newCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(10)
-	for _, rm := range req.Participants {
+	for _, rm := range participants {
 		eg.Go(func() error {
 			primary, err := s.getPrimaryTablet(newCtx, rm)
 			if err != nil {
@@ -3058,6 +3105,10 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		span.Annotate("avoid_primary_alias", topoproto.TabletAliasString(req.AvoidPrimary))
 	}
 
+	if req.ExpectedPrimary != nil {
+		span.Annotate("expected_primary_alias", topoproto.TabletAliasString(req.ExpectedPrimary))
+	}
+
 	if req.NewPrimary != nil {
 		span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	}
@@ -3077,6 +3128,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		reparentutil.PlannedReparentOptions{
 			AvoidPrimaryAlias:       req.AvoidPrimary,
 			NewPrimaryAlias:         req.NewPrimary,
+			ExpectedPrimaryAlias:    req.ExpectedPrimary,
 			WaitReplicasTimeout:     waitReplicasTimeout,
 			TolerableReplLag:        tolerableReplLag,
 			AllowCrossCellPromotion: req.AllowCrossCellPromotion,
@@ -3515,10 +3567,11 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("shard", ti.Shard)
 
 	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
-		BackupTime:         req.BackupTime,
-		RestoreToPos:       req.RestoreToPos,
-		RestoreToTimestamp: req.RestoreToTimestamp,
-		DryRun:             req.DryRun,
+		BackupTime:           req.BackupTime,
+		RestoreToPos:         req.RestoreToPos,
+		RestoreToTimestamp:   req.RestoreToTimestamp,
+		DryRun:               req.DryRun,
+		AllowedBackupEngines: req.AllowedBackupEngines,
 	}
 	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {
@@ -5212,6 +5265,9 @@ func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.Work
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keep_data", req.KeepData)
+	span.Annotate("keep_routing_rules", req.KeepRoutingRules)
+	span.Annotate("shards", req.Shards)
 
 	resp, err = s.ws.WorkflowDelete(ctx, req)
 	return resp, err
@@ -5243,6 +5299,7 @@ func (s *VtctldServer) WorkflowSwitchTraffic(ctx context.Context, req *vtctldata
 	span.Annotate("tablet-types", req.TabletTypes)
 	span.Annotate("direction", req.Direction)
 	span.Annotate("enable-reverse-replication", req.EnableReverseReplication)
+	span.Annotate("force", req.Force)
 
 	resp, err = s.ws.WorkflowSwitchTraffic(ctx, req)
 	return resp, err

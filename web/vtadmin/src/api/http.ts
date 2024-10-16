@@ -421,6 +421,37 @@ export const fetchVSchema = async ({ clusterID, keyspace }: FetchVSchemaParams) 
     return pb.VSchema.create(result);
 };
 
+export interface FetchTransactionsParams {
+    clusterID: string;
+    keyspace: string;
+    abandonAge?: string;
+}
+
+export const fetchTransactions = async ({ clusterID, keyspace, abandonAge = '' }: FetchTransactionsParams) => {
+    const req = new URLSearchParams();
+    req.append('abandon_age', abandonAge);
+
+    const { result } = await vtfetch(`/api/transactions/${clusterID}/${keyspace}?${req}`);
+
+    const err = vtctldata.GetUnresolvedTransactionsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetUnresolvedTransactionsResponse.create(result);
+};
+
+export interface ConcludeTransactionParams {
+    clusterID: string;
+    dtid: string;
+}
+
+export const concludeTransaction = async ({ clusterID, dtid }: ConcludeTransactionParams) => {
+    const { result } = await vtfetch(`/api/transaction/${clusterID}/${dtid}/conclude`);
+    const err = vtctldata.ConcludeTransactionResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ConcludeTransactionResponse.create(result);
+};
+
 export const fetchWorkflows = async () => {
     const { result } = await vtfetch(`/api/workflows`);
 
@@ -448,6 +479,63 @@ export const fetchWorkflowStatus = async (params: { clusterID: string; keyspace:
     return vtctldata.WorkflowStatusResponse.create(result);
 };
 
+export interface CreateMaterializeParams {
+    clusterID: string;
+    tableSettings: string;
+    request: vtctldata.IMaterializeCreateRequest;
+}
+
+export const createMaterialize = async ({ clusterID, tableSettings, request }: CreateMaterializeParams) => {
+    const body = {
+        table_settings: tableSettings,
+        request: request,
+    };
+
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/materialize`, {
+        body: JSON.stringify(body),
+        method: 'post',
+    });
+
+    const err = vtctldata.MaterializeCreateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.MaterializeCreateResponse.create(result);
+};
+
+export interface CreateMoveTablesParams {
+    clusterID: string;
+    request: vtctldata.IMoveTablesCreateRequest;
+}
+
+export const createMoveTables = async ({ clusterID, request }: CreateMoveTablesParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/movetables`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtctldata.WorkflowStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowStatusResponse.create(result);
+};
+
+export interface CreateReshardParams {
+    clusterID: string;
+    request: vtctldata.IReshardCreateRequest;
+}
+
+export const createReshard = async ({ clusterID, request }: CreateReshardParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/reshard`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtctldata.WorkflowStatusResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowStatusResponse.create(result);
+};
+
 export interface WorkflowActionParams {
     clusterID: string;
     keyspace: string;
@@ -468,6 +556,54 @@ export const stopWorkflow = async ({ clusterID, keyspace, name }: WorkflowAction
     if (err) throw Error(err);
 
     return vtctldata.WorkflowUpdateResponse.create(result);
+};
+
+export interface MoveTablesCompleteParams {
+    clusterID: string;
+    request: vtctldata.IMoveTablesCompleteRequest;
+}
+
+export const completeMoveTables = async ({ clusterID, request }: MoveTablesCompleteParams) => {
+    const { result } = await vtfetch(`/api/movetables/${clusterID}/complete`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+    const err = vtctldata.MoveTablesCompleteResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.MoveTablesCompleteResponse.create(result);
+};
+
+export interface WorkflowSwitchTrafficParams {
+    clusterID: string;
+    request: vtctldata.IWorkflowSwitchTrafficRequest;
+}
+
+export const workflowSwitchTraffic = async ({ clusterID, request }: WorkflowSwitchTrafficParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/switchtraffic`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+    const err = vtctldata.WorkflowSwitchTrafficResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowSwitchTrafficResponse.create(result);
+};
+
+export interface WorkflowDeleteParams {
+    clusterID: string;
+    request: vtctldata.IWorkflowDeleteRequest;
+}
+
+export const workflowDelete = async ({ clusterID, request }: WorkflowDeleteParams) => {
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/delete`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+    const err = vtctldata.WorkflowDeleteResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.WorkflowDeleteResponse.create(result);
 };
 
 export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {
@@ -883,4 +1019,38 @@ export const validateVersionShard = async (params: ValidateVersionShardParams) =
     if (err) throw Error(err);
 
     return vtctldata.ValidateVersionShardResponse.create(result);
+};
+
+export interface CreateVDiffParams {
+    clusterID: string;
+    request: vtctldata.IVDiffCreateRequest;
+}
+
+export const createVDiff = async ({ clusterID, request }: CreateVDiffParams) => {
+    const { result } = await vtfetch(`/api/vdiff/${clusterID}/`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtctldata.VDiffCreateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.VDiffCreateResponse.create(result);
+};
+
+export interface ShowVDiffParams {
+    clusterID: string;
+    request: vtctldata.IVDiffShowRequest;
+}
+
+export const showVDiff = async ({ clusterID, request }: ShowVDiffParams) => {
+    const { result } = await vtfetch(`/api/vdiff/${clusterID}/show`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtadmin.VDiffShowResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtadmin.VDiffShowResponse.create(result);
 };

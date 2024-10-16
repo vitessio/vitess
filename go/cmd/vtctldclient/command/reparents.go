@@ -92,6 +92,7 @@ var emergencyReparentShardOptions = struct {
 	Force                     bool
 	WaitReplicasTimeout       time.Duration
 	NewPrimaryAliasStr        string
+	ExpectedPrimaryAliasStr   string
 	IgnoreReplicaAliasStrList []string
 	PreventCrossCellPromotion bool
 	WaitForAllTablets         bool
@@ -105,11 +106,19 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 
 	var (
 		newPrimaryAlias      *topodatapb.TabletAlias
+		expectedPrimaryAlias *topodatapb.TabletAlias
 		ignoreReplicaAliases = make([]*topodatapb.TabletAlias, len(emergencyReparentShardOptions.IgnoreReplicaAliasStrList))
 	)
 
 	if emergencyReparentShardOptions.NewPrimaryAliasStr != "" {
 		newPrimaryAlias, err = topoproto.ParseTabletAlias(emergencyReparentShardOptions.NewPrimaryAliasStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	if emergencyReparentShardOptions.ExpectedPrimaryAliasStr != "" {
+		expectedPrimaryAlias, err = topoproto.ParseTabletAlias(emergencyReparentShardOptions.ExpectedPrimaryAliasStr)
 		if err != nil {
 			return err
 		}
@@ -130,6 +139,7 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 		Keyspace:                  keyspace,
 		Shard:                     shard,
 		NewPrimary:                newPrimaryAlias,
+		ExpectedPrimary:           expectedPrimaryAlias,
 		IgnoreReplicas:            ignoreReplicaAliases,
 		WaitReplicasTimeout:       protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
 		PreventCrossCellPromotion: emergencyReparentShardOptions.PreventCrossCellPromotion,
@@ -185,6 +195,7 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 var plannedReparentShardOptions = struct {
 	NewPrimaryAliasStr      string
 	AvoidPrimaryAliasStr    string
+	ExpectedPrimaryAliasStr string
 	WaitReplicasTimeout     time.Duration
 	TolerableReplicationLag time.Duration
 	AllowCrossCellPromotion bool
@@ -197,8 +208,9 @@ func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
 	}
 
 	var (
-		newPrimaryAlias   *topodatapb.TabletAlias
-		avoidPrimaryAlias *topodatapb.TabletAlias
+		newPrimaryAlias      *topodatapb.TabletAlias
+		avoidPrimaryAlias    *topodatapb.TabletAlias
+		expectedPrimaryAlias *topodatapb.TabletAlias
 	)
 
 	if plannedReparentShardOptions.NewPrimaryAliasStr != "" {
@@ -215,6 +227,13 @@ func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if plannedReparentShardOptions.ExpectedPrimaryAliasStr != "" {
+		expectedPrimaryAlias, err = topoproto.ParseTabletAlias(plannedReparentShardOptions.ExpectedPrimaryAliasStr)
+		if err != nil {
+			return err
+		}
+	}
+
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.PlannedReparentShard(commandCtx, &vtctldatapb.PlannedReparentShardRequest{
@@ -222,6 +241,7 @@ func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
 		Shard:                   shard,
 		NewPrimary:              newPrimaryAlias,
 		AvoidPrimary:            avoidPrimaryAlias,
+		ExpectedPrimary:         expectedPrimaryAlias,
 		WaitReplicasTimeout:     protoutil.DurationToProto(plannedReparentShardOptions.WaitReplicasTimeout),
 		TolerableReplicationLag: protoutil.DurationToProto(plannedReparentShardOptions.TolerableReplicationLag),
 		AllowCrossCellPromotion: plannedReparentShardOptions.AllowCrossCellPromotion,
@@ -286,6 +306,7 @@ func commandTabletExternallyReparented(cmd *cobra.Command, args []string) error 
 func init() {
 	EmergencyReparentShard.Flags().DurationVar(&emergencyReparentShardOptions.WaitReplicasTimeout, "wait-replicas-timeout", topo.RemoteOperationTimeout, "Time to wait for replicas to catch up in reparenting.")
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.NewPrimaryAliasStr, "new-primary", "", "Alias of a tablet that should be the new primary. If not specified, the vtctld will select the best candidate to promote.")
+	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.ExpectedPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
@@ -299,6 +320,7 @@ func init() {
 	PlannedReparentShard.Flags().DurationVar(&plannedReparentShardOptions.TolerableReplicationLag, "tolerable-replication-lag", 0, "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.")
 	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.NewPrimaryAliasStr, "new-primary", "", "Alias of a tablet that should be the new primary.")
 	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.AvoidPrimaryAliasStr, "avoid-primary", "", "Alias of a tablet that should not be the primary; i.e. \"reparent to any other tablet if this one is the primary\".")
+	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.ExpectedPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
 	PlannedReparentShard.Flags().BoolVar(&plannedReparentShardOptions.AllowCrossCellPromotion, "allow-cross-cell-promotion", false, "Allow cross cell promotion")
 	Root.AddCommand(PlannedReparentShard)
 

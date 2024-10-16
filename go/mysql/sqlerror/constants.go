@@ -123,6 +123,7 @@ const (
 	ErSPNotVarArg                   = ErrorCode(1414)
 	ERRowIsReferenced2              = ErrorCode(1451)
 	ErNoReferencedRow2              = ErrorCode(1452)
+	ERInnodbIndexCorrupt            = ErrorCode(1817)
 	ERDupIndex                      = ErrorCode(1831)
 	ERInnodbReadOnly                = ErrorCode(1874)
 
@@ -246,6 +247,7 @@ const (
 	ERNoSuchUser                   = ErrorCode(1449)
 	ERForbidSchemaChange           = ErrorCode(1450)
 	ERWrongValue                   = ErrorCode(1525)
+	ERWrongParamcountToNativeFct   = ErrorCode(1582)
 	ERDataOutOfRange               = ErrorCode(1690)
 	ERInvalidJSONText              = ErrorCode(3140)
 	ERInvalidJSONTextInParams      = ErrorCode(3141)

@@ -132,6 +132,10 @@ func (t *noopVCursor) UnresolvedTransactions(ctx context.Context, keyspace strin
 	panic("implement me")
 }
 
+func (t *noopVCursor) StartPrimitiveTrace() func() Stats {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -441,9 +445,10 @@ type loggingVCursor struct {
 
 	parser *sqlparser.Parser
 
-	handleMirrorClonesFn   func(context.Context) VCursor
+	onMirrorClonesFn       func(context.Context) VCursor
 	onExecuteMultiShardFn  func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
 	onStreamExecuteMultiFn func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
+	onRecordMirrorStatsFn  func(time.Duration, time.Duration, error)
 }
 
 func (f *loggingVCursor) HasCreatedTempTable() {
@@ -560,8 +565,8 @@ func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 }
 
 func (f *loggingVCursor) CloneForMirroring(ctx context.Context) VCursor {
-	if f.handleMirrorClonesFn != nil {
-		return f.handleMirrorClonesFn(ctx)
+	if f.onMirrorClonesFn != nil {
+		return f.onMirrorClonesFn(ctx)
 	}
 	panic("no mirror clones available")
 }
@@ -882,6 +887,12 @@ func (t *loggingVCursor) SQLParser() *sqlparser.Parser {
 	return t.parser
 }
 
+func (t *loggingVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.Duration, targetErr error) {
+	if t.onRecordMirrorStatsFn != nil {
+		t.onRecordMirrorStatsFn(sourceExecTime, targetExecTime, targetErr)
+	}
+}
+
 func (t *noopVCursor) VExplainLogging() {}
 func (t *noopVCursor) DisableLogging()  {}
 func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
@@ -890,6 +901,10 @@ func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
 
 func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 	return nil, nil
+}
+
+// RecordMirrorStats implements VCursor.
+func (t *noopVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.Duration, targetErr error) {
 }
 
 func expectResult(t *testing.T, result, want *sqltypes.Result) {

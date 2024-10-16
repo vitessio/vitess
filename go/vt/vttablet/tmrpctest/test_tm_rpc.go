@@ -96,6 +96,11 @@ func (fra *fakeRPCTM) ResetSequences(ctx context.Context, tables []string) error
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	// TODO implement me
 	panic("implement me")
@@ -106,6 +111,11 @@ func (fra *fakeRPCTM) LockTables(ctx context.Context) error {
 }
 
 func (fra *fakeRPCTM) UnlockTables(ctx context.Context) error {
+	panic("implement me")
+}
+
+func (fra *fakeRPCTM) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -415,6 +425,16 @@ func tmRPCTestGetUnresolvedTransactionsPanic(ctx context.Context, t *testing.T, 
 	expectHandleRPCPanic(t, "GetUnresolvedTransactions", false /*verbose*/, err)
 }
 
+func tmRPCTestReadTransaction(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ReadTransaction(ctx, tablet, "aa")
+	require.NoError(t, err)
+}
+
+func tmRPCTestReadTransactionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ReadTransaction(ctx, tablet, "aa")
+	expectHandleRPCPanic(t, "ReadTransaction", false /*verbose*/, err)
+}
+
 //
 // Various read-write methods
 //
@@ -449,6 +469,30 @@ func tmRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "SetReadOnly", true /*verbose*/, err)
 	err = client.SetReadWrite(ctx, tablet)
 	expectHandleRPCPanic(t, "SetReadWrite", true /*verbose*/, err)
+}
+
+var testChangeTagsValue = map[string]string{
+	"test": "12345",
+}
+
+func (fra *fakeRPCTM) ChangeTags(ctx context.Context, tabletTags map[string]string, replace bool) (map[string]string, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "ChangeTags tabletType", tabletTags, testChangeTagsValue)
+	return tabletTags, nil
+}
+
+func tmRPCTestChangeTags(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ChangeTags(ctx, tablet, testChangeTagsValue, false)
+	if err != nil {
+		t.Errorf("ChangeTags failed: %v", err)
+	}
+}
+
+func tmRPCTestChangeTagsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ChangeTags(ctx, tablet, testChangeTagsValue, false)
+	expectHandleRPCPanic(t, "ChangeTags", true /*verbose*/, err)
 }
 
 var testChangeTypeValue = topodatapb.TabletType_REPLICA
@@ -737,7 +781,14 @@ func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerd
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context) ([]*querypb.TransactionMetadata, error) {
+func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return nil, nil
+}
+
+func (fra *fakeRPCTM) ReadTransaction(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionRequest) (*querypb.TransactionMetadata, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1450,6 +1501,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestGetPermissions(ctx, t, client, tablet)
 	tmRPCTestGetGlobalStatusVars(ctx, t, client, tablet)
 	tmRPCTestGetUnresolvedTransactions(ctx, t, client, tablet)
+	tmRPCTestReadTransaction(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnly(ctx, t, client, tablet)
@@ -1512,6 +1564,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestGetPermissionsPanic(ctx, t, client, tablet)
 	tmRPCTestGetGlobalStatusVarsPanic(ctx, t, client, tablet)
 	tmRPCTestGetUnresolvedTransactionsPanic(ctx, t, client, tablet)
+	tmRPCTestReadTransactionPanic(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnlyPanic(ctx, t, client, tablet)

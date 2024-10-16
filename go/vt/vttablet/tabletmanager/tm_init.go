@@ -50,6 +50,7 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
@@ -64,6 +65,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -75,6 +77,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 const (
@@ -123,6 +126,9 @@ var (
 	// statsIsInSrvKeyspace is set to 1 (true), 0 (false) whether the tablet is in the serving keyspace
 	statsIsInSrvKeyspace *stats.Gauge
 
+	// statsTabletTags is set to 1 (true) if a tablet tag exists.
+	statsTabletTags *stats.GaugesWithMultiLabels
+
 	statsKeyspace      = stats.NewString("TabletKeyspace")
 	statsShard         = stats.NewString("TabletShard")
 	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
@@ -142,6 +148,7 @@ func init() {
 	statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 	statsIsInSrvKeyspace = stats.NewGauge("IsInSrvKeyspace", "Whether the vttablet is in the serving keyspace (1 = true / 0 = false)")
+	statsTabletTags = stats.NewGaugesWithMultiLabels("TabletTags", "Tablet tags key/values", []string{"key", "value"})
 }
 
 // TabletManager is the main class for the tablet manager.
@@ -157,6 +164,9 @@ type TabletManager struct {
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
 	Env                 *vtenv.Environment
+
+	// tmc is used to run an RPC against other vttablets.
+	tmc tmclient.TabletManagerClient
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -344,6 +354,13 @@ func mergeTags(a, b map[string]string) map[string]string {
 	return result
 }
 
+func setTabletTagsStats(tablet *topodatapb.Tablet) {
+	statsTabletTags.ResetAll()
+	for key, val := range tablet.Tags {
+		statsTabletTags.Set([]string{key, val}, 1)
+	}
+}
+
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
 	defer func() {
@@ -352,6 +369,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	log.Infof("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
+	tm.tmc = tmclient.NewTabletManagerClient()
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)
 	tm._waitForGrantsComplete = make(chan struct{})
@@ -545,13 +563,17 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		return nil, err
 	}
 
-	tm.tmState.RefreshFromTopoInfo(ctx, shardInfo, nil)
+	if err := tm.tmState.RefreshFromTopoInfo(ctx, shardInfo, nil); err != nil {
+		return nil, err
+	}
 
 	// Rebuild keyspace if this the first tablet in this keyspace/cell
 	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, tablet.Keyspace)
 	switch {
 	case err == nil:
-		tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+		if err := tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace); err != nil {
+			return nil, err
+		}
 	case topo.IsErrType(err, topo.NoNode):
 		var rebuildKsCtx context.Context
 		rebuildKsCtx, tm._rebuildKeyspaceCancel = context.WithCancel(tm.BatchCtx)
@@ -603,7 +625,10 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 	defer func() {
 		log.Infof("Keyspace rebuilt: %v", keyspace)
 		if ctx.Err() == nil {
-			tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
+			err := tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
+			if err != nil {
+				log.Errorf("Error refreshing topo information - %v", err)
+			}
 		}
 		close(done)
 	}()
@@ -841,9 +866,10 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
 				}
 			}
+
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, mysqlShutdownTimeout); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 
@@ -889,6 +915,7 @@ func (tm *TabletManager) exportStats() {
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}
 	statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
+	setTabletTagsStats(tablet)
 }
 
 // withRetry will exponentially back off and retry a function upon
@@ -943,50 +970,50 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 
 // initializeReplication is used to initialize the replication when the tablet starts.
 // It returns the current primary tablet for use externally
-func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (primary *topo.TabletInfo, err error) {
+func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (primaryPosStr string, err error) {
 	// If active reparents are disabled, we do not touch replication.
 	// There is nothing to do
 	if mysqlctl.DisableActiveReparents {
-		return nil, nil
+		return "", nil
 	}
 
 	// If the desired tablet type is primary, then we shouldn't be setting our replication source.
 	// So there is nothing to do.
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		return nil, nil
+		return "", nil
 	}
 
 	// Read the shard to find the current primary, and its location.
 	tablet := tm.Tablet()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "cannot read shard")
+		return "", vterrors.Wrap(err, "cannot read shard")
 	}
 	if si.PrimaryAlias == nil {
 		// There's no primary. This is fine, since there might be no primary currently
 		log.Warningf("cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard)
-		return nil, nil
+		return "", nil
 	}
 	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
 		// We used to be the primary before we got restarted,
 		// and no other primary has been elected in the meantime.
 		// There isn't anything to do here either.
 		log.Warningf("cannot start replication during initialization: primary in shard record still points to this tablet.")
-		return nil, nil
+		return "", nil
 	}
 	currentPrimary, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "cannot read primary tablet %v", si.PrimaryAlias)
+		return "", vterrors.Wrapf(err, "cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
 	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
+		return "", vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
+		return "", vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
 	}
 	// If using semi-sync, we need to enable it before connecting to primary.
 	// We should set the correct type, since it is used in replica semi-sync
@@ -995,21 +1022,50 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// Set primary and start replication.
 	if currentPrimary.Tablet.MysqlHostname == "" {
 		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
-		return nil, nil
-	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, 0, true, true); err != nil {
-		return nil, vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+		return "", nil
 	}
 
-	return currentPrimary, nil
+	// Find our own executed GTID set and,
+	// the executed GTID set of the tablet that we are reparenting to.
+	// We will then compare our own position against it to verify that we don't
+	// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
+	// we will not enter the replication graph and instead fail replication.
+	replicaPos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	primaryPosStr, err = tm.tmc.PrimaryPosition(ctx, currentPrimary.Tablet)
+	if err != nil {
+		return "", err
+	}
+
+	primaryPosition, err := replication.DecodePosition(primaryPosStr)
+	if err != nil {
+		return "", err
+	}
+
+	errantGTIDs, err := replication.ErrantGTIDsOnReplica(replicaPos, primaryPosition)
+	if err != nil {
+		return "", err
+	}
+	if errantGTIDs != "" {
+		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s", errantGTIDs))
+	}
+
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, 0, true, true); err != nil {
+		return "", vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+	}
+
+	return primaryPosStr, nil
 }

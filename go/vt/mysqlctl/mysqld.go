@@ -35,6 +35,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -108,9 +109,10 @@ var (
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	dbcfgs  *dbconfigs.DBConfigs
-	dbaPool *dbconnpool.ConnectionPool
-	appPool *dbconnpool.ConnectionPool
+	dbcfgs   *dbconfigs.DBConfigs
+	dbaPool  *dbconnpool.ConnectionPool
+	appPool  *dbconnpool.ConnectionPool
+	lockConn *dbconnpool.PooledDBConnection
 
 	capabilities capabilitySet
 
@@ -1290,6 +1292,71 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) (string, error) {
 	}
 	res := qr.Named().Row()
 	return res.ToString("@@global.version_comment")
+}
+
+// hostMetrics returns several OS metrics to be used by the tablet throttler.
+func hostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
+	resp := &mysqlctlpb.HostMetricsResponse{
+		Metrics: make(map[string]*mysqlctlpb.HostMetricsResponse_Metric),
+	}
+	newMetric := func(name string) *mysqlctlpb.HostMetricsResponse_Metric {
+		metric := &mysqlctlpb.HostMetricsResponse_Metric{
+			Name: name,
+		}
+		resp.Metrics[name] = metric
+		return metric
+	}
+	withError := func(metric *mysqlctlpb.HostMetricsResponse_Metric, err error) error {
+		if err != nil {
+			metric.Error = &vtrpcpb.RPCError{
+				Message: err.Error(),
+				Code:    vtrpcpb.Code_FAILED_PRECONDITION,
+			}
+		}
+		return err
+	}
+
+	_ = func() error {
+		metric := newMetric("datadir-used-ratio")
+		// 0.0 for empty mount, 1.0 for completely full mount
+		var st syscall.Statfs_t
+		if err := syscall.Statfs(cnf.DataDir, &st); err != nil {
+			return withError(metric, err)
+		}
+		if st.Blocks == 0 {
+			return withError(metric, fmt.Errorf("unexpected zero blocks in %s", cnf.DataDir))
+		}
+		metric.Value = float64(st.Blocks-st.Bfree) / float64(st.Blocks)
+		return nil
+	}()
+
+	_ = func() error {
+		metric := newMetric("loadavg")
+		if runtime.GOOS != "linux" {
+			return withError(metric, fmt.Errorf("loadavg metric is only available on Linux"))
+		}
+		content, err := os.ReadFile("/proc/loadavg")
+		if err != nil {
+			return withError(metric, err)
+		}
+		fields := strings.Fields(string(content))
+		if len(fields) == 0 {
+			return withError(metric, fmt.Errorf("unexpected /proc/loadavg content"))
+		}
+		loadAvg, err := strconv.ParseFloat(fields[0], 64)
+		if err != nil {
+			return withError(metric, err)
+		}
+		metric.Value = loadAvg / float64(runtime.NumCPU())
+		return nil
+	}()
+
+	return resp, nil
+}
+
+// HostMetrics returns several OS metrics to be used by the tablet throttler.
+func (mysqld *Mysqld) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
+	return hostMetrics(ctx, cnf)
 }
 
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:

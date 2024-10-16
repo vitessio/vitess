@@ -87,14 +87,6 @@ func TestRegularExpressions(t *testing.T) {
 				require.Equal(t, `flag.String("bootstrap-version", "18.2", "the version identifier to use for the docker images")`, res)
 			},
 		},
-		{
-			regexp: regexpReplaceGolangVersionInWorkflow,
-			input:  "go-version: 1.20.5",
-			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
-				res := regexp.ReplaceAllString(input, "go-version: 1.20.6")
-				require.Equal(t, `go-version: 1.20.6`, res)
-			},
-		},
 	}
 
 	for _, list := range lists {

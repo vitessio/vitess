@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -55,12 +56,32 @@ const (
 	// Retrieve the current configuration values for a workflow's vreplication stream(s).
 	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
-	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
+	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a %s where id = %a"
 	// Update field values for multiple workflows. The final format specifier is
 	// used to optionally add any additional predicates to the query.
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
 	// Check if workflow is still copying.
 	sqlGetVReplicationCopyStatus = "select distinct vrepl_id from %s.copy_state where vrepl_id = %d"
+	// Validate the minimum set of permissions needed to manage vreplication metadata.
+	// This is a simple check for a matching user rather than any specific user@host
+	// combination.
+	sqlValidateVReplicationPermissions = `
+select count(*)>0 as good from mysql.user as u
+  left join mysql.db as d on (u.user = d.user)
+  left join mysql.tables_priv as t on (u.user = t.user)
+where u.user = %a
+  and (
+    (u.select_priv = 'y' and u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y') /* user has global privs */
+    or (d.db = %a and d.select_priv = 'y' and d.insert_priv = 'y' and d.update_priv = 'y' and d.delete_priv = 'y') /* user has db privs */
+    or (t.db = %a and t.table_name = 'vreplication' /* user has table privs */
+      and find_in_set('select', t.table_priv)
+      and find_in_set('insert', t.table_priv)
+      and find_in_set('update', t.table_priv)
+      and find_in_set('delete', t.table_priv)
+    )
+  )
+limit 1
+`
 )
 
 var (
@@ -483,6 +504,8 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 				state = binlogdatapb.VReplicationWorkflowState_Copying.String()
 			}
 		}
+		options := getOptionSetString(req.ConfigOverrides)
+
 		bindVars = map[string]*querypb.BindVariable{
 			"st": sqltypes.StringBindVariable(state),
 			"sc": sqltypes.StringBindVariable(string(source)),
@@ -490,7 +513,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			"tt": sqltypes.StringBindVariable(tabletTypesStr),
 			"id": sqltypes.Int64BindVariable(id),
 		}
-		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
+		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", options, ":id")
 		stmt, err = parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
 			return nil, err
@@ -507,6 +530,51 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			RowsAffected: rowsAffected,
 		},
 	}, nil
+}
+
+// getOptionSetString takes the option keys passed in and creates a sql clause to update the existing options
+// field in the vreplication table. The clause is built using the json_set() for new and updated options
+// and json_remove() for deleted options, denoted by an empty value.
+func getOptionSetString(config map[string]string) string {
+	if len(config) == 0 {
+		return ""
+	}
+
+	var (
+		options     string
+		deletedKeys []string
+		keys        []string
+	)
+	for k, v := range config {
+		if strings.TrimSpace(v) == "" {
+			deletedKeys = append(deletedKeys, k)
+		} else {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	sort.Strings(deletedKeys)
+	clause := "options"
+	if len(deletedKeys) > 0 {
+		// We need to quote the key in the json functions because flag names can contain hyphens.
+		clause = fmt.Sprintf("json_remove(options, '$.config.\"%s\"'", deletedKeys[0])
+		for _, k := range deletedKeys[1:] {
+			clause += fmt.Sprintf(", '$.config.\"%s\"'", k)
+		}
+		clause += ")"
+	}
+	if len(keys) > 0 {
+		clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
+		for i, k := range keys {
+			if i > 0 {
+				clause += ", "
+			}
+			clause += fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k]))
+		}
+		clause += ")"
+	}
+	options = fmt.Sprintf(", options = %s", clause)
+	return options
 }
 
 // UpdateVReplicationWorkflows operates in much the same way that
@@ -529,6 +597,42 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 		Result: &querypb.QueryResult{
 			RowsAffected: res.RowsAffected,
 		},
+	}, nil
+}
+
+// ValidateVReplicationPermissions validates that the --db_filtered_user has
+// the minimum permissions required on the sidecardb vreplication table
+// needed in order to manage vreplication metadata.
+func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	query, err := sqlparser.ParseAndBind(sqlValidateVReplicationPermissions,
+		sqltypes.StringBindVariable(tm.DBConfigs.Filtered.User),
+		sqltypes.StringBindVariable(sidecar.GetName()),
+		sqltypes.StringBindVariable(sidecar.GetName()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch(query, 1, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) != 1 { // Should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected response to query %s: expected 1 row with 1 column, got: %+v",
+			query, qr)
+	}
+	val, err := qr.Rows[0][0].ToBool()
+	if err != nil { // Should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for query %s: expected boolean-like value, got: %q",
+			query, qr.Rows[0][0].ToString())
+	}
+	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+		User: tm.DBConfigs.Filtered.User,
+		Ok:   val,
 	}, nil
 }
 

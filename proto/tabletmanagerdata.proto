@@ -29,6 +29,7 @@ import "replicationdata.proto";
 import "logutil.proto";
 import "vttime.proto";
 import "vtrpc.proto";
+import "mysqlctl.proto";
 
 //
 // Data structures
@@ -310,10 +311,19 @@ message ExecuteFetchAsAppResponse {
 }
 
 message GetUnresolvedTransactionsRequest {
+  int64 abandon_age = 1;
 }
 
 message GetUnresolvedTransactionsResponse {
   repeated query.TransactionMetadata transactions = 1;
+}
+
+message ReadTransactionRequest {
+  string dtid = 1;
+}
+
+message ReadTransactionResponse {
+  query.TransactionMetadata transaction = 1;
 }
 
 message ConcludeTransactionRequest {
@@ -323,6 +333,15 @@ message ConcludeTransactionRequest {
 
 message ConcludeTransactionResponse {
 }
+
+
+message MysqlHostMetricsRequest {
+}
+
+message MysqlHostMetricsResponse {
+  mysqlctl.HostMetricsResponse HostMetrics = 1;
+}
+
 
 message ReplicationStatusRequest {
 }
@@ -531,6 +550,8 @@ message BackupRequest {
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 4;
+  // BackupEngine specifies if we want to use a particular backup engine for this backup request
+  optional string backup_engine = 5;
 }
 
 message BackupResponse {
@@ -548,6 +569,8 @@ message RestoreFromBackupRequest {
   // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
   // RestoreToTimestamp and RestoreToPos are mutually exclusive.
   vttime.Time restore_to_timestamp = 4;
+  // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
+  repeated string allowed_backup_engines = 5;
 }
 
 message RestoreFromBackupResponse {
@@ -642,6 +665,18 @@ message ReadVReplicationWorkflowResponse {
   }
   repeated Stream streams = 11;
   string options = 12;
+  map<string, string> config_overrides = 13;
+}
+
+message ValidateVReplicationPermissionsRequest {
+}
+
+message ValidateVReplicationPermissionsResponse {
+  // The --db_filtered_user on the tablet.
+  string user = 1;
+  // Does the user have the minimum privileges needed to manage
+  // vreplication metadata.
+  bool ok = 2;
 }
 
 message VDiffRequest {
@@ -694,6 +729,7 @@ message VDiffOptions {
   VDiffReportOptions report_options = 3;
 }
 
+
 // UpdateVReplicationWorkflowRequest is used to update an existing VReplication
 // workflow. Note that the following fields MUST have an explicit value provided
 // if you do NOT wish to update the existing value to the given type's ZeroValue:
@@ -708,6 +744,7 @@ message UpdateVReplicationWorkflowRequest {
   optional binlogdata.OnDDLAction on_ddl = 5;
   optional binlogdata.VReplicationWorkflowState state = 6;
   reserved 7; // unused, was: repeated string shards
+  map<string, string> config_overrides = 8;
 }
 
 message UpdateVReplicationWorkflowResponse {
@@ -870,4 +907,13 @@ message GetThrottlerStatusResponse {
   }
   // RecentApps is a map of app names to their recent check status
   map<string, RecentApp> recent_apps = 18;
+}
+
+message ChangeTagsRequest {
+  map<string, string> tags = 1;
+  bool replace = 2;
+}
+
+message ChangeTagsResponse {
+  map<string, string> tags = 1;
 }

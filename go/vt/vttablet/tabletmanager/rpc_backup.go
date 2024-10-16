@@ -53,7 +53,13 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	if !req.AllowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
 		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
-	engine, err := mysqlctl.GetBackupEngine()
+
+	backupEngine := ""
+	if req.BackupEngine != nil {
+		backupEngine = *req.BackupEngine
+	}
+
+	engine, err := mysqlctl.GetBackupEngine(backupEngine)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
@@ -163,6 +169,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		Stats:                backupstats.BackupStats(),
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		BackupEngine:         backupEngine,
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)

@@ -187,14 +187,14 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 
 // commit2PC will not used the pinned tablets - to make sure we use the current source, we need to use the gateway's queryservice
 func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err error) {
-	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
-		_ = txc.Rollback(ctx, session)
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "pre or post actions not allowed for 2PC commits")
-	}
-
 	// If the number of participants is one or less, then it's a normal commit.
 	if len(session.ShardSessions) <= 1 {
 		return txc.commitNormal(ctx, session)
+	}
+
+	if err := txc.checkValidCondition(session); err != nil {
+		_ = txc.Rollback(ctx, session)
+		return err
 	}
 
 	mmShard := session.ShardSessions[0]
@@ -273,6 +273,16 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 	// This step is to clean up the transaction metadata.
 	txPhase = Commit2pcConclude
 	_ = txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+	return nil
+}
+
+func (txc *TxConn) checkValidCondition(session *SafeSession) error {
+	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
+		return vterrors.VT12001("atomic distributed transaction commit with consistent lookup vindex")
+	}
+	if session.GetInReservedConn() {
+		return vterrors.VT12001("atomic distributed transaction commit with system settings")
+	}
 	return nil
 }
 
@@ -427,7 +437,7 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 
 // ResolveTransactions fetches all unresolved transactions and resolves them.
 func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Target) error {
-	transactions, err := txc.tabletGateway.UnresolvedTransactions(ctx, target)
+	transactions, err := txc.tabletGateway.UnresolvedTransactions(ctx, target, 0 /* abandonAgeSeconds */)
 	if err != nil {
 		return err
 	}
@@ -579,7 +589,7 @@ func (txc *TxConn) UnresolvedTransactions(ctx context.Context, targets []*queryp
 	var tmList []*querypb.TransactionMetadata
 	var mu sync.Mutex
 	err := txc.runTargets(targets, func(target *querypb.Target) error {
-		res, err := txc.tabletGateway.UnresolvedTransactions(ctx, target)
+		res, err := txc.tabletGateway.UnresolvedTransactions(ctx, target, 0 /* abandonAgeSeconds */)
 		if err != nil {
 			return err
 		}

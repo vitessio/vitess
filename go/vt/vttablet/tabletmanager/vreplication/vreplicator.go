@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -113,6 +114,7 @@ type vreplicator struct {
 	WorkflowName    string
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
+	workflowConfig             *vttablet.VReplicationConfig
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -137,19 +139,25 @@ type vreplicator struct {
 //	alias like "a+b as targetcol" must be used.
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
-func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
-	if vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
-		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
-			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
+func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats,
+	dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig) *vreplicator {
+	if workflowConfig == nil {
+		workflowConfig = vttablet.DefaultVReplicationConfig
 	}
+	if workflowConfig.HeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
+		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
+			workflowConfig.HeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
+	}
+	vttablet.InitVReplicationConfigDefaults()
 	vr := &vreplicator{
 		vre:             vre,
 		id:              id,
 		source:          source,
 		sourceVStreamer: sourceVStreamer,
 		stats:           stats,
-		dbClient:        newVDBClient(dbClient, stats),
+		dbClient:        newVDBClient(dbClient, stats, workflowConfig.RelayLogMaxItems),
 		mysqld:          mysqld,
+		workflowConfig:  workflowConfig,
 	}
 	vr.setExistingRowsCopied()
 	return vr
@@ -239,7 +247,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	if err := vr.getSettingFKCheck(); err != nil {
 		return err
 	}
-	//defensive guard, should be a no-op since it should happen after copy is done
+	// defensive guard, should be a no-op since it should happen after copy is done
 	defer vr.resetFKCheckAfterCopy(vr.dbClient)
 	if err := vr.getSettingFKRestrict(); err != nil {
 		return err
@@ -1105,7 +1113,7 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 	if err := dbc.Connect(); err != nil {
 		return nil, vterrors.Wrap(err, "can't connect to database")
 	}
-	dbClient := newVDBClient(dbc, vr.stats)
+	dbClient := newVDBClient(dbc, vr.stats, vr.workflowConfig.RelayLogMaxItems)
 	if _, err := vr.setSQLMode(ctx, dbClient); err != nil {
 		return nil, vterrors.Wrap(err, "failed to set sql_mode")
 	}

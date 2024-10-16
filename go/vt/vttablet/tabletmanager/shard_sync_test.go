@@ -48,7 +48,7 @@ func TestShardSync(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	statsTabletTypeCount.ResetAll()
-	tm := newTestTM(t, ts, 100, keyspace, shard)
+	tm := newTestTM(t, ts, 100, keyspace, shard, nil)
 	defer tm.Stop()
 
 	// update the primary info in the shard record and set it to nil

@@ -189,6 +189,11 @@ type TabletManagerClient struct {
 		ErrorAfter    time.Duration
 	}
 	// keyed by tablet alias.
+	ChangeTagsResult map[string]struct {
+		Response *tabletmanagerdatapb.ChangeTagsResponse
+		Error    error
+	}
+	ChangeTagsDelays       map[string]time.Duration
 	ChangeTabletTypeResult map[string]error
 	ChangeTabletTypeDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -260,6 +265,7 @@ type TabletManagerClient struct {
 		Error    error
 	}
 	GetUnresolvedTransactionsResults map[string][]*querypb.TransactionMetadata
+	ReadTransactionResult            map[string]*querypb.TransactionMetadata
 	// keyed by tablet alias.
 	InitPrimaryDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -477,6 +483,39 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 	return stream, nil
 }
 
+// ChangeTags is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet, tabletTags map[string]string, replace bool) (*tabletmanagerdatapb.ChangeTagsResponse, error) {
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.ChangeTagsDelays != nil {
+		if delay, ok := fake.ChangeTagsDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.ChangeTagsResult[key]; ok {
+		return result.Response, result.Error
+	}
+
+	if fake.TopoServer == nil {
+		return nil, assert.AnError
+	}
+
+	tablet, err := topotools.ChangeTags(ctx, fake.TopoServer, tablet.Alias, tabletTags, replace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tabletmanagerdatapb.ChangeTagsResponse{
+		Tags: tablet.Tags,
+	}, nil
+}
+
 // ChangeType is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType, semiSync bool) error {
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -661,6 +700,18 @@ func (fake *TabletManagerClient) GetUnresolvedTransactions(ctx context.Context, 
 	}
 
 	return fake.GetUnresolvedTransactionsResults[tablet.Shard], nil
+}
+
+// ReadTransaction is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	if fake.CallError {
+		return nil, fmt.Errorf("%w: blocked call for ReadTransaction on fake TabletManagerClient", assert.AnError)
+	}
+	if fake.ReadTransactionResult == nil {
+		return nil, fmt.Errorf("%w: no ReadTransaction result on fake TabletManagerClient", assert.AnError)
+	}
+
+	return fake.ReadTransactionResult[tablet.Shard], nil
 }
 
 // ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
