@@ -22,8 +22,6 @@ import (
 	"slices"
 	"strconv"
 
-	"vitess.io/vitess/go/slice"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -560,9 +558,6 @@ func createProjectionWithTheseColumns(
 	proj.Columns = AliasedProjections(p.columns)
 	if dt != nil {
 		kopy := *dt
-		kopy.Columns = slice.Map(p.columnAliases, func(s string) sqlparser.IdentifierCI {
-			return sqlparser.NewIdentifierCI(s)
-		})
 		proj.DT = &kopy
 	}
 
