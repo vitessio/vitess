@@ -616,6 +616,35 @@
     }
   },
   {
+    "comment": "using HAVING inside a derived table still produces viable plans",
+    "query": "select id from (select id from user group by id having (count(user.id) = 2) limit 2 offset 0) subquery_for_limit",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from (select id from user group by id having (count(user.id) = 2) limit 2 offset 0) subquery_for_limit",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "2",
+        "Offset": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from (select id, count(`user`.id) = 2 from `user` where 1 != 1 group by id) as subquery_for_limit where 1 != 1",
+            "Query": "select id from (select id, count(`user`.id) = 2 from `user` group by id having count(`user`.id) = 2) as subquery_for_limit limit 2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "sum with distinct no unique vindex",
     "query": "select col1, sum(distinct col2) from user group by col1",
     "plan": {
