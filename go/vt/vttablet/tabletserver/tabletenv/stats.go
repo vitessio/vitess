@@ -102,7 +102,7 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 
 		QueryTimingsByTabletType: exporter.NewTimings("QueryTimingsByTabletType", "Query timings broken down by active tablet type", "TabletType"),
 
-		Unresolved:         exporter.NewGaugesWithSingleLabel("UnresolvedTransaction", "Unresolved items", "ManagerType"),
+		Unresolved:         exporter.NewGaugesWithSingleLabel("UnresolvedTransaction", "Current unresolved transactions", "ManagerType"),
 		CommitPreparedFail: exporter.NewCountersWithSingleLabel("CommitPreparedFail", "failed prepared transactions commit", "FailureType"),
 		RedoPreparedFail:   exporter.NewCountersWithSingleLabel("RedoPreparedFail", "failed prepared transactions on redo", "FailureType"),
 	}
