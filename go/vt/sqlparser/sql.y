@@ -3540,11 +3540,19 @@ character_set:
   {
     $$ = string($3)
   }
+| CHARACTER SET STRING
+  {
+    $$ = string($3)
+  }
 | CHARSET ID
   {
     $$ = string($2)
   }
 | CHARSET BINARY
+  {
+    $$ = string($2)
+  }
+| CHARSET STRING
   {
     $$ = string($2)
   }

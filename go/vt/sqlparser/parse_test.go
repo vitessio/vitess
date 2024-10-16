@@ -3327,76 +3327,116 @@ var (
 		}, {
 			input:  "SELECT * FROM information_schema.processlist",
 			output: "select * from information_schema.`processlist`",
-		}, {
+		},
+		{
 			input:  "CREATE DATABASE `dolt_testing` DEFAULT CHARACTER SET latin1",
 			output: "create database dolt_testing default character set latin1",
-		}, {
+		},
+		{
 			input:  "CREATE DATABASE `dolt_testing` DEFAULT CHARACTER SET=latin1",
 			output: "create database dolt_testing default character set latin1",
-		}, {
+		},
+		{
 			input:  "CREATE DATABASE `dolt_testing` DEFAULT CHARSET latin1",
 			output: "create database dolt_testing default charset latin1",
-		}, {
+		},
+		{
 			input:  "CREATE DATABASE `dolt_testing` DEFAULT COLLATE latin1_general_ci",
 			output: "create database dolt_testing default collate latin1_general_ci",
-		}, {
+		},
+		{
 			input:  "CREATE DATABASE `dolt_testing` COLLATE latin1_general_ci CHARACTER SET latin1",
 			output: "create database dolt_testing collate latin1_general_ci character set latin1",
-		}, {
+		},
+		{
 			input:  "CREATE DATABASE `dolt_testing` DEFAULT COLLATE cp1257_lithuanian_ci",
 			output: "create database dolt_testing default collate cp1257_lithuanian_ci",
-		}, {
+		},
+		{
 			input:  "CREATE DATABASE `dolt_testing` DEFAULT CHARACTER SET latin1 DEFAULT COLLATE latin1_general_ci",
 			output: "create database dolt_testing default character set latin1 default collate latin1_general_ci",
-		}, {
+		},
+		{
 			input:  "CREATE DATABASE IF NOT EXISTS `test` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT ENCRYPTION='N'",
 			output: "create database if not exists test default character set utf8mb4 collate utf8mb4_0900_ai_ci default encryption N",
-		}, {
+		},
+		{
 			input:  "CREATE DATABASE `somedb` CHARACTER SET binary CHARSET binary COLLATE binary collate binary encryption 'n' encryption 'n'",
 			output: "create database somedb character set binary charset binary collate binary collate binary encryption n encryption n",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255) collate 'utf8_unicode_ci')",
 			output: "create table test (\n\tpk varchar(255) collate utf8_unicode_ci\n)",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255) collate utf8_unicode_ci)",
 			output: "create table test (\n\tpk varchar(255) collate utf8_unicode_ci\n)",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255)) collate 'utf8_unicode_ci'",
 			output: "create table test (\n\tpk varchar(255)\n) collate utf8_unicode_ci",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255)) collate utf8_unicode_ci",
 			output: "create table test (\n\tpk varchar(255)\n) collate utf8_unicode_ci",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255) charset binary)",
 			output: "create table test (\n\tpk varchar(255) character set binary\n)",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255) charset utf8mb4)",
 			output: "create table test (\n\tpk varchar(255) character set utf8mb4\n)",
-		}, {
+		},
+		{
+			input:  "create table test (pk varchar(255) charset 'utf8mb4')",
+			output: "create table test (\n\tpk varchar(255) character set utf8mb4\n)",
+		},
+		{
 			input:  "create table test (pk varchar(255) character set binary)",
 			output: "create table test (\n\tpk varchar(255) character set binary\n)",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255) character set utf8mb4)",
 			output: "create table test (\n\tpk varchar(255) character set utf8mb4\n)",
-		}, {
+		},
+		{
+			input:  "create table test (pk varchar(255) character set 'utf8mb4')",
+			output: "create table test (\n\tpk varchar(255) character set utf8mb4\n)",
+		},
+		{
 			input:  "create table test (pk varchar(255) collate binary)",
 			output: "create table test (\n\tpk varchar(255) collate binary\n)",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255) collate utf8_unicode_ci)",
 			output: "create table test (\n\tpk varchar(255) collate utf8_unicode_ci\n)",
-		}, {
+		},
+		{
+			input:  "create table test (pk varchar(255) collate 'utf8_unicode_ci')",
+			output: "create table test (\n\tpk varchar(255) collate utf8_unicode_ci\n)",
+		},
+		{
 			input:  "create table test (pk varchar(255) charset binary collate binary)",
 			output: "create table test (\n\tpk varchar(255) character set binary collate binary\n)",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255) charset utf8mb4 collate utf8_unicode_ci)",
 			output: "create table test (\n\tpk varchar(255) character set utf8mb4 collate utf8_unicode_ci\n)",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255) character set binary collate binary)",
 			output: "create table test (\n\tpk varchar(255) character set binary collate binary\n)",
-		}, {
+		},
+		{
 			input:  "create table test (pk varchar(255) character set utf8mb4 collate utf8_unicode_ci)",
 			output: "create table test (\n\tpk varchar(255) character set utf8mb4 collate utf8_unicode_ci\n)",
-		}, {
+		},
+		{
+			input:  "create table test (pk varchar(255) character set 'utf8mb4' collate 'utf8_unicode_ci')",
+			output: "create table test (\n\tpk varchar(255) character set utf8mb4 collate utf8_unicode_ci\n)",
+		},
+		{
 			input:  "select * from current",
 			output: "select * from `current`",
 		}, {
