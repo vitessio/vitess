@@ -46,7 +46,7 @@ func (c *Codec) Marshal(v any) (mem.BufferSlice, error) {
 	if m, ok := v.(vtprotoMessage); ok {
 		size := m.SizeVT()
 		if mem.IsBelowBufferPoolingThreshold(size) {
-			buf := make([]byte, 0, size)
+			buf := make([]byte, size)
 			if _, err := m.MarshalToSizedBufferVT(buf[:size]); err != nil {
 				return nil, err
 			}
