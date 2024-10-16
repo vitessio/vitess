@@ -62,3 +62,6 @@ from (select 1 as one
 select u.id, u.t1_id, t.num_segments
 from (select id, count(*) as num_segments from t1 group by 1 order by 2 desc limit 20) t
          join t2 u on u.id = t.id;
+
+select name
+from (select name from t1 group by name having count(t1.id) > 1) t1;
