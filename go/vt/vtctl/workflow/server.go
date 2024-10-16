@@ -1523,7 +1523,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "MoveTablesCreate")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
-		return nil, lockErr
+		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
 	}
 	defer workflowUnlock(&err)
 	ctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "MoveTablesCreate")
@@ -1725,7 +1725,7 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "MoveTablesComplete")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
-		return nil, lockErr
+		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
 	}
 	defer workflowUnlock(&err)
 
@@ -2123,7 +2123,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "WorkflowDelete")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
-		return nil, lockErr
+		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
 	}
 	defer workflowUnlock(&err)
 
@@ -3296,7 +3296,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "WorkflowSwitchTraffic")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
-		return nil, lockErr
+		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
 	}
 	defer workflowUnlock(&err)
 
