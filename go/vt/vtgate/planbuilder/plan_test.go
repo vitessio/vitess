@@ -293,7 +293,7 @@ func (s *planTestSuite) TestViews() {
 	s.testFile("view_cases.json", vschemaWrapper, false)
 }
 
-func (s *planTestSuite) /**/ TestOne() {
+func (s *planTestSuite) TestOne() {
 	reset := operators.EnableDebugPrinting()
 	defer reset()
 

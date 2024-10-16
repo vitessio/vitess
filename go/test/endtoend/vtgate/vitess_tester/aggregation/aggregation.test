@@ -64,4 +64,4 @@ from (select id, count(*) as num_segments from t1 group by 1 order by 2 desc lim
          join t2 u on u.id = t.id;
 
 select name
-from (select name from t1 group by name having count(t1.id > 1)) t1;
+from (select name from t1 group by name having count(t1.id) > 1) t1;
