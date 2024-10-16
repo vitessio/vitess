@@ -26,9 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -164,6 +163,7 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 
 	conn := vtgateConn.Session("", nil)
 	ctx, cancel := context.WithCancel(context.Background())
+	ctx = callerid.NewContext(ctx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
 	defer cancel()
 
 	for i := 1; i <= 20; i++ {
@@ -176,8 +176,7 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 		multi := len(conn.SessionPb().ShardSessions) > 1
 
 		// fail after mm commit.
-		newCtx := callerid.NewContext(ctx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
-		_, err = conn.Execute(newCtx, "commit", nil)
+		_, err = conn.Execute(ctx, "commit", nil)
 		if multi {
 			assert.ErrorContains(t, err, "Fail After MM commit")
 		} else {
@@ -206,6 +205,76 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 			fmt.Printf("unresolved tx count: %f\n", unresolvedCount)
 		}
 	}
+}
+
+// TestVTTablet2PCMetricsFailCommitPrepared tests 2pc metrics on VTTablet on commit prepared failure..';;/
+func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
+	defer cleanup(t)
+
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	conn := vtgateConn.Session("", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	newCtx := callerid.NewContext(ctx, callerid.NewEffectiveCallerID("CP_80-_R", "", ""), nil)
+	execute(t, newCtx, conn, "begin")
+	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (4, 1)")
+	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (6, 2)")
+	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (9, 3)")
+	_, err = conn.Execute(newCtx, "commit", nil)
+	require.ErrorContains(t, err, "commit prepared: retryable error")
+	dtidRetryable := getDTIDFromWarnings(ctx, t, conn)
+	require.NotEmpty(t, dtidRetryable)
+
+	cpFail := getVarValue[map[string]any](t, "CommitPreparedFail", clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().VttabletProcess.GetVars)
+	require.EqualValues(t, 1, cpFail["Retryable"])
+	require.Nil(t, cpFail["NonRetryable"])
+
+	newCtx = callerid.NewContext(ctx, callerid.NewEffectiveCallerID("CP_80-_NR", "", ""), nil)
+	execute(t, newCtx, conn, "begin")
+	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (20, 11)")
+	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (22, 21)")
+	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (25, 31)")
+	_, err = conn.Execute(newCtx, "commit", nil)
+	require.ErrorContains(t, err, "commit prepared: non retryable error")
+	dtidNonRetryable := getDTIDFromWarnings(ctx, t, conn)
+	require.NotEmpty(t, dtidNonRetryable)
+
+	cpFail = getVarValue[map[string]any](t, "CommitPreparedFail", clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().VttabletProcess.GetVars)
+	require.EqualValues(t, 1, cpFail["Retryable"]) // old counter value
+	require.EqualValues(t, 1, cpFail["NonRetryable"])
+
+	// restart to trigger unresolved transactions
+	err = clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().RestartOnlyTablet()
+	require.NoError(t, err)
+
+	// dtid with retryable error should be resolved.
+	waitForDTIDResolve(ctx, t, conn, dtidRetryable, 5*time.Second)
+
+	// dtid with non retryable error should remain unresolved.
+	qr, err := conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtidNonRetryable), nil)
+	require.NoError(t, err)
+	require.NotZero(t, qr.Rows, "should remain unresolved")
+
+	// running conclude transaction for it.
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"DistributedTransaction", "conclude", "--dtid", dtidNonRetryable)
+	require.NoError(t, err)
+	require.Contains(t, out, "Successfully concluded the distributed transaction")
+	// now verifying
+	qr, err = conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtidNonRetryable), nil)
+	require.NoError(t, err)
+	require.Empty(t, qr.Rows)
+}
+
+func execute(t *testing.T, ctx context.Context, conn *vtgateconn.VTGateSession, query string) {
+	t.Helper()
+
+	_, err := conn.Execute(ctx, query, nil)
+	require.NoError(t, err)
 }
 
 func getUnresolvedTxCount(t *testing.T) float64 {
@@ -290,6 +359,11 @@ func getVarValue[T any](t *testing.T, key string, varFunc func() map[string]any)
 func waitForResolve(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateSession, waitTime time.Duration) {
 	t.Helper()
 
+	dtid := getDTIDFromWarnings(ctx, t, conn)
+	waitForDTIDResolve(ctx, t, conn, dtid, waitTime)
+}
+
+func getDTIDFromWarnings(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateSession) string {
 	qr, err := conn.Execute(ctx, "show warnings", nil)
 	require.NoError(t, err)
 	require.Len(t, qr.Rows, 1)
@@ -302,8 +376,10 @@ func waitForResolve(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateSe
 	// extract transaction ID
 	indx := strings.Index(w.Msg, " ")
 	require.Greater(t, indx, 0)
-	dtid := w.Msg[:indx]
+	return w.Msg[:indx]
+}
 
+func waitForDTIDResolve(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateSession, dtid string, waitTime time.Duration) {
 	unresolved := true
 	totalTime := time.After(waitTime)
 	for unresolved {
@@ -312,7 +388,7 @@ func waitForResolve(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateSe
 			t.Errorf("transaction resolution exceeded wait time of %v", waitTime)
 			unresolved = false // break the loop.
 		case <-time.After(100 * time.Millisecond):
-			qr, err = conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%v'`, dtid), nil)
+			qr, err := conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtid), nil)
 			require.NoError(t, err)
 			unresolved = len(qr.Rows) != 0
 		}

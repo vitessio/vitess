@@ -113,4 +113,5 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 func cleanup(t *testing.T) {
 	cluster.PanicHandler(t)
 	twopcutil.ClearOutTable(t, vtParams, "twopc_user")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_t1")
 }

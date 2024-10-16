@@ -33,19 +33,21 @@ import (
 
 // DTExecutor is used for executing a distributed transactional request.
 type DTExecutor struct {
-	ctx      context.Context
-	logStats *tabletenv.LogStats
-	te       *TxEngine
-	qe       *QueryEngine
+	ctx       context.Context
+	logStats  *tabletenv.LogStats
+	te        *TxEngine
+	qe        *QueryEngine
+	shardFunc func() string
 }
 
 // NewDTExecutor creates a new distributed transaction executor.
-func NewDTExecutor(ctx context.Context, te *TxEngine, qe *QueryEngine, logStats *tabletenv.LogStats) *DTExecutor {
+func NewDTExecutor(ctx context.Context, logStats *tabletenv.LogStats, te *TxEngine, qe *QueryEngine, shardFunc func() string) *DTExecutor {
 	return &DTExecutor{
-		ctx:      ctx,
-		te:       te,
-		qe:       qe,
-		logStats: logStats,
+		ctx:       ctx,
+		logStats:  logStats,
+		te:        te,
+		qe:        qe,
+		shardFunc: shardFunc,
 	}
 }
 
@@ -168,6 +170,12 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 		}
 		dte.te.txPool.RollbackAndRelease(ctx, conn)
 	}()
+	if DebugTwoPc {
+		if err := checkTestFailure(dte.ctx, dte.shardFunc()); err != nil {
+			log.Errorf("failing test on commit prepared: %v", err)
+			return err
+		}
+	}
 	if err = dte.te.twoPC.DeleteRedo(ctx, conn, dtid); err != nil {
 		return err
 	}
