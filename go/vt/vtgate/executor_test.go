@@ -2805,14 +2805,6 @@ func TestExecutorRejectTwoPC(t *testing.T) {
 	}{
 		{
 			sqls: []string{
-				`set time_zone = "+08:00"`,
-				`insert into user_extra(user_id) values (1)`,
-				`insert into user_extra(user_id) values (2)`,
-				`insert into user_extra(user_id) values (3)`,
-			},
-			expErr: "VT12001: unsupported: atomic distributed transaction commit with system settings",
-		}, {
-			sqls: []string{
 				`update t1 set unq_col = 1 where id = 1`,
 				`update t1 set unq_col = 1 where id = 3`,
 			},
