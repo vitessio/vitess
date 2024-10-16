@@ -73,6 +73,8 @@ func TestMain(m *testing.M) {
 			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--migration_check_interval", "2s",
+			"--onterm_timeout", "1s",
+			"--onclose_timeout", "1s",
 		)
 
 		// Start keyspace

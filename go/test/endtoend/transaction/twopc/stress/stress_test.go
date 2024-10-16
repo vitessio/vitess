@@ -71,15 +71,15 @@ func TestSettings(t *testing.T) {
 			commitDelayTime: "5",
 			queries: append(
 				append([]string{`set @@time_zone="+10:30"`, "begin"}, getMultiShardInsertQueries()...),
-				"insert into twopc_settings(id, col) values(1, now())"),
+				"insert into twopc_settings(id, col) values(9, now())"),
 			verifyFunc: func(t *testing.T, vtParams *mysql.ConnParams) {
 				// We can check that the time_zone setting was taken into account by checking the diff with the time by using a different time_zone.
 				ctx := context.Background()
 				conn, err := mysql.Connect(ctx, vtParams)
 				require.NoError(t, err)
 				defer conn.Close()
-				utils.Exec(t, conn, `set @@time_zone="+5:00""`)
-				utils.AssertMatches(t, conn, `select HOUR(TIMEDIFF((select col from twopc_settings where id = 1),now()))`, `[[INT64(5)]]`)
+				utils.Exec(t, conn, `set @@time_zone="+7:00"`)
+				utils.AssertMatches(t, conn, `select HOUR(TIMEDIFF((select col from twopc_settings where id = 9),now()))`, `[[INT64(3)]]`)
 			},
 		},
 		{
@@ -88,15 +88,15 @@ func TestSettings(t *testing.T) {
 			queries: append(
 				append([]string{"begin"}, getMultiShardInsertQueries()...),
 				`set @@time_zone="+10:30"`,
-				"insert into twopc_settings(id, col) values(1, now())"),
+				"insert into twopc_settings(id, col) values(9, now())"),
 			verifyFunc: func(t *testing.T, vtParams *mysql.ConnParams) {
 				// We can check that the time_zone setting was taken into account by checking the diff with the time by using a different time_zone.
 				ctx := context.Background()
 				conn, err := mysql.Connect(ctx, vtParams)
 				require.NoError(t, err)
 				defer conn.Close()
-				utils.Exec(t, conn, `set @@time_zone="+5:00""`)
-				utils.AssertMatches(t, conn, `select HOUR(TIMEDIFF((select col from twopc_settings where id = 1),now()))`, `[[INT64(5)]]`)
+				utils.Exec(t, conn, `set @@time_zone="+7:00"`)
+				utils.AssertMatches(t, conn, `select HOUR(TIMEDIFF((select col from twopc_settings where id = 9),now()))`, `[[INT64(3)]]`)
 			},
 		},
 		{
@@ -104,16 +104,16 @@ func TestSettings(t *testing.T) {
 			commitDelayTime: "5",
 			queries: append(
 				append([]string{`set @@time_zone="+10:30"`, "begin"}, getMultiShardInsertQueries()...),
-				"insert into twopc_settings(id, col) values(1, now())",
-				`set @@time_zone="+5:30"`,
-				"insert into twopc_settings(id, col) values(2, now())"),
+				"insert into twopc_settings(id, col) values(9, now())",
+				`set @@time_zone="+7:00"`,
+				"insert into twopc_settings(id, col) values(25, now())"),
 			verifyFunc: func(t *testing.T, vtParams *mysql.ConnParams) {
 				// We can check that the time_zone setting was taken into account by checking the diff with the time by using a different time_zone.
 				ctx := context.Background()
 				conn, err := mysql.Connect(ctx, vtParams)
 				require.NoError(t, err)
 				defer conn.Close()
-				utils.AssertMatches(t, conn, `select HOUR(TIMEDIFF((select col from twopc_settings where id = 1),(select col from twopc_settings where id = 2)))`, `[[INT64(5)]]`)
+				utils.AssertMatches(t, conn, `select HOUR(TIMEDIFF((select col from twopc_settings where id = 9),(select col from twopc_settings where id = 25)))`, `[[INT64(3)]]`)
 			},
 		},
 	}
@@ -125,6 +125,8 @@ func TestSettings(t *testing.T) {
 			// cleanup all the old data.
 			conn, closer := start(t)
 			defer closer()
+			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
+			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
 			var wg sync.WaitGroup
 			runMultiShardCommitWithDelay(t, conn, tt.commitDelayTime, &wg, tt.queries)
 			// Allow enough time for the commit to have started.
@@ -213,6 +215,8 @@ func TestDisruptions(t *testing.T) {
 			// cleanup all the old data.
 			conn, closer := start(t)
 			defer closer()
+			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
+			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
 			var wg sync.WaitGroup
 			runMultiShardCommitWithDelay(t, conn, tt.commitDelayTime, &wg, append([]string{"begin"}, getMultiShardInsertQueries()...))
 			// Allow enough time for the commit to have started.
@@ -265,9 +269,7 @@ func runMultiShardCommitWithDelay(t *testing.T, conn *mysql.Conn, commitDelayTim
 	}
 	// We want to delay the commit on one of the shards to simulate slow commits on a shard.
 	twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitShard, "80-")
-	defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
 	twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitTime, commitDelayTime)
-	defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
 	// We will execute a commit in a go routine, because we know it will take some time to complete.
 	// While the commit is ongoing, we would like to run the disruption.
 	wg.Add(1)
@@ -347,7 +349,9 @@ func ersShard3(t *testing.T) error {
 func vttabletRestartShard3(t *testing.T) error {
 	shard := clusterInstance.Keyspaces[0].Shards[2]
 	tablet := shard.Vttablets[0]
-	return tablet.RestartOnlyTablet()
+	_ = tablet.VttabletProcess.TearDownWithTimeout(2 * time.Second)
+	tablet.VttabletProcess.ServingStatus = "SERVING"
+	return tablet.VttabletProcess.Setup()
 }
 
 // mysqlRestartShard3 restarts MySQL on the first tablet of the third shard.
