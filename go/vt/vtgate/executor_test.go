@@ -42,6 +42,11 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
@@ -50,12 +55,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
@@ -2792,6 +2791,77 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	// empty prepared query
 	_, err = executor.Execute(context.Background(), nil, "TestExecutorPrepareExecute", session, "prepare prep_user from ''", nil)
 	require.Error(t, err)
+}
+
+// TestExecutorSettingsInTwoPC tests that settings are supported for multi-shard atomic commit.
+func TestExecutorSettingsInTwoPC(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	tcases := []struct {
+		sqls            []string
+		testRes         []*sqltypes.Result
+		expectedQueries [][]string
+	}{
+		{
+			sqls: []string{
+				`set time_zone = "+08:00"`,
+				`insert into user_extra(user_id) values (1)`,
+				`insert into user_extra(user_id) values (2)`,
+				`insert into user_extra(user_id) values (3)`,
+			},
+			testRes: []*sqltypes.Result{
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "varchar"),
+					"+08:00"),
+			},
+			expectedQueries: [][]string{
+				{
+					"select '+08:00' from dual where @@time_zone != '+08:00'",
+					"set @@time_zone = '+08:00'",
+					"set @@time_zone = '+08:00'",
+					"insert into user_extra(user_id) values (1)",
+					"insert into user_extra(user_id) values (2)",
+				},
+				{
+					"set @@time_zone = '+08:00'",
+					"insert into user_extra(user_id) values (3)",
+				},
+			},
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("%v", tcase.sqls), func(t *testing.T) {
+			sbc1.SetResults(tcase.testRes)
+			sbc2.SetResults(tcase.testRes)
+
+			// create a new session
+			session := NewSafeSession(&vtgatepb.Session{
+				TargetString:         KsTestSharded,
+				TransactionMode:      vtgatepb.TransactionMode_TWOPC,
+				EnableSystemSettings: true,
+			})
+
+			// start transaction
+			_, err := executor.Execute(ctx, nil, "TestExecutorSettingsInTwoPC", session, "begin", nil)
+			require.NoError(t, err)
+
+			// execute queries
+			for _, sql := range tcase.sqls {
+				_, err = executor.Execute(ctx, nil, "TestExecutorSettingsInTwoPC", session, sql, nil)
+				require.NoError(t, err)
+			}
+
+			// commit 2pc
+			_, err = executor.Execute(ctx, nil, "TestExecutorSettingsInTwoPC", session, "commit", nil)
+			require.NoError(t, err)
+
+			queriesRecvd, err := sbc1.GetFinalQueries()
+			require.NoError(t, err)
+			assert.EqualValues(t, tcase.expectedQueries[0], queriesRecvd)
+			queriesRecvd, err = sbc2.GetFinalQueries()
+			require.NoError(t, err)
+			assert.EqualValues(t, tcase.expectedQueries[1], queriesRecvd)
+		})
+	}
 }
 
 // TestExecutorRejectTwoPC test all the unsupported cases for multi-shard atomic commit.
