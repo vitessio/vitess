@@ -3138,10 +3138,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.WorkflowSwitchTraffic")
 	defer span.Finish()
 
-	if req == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid nil request")
-	}
-
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("tablet-types", req.TabletTypes)
@@ -3189,6 +3185,14 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	if startState.WorkflowType == TypeMigrate {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
+	}
+
+	if direction == DirectionBackward && ts.IsMultiTenantMigration() {
+		// In a multi-tenant migration, multiple migrations would be writing to the same
+		// table, so we can't stop writes like we do with MoveTables, using denied tables,
+		// since it would block all other migrations as well as traffic for tenants which
+		// have already been migrated.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse traffic for multi-tenant migrations")
 	}
 
 	// We need this to know when there isn't a reverse workflow to use.
