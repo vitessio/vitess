@@ -2780,23 +2780,7 @@ func (s *Server) DeleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 		return nil
 	}
 
-	var err error
-	// Lock the target keyspace. We need to ensure that we hold the lock for the
-	// duration of our operation which can be a while in this case.
-	deadline, ok := ctx.Deadline()
-	if !ok { // Should never happen
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "missing deadline in the context")
-	}
-	lockCtx, targetUnlock, lockErr := s.ts.LockKeyspace(ctx, ts.TargetKeyspaceName(), "DeleteTenantData",
-		topo.WithTTL(time.Duration(deadline.UnixNano()+int64(time.Millisecond*1))))
-	if lockErr != nil {
-		return vterrors.Wrapf(lockErr, "failed to lock the %s keyspace", ts.TargetKeyspaceName())
-	}
-	defer targetUnlock(&err)
-	ctx = lockCtx
-
-	var tenantPredicate *sqlparser.Expr
-	tenantPredicate, err = ts.buildTenantPredicate(ctx)
+	tenantPredicate, err := ts.buildTenantPredicate(ctx)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to build delete filter")
 	}
