@@ -370,10 +370,9 @@
       "Original": "with s as (select id from user having count(*) = 1) select * from s",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:id"
+        "Columns": [
+          0
         ],
-        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Projection",

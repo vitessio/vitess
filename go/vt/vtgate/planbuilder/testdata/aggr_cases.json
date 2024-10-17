@@ -590,7 +590,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from (select id, count(`user`.id) = 2 from `user` where 1 != 1 group by id) as subquery_for_limit where 1 != 1",
-            "Query": "select id from (select id, count(`user`.id) = 2 from `user` group by id having count(`user`.id) = 2) as subquery_for_limit limit 2",
+            "Query": "select id from (select id, count(`user`.id) = 2 from `user` group by id having count(`user`.id) = 2) as subquery_for_limit limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -3644,10 +3644,9 @@
       "Original": "select * from (select id from user having count(*) = 1) s",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:id"
+        "Columns": [
+          0
         ],
-        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Projection",
@@ -6594,11 +6593,11 @@
                               {
                                 "OperatorType": "SimpleProjection",
                                 "Columns": [
-                              2,
-                              0,
-                              1,
-                              3
-                            ],
+                                  2,
+                                  0,
+                                  1,
+                                  3
+                                ],
                                 "Inputs": [
                                   {
                                     "OperatorType": "Sort",

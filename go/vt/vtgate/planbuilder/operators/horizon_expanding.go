@@ -300,6 +300,7 @@ outer:
 func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) Operator {
 	p := newAliasedProjection(a)
 	p.DT = a.DT
+	a.DT = nil // we don't need the derived table twice
 	for _, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
 		if err != nil {
