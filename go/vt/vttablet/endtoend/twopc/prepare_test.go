@@ -81,7 +81,7 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	require.NoError(t, err)
 
 	client2 := framework.NewClient()
-	_, err = client2.BeginExecute(`select * from _vt.redo_state where dtid = 'aa' for update`, nil, nil)
+	_, err = client2.BeginExecute(`select * from _vt.redo_state where dtid = X'6161' for update`, nil, nil)
 	require.NoError(t, err)
 
 	ch := make(chan any)
@@ -103,7 +103,7 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	client2.Release()
 	<-ch
 
-	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = 'aa'", nil)
+	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = X'6161'", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[VARBINARY("aa") INT64(1) TEXT("Query execution was interrupted (errno 1317) (sqlstate 70100) during query: delete from _vt.redo_state where dtid = 'aa'")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[VARBINARY("aa") INT64(1) TEXT("Query execution was interrupted (errno 1317) (sqlstate 70100) during query: delete from _vt.redo_state where dtid = X'6161'")]]`, fmt.Sprintf("%v", qr.Rows))
 }

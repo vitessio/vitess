@@ -1055,7 +1055,7 @@
         "Query": "select * from `user` where id = 0x04",
         "Table": "`user`",
         "Values": [
-          "'\u0004'"
+          "X'04'"
         ],
         "Vindex": "user_index"
       },
