@@ -582,7 +582,10 @@
           }
         ]
       }
-    }
+    },
+    "warnings": [
+      "code:1246 message:\"converted 'next transaction' scope to 'session' scope\""
+    ]
   },
   {
     "comment": "set vitess_metadata",
@@ -604,6 +607,9 @@
           }
         ]
       }
-    }
+    },
+    "warnings": [
+      "code:1246 message:\"converted 'next transaction' scope to 'session' scope\""
+    ]
   }
 ]

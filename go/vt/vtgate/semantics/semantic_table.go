@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -102,7 +103,7 @@ type (
 		// Comments stores any comments of the /* vt+ */ type in the query
 		Comments *sqlparser.ParsedComments
 		// Warning stores any warnings generated during semantic analysis.
-		Warning string
+		Warnings []*querypb.QueryWarning
 		// Collation represents the default collation for the query, usually inherited
 		// from the connection's default collation.
 		Collation collations.ID

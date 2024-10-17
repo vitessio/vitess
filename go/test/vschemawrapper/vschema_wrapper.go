@@ -51,6 +51,7 @@ type VSchemaWrapper struct {
 	EnableViews           bool
 	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
 	Env                   *vtenv.Environment
+	Warnings              []*querypb.QueryWarning
 }
 
 func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
@@ -132,7 +133,8 @@ func (vw *VSchemaWrapper) Environment() *vtenv.Environment {
 	return vw.Env
 }
 
-func (vw *VSchemaWrapper) PlannerWarning(_ string) {
+func (vw *VSchemaWrapper) PlannerWarnings(warnings ...*querypb.QueryWarning) {
+	vw.Warnings = warnings
 }
 
 func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {

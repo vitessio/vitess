@@ -21,6 +21,9 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -92,7 +95,10 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 				// This is to keep the backward compatibility.
 				// 'transaction_isolation' was added as a reserved connection system variable, so it used to change the setting at session level already.
 				// logging warning now to
-				vschema.PlannerWarning("converted 'next transaction' scope to 'session' scope")
+				vschema.PlannerWarnings(&querypb.QueryWarning{
+					Code:    uint32(sqlerror.ERAutoConvert),
+					Message: "converted 'next transaction' scope to 'session' scope",
+				})
 			}
 		case sqlparser.VitessMetadataScope:
 			value, err := getValueFor(expr)
