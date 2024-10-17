@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -224,6 +225,7 @@ type testMaterializerTMClient struct {
 
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
+	fetchAsAllPrivsQueries             map[int]map[string]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
 
 	// Used to confirm the number of times WorkflowDelete was called.
@@ -243,6 +245,7 @@ func newTestMaterializerTMClient(keyspace string, sourceShards []string, tableSe
 		sourceShards:                       sourceShards,
 		tableSettings:                      tableSettings,
 		vrQueries:                          make(map[int][]*queryResult),
+		fetchAsAllPrivsQueries:             make(map[int]map[string]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
 		getSchemaResponses:                 make(map[uint32]*tabletmanagerdatapb.SchemaDefinition),
 	}
@@ -370,6 +373,20 @@ func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, r
 	})
 }
 
+func (tmc *testMaterializerTMClient) expectFetchAsAllPrivsQuery(tabletID int, query string, result *sqltypes.Result) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.fetchAsAllPrivsQueries[tabletID] == nil {
+		tmc.fetchAsAllPrivsQueries[tabletID] = make(map[string]*queryResult)
+	}
+
+	tmc.fetchAsAllPrivsQueries[tabletID][query] = &queryResult{
+		query:  query,
+		result: sqltypes.ResultToProto3(result),
+	}
+}
+
 func (tmc *testMaterializerTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *createVReplicationWorkflowRequestResponse) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
@@ -420,7 +437,16 @@ func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tabl
 }
 
 func (tmc *testMaterializerTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
-	return nil, nil
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if resultsForTablet, ok := tmc.fetchAsAllPrivsQueries[int(tablet.Alias.Uid)]; ok {
+		if result, ok := resultsForTablet[string(req.Query)]; ok {
+			return result.result, result.err
+		}
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteFetchAsAllPrivs result set for tablet %d", assert.AnError, int(tablet.Alias.Uid))
 }
 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
