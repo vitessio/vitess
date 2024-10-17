@@ -90,6 +90,12 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		for _, order := range horizon.Query.GetOrderBy() {
 			qp.addDerivedColumn(ctx, order.Expr)
 		}
+		sel, isSel := horizon.Query.(*sqlparser.Select)
+		if isSel && sel.Having != nil {
+			for _, pred := range sqlparser.SplitAndExpression(nil, sel.Having.Expr) {
+				qp.addDerivedColumn(ctx, pred)
+			}
+		}
 	}
 
 	op, err := createProjectionFromSelect(ctx, horizon)
@@ -307,6 +313,7 @@ outer:
 func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
 	p := newAliasedProjection(a)
 	p.DT = a.DT
+	a.DT = nil // we don't need the derived table twice
 	for _, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
 		if err != nil {
