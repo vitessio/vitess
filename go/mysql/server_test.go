@@ -654,8 +654,8 @@ func TestServerStats(t *testing.T) {
 	}
 
 	timings.Reset()
-	connAccept.Reset()
 	connCount.Reset()
+	connAccept.Reset()
 	connSlow.Reset()
 	connRefuse.Reset()
 
@@ -667,9 +667,23 @@ func TestServerStats(t *testing.T) {
 	assert.Contains(t, output, "ERROR 1047 (08S01)")
 	assert.Contains(t, output, "forced query error", "Unexpected output for 'error': %v", output)
 
-	assert.EqualValues(t, 0, connCount.Get(), "connCount")
-	assert.EqualValues(t, 1, connAccept.Get(), "connAccept")
-	assert.EqualValues(t, 1, connSlow.Get(), "connSlow")
+	// Accept starts a goroutine to handle each incoming connection.
+	// It's in that goroutine where live stats/gauges such as the
+	// current connection counts are updated when the handle function
+	// ends (e.g. connCount.Add(-1)).
+	// So we wait for the expected value to avoid races and flakiness.
+	// 1 second should be enough, but no reason to fail the test or
+	// a CI workflow if the test is CPU starved.
+	conditionWait := 10 * time.Second
+	conditionTick := 10 * time.Millisecond
+	assert.Eventually(t, func() bool {
+		return connCount.Get() == int64(0)
+	}, conditionWait, conditionTick, "connCount")
+	assert.Eventually(t, func() bool {
+		return connSlow.Get() == int64(0)
+	}, conditionWait, conditionTick, "connSlow")
+
+	assert.EqualValues(t, 0, connAccept.Get(), "connAccept")
 	assert.EqualValues(t, 0, connRefuse.Get(), "connRefuse")
 
 	expectedTimingDeltas := map[string]int64{
