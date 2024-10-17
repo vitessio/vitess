@@ -220,6 +220,7 @@ const (
 	ERWrongFKDef                   = ErrorCode(1239)
 	ERKeyRefDoNotMatchTableRef     = ErrorCode(1240)
 	ERCyclicReference              = ErrorCode(1245)
+	ERAutoConvert                  = ErrorCode(1246)
 	ERIllegalReference             = ErrorCode(1247)
 	ERDerivedMustHaveAlias         = ErrorCode(1248)
 	ERTableNameNotAllowedHere      = ErrorCode(1250)

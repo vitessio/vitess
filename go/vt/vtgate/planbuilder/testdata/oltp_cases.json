@@ -98,7 +98,9 @@
         "main.sbtest1"
       ]
     },
-    "warning": "Column 'c' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'c' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "OLTP distinct range select",
@@ -129,7 +131,9 @@
         "main.sbtest30"
       ]
     },
-    "warning": "Column 'c' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'c' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "OLTP index udpate",

@@ -478,7 +478,9 @@
         "user.view_a"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "create view with Booleans and parenthesis",

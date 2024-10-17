@@ -4078,7 +4078,9 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "HAVING predicates that use table columns are safe to rewrite if we can move them to the WHERE clause",
@@ -4693,7 +4695,9 @@
         "user.authoritative"
       ]
     },
-    "warning": "Column 'user_id' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'user_id' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "group by and having with authoritative table - removing keyspace from having",
@@ -4720,6 +4724,10 @@
         "user.authoritative"
       ]
     },
-    "warning": "Column 'user_id' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'user_id' in group statement is ambiguous\"",
+      "code:1052 message:\"Column 'user_id' in having clause is ambiguous\"",
+      "code:1052 message:\"Column 'user_id' in order by statement is ambiguous\""
+    ]
   }
 ]

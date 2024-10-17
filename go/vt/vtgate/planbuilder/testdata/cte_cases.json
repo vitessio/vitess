@@ -112,7 +112,9 @@
         "user.user_extra"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "with t as (select user.col as col, 32 from user join user_extra) select sum(col) from t",
@@ -372,7 +374,10 @@
         "user.user"
       ]
     },
-    "warning": "Column 'val1' in group statement is ambiguous"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'val1' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "with s as (select id from user having count(*) = 1) select * from s",
@@ -487,7 +492,10 @@
         "user.user_extra"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'flowId' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "with tt as (SELECT foo, max(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) SELECT foo FROM tt WHERE bazo BETWEEN 100 AND 200",
@@ -526,7 +534,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'foo' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'foo' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "with tt as (SELECT foo, count(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) SELECT foo FROM tt WHERE bazo BETWEEN 100 AND 200",
@@ -565,7 +575,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'foo' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'foo' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "with d as (select id, count(*) as a from user) select d.a from music join d on music.user_id = d.id group by 1",
@@ -2460,7 +2472,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'manager_id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'manager_id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "Query that can be merged, dual on the RHS of the UNION",

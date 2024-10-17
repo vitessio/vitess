@@ -3765,7 +3765,9 @@
     "comment": "insert using select with more columns in select",
     "query": "insert into music(id, user_id) select id, count(user_id), sum(user_id) from user group by id",
     "plan": "VT03006: column count does not match value count with the row",
-    "warning": "Column 'id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "insert using select with more columns in select after accounting for star column",

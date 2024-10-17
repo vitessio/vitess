@@ -54,7 +54,7 @@ type VSchema interface {
 	WarnUnshardedOnly(format string, params ...any)
 
 	// PlannerWarning records warning created during planning.
-	PlannerWarning(message string)
+	PlannerWarnings(warnings ...*querypb.QueryWarning)
 
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)

@@ -304,7 +304,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "scatter aggregate in a subquery",
@@ -423,7 +425,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "count with distinct group by unique vindex",
@@ -446,7 +450,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "count with distinct unique vindex",
@@ -478,7 +484,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "count with distinct no unique vindex",
@@ -511,7 +519,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "count with distinct no unique vindex and no group by",
@@ -587,7 +598,10 @@
         "user.music"
       ]
     },
-    "warning": "Column 'user_id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\"",
+      "code:1052 message:\"Column 'user_id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "count with distinct no unique vindex, count expression aliased",
@@ -620,7 +634,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "using HAVING inside a derived table still produces viable plans",
@@ -650,7 +667,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "sum with distinct no unique vindex",
@@ -683,7 +702,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "min with distinct no unique vindex. distinct is ignored.",
@@ -716,7 +738,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "order by count distinct",
@@ -756,19 +781,28 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "scatter aggregate group by aggregate function - since we don't have authoratative columns for user, we can't be sure that the user isn't referring a column named b",
     "query": "select count(*) b from user group by b",
     "plan": "VT03005: cannot group on 'count(*)'",
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'b' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "scatter aggregate group by aggregate function with column information",
     "query": "select count(*) b from authoritative group by b",
     "plan": "VT03005: cannot group on 'b'",
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'b' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "scatter aggregate multiple group by (columns)",
@@ -801,7 +835,11 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'a' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'b' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "Aggregation with derived table",
@@ -918,7 +956,11 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'b' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'a' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "group concat with a separator needing evaluation on vtgate",
@@ -1107,7 +1149,9 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "scatter aggregate with jumbled order by columns",
@@ -1140,7 +1184,9 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "scatter aggregate with jumbled group by and order by columns",
@@ -1173,7 +1219,9 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "scatter aggregate with some descending order by cols",
@@ -1206,13 +1254,17 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "invalid order by column numner for scatter",
     "query": "select col, count(*) from user group by col order by 5 limit 10",
     "plan": "Unknown column '5' in 'order clause'",
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "aggregate with limit",
@@ -1250,7 +1302,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "routing rules for aggregates",
@@ -1273,7 +1327,10 @@
         "main.unsharded"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "order by on a reference table",
@@ -1296,7 +1353,9 @@
         "user.ref"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "distinct and aggregate functions missing group by",
@@ -1358,7 +1417,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'a' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "Group by invalid column number (code is duplicated from symab).",
@@ -1481,7 +1543,9 @@
         "user.user_extra"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "optimize group by when using distinct with no aggregation",
@@ -1514,7 +1578,11 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'col2' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "do not use distinct when using only aggregates and no group by",
@@ -1627,7 +1695,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "aggregate query with order by aggregate column along with NULL",
@@ -1666,7 +1737,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "aggregate query with order by NULL",
@@ -1698,7 +1772,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "join query on sharding key with group by a unique vindex with having clause.",
@@ -1774,7 +1850,10 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in having clause is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\"",
+      "code:1052 message:\"Column 'id' in having clause is ambiguous\""
+    ]
   },
   {
     "comment": "weight_string addition to group by",
@@ -1918,7 +1997,9 @@
         "user.user_extra"
       ]
     },
-    "warning": "Column 'id' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "Column and Literal equality filter on scatter aggregates",
@@ -2237,7 +2318,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "We should be able to find grouping keys on ordered aggregates",
@@ -2276,7 +2360,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col2' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "User defined aggregation expression being used in order by of a query that is single sharded",
@@ -2303,7 +2390,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "user defined aggregation such that it can pushed to mysql in a scatter route",
@@ -2326,7 +2416,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "distinct on text column with collation",
@@ -2358,7 +2450,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "aggregation filtering by having on a route with no group by with non-unique vindex filter",
@@ -2779,7 +2873,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "aggregation on top of semijoin",
@@ -2871,7 +2968,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'val2' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "group by column alias",
@@ -2904,7 +3004,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'a' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "multiple distinct aggregations on the same column is allowed",
@@ -2937,7 +3040,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'tcol1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "multiple distinct aggregations on the same column in different positions",
@@ -2970,7 +3076,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'tcol1' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "distinct aggregation will 3 table join query",
@@ -3078,7 +3187,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "select count(distinct user_id, name) from unsharded",
@@ -3196,7 +3307,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'foo' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "find aggregation expression and use column offset in filter times two",
@@ -3235,7 +3349,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'foo' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "find aggregation expression and use column offset in filter times three",
@@ -3274,7 +3391,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'foo' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "having should be able to add new aggregation expressions in having",
@@ -3313,7 +3433,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'foo' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3",
@@ -3841,7 +3964,10 @@
         "user.user"
       ]
     },
-    "warning": "Column 'val1' in group statement is ambiguous"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'val1' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "Can't inline derived table when it has HAVING with aggregation function",
@@ -4191,7 +4317,10 @@
         "user.user_extra"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'flowId' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "aggregation, where and derived tables - we can push extremums",
@@ -4230,7 +4359,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'foo' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'foo' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "aggregation, where and derived tables - we can't push aggregations that might need a second layer of aggregation",
@@ -4269,7 +4400,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'foo' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'foo' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "Scatter order by is complex with aggregates in select",
@@ -4309,7 +4442,10 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\"",
+      "code:1052 message:\"Column 'col' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "scatter aggregate complex order by",
@@ -4334,7 +4470,10 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\"",
+      "code:1052 message:\"Column 'id' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "select expression does not directly depend on grouping expression",
@@ -4367,7 +4506,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'a' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "inner join with scalar aggregation",
@@ -5024,7 +5166,12 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\"",
+      "code:1052 message:\"Column 'val' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "scatter aggregate with ambiguous aliases",
@@ -5191,7 +5338,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "using a grouping column multiple times should be OK",
@@ -5223,7 +5372,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "multiple count star and a count with 3 table join",
@@ -5932,7 +6083,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'intcol' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'intcol' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "ordering on top of aggregator without pushing the column down during the horizon phase",
@@ -6079,7 +6232,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'foo' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "aggregation on union",
@@ -7233,7 +7389,10 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\"",
+      "code:1052 message:\"Column 'col' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "col is a column on user, but the HAVING is referring to an alias",
@@ -7279,7 +7438,10 @@
     "comment": "Aggregate UDFs can't be handled by vtgate",
     "query": "select id from t1 group by id having udf_aggr(foo) > 1 and sum(foo) = 10",
     "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(foo)' must be pushed down to MySQL",
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "Valid to run since we can push down the aggregate function because of the grouping",
@@ -7302,7 +7464,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "Valid to run since we can push down the aggregate function because it's unsharded",
@@ -7351,7 +7515,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1052 message:\"Column 'bar' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "Aggregation over a ORDER BY/LIMIT inside a derived table",

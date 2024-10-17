@@ -101,7 +101,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	}
 
 	// record any warning as planner warning.
-	vschema.PlannerWarning(semTable.Warning)
+	vschema.PlannerWarnings(semTable.Warnings...)
 
 	return &PlanningContext{
 		ReservedVars:      reservedVars,

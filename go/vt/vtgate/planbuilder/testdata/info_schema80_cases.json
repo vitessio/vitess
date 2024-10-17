@@ -326,7 +326,9 @@
         ]
       }
     },
-    "warning": "Column 'ordinal_position' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'ordinal_position' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "rails query",

@@ -567,7 +567,9 @@
         "main.customer1"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "TPC-C select unique customer1",
@@ -620,7 +622,9 @@
         "main.orders1"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "TPC-C select order_line1",
@@ -673,7 +677,9 @@
         "main.new_orders1"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "TPC-C delete new_orders1",
@@ -961,7 +967,12 @@
         "main.orders1"
       ]
     },
-    "warning": "Column 'o_w_id' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'o_c_id' in group statement is ambiguous\"",
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'o_d_id' in group statement is ambiguous\"",
+      "code:1052 message:\"Column 'o_w_id' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "TPC-C delete order_line1",

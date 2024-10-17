@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -453,6 +454,13 @@ func (r *earlyRewriter) handleGroupBy(parent sqlparser.SQLNode, iter iterator) e
 }
 
 func (r *earlyRewriter) addWarning(message string, code sqlerror.ErrorCode) {
+	idx := slices.IndexFunc(r.warnings, func(q *querypb.QueryWarning) bool {
+		return q.Message == message && q.Code == uint32(code)
+	})
+	if idx != -1 {
+		// warning already exists
+		return
+	}
 	r.warnings = append(r.warnings, &querypb.QueryWarning{
 		Message: message,
 		Code:    uint32(code),

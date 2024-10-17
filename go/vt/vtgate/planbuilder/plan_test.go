@@ -28,6 +28,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/slice"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -661,11 +666,11 @@ func createFkDefinition(childCols []string, parentTableName string, parentCols [
 
 type (
 	planTest struct {
-		Comment string          `json:"comment,omitempty"`
-		Query   string          `json:"query,omitempty"`
-		Plan    json.RawMessage `json:"plan,omitempty"`
-		Skip    bool            `json:"skip,omitempty"`
-		Warning string          `json:"warning,omitempty"`
+		Comment  string          `json:"comment,omitempty"`
+		Query    string          `json:"query,omitempty"`
+		Plan     json.RawMessage `json:"plan,omitempty"`
+		Skip     bool            `json:"skip,omitempty"`
+		Warnings []string        `json:"warnings,omitempty"`
 	}
 )
 
@@ -689,7 +694,9 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 			}
 			vschema.Version = Gen4
 			out := getPlanOutput(tcase, vschema, render)
-			current.Warning = vschema.Warning
+			current.Warnings = slice.Map(vschema.Warnings, func(q *querypb.QueryWarning) string {
+				return q.String()
+			})
 
 			// our expectation for the planner on the query is one of three
 			// - produces same plan as expected
@@ -712,8 +719,8 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 				} else if tcase.Skip {
 					t.Errorf("query is correct even though it is skipped:\n %s", tcase.Query)
 				}
-				if tcase.Warning != current.Warning && !tcase.Skip {
-					t.Errorf("warning mismatch: expected: %s, got: %s", tcase.Warning, current.Warning)
+				if !tcase.Skip {
+					assert.Equal(t, tcase.Warnings, current.Warnings)
 				}
 				current.Plan = []byte(out)
 			})

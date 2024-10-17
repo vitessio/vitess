@@ -233,7 +233,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "ORDER BY works for select * from authoritative table",
@@ -258,7 +260,9 @@
         "user.authoritative"
       ]
     },
-    "warning": "Column 'user_id' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'user_id' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "Test that LIMIT can be pushed to the route even in the presence of an outer join",
@@ -345,7 +349,9 @@
         "user.authoritative"
       ]
     },
-    "warning": "Column 'col1' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col1' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "ORDER BY on scatter with text column",
@@ -370,7 +376,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'textcol1' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "ORDER BY on scatter with text column, qualified name TODO: can plan better",
@@ -395,7 +404,10 @@
         "user.user"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'textcol1' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "ORDER BY on scatter with multiple text columns",
@@ -420,13 +432,21 @@
         "user.user"
       ]
     },
-    "warning": "Column 'textcol2' in order by statement is ambiguous"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'textcol1' in order by statement is ambiguous\"",
+      "code:1052 message:\"Column 'textcol2' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "ORDER BY invalid col number on scatter",
     "query": "select col from user order by 2",
     "plan": "Unknown column '2' in 'order clause'",
-    "warning": "Column 'textcol2' in order by statement is ambiguous"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\"",
+      "code:1052 message:\"Column 'textcol1' in order by statement is ambiguous\"",
+      "code:1052 message:\"Column 'textcol2' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "ORDER BY column offset",
@@ -519,7 +539,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "ORDER BY NULL for join",
@@ -1161,7 +1183,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "LIMIT",
@@ -1451,7 +1475,9 @@
         "user.music"
       ]
     },
-    "warning": "Missing table info, so not binding to anything on the FROM clause"
+    "warnings": [
+      "code:1235 message:\"Missing table info, so not binding to anything on the FROM clause\""
+    ]
   },
   {
     "comment": "column alias for a table column in order by",
@@ -1476,7 +1502,9 @@
         "user.music"
       ]
     },
-    "warning": "Column 'id' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "ordering on the left side of the join",
@@ -1520,7 +1548,9 @@
         "user.user"
       ]
     },
-    "warning": "Column '`name`' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column '`name`' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "aggregation and non-aggregations column without group by",
@@ -1701,7 +1731,9 @@
         "user.user"
       ]
     },
-    "warning": "Column '`name`' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column '`name`' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "order by with ambiguous column reference ; valid in MySQL",
@@ -1726,7 +1758,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "Scatter order by and aggregation: order by column must reference column from select list",
@@ -1766,7 +1800,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in group statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in group statement is ambiguous\""
+    ]
   },
   {
     "comment": "Distinct with cross shard query",
@@ -1963,7 +1999,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "Order by column number with collate",
@@ -2012,7 +2050,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'id' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'id' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "Order by column number with collate",
@@ -2181,7 +2221,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "distinct with order by having additional non-order by columns in the selection using aggregation engine",
@@ -2213,7 +2255,9 @@
         "user.user"
       ]
     },
-    "warning": "Column 'col' in order by statement is ambiguous"
+    "warnings": [
+      "code:1052 message:\"Column 'col' in order by statement is ambiguous\""
+    ]
   },
   {
     "comment": "distinct with order by having no overalap with the selection columns - using distinct engine",

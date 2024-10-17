@@ -1148,14 +1148,8 @@ func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...any) {
 }
 
 // PlannerWarning implements the VCursor interface
-func (vc *vcursorImpl) PlannerWarning(message string) {
-	if message == "" {
-		return
-	}
-	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-		Code:    uint32(sqlerror.ERNotSupportedYet),
-		Message: message,
-	})
+func (vc *vcursorImpl) PlannerWarnings(warnings ...*querypb.QueryWarning) {
+	vc.warnings = append(vc.warnings, warnings...)
 }
 
 // ForeignKeyMode implements the VCursor interface

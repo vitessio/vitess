@@ -109,7 +109,7 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 		return nil, err
 	}
 	// record any warning as planner warning.
-	vschema.PlannerWarning(semTable.Warning)
+	vschema.PlannerWarnings(semTable.Warnings...)
 
 	plan, tablesUsed, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema)
 	if err != nil {
