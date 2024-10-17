@@ -367,34 +367,28 @@ func TestEncode(t *testing.T) {
 		outSQL   string
 		outASCII string
 	}{{
-		in:       NULL,
-		outSQL:   "null",
-		outASCII: "null",
+		in:     NULL,
+		outSQL: "null",
 	}, {
-		in:       TestValue(Int64, "1"),
-		outSQL:   "1",
-		outASCII: "1",
+		in:     TestValue(Int64, "1"),
+		outSQL: "1",
 	}, {
-		in:       TestValue(VarChar, "foo"),
-		outSQL:   "'foo'",
-		outASCII: "'Zm9v'",
+		in:     TestValue(VarChar, "foo"),
+		outSQL: "'foo'",
 	}, {
-		in:       TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
-		outSQL:   "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
-		outASCII: "'ACciCAoNCRpc'",
+		in:     TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
+		outSQL: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 	}, {
-		in:       TestValue(Bit, "a"),
-		outSQL:   "b'01100001'",
-		outASCII: "'YQ=='",
+		in:     TestValue(VarBinary, "\x00'\"\b\n\r\t\x1A\\"),
+		outSQL: "X'002722080A0D091A5C'",
+	}, {
+		in:     TestValue(Bit, "a"),
+		outSQL: "b'01100001'",
 	}}
 	for _, tcase := range testcases {
 		var buf strings.Builder
 		tcase.in.EncodeSQL(&buf)
 		assert.Equal(t, tcase.outSQL, buf.String())
-
-		buf.Reset()
-		tcase.in.EncodeASCII(&buf)
-		assert.Equal(t, tcase.outASCII, buf.String())
 	}
 }
 
@@ -639,6 +633,9 @@ func TestEncodeSQLStringBuilder(t *testing.T) {
 	}, {
 		in:     TestTuple(TestValue(Int64, "1"), TestValue(VarChar, "foo")),
 		outSQL: "(1, 'foo')",
+	}, {
+		in:     TestValue(VarBinary, "foo"),
+		outSQL: "X'666F6F'",
 	}}
 	for _, tcase := range testcases {
 		var buf strings.Builder

@@ -30,19 +30,28 @@ func TestEncodable(t *testing.T) {
 	}{{
 		in: InsertValues{{
 			sqltypes.NewInt64(1),
+			sqltypes.NewVarChar("foo('a')"),
+		}, {
+			sqltypes.NewInt64(2),
+			sqltypes.NewVarChar("bar(`b`)"),
+		}},
+		out: "(1, 'foo(\\'a\\')'), (2, 'bar(`b`)')",
+	}, {
+		in: InsertValues{{
+			sqltypes.NewInt64(1),
 			sqltypes.NewVarBinary("foo('a')"),
 		}, {
 			sqltypes.NewInt64(2),
 			sqltypes.NewVarBinary("bar(`b`)"),
 		}},
-		out: "(1, 'foo(\\'a\\')'), (2, 'bar(`b`)')",
+		out: "(1, X'666F6F2827612729'), (2, X'6261722860626029')",
 	}, {
 		// Single column.
 		in: &TupleEqualityList{
 			Columns: []IdentifierCI{NewIdentifierCI("pk")},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt64(1)},
-				{sqltypes.NewVarBinary("aa")},
+				{sqltypes.NewVarChar("aa")},
 			},
 		},
 		out: "pk in (1, 'aa')",
@@ -53,11 +62,11 @@ func TestEncodable(t *testing.T) {
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.NewInt64(1),
-					sqltypes.NewVarBinary("aa"),
+					sqltypes.NewVarChar("aa"),
 				},
 				{
 					sqltypes.NewInt64(2),
-					sqltypes.NewVarBinary("bb"),
+					sqltypes.NewVarChar("bb"),
 				},
 			},
 		},
