@@ -70,7 +70,7 @@ func TestVindexLookup(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(10)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
-	expectResult(t, result, defaultSelectResult)
+	expectResult(t, "vindexlookup execute", result, defaultSelectResult)
 
 	fp.rewind()
 	vc.Rewind()
@@ -80,7 +80,7 @@ func TestVindexLookup(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(10)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, result, defaultSelectResult)
+	expectResult(t, "vindexlookup stream execute", result, defaultSelectResult)
 }
 
 func TestVindexLookupTruncate(t *testing.T) {
@@ -121,7 +121,7 @@ func TestVindexLookupTruncate(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(10)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
-	expectResult(t, result, wantRes)
+	expectResult(t, "vindexlookup execute", result, wantRes)
 
 	fp.rewind()
 	vc.Rewind()
@@ -131,5 +131,5 @@ func TestVindexLookupTruncate(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(10)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, result, wantRes)
+	expectResult(t, "vindexlookup stream execute", result, wantRes)
 }
