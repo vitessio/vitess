@@ -333,7 +333,8 @@ Flags:
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream_health_buffer_size uint                                   max streaming health entries to buffer per streaming health client (default 20)
-      --structured-logging                                               enable structured logging
+      --structured-log-level logLevel                                    The minimum log level, options: debug, info, warn, error. (default info)
+      --structured-logging                                               Enable json-based structured logging
       --table-acl-config string                                          path to table access checker config file; send SIGHUP to reload this file
       --table-acl-config-reload-interval duration                        Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class

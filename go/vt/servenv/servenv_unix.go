@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 )
 
 // Init is the first phase of the server startup.
@@ -39,6 +40,13 @@ func Init() {
 	_ = stats.NewGaugeFunc("Uptime", "Uptime in nanoseconds", func() int64 {
 		return int64(time.Since(serverStart).Nanoseconds())
 	})
+
+	if useStructuredLogger {
+		// Replace glog logger with zap logger
+		if err := logutil.SetStructuredLogger(nil); err != nil {
+			log.Exitf("error while setting the structured logger: %s", err)
+		}
+	}
 
 	// Ignore SIGPIPE if specified
 	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr

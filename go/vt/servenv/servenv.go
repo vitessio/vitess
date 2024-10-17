@@ -102,7 +102,8 @@ func RegisterFlags() {
 		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.") // Logging
 
 		// Logging
-		fs.BoolVar(&useStructuredLogger, "structured-logging", useStructuredLogger, "enable structured logging")
+		fs.BoolVar(&useStructuredLogger, "structured-logging", useStructuredLogger, "Enable json-based structured logging")
+		fs.Var((*logutil.ZapLogLevelFlag)(&logutil.StructuredLoggingLevel), "structured-log-level", "The minimum log level, options: debug, info, warn, error.")
 	})
 }
 
@@ -291,8 +292,7 @@ func ParseFlags(cmd string) {
 
 	if useStructuredLogger {
 		// Replace glog logger with zap logger
-		_, err := logutil.SetStructuredLogger(nil)
-		if err != nil {
+		if err := logutil.SetStructuredLogger(nil); err != nil {
 			log.Exitf("error while setting the structured logger: %s", err)
 		}
 	}
@@ -393,6 +393,13 @@ func ParseFlagsWithArgs(cmd string) []string {
 	if version {
 		AppVersion.Print()
 		os.Exit(0)
+	}
+
+	if useStructuredLogger {
+		// Replace glog logger with zap logger
+		if err := logutil.SetStructuredLogger(nil); err != nil {
+			log.Exitf("error while setting the structured logger: %s", err)
+		}
 	}
 
 	args := fs.Args()

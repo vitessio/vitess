@@ -196,7 +196,8 @@ Flags:
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
-      --structured-logging                                               enable structured logging
+      --structured-log-level logLevel                                    The minimum log level, options: debug, info, warn, error. (default info)
+      --structured-logging                                               Enable json-based structured logging
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-filter-tags StringMap                                     Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.
       --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.

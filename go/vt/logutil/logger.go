@@ -17,8 +17,11 @@ limitations under the License.
 package logutil
 
 import (
+	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -26,6 +29,7 @@ import (
 
 	noglog "github.com/slok/noglog"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
@@ -388,27 +392,75 @@ func fileAndLine(depth int) (string, int64) {
 	return file, int64(line)
 }
 
-type StructuredLogger zap.SugaredLogger
+// StructuredLoggingLevel defines the log level of structured logging.
+var StructuredLoggingLevel = zapcore.InfoLevel
 
-// SetStructuredLogger in-place noglog replacement with Zap's logger.
-func SetStructuredLogger(conf *zap.Config) (vtSLogger *zap.SugaredLogger, err error) {
-	var l *zap.Logger
+// newZapLoggerConfig creates a new config for a zap logger that uses RFC3339 timestamps.
+func newZapLoggerConfig() zap.Config {
+	conf := zap.NewProductionConfig()
+	conf.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339)
+	conf.Level = zap.NewAtomicLevelAt(StructuredLoggingLevel)
 
-	// Use the passed configuration instead of the default configuration
-	if conf == nil {
-		defaultProdConf := zap.NewProductionConfig()
-		conf = &defaultProdConf
+	// use --log_dir if provided
+	ld := flag.Lookup("log_dir")
+	if ld.Value != nil && ld.Value.String() != "" {
+		program := filepath.Base(os.Args[0])
+		conf.OutputPaths = append(
+			conf.OutputPaths,
+			filepath.Join(ld.Value.String(), program+".log"),
+		)
 	}
 
-	// Build configuration and generate a sugared logger
-	l, err = conf.Build()
-	vtSLogger = l.Sugar()
+	return conf
+}
+
+// ZapLogLevelFlag implements the pflag.Value interface, for parsing a zap log level string.
+type ZapLogLevelFlag zapcore.Level
+
+// String represents a zapcore.Level as a lowercase string.
+func (z *ZapLogLevelFlag) String() string {
+	level := zapcore.Level(*z)
+	return level.String()
+}
+
+// Set is part of the pflag.Value interface.
+func (z *ZapLogLevelFlag) Set(v string) error {
+	level, err := zapcore.ParseLevel(v)
+	if err == nil {
+		*z = ZapLogLevelFlag(level)
+	}
+	return err
+}
+
+// Type is part of the pflag.Value interface.
+func (z *ZapLogLevelFlag) Type() string {
+	return "logLevel"
+}
+
+// SetStructuredLogger in-place noglog replacement with Zap's logger.
+func SetStructuredLogger(conf *zap.Config) error {
+	// Use the passed configuration instead of
+	// the default configuration.
+	if conf == nil {
+		defaultConf := newZapLoggerConfig()
+		conf = &defaultConf
+	}
+
+	// Build configuration and generate a sugared logger.
+	// Skip 3 callers so we log the real caller vs the
+	// noglog wrapper.
+	l, err := conf.Build(zap.AddCallerSkip(3))
+	if err != nil {
+		return err
+	}
+
+	logger := l.Sugar()
 
 	noglog.SetLogger(&noglog.LoggerFunc{
-		DebugfFunc: func(f string, a ...interface{}) { vtSLogger.Debugf(f, a...) },
-		InfofFunc:  func(f string, a ...interface{}) { vtSLogger.Infof(f, a...) },
-		WarnfFunc:  func(f string, a ...interface{}) { vtSLogger.Warnf(f, a...) },
-		ErrorfFunc: func(f string, a ...interface{}) { vtSLogger.Errorf(f, a...) },
+		DebugfFunc: func(f string, a ...interface{}) { logger.Debugf(f, a...) },
+		InfofFunc:  func(f string, a ...interface{}) { logger.Infof(f, a...) },
+		WarnfFunc:  func(f string, a ...interface{}) { logger.Warnf(f, a...) },
+		ErrorfFunc: func(f string, a ...interface{}) { logger.Errorf(f, a...) },
 	})
 
 	log.Flush = noglog.Flush
@@ -428,5 +480,5 @@ func SetStructuredLogger(conf *zap.Config) (vtSLogger *zap.SugaredLogger, err er
 	log.Fatalf = noglog.Fatalf
 	log.FatalDepth = noglog.FatalDepth
 
-	return
+	return nil
 }
