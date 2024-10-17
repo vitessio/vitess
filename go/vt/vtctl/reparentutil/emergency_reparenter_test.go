@@ -4889,7 +4889,9 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
-			tmc: &testutil.TabletManagerClient{},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{},
+			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000102": {
 					After: &replicationdatapb.Status{
@@ -5294,6 +5296,97 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			wantedCandidates:         []string{"zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+		},
+		{
+			name: "Case 6c: Errant GTID introduced on a replica server by a write that shouldn't happen. Only 2 tablets exist.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 3,
+					"zone1-0000000103": 3,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000103"},
+			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+		},
+		{
+			name: "Case 6c Legacy: Errant GTID introduced on a replica server by a write that shouldn't happen. Only 2 tablets exist. - ReadReparentJournalInfo not implemented",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103"},
+			wantMostAdvancedPossible: []string{"zone1-0000000102"},
 		},
 		{
 			name: "Case 7: Both replicas with errant GTIDs",
