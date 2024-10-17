@@ -309,11 +309,11 @@ func VtgateProcessInstance(
 }
 
 // GetVars returns map of vars
-func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
+func (vtgate *VtgateProcess) GetVars() map[string]any {
 	resultMap := make(map[string]any)
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
-		return nil, fmt.Errorf("error getting response from %s", vtgate.VerifyURL)
+		return nil
 	}
 	defer resp.Body.Close()
 
@@ -321,11 +321,11 @@ func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
-			return nil, fmt.Errorf("not able to parse response body")
+			return nil
 		}
-		return resultMap, nil
+		return resultMap
 	}
-	return nil, fmt.Errorf("unsuccessful response")
+	return nil
 }
 
 // ReadVSchema reads the vschema from the vtgate endpoint for it and returns
