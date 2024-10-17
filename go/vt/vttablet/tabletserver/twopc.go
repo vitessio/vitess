@@ -171,7 +171,7 @@ func (tpc *TwoPC) Close() {
 // SaveRedo saves the statements in the redo log using the supplied connection.
 func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []tx.Query) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":         sqltypes.StringBindVariable(dtid),
+		"dtid":         sqltypes.BytesBindVariable([]byte(dtid)),
 		"state":        sqltypes.Int64BindVariable(RedoStatePrepared),
 		"time_created": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 	}
@@ -202,7 +202,7 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 // UpdateRedo changes the state of the redo log for the dtid.
 func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int, message string) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":    sqltypes.StringBindVariable(dtid),
+		"dtid":    sqltypes.BytesBindVariable([]byte(dtid)),
 		"state":   sqltypes.Int64BindVariable(int64(state)),
 		"message": sqltypes.StringBindVariable(message),
 	}
@@ -213,7 +213,7 @@ func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid
 // DeleteRedo deletes the redo log for the dtid.
 func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *StatefulConnection, dtid string) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid": sqltypes.StringBindVariable(dtid),
+		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.deleteRedoTx, bindVars)
 	if err != nil {
@@ -291,7 +291,7 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 // CreateTransaction saves the metadata of a 2pc transaction as Prepared.
 func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *StatefulConnection, dtid string, participants []*querypb.Target) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":     sqltypes.StringBindVariable(dtid),
+		"dtid":     sqltypes.BytesBindVariable([]byte(dtid)),
 		"state":    sqltypes.Int64BindVariable(int64(DTStatePrepare)),
 		"cur_time": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 	}
@@ -324,7 +324,7 @@ func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *StatefulConnectio
 // If the transaction is not a in the Prepare state, an error is returned.
 func (tpc *TwoPC) Transition(ctx context.Context, conn *StatefulConnection, dtid string, state querypb.TransactionState) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":    sqltypes.StringBindVariable(dtid),
+		"dtid":    sqltypes.BytesBindVariable([]byte(dtid)),
 		"state":   sqltypes.Int64BindVariable(int64(state)),
 		"prepare": sqltypes.Int64BindVariable(int64(querypb.TransactionState_PREPARE)),
 	}
@@ -341,7 +341,7 @@ func (tpc *TwoPC) Transition(ctx context.Context, conn *StatefulConnection, dtid
 // DeleteTransaction deletes the metadata for the specified transaction.
 func (tpc *TwoPC) DeleteTransaction(ctx context.Context, conn *StatefulConnection, dtid string) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid": sqltypes.StringBindVariable(dtid),
+		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.deleteTransaction, bindVars)
 	if err != nil {
@@ -361,7 +361,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 
 	result := &querypb.TransactionMetadata{}
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid": sqltypes.StringBindVariable(dtid),
+		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
 	}
 	qr, err := tpc.read(ctx, conn.Conn, tpc.readTransaction, bindVars)
 	if err != nil {
