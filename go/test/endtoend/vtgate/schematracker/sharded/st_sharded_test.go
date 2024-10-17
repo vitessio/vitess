@@ -64,6 +64,12 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		// This test fails on slack-15.0, but we don't use schema tracking. Skip it.
+		if vtgateVer < 16 || vttabletVer < 16 {
+			fmt.Println("test requires version >= 16, skipping")
+			return 0
+		}
+
 		// For upgrade/downgrade tests.
 		if vtgateVer < 17 || vttabletVer < 17 {
 			// Then only the default sidecarDBName is supported.

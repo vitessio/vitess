@@ -53,6 +53,11 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func TestVtGateVExplain(t *testing.T) {
+	if !utils.BinaryIsAtLeastAtVersion(16, "vtgate") {
+		t.Log("test requires version >= 16, skipping")
+		return
+	}
+
 	conn, closer := start(t)
 	defer closer()
 
@@ -136,6 +141,11 @@ func TestVtGateVExplain(t *testing.T) {
 }
 
 func TestVExplainPlan(t *testing.T) {
+	if !utils.BinaryIsAtLeastAtVersion(16, "vtgate") {
+		t.Log("test requires version >= 16, skipping")
+		return
+	}
+
 	conn, closer := start(t)
 	defer closer()
 
@@ -145,6 +155,11 @@ func TestVExplainPlan(t *testing.T) {
 }
 
 func TestVExplainAll(t *testing.T) {
+	if !utils.BinaryIsAtLeastAtVersion(16, "vtgate") {
+		t.Log("test requires version >= 16, skipping")
+		return
+	}
+
 	conn, closer := start(t)
 	defer closer()
 
