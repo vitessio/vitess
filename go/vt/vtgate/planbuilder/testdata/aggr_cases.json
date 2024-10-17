@@ -572,6 +572,35 @@
     }
   },
   {
+    "comment": "using HAVING inside a derived table still produces viable plans",
+    "query": "select id from (select id from user group by id having (count(user.id) = 2) limit 2 offset 0) subquery_for_limit",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from (select id from user group by id having (count(user.id) = 2) limit 2 offset 0) subquery_for_limit",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "2",
+        "Offset": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from (select id, count(`user`.id) = 2 from `user` where 1 != 1 group by id) as subquery_for_limit where 1 != 1",
+            "Query": "select id from (select id, count(`user`.id) = 2 from `user` group by id having count(`user`.id) = 2) as subquery_for_limit limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "sum with distinct no unique vindex",
     "query": "select col1, sum(distinct col2) from user group by col1",
     "plan": {
@@ -3614,25 +3643,41 @@
       "QueryType": "SELECT",
       "Original": "select * from (select id from user having count(*) = 1) s",
       "Instructions": {
-        "OperatorType": "Filter",
-        "Predicate": "count(*) = 1",
-        "ResultColumns": 1,
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as id",
+              "count(*) = 1 as count(*) = 1"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-                "Query": "select id, count(*) from `user`",
-                "Table": "`user`"
+                "OperatorType": "Filter",
+                "Predicate": "count(*) = 1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), any_value(2)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id, count(*), 1 from `user` where 1 != 1",
+                        "Query": "select id, count(*), 1 from `user`",
+                        "Table": "`user`"
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           }
@@ -6548,11 +6593,11 @@
                               {
                                 "OperatorType": "SimpleProjection",
                                 "Columns": [
-                              2,
-                              0,
-                              1,
-                              3
-                            ],
+                                  2,
+                                  0,
+                                  1,
+                                  3
+                                ],
                                 "Inputs": [
                                   {
                                     "OperatorType": "Sort",

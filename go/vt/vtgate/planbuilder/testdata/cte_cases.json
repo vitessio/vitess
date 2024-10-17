@@ -369,25 +369,41 @@
       "QueryType": "SELECT",
       "Original": "with s as (select id from user having count(*) = 1) select * from s",
       "Instructions": {
-        "OperatorType": "Filter",
-        "Predicate": "count(*) = 1",
-        "ResultColumns": 1,
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as id",
+              "count(*) = 1 as count(*) = 1"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-                "Query": "select id, count(*) from `user`",
-                "Table": "`user`"
+                "OperatorType": "Filter",
+                "Predicate": "count(*) = 1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), any_value(2)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id, count(*), 1 from `user` where 1 != 1",
+                        "Query": "select id, count(*), 1 from `user`",
+                        "Table": "`user`"
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           }
