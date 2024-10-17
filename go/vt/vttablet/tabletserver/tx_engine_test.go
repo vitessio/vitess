@@ -721,3 +721,90 @@ func TestIsTwoPCAllowed(t *testing.T) {
 		})
 	}
 }
+
+// TestPrepareTx tests prepareTx function in transaction engine.
+func TestPrepareTx(t *testing.T) {
+	testcases := []struct {
+		name           string
+		preparedTx     *tx.PreparedTx
+		requireFailure bool
+		errWanted      string
+		queryLogWanted string
+	}{
+		{
+			name: "Success",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"insert into vitess_test (intval) values(40)",
+					"set @@time_zone='+10:30'",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: false,
+			errWanted:      "",
+			queryLogWanted: "use `fakesqldb`;begin;insert into vitess_test (intval) values(40);set @@time_zone='+10:30';insert into vitess_test (intval) values(20)",
+		},
+		{
+			name: "Unretryable failure during query",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"insert into vitess_test (intval) values(40)",
+					"failing query",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: true,
+			errWanted:      "(errno 1105) (sqlstate HY000)",
+		},
+		{
+			name: "Retryable failure during query",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"insert into vitess_test (intval) values(40)",
+					"retryable query",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: false,
+			errWanted:      "Retryable error (errno 2002) (sqlstate HY000)",
+		},
+		{
+			name: "Success - Settings query in the beginning",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"set @@time_zone='+10:30'",
+					"insert into vitess_test (intval) values(40)",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: false,
+			errWanted:      "",
+			queryLogWanted: "use `fakesqldb`;set @@time_zone='+10:30';begin;insert into vitess_test (intval) values(40);insert into vitess_test (intval) values(20)",
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			db.AddQueryPattern(".*", &sqltypes.Result{})
+			db.AddRejectedQuery("failing query", assert.AnError)
+			db.AddRejectedQuery("retryable query", sqlerror.NewSQLError(sqlerror.CRConnectionError, "", "Retryable error"))
+			cfg := tabletenv.NewDefaultConfig()
+			cfg.DB = newDBConfigs(db)
+			cfg.TwoPCEnable = true
+			cfg.TwoPCAbandonAge = 200
+			te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
+			te.AcceptReadWrite()
+			db.ResetQueryLog()
+			failed, err := te.prepareTx(context.Background(), tt.preparedTx)
+			require.EqualValues(t, tt.requireFailure, failed)
+			if tt.errWanted != "" {
+				require.ErrorContains(t, err, tt.errWanted)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, 1, len(te.preparedPool.conns))
+			require.EqualValues(t, tt.queryLogWanted, db.QueryLog())
+		})
+	}
+}

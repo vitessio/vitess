@@ -1,20 +1,11 @@
-create table twopc_fuzzer_update (
+create table twopc_t1 (
     id bigint,
     col bigint,
     primary key (id)
 ) Engine=InnoDB;
 
-create table twopc_fuzzer_insert (
+create table twopc_settings (
     id bigint,
-    updateSet bigint,
-    threadId bigint,
-    col bigint auto_increment,
-    key(col),
-    primary key (id, col)
-) Engine=InnoDB;
-
-create table twopc_t1 (
-    id bigint,
-    col bigint,
+    col varchar(50),
     primary key (id)
 ) Engine=InnoDB;
