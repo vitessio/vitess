@@ -235,13 +235,17 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 	return tr
 }
 
-func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *Route) *ApplyJoin {
-	return NewApplyJoin(op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
+func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *Route) (*ApplyJoin, error) {
+	return NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) (*Route, error) {
+	join, err := jm.getApplyJoin(ctx, op1, op2)
+	if err != nil {
+		return nil, err
+	}
 	return &Route{
-		Source:     jm.getApplyJoin(ctx, op1, op2),
+		Source:     join,
 		MergedWith: []*Route{op2},
 		Routing:    r,
 	}, nil

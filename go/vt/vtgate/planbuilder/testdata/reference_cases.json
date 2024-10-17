@@ -876,19 +876,19 @@
       "QueryType": "SELECT",
       "Original": "select * from user.ref_with_source ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
       "Instructions": {
-        "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
         "OperatorType": "Route",
         "Variant": "EqualUnique",
-        "Vindex": "user_index",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
+        "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
         "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
         "Table": "`user`, ref_with_source",
         "Values": [
           "INT64(2)"
-        ]
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.ref_with_source",
@@ -903,19 +903,19 @@
       "QueryType": "SELECT",
       "Original": "select * from source_of_ref ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
       "Instructions": {
-        "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
         "OperatorType": "Route",
         "Variant": "EqualUnique",
-        "Vindex": "user_index",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
+        "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
         "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
         "Table": "`user`, ref_with_source",
         "Values": [
           "INT64(2)"
-        ]
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.ref_with_source",
@@ -937,7 +937,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where 1 != 1",
-        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where rr.bar = sr.bar and u.id = ue.user_id and sr.foo = ue.foo",
+        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where sr.foo = :ue_foo and rr.bar = sr.bar and u.id = ue.user_id and sr.foo = ue.foo",
         "Table": "`user`, ref, ref_with_source, user_extra"
       },
       "TablesUsed": [

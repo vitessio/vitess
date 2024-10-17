@@ -578,7 +578,10 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 
 	// if at least one column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	derived, op, ok, offsets := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	derived, op, ok, offsets, err := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	if err != nil {
+		return 0, err
+	}
 	r.Source = op
 	if ok {
 		return offsets[0], nil
@@ -599,7 +602,7 @@ type selectExpressions interface {
 	ops.Operator
 	addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error)
 	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error)
-	isDerived() bool
+	derivedName() string
 }
 
 // addColumnToInput adds a column to an operator without pushing it down.
@@ -615,63 +618,83 @@ func addMultipleColumnsToInput(
 	projection ops.Operator, // if an operator needed to be built, it will be returned here
 	found bool, // whether a matching op was found or not
 	offsets []int, // the offsets the expressions received
+	err error,
 ) {
 	switch op := operator.(type) {
 	case *SubQuery:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset, err := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, exprs)
+		if err != nil {
+			return "", nil, true, nil, err
+		}
 		if added {
 			op.Outer = src
 		}
-		return derivedName, op, added, offset
+		return derivedName, op, added, offset, nil
 
 	case *Distinct:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset, err := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		if err != nil {
+			return "", nil, true, nil, err
+		}
 		if added {
 			op.Source = src
 		}
-		return derivedName, op, added, offset
+		return derivedName, op, added, offset, nil
 
 	case *Limit:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset, err := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		if err != nil {
+			return "", nil, true, nil, err
+		}
 		if added {
 			op.Source = src
 		}
-		return derivedName, op, added, offset
+		return derivedName, op, added, offset, nil
 
 	case *Ordering:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset, err := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		if err != nil {
+			return "", nil, true, nil, err
+		}
 		if added {
 			op.Source = src
 		}
-		return derivedName, op, added, offset
+		return derivedName, op, added, offset, nil
 
 	case *LockAndComment:
-		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset, err := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		if err != nil {
+			return "", nil, true, nil, err
+		}
 		if added {
 			op.Source = src
 		}
-		return derivedName, op, added, offset
+		return derivedName, op, added, offset, nil
 
 	case *Horizon:
 		// if the horizon has an alias, then it is a derived table,
 		// we have to add a new projection and can't build on this one
-		return op.Alias, op, false, nil
+		return op.Alias, op, false, nil, nil
 
 	case selectExpressions:
-		if op.isDerived() {
+		name := op.derivedName()
+		if name != "" {
 			// if the only thing we can push to is a derived table,
 			// we have to add a new projection and can't build on this one
-			return "", op, false, nil
+			return name, op, false, nil, nil
 		}
-		offset, _ := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
-		return "", op, true, offset
+		offset, err := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
+		if err != nil {
+			return "", nil, true, nil, err
+		}
+		return "", op, true, offset, nil
 
 	case *Union:
 		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
 		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
 		unionColumns, err := op.GetColumns(ctx)
 		if err != nil {
-			return "", op, false, nil
+			break
 		}
 		proj := &Projection{
 			Source:  op,
@@ -682,9 +705,8 @@ func addMultipleColumnsToInput(
 			},
 		}
 		return addMultipleColumnsToInput(ctx, proj, reuse, addToGroupBy, exprs)
-	default:
-		return "", op, false, nil
 	}
+	return "", operator, false, nil, nil
 }
 
 func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {

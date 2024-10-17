@@ -382,7 +382,10 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 			return nil, nil, vterrors.VT12001("JOIN between derived tables with LIMIT")
 		}
 
-		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
+		join, err := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, !inner)
+		if err != nil {
+			return nil, nil, err
+		}
 		for _, pred := range joinPredicates {
 			err := join.AddJoinPredicate(ctx, pred)
 			if err != nil {
@@ -392,7 +395,10 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 		return join, rewrite.NewTree("logical join to applyJoin, switching side because LIMIT", join), nil
 	}
 
-	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
+	join, err := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, !inner)
+	if err != nil {
+		return nil, nil, err
+	}
 	for _, pred := range joinPredicates {
 		err := join.AddJoinPredicate(ctx, pred)
 		if err != nil {

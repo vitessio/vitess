@@ -149,7 +149,10 @@ func (sp StarProjections) GetSelectExprs() sqlparser.SelectExprs {
 
 func (ap AliasedProjections) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slice.Map(ap, func(from *ProjExpr) *sqlparser.AliasedExpr {
-		return aeWrap(from.ColExpr)
+		return &sqlparser.AliasedExpr{
+			As:   from.Original.As,
+			Expr: from.ColExpr,
+		}
 	}), nil
 }
 
@@ -245,6 +248,13 @@ func (p *Projection) GetAliasedProjections() (AliasedProjections, error) {
 
 func (p *Projection) isDerived() bool {
 	return p.DT != nil
+}
+
+func (p *Projection) derivedName() string {
+	if p.DT == nil {
+		return ""
+	}
+	return p.DT.Alias
 }
 
 func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {

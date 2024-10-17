@@ -511,7 +511,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 42 from `user` as u, user_extra as ue, music as m where 1 != 1",
-        "Query": "select 42 from `user` as u, user_extra as ue, music as m where u.id = ue.user_id and m.user_id = u.id and (u.foo or m.foo or ue.foo)",
+        "Query": "select 42 from `user` as u, user_extra as ue, music as m where u.id = ue.user_id and u.id = :m_user_id and (u.foo or :m_foo or ue.foo) and m.user_id = u.id and (u.foo or m.foo or ue.foo)",
         "Table": "`user`, music, user_extra"
       },
       "TablesUsed": [
@@ -1598,7 +1598,7 @@
           "Sharded": true
         },
         "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t, user_extra where 1 != 1",
-        "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
+        "Query": "select t.id from (select id from `user` where id = 5 and id = :user_extra_user_id) as t, user_extra where t.id = user_extra.user_id",
         "Table": "`user`, user_extra",
         "Values": [
           "INT64(5)"
@@ -1736,7 +1736,7 @@
           "Sharded": true
         },
         "FieldQuery": "select t.id from (select id, textcol1 as baz from `user` as route1 where 1 != 1) as t, (select id, textcol1 + textcol1 as baz from `user` where 1 != 1) as s where 1 != 1",
-        "Query": "select t.id from (select id, textcol1 as baz from `user` as route1 where textcol1 = '3') as t, (select id, textcol1 + textcol1 as baz from `user` where textcol1 + textcol1 = '3') as s where t.id = s.id",
+        "Query": "select t.id from (select id, textcol1 as baz from `user` as route1 where textcol1 = '3') as t, (select id, textcol1 + textcol1 as baz from `user` where textcol1 + textcol1 = '3' and id = :t_id) as s where t.id = s.id",
         "Table": "`user`"
       },
       "TablesUsed": [
@@ -2000,8 +2000,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "FieldQuery": "select 1 from (select user_extra.col as `user_extra.col` from user_extra where 1 != 1) as t where 1 != 1",
+            "Query": "select 1 from (select user_extra.col as `user_extra.col` from user_extra where user_extra.col = :user_col) as t",
             "Table": "user_extra"
           }
         ]
