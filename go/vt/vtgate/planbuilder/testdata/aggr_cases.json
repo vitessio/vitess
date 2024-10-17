@@ -579,8 +579,8 @@
       "Original": "select id from (select id from user group by id having (count(user.id) = 2) limit 2 offset 0) subquery_for_limit",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "2",
-        "Offset": "0",
+        "Count": "INT64(2)",
+        "Offset": "INT64(0)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -590,7 +590,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from (select id, count(`user`.id) = 2 from `user` where 1 != 1 group by id) as subquery_for_limit where 1 != 1",
-            "Query": "select id from (select id, count(`user`.id) = 2 from `user` group by id having count(`user`.id) = 2) as subquery_for_limit limit 2",
+            "Query": "select id from (select id, count(`user`.id) = 2 from `user` group by id having count(`user`.id) = 2) as subquery_for_limit limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -3643,16 +3643,15 @@
       "Original": "select * from (select id from user having count(*) = 1) s",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:id"
+        "Columns": [
+          0
         ],
-        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              ":0 as id",
-              "count(*) = 1 as count(*) = 1"
+              "[COLUMN 0] as id",
+              "[COLUMN 1] = [COLUMN 2] as count(*) = 1"
             ],
             "Inputs": [
               {
