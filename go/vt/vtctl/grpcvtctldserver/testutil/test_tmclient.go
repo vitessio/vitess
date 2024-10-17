@@ -956,6 +956,11 @@ func (fake *TabletManagerClient) PopulateReparentJournal(ctx context.Context, ta
 	return assert.AnError
 }
 
+// ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+	return 0, nil
+}
+
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	if fake.PromoteReplicaResults == nil {
