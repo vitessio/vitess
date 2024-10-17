@@ -515,6 +515,20 @@ const (
 		WHERE
 			workflow=%a
 		`
+	sqlReadVReplLogErrors = `SELECT
+			state,
+			message
+		FROM _vt.vreplication_log
+		WHERE
+			vrepl_id=%a
+			AND (
+				state='Error'
+				OR locate ('terminal error:', message) = 1
+			)
+		ORDER BY
+			id DESC
+		LIMIT 1
+	`
 	sqlReadCountCopyState = `SELECT
 			count(*) as cnt
 		FROM
