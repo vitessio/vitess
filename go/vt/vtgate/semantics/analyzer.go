@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -45,7 +46,7 @@ type analyzer struct {
 
 	notSingleRouteErr       error
 	unshardedErr            error
-	warning                 string
+	warnings                []*querypb.QueryWarning
 	canShortcut             bool
 	singleUnshardedKeyspace bool
 	fullAnalysis            bool
@@ -140,7 +141,7 @@ func (a *analyzer) newSemTable(
 		return &SemTable{
 			Tables:                    a.earlyTables.Tables,
 			Comments:                  comments,
-			Warning:                   a.warning,
+			Warnings:                  a.warnings,
 			Collation:                 coll,
 			ExprTypes:                 map[sqlparser.Expr]evalengine.Type{},
 			NotSingleRouteErr:         a.notSingleRouteErr,
@@ -177,7 +178,7 @@ func (a *analyzer) newSemTable(
 		Targets:                   a.binder.targets,
 		NotSingleRouteErr:         a.notSingleRouteErr,
 		NotUnshardedErr:           a.unshardedErr,
-		Warning:                   a.warning,
+		Warnings:                  a.warnings,
 		Comments:                  comments,
 		ColumnEqualities:          map[columnName][]sqlparser.Expr{},
 		Collation:                 coll,
@@ -227,7 +228,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 	// log any warn in rewriting.
-	a.warning = a.rewriter.warning
+	a.warnings = a.rewriter.warnings
 
 	a.noteQuerySignature(cursor.Node())
 

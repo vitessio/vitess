@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -30,7 +32,7 @@ type earlyRewriter struct {
 	binder          *binder
 	scoper          *scoper
 	clause          string
-	warning         string
+	warnings        []*querypb.QueryWarning
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 	env             *vtenv.Environment
 	aliasMapCache   map[*sqlparser.Select]map[string]exprContainer
@@ -450,6 +452,13 @@ func (r *earlyRewriter) handleGroupBy(parent sqlparser.SQLNode, iter iterator) e
 	return nil
 }
 
+func (r *earlyRewriter) addWarning(message string, code sqlerror.ErrorCode) {
+	r.warnings = append(r.warnings, &querypb.QueryWarning{
+		Message: message,
+		Code:    uint32(code),
+	})
+}
+
 // rewriteHavingAndOrderBy rewrites columns in the ORDER BY and HAVING clauses to use aliases
 // from the SELECT expressions when applicable, following MySQL scoping rules:
 //   - A column identifier without a table qualifier that matches an alias introduced
@@ -483,7 +492,7 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 
 			isColumnOnTable, sure := r.isColumnOnTable(col, currentScope)
 			if found && isColumnOnTable {
-				r.warning = fmt.Sprintf("Column '%s' in group statement is ambiguous", sqlparser.String(col))
+				r.addWarning(fmt.Sprintf("Column '%s' in group statement is ambiguous", sqlparser.String(col)), sqlerror.ERNonUniq)
 			}
 
 			if isColumnOnTable && sure {
@@ -491,7 +500,7 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 			}
 
 			if !sure {
-				r.warning = "Missing table info, so not binding to anything on the FROM clause"
+				r.addWarning("Missing table info, so not binding to anything on the FROM clause", sqlerror.ERNotSupportedYet)
 			}
 
 			if item.ambiguous {
@@ -553,7 +562,7 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 			isColumnOnTable, sure := r.isColumnOnTable(col, currentScope)
 			if isColumnOnTable {
 				if found && sure {
-					r.warning = fmt.Sprintf("Column '%s' in having clause is ambiguous", sqlparser.String(col))
+					r.addWarning(fmt.Sprintf("Column '%s' in having clause is ambiguous", sqlparser.String(col)), sqlerror.ERNonUniq)
 				}
 				return
 			}
@@ -650,7 +659,7 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 		}
 		isColumnOnTable, sure := r.isColumnOnTable(col, currentScope)
 		if found && isColumnOnTable && sure {
-			r.warning = fmt.Sprintf("Column '%s' in order by statement is ambiguous", sqlparser.String(col))
+			r.addWarning(fmt.Sprintf("Column '%s' in order by statement is ambiguous", sqlparser.String(col)), sqlerror.ERNonUniq)
 		}
 
 		topLevel := col == node
@@ -660,7 +669,7 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 		}
 
 		if !sure {
-			r.warning = "Missing table info, so not binding to anything on the FROM clause"
+			r.addWarning("Missing table info, so not binding to anything on the FROM clause", sqlerror.ERNotSupportedYet)
 		}
 
 		if item.ambiguous {
