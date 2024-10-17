@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 
@@ -784,7 +786,8 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	// These tablets cannot be trusted for errant GTID detection.
 	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout)
 	if err != nil {
-		return nil, err
+		// If we run into an error finding the reparent journal lengths, we use the legacy errant GTID detection logic.
+		return erp.legacyFindErrantGTIDS(validCandidates, statusMap)
 	}
 
 	// Find the maximum length of the reparent journal among all the candidates.
@@ -853,6 +856,50 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			continue
 		}
 		updatedValidCandidates[alias] = validCandidates[alias]
+	}
+
+	return updatedValidCandidates, nil
+}
+
+// legacyFindErrantGTIDS is the legacy implementation of findErrantGTIDS.
+// We only need this for the situation where we
+// don't have the `ReadReparentJournalInfo` RPC implemented in the vttablet.
+func (erp *EmergencyReparenter) legacyFindErrantGTIDS(
+	validCandidates map[string]replication.Position,
+	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+) (map[string]replication.Position, error) {
+	updatedValidCandidates := maps.Clone(validCandidates)
+	for candidate := range validCandidates {
+		status, ok := statusMap[candidate]
+		if !ok {
+			// If the tablet is not in the statusMap, then it is presenting itself as a primary candidate.
+			// We don't run errant GTID detection for them.
+			continue
+		}
+
+		// Store all the other candidate's positions so that we can run errant GTID detection using them.
+		otherPositions := make([]replication.Position, 0, len(validCandidates)-1)
+		for otherCandidate := range validCandidates {
+			if otherCandidate == candidate {
+				continue
+			}
+			otherPositions = append(otherPositions, validCandidates[otherCandidate])
+		}
+		// Use the legacy code to run errant GTID detection and throw away any tablet that has errant GTIDs.
+		afterStatus := replication.ProtoToReplicationStatus(status.After)
+		errantGTIDs, err := replication.LegacyFindErrantGTIDs(afterStatus.RelayLogPosition, afterStatus.SourceUUID, otherPositions)
+		switch {
+		case err != nil:
+			// Could not look up GTIDs to determine if we have any. It's not
+			// safe to continue.
+			return nil, err
+		case len(errantGTIDs) != 0:
+			// This tablet has errant GTIDs. It's not a valid candidate for
+			// reparent, so don't insert it into the final mapping.
+			log.Errorf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs)
+			delete(updatedValidCandidates, candidate)
+			continue
+		}
 	}
 
 	return updatedValidCandidates, nil

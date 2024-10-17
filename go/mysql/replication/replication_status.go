@@ -177,6 +177,62 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 	return replstatus
 }
 
+// LegacyFindErrantGTIDs is the legacy implementation for FindErrantGTIDs. It has an additional check for
+// checking if one of the replicas is the superset of the other if only 2 are available. We need this check
+// only for the situation where we don't have the `ReadReparentJournalInfo` RPC implemented in the vttablet.
+func LegacyFindErrantGTIDs(position Position, sourceUUID SID, otherPositions []Position) (Mysql56GTIDSet, error) {
+	if len(otherPositions) == 0 {
+		// If there is nothing to compare this replica against, then we must assume that its GTID set is the correct one.
+		return nil, nil
+	}
+
+	relayLogSet, ok := position.GTIDSet.(Mysql56GTIDSet)
+	if !ok {
+		return nil, fmt.Errorf("errant GTIDs can only be computed on the MySQL flavor")
+	}
+
+	otherSets := make([]Mysql56GTIDSet, 0, len(otherPositions))
+	for _, pos := range otherPositions {
+		otherSet, ok := pos.GTIDSet.(Mysql56GTIDSet)
+		if !ok {
+			panic("The receiver ReplicationStatus contained a Mysql56GTIDSet in its relay log, but a replica's ReplicationStatus is of another flavor. This should never happen.")
+		}
+		otherSets = append(otherSets, otherSet)
+	}
+
+	// This check is only required because we want to support the case where the vttablet doesn't have
+	// `ReadReparentJournalInfo` RPC implemented. So, the new logic for only using the tablets with the maximum
+	// length of reparent journal won't filter any candidates. We'll need this logic to continue supporting the cases
+	// that we did before.
+	if len(otherSets) == 1 {
+		// If there is only one replica to compare against, and one is a subset of the other, then we consider them not to be errant.
+		// It simply means that one replica might be behind on replication.
+		if relayLogSet.Contains(otherSets[0]) || otherSets[0].Contains(relayLogSet) {
+			return nil, nil
+		}
+	}
+
+	// Copy set for final diffSet so we don't mutate receiver.
+	diffSet := make(Mysql56GTIDSet, len(relayLogSet))
+	for sid, intervals := range relayLogSet {
+		if sid == sourceUUID {
+			continue
+		}
+		diffSet[sid] = intervals
+	}
+
+	for _, otherSet := range otherSets {
+		diffSet = diffSet.Difference(otherSet)
+	}
+
+	if len(diffSet) == 0 {
+		// If diffSet is empty, then we have no errant GTIDs.
+		return nil, nil
+	}
+
+	return diffSet, nil
+}
+
 // FindErrantGTIDs can be used to find errant GTIDs in the receiver's relay log, by comparing it against all known replicas,
 // provided as a list of Positions. This method only works if the flavor for all retrieved Positions is MySQL.
 // The result is returned as a Mysql56GTIDSet, each of whose elements is a found errant GTID.
