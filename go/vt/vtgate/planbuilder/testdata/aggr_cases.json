@@ -303,7 +303,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in group statement is ambiguous"
   },
   {
     "comment": "scatter aggregate in a subquery",
@@ -421,7 +422,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "count with distinct group by unique vindex",
@@ -443,7 +445,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in group statement is ambiguous"
   },
   {
     "comment": "count with distinct unique vindex",
@@ -474,7 +477,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "count with distinct no unique vindex",
@@ -506,7 +510,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "count with distinct no unique vindex and no group by",
@@ -581,7 +586,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "warning": "Column 'user_id' in group statement is ambiguous"
   },
   {
     "comment": "count with distinct no unique vindex, count expression aliased",
@@ -613,7 +619,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "using HAVING inside a derived table still produces viable plans",
@@ -642,7 +649,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in group statement is ambiguous"
   },
   {
     "comment": "sum with distinct no unique vindex",
@@ -674,7 +682,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "min with distinct no unique vindex. distinct is ignored.",
@@ -706,7 +715,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "order by count distinct",
@@ -745,17 +755,20 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate group by aggregate function - since we don't have authoratative columns for user, we can't be sure that the user isn't referring a column named b",
     "query": "select count(*) b from user group by b",
-    "plan": "VT03005: cannot group on 'count(*)'"
+    "plan": "VT03005: cannot group on 'count(*)'",
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate group by aggregate function with column information",
     "query": "select count(*) b from authoritative group by b",
-    "plan": "VT03005: cannot group on 'b'"
+    "plan": "VT03005: cannot group on 'b'",
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate multiple group by (columns)",
@@ -787,7 +800,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "Aggregation with derived table",
@@ -903,7 +917,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "group concat with a separator needing evaluation on vtgate",
@@ -1091,7 +1106,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate with jumbled order by columns",
@@ -1123,7 +1139,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate with jumbled group by and order by columns",
@@ -1155,7 +1172,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate with some descending order by cols",
@@ -1187,12 +1205,14 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "invalid order by column numner for scatter",
     "query": "select col, count(*) from user group by col order by 5 limit 10",
-    "plan": "Unknown column '5' in 'order clause'"
+    "plan": "Unknown column '5' in 'order clause'",
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "aggregate with limit",
@@ -1229,7 +1249,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "routing rules for aggregates",
@@ -1251,7 +1272,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "order by on a reference table",
@@ -1273,7 +1295,8 @@
       "TablesUsed": [
         "user.ref"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "distinct and aggregate functions missing group by",
@@ -1334,7 +1357,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "Group by invalid column number (code is duplicated from symab).",
@@ -1456,7 +1480,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "optimize group by when using distinct with no aggregation",
@@ -1488,7 +1513,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "do not use distinct when using only aggregates and no group by",
@@ -1600,7 +1626,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "aggregate query with order by aggregate column along with NULL",
@@ -1638,7 +1665,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "aggregate query with order by NULL",
@@ -1669,7 +1697,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "join query on sharding key with group by a unique vindex with having clause.",
@@ -1744,7 +1773,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in having clause is ambiguous"
   },
   {
     "comment": "weight_string addition to group by",
@@ -1887,7 +1917,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "Column and Literal equality filter on scatter aggregates",
@@ -2205,7 +2236,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "We should be able to find grouping keys on ordered aggregates",
@@ -2243,7 +2275,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "User defined aggregation expression being used in order by of a query that is single sharded",
@@ -2269,7 +2302,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "user defined aggregation such that it can pushed to mysql in a scatter route",
@@ -2291,7 +2325,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in group statement is ambiguous"
   },
   {
     "comment": "distinct on text column with collation",
@@ -2322,7 +2357,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "aggregation filtering by having on a route with no group by with non-unique vindex filter",
@@ -2742,7 +2778,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "aggregation on top of semijoin",
@@ -2833,7 +2870,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "group by column alias",
@@ -2865,7 +2903,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "multiple distinct aggregations on the same column is allowed",
@@ -2897,7 +2936,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "multiple distinct aggregations on the same column in different positions",
@@ -2929,7 +2969,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "distinct aggregation will 3 table join query",
@@ -3036,7 +3077,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in group statement is ambiguous"
   },
   {
     "comment": "select count(distinct user_id, name) from unsharded",
@@ -3153,7 +3195,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "find aggregation expression and use column offset in filter times two",
@@ -3191,7 +3234,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "find aggregation expression and use column offset in filter times three",
@@ -3229,7 +3273,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "having should be able to add new aggregation expressions in having",
@@ -3267,7 +3312,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3",
@@ -3794,7 +3840,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'val1' in group statement is ambiguous"
   },
   {
     "comment": "Can't inline derived table when it has HAVING with aggregation function",
@@ -4143,7 +4190,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "aggregation, where and derived tables - we can push extremums",
@@ -4181,7 +4229,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'foo' in group statement is ambiguous"
   },
   {
     "comment": "aggregation, where and derived tables - we can't push aggregations that might need a second layer of aggregation",
@@ -4219,7 +4268,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'foo' in group statement is ambiguous"
   },
   {
     "comment": "Scatter order by is complex with aggregates in select",
@@ -4258,7 +4308,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "scatter aggregate complex order by",
@@ -4282,7 +4333,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "select expression does not directly depend on grouping expression",
@@ -4314,7 +4366,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "inner join with scalar aggregation",
@@ -4970,7 +5023,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "scatter aggregate with ambiguous aliases",
@@ -5136,7 +5190,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "using a grouping column multiple times should be OK",
@@ -5167,7 +5222,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "multiple count star and a count with 3 table join",
@@ -5875,7 +5931,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'intcol' in group statement is ambiguous"
   },
   {
     "comment": "ordering on top of aggregator without pushing the column down during the horizon phase",
@@ -6021,7 +6078,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "aggregation on union",
@@ -7174,7 +7232,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "col is a column on user, but the HAVING is referring to an alias",
@@ -7219,7 +7278,8 @@
   {
     "comment": "Aggregate UDFs can't be handled by vtgate",
     "query": "select id from t1 group by id having udf_aggr(foo) > 1 and sum(foo) = 10",
-    "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(foo)' must be pushed down to MySQL"
+    "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(foo)' must be pushed down to MySQL",
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "Valid to run since we can push down the aggregate function because of the grouping",
@@ -7241,7 +7301,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in group statement is ambiguous"
   },
   {
     "comment": "Valid to run since we can push down the aggregate function because it's unsharded",
@@ -7289,7 +7350,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "Aggregation over a ORDER BY/LIMIT inside a derived table",

@@ -665,6 +665,7 @@ type (
 		Query   string          `json:"query,omitempty"`
 		Plan    json.RawMessage `json:"plan,omitempty"`
 		Skip    bool            `json:"skip,omitempty"`
+		Warning string          `json:"warning,omitempty"`
 	}
 )
 
@@ -688,6 +689,7 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 			}
 			vschema.Version = Gen4
 			out := getPlanOutput(tcase, vschema, render)
+			current.Warning = vschema.Warning
 
 			// our expectation for the planner on the query is one of three
 			// - produces same plan as expected
@@ -709,6 +711,9 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 					}
 				} else if tcase.Skip {
 					t.Errorf("query is correct even though it is skipped:\n %s", tcase.Query)
+				}
+				if tcase.Warning != current.Warning && !tcase.Skip {
+					t.Errorf("warning mismatch: expected: %s, got: %s", tcase.Warning, current.Warning)
 				}
 				current.Plan = []byte(out)
 			})

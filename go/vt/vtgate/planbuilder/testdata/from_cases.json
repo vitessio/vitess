@@ -4048,7 +4048,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col1' in group statement is ambiguous"
   },
   {
     "comment": "join with USING construct",

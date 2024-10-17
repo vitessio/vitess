@@ -160,7 +160,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "Union all",
@@ -291,7 +292,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "union all on scatter and single route",
@@ -1052,27 +1054,32 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "ambiguous LIMIT",
     "query": "select id from user limit 1 union all select id from music limit 1",
-    "plan": "syntax error at position 34 near 'union'"
+    "plan": "syntax error at position 34 near 'union'",
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "ambiguous ORDER BY",
     "query": "select id from user order by id union all select id from music order by id desc",
-    "plan": "syntax error at position 38 near 'union'"
+    "plan": "syntax error at position 38 near 'union'",
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "different number of columns",
     "query": "select id, 42 from user where id = 1 union all select id from user where id = 5",
-    "plan": "The used SELECT statements have a different number of columns: 2, 1"
+    "plan": "The used SELECT statements have a different number of columns: 2, 1",
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "union with invalid order by clause with table qualifier",
     "query": "select id from user union select 3 order by user.id",
-    "plan": "Table `user` from one of the SELECTs cannot be used in global ORDER clause"
+    "plan": "Table `user` from one of the SELECTs cannot be used in global ORDER clause",
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "union with invalid order by clause with table qualifier",

@@ -97,7 +97,8 @@
       "TablesUsed": [
         "main.sbtest1"
       ]
-    }
+    },
+    "warning": "Column 'c' in order by statement is ambiguous"
   },
   {
     "comment": "OLTP distinct range select",
@@ -127,7 +128,8 @@
       "TablesUsed": [
         "main.sbtest30"
       ]
-    }
+    },
+    "warning": "Column 'c' in order by statement is ambiguous"
   },
   {
     "comment": "OLTP index udpate",

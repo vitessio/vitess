@@ -45,12 +45,14 @@
       "TablesUsed": [
         "main.lineitem"
       ]
-    }
+    },
+    "warning": "Column 'l_linestatus' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 2",
     "query": "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and p_size = 15 and p_type like '%BRASS' and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' and ps_supplycost = ( select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' ) order by s_acctbal desc, n_name, s_name, p_partkey limit 10",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "warning": "Column 'p_partkey' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 3",
@@ -181,7 +183,8 @@
         "main.lineitem",
         "main.orders"
       ]
-    }
+    },
+    "warning": "Column 'o_orderdate' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 4",
@@ -780,7 +783,8 @@
         "main.orders",
         "main.supplier"
       ]
-    }
+    },
+    "warning": "Column 'l_year' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 8",
@@ -1064,7 +1068,8 @@
         "main.region",
         "main.supplier"
       ]
-    }
+    },
+    "warning": "Column 'o_year' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 9",
@@ -1766,7 +1771,8 @@
         "main.partsupp",
         "main.supplier"
       ]
-    }
+    },
+    "warning": "Column 'ps_partkey' in group statement is ambiguous"
   },
   {
     "comment": "TPC-H query 12",
@@ -1962,7 +1968,8 @@
         "main.customer",
         "main.orders"
       ]
-    }
+    },
+    "warning": "Column 'c_count' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 14",
@@ -2092,7 +2099,8 @@
         "main.revenue0",
         "main.supplier"
       ]
-    }
+    },
+    "warning": "Column 's_suppkey' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 16",
@@ -2189,7 +2197,8 @@
         "main.partsupp",
         "main.supplier"
       ]
-    }
+    },
+    "warning": "Column 'p_size' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 17",
@@ -2357,7 +2366,8 @@
         "main.lineitem",
         "main.orders"
       ]
-    }
+    },
+    "warning": "Column 'o_orderdate' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 19",
@@ -2425,7 +2435,8 @@
   {
     "comment": "TPC-H query 20",
     "query": "select s_name, s_address from supplier, nation where s_suppkey in ( select ps_suppkey from partsupp where ps_partkey in ( select p_partkey from part where p_name like 'forest%' ) and ps_availqty > ( select 0.5 * sum(l_quantity) from lineitem where l_partkey = ps_partkey and l_suppkey = ps_suppkey and l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year ) ) and s_nationkey = n_nationkey and n_name = 'CANADA' order by s_name",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "warning": "Column 's_name' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 21",
@@ -2587,11 +2598,13 @@
         "main.orders",
         "main.supplier"
       ]
-    }
+    },
+    "warning": "Column 's_name' in order by statement is ambiguous"
   },
   {
     "comment": "TPC-H query 22",
     "query": "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from ( select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') and c_acctbal > ( select avg(c_acctbal) from customer where c_acctbal > 0.00 and substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') ) and not exists ( select * from orders where o_custkey = c_custkey ) ) as custsale group by cntrycode order by cntrycode",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "warning": "Column 'cntrycode' in order by statement is ambiguous"
   }
 ]

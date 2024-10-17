@@ -4077,7 +4077,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "HAVING predicates that use table columns are safe to rewrite if we can move them to the WHERE clause",
@@ -4691,7 +4692,8 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "warning": "Column 'user_id' in order by statement is ambiguous"
   },
   {
     "comment": "group by and having with authoritative table - removing keyspace from having",
@@ -4717,6 +4719,7 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "warning": "Column 'user_id' in order by statement is ambiguous"
   }
 ]

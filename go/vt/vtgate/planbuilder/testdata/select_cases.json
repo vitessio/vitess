@@ -818,7 +818,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "Jumbled references",
@@ -1171,7 +1172,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "warning": "Column 'user_id' in order by statement is ambiguous"
   },
   {
     "comment": "sharded limit offset with arguments",
@@ -1202,7 +1204,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "warning": "Column 'user_id' in order by statement is ambiguous"
   },
   {
     "comment": "Sharding Key Condition in Parenthesis",
@@ -1332,7 +1335,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "Booleans and parenthesis",
@@ -2184,17 +2188,20 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "warning": "Column 'user_id' in having clause is ambiguous"
   },
   {
     "comment": "sql_calc_found_rows in sub queries",
     "query": "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)",
-    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+    "warning": "Column 'user_id' in having clause is ambiguous"
   },
   {
     "comment": "sql_calc_found_rows in derived table",
     "query": "select sql_calc_found_rows * from (select sql_calc_found_rows * from music limit 10) t limit 1",
-    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+    "warning": "Column 'user_id' in having clause is ambiguous"
   },
   {
     "comment": "select from unsharded keyspace into dumpfile",
@@ -3061,7 +3068,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "correlated subquery having dependencies on two tables",
@@ -3517,7 +3525,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "yeah, it does not make sense, but it's valid",
@@ -5068,7 +5077,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",

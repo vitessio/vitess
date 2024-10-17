@@ -36,7 +36,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate order by references aggregate expression",
@@ -75,7 +76,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "select a, b, count(*) k from user group by a order by b, a, k",
@@ -114,7 +116,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate with memory sort and limit",
@@ -159,7 +162,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate with memory sort and order by number",
@@ -198,7 +202,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "scatter aggregate with memory sort and order by number, reuse weight_string\n# we have to use a meaningless construct to test this",
@@ -236,7 +241,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "order by on a cross-shard derived table",
@@ -279,7 +285,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "order by on a cross-shard query. Note: this happens only when an order by column is from the second table",
@@ -537,7 +544,8 @@
       "TablesUsed": [
         "user_index"
       ]
-    }
+    },
+    "warning": "Column 'range_start' in order by statement is ambiguous"
   },
   {
     "comment": "unary expression",
@@ -561,7 +569,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "unary expression in join query",
@@ -630,7 +639,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'intcol' in order by statement is ambiguous"
   },
   {
     "comment": "scatter order by with order by column not present",

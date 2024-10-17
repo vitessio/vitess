@@ -37,7 +37,8 @@
   {
     "comment": "ORDER BY on select *",
     "query": "select *, col from user order by col",
-    "plan": "VT09015: schema tracking required"
+    "plan": "VT09015: schema tracking required",
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "ORDER BY on select multi t.*",
@@ -47,17 +48,20 @@
   {
     "comment": "ORDER BY on select multi *",
     "query": "select *, name, *, col from user order by col",
-    "plan": "VT09015: schema tracking required"
+    "plan": "VT09015: schema tracking required",
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "Group by column number, used with non-aliased expression (duplicated code)",
     "query": "select * from user group by 1",
-    "plan": "cannot use column offsets in group clause when using `*`"
+    "plan": "cannot use column offsets in group clause when using `*`",
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "create view with Cannot auto-resolve for cross-shard joins",
     "query": "create view user.view_a as select col from user join user_extra",
-    "plan": "Column 'col' in field list is ambiguous"
+    "plan": "Column 'col' in field list is ambiguous",
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "unsharded insert, unqualified names and auto-inc combined",

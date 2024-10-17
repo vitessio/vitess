@@ -17,12 +17,14 @@
   {
     "comment": "subqueries not supported in group by",
     "query": "select id from user group by id, (select id from user_extra)",
-    "plan": "VT12001: unsupported: subqueries in GROUP BY"
+    "plan": "VT12001: unsupported: subqueries in GROUP BY",
+    "warning": "Column 'id' in group statement is ambiguous"
   },
   {
     "comment": "user defined functions used in having clause that needs evaluation on vtgate",
     "query": "select col1, udf_aggr( col2 ) r from user group by col1 having r >= 0.3",
-    "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(col2)' must be pushed down to MySQL"
+    "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(col2)' must be pushed down to MySQL",
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "update changes primary vindex column",
@@ -32,7 +34,8 @@
   {
     "comment": "subquery with an aggregation in order by that cannot be merged into a single route",
     "query": "select col, trim((select user_name from user where col = 'a')) val from user_extra where user_id = 3 group by col order by val",
-    "plan": "VT12001: unsupported: subquery with aggregation in order by"
+    "plan": "VT12001: unsupported: subquery with aggregation in order by",
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "update change in multicol vindex column",
@@ -157,7 +160,8 @@
   {
     "comment": "create view with sharded limit",
     "query": "create view user.view_a as select id from user order by id limit 10",
-    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements",
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "create view with top level subquery in select",
@@ -172,7 +176,8 @@
   {
     "comment": "create view with sql_calc_found_rows with group by and having",
     "query": "create view user.view_a as select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
-    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
+    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements",
+    "warning": "Column 'user_id' in having clause is ambiguous"
   },
   {
     "comment": "create view with incompatible keyspaces",
@@ -367,7 +372,8 @@
   {
     "comment": "WITH ROLLUP not supported on sharded queries",
     "query": "select a, b, c, sum(d) from user group by a, b, c with rollup",
-    "plan": "VT12001: unsupported: GROUP BY WITH ROLLUP not supported for sharded queries"
+    "plan": "VT12001: unsupported: GROUP BY WITH ROLLUP not supported for sharded queries",
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "SOME/ANY/ALL comparison operator not supported for unsharded queries",

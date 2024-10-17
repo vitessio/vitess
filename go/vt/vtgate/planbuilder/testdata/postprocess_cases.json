@@ -232,7 +232,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "ORDER BY works for select * from authoritative table",
@@ -256,7 +257,8 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "warning": "Column 'user_id' in order by statement is ambiguous"
   },
   {
     "comment": "Test that LIMIT can be pushed to the route even in the presence of an outer join",
@@ -342,7 +344,8 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "warning": "Column 'col1' in order by statement is ambiguous"
   },
   {
     "comment": "ORDER BY on scatter with text column",
@@ -366,7 +369,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "ORDER BY on scatter with text column, qualified name TODO: can plan better",
@@ -390,7 +394,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "ORDER BY on scatter with multiple text columns",
@@ -414,12 +419,14 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'textcol2' in order by statement is ambiguous"
   },
   {
     "comment": "ORDER BY invalid col number on scatter",
     "query": "select col from user order by 2",
-    "plan": "Unknown column '2' in 'order clause'"
+    "plan": "Unknown column '2' in 'order clause'",
+    "warning": "Column 'textcol2' in order by statement is ambiguous"
   },
   {
     "comment": "ORDER BY column offset",
@@ -511,7 +518,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "ORDER BY NULL for join",
@@ -1152,7 +1160,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "LIMIT",
@@ -1441,7 +1450,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "column alias for a table column in order by",
@@ -1465,7 +1475,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "ordering on the left side of the join",
@@ -1508,7 +1519,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "warning": "Column '`name`' in order by statement is ambiguous"
   },
   {
     "comment": "aggregation and non-aggregations column without group by",
@@ -1688,7 +1700,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "warning": "Column '`name`' in order by statement is ambiguous"
   },
   {
     "comment": "order by with ambiguous column reference ; valid in MySQL",
@@ -1712,7 +1725,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "Scatter order by and aggregation: order by column must reference column from select list",
@@ -1751,7 +1765,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in group statement is ambiguous"
   },
   {
     "comment": "Distinct with cross shard query",
@@ -1947,7 +1962,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "Order by column number with collate",
@@ -1995,7 +2011,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'id' in order by statement is ambiguous"
   },
   {
     "comment": "Order by column number with collate",
@@ -2163,7 +2180,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "distinct with order by having additional non-order by columns in the selection using aggregation engine",
@@ -2194,7 +2212,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "warning": "Column 'col' in order by statement is ambiguous"
   },
   {
     "comment": "distinct with order by having no overalap with the selection columns - using distinct engine",

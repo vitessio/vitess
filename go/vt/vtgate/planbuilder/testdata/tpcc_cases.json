@@ -566,7 +566,8 @@
       "TablesUsed": [
         "main.customer1"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "TPC-C select unique customer1",
@@ -618,7 +619,8 @@
       "TablesUsed": [
         "main.orders1"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "TPC-C select order_line1",
@@ -670,7 +672,8 @@
       "TablesUsed": [
         "main.new_orders1"
       ]
-    }
+    },
+    "warning": "Missing table info, so not binding to anything on the FROM clause"
   },
   {
     "comment": "TPC-C delete new_orders1",
@@ -957,7 +960,8 @@
       "TablesUsed": [
         "main.orders1"
       ]
-    }
+    },
+    "warning": "Column 'o_w_id' in group statement is ambiguous"
   },
   {
     "comment": "TPC-C delete order_line1",
