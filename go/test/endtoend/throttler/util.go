@@ -529,7 +529,7 @@ func WaitForValidData(t *testing.T, tablet *cluster.Vttablet, timeout time.Durat
 	selfCheckURL := fmt.Sprintf("http://localhost:%d/throttler/check-self", tablet.HTTPPort)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -548,8 +548,10 @@ func WaitForValidData(t *testing.T, tablet *cluster.Vttablet, timeout time.Durat
 		}
 		select {
 		case <-ctx.Done():
-			t.Errorf("timed out waiting for %s tablet's throttler to return a valid result after %v; last seen value: %+v",
-				tablet.Alias, timeout, checkResp)
+			respByte, _ := io.ReadAll(checkResp.Body)
+			body := string(respByte)
+			t.Errorf("timed out waiting for %s tablet's throttler to return a valid result after %v; last seen result: %+v",
+				tablet.Alias, timeout, body)
 			return
 		case <-ticker.C:
 		}
