@@ -2461,6 +2461,15 @@ func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctl
 			if err != nil {
 				return err
 			}
+			// The metadata manager is itself not part of the list of participants.
+			// We should it to the list before showing it to the users.
+			for _, trnx := range shardTrnxs {
+				trnx.Participants = append(trnx.Participants, &querypb.Target{
+					Keyspace:   req.Keyspace,
+					Shard:      shard,
+					TabletType: topodatapb.TabletType_PRIMARY,
+				})
+			}
 			mu.Lock()
 			defer mu.Unlock()
 			transactions = append(transactions, shardTrnxs...)
