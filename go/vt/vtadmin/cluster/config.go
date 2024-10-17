@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -149,6 +150,8 @@ func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err err
 		return nil, "", ErrNoConfigID
 	}
 
+	id = formatID(id)
+
 	tmp := map[string]string{}
 	if err := v.Unmarshal(&tmp); err != nil {
 		return nil, id, err
@@ -164,6 +167,7 @@ func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err err
 	if err := cfg.unmarshalMap(tmp); err != nil {
 		return nil, id, err
 	}
+	cfg.ID = id
 
 	return cfg, id, nil
 }
@@ -237,7 +241,7 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 // config. Neither the caller or the argument are modified in any way.
 func (cfg Config) Merge(override Config) Config {
 	merged := Config{
-		ID:                          cfg.ID,
+		ID:                          formatID(cfg.ID),
 		Name:                        cfg.Name,
 		DiscoveryImpl:               cfg.DiscoveryImpl,
 		DiscoveryFlagsByImpl:        map[string]map[string]string{},
@@ -255,7 +259,7 @@ func (cfg Config) Merge(override Config) Config {
 	}
 
 	if override.ID != "" {
-		merged.ID = override.ID
+		merged.ID = formatID(override.ID)
 	}
 
 	if override.Name != "" {
@@ -282,6 +286,13 @@ func (cfg Config) Merge(override Config) Config {
 	mergeStringMap(merged.VtctldFlags, override.VtctldFlags)
 
 	return merged
+}
+
+func formatID(id string) string {
+	// gRPC can't process custom resolver names with underscores
+	id = strings.Replace(id, "_", "-", -1)
+
+	return id
 }
 
 func mergeStringMap(base map[string]string, override map[string]string) {
