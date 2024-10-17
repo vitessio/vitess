@@ -282,7 +282,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		// Copy mode.
 		"insert into dst(idc,val) values ('a',1)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"idc" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:"a"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A226964632220747970653A5641524348415220636861727365743A333320666C6167733A32303438337D20726F77733A7B6C656E677468733A312076616C7565733A2261227D'.*`,
 		// Copy-catchup mode.
 		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
@@ -292,11 +292,11 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		// upd1 := expect.
 		upd1 := expect.Then(qh.Eventually(
 			"insert into dst(idc,val) values ('B',3)",
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"idc" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:"B"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A226964632220747970653A5641524348415220636861727365743A333320666C6167733A32303438337D20726F77733A7B6C656E677468733A312076616C7565733A2242227D'.*`,
 		))
 		upd2 := expect.Then(qh.Eventually(
 			"insert into dst(idc,val) values ('c',2)",
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"idc" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:"c"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A226964632220747970653A5641524348415220636861727365743A333320666C6167733A32303438337D20726F77733A7B6C656E677468733A312076616C7565733A2263227D'.*`,
 		))
 		upd1.Then(upd2.Eventually())
 		return upd2
@@ -336,7 +336,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 
 	execStatements(t, []string{
 		"create table src(id int, idc varbinary(20), idc2 varbinary(20), val int, primary key(id,idc,idc2))",
-		"insert into src values(1, 'a', 'a', 1), (1, 'c', 'c', 2)",
+		"insert into src values(1, X'61', X'61', 1), (1, X'63', X'63', 2)",
 		fmt.Sprintf("create table %s.dst(id int, idc varbinary(20), idc2 varbinary(20), val int, primary key(id,idc,idc2))", vrepldb),
 	})
 	defer execStatements(t, []string{
@@ -354,7 +354,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		}
 		// Insert a row with PK which is < the lastPK till now because of the utf8mb4 collation
 		execStatements(t, []string{
-			"insert into src values(1, 'B', 'B', 3)",
+			"insert into src values(1, X'42', X'42', 3)",
 		})
 		// Wait for context to expire and then send the row.
 		// This will cause the copier to abort and go back to catchup mode.
@@ -404,13 +404,13 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		// Copy mode.
-		"insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} fields:{name:"idc" type:VARBINARY charset:63 flags:20611} fields:{name:"idc2" type:VARBINARY charset:63 flags:20611} rows:{lengths:1 lengths:1 lengths:1 values:"1aa"}'.*`,
+		"insert into dst(id,idc,idc2,val) values (1,X'61',X'61',1)",
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D206669656C64733A7B6E616D653A226964632220747970653A56415242494E41525920636861727365743A363320666C6167733A32303631317D206669656C64733A7B6E616D653A22696463322220747970653A56415242494E41525920636861727365743A363320666C6167733A32303631317D20726F77733A7B6C656E677468733A31206C656E677468733A31206C656E677468733A312076616C7565733A22316161227D'.*`,
 		// Copy-catchup mode.
-		`insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
+		`insert into dst(id,idc,idc2,val) select 1, X'42', X'42', 3 from dual where (1,X'42',X'42') <= (1,X'61',X'61')`,
 		// Copy mode.
-		"insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} fields:{name:"idc" type:VARBINARY charset:63 flags:20611} fields:{name:"idc2" type:VARBINARY charset:63 flags:20611} rows:{lengths:1 lengths:1 lengths:1 values:"1cc"}'.*`,
+		"insert into dst(id,idc,idc2,val) values (1,X'63',X'63',2)",
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D206669656C64733A7B6E616D653A226964632220747970653A56415242494E41525920636861727365743A363320666C6167733A32303631317D206669656C64733A7B6E616D653A22696463322220747970653A56415242494E41525920636861727365743A363320666C6167733A32303631317D20726F77733A7B6C656E677468733A31206C656E677468733A31206C656E677468733A312076616C7565733A22316363227D'.*`,
 		// Wrap-up.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
@@ -494,7 +494,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		// Inserts may happen out-of-order. Update happen in-order.
 		"begin",
 		"insert into dst1(id,id2) values (1,1), (2,2)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"2"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		"commit",
 	)).Then(qh.Immediately(
 		"set @@session.foreign_key_checks=0",
@@ -515,7 +515,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		// copy dst2
 		"begin",
 		"insert into dst2(id,id2) values (1,21), (2,22)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"2"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		"commit",
 	)).Then(qh.Immediately(
 		"set @@session.foreign_key_checks=0",
@@ -560,13 +560,13 @@ func testPlayerCopyTables(t *testing.T) {
 
 	execStatements(t, []string{
 		"create table ast1(id int, primary key(id))",
-		"create table src1(id int, val varbinary(128), d decimal(8,0), j json, primary key(id))",
+		"create table src1(id int, val varchar(128), d decimal(8,0), j json, primary key(id))",
 		"insert into src1 values(2, 'bbb', 1, '{\"foo\": \"bar\"}'), (1, 'aaa', 0, JSON_ARRAY(123456789012345678901234567890, \"abcd\")), (3, 'ccc', 2, 'null'), (4, 'ddd', 3, '{\"name\": \"matt\", \"size\": null}'), (5, 'eee', 4, null)",
 		fmt.Sprintf("create table %s.ast1(id int, primary key(id))", vrepldb),
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128), d decimal(8,0), j json, primary key(id))", vrepldb),
-		"create table yes(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
-		"create table no(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.dst1(id int, val varchar(128), val2 varchar(128), d decimal(8,0), j json, primary key(id))", vrepldb),
+		"create table yes(id int, val varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.yes(id int, val varchar(128), primary key(id))", vrepldb),
+		"create table no(id int, val varchar(128), primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table ast1",
@@ -628,7 +628,7 @@ func testPlayerCopyTables(t *testing.T) {
 		"commit",
 		"begin",
 		"insert into dst1(id,val,val2,d,j) values (1,'aaa','aaa',0,JSON_ARRAY(123456789012345678901234567890, _utf8mb4'abcd')), (2,'bbb','bbb',1,JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar')), (3,'ccc','ccc',2,CAST(_utf8mb4'null' as JSON)), (4,'ddd','ddd',3,JSON_OBJECT(_utf8mb4'name', _utf8mb4'matt', _utf8mb4'size', null)), (5,'eee','eee',4,null)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"5"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2235227D'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
@@ -695,9 +695,9 @@ func testPlayerCopyBigTable(t *testing.T) {
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
 	execStatements(t, []string{
-		"create table src(id int, val varbinary(128), primary key(id))",
+		"create table src(id int, val varchar(128), primary key(id))",
 		"insert into src values(1, 'aaa'), (2, 'bbb')",
-		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.dst(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src",
@@ -764,7 +764,7 @@ func testPlayerCopyBigTable(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(id,val) values (1,'aaa')",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"1"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2231227D'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
 		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
@@ -774,12 +774,12 @@ func testPlayerCopyBigTable(t *testing.T) {
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		ins1 := expect.Then(qh.Eventually("insert into dst(id,val) values (2,'bbb')"))
 		upd1 := ins1.Then(qh.Eventually(
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"2"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		))
 		// Third row copied without going back to catchup state.
 		ins3 := expect.Then(qh.Eventually("insert into dst(id,val) values (3,'ccc')"))
 		upd3 := ins3.Then(qh.Eventually(
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"3"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2233227D'.*`,
 		))
 		upd1.Then(upd3.Eventually())
 		return upd3
@@ -825,9 +825,9 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
 	execStatements(t, []string{
-		"create table src(id int, val varbinary(128), primary key(id))",
+		"create table src(id int, val varchar(128), primary key(id))",
 		"insert into src values(1, 'aaa'), (2, 'bbb')",
-		fmt.Sprintf("create table %s.src(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.src(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src",
@@ -893,7 +893,7 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into src(id,val) values (1,'aaa')",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"1"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2231227D'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
 		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
@@ -903,12 +903,12 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		ins1 := expect.Then(qh.Eventually("insert into src(id,val) values (2,'bbb')"))
 		upd1 := ins1.Then(qh.Eventually(
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"2"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		))
 		// Third row copied without going back to catchup state.
 		ins3 := expect.Then(qh.Eventually("insert into src(id,val) values (3,'ccc')"))
 		upd3 := ins3.Then(qh.Eventually(
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"3"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2233227D'.*`,
 		))
 		upd1.Then(upd3.Eventually())
 		return upd3
@@ -943,19 +943,19 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 		// src1 is initialized as partially copied.
 		// lastpk will be initialized at (6,6) later below.
 		// dst1 only copies id1 and val. This will allow us to test for correctness if id2 changes in the source.
-		"create table src1(id1 int, id2 int, val varbinary(128), primary key(id1, id2))",
+		"create table src1(id1 int, id2 int, val varchar(128), primary key(id1, id2))",
 		"insert into src1 values(2,2,'no change'), (3,3,'update'), (4,4,'delete'), (5,5,'move within'), (6,6,'move out'), (8,8,'no change'), (9,9,'delete'), (10,10,'update'), (11,11,'move in')",
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.dst1(id int, val varchar(128), primary key(id))", vrepldb),
 		fmt.Sprintf("insert into %s.dst1 values(2,'no change'), (3,'update'), (4,'delete'), (5,'move within'), (6,'move out')", vrepldb),
 		// copied is initialized as fully copied
-		"create table copied(id int, val varbinary(128), primary key(id))",
+		"create table copied(id int, val varchar(128), primary key(id))",
 		"insert into copied values(1,'aaa')",
-		fmt.Sprintf("create table %s.copied(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.copied(id int, val varchar(128), primary key(id))", vrepldb),
 		fmt.Sprintf("insert into %s.copied values(1,'aaa')", vrepldb),
 		// not_copied yet to be copied.
-		"create table not_copied(id int, val varbinary(128), primary key(id))",
+		"create table not_copied(id int, val varchar(128), primary key(id))",
 		"insert into not_copied values(1,'aaa')",
-		fmt.Sprintf("create table %s.not_copied(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.not_copied(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -1067,13 +1067,13 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 	).Then(qh.Immediately(
 		"insert into dst1(id,val) values (7,'insert out'), (8,'no change'), (10,'updated'), (12,'move out')",
 	)).Then(qh.Eventually(
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id1" type:INT32 charset:63 flags:53251} fields:{name:"id2" type:INT32 charset:63 flags:53251} rows:{lengths:2 lengths:1 values:"126"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A226964312220747970653A494E54333220636861727365743A363320666C6167733A35333235317D206669656C64733A7B6E616D653A226964322220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A32206C656E677468733A312076616C7565733A22313236227D'.*`,
 	)).Then(qh.Immediately(
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		"insert into not_copied(id,val) values (1,'bbb')",
 	)).Then(qh.Eventually(
 		// Copy again. There should be no events for catchup.
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"1"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2231227D'.*`,
 	)).Then(qh.Immediately(
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*not_copied",
 		"/update _vt.vreplication set state='Running'",
@@ -1118,9 +1118,9 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table src(id int, val varbinary(128), primary key(id))",
+		"create table src(id int, val varchar(128), primary key(id))",
 		"insert into src values(2,'copied'), (3,'uncopied')",
-		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.dst(id int, val varchar(128), primary key(id))", vrepldb),
 		fmt.Sprintf("insert into %s.dst values(2,'copied')", vrepldb),
 	})
 	defer execStatements(t, []string{
@@ -1218,9 +1218,9 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table src(id int, val varbinary(128), primary key(id))",
+		"create table src(id int, val varchar(128), primary key(id))",
 		"insert into src values(2,'copied'), (3,'uncopied')",
-		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.dst(id int, val varchar(128), primary key(id))", vrepldb),
 		fmt.Sprintf("insert into %s.dst values(2,'copied')", vrepldb),
 	})
 	defer execStatements(t, []string{
@@ -1344,9 +1344,9 @@ func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table src1(id int, val varbinary(128), primary key(id))",
+		"create table src1(id int, val varchar(128), primary key(id))",
 		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.dst1(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -1393,7 +1393,7 @@ func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 	).Then(qh.Eventually(
 		"begin",
 		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"2"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		"commit",
 	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
@@ -1423,13 +1423,13 @@ func testPlayerCopyTablesGIPK(t *testing.T) {
 
 	execStatements(t, []string{
 		"SET @@session.sql_generate_invisible_primary_key=ON;",
-		"create table src1(val varbinary(128))",
+		"create table src1(val varchar(128))",
 		"insert into src1 values('aaa'), ('bbb')",
-		"create table src2(val varbinary(128))",
+		"create table src2(val varchar(128))",
 		"insert into src2 values('aaa'), ('bbb')",
-		fmt.Sprintf("create table %s.dst1(val varbinary(128))", vrepldb),
+		fmt.Sprintf("create table %s.dst1(val varchar(128))", vrepldb),
 		"SET @@session.sql_generate_invisible_primary_key=OFF;",
-		fmt.Sprintf("create table %s.dst2(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
+		fmt.Sprintf("create table %s.dst2(my_row_id int, val varchar(128), primary key(my_row_id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -1481,7 +1481,7 @@ func testPlayerCopyTablesGIPK(t *testing.T) {
 	).Then(qh.Eventually(
 		"begin",
 		"insert into dst1(my_row_id,val) values (1,'aaa'), (2,'bbb')",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"my_row_id" type:UINT64 charset:63 flags:49699} rows:{lengths:1 values:"2"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A226D795F726F775F69642220747970653A55494E54363420636861727365743A363320666C6167733A34393639397D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		"commit",
 	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
@@ -1492,7 +1492,7 @@ func testPlayerCopyTablesGIPK(t *testing.T) {
 		"commit",
 		"begin",
 		"insert into dst2(my_row_id,val) values (1,'aaa'), (2,'bbb')",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"my_row_id" type:UINT64 charset:63 flags:49699} rows:{lengths:1 values:"2"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A226D795F726F775F69642220747970653A55494E54363420636861727365743A363320666C6167733A34393639397D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		"commit",
 	)).Then(qh.Immediately(
 		// copy of dst2 is done: delete from copy_state.
@@ -1519,9 +1519,9 @@ func testPlayerCopyTableCancel(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table src1(id int, val varbinary(128), primary key(id))",
+		"create table src1(id int, val varchar(128), primary key(id))",
 		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.dst1(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -1583,7 +1583,7 @@ func testPlayerCopyTableCancel(t *testing.T) {
 	).Then(qh.Eventually(
 		"begin",
 		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"2"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		"commit",
 	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
@@ -1606,12 +1606,12 @@ func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table src1(id int, val varbinary(128), val2 varbinary(128) as (concat(id, val)), val3 varbinary(128) as (concat(val, id)), id2 int, primary key(id))",
+		"create table src1(id int, val varchar(128), val2 varchar(128) as (concat(id, val)), val3 varchar(128) as (concat(val, id)), id2 int, primary key(id))",
 		"insert into src1(id, val, id2) values(2, 'bbb', 20), (1, 'aaa', 10)",
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128) as (concat(id, val)), val3 varbinary(128), id2 int, primary key(id))", vrepldb),
-		"create table src2(id int, val varbinary(128), val2 varbinary(128) as (concat(id, val)), val3 varbinary(128) as (concat(val, id)), id2 int, primary key(id))",
+		fmt.Sprintf("create table %s.dst1(id int, val varchar(128), val2 varchar(128) as (concat(id, val)), val3 varchar(128), id2 int, primary key(id))", vrepldb),
+		"create table src2(id int, val varchar(128), val2 varchar(128) as (concat(id, val)), val3 varchar(128) as (concat(val, id)), id2 int, primary key(id))",
 		"insert into src2(id, val, id2) values(2, 'bbb', 20), (1, 'aaa', 10)",
-		fmt.Sprintf("create table %s.dst2(val3 varbinary(128), val varbinary(128), id2 int)", vrepldb),
+		fmt.Sprintf("create table %s.dst2(val3 varchar(128), val varchar(128), id2 int)", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -1656,11 +1656,11 @@ func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		"/update _vt.vreplication set state",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"2"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		"insert into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"2"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		// copy of dst2 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst2",
 		"/update _vt.vreplication set state",
@@ -1737,7 +1737,7 @@ func testCopyTablesWithInvalidDates(t *testing.T) {
 	).Then(qh.Eventually(
 		"begin",
 		"insert into dst1(id,dt) values (1,'2020-01-12'), (2,'0000-00-00')",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"2"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A312076616C7565733A2232227D'.*`,
 		"commit",
 	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
@@ -1827,7 +1827,7 @@ func testCopyInvisibleColumns(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:"id" type:INT32 charset:63 flags:53251} fields:{name:"inv1" type:INT32 charset:63 flags:53251} rows:{lengths:1 lengths:3 values:"2200"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(X'6669656C64733A7B6E616D653A2269642220747970653A494E54333220636861727365743A363320666C6167733A35333235317D206669656C64733A7B6E616D653A22696E76312220747970653A494E54333220636861727365743A363320666C6167733A35333235317D20726F77733A7B6C656E677468733A31206C656E677468733A332076616C7565733A2232323030227D'.*`,
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		"/update _vt.vreplication set state='Running'",
