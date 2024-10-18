@@ -3135,6 +3135,9 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 
 // WorkflowSwitchTraffic switches traffic in the direction passed for specified tablet types.
 func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
+	//FIXME: remove added log to trigger CI
+	log.Infof("WorkflowSwitchTraffic request: %v", req)
+
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.WorkflowSwitchTraffic")
 	defer span.Finish()
 
