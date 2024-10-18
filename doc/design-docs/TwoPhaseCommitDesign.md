@@ -145,23 +145,186 @@ If the Prepares are successful, the state transitions to 'Commit'. In the Commit
 Any failure during the Prepare state results in the state transitioning to 'Rollback'. In this state, only rollbacks are allowed.
 # Component interactions
 
-In order to make 2PC work, the following pieces of functionality have to be built:
+Any error in the commit phase is indicated to the application with a warning flag. If an application's transaction receives a warning signal, it can execute a `show warnings` to know the distributed transaction ID for that transaction. It can watch the transaction status with `show transaction status for <dtid>`.
 
-* DTID generation
-* Prepare API
-* Metadata Manager API
-* Coordinator
-* Watchdogs
-* Client API
-* Production support
+Case 1: All components respond with success.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
 
-The diagram below show how the various components interact.
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Success
+  par
+  G ->> RM1: Prepare Transaction
+  G ->> RM2: Prepare Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Success
+  end
+  G ->> MM: Store Commit Decision
+  MM -->> G: Success
+  par
+  G ->> RM1: Commit Prepared Transaction
+  G ->> RM2: Commit Prepared Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Success
+  end
+  opt Any failure here does not impact the reponse to the application
+  G ->> MM: Delete Transaction Record
+  end
+  G ->>- App: OK Packet
+```
 
-![](https://raw.githubusercontent.com/vitessio/vitess/main/doc/design-docs/TxInteractions.png)
+Case 2: When the Commit Prepared Transaction from the RM responds with an error. In this case, the watcher service needs to resolve the transaction and commit the pending prepared transactions.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
 
-The detailed design explains all the functionalities and interactions.
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Success
+  par
+  G ->> RM1: Prepare Transaction
+  G ->> RM2: Prepare Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Success
+  end
+  G ->> MM: Store Commit Decision
+  MM -->> G: Success
+  par
+  G ->> RM1: Commit Prepared Transaction
+  G ->> RM2: Commit Prepared Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Failure
+  end
+  G ->>- App: Err Packet
+```
+
+Case 3: When the Commit Descision from MM responds with an error. In this case, the watcher service needs to resolve the transaction as it is not certain whether the commit decision persisted or not.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
+
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Success
+  par
+  G ->> RM1: Prepare Transaction
+  G ->> RM2: Prepare Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Success
+  end
+  G ->> MM: Store Commit Decision
+  MM -->> G: Failure
+  G ->>- App: Err Packet
+```
+
+Case 4: When a Prepare Transaction fails. TM will decide to roll back the transaction. If any rollback returns a failure, the watcher service will resolve the transaction.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
+
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Success
+  par
+  G ->> RM1: Prepare Transaction
+  G ->> RM2: Prepare Transaction
+  RM1 -->> G: Failure
+  RM2 -->> G: Success
+  end
+  par
+  G ->> MM: Store Rollback Decision
+  G ->> RM1: Rollback Prepared Transaction
+  G ->> RM2: Rollback Prepared Transaction
+  MM -->> G: Success / Failure
+  RM1 -->> G: Success / Failure
+  RM2 -->> G: Success / Failure
+  end
+  opt Rollback success on MM and RMs
+    G ->> MM: Delete Transaction Record
+  end
+  G ->>- App: Err Packet
+```
+
+Case 5: When Create Transaction Record fails. TM will roll back the transaction.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
+
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Failure
+  par
+  G ->> RM1: Rollback Transaction
+  G ->> RM2: Rollback Transaction
+  RM1 -->> G: Success / Failure
+  RM2 -->> G: Success / Failure
+  end
+  G ->>- App: Err Packet
+```
+
+## Transaction Resolution Watcher
+
+```mermaid
+sequenceDiagram
+  participant G1 as VTGate
+  participant G2 as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
+
+  MM -) G1: Unresolved Transaction
+  MM -) G2: Unresolved Transaction
+  Note over G1,MM: MM sends this over health stream.
+  loop till no more unresolved transactions
+  G1 ->> MM: Provide Transaction details
+  G2 ->> MM: Provide Transaction details
+  MM -->> G2: Distributed Transaction ID details
+  Note over G2,MM: This VTGate recieves the transaction to resolve.
+  end
+  alt Transaction State: Commit
+  G2 ->> RM1: Commit Prepared Transaction
+  G2 ->> RM2: Commit Prepared Transaction
+  else Transaction State: Rollback
+  G2 ->> RM1: Rollback Prepared Transaction
+  G2 ->> RM2: Rollback Prepared Transaction
+  else Transaction State: Prepare
+  G2 ->> MM: Store Rollback Decision
+  MM -->> G2: Success
+  opt Only when Rollback Decision is stored
+  G2 ->> RM1: Rollback Prepared Transaction
+  G2 ->> RM2: Rollback Prepared Transaction
+  end
+  end
+  opt Commit / Rollback success on MM and RMs
+  G2 ->> MM: Delete Transaction Record
+  end
+```
 
 # Detailed Design
+
+The detailed design explains all the functionalities and interactions.
 
 ## DTID generation
 
