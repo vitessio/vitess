@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -182,9 +181,17 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 // to ensure that it behaves as expected given a specific request.
 func TestVDiffCreate(t *testing.T) {
 	ctx := context.Background()
-	ts := memorytopo.NewServer(ctx, "cell")
-	tmc := &fakeTMC{}
-	s := NewServer(vtenv.NewTestEnv(), ts, tmc)
+	workflowName := "wf1"
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "source",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "target",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
 
 	tests := []struct {
 		name    string
@@ -197,17 +204,32 @@ func TestVDiffCreate(t *testing.T) {
 			// We did not provide any keyspace or shard.
 			wantErr: "FindAllShardsInKeyspace() invalid keyspace name: UnescapeID err: invalid input identifier ''",
 		},
+		{
+			name: "generated UUID",
+			req: &vtctldatapb.VDiffCreateRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflowName,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := s.VDiffCreate(ctx, tt.req)
+			if tt.wantErr == "" {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspace.KeyspaceName, &queryResult{
+					query:  "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)",
+					result: &querypb.QueryResult{},
+				})
+			}
+			got, err := env.ws.VDiffCreate(ctx, tt.req)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
 			require.NotNil(t, got)
-			require.NotEmpty(t, got.UUID)
+			// Ensure that we always use a valid UUID.
+			err = uuid.Validate(got.UUID)
+			require.NoError(t, err)
 		})
 	}
 }
