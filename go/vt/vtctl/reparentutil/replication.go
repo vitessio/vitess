@@ -232,6 +232,7 @@ func stopReplicationAndBuildStatusMaps(
 			statusMap:        map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
 			reachableTablets: []*topodatapb.Tablet{},
+			backingUpTablets: map[string]bool{},
 		}
 	)
 
