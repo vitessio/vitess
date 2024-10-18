@@ -5342,6 +5342,7 @@ func (m *WorkflowDeleteRequest) CloneVT() *WorkflowDeleteRequest {
 	r.Workflow = m.Workflow
 	r.KeepData = m.KeepData
 	r.KeepRoutingRules = m.KeepRoutingRules
+	r.DeleteBatchSize = m.DeleteBatchSize
 	if rhs := m.Shards; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -20282,6 +20283,11 @@ func (m *WorkflowDeleteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.DeleteBatchSize != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.DeleteBatchSize))
+		i--
+		dAtA[i] = 0x30
+	}
 	if len(m.Shards) > 0 {
 		for iNdEx := len(m.Shards) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.Shards[iNdEx])
@@ -26802,6 +26808,9 @@ func (m *WorkflowDeleteRequest) SizeVT() (n int) {
 			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
+	}
+	if m.DeleteBatchSize != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.DeleteBatchSize))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -63078,6 +63087,25 @@ func (m *WorkflowDeleteRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Shards = append(m.Shards, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DeleteBatchSize", wireType)
+			}
+			m.DeleteBatchSize = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.DeleteBatchSize |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
