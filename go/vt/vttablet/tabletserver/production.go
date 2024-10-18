@@ -18,6 +18,10 @@ limitations under the License.
 
 package tabletserver
 
+import (
+	"context"
+)
+
 // This file defines debug constants that are always false.
 // This file is used for building production code.
 // We use go build directives to include a file that defines the constant to true
@@ -28,3 +32,7 @@ package tabletserver
 const DebugTwoPc = false
 
 func commitPreparedDelayForTest(tsv *TabletServer) {}
+
+func checkTestFailure(context.Context, string) error {
+	return nil
+}

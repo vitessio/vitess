@@ -19,12 +19,16 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"os"
 	"path"
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const DebugTwoPc = true
@@ -44,5 +48,26 @@ func commitPreparedDelayForTest(tsv *TabletServer) {
 		delVal, _ := strconv.Atoi(delay)
 		log.Infof("Delaying commit for shard %v for %d seconds", sh, delVal)
 		time.Sleep(time.Duration(delVal) * time.Second)
+	}
+}
+
+// checkTestFailure is used to simulate failures in 2PC flow for testing when DebugTwoPc is true.
+func checkTestFailure(ctx context.Context, shard string) error {
+	if shard != "80-" {
+		return nil
+	}
+	callerID := callerid.EffectiveCallerIDFromContext(ctx)
+	if callerID == nil {
+		return nil
+	}
+	switch callerID.Principal {
+	case "CP_80-_R":
+		// retryable error.
+		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "commit prepared: retryable error")
+	case "CP_80-_NR":
+		// non retryable error.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "commit prepared: non retryable error")
+	default:
+		return nil
 	}
 }

@@ -844,8 +844,8 @@ func getVtgateApiErrorCounts(t *testing.T) float64 {
 }
 
 func getVar(t *testing.T, key string) interface{} {
-	vars, err := clusterInstance.VtgateProcess.GetVars()
-	require.NoError(t, err)
+	vars := clusterInstance.VtgateProcess.GetVars()
+	require.NotNil(t, vars)
 
 	val, exists := vars[key]
 	if !exists {
