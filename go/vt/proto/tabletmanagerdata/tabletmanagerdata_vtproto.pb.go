@@ -1149,6 +1149,7 @@ func (m *ReplicationStatusResponse) CloneVT() *ReplicationStatusResponse {
 	}
 	r := new(ReplicationStatusResponse)
 	r.Status = m.Status.CloneVT()
+	r.BackingUp = m.BackingUp
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1893,6 +1894,7 @@ func (m *StopReplicationAndGetStatusResponse) CloneVT() *StopReplicationAndGetSt
 	}
 	r := new(StopReplicationAndGetStatusResponse)
 	r.Status = m.Status.CloneVT()
+	r.BackingUp = m.BackingUp
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -5571,6 +5573,16 @@ func (m *ReplicationStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.BackingUp {
+		i--
+		if m.BackingUp {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x10
+	}
 	if m.Status != nil {
 		size, err := m.Status.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -7306,6 +7318,16 @@ func (m *StopReplicationAndGetStatusResponse) MarshalToSizedBufferVT(dAtA []byte
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.BackingUp {
+		i--
+		if m.BackingUp {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
 	}
 	if m.Status != nil {
 		size, err := m.Status.MarshalToSizedBufferVT(dAtA[:i])
@@ -11099,6 +11121,9 @@ func (m *ReplicationStatusResponse) SizeVT() (n int) {
 		l = m.Status.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.BackingUp {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -11670,6 +11695,9 @@ func (m *StopReplicationAndGetStatusResponse) SizeVT() (n int) {
 	if m.Status != nil {
 		l = m.Status.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.BackingUp {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -18692,6 +18720,26 @@ func (m *ReplicationStatusResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackingUp", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.BackingUp = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -21940,6 +21988,26 @@ func (m *StopReplicationAndGetStatusResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackingUp", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.BackingUp = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
