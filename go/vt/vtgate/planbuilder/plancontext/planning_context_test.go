@@ -290,8 +290,7 @@ func (v *vschema) WarnUnshardedOnly(format string, params ...any) {
 	panic("implement me")
 }
 
-func (v *vschema) PlannerWarning(message string) {
-	// TODO implement me
+func (v *vschema) PlannerWarnings(...*querypb.QueryWarning) {
 	panic("implement me")
 }
 
