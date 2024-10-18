@@ -323,7 +323,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
 		subscribers:        make(map[chan *TabletHealth]struct{}),
 		cellAliases:        make(map[string]string),
-		loadTabletsTrigger: make(chan struct{}),
+		loadTabletsTrigger: make(chan struct{}, 1),
 	}
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
@@ -516,7 +516,13 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		if prevTarget.TabletType == topodata.TabletType_PRIMARY {
 			if primaries := hc.healthData[oldTargetKey]; len(primaries) == 0 {
 				log.Infof("We will have no health data for the next new primary tablet after demoting the tablet: %v, so start loading tablets now", topotools.TabletIdent(th.Tablet))
-				hc.loadTabletsTrigger <- struct{}{}
+				// We want to trigger a loadTablets call, but if the channel is not empty
+				// then a trigger is already scheduled, we don't need to trigger another one.
+				// This also prevents the code from deadlocking as described in https://github.com/vitessio/vitess/issues/16994.
+				select {
+				case hc.loadTabletsTrigger <- struct{}{}:
+				default:
+				}
 			}
 		}
 	}
