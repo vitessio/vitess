@@ -798,6 +798,108 @@
     }
   },
   {
+    "comment": "Disjunction of conjunctions with 4 or more disjunctions",
+    "query": "select id from user where (col = 'aa' AND name = 'bb') OR (col = 'cc' AND name = 'dd') OR (col = 'ee' AND name = 'ff') OR (col = 'gg' AND name = 'hh')",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (col = 'aa' AND name = 'bb') OR (col = 'cc' AND name = 'dd') OR (col = 'ee' AND name = 'ff') OR (col = 'gg' AND name = 'hh')",
+      "Instructions": {
+        "OperatorType": "VindexLookup",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Values": [
+          "('bb', 'dd', 'ff', 'hh')"
+        ],
+        "Vindex": "name_user_map",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+            "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+            "Table": "name_user_vdx",
+            "Values": [
+              "::name"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where col = 'aa' and `name` = 'bb' or col = 'cc' and `name` = 'dd' or col = 'ee' and `name` = 'ff' or col = 'gg' and `name` = 'hh'",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Disjunction of conjunctions with 3 or less disjunctions",
+    "query": "select id from user where (col = 'aa' AND name = 'bb') OR (col = 'cc' AND name = 'dd') OR (col = 'ee' AND name = 'ff')",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (col = 'aa' AND name = 'bb') OR (col = 'cc' AND name = 'dd') OR (col = 'ee' AND name = 'ff')",
+      "Instructions": {
+        "OperatorType": "VindexLookup",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Values": [
+          "('bb', 'dd', 'ff')"
+        ],
+        "Vindex": "name_user_map",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+            "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+            "Table": "name_user_vdx",
+            "Values": [
+              "::name"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where col in ('aa', 'cc', 'ee') and (col in ('aa', 'cc') or `name` = 'ff') and (col = 'aa' or `name` = 'dd' or col = 'ee') and (col = 'aa' or `name` = 'dd' or `name` = 'ff') and (`name` = 'bb' or col = 'cc' or col = 'ee') and (`name` = 'bb' or col = 'cc' or `name` = 'ff') and (`name` in ('bb', 'dd') or col = 'ee') and `name` in ::__vals",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Single table complex in clause",
     "query": "select id from user where name in (col, 'bb')",
     "plan": {
