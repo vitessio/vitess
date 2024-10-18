@@ -29,6 +29,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
@@ -1835,6 +1836,16 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 	if req.AutoStart != nil {
 		span.Annotate("auto_start", req.GetAutoStart())
+	}
+
+	var err error
+	req.Uuid = strings.TrimSpace(req.Uuid)
+	if req.Uuid == "" { // Generate a UUID
+		req.Uuid = uuid.New().String()
+	} else { // Validate UUID if provided
+		if err = uuid.Validate(req.Uuid); err != nil {
+			return nil, vterrors.Wrapf(err, "invalid UUID provided: %s", req.Uuid)
+		}
 	}
 
 	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
