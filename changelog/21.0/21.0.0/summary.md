@@ -23,6 +23,7 @@
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
     - **[Current Errant GTIDs Count Metric](#errant-gtid-metric)**
     - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
+    - **[Support for specifying expected primary in reparents](#reparents-expectedPrimary)
 
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -234,3 +235,7 @@ This metric shows the current count of the errant GTIDs in the tablets.
 ### <a id="vtctldclient-changetablettags"/>`vtctldclient ChangeTabletTags` command
 
 The `vtctldclient` command `ChangeTabletTags` was added to allow the tags of a tablet to be changed dynamically.
+
+### <a id="reparents-expectedPrimary"/>Support specifying expected primary in reparents
+
+The `EmergencyReparentShard` and `PlannedReparentShard` commands and RPCs now support specifying a primary we expect to still be the current primary in order for a reparent operation to be processed. This allows reparents to be conditional on a specific state being true.
