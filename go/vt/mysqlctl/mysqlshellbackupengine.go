@@ -190,6 +190,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 
 	// Get exit status.
 	if err := cmd.Wait(); err != nil {
+		pipeWriter.Close() // make sure we close the writer so the goroutines above will complete.
 		return BackupUnusable, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
 
