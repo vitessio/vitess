@@ -88,6 +88,8 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 // WriteTestCommunicationFile writes the content to the file with the given name.
 // We use these files to coordinate with the vttablets running in the debug mode.
 func WriteTestCommunicationFile(t *testing.T, fileName string, content string) {
+	// Delete the file just to make sure it doesn't exist before we write to it.
+	DeleteFile(fileName)
 	err := os.WriteFile(path.Join(os.Getenv("VTDATAROOT"), fileName), []byte(content), 0644)
 	require.NoError(t, err)
 }
