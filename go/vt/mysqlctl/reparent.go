@@ -22,6 +22,7 @@ This file contains the reparenting methods for mysqlctl.
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -51,6 +52,11 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
 		"VALUES (%d, '%s', '%s', '%s')", sidecar.GetIdentifier(),
 		timeCreatedNS, actionName, primaryAlias, posStr).Query
+}
+
+// ReadReparentJournalInfoQuery returns the query we use to read information required from Reparent Journal.
+func ReadReparentJournalInfoQuery() string {
+	return fmt.Sprintf("SELECT COUNT(*) FROM %s.reparent_journal", sidecar.GetIdentifier())
 }
 
 // queryReparentJournal returns the SQL query to use to query the database
