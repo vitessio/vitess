@@ -64,7 +64,7 @@ func TestCommitPreparedFailNonRetryable(t *testing.T) {
 
 	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = 'bb'", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[VARBINARY("bb") INT64(0) TEXT("Lock wait timeout exceeded; try restarting transaction (errno 1205) (sqlstate HY000) during query: delete from _vt.redo_state where dtid = 'bb'")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[VARBINARY("bb") INT64(0) TEXT("Lock wait timeout exceeded; try restarting transaction (errno 1205) (sqlstate HY000) during query: delete from _vt.redo_state where dtid = X'6262'")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestCommitPreparedFailRetryable tests the case where the commit_prepared fails when the query is killed.
