@@ -26242,6 +26242,9 @@ export namespace tabletmanagerdata {
 
         /** ReplicationStatusResponse status */
         status?: (replicationdata.IStatus|null);
+
+        /** ReplicationStatusResponse backingUp */
+        backingUp?: (boolean|null);
     }
 
     /** Represents a ReplicationStatusResponse. */
@@ -26255,6 +26258,9 @@ export namespace tabletmanagerdata {
 
         /** ReplicationStatusResponse status. */
         public status?: (replicationdata.IStatus|null);
+
+        /** ReplicationStatusResponse backingUp. */
+        public backingUp: boolean;
 
         /**
          * Creates a new ReplicationStatusResponse instance using the specified properties.
@@ -30462,6 +30468,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusResponse status */
         status?: (replicationdata.IStopReplicationStatus|null);
+
+        /** StopReplicationAndGetStatusResponse backingUp */
+        backingUp?: (boolean|null);
     }
 
     /** Represents a StopReplicationAndGetStatusResponse. */
@@ -30475,6 +30484,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusResponse status. */
         public status?: (replicationdata.IStopReplicationStatus|null);
+
+        /** StopReplicationAndGetStatusResponse backingUp. */
+        public backingUp: boolean;
 
         /**
          * Creates a new StopReplicationAndGetStatusResponse instance using the specified properties.
@@ -47192,6 +47204,9 @@ export namespace replicationdata {
 
         /** Status replication_lag_unknown */
         replication_lag_unknown?: (boolean|null);
+
+        /** Status backingUp */
+        backingUp?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -47268,6 +47283,9 @@ export namespace replicationdata {
 
         /** Status replication_lag_unknown. */
         public replication_lag_unknown: boolean;
+
+        /** Status backingUp. */
+        public backingUp: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.
@@ -47458,6 +47476,9 @@ export namespace replicationdata {
 
         /** StopReplicationStatus after */
         after?: (replicationdata.IStatus|null);
+
+        /** StopReplicationStatus backingUp */
+        backingUp?: (boolean|null);
     }
 
     /** Represents a StopReplicationStatus. */
@@ -47474,6 +47495,9 @@ export namespace replicationdata {
 
         /** StopReplicationStatus after. */
         public after?: (replicationdata.IStatus|null);
+
+        /** StopReplicationStatus backingUp. */
+        public backingUp: boolean;
 
         /**
          * Creates a new StopReplicationStatus instance using the specified properties.
