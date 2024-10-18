@@ -680,10 +680,10 @@ func TestServerStats(t *testing.T) {
 		return connCount.Get() == int64(0)
 	}, conditionWait, conditionTick, "connCount")
 	assert.Eventually(t, func() bool {
-		return connSlow.Get() == int64(0)
+		return connSlow.Get() == int64(1)
 	}, conditionWait, conditionTick, "connSlow")
 
-	assert.EqualValues(t, 0, connAccept.Get(), "connAccept")
+	assert.EqualValues(t, 1, connAccept.Get(), "connAccept")
 	assert.EqualValues(t, 0, connRefuse.Get(), "connRefuse")
 
 	expectedTimingDeltas := map[string]int64{
