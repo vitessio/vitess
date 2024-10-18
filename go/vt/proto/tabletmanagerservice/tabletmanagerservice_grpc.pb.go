@@ -99,6 +99,8 @@ type TabletManagerClient interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
+	// ReadReparentJournalInfo reads the information from reparent journal
+	ReadReparentJournalInfo(ctx context.Context, in *tabletmanagerdata.ReadReparentJournalInfoRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error)
 	// InitReplica tells the tablet to reparent to the primary unconditionally
 	InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemotePrimary tells the soon-to-be-former primary it's gonna change
@@ -587,6 +589,15 @@ func (c *tabletManagerClient) PopulateReparentJournal(ctx context.Context, in *t
 	return out, nil
 }
 
+func (c *tabletManagerClient) ReadReparentJournalInfo(ctx context.Context, in *tabletmanagerdata.ReadReparentJournalInfoRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error) {
+	out := new(tabletmanagerdata.ReadReparentJournalInfoResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReadReparentJournalInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error) {
 	out := new(tabletmanagerdata.InitReplicaResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitReplica", in, out, opts...)
@@ -839,6 +850,8 @@ type TabletManagerServer interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
+	// ReadReparentJournalInfo reads the information from reparent journal
+	ReadReparentJournalInfo(context.Context, *tabletmanagerdata.ReadReparentJournalInfoRequest) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error)
 	// InitReplica tells the tablet to reparent to the primary unconditionally
 	InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemotePrimary tells the soon-to-be-former primary it's gonna change
@@ -1023,6 +1036,9 @@ func (UnimplementedTabletManagerServer) InitPrimary(context.Context, *tabletmana
 }
 func (UnimplementedTabletManagerServer) PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PopulateReparentJournal not implemented")
+}
+func (UnimplementedTabletManagerServer) ReadReparentJournalInfo(context.Context, *tabletmanagerdata.ReadReparentJournalInfoRequest) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadReparentJournalInfo not implemented")
 }
 func (UnimplementedTabletManagerServer) InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitReplica not implemented")
@@ -1979,6 +1995,24 @@ func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_ReadReparentJournalInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReadReparentJournalInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ReadReparentJournalInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ReadReparentJournalInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ReadReparentJournalInfo(ctx, req.(*tabletmanagerdata.ReadReparentJournalInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_InitReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.InitReplicaRequest)
 	if err := dec(in); err != nil {
@@ -2443,6 +2477,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PopulateReparentJournal",
 			Handler:    _TabletManager_PopulateReparentJournal_Handler,
+		},
+		{
+			MethodName: "ReadReparentJournalInfo",
+			Handler:    _TabletManager_ReadReparentJournalInfo_Handler,
 		},
 		{
 			MethodName: "InitReplica",

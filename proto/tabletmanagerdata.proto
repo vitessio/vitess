@@ -448,6 +448,13 @@ message PopulateReparentJournalRequest {
 message PopulateReparentJournalResponse {
 }
 
+message ReadReparentJournalInfoRequest {
+}
+
+message ReadReparentJournalInfoResponse {
+  int32 length = 1;
+}
+
 message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
