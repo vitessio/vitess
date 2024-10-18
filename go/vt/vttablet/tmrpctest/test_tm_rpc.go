@@ -1388,7 +1388,7 @@ func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request
 }
 
 func (fra *fakeRPCTM) IsBackingUp() bool {
-	panic("implement me")
+	return false
 }
 
 func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
