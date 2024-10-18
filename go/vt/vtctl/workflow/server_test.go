@@ -1812,7 +1812,9 @@ func createReadVReplicationWorkflowFunc(t *testing.T, workflowType binlogdatapb.
 	}
 }
 
-func TestGetWorkflowsSingleStream(t *testing.T) {
+// Test checks that we don't include logs from non-existent streams in the result.
+// Ensures that we just skip the logs from non-existent streams and include the rest.
+func TestGetWorkflowsStreamLogs(t *testing.T) {
 	ctx := context.Background()
 
 	sourceKeyspace := "source_keyspace"
