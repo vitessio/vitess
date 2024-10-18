@@ -19,7 +19,6 @@ package sqltypes
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -441,6 +440,8 @@ func (v Value) EncodeSQL(b BinWriter) {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
+	case v.IsBinary():
+		encodeBinarySQL(v.val, b)
 	case v.IsQuoted():
 		encodeBytesSQL(v.val, b)
 	case v.Type() == Bit:
@@ -456,6 +457,8 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
+	case v.IsBinary():
+		encodeBinarySQLStringBuilder(v.val, b)
 	case v.IsQuoted():
 		encodeBytesSQLStringBuilder(v.val, b)
 	case v.Type() == Bit:
@@ -482,22 +485,12 @@ func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
+	case v.IsBinary():
+		encodeBinarySQLBytes2(v.val, b)
 	case v.IsQuoted():
 		encodeBytesSQLBytes2(v.val, b)
 	case v.Type() == Bit:
 		encodeBytesSQLBits(v.val, b)
-	default:
-		b.Write(v.val)
-	}
-}
-
-// EncodeASCII encodes the value using 7-bit clean ascii bytes.
-func (v Value) EncodeASCII(b BinWriter) {
-	switch {
-	case v.Type() == Null:
-		b.Write(NullBytes)
-	case v.IsQuoted() || v.Type() == Bit:
-		encodeBytesASCII(v.val, b)
 	default:
 		b.Write(v.val)
 	}
@@ -758,6 +751,34 @@ func (v Value) TinyWeight() uint32 {
 	return v.tinyweight
 }
 
+func encodeBinarySQL(val []byte, b BinWriter) {
+	buf := &bytes2.Buffer{}
+	encodeBinarySQLBytes2(val, buf)
+	b.Write(buf.Bytes())
+}
+
+const hextable = "0123456789ABCDEF"
+
+func encodeBinarySQLBytes2(val []byte, buf *bytes2.Buffer) {
+	buf.WriteByte('X')
+	buf.WriteByte('\'')
+	for _, ch := range val {
+		buf.WriteByte(hextable[ch>>4])
+		buf.WriteByte(hextable[ch&0x0f])
+	}
+	buf.WriteByte('\'')
+}
+
+func encodeBinarySQLStringBuilder(val []byte, buf *strings.Builder) {
+	buf.WriteByte('X')
+	buf.WriteByte('\'')
+	for _, ch := range val {
+		buf.WriteByte(hextable[ch>>4])
+		buf.WriteByte(hextable[ch&0x0f])
+	}
+	buf.WriteByte('\'')
+}
+
 func encodeBytesSQL(val []byte, b BinWriter) {
 	buf := &bytes2.Buffer{}
 	encodeBytesSQLBytes2(val, buf)
@@ -836,16 +857,6 @@ func encodeBytesSQLBits(val []byte, b BinWriter) {
 		fmt.Fprintf(b, "%08b", ch)
 	}
 	fmt.Fprint(b, "'")
-}
-
-func encodeBytesASCII(val []byte, b BinWriter) {
-	buf := &bytes2.Buffer{}
-	buf.WriteByte('\'')
-	encoder := base64.NewEncoder(base64.StdEncoding, buf)
-	encoder.Write(val)
-	encoder.Close()
-	buf.WriteByte('\'')
-	b.Write(buf.Bytes())
 }
 
 // SQLEncodeMap specifies how to escape binary data with '\'.
