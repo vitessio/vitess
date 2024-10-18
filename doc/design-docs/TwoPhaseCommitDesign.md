@@ -1,4 +1,4 @@
-# Design doc: 2PC in Vitess
+# Design Document: Atomic Distributed Transaction
 
 # Objective
 
@@ -8,7 +8,7 @@ Provide a mechanism to support atomic commits for distributed transactions acros
 
 Vitess distributed transactions have so far been Best Effort Commit (BEC). An application is allowed to send DMLs that go to different shards or keyspaces in a single transaction. When a commit is issued, Vitess tries to individually commit each db transaction that was initiated. However, if a database goes down in the middle of a commit, that part of the transaction is lost. Moreover, with the support of lookup vindexes, VTGates could themselves open distributed transactions from single statements issued by the app.
 
-2PC is the de facto protocol for atomically committing distributed transactions. Unfortunately, this has been considered impractical, and has predominantly failed in the industry. There are a few reasons:
+Two Phase Commit (2PC) is the de facto protocol for atomically committing distributed transactions. Unfortunately, this has been considered impractical, and has predominantly failed in the industry. There are a few reasons:
 
 * A database that goes down in the middle of a 2PC commit would hold transactions in other databases hostage till it was recovered. This is now a solved problem due to replication and fast failovers.
 * The ACID requirements of relational databases were too demanding and contentious for a pure implementation to practically scale.
@@ -17,7 +17,7 @@ Vitess distributed transactions have so far been Best Effort Commit (BEC). An ap
 
 This document intends to address the above concerns with some practical trade-offs.
 
-Although MySQL supports the XA protocol, it’s been unusable due to bugs. Version 5.7 claims to have fixed them all, but the more common versions in use are 5.6 and below, and we need to make 2PC work for those versions also. Even at 5.7, we still have to contend with the chattiness of XA, and the fact that it’s unused code.
+Although MySQL supports the XA protocol, it’s been unusable due to bugs. There have been multi fixes made on 8.0, but still there are many open bugs. Also, it's usage in production is hardly known.
 
 The most critical component of the 2PC protocol is the `Prepare` functionality. There is actually a way to implement Prepare on top of a transactional system. This is explained in a [Vitess Blog](https://vitess.io/blog/2016-06-07-distributed-transactions-in-vitess/), which will be used as foundation for this design.
 
@@ -27,63 +27,48 @@ Familiarity with the blog and the [2PC algorithm](http://c2.com/cgi/wiki?TwoPhas
 
 Vitess will add a few variations to the traditional 2PC algorithm:
 
-* There is a presumption that the Resource Managers (aka participants) have to know upfront that they’re involved in a 2PC transaction. Many of the APIs force the application to make this choice at the beginning of a transaction. This is actually not required. In the case of Vitess, a distributed transaction will start off just like before, with a normal Begin. It will be converted only if the application requests a 2PC commit. This approach allows us to optimize some common use cases.
-* The 2PC algorithm does not specify how the Transaction Manager maintains the metadata. If you work through all the failure modes, it will become evident that the manager must also be an HA transactional system that must survive failures without data loss. Since the VTTablets are already built to be HA, there’s no reason to build yet another system. So, we’ll split the role of the Transaction Manager into two:
-    * The Coordinator will be stateless and will orchestrate the work. VTGates are the perfect fit for this role.
-    * One of the VTTablets will be designated as the Metadata Manager (MM). It will be used to store the metadata and perform the necessary state transitions.
-* If we designate one of the participant VTTablets to be the MM, then that database can avoid the prepare phase: If you assume there are N participants, the typical explanation says that you perform prepares from 1->N, and then commit from 1->N. If we instead went from 1->N for prepare, and N->1 for commit. Then the N’th database would perform a Prepare->Decide to commit->Commit. Instead, we execute the DML needed to transition the metadata state to ‘Decide to Commit’ as part of the app transaction, and commit it. If the commit fails, then it’s treated as the prepare having failed. If the commit succeeds, then it’s treated as all three operations having succeeded.
+* There is a presumption that the Resource Managers (aka participants) must know upfront that they are involved in a 2PC transaction. Many APIs force the application to make this choice at the beginning of a transaction, but this is not actually required. In the case of Vitess, a distributed transaction will start off as usual, with a normal Begin. It will be converted only if the application requests a 2PC commit. This approach allows optimization of some common use cases.
+* The 2PC algorithm does not specify how the Transaction Manager maintains the metadata. If you work through all the failure modes, it becomes evident that the manager must also be a highly available (HA) transactional system that survives failures without data loss. Since the VTTablets are already built to be HA, there’s no reason to build yet another system. So, we will split the role of the Transaction Manager into two:
+  -   The Coordinator will be stateless and will orchestrate the work. VTGates are the perfect fit for this role.
+  -   One of the VTTablets will be designated as the Metadata Manager (MM). It will store the metadata and perform the necessary state transitions.
+* If we designate one of the participant VTTablets to be the MM, that database can avoid the prepare phase. If you assume there are N participants, the typical explanation says to perform prepares from 1->N, and then commit from 1->N. Instead, we could go from 1->N for prepare, and N->1 for commit. Then, the Nth database would perform a Prepare->Decide to Commit->Commit. Instead, we execute the DML needed to transition the metadata state to "Decide to Commit" as part of the app transaction and commit it. If the commit fails, it is treated as the prepare having failed. If the commit succeeds, it is treated as all three operations having succeeded.
 * The Prepare functionality will be implemented as explained in the [blog](https://vitess.io/blog/2016-06-07-distributed-transactions-in-vitess/).
 
-Combining the above changes allows us to keep the most common use case efficient: A transaction that affects only one database incurs no additional cost due to 2PC.
+Combining the above changes allows us to keep the most common use case efficient. A transaction that affects only one database incurs no additional cost due to 2PC.
 
-In the case of multi-db transactions, we can choose the participant with the highest number of statements to be the MM; That database will not incur the cost of going through the Prepare phase, and we also avoid requiring a separate transaction to persist the commit decision.
+In the case of multi-database transactions, we can choose the participant with the highest number of statements to be the MM. That database will not incur the cost of going through the Prepare phase, and we also avoid requiring a separate transaction to persist the commit decision.
 
 ## ACID trade-offs
 
-The core 2PC algorithm only guarantees Atomicity. Either the entire transaction commits, or it’s rolled back completely.
+The core 2PC algorithm only guarantees Atomicity: either the entire transaction commits, or it’s rolled back completely.
 
-Consistency is an orthogonal property because it’s mainly related to making sure the values in the database don’t break relational rules.
+Consistency is an orthogonal property because it primarily ensures that the values in the database do not violate relational rules.
 
 Durability is guaranteed by each database, and the collective durability is inherited by the 2PC process.
 
-Isolation requires additional work. If a client tries to read data in the middle of a distributed commit, it could see partial commits. In order to prevent this, databases put read locks on rows that are involved in a 2PC. So, anyone that tries to read them will have to wait till the transaction is resolved. This type of locking is so contentious that it often defeats the purpose of distributing the data.
+Isolation requires additional work. If a client tries to read data in the middle of a distributed commit, it could see partial commits. To prevent this, databases place read locks on rows involved in a 2PC. Consequently, anyone attempting to read them must wait until the transaction is resolved. This type of locking is so contentious that it often defeats the purpose of distributing the data.
 
-In reality, this level of Isolation guarantee is overkill for most code paths of an application. So, it’s more practical to relax this for the sake of scalability, and let the application use explicit locks where it thinks better Isolation is required.
+In reality, this level of Isolation guarantee is overkill for most application code paths. Therefore, it is more practical to relax this for the sake of scalability and allow the application to use explicit locks where it deems better Isolation is required.
 
-On the other hand, Atomicity is critical; Non-atomic transactions can result in partial commits, which is effectively corrupt data. As stated earlier, this is what we get from 2PC.
-
-# Glossary
-
-We introduced many terms in the previous sections. It’s time for a quick recap:
-
-* Distributed Transaction: Any transaction that spans multiple databases is a distributed transaction. It does not imply any commit protocol.
-* Best Effort Commit (BEC): This protocol is what’s currently supported by Vitess, where commits are sent to all participants. This could result in partial commits if there are failures during the process.
-* Two-Phase Commit (2PC): This is the protocol that guarantees Atomic distributed commits.
-* Coordinator: This is a stateless process that is responsible for initiating, resuming and completing a 2PC transaction. This role is fulfilled by the VTGates.
-* Resource Manager aka Participant: Any database that’s involved in a distributed transaction. Only VTTablets can be participants.
-* Metadata Manager (MM): The database responsible for storing the metadata and performing its state transitions. In Vitess, one of the participants will be designated as the MM.
-* Watchdog: The watchdog looks for abandoned transactions and initiates the process to get them resolved.
-* Distributed Transaction ID (DTID): A unique identifier for a 2PC transaction.
-* VTTablet transaction id (VTID): This is the individual transaction ID for each VTTablet participant that contains the application’s statements to be committed/rolled back.
-* Decision: This is the irreversible decision to either commit or rollback the transaction. Although confusing, this is also referred to as the ‘Commit Decision’. We’ll also indirectly refer to this as ‘Metadata state transition’. This is because a transaction undergoes many state changes. The Decision is a critical transition. So, it warrants its own name.
+On the other hand, Atomicity is critical. Non-atomic transactions can result in partial commits, effectively corrupting the data. As mentioned earlier, Atomicity is guaranteed by 2PC.
 
 # Life of a 2PC transaction
 
-* The application issues a Begin to VTGate. At this time, the Session proto is just updated to indicate that it’s in a transaction.
-* The application sends DMLs to VTGate. As these DMLs are received, VTGate starts transactions against various VTTablets. The transaction id for each VTTablet (VTID) is stored in the Session proto.
-* The application requests a 2PC. Until this point, there is no difference between a BEC and a 2PC. In the case of BEC, VTGate just sends the commit to all participating VTTablets. For 2PC, VTGate initiates and executes the workflow described in the subsequent steps.
+* The application issues a Begin to VTGate. At this time, the session is updated to indicate that it’s in a transaction.
+* The application sends DMLs to VTGate. As these DMLs are received, VTGate starts transactions against various VTTablets. The transaction id for each VTTablet (VTID) is stored in the session.
+* The application requests a 2PC commit. Until this point, there is no difference between a BEC and a 2PC. In the case of BEC, VTGate just sends the commit to all participating VTTablets. For 2PC, VTGate initiates and executes the workflow described in the subsequent steps.
 
 ## Prepare
 
-* Generate a DTID.
-* The VTTablet with the most DMLs is singled out as the MM. To this VTTablet, issue a CreateTransaction command with the DTID. This information will be monitored by the watchdogs.
+* Generate a Distributed Transaction Identifier (DTID).
+* The VTTablet at the first position in the session transaction list is singled out as the MM. To this VTTablet, issue a CreateTransaction command with the DTID. This information will be monitored by the transaction resolution watcher.
 * Issue a Prepare to all other VTTablets. Send the DTID as part of the prepare request.
 
 ## Commit
 
 * Execute the 3-in-1 action of Prepare->Decide->Commit (StartCommit) for the MM VTTablet. This will change the metadata state to ‘Commit’.
 * Issue a CommitPrepared commands to all the prepared VTTablets using the DTID.
-* Delete the transaction in the MM (ConcludeTransaction).
+* Delete the transaction in the MM with ConcludeTransaction.
 
 ## Rollback
 
@@ -91,52 +76,255 @@ Any form of failure until the point of saving the commit decision will result in
 
 * Transition the metadata state to ‘Rollback’.
 * Issue RollbackPrepared commands to the prepared transactions using the DTID.
-* If the original VTGate is still orchestrating, rollback the unprepared transactions using their VTIDs. The initial version will just execute RollbackPrepared on all participants with the assumption that any unprepared transactions will be rolled back by the transaction killer.
-* Delete the transaction in the MM (ConcludeTransaction).
+* If the original VTGate is still orchestrating, rollback the unprepared transactions using their VTIDs. Otherwise, any unprepared transactions will be rolled back by the transaction killer.
+* Delete the transaction in the MM with ConcludeTransaction.
 
-## Watchdog
+## Transaction Resolution Watcher
 
-A watchdog will kick in if a transaction remains unresolved for too long. If such a transaction is found, it will be in one of three states:
+A Transaction Resolution watcher will kick in if a transaction remains unresolved for too long in the MM. If such a transaction is found, it will be in one of three states:
 
 1. Prepare
 2. Rollback
 3. Commit
 
-For #1 and #2, the Rollback workflow is initiated. For #3, the commit is resumed.
+For #1 and #2, the Rollback workflow is initiated. For #3, the commit workflow is resumed.
 
-The following diagram illustrates the life-cycle of a Vitess transaction.
+The following diagrams illustrates the life-cycle of a 2PC transaction in Metadata Manager (MM) and Resource Manager  (RM).
 
-![](https://raw.githubusercontent.com/vitessio/vitess/main/doc/design-docs/TxLifecycle.png)
+```mermaid
+---
+title: State Changes for Transaction Record in MM
+---
+stateDiagram-v2
+  classDef  action  font-style:italic,font-weight:bold,fill:white
+  state "Prepare"  as  p
+  state "Commit"  as  c
+  state "Rollback"  as  r
 
-A transaction generally starts off as a single DB transaction. It becomes a distributed transaction as soon as more than one VTTablet is affected. If the app issues a rollback, then all participants are simply rolled back. If a BEC is issued, then all transactions are individually committed. These actions are the same irrespective of single or distributed transactions.
+  [*]  -->  p: Start Transaction
+  p  -->  c: Prepare Success
+  p  -->  r: Prepare Failed
+  c  -->  [*]: Conclude Transaction
+  r  -->  [*]: Conclude Transaction
+```
 
-In the case of a single DB transactions, a 2PC is also a BEC.
+```mermaid
+---
+title: State Changes for Redo Record in RM
+---
+stateDiagram-v2
+    classDef action font-style:italic,font-weight:bold,fill:white
+    state "Redo Prepared Logs" as rpl
+    state "Delete Redo Logs" as drl
+    state "Check Type of Failure" as ctf
 
-If a 2PC is issued to a distributed transaction, the new machinery kicks in. Actual metadata is created. The state starts off as ‘Prepare’ and remains so while Prepares are issued. In this state, only Prepares are allowed.
+    state "Prepared" as p
+    state "Failure" as f
+    state commitRPC <<choice>>
+    state failureType <<choice>>
+    state redoSuccess <<choice>>
 
-If Prepares are successful, then the state is transitioned to ‘Commit’. In the Commit state, only commits are allowed. By the guarantee given by the Prepare contract, all databases will eventually accept the commits.
+    [*] --> p: Commit redo logs<br>Prepare Call Succeeds
+    drl --> [*]
+    p --> drl:::action: Receive Rollback<br>Rollback transaction
+    p --> commitRPC: Receive CommitRPC
+    commitRPC --> drl: If commit succeeds
+    ctf --> failureType
+    commitRPC --> ctf:::action: If commit fails
+    failureType --> f: Unretriable failure<br>Wait for user intervention
+    f --> drl: User calls ConcludeTransaction
+    failureType --> rpl:::action: Failure because of MySQL restart
+    rpl --> redoSuccess: Check if redo prepare fails
+    redoSuccess --> p: Redo prepare succeeds
+    redoSuccess --> ctf: Redo prepare fails
+```
 
-Any failure during the Prepare state will result in the state being transitioned to ‘Rollback’. In this state, only rollbacks are allowed.
-
+A transaction generally begins as a single DB transaction, and a 2PC commit on a single DB transaction is treated as a normal commit. A transaction becomes a distributed transaction as soon as more than one VTTablet is involved. If an app issues a rollback, all participants are simply rolled back.  
+A 2PC commit on a distributed transaction initiates the new commit flow. The transaction record is stored in the 'Prepare' state and remains so while Prepares are issued to the RMs.  
+If the Prepares are successful, the state transitions to 'Commit'. In the Commit state, only commits are allowed. By the guarantee provided by the Prepare contract, all databases will eventually accept the commits.  
+Any failure during the Prepare state results in the state transitioning to 'Rollback'. In this state, only rollbacks are allowed.
 # Component interactions
 
-In order to make 2PC work, the following pieces of functionality have to be built:
+Any error in the commit phase is indicated to the application with a warning flag. If an application's transaction receives a warning signal, it can execute a `show warnings` to know the distributed transaction ID for that transaction. It can watch the transaction status with `show transaction status for <dtid>`.
 
-* DTID generation
-* Prepare API
-* Metadata Manager API
-* Coordinator
-* Watchdogs
-* Client API
-* Production support
+Case 1: All components respond with success.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
 
-The diagram below show how the various components interact.
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Success
+  par
+  G ->> RM1: Prepare Transaction
+  G ->> RM2: Prepare Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Success
+  end
+  G ->> MM: Store Commit Decision
+  MM -->> G: Success
+  par
+  G ->> RM1: Commit Prepared Transaction
+  G ->> RM2: Commit Prepared Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Success
+  end
+  opt Any failure here does not impact the reponse to the application
+  G ->> MM: Delete Transaction Record
+  end
+  G ->>- App: OK Packet
+```
 
-![](https://raw.githubusercontent.com/vitessio/vitess/main/doc/design-docs/TxInteractions.png)
+Case 2: When the Commit Prepared Transaction from the RM responds with an error. In this case, the watcher service needs to resolve the transaction and commit the pending prepared transactions.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
 
-The detailed design explains all the functionalities and interactions.
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Success
+  par
+  G ->> RM1: Prepare Transaction
+  G ->> RM2: Prepare Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Success
+  end
+  G ->> MM: Store Commit Decision
+  MM -->> G: Success
+  par
+  G ->> RM1: Commit Prepared Transaction
+  G ->> RM2: Commit Prepared Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Failure
+  end
+  G ->>- App: Err Packet
+```
+
+Case 3: When the Commit Descision from MM responds with an error. In this case, the watcher service needs to resolve the transaction as it is not certain whether the commit decision persisted or not.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
+
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Success
+  par
+  G ->> RM1: Prepare Transaction
+  G ->> RM2: Prepare Transaction
+  RM1 -->> G: Success
+  RM2 -->> G: Success
+  end
+  G ->> MM: Store Commit Decision
+  MM -->> G: Failure
+  G ->>- App: Err Packet
+```
+
+Case 4: When a Prepare Transaction fails. TM will decide to roll back the transaction. If any rollback returns a failure, the watcher service will resolve the transaction.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
+
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Success
+  par
+  G ->> RM1: Prepare Transaction
+  G ->> RM2: Prepare Transaction
+  RM1 -->> G: Failure
+  RM2 -->> G: Success
+  end
+  par
+  G ->> MM: Store Rollback Decision
+  G ->> RM1: Rollback Prepared Transaction
+  G ->> RM2: Rollback Prepared Transaction
+  MM -->> G: Success / Failure
+  RM1 -->> G: Success / Failure
+  RM2 -->> G: Success / Failure
+  end
+  opt Rollback success on MM and RMs
+    G ->> MM: Delete Transaction Record
+  end
+  G ->>- App: Err Packet
+```
+
+Case 5: When Create Transaction Record fails. TM will roll back the transaction.
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant G as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
+
+  App ->>+ G: Commit
+  G ->> MM: Create Transaction Record
+  MM -->> G: Failure
+  par
+  G ->> RM1: Rollback Transaction
+  G ->> RM2: Rollback Transaction
+  RM1 -->> G: Success / Failure
+  RM2 -->> G: Success / Failure
+  end
+  G ->>- App: Err Packet
+```
+
+## Transaction Resolution Watcher
+
+```mermaid
+sequenceDiagram
+  participant G1 as VTGate
+  participant G2 as VTGate
+  participant MM as VTTablet/MM
+  participant RM1 as VTTablet/RM1
+  participant RM2 as VTTablet/RM2
+
+  MM -) G1: Unresolved Transaction
+  MM -) G2: Unresolved Transaction
+  Note over G1,MM: MM sends this over health stream.
+  loop till no more unresolved transactions
+  G1 ->> MM: Provide Transaction details
+  G2 ->> MM: Provide Transaction details
+  MM -->> G2: Distributed Transaction ID details
+  Note over G2,MM: This VTGate recieves the transaction to resolve.
+  end
+  alt Transaction State: Commit
+  G2 ->> RM1: Commit Prepared Transaction
+  G2 ->> RM2: Commit Prepared Transaction
+  else Transaction State: Rollback
+  G2 ->> RM1: Rollback Prepared Transaction
+  G2 ->> RM2: Rollback Prepared Transaction
+  else Transaction State: Prepare
+  G2 ->> MM: Store Rollback Decision
+  MM -->> G2: Success
+  opt Only when Rollback Decision is stored
+  G2 ->> RM1: Rollback Prepared Transaction
+  G2 ->> RM2: Rollback Prepared Transaction
+  end
+  end
+  opt Commit / Rollback success on MM and RMs
+  G2 ->> MM: Delete Transaction Record
+  end
+```
 
 # Detailed Design
+
+The detailed design explains all the functionalities and interactions.
 
 ## DTID generation
 
@@ -415,3 +603,18 @@ This design has a bunch of innovative ideas. However, it’s possible that they�
 * Storing the Metadata in a transactional engine and making the coordinator stateless.
 * Storing the Metadata with one of the participants and avoiding the cost of a Prepare for that participant.
 * Choosing to relax Isolation guarantees while maintaining Atomicity.
+
+# Appendix
+
+## Glossary
+
+* Distributed Transaction: Any transaction that spans multiple databases is a distributed transaction. It does not imply any commit protocol.
+* Best Effort Commit (BEC): This protocol is what’s currently supported by Vitess, where commits are sent to all participants. This could result in partial commits if there are failures during the process.
+* Two-Phase Commit (2PC): This is the protocol that guarantees Atomic distributed commits.
+* Coordinator: This is a stateless process that is responsible for initiating, resuming and completing a 2PC transaction. This role is fulfilled by the VTGates.
+* Resource Manager (RM) aka Participant: Any database that’s involved in a distributed transaction. Only VTTablets can be participants.
+* Metadata Manager (MM): The database responsible for storing the metadata and performing its state transitions. In Vitess, one of the participants will be designated as the MM.
+* Watchdog: The watchdog looks for abandoned transactions and initiates the process to get them resolved.
+* Distributed Transaction ID (DTID): A unique identifier for a 2PC transaction.
+* VTTablet transaction id (VTID): This is the individual transaction ID for each VTTablet participant that contains the application’s statements to be committed/rolled back.
+* Decision: This is the irreversible decision to either commit or rollback the transaction. Although confusing, this is also referred to as the ‘Commit Decision’. We’ll also indirectly refer to this as ‘Metadata state transition’. This is because a transaction undergoes many state changes. The Decision is a critical transition. So, it warrants its own name.  
