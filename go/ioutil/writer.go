@@ -22,6 +22,7 @@ wrappers around WriteCloser and Writer.
 package ioutil
 
 import (
+	"bytes"
 	"io"
 	"time"
 )
@@ -86,4 +87,17 @@ func NewMeteredWriter(tw io.Writer, fns ...func(int, time.Duration)) MeteredWrit
 // written in this Write call.
 func (tw *meteredWriter) Write(p []byte) (int, error) {
 	return tw.meter.measure(tw.Writer.Write, p)
+}
+
+// MemoryBuffer implements io.WriteCloser using an in-memory buffer.
+type MemoryBuffer struct {
+	*bytes.Buffer
+}
+
+func (m MemoryBuffer) Close() error {
+	return nil
+}
+
+func NewMemoryBuffer() MemoryBuffer {
+	return MemoryBuffer{bytes.NewBuffer(nil)}
 }
