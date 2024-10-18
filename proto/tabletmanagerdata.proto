@@ -348,6 +348,7 @@ message ReplicationStatusRequest {
 
 message ReplicationStatusResponse {
   replicationdata.Status status = 1;
+  bool backingUp = 2;
 }
 
 message PrimaryStatusRequest {
@@ -529,6 +530,7 @@ message StopReplicationAndGetStatusResponse {
 
   // Status represents the replication status call right before, and right after telling the replica to stop.
   replicationdata.StopReplicationStatus status = 2;
+  bool backingUp = 3;
 }
 
 message PromoteReplicaRequest {

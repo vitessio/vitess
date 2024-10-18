@@ -203,6 +203,7 @@ type replicationSnapshot struct {
 	statusMap        map[string]*replicationdatapb.StopReplicationStatus
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
 	reachableTablets []*topodatapb.Tablet
+	backingUpTablets map[string]bool
 }
 
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
@@ -249,6 +250,9 @@ func stopReplicationAndBuildStatusMaps(
 		logger.Infof("getting replication position from %v", alias)
 
 		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+		m.Lock()
+		res.backingUpTablets[alias] = stopReplicationStatus.GetBackingUp()
+		m.Unlock()
 		if err != nil {
 			sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
