@@ -318,7 +318,11 @@ func Init(
 
 	plans := DefaultPlanCache()
 
-	config := &Config{defaultTabletType: defaultTabletType}
+	config := &Config{
+		DefaultTabletType: defaultTabletType,
+		PlannerVersion:    pv,
+		ErrorTransform:    NullErrorTransformer{},
+	}
 
 	executor := NewExecutor(
 		ctx,
@@ -332,7 +336,6 @@ func Init(
 		plans,
 		si,
 		noScatter,
-		pv,
 		warmingReadsPercent,
 		config,
 	)

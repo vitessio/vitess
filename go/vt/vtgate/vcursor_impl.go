@@ -509,7 +509,7 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	return vc.config.pv
+	return vc.config.PlannerVersion
 }
 
 // GetSemTable implements the ContextVSchema interface
@@ -818,7 +818,7 @@ func (vc *vcursorImpl) Session() engine.SessionActions {
 }
 
 func (vc *vcursorImpl) SetTarget(target string) error {
-	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.config.defaultTabletType)
+	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.config.DefaultTabletType)
 	if err != nil {
 		return err
 	}

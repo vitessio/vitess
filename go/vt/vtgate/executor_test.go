@@ -2041,7 +2041,7 @@ func TestServingKeyspaces(t *testing.T) {
 
 	executor, sbc1, _, sbclookup, ctx := createExecutorEnv(t)
 
-	executor.config.pv = querypb.ExecuteOptions_Gen4
+	executor.config.PlannerVersion = querypb.ExecuteOptions_Gen4
 	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
 	require.True(t, ok)
 	hc := gw.hc.(*discovery.FakeHealthCheck)
