@@ -50,6 +50,24 @@ func TestMergeConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "id with underscores",
+			base: Config{
+				ID:   "my_cluster",
+				Name: "mycluster",
+			},
+			override: Config{
+				DiscoveryImpl: "consul",
+			},
+			expected: Config{
+				ID:                   "my-cluster",
+				Name:                 "mycluster",
+				DiscoveryImpl:        "consul",
+				DiscoveryFlagsByImpl: FlagsByImpl{},
+				VtSQLFlags:           map[string]string{},
+				VtctldFlags:          map[string]string{},
+			},
+		},
+		{
 			name: "merging discovery flags",
 			base: Config{
 				ID:   "c1",
