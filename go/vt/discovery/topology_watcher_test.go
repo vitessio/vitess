@@ -28,6 +28,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -708,4 +709,68 @@ func TestGetTabletErrorDoesNotRemoveFromHealthcheck(t *testing.T) {
 	assert.Contains(t, allTablets, key2)
 	assert.True(t, proto.Equal(tablet1, allTablets[key1]))
 	assert.True(t, proto.Equal(tablet2, allTablets[key2]))
+}
+
+// TestDeadlockBetweenTopologyWatcherAndHealthCheck tests the possibility of a deadlock
+// between the topology watcher and the health check.
+// The issue https://github.com/vitessio/vitess/issues/16994 has more details on the deadlock.
+func TestDeadlockBetweenTopologyWatcherAndHealthCheck(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// create a new memory topo server and an health check instance.
+	ts, _ := memorytopo.NewServerAndFactory(ctx, "zone-1")
+	hc := NewHealthCheck(ctx, time.Hour, time.Hour, ts, "zone-1", "", nil)
+	defer hc.Close()
+	defer hc.topoWatchers[0].Stop()
+
+	// Add a tablet to the topology.
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Type:     topodatapb.TabletType_REPLICA,
+		Hostname: "host1",
+		PortMap: map[string]int32{
+			"grpc": 123,
+		},
+		Keyspace: "keyspace",
+		Shard:    "shard",
+	}
+	err := ts.CreateTablet(ctx, tablet1)
+	// Run the first loadTablets call to ensure the tablet is present in the topology watcher.
+	hc.topoWatchers[0].loadTablets()
+	require.NoError(t, err)
+
+	// We want to run updateHealth with arguments that always
+	// make it trigger load Tablets.
+	th := &TabletHealth{
+		Tablet: tablet1,
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "shard",
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
+	}
+	prevTarget := &querypb.Target{
+		Keyspace:   "keyspace",
+		Shard:      "shard",
+		TabletType: topodatapb.TabletType_PRIMARY,
+	}
+
+	// If we run the updateHealth function often enough, then we
+	// will see the deadlock where the topology watcher is trying to replace
+	// the tablet in the health check, but health check has the mutex acquired
+	// already because it is calling updateHealth.
+	// updateHealth itself will be stuck trying to send on the shared channel.
+	for i := 0; i < 10; i++ {
+		// Update the port of the tablet so that when update Health asks topo watcher to
+		// refresh the tablets, it finds an update and tries to replace it.
+		_, err = ts.UpdateTabletFields(ctx, tablet1.Alias, func(t *topodatapb.Tablet) error {
+			t.PortMap["testing_port"] = int32(i + 1)
+			return nil
+		})
+		require.NoError(t, err)
+		hc.updateHealth(th, prevTarget, false, false)
+	}
 }
