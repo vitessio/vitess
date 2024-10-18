@@ -138,7 +138,7 @@ type (
 		interOpStats map[engine.Primitive]engine.RowsReceived
 		shardsStats  map[engine.Primitive]engine.ShardsQueried
 
-		defaultTabletType topodatapb.TabletType
+		config *Config
 	}
 )
 
@@ -157,7 +157,7 @@ func newVCursorImpl(
 	serv srvtopo.Server,
 	warnShardedOnly bool,
 	pv plancontext.PlannerVersion,
-	defaultTabletType topodatapb.TabletType,
+	config *Config,
 ) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema, defaultTabletType)
 	if err != nil {
@@ -209,7 +209,7 @@ func newVCursorImpl(
 		warmingReadsPercent: warmingReadsPct,
 		warmingReadsChannel: warmingReadsChan,
 		resultsObserver:     nullResultsObserver{},
-		defaultTabletType:   defaultTabletType,
+		config:              config,
 	}, nil
 }
 
@@ -821,8 +821,7 @@ func (vc *vcursorImpl) Session() engine.SessionActions {
 }
 
 func (vc *vcursorImpl) SetTarget(target string) error {
-	fmt.Println(vc.defaultTabletType)
-	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.defaultTabletType)
+	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.config.defaultTabletType)
 	if err != nil {
 		return err
 	}

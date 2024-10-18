@@ -318,6 +318,8 @@ func Init(
 
 	plans := DefaultPlanCache()
 
+	config := &Config{defaultTabletType: defaultTabletType}
+
 	executor := NewExecutor(
 		ctx,
 		env,
@@ -332,7 +334,7 @@ func Init(
 		noScatter,
 		pv,
 		warmingReadsPercent,
-		defaultTabletType,
+		config,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {
