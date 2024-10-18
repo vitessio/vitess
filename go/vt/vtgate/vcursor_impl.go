@@ -126,7 +126,6 @@ type (
 		queryTimeout        time.Duration
 
 		warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
-		pv       plancontext.PlannerVersion
 
 		warmingReadsPercent int
 		warmingReadsChannel chan bool
@@ -156,7 +155,6 @@ func newVCursorImpl(
 	resolver *srvtopo.Resolver,
 	serv srvtopo.Server,
 	warnShardedOnly bool,
-	pv plancontext.PlannerVersion,
 	config *Config,
 ) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema, defaultTabletType)
@@ -205,7 +203,6 @@ func newVCursorImpl(
 		vm:                  vm,
 		topoServer:          ts,
 		warnShardedOnly:     warnShardedOnly,
-		pv:                  pv,
 		warmingReadsPercent: warmingReadsPct,
 		warmingReadsChannel: warmingReadsChan,
 		resultsObserver:     nullResultsObserver{},
@@ -512,7 +509,7 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	return vc.pv
+	return vc.config.pv
 }
 
 // GetSemTable implements the ContextVSchema interface
@@ -1411,8 +1408,8 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 		vm:              vc.vm,
 		topoServer:      vc.topoServer,
 		warnShardedOnly: vc.warnShardedOnly,
-		pv:              vc.pv,
 		resultsObserver: vc.resultsObserver,
+		config:          vc.config,
 	}
 }
 
@@ -1484,7 +1481,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		semTable:            vc.semTable,
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
-		pv:                  vc.pv,
+		config:              vc.config,
 		resultsObserver:     nullResultsObserver{},
 	}
 
@@ -1516,8 +1513,8 @@ func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		semTable:            vc.semTable,
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
-		pv:                  vc.pv,
 		resultsObserver:     nullResultsObserver{},
+		config:              vc.config,
 	}
 
 	v.marginComments.Trailing += "/* mirror query */"

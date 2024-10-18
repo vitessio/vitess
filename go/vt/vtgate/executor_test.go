@@ -1558,7 +1558,7 @@ func TestVSchemaStats(t *testing.T) {
 var pv = querypb.ExecuteOptions_Gen4
 
 func createVCursor(target string, e *Executor) (*vcursorImpl, error) {
-	return newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: target}), makeComments(""), e, nil, e.vm, e.VSchema(), e.resolver.resolver, nil, false, pv, defaultConfig())
+	return newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: target}), makeComments(""), e, nil, e.vm, e.VSchema(), e.resolver.resolver, nil, false, defaultConfig())
 }
 
 func TestGetPlanUnnormalized(t *testing.T) {
@@ -1647,7 +1647,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnv(t)
 
-		emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, defaultConfig())
+		emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, defaultConfig())
 		query1 := "select * from music_user_map where id = 1"
 
 		_, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true)
@@ -1797,7 +1797,7 @@ func TestGetPlanPriority(t *testing.T) {
 
 			r.normalize = true
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
-			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, defaultConfig())
+			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, defaultConfig())
 			assert.NoError(t, err)
 
 			stmt, err := sqlparser.NewTestParser().Parse(testCase.sql)
@@ -2041,7 +2041,7 @@ func TestServingKeyspaces(t *testing.T) {
 
 	executor, sbc1, _, sbclookup, ctx := createExecutorEnv(t)
 
-	executor.pv = querypb.ExecuteOptions_Gen4
+	executor.config.pv = querypb.ExecuteOptions_Gen4
 	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
 	require.True(t, ok)
 	hc := gw.hc.(*discovery.FakeHealthCheck)

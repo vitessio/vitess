@@ -195,7 +195,10 @@ func createExecutorEnvCallback(t testing.TB, eachShard func(shard, ks string, ta
 }
 
 func defaultConfig() *Config {
-	return &Config{defaultTabletType: defaultTabletType}
+	return &Config{
+		defaultTabletType: defaultTabletType,
+		pv:                querypb.ExecuteOptions_Gen4,
+	}
 }
 
 func createExecutorEnv(t testing.TB) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context) {
