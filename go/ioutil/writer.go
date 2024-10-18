@@ -89,15 +89,15 @@ func (tw *meteredWriter) Write(p []byte) (int, error) {
 	return tw.meter.measure(tw.Writer.Write, p)
 }
 
-// MemoryBuffer implements io.WriteCloser using an in-memory buffer.
-type MemoryBuffer struct {
+// BytesBufferWriter implements io.WriteCloser using an in-memory buffer.
+type BytesBufferWriter struct {
 	*bytes.Buffer
 }
 
-func (m MemoryBuffer) Close() error {
+func (m BytesBufferWriter) Close() error {
 	return nil
 }
 
-func NewMemoryBuffer() MemoryBuffer {
-	return MemoryBuffer{bytes.NewBuffer(nil)}
+func NewBytesBufferWriter() BytesBufferWriter {
+	return BytesBufferWriter{bytes.NewBuffer(nil)}
 }

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -335,6 +334,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		mysqlShellBackupBinaryName = originalBinary
 	}()
 
+	logger := logutil.NewMemoryLogger()
 	fakedb := fakesqldb.New(t)
 	defer fakedb.Close()
 	mysql := NewFakeMysqlDaemon(fakedb)
@@ -343,6 +343,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 	be := &MySQLShellBackupEngine{}
 	params := BackupParams{
 		TabletAlias: "test",
+		Logger:      logger,
 		Mysqld:      mysql,
 	}
 	bs := FakeBackupStorage{
@@ -350,9 +351,8 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 	}
 
 	t.Run("lock released if we see the mysqlsh lock being acquired", func(t *testing.T) {
-		logger := logutil.NewMemoryLogger()
-		params.Logger = logger
-		manifestBuffer := ioutil.NewMemoryBuffer()
+		logger.Clear()
+		manifestBuffer := ioutil.NewBytesBufferWriter()
 		bs.StartBackupReturn.BackupHandle = &FakeBackupHandle{
 			Dir:           t.TempDir(),
 			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: manifestBuffer},
@@ -376,21 +376,14 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		require.Equal(t, mysqlShellBackupEngineName, manifest.BackupMethod)
 
 		// did we notice the lock was release and did we release it ours as well?
-		errorLogged := false
-		for _, event := range logger.Events {
-			if strings.Contains(event.Value, "global read lock released after") {
-				errorLogged = true
-			}
-		}
-
-		assert.True(t, errorLogged, "failed to release the global lock after mysqlsh")
+		require.Contains(t, logger.String(), "global read lock released after",
+			"failed to release the global lock after mysqlsh")
 	})
 
 	t.Run("lock released if when we don't see mysqlsh released it", func(t *testing.T) {
 		mysql.GlobalReadLock = false // clear lock status.
-		logger := logutil.NewMemoryLogger()
-		params.Logger = logger
-		manifestBuffer := ioutil.NewMemoryBuffer()
+		logger.Clear()
+		manifestBuffer := ioutil.NewBytesBufferWriter()
 		bs.StartBackupReturn.BackupHandle = &FakeBackupHandle{
 			Dir:           t.TempDir(),
 			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: manifestBuffer},
@@ -409,21 +402,14 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 
 		// make sure we are at least logging the lock wasn't able to be released earlier.
-		errorLogged := false
-		for _, event := range logger.Events {
-			if strings.Contains(event.Value, "could not release global lock earlier") {
-				errorLogged = true
-			}
-		}
-
-		assert.True(t, errorLogged, "failed to log error message when unable to release lock during backup")
+		require.Contains(t, logger.String(), "could not release global lock earlier",
+			"failed to log error message when unable to release lock during backup")
 	})
 
 	t.Run("lock released when backup fails", func(t *testing.T) {
 		mysql.GlobalReadLock = false // clear lock status.
-		logger := logutil.NewMemoryLogger()
-		params.Logger = logger
-		manifestBuffer := ioutil.NewMemoryBuffer()
+		logger.Clear()
+		manifestBuffer := ioutil.NewBytesBufferWriter()
 		bs.StartBackupReturn.BackupHandle = &FakeBackupHandle{
 			Dir:           t.TempDir(),
 			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: manifestBuffer},

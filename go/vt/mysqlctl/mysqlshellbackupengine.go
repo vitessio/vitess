@@ -155,8 +155,9 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	lockAcquired := time.Now() // we will report how long we hold the lock for
 
 	// we need to release the global read lock in case the backup fails to start and
-	// the lock wasn't released by releaseReadLock() yet
-	defer func() { _ = params.Mysqld.ReleaseGlobalReadLock(ctx) }()
+	// the lock wasn't released by releaseReadLock() yet. context might be expired,
+	// so we pass a new one.
+	defer func() { _ = params.Mysqld.ReleaseGlobalReadLock(context.Background()) }()
 
 	posBeforeBackup, err := params.Mysqld.PrimaryPosition(ctx)
 	if err != nil {
