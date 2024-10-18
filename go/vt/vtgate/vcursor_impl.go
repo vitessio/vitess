@@ -137,6 +137,8 @@ type (
 		// if this field is nil, it means that we are not logging operator traffic
 		interOpStats map[engine.Primitive]engine.RowsReceived
 		shardsStats  map[engine.Primitive]engine.ShardsQueried
+
+		defaultTabletType topodatapb.TabletType
 	}
 )
 
@@ -155,8 +157,9 @@ func newVCursorImpl(
 	serv srvtopo.Server,
 	warnShardedOnly bool,
 	pv plancontext.PlannerVersion,
+	defaultTabletType topodatapb.TabletType,
 ) (*vcursorImpl, error) {
-	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
+	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema, defaultTabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -206,6 +209,7 @@ func newVCursorImpl(
 		warmingReadsPercent: warmingReadsPct,
 		warmingReadsChannel: warmingReadsChan,
 		resultsObserver:     nullResultsObserver{},
+		defaultTabletType:   defaultTabletType,
 	}, nil
 }
 
@@ -817,7 +821,8 @@ func (vc *vcursorImpl) Session() engine.SessionActions {
 }
 
 func (vc *vcursorImpl) SetTarget(target string) error {
-	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, defaultTabletType)
+	fmt.Println(vc.defaultTabletType)
+	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.defaultTabletType)
 	if err != nil {
 		return err
 	}
@@ -1200,7 +1205,11 @@ func (vc *vcursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.Mirro
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
+func parseDestinationTarget(
+	targetString string,
+	vschema *vindexes.VSchema,
+	defaultTabletType topodatapb.TabletType,
+) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
 	// Set default keyspace
 	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {

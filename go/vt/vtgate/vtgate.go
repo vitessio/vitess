@@ -332,6 +332,7 @@ func Init(
 		noScatter,
 		pv,
 		warmingReadsPercent,
+		defaultTabletType,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {

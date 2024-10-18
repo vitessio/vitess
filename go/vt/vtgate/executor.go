@@ -130,6 +130,8 @@ type Executor struct {
 
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
+
+	defaultTabletType topodatapb.TabletType
 }
 
 var executorOnce sync.Once
@@ -161,6 +163,7 @@ func NewExecutor(
 	noScatter bool,
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
+	defaultTabletType topodatapb.TabletType,
 ) *Executor {
 	e := &Executor{
 		env:                 env,
@@ -178,6 +181,7 @@ func NewExecutor(
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
+		defaultTabletType:   defaultTabletType,
 	}
 
 	vschemaacl.Init()
@@ -1073,7 +1077,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := topoproto.ParseDestination(targetString, defaultTabletType)
+	destKeyspace, destTabletType, dest, err := topoproto.ParseDestination(targetString, e.defaultTabletType)
 	// Set default keyspace
 	if destKeyspace == "" && len(e.VSchema().Keyspaces) == 1 {
 		for k := range e.VSchema().Keyspaces {
@@ -1406,7 +1410,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv, e.defaultTabletType)
 
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
