@@ -16,11 +16,12 @@ import (
 
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
