@@ -23,7 +23,7 @@
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
     - **[Current Errant GTIDs Count Metric](#errant-gtid-metric)**
     - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
-    - **[Support for specifying expected primary in reparents](#reparents-expectedPrimary)
+    - **[Support for specifying expected primary in reparents](#reparents-expectedPrimary)**
 
 
 ## <a id="major-changes"/>Major Changes</a>
