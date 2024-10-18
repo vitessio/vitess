@@ -77,7 +77,7 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /go/vt/vttablet/*tmclient* @ajm188 @GuptaManan100 @rohit-nayak-ps @shlomi-noach
 /go/vt/vttablet/vexec @mattlord @rohit-nayak-ps @shlomi-noach
 /go/vt/wrangler @deepthi @mattlord @rohit-nayak-ps
-/go/vt/workflow @mattlord @rohit-nayak-ps
+/go/vt/vtctl/workflow @mattlord @rohit-nayak-ps
 /proto/ @deepthi @harshit-gangal
 /proto/vtadmin.proto @ajm188 @notfelineit @mattlord
 /proto/vtctldata.proto @ajm188 @notfelineit @mattlord
