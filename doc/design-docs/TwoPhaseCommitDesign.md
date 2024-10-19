@@ -473,19 +473,26 @@ If not successful, VTGate at this point will leave the transaction resolution to
 
 ### SetRollback
 
-SetRollback transitions the state from PREPARE to ROLLBACK using an independent transaction. When this function is called, the MM’s transaction (VTID) may still be alive. So, we infer the transaction id from the dtid and perform a best effort rollback. If the transaction is not found, it’s a no-op.
+This function transitions the state from PREPARE to ROLLBACK using an independent transaction. 
+When this function is called, the MM’s transaction (VTID) may still be alive. 
+So, it infers the transaction id from the dtid and perform a best effort rollback. 
+If the transaction is not found, it’s a no-op.
 
 ### ConcludeTransaction
 
-This function just deletes the row.
+This function removes the transaction metadata record for the given DTID.
 
 ### ReadTransaction
 
-This function returns the transaction info given the dtid.
+This function returns the transaction metadata for the given DTID.
+
+### UnresolvedTransactions
+
+This function returns all unresolved transaction metadata older than certain age either provided in the request or the default set on the VTTablet.
 
 ### ReadTwopcInflight
 
-This function returns all transaction metadata including the info in the redo logs.
+This function returns all transaction metadata and the redo statement log.
 
 ## Coordinator
 
