@@ -494,13 +494,14 @@ This function returns all unresolved transaction metadata older than certain age
 
 This function returns all transaction metadata and the redo statement log.
 
-## Coordinator
+## Transaction Coordinator
 
-VTGate is already responsible for BEC, aka Commit(Atomic=false), it can naturally be extended to act as the coordinator for 2PC. It needs to support Commit(Atomic=true), and ResolveTransaction.
+VTGate is already responsible for Best Effort Commit, aka `transaction_mode=MULTI`, it can naturally be extended to act as the coordinator for 2PC. 
+It needs to support commit with `transaction_mode=twopc`.
 
-If there are operational errors before the commit decision, the transaction is rolled back. If the rollback fails, or if a failure happens after the commit decision, we give up. The watchdog will later pick it up and try to resolve it.
+VTGate also have to listen on VTTablet healthstream to receive unresolved transaction signal and act on it to resolve them.
 
-### Commit(Atomic=true)
+### Commit(transaction_mode=twopc)
 
 This call is issued on an active transaction, whose Session info is known. The function will perform the workflow described in the life of a transaction:
 
@@ -511,22 +512,23 @@ This call is issued on an active transaction, whose Session info is known. The f
 * CommitPrepared on all other participants
 * ResolveTransaction on the MM
 
-Any non-operational failure before StartCommit will trigger the rollback workflow:
+Any failure before StartCommit will trigger the rollback workflow:
 
 * SetRollback on the MM
 * RollbackPrepared on all participants for which Prepare was sent
 * Rollback on all other participants
 * ResolveTransaction on the MM
 
-### ResolveTransaction
+### Unresolved Transaction Signal
 
-This function is called by a watchdog if a VTGate had failed to complete a transaction. It could be due to VTGate crashing, or other unrecoverable errors.
+This signal is received by VTGate from MM when there are unresolved transactions.
 
-The function starts off with a ReadTransaction, and based on the state, it performs the following actions:
+The function starts off with calling UnresolvedTransactions on the VTTablet to read the transaction metadata.
+Based on the state, it performs the following actions:
 
 * Prepare: SetRollback and initiate rollback workflow. 
-* Rollback: initiate rollback workflow.
-* Commit: initiate commit workflow.
+* Rollback: Initiate rollback workflow.
+* Commit: Initiate commit workflow.
 
 Commit workflow:
 
@@ -538,15 +540,16 @@ Rollback workflow:
 * RollbackPrepared on all participants.
 * ResolveTransaction on the MM.
 
-## Watchdogs
+## Transaction Resolution Watcher
 
-The stateless VTGates are considered ephemeral and can fail at any time, which means that transactions could be abandoned in the middle of a distributed commit. To mitigate this, every primary vttablet will poll its dt_state table for distributed transactions that are lingering. If any such transaction is found, it invokes VTGate with that dtid for a Resolve to be retried.
-
-_This is not a clean design because it introduces a backward dependency from VTTablet to VTGate. However, it saves us the need to create yet another server that will add to the overall complexity of the deployment. It was decided that this is a worthy trade-off._
+The stateless VTGates are considered ephemeral and can fail at any time, which means that transactions could be abandoned in the middle of a distributed commit. 
+To mitigate this, every primary vttablet will poll its dt_state table for distributed transactions that are lingering. 
+If any such transaction is found, it will signal this to VTGate via health stream to resolve them.
 
 ## Client API
 
-The client API change will  be an additional flag to the Commit call, where the app can set Atomic to true or false.
+The client have to modify the `transaction_mode`. 
+Default is `Multi`, they would need to set to `twopc` either as a VTGate flag or on the session with `SET` statement.
 
 ## Production support
 
