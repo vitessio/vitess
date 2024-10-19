@@ -19,7 +19,10 @@ package newfeaturetest
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -176,4 +179,67 @@ func TestERSWithWriteInPromoteReplica(t *testing.T) {
 	}, tablets[3])
 	_, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
 	require.NoError(t, err, "ERS should not fail even if there is a sidecardb change")
+}
+
+func TestSimultaneousPRS(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupShardedReparentCluster(t, "semi_sync")
+	defer utils.TeardownCluster(clusterInstance)
+
+	// Start by reparenting all the shards to the first tablet.
+	keyspace := clusterInstance.Keyspaces[0]
+	shards := keyspace.Shards
+	for _, shard := range shards {
+		err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shard.Name, shard.Vttablets[0].Alias)
+		require.NoError(t, err)
+	}
+
+	rowCount := 1000
+	vtParams := clusterInstance.GetVTParams(keyspace.Name)
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	// Now, we need to insert some data into the cluster.
+	for i := 1; i <= rowCount; i++ {
+		_, err = conn.ExecuteFetch(utils.GetInsertQuery(i), 0, false)
+		require.NoError(t, err)
+	}
+
+	// Now we start a goroutine that continues to read the data until we've finished the test.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		tick := time.NewTicker(100 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				go func() {
+					conn, err := mysql.Connect(context.Background(), &vtParams)
+					if err != nil {
+						return
+					}
+					// We're running queries every 100 millisecond and verifying the results are all correct.
+					res, err := conn.ExecuteFetch(utils.GetSelectionQuery(), rowCount+10, false)
+					require.NoError(t, err)
+					require.Len(t, res.Rows, rowCount)
+				}()
+			}
+		}
+	}()
+
+	// Now, we run go routines to run PRS calls on all the shards simultaneously.
+	wg := sync.WaitGroup{}
+	for _, shard := range shards {
+		wg.Add(1)
+		go func() {
+			time.Sleep(time.Second * time.Duration(rand.IntN(6)))
+			defer wg.Done()
+			err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shard.Name, shard.Vttablets[1].Alias)
+			require.NoError(t, err)
+		}()
+	}
+	wg.Wait()
+	cancel()
 }
