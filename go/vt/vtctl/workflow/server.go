@@ -863,8 +863,8 @@ ORDER BY
 
 					if stream.Id > streamLog.StreamId {
 						s.Logger().Warningf("Found stream log for nonexistent stream: %+v", streamLog)
-						// This can happen on manual/failed workflow cleanup so keep going.
-						continue
+						// This can happen on manual/failed workflow cleanup so move to the next log.
+						break
 					}
 
 					// stream.Id == streamLog.StreamId
