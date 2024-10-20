@@ -46,10 +46,13 @@ import (
 func TestVtctldclientCLI(t *testing.T) {
 	setSidecarDBName("_vt")
 	var err error
+	origDefaultReplicas := defaultReplicas
 	origDefaultRdonly := defaultRdonly
 	defer func() {
+		defaultReplicas = origDefaultReplicas
 		defaultRdonly = origDefaultRdonly
 	}()
+	defaultReplicas = 1
 	defaultRdonly = 0
 	vc = setupMinimalCluster(t)
 	vttablet.InitVReplicationConfigDefaults()
