@@ -523,7 +523,7 @@ const (
 			vrepl_id=%a
 			AND (
 				state='Error'
-				OR locate ('terminal error:', message) = 1
+				OR locate (concat(%a, ':'), message) = 1
 			)
 		ORDER BY
 			id DESC

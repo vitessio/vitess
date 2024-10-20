@@ -47,6 +47,9 @@ const (
 	// give up and return an error message that the user
 	// can see and act upon if needed.
 	tabletPickerRetries = 5
+
+	// Prepended to the message to indicate that it is a terminal error.
+	TerminalErrorIndicator = "terminal error"
 )
 
 // controller is created by Engine. Members are initialized upfront.
@@ -305,7 +308,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy)) ||
 			isUnrecoverableError(err) ||
 			!ct.lastWorkflowError.ShouldRetry() {
-			err = vterrors.Wrapf(err, "terminal error")
+			err = vterrors.Wrapf(err, TerminalErrorIndicator)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
 				log.Errorf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err)
 				return err // yes, err and not errSetState.
