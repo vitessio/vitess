@@ -49,6 +49,19 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+var (
+	allTabletTypes = []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
+
+	roTabletTypes = []topodatapb.TabletType{
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
+)
+
 type fakeTMC struct {
 	tmclient.TabletManagerClient
 	vrepQueriesByTablet map[string]map[string]*querypb.QueryResult
@@ -971,12 +984,6 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 	targetKeyspaceName := "targetks"
 	vrID := 1
 
-	tabletTypes := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
-	}
-
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
 		tableName: {
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -1066,7 +1073,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 			},
 			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
 				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
@@ -1088,11 +1095,33 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionBackward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 			},
 			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
 				Summary:      fmt.Sprintf("ReverseTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
 				StartState:   "All Reads Switched. Writes Switched",
+				CurrentState: "Reads Not Switched. Writes Not Switched",
+			},
+		},
+		{
+			name: "backward for read-only tablets",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionBackward),
+				TabletTypes: roTabletTypes,
+			},
+			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:      fmt.Sprintf("ReverseTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
+				StartState:   "All Reads Switched. Writes Not Switched",
 				CurrentState: "Reads Not Switched. Writes Not Switched",
 			},
 		},
@@ -1110,7 +1139,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 			},
 			preFunc: func(env *testEnv) {
 				env.tmc.SetRefreshStateError(env.tablets[sourceKeyspaceName][startingSourceTabletUID], errors.New("tablet refresh error"))
@@ -1132,7 +1161,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 				Force:       true,
 			},
 			preFunc: func(env *testEnv) {
@@ -1172,22 +1201,28 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.updateTableRoutingRules(t, ctx, tabletTypes, []string{tableName},
+				env.updateTableRoutingRules(t, ctx, tc.req.TabletTypes, []string{tableName},
 					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
+				if !slices.Contains(tc.req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, journalQR)
+					}
+				} else {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
+					}
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
+					}
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, deleteWFQR)
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createWFQR)
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createJournalQR)
+					}
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, freezeReverseWFQR)
 				}
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
-				}
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
-				}
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, deleteWFQR)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createWFQR)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createJournalQR)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, freezeReverseWFQR)
 			}
 			if tc.preFunc != nil {
 				tc.preFunc(env)
@@ -1203,29 +1238,47 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			// Confirm that we have the expected routing rules.
 			rr, err := env.ts.GetRoutingRules(ctx)
 			require.NoError(t, err)
-			to := fmt.Sprintf("%s.%s", tc.targetKeyspace.KeyspaceName, tableName)
-			if tc.req.Direction == int32(DirectionBackward) {
-				to = fmt.Sprintf("%s.%s", tc.sourceKeyspace.KeyspaceName, tableName)
-			}
 			for _, rr := range rr.Rules {
+				_, rrTabletType, found := strings.Cut(rr.FromTable, "@")
+				if !found { // No @<tablet_type> is primary
+					rrTabletType = topodatapb.TabletType_PRIMARY.String()
+				}
+				tabletType, err := topoproto.ParseTabletType(rrTabletType)
+				require.NoError(t, err)
+
+				var to string
+				if slices.Contains(tc.req.TabletTypes, tabletType) {
+					to = fmt.Sprintf("%s.%s", tc.targetKeyspace.KeyspaceName, tableName)
+					if tc.req.Direction == int32(DirectionBackward) {
+						to = fmt.Sprintf("%s.%s", tc.sourceKeyspace.KeyspaceName, tableName)
+					}
+				} else {
+					to = fmt.Sprintf("%s.%s", tc.sourceKeyspace.KeyspaceName, tableName)
+					if tc.req.Direction == int32(DirectionBackward) {
+						to = fmt.Sprintf("%s.%s", tc.targetKeyspace.KeyspaceName, tableName)
+					}
+				}
 				for _, tt := range rr.ToTables {
-					require.Equal(t, to, tt)
+					require.Equal(t, to, tt, "Additional info: tablet type: %s, rr.FromTable: %s, rr.ToTables: %v, to string: %s",
+						tabletType.String(), rr.FromTable, rr.ToTables, to)
 				}
 			}
 			// Confirm that we have the expected denied tables entries.
-			for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
-				for _, shardName := range keyspace.ShardNames {
-					si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
-					require.NoError(t, err)
-					switch {
-					case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionForward):
-						require.True(t, hasDeniedTableEntry(si))
-					case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionBackward):
-						require.False(t, hasDeniedTableEntry(si))
-					case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionForward):
-						require.False(t, hasDeniedTableEntry(si))
-					case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionBackward):
-						require.True(t, hasDeniedTableEntry(si))
+			if slices.Contains(tc.req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
+					for _, shardName := range keyspace.ShardNames {
+						si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
+						require.NoError(t, err)
+						switch {
+						case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionForward):
+							require.True(t, hasDeniedTableEntry(si))
+						case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionBackward):
+							require.False(t, hasDeniedTableEntry(si))
+						case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionForward):
+							require.False(t, hasDeniedTableEntry(si))
+						case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionBackward):
+							require.True(t, hasDeniedTableEntry(si))
+						}
 					}
 				}
 			}
@@ -1246,11 +1299,6 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 	sourceKeyspaceName := "sourceks"
 	targetKeyspaceName := "targetks"
 	vrID := 1
-	tabletTypes := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
-	}
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
 		table1Name: {
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -1303,7 +1351,7 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 				DryRun:      true,
 			},
 			want: []string{
@@ -1344,13 +1392,13 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionBackward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 				DryRun:      true,
 			},
 			want: []string{
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", targetKeyspaceName, sourceKeyspaceName),
-				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
+				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
@@ -1369,6 +1417,32 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 					sourceKeyspaceName, startingSourceTabletUID, ReverseWorkflowName(workflowName), sourceKeyspaceName, sourceKeyspaceName, startingSourceTabletUID+tabletUIDStep, ReverseWorkflowName(workflowName), sourceKeyspaceName),
 				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Unlock keyspace %s", targetKeyspaceName),
+			},
+		},
+		{
+			name: "backward for read-only tablets",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionBackward),
+				TabletTypes: roTabletTypes,
+				DryRun:      true,
+			},
+			want: []string{
+				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
+				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", sourceKeyspaceName),
+				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
 			},
 		},
 	}
@@ -1391,14 +1465,20 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.updateTableRoutingRules(t, ctx, tabletTypes, tables,
+				env.updateTableRoutingRules(t, ctx, tc.req.TabletTypes, tables,
 					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
-				}
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
+				if !slices.Contains(tc.req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+					for i := 0; i < len(tc.sourceKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, journalQR)
+					}
+				} else {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
+					for i := 0; i < len(tc.sourceKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
+					}
+					for i := 0; i < len(tc.sourceKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
+					}
 				}
 			}
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
