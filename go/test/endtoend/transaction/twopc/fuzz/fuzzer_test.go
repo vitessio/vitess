@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,7 +127,18 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			fz.start(t)
 
 			// Wait for the timeForTesting so that the threads continue to run.
-			time.Sleep(tt.timeForTesting)
+			timeout := time.After(tt.timeForTesting)
+			loop := true
+			for loop {
+				select {
+				case <-timeout:
+					loop = false
+				case <-time.After(1 * time.Second):
+					if t.Failed() {
+						loop = false
+					}
+				}
+			}
 
 			// Signal the fuzzer to stop.
 			fz.stop()
@@ -302,9 +314,11 @@ func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 	// for each update set ordered by the auto increment column will not be true.
 	// That assertion depends on all the transactions running updates first to ensure that for any given update set,
 	// no two transactions are running the insert queries.
-	queries := []string{"begin"}
+	var queries []string
 	queries = append(queries, fz.generateUpdateQueries(updateSetVal, incrementVal)...)
 	queries = append(queries, fz.generateInsertQueries(updateSetVal, threadId)...)
+	queries = fz.addRandomSavePoints(queries)
+	queries = append([]string{"begin"}, queries...)
 	finalCommand := "commit"
 	for _, query := range queries {
 		_, err := conn.ExecuteFetch(query, 0, false)
@@ -375,6 +389,45 @@ func (fz *fuzzer) runClusterDisruption(t *testing.T) {
 			return
 		}
 	}
+}
+
+// addRandomSavePoints will add random savepoints and queries to the list of queries.
+// It still ensures that all the new queries added are rolledback so that the assertions of queries
+// don't change.
+func (fz *fuzzer) addRandomSavePoints(queries []string) []string {
+	savePointCount := 1
+	for {
+		shouldAddSavePoint := rand.Intn(2)
+		if shouldAddSavePoint == 0 {
+			return queries
+		}
+
+		savePointQueries := []string{"SAVEPOINT sp" + strconv.Itoa(savePointCount)}
+		randomDmlCount := rand.Intn(2) + 1
+		for i := 0; i < randomDmlCount; i++ {
+			savePointQueries = append(savePointQueries, fz.randomDML())
+		}
+		savePointQueries = append(savePointQueries, "ROLLBACK TO sp"+strconv.Itoa(savePointCount))
+		savePointCount++
+
+		savePointPosition := rand.Intn(len(queries))
+		newQueries := slices.Clone(queries[:savePointPosition])
+		newQueries = append(newQueries, savePointQueries...)
+		newQueries = append(newQueries, queries[savePointPosition:]...)
+		queries = newQueries
+	}
+}
+
+// randomDML generates a random DML to be used.
+func (fz *fuzzer) randomDML() string {
+	queryType := rand.Intn(2)
+	if queryType == 0 {
+		// Generate INSERT
+		return fmt.Sprintf(insertIntoFuzzInsert, updateRowBaseVals[rand.Intn(len(updateRowBaseVals))], rand.Intn(fz.updateSets), rand.Intn(fz.threads))
+	}
+	// Generate UPDATE
+	updateId := fz.updateRowsVals[rand.Intn(len(fz.updateRowsVals))][rand.Intn(len(updateRowBaseVals))]
+	return fmt.Sprintf(updateFuzzUpdate, rand.Intn(100000), updateId)
 }
 
 /*

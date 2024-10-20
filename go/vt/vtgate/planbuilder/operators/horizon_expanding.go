@@ -78,6 +78,12 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		for _, order := range horizon.Query.GetOrderBy() {
 			qp.addDerivedColumn(ctx, order.Expr)
 		}
+		sel, isSel := horizon.Query.(*sqlparser.Select)
+		if isSel && sel.Having != nil {
+			for _, pred := range sqlparser.SplitAndExpression(nil, sel.Having.Expr) {
+				qp.addDerivedColumn(ctx, pred)
+			}
+		}
 	}
 
 	op := createProjectionFromSelect(ctx, horizon)

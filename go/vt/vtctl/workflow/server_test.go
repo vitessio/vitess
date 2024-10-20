@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -182,9 +181,17 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 // to ensure that it behaves as expected given a specific request.
 func TestVDiffCreate(t *testing.T) {
 	ctx := context.Background()
-	ts := memorytopo.NewServer(ctx, "cell")
-	tmc := &fakeTMC{}
-	s := NewServer(vtenv.NewTestEnv(), ts, tmc)
+	workflowName := "wf1"
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "source",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "target",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
 
 	tests := []struct {
 		name    string
@@ -197,17 +204,32 @@ func TestVDiffCreate(t *testing.T) {
 			// We did not provide any keyspace or shard.
 			wantErr: "FindAllShardsInKeyspace() invalid keyspace name: UnescapeID err: invalid input identifier ''",
 		},
+		{
+			name: "generated UUID",
+			req: &vtctldatapb.VDiffCreateRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflowName,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := s.VDiffCreate(ctx, tt.req)
+			if tt.wantErr == "" {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspace.KeyspaceName, &queryResult{
+					query:  "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)",
+					result: &querypb.QueryResult{},
+				})
+			}
+			got, err := env.ws.VDiffCreate(ctx, tt.req)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
 			require.NotNil(t, got)
-			require.NotEmpty(t, got.UUID)
+			// Ensure that we always use a valid UUID.
+			err = uuid.Validate(got.UUID)
+			require.NoError(t, err)
 		})
 	}
 }
@@ -1810,4 +1832,63 @@ func createReadVReplicationWorkflowFunc(t *testing.T, workflowType binlogdatapb.
 			Streams:      streams,
 		}, nil
 	}
+}
+
+// Test checks that we don't include logs from non-existent streams in the result.
+// Ensures that we just skip the logs from non-existent streams and include the rest.
+func TestGetWorkflowsStreamLogs(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := "source_keyspace"
+	targetKeyspace := "target_keyspace"
+	workflow := "test_workflow"
+
+	sourceShards := []string{"-"}
+	targetShards := []string{"-"}
+
+	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: sourceKeyspace,
+		TargetKeyspace: targetKeyspace,
+		Workflow:       workflow,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "table1",
+				SourceExpression: fmt.Sprintf("select * from %s", "table1"),
+			},
+			{
+				TargetTable:      "table2",
+				SourceExpression: fmt.Sprintf("select * from %s", "table2"),
+			},
+		},
+	}, sourceShards, targetShards)
+
+	logResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|vrepl_id|type|state|message|created_at|updated_at|`count`", "int64|int64|varchar|varchar|varchar|varchar|varchar|int64"),
+		"1|0|State Change|Running|test message for non-existent 1|2006-01-02 15:04:05|2006-01-02 15:04:05|1",
+		"2|0|State Change|Stopped|test message for non-existent 2|2006-01-02 15:04:06|2006-01-02 15:04:06|1",
+		"3|1|State Change|Running|log message|2006-01-02 15:04:07|2006-01-02 15:04:07|1",
+	)
+
+	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
+	te.tmc.expectVRQuery(200, "select id from _vt.vreplication where db_name = 'vt_target_keyspace' and workflow = 'test_workflow'", &sqltypes.Result{})
+	te.tmc.expectVRQuery(200, "select id, vrepl_id, type, state, message, created_at, updated_at, `count` from _vt.vreplication_log where vrepl_id in (1) order by vrepl_id asc, id asc", logResult)
+
+	res, err := te.ws.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
+		Keyspace:    targetKeyspace,
+		Workflow:    workflow,
+		IncludeLogs: true,
+	})
+	require.NoError(t, err)
+
+	assert.Len(t, res.Workflows, 1)
+	assert.NotNil(t, res.Workflows[0].ShardStreams["-/cell-0000000200"])
+	assert.Len(t, res.Workflows[0].ShardStreams["-/cell-0000000200"].Streams, 1)
+
+	gotLogs := res.Workflows[0].ShardStreams["-/cell-0000000200"].Streams[0].Logs
+
+	// The non-existent stream logs shouldn't be part of the result
+	assert.Len(t, gotLogs, 1)
+	assert.Equal(t, gotLogs[0].Message, "log message")
+	assert.Equal(t, gotLogs[0].State, "Running")
+	assert.Equal(t, gotLogs[0].Id, int64(3))
 }
