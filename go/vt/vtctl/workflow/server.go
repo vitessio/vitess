@@ -3143,7 +3143,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	span.Annotate("tablet-types", req.TabletTypes)
 	span.Annotate("direction", req.Direction)
 	span.Annotate("enable-reverse-replication", req.EnableReverseReplication)
-	span.Annotate("shards", req.GetShards)
+	span.Annotate("shards", req.Shards)
 	span.Annotate("force", req.Force)
 
 	var (
@@ -3195,7 +3195,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse traffic for multi-tenant migrations")
 	}
 
-	// We need this to know when there isn't a reverse workflow to use.
+	// We need this to know when there isn't a (non-FROZEN) reverse workflow to use.
 	onlySwitchingReads := !startState.WritesSwitched && !switchPrimary
 
 	// We need this for idempotency and to avoid unnecessary work and resulting risk.

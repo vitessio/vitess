@@ -1089,28 +1089,32 @@ func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
 }
 
 func validateTableRoutingRule(t *testing.T, table, tabletType, fromKeyspace, toKeyspace string) {
+	tabletType = strings.ToLower(strings.TrimSpace(tabletType))
 	rr := getRoutingRules(t)
-	// We set matched = true by default because it is possible, if --no-routing-rules is set while creating a workflow,
-	// that the routing rules are empty when the workflow starts.
+	// We set matched = true by default because it is possible, if --no-routing-rules is set while creating
+	// a workflow, that the routing rules are empty when the workflow starts.
 	// We set it to false below when the rule is found, but before matching the routed keyspace.
 	matched := true
 	for _, r := range rr.GetRules() {
-		ruleKey := fmt.Sprintf("%s.%s", fromKeyspace, table)
+		fromRule := fmt.Sprintf("%s.%s", fromKeyspace, table)
 		if tabletType != "" && tabletType != "primary" {
-			ruleKey = fmt.Sprintf("%s@%s", ruleKey, tabletType)
+			fromRule = fmt.Sprintf("%s@%s", fromRule, tabletType)
 		}
-		if r.FromTable == ruleKey {
-			matched = false // We found the rule, so we can set matched to false here and check for the routed keyspace below.
+		if r.FromTable == fromRule {
+			// We found the rule, so we can set matched to false here and check for the routed keyspace below.
+			matched = false
+			require.NotEmpty(t, r.ToTables)
 			toTable := r.ToTables[0]
-			arr := strings.Split(toTable, ".") // The ToTables value is of the form "routedKeyspace".table".
-			if len(arr) == 2 {                 // Should always be true.
-				routedKeyspace := arr[0]
-				if routedKeyspace == toKeyspace {
-					matched = true // We found the rule and the keyspace matches.
-					break
-				}
+			// The ToTables value is of the form "routedKeyspace.table".
+			routedKeyspace, routedTable, ok := strings.Cut(toTable, ".")
+			require.True(t, ok)
+			require.Equal(t, table, routedTable)
+			if routedKeyspace == toKeyspace {
+				// We found the rule, the table and keyspace matches, so our search is done.
+				matched = true
+				break
 			}
 		}
 	}
-	require.Truef(t, matched, "Routing rule for %s.%s from %s to %s not found", fromKeyspace, table, tabletType, toKeyspace)
+	require.Truef(t, matched, "routing rule for %s.%s from %s to %s not found", fromKeyspace, table, tabletType, toKeyspace)
 }
