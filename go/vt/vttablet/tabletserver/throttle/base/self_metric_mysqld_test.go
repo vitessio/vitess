@@ -57,11 +57,12 @@ func TestGetMysqlMetricsRateLimiter(t *testing.T) {
 			// There can be a race condition where the rate limiter still emits one final tick after the context is cancelled.
 			// So we wait enough time to ensure that tick is "wasted".
 			time.Sleep(2 * rateLimit)
-			for range 10 {
+			// Now that the rate limited was stopped (we invoked `cancel()`), its `Do()` should not invoke the function anymore.
+			for range 7 {
 				rateLimiter.Do(incr)
 				time.Sleep(time.Millisecond)
 			}
-			assert.EqualValues(t, 10, val)
+			assert.EqualValues(t, 10, val) // Same "10" value as before.
 			{
 				rateLimiter := mysqlHostMetricsRateLimiter.Load()
 				assert.Nil(t, rateLimiter)
