@@ -18,6 +18,7 @@ package base
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -26,8 +27,9 @@ import (
 
 func TestGetMysqlMetricsRateLimiter(t *testing.T) {
 	rateLimit := 10 * time.Millisecond
-	for range 3 {
-		t.Run("iteration", func(t *testing.T) {
+	for i := range 3 {
+		testName := fmt.Sprintf("iteration %d", i)
+		t.Run(testName, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			{
