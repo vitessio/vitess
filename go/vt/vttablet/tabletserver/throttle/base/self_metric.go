@@ -27,7 +27,7 @@ import (
 )
 
 type SelfMetricReadParams struct {
-	Throttler  MetricsPublisher
+	Throttler  metricsPublisher
 	Conn       *connpool.Conn
 	TmClient   tmclient.TabletManagerClient
 	TabletInfo *topo.TabletInfo

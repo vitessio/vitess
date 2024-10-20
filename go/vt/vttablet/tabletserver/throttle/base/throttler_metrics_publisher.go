@@ -16,8 +16,8 @@ limitations under the License.
 
 package base
 
-// MetricsPublisher is implemented by throttler.Throttler and is used by SelfMetric
+// metricsPublisher is implemented by throttler.Throttler and is used by SelfMetric
 // implementations to query the throttler.
-type MetricsPublisher interface {
+type metricsPublisher interface {
 	GetCustomMetricsQuery() string
 }
