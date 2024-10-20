@@ -550,7 +550,7 @@ func WaitForValidData(t *testing.T, tablet *cluster.Vttablet, timeout time.Durat
 		case <-ctx.Done():
 			respByte, _ := io.ReadAll(checkResp.Body)
 			body := string(respByte)
-			t.Errorf("timed out waiting for %s tablet's throttler to return a valid result after %v; last seen result: %+v",
+			require.Failf(t, "time out", "waiting for %s tablet's throttler to return a valid result after %v; last seen result: %+v",
 				tablet.Alias, timeout, body)
 			return
 		case <-ticker.C:
