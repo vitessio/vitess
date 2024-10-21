@@ -703,7 +703,7 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 		"Prepare", "prepare", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.Prepare(transactionID, dtid)
 		},
 	)
@@ -716,7 +716,7 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 		"CommitPrepared", "commit_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			if DebugTwoPc {
 				commitPreparedDelayForTest(tsv)
 			}
@@ -732,7 +732,7 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 		"RollbackPrepared", "rollback_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.RollbackPrepared(dtid, originalID)
 		},
 	)
@@ -765,7 +765,7 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 		"CreateTransaction", "create_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.CreateTransaction(dtid, participants)
 		},
 	)
@@ -779,7 +779,7 @@ func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target
 		"StartCommit", "start_commit", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.StartCommit(transactionID, dtid)
 		},
 	)
@@ -793,7 +793,7 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 		"SetRollback", "set_rollback", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.SetRollback(dtid, transactionID)
 		},
 	)
@@ -807,7 +807,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 		"ConcludeTransaction", "conclude_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.ConcludeTransaction(dtid)
 		},
 	)
@@ -820,7 +820,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 		"ReadTransaction", "read_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			metadata, err = txe.ReadTransaction(dtid)
 			return err
 		},
@@ -835,7 +835,7 @@ func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *que
 		"UnresolvedTransactions", "unresolved_transaction", nil,
 		target, nil, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			transactions, err = txe.UnresolvedTransactions(time.Duration(abandonAgeSeconds) * time.Second)
 			return err
 		},
@@ -1865,7 +1865,7 @@ func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
 func (tsv *TabletServer) registerTwopczHandler() {
 	tsv.exporter.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
-		txe := NewDTExecutor(ctx, tsv.te, tsv.qe, tabletenv.NewLogStats(ctx, "twopcz"))
+		txe := NewDTExecutor(ctx, tabletenv.NewLogStats(ctx, "twopcz"), tsv.te, tsv.qe, tsv.getShard)
 		twopczHandler(txe, w, r)
 	})
 }
@@ -2153,4 +2153,8 @@ func skipQueryPlanCache(options *querypb.ExecuteOptions) bool {
 		return false
 	}
 	return options.SkipQueryPlanCache || options.HasCreatedTempTables
+}
+
+func (tsv *TabletServer) getShard() string {
+	return tsv.sm.Target().Shard
 }
