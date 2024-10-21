@@ -551,81 +551,146 @@ If any such transaction is found, it will signal this to VTGate via health strea
 The client have to modify the `transaction_mode`. 
 Default is `Multi`, they would need to set to `twopc` either as a VTGate flag or on the session with `SET` statement.
 
-## Production support
+# Production support
 
-Beyond the basic functionality, additional work is needed to make 2PC viable for production. The areas of concern are monitoring, tooling and configuration.
+Beyond the functionality, additional work is needed to make 2PC viable for production. 
+The areas of concern are disruptions, monitoring, tooling and configuration.
 
-### Monitoring
+# Disruptions
 
-To facilitate monitoring, new variables have to be exported.
+The atomic transactions should be resilient to the disruptions. Let us cover the different disruptions that can happen in a running cluster and how atomic transactions are engineered to handle them without breaking the Atomicity guarantee.
 
-VTTablet
+### `PlannedReparentShard` and `EmergencyReparentShard`
+
+For both Planned and Emergency reparents, we call `DemotePrimary` on the primary tablet. For Planned reparent, this call has to succeed, while on Emergency reparent, if the primary is unreachable then this call can fail, and we would still proceed further.
+
+As part of the `DemotePrimary` flow, when we transition the tablet to a non-serving state, we wait for all the transactions to have completed (in `TxEngine.shutdownLocked()` we have `te.txPool.WaitForEmpty()`). If the user has specified a shutdown grace-period, then after that much time elapses, we go ahead and forcefully kill all running queries. We then also rollback the prepared transactions. It is crucial that we rollback the prepared transactions only after all other writes have been killed, because when we rollback a prepared transaction, it lets go of the locks it was holding. If there were some other conflicting write in progress that hadn't been killed, then it could potentially go through and cause data corruption since we won't be able to prepare the transaction again. All the code to kill queries can be found in `stateManager.terminateAllQueries()`.
+
+The above outlined steps ensure that we either wait for all prepared transactions to conclude or we rollback them safely so that they can be prepared again on the new primary.
+
+On the new primary, when we call `PromoteReplica`, we redo all the prepared transactions before we allow any new writes to go through. This ensures that the new primary is in the same state as the old primary was before the reparent. The code for redoing the prepared transactions can be found in `TxEngine.RedoPreparedTransactions()`.
+
+If everything goes as described above, there is no reason for redoing of prepared transactions to fail. But in case, something unexpected happens and preparing transactions fails, we still allow the vttablet to accept new writes because we decided availability of the tablet is more important. We will however, build tooling and metrics for the users to be notified of these failures and let them handle this in the way they see fit.
+
+While Planned reparent is an operation where all the processes are running fine, Emergency reparent is called when something has gone wrong with the cluster. Because we call `DemotePrimary` in parallel with `StopReplicationAndBuildStatusMap`, we can run into a case wherein the primary tries to write something to the binlog after all the replicas have stopped replicating. If we were to run without semi-sync, then the primary could potentially commit a prepared transaction, and return a success to the vtgate trying to commit this transaction. The vtgate can then conclude that the transaction is safe to conclude and remove all the metadata information. However, on the new primary since the transaction commit didn't get replicated, it would re-prepare the transaction and would wait for a coordinator to either commit or rollback it, but that would never happen. Essentially we would have a transaction stuck in prepared state on a shard indefinitely. To avoid this situation, it is essential that we run with semi-sync, because this ensures that any write that is acknowledged as a success to the caller, would necessarily have to be replicated to at least one replica. This ensures that the transaction would also already be committed on the new primary.
+
+### MySQL Restarts
+
+When MySQL restarts, it loses all the ongoing transactions which includes all the prepared transactions. This is because the transaction logs are not persistent across restarts. This is a MySQL limitation and there is no way to get around this. However, at the Vitess level we must ensure that we can commit the prepared transactions even in case of MySQL restarts without any failures.
+
+Vttablet has the code to detect MySQL failures and call `stateManager.checkMySQL()` which transitions the tablet to a NotConnected state. This prevents any writes from going through until the vttablet has transitioned back to a serving state.
+
+However, we cannot rely on `checkMySQL` to ensure that no conflicting writes go through. This is because the time between MySQL restart and the vttablet transitioning to a NotConnected state can be large. During this time, the vttablet would still be accepting writes and some of them could potentially conflict with the prepared transactions.
+
+To handle this, we rely on the fact that when MySQL restarts, it starts with super-read-only turned on. This means that no writes can go through. It is VTOrc that registers this as an issue and fixes it by calling `UndoDemotePrimary`. As part of that call, before we set MySQL to read-write, we ensure that all the prepared transactions are redone in the read_only state. We use the dba pool (that has admin permissions) to prepare the transactions. This is safe because we know that no conflicting writes can go through until we set MySQL to read-write. The code to set MySQL to read-write after redoing prepared transactions can be found in `TabletManager.redoPreparedTransactionsAndSetReadWrite()`.
+
+Handling MySQL restarts is the only reason we needed to add the code to redo prepared transactions whenever MySQL transitions from super-read-only to read-write state. Even though, we only need to do this in `UndoDemotePrimary`, it not necessary that it is `UndoDemotePrimary` that sets MySQL to read-write. If the user notices that the tablet is in a read-only state before VTOrc has a chance to fix it, they can manually call `SetReadWrite` on the tablet.
+Therefore, the safest option was to always check if we need to redo the prepared transactions whenever MySQL transitions from super-read-only to read-write state.
+
+### VTTablet Restarts
+
+When Vttabet restarts, all the previous connections are dropped. It starts in a non-serving state, and then after reading the shard and tablet records from the topo, it transitions to a serving state.
+As part of this transition we need to ensure that we redo the prepared transactions before we start accepting any writes. This is done as part of the `TxEngine.transition` function when we transition to an `AcceptingReadWrite` state. We call the same code for redoing the prepared transactions that we called for MySQL restarts, PRS and ERS.
+
+### VTGate Restarts
+
+There is no additional work needed for VTGate restarts. The atomic transaction will resume based on the last known state in the MM based and will kick of the unresolved transaction workflow.
+
+### Online DDL
+
+During an Online DDL cutover, we need to ensure that all the prepared transactions on the online DDL table needs to be completed before we can proceed with the cutover.
+This is because the cutover involves a schema change and we cannot have any prepared transactions that are dependent on the old schema.
+
+As part of the cut-over process, Online DDL adds query rules to buffer new queries on the table.
+It then checks for any open prepared transaction on the table and waits for up to 100ms if found, then checks again.
+If it finds no prepared transaction of the table, it moves forward with the cut-over, otherwise it fails. The Online DDL mechanism will later retry the cut-over.
+
+In the Prepare code, we check the query rules before adding the transaction to the prepared list and re-check the rules before storing the transaction logs in the transaction redo table.
+Any transaction that went past the first check will fail the second check if the cutover proceeds.
+
+The check on both sides prevents either the cutover from proceeding or the transaction from being prepared.
+
+### MoveTables
+
+The only step of a `MoveTables` workflow that needs to synchronize with atomic transactions is `SwitchTraffic` for writes. As part of this step, we want to disallow writes to only the tables involved. We use `DeniedTables` in `ShardInfo` to accomplish this. After we update the topo server with the new `DeniedTables`, we make all the vttablets refresh their topo to ensure that they've registered the change.
+
+On vttablet, the `DeniedTables` are used to add query rules very similar to the ones in Online DDL. The only difference is that in Online DDL, we buffer the queries, but for `SwitchTraffic` we fail them altogether. Addition of these query rules, prevents any new atomic transactions from being prepared.
+
+Next, we try locking the tables to ensure no existing write is pending. This step blocks until all open prepared transactions have succeeded.
+
+After this step, `SwitchTraffic` can proceed without any issues, since we are guaranteed to reject any new atomic transactions until the `DeniedTables` has been reset, and having acquired the table lock, we know no write is currently in progress.
+
+
+## Monitoring
+
+To facilitate monitoring, new metrics will be published.
+
+### VTTablet
 
 * The Transactions hierarchy will be extended to report CommitPrepared and RollbackPrepared stats, which includes histograms. Since Prepare is an intermediate step, it will not be rolled up in this variable.
 * For Prepare, two new variables will be created:
   * Prepare histogram will report prepare timings.
   * PrepareStatements histogram will report the number of statements for each Prepare.
-* New histogram variables will be exported for all the new MM functions.
-* LingeringCount is a gauge that reports if a transaction has been unresolved for too long. This most likely means that it’s repeatedly failing. So, an alert should be raised. This applies to prepared transactions also.
+* `UnresolvedTransaction` is a gauge that reports current number of open unresolved transactions in `ResourceManager` or `MetadataManager`.
+* Any CommitPrepared or RedoPrepared failure will raise the counter in respective `CommitPreparedFail` or `RedoPreparedFail` with retyable or non-retryable error. Alert should be raised for non-retryable error.
 * Any unexpected errors during a 2PC will increment a counter for InternalErrors, which should already be set to raise an alert.
 
-VTGate
+### VTGate
 
-* TwoPCTransactions will report Commit, Rollback, ResolveCommit and ResolveRollback stats. The Resolve subvars are for the ResolveTransaction function.
-* TwoPCParticipants will report the transaction count and the ParticipantCount. This is a way to track the average number of participants per 2PC transaction.
+* Transactions will report Commit mode timing histogram `Single`, `Multi` and `TwoPC` for single shard, best-effort multi shard and 2PC multi shard transactions.
+* 2PC transactions will report 
+  * `CommitUnresolved` count on a failure after transactions is prepared on all RMs.
+  * `Participant` count to determine the average number of shards involved in a multi shard transaction. 
 
-### Tooling
+## Tooling
 
-For vttablet, a new URL, /twopcz, will display unresolved twopc transactions and transactions that are in the Prepare state. It will also provide buttons to force the following actions:
+On VTAdmin, `Transactions` tab will list all the unresolved TwoPC transactions. It will have option to change the abandon age time to limit the unresolved transactions older than the select time.
+The current action that can be done on these transactions is `Conclude`. It will clear out the state in all the shards about the selected transaction.
+Currently, the user have to take the corrective actions for the transactions that are lingering from long time and transaction resolver is not able to complete them.
 
-* Discard a Prepare that failed to commit.
-* Force a commit or rollback of a prepared transaction.
-* Resolve a distributed transaction.
+# Data Guarantees
 
-# Data guarantees
-
-Although the above workflows are foolproof, they do rely on the data guarantees provided by the underlying systems and the fact that prepared transactions can get killed only together with vttablet. Of these, one failure mode has to be visited: It’s possible that there’s data loss when a primary goes down and a new replica gets elected as the new primary. This loss is highly mitigated with semi-sync turned on, but it’s still possible. In such situations, we have to describe how 2PC will behave.
-
-In all of the scenarios below, there is irrecoverable data loss. But the system needs to alert correctly, and we must be able to make best effort recovery and move on. For now, these scenarios require operator intervention, but the system could be made to automatically perform these as we gain confidence.
-
-## Loss of MM’s transaction and metadata
-
-Scenario: An  MM VTTablet experiences a network partition, and the coordinator continues to commit transactions. Eventually, there’s a reparent and all these transactions are lost.
-
-In this situation, it’s possible that the participants are in a prepared state, but if you looked for their metadata, you’ll not find it because it’s lost. These transactions will remain in the prepared state forever, holding locks. If this happened, a Lingering alert will be raised. An operator will then realize that there was data loss, and can manually rollback these transactions from the /twopcz dashboard.
-
-## Loss of a Prepared transaction
-
-The previous scenario could happen to one of the participants instead. If so, the 2PC transaction will become unresolvable because an attempt to commit the prepared transaction will repeatedly fail on the participant that lost the prepared transaction.
-
-This situation will raise a 2PC Lingering transaction alert. The operator can force the 2PC transaction as resolved.
-
-## Loss of MM’s transaction after commit decision
-
-Scenario: Network partition happened after metadata was created. VTGate performs a StartCommit, succeeds in a few commits and crashes. Now, some transactions are in the prepared state. After the recovery, the metadata of the 2PC transaction is also in the Prepared state.
-
-The watchdog will grab this transaction and invoke a ResolveTransaction. The VTGate will then make a decision to rollback, because all it sees is a 2PC in Prepare state. It will attempt to rollback all participants, while some might have already committed. A failure like this will be undetectable.
+Although the above workflows are foolproof, they do rely on the data guarantees provided by the underlying systems and the fact that prepared transactions can get killed only together with vttablet.
+In all the scenarios below, there is as possibility of irrecoverable data loss. But the system needs to alert correctly, and we must be able to make the best effort recovery and move on. 
+For now, these scenarios require operator intervention, but the system could be made to automatically perform these as we gain confidence.
 
 ## Prepared transaction gets killed
 
 It is possible for an external agent to kill the connection of a prepared transaction. If this happened, MySQL will roll it back. If the system is serving live traffic, it may make forward progress in such a way that the transaction may not be replayable, or may replay with different outcome.
-
 This is a very unlikely occurrence. But if something like this happen, then an alert will be raised when the coordinator finds that the transaction is missing. That transaction will be marked as Failed until an operator resolves it.
-
 But if there’s a failover before the transaction is marked as failed, it will be resurrected over future transaction possibly with incorrect changes. A failure like this will be undetectable.
+
+## Transaction Recovery Redo Reliability
+
+The current implementation stores the transaction recovery logs as DML statements. 
+On transaction recovery, while applying the statements from these logs it is not expected to fail as the current shutdown and startup workflow ensure that no other DMLs leak into the database. 
+Still, there remains a risk of statement failure during the redo log application, potentially resulting in lost modifications without clear tracking of modified rows.
+If something like this happen, then an alert will be raised which the operator have to look into. 
 
 # Testing Plan
 
-The main workflow of 2PC is fairly straightforward and easy to test. What makes it complicated are the failure modes. But those have to be tested thoroughly. Otherwise, we’ll not be able to gain the confidence to take this to production.
+The main workflow of 2PC is fairly straightforward and easy to test. What makes it complicated are the failure modes. We will classify these tests into different tests.
 
-Some important failure scenarios that must be tested are:
+## Basic Tests
+Commit or rollback of transactions, and handling prepare failures leading to transaction rollbacks.
 
-* Correct shutdown of vttablet when it has prepared transactions.
-* Resurrection of prepared transactions when a vttablet becomes a primary.
-* A reparent of a VTTablet that has prepared transactions. This is effectively tested by the previous two steps, but it will be nice as an integration test. It will be even nicer if we could go a step further and see if VTGate can still complete a transaction if a reparent happened in the middle of a commit.
+## Reliability tests
+This test should run over an extended period, potentially lasting a few days or a week, and must endure various scenarios including:
+
+* Failure of different components (e.g., VTGate, VTTablets, MySQL)
+* Reparenting (PRS & ERS)
+* Resharding
+* Online DDL operations
+
+### Fuzzy tests
+A fuzzy test suite, running continous stream of multi-shard transactions and expecting events to be in specific sequence on terminating the long running test.
+
+### Stress Tests
+A continuous stream of transactions (single and distributed) will be executed, with all successful commits recorded along with the expected rows. 
+The binary log events will be streamed continuously and validated against the ordering of the change stream and the successful transactions.
+
 
 # Innovation
-
 This design has a bunch of innovative ideas. However, it’s possible that they’ve been used before under other circumstances, or even 2PC itself. Here’s a summary of all the new ideas in this document, some with more merit than others:
 
 * Moving away from the heavyweight XA standard.
@@ -633,6 +698,15 @@ This design has a bunch of innovative ideas. However, it’s possible that they�
 * Storing the Metadata in a transactional engine and making the coordinator stateless.
 * Storing the Metadata with one of the participants and avoiding the cost of a Prepare for that participant.
 * Choosing to relax Isolation guarantees while maintaining Atomicity.
+
+
+# Future Enhancements
+
+## Read Isolation Guarantee
+The current system lacks isolation guarantees, placing the burden on the application to manage it. Implementing read isolation will enable true cross-shard ACID transactions.
+
+## Distributed Deadlock Avoidance
+The current system can encounter cross-shard deadlocks, which are only resolved when one of the transactions times out and is rolled back. Implementing distributed deadlock avoidance will address this issue more efficiently.
 
 # Appendix
 
@@ -647,4 +721,16 @@ This design has a bunch of innovative ideas. However, it’s possible that they�
 * Watchdog: The watchdog looks for abandoned transactions and initiates the process to get them resolved.
 * Distributed Transaction ID (DTID): A unique identifier for a 2PC transaction.
 * VTTablet transaction id (VTID): This is the individual transaction ID for each VTTablet participant that contains the application’s statements to be committed/rolled back.
-* Decision: This is the irreversible decision to either commit or rollback the transaction. Although confusing, this is also referred to as the ‘Commit Decision’. We’ll also indirectly refer to this as ‘Metadata state transition’. This is because a transaction undergoes many state changes. The Decision is a critical transition. So, it warrants its own name.  
+* Decision: This is the irreversible decision to either commit or rollback the transaction. Although confusing, this is also referred to as the ‘Commit Decision’. We’ll also indirectly refer to this as ‘Metadata state transition’. This is because a transaction undergoes many state changes. The Decision is a critical transition. So, it warrants its own name.
+
+## Reworked Design
+This design is updated based on the new work carried on the Atomic Distributed Transactions.
+More details about the recent changes are present in the [RFC](https://github.com/vitessio/vitess/issues/16245).
+
+## Exploratory Work
+MySQL XA was considered as an alternative to having RMs manage the transaction recovery logs and hold up the row locks until a commit or rollback occurs.
+
+There are currently 20+ open bugs on XA. On MySQL 8.0.33, reproduction steps were followed for all the bugs, and 8 still persist. Out of these 8 bugs, 4 have patches attached that resolve the issues when applied. 
+For the remaining 4 issues, changes will need to be made either in the code or the workflow to ensure they are resolved.
+
+MySQL’s XA seems a probable candidate if we encounter issues with our implementation of handling distributed transactions that XA can resolve. XA's chatty API and no known big production deployment have kept us away from using it.
