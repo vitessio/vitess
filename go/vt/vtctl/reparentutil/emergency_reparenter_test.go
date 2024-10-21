@@ -4460,11 +4460,22 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 		}
 	)
 	allTablets := []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet}
+	noTabletsBackingUp := map[string]bool{
+		topoproto.TabletAliasString(primaryTablet.Alias): false, topoproto.TabletAliasString(replicaTablet.Alias): false,
+		topoproto.TabletAliasString(rdonlyTablet.Alias): false, topoproto.TabletAliasString(replicaCrossCellTablet.Alias): false,
+		topoproto.TabletAliasString(rdonlyCrossCellTablet.Alias): false,
+	}
+	replicaBackingUp := map[string]bool{
+		topoproto.TabletAliasString(primaryTablet.Alias): false, topoproto.TabletAliasString(replicaTablet.Alias): true,
+		topoproto.TabletAliasString(rdonlyTablet.Alias): false, topoproto.TabletAliasString(replicaCrossCellTablet.Alias): false,
+		topoproto.TabletAliasString(rdonlyCrossCellTablet.Alias): false,
+	}
 	tests := []struct {
 		name             string
 		durability       string
 		validTablets     []*topodatapb.Tablet
 		tabletsReachable []*topodatapb.Tablet
+		tabletsBackingUp map[string]bool
 		prevPrimary      *topodatapb.Tablet
 		opts             EmergencyReparentOptions
 		filteredTablets  []*topodatapb.Tablet
@@ -4475,12 +4486,21 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			durability:       "none",
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
+			tabletsBackingUp: noTabletsBackingUp,
 			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
+		}, {
+			name:             "filter backing up",
+			durability:       "none",
+			validTablets:     allTablets,
+			tabletsReachable: allTablets,
+			tabletsBackingUp: replicaBackingUp,
+			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaCrossCellTablet},
 		}, {
 			name:             "filter cross cell",
 			durability:       "none",
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
+			tabletsBackingUp: noTabletsBackingUp,
 			prevPrimary: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone-1",
@@ -4495,6 +4515,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			durability:       "cross_cell",
 			validTablets:     []*topodatapb.Tablet{primaryTablet, replicaTablet},
 			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsBackingUp: noTabletsBackingUp,
 			filteredTablets:  nil,
 		}, {
 			name:       "filter mixed",
@@ -4509,12 +4530,14 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			},
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
+			tabletsBackingUp: noTabletsBackingUp,
 			filteredTablets:  []*topodatapb.Tablet{replicaCrossCellTablet},
 		}, {
 			name:             "error - requested primary must not",
 			durability:       "none",
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
+			tabletsBackingUp: noTabletsBackingUp,
 			opts: EmergencyReparentOptions{
 				NewPrimaryAlias: rdonlyTablet.Alias,
 			},
@@ -4535,6 +4558,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			durability:       "cross_cell",
 			validTablets:     allTablets,
 			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsBackingUp: noTabletsBackingUp,
 			opts: EmergencyReparentOptions{
 				NewPrimaryAlias: primaryTablet.Alias,
 			},
@@ -4548,7 +4572,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tt.opts.durability = durability
 			logger := logutil.NewMemoryLogger()
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.prevPrimary, tt.opts)
+			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.tabletsBackingUp, tt.prevPrimary, tt.opts)
 			if tt.errShouldContain != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.errShouldContain)

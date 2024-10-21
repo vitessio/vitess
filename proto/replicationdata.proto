@@ -50,6 +50,7 @@ message Status {
   bool has_replication_filters = 22;
   bool ssl_allowed = 23;
   bool replication_lag_unknown = 24;
+  bool backingUp = 25;
 }
 
 // Configuration holds replication configuration information gathered from performance_schema and global variables.
@@ -65,6 +66,7 @@ message Configuration {
 message StopReplicationStatus {
   replicationdata.Status before = 1;
   replicationdata.Status after = 2;
+  bool backingUp = 3;
 }
 
 // StopReplicationMode is used to provide controls over how replication is stopped.
