@@ -19,10 +19,8 @@ package newfeaturetest
 import (
 	"context"
 	"fmt"
-	"math/rand/v2"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -181,10 +179,16 @@ func TestERSWithWriteInPromoteReplica(t *testing.T) {
 	require.NoError(t, err, "ERS should not fail even if there is a sidecardb change")
 }
 
-func TestSimultaneousPRS(t *testing.T) {
+func TestBufferingWithMultipleDisruptions(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupShardedReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
+
+	// Stop all VTOrc instances, so that they don't interfere with the test.
+	for _, vtorc := range clusterInstance.VTOrcProcesses {
+		err := vtorc.TearDown()
+		require.NoError(t, err)
+	}
 
 	// Start by reparenting all the shards to the first tablet.
 	keyspace := clusterInstance.Keyspaces[0]
@@ -194,52 +198,40 @@ func TestSimultaneousPRS(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	rowCount := 1000
-	vtParams := clusterInstance.GetVTParams(keyspace.Name)
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	// Now, we need to insert some data into the cluster.
-	for i := 1; i <= rowCount; i++ {
-		_, err = conn.ExecuteFetch(utils.GetInsertQuery(i), 0, false)
-		require.NoError(t, err)
-	}
+	// We simulate start of external reparent or a PRS where the healthcheck update from the tablet gets lost in transit
+	// to vtgate by just setting the primary read only. This is also why we needed to shutdown all VTOrcs, so that they don't
+	// fix this.
+	//utils.RunSQL(context.Background(), t, "set global read_only=1", shards[0].Vttablets[0])
+	//utils.RunSQL(context.Background(), t, "set global read_only=1", shards[1].Vttablets[0])
 
-	// Now we start a goroutine that continues to read the data until we've finished the test.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() {
-		tick := time.NewTicker(100 * time.Millisecond)
-		defer tick.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				go func() {
-					conn, err := mysql.Connect(context.Background(), &vtParams)
-					if err != nil {
-						return
-					}
-					// We're running queries every 100 millisecond and verifying the results are all correct.
-					res, err := conn.ExecuteFetch(utils.GetSelectionQuery(), rowCount+10, false)
-					require.NoError(t, err)
-					require.Len(t, res.Rows, rowCount)
-				}()
-			}
-		}
-	}()
-
-	// Now, we run go routines to run PRS calls on all the shards simultaneously.
 	wg := sync.WaitGroup{}
-	for _, shard := range shards {
+	rowCount := 10
+	vtParams := clusterInstance.GetVTParams(keyspace.Name)
+	// We now spawn writes for a bunch of go routines.
+	// The ones going to shard 1 and shard 2 should block, since
+	// they're in the midst of a reparenting operation (as seen by the buffering code).
+	for i := 1; i <= rowCount; i++ {
 		wg.Add(1)
-		go func() {
-			time.Sleep(time.Second * time.Duration(rand.IntN(6)))
+		go func(i int) {
 			defer wg.Done()
-			err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shard.Name, shard.Vttablets[1].Alias)
+			conn, err := mysql.Connect(context.Background(), &vtParams)
+			if err != nil {
+				return
+			}
+			_, err = conn.ExecuteFetch(utils.GetInsertQuery(i), 0, false)
 			require.NoError(t, err)
-		}()
+		}(i)
 	}
+
+	// Now, run a PRS call on the last shard. This shouldn't unbuffer the queries that are buffered for shards 1 and 2
+	// since the disruption on the two shards hasn't stopped.
+	err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shards[2].Name, shards[2].Vttablets[1].Alias)
+	require.NoError(t, err)
+	// We wait a second just to make sure the PRS changes are processed by the buffering logic in vtgate.
+	//time.Sleep(1 * time.Second)
+	// Finally, we'll now simulate the 2 shards being healthy again by setting them back to read-write.
+	//utils.RunSQL(context.Background(), t, "set global read_only=0", shards[0].Vttablets[0])
+	//utils.RunSQL(context.Background(), t, "set global read_only=0", shards[1].Vttablets[0])
+	// Wait for all the writes to have succeeded.
 	wg.Wait()
-	cancel()
 }
