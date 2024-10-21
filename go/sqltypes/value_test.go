@@ -380,7 +380,7 @@ func TestEncode(t *testing.T) {
 		outSQL: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 	}, {
 		in:     TestValue(VarBinary, "\x00'\"\b\n\r\t\x1A\\"),
-		outSQL: "X'002722080A0D091A5C'",
+		outSQL: "_binary'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 	}, {
 		in:     TestValue(Bit, "a"),
 		outSQL: "b'01100001'",
@@ -635,7 +635,7 @@ func TestEncodeSQLStringBuilder(t *testing.T) {
 		outSQL: "(1, 'foo')",
 	}, {
 		in:     TestValue(VarBinary, "foo"),
-		outSQL: "X'666F6F'",
+		outSQL: "_binary'foo'",
 	}}
 	for _, tcase := range testcases {
 		var buf strings.Builder

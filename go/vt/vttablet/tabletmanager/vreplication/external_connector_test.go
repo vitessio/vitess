@@ -64,7 +64,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
-		"insert into tab1(id,val) values (1,X'61'), (2,X'62')",
+		"insert into tab1(id,val) values (1,_binary'a'), (2,_binary'b')",
 		"/insert into _vt.copy_state",
 		"commit",
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name",
@@ -73,7 +73,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	execStatements(t, []string{"insert into tab1 values(3, 'c')"})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert into tab1(id,val) values (3,X'63')",
+		"insert into tab1(id,val) values (3,_binary'c')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -96,7 +96,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
-		"insert into tab2(id,val) values (1,X'61'), (2,X'62')",
+		"insert into tab2(id,val) values (1,_binary'a'), (2,_binary'b')",
 		"/insert into _vt.copy_state",
 		"commit",
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name",
@@ -121,7 +121,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
-		"insert into tab3(id,val) values (1,X'61'), (2,X'62')",
+		"insert into tab3(id,val) values (1,_binary'a'), (2,_binary'b')",
 		"/insert into _vt.copy_state",
 		"commit",
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name",
@@ -163,8 +163,8 @@ func TestExternalConnectorPlay(t *testing.T) {
 
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
-		"insert into tab1(id,val) values (1,X'61')",
-		"insert into tab1(id,val) values (2,X'62')",
+		"insert into tab1(id,val) values (1,_binary'a')",
+		"insert into tab1(id,val) values (2,_binary'b')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	}, pos)

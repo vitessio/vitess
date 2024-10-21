@@ -2823,7 +2823,7 @@
         "Query": "delete from `user` where `name` = _binary 'abc'",
         "Table": "user",
         "Values": [
-          "X'616263'"
+          "_binary'abc'"
         ],
         "Vindex": "name_user_map"
       },

@@ -757,26 +757,14 @@ func encodeBinarySQL(val []byte, b BinWriter) {
 	b.Write(buf.Bytes())
 }
 
-const hextable = "0123456789ABCDEF"
-
 func encodeBinarySQLBytes2(val []byte, buf *bytes2.Buffer) {
-	buf.WriteByte('X')
-	buf.WriteByte('\'')
-	for _, ch := range val {
-		buf.WriteByte(hextable[ch>>4])
-		buf.WriteByte(hextable[ch&0x0f])
-	}
-	buf.WriteByte('\'')
+	buf.Write([]byte("_binary"))
+	encodeBytesSQLBytes2(val, buf)
 }
 
 func encodeBinarySQLStringBuilder(val []byte, buf *strings.Builder) {
-	buf.WriteByte('X')
-	buf.WriteByte('\'')
-	for _, ch := range val {
-		buf.WriteByte(hextable[ch>>4])
-		buf.WriteByte(hextable[ch&0x0f])
-	}
-	buf.WriteByte('\'')
+	buf.Write([]byte("_binary"))
+	encodeBytesSQLStringBuilder(val, buf)
 }
 
 func encodeBytesSQL(val []byte, b BinWriter) {
