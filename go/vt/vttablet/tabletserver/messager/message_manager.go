@@ -236,6 +236,9 @@ type messageManager struct {
 	ackQuery                  *sqlparser.ParsedQuery
 	postponeQuery             *sqlparser.ParsedQuery
 	purgeQuery                *sqlparser.ParsedQuery
+
+	// idType is the type of the id column in the message table.
+	idType sqltypes.Type
 }
 
 // newMessageManager creates a new message manager.
@@ -259,6 +262,7 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 		purgeTicks:      timer.NewTimer(table.MessageInfo.PollInterval),
 		postponeSema:    postponeSema,
 		messagesPending: true,
+		idType:          table.MessageInfo.IDType,
 	}
 	mm.cond.L = &mm.mu
 
@@ -856,7 +860,7 @@ func (mm *messageManager) GenerateAckQuery(ids []string) (string, map[string]*qu
 	}
 	for _, id := range ids {
 		idbvs.Values = append(idbvs.Values, &querypb.Value{
-			Type:  querypb.Type_VARBINARY,
+			Type:  mm.idType,
 			Value: []byte(id),
 		})
 	}
@@ -874,7 +878,7 @@ func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[strin
 	}
 	for _, id := range ids {
 		idbvs.Values = append(idbvs.Values, &querypb.Value{
-			Type:  querypb.Type_VARBINARY,
+			Type:  mm.idType,
 			Value: []byte(id),
 		})
 	}

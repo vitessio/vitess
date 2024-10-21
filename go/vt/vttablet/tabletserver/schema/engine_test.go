@@ -737,6 +737,7 @@ func initialSchema() map[string]*Table {
 				BatchSize:          1,
 				CacheSize:          10,
 				PollInterval:       30 * time.Second,
+				IDType:             sqltypes.Int64,
 			},
 		},
 	}
