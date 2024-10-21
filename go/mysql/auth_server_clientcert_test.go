@@ -34,11 +34,10 @@ import (
 
 const clientCertUsername = "Client Cert"
 
-// The listener's accept loop actually only ends on a connection
+// The listener's Accept() loop actually only ends on a connection
 // error, which will occur when trying to connect after the listener
 // has been closed. So this function closes the listener and then
-// calls Connect to trigger the error which ends that conneciton
-// request handler goroutine.
+// calls Connect to trigger the error which ends that work.
 var cleanupListener = func(ctx context.Context, l *Listener, params *ConnParams) {
 	l.Close()
 	_, _ = Connect(ctx, params)

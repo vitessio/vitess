@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
