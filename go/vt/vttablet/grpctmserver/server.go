@@ -545,6 +545,17 @@ func (s *server) PopulateReparentJournal(ctx context.Context, request *tabletman
 	return response, s.tm.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, request.PrimaryAlias, request.ReplicationPosition)
 }
 
+func (s *server) ReadReparentJournalInfo(ctx context.Context, request *tabletmanagerdatapb.ReadReparentJournalInfoRequest) (response *tabletmanagerdatapb.ReadReparentJournalInfoResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ReadReparentJournalInfo", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ReadReparentJournalInfoResponse{}
+	length, err := s.tm.ReadReparentJournalInfo(ctx)
+	if err == nil {
+		response.Length = int32(length)
+	}
+	return response, err
+}
+
 func (s *server) InitReplica(ctx context.Context, request *tabletmanagerdatapb.InitReplicaRequest) (response *tabletmanagerdatapb.InitReplicaResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "InitReplica", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
