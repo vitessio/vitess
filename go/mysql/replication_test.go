@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -72,6 +73,7 @@ func TestComBinlogDump(t *testing.T) {
 }
 
 func TestComBinlogDumpGTID(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
 		listener.Close()
@@ -161,6 +163,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 }
 
 func TestSendSemiSyncAck(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
 		listener.Close()

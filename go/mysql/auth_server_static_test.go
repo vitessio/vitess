@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 // getEntries is a test-only method for AuthServerStatic.
@@ -105,9 +107,9 @@ func TestHostMatcher(t *testing.T) {
 }
 
 func TestStaticConfigHUP(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	tmpFile, err := os.CreateTemp("", "mysql_auth_server_static_file.json")
 	require.NoError(t, err, "couldn't create temp file: %v", err)
-
 	defer os.Remove(tmpFile.Name())
 
 	oldStr := "str5"
@@ -125,14 +127,18 @@ func TestStaticConfigHUP(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	// delete registered Auth server
-	clear(authServers)
+	// Delete registered Auth servers.
+	for k, v := range authServers {
+		if s, ok := v.(*AuthServerStatic); ok {
+			s.close()
+		}
+		delete(authServers, k)
+	}
 }
 
 func TestStaticConfigHUPWithRotation(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "mysql_auth_server_static_file.json")
 	require.NoError(t, err, "couldn't create temp file: %v", err)
-
 	defer os.Remove(tmpFile.Name())
 
 	oldStr := "str1"
@@ -147,6 +153,16 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 
 	hupTestWithRotation(t, aStatic, tmpFile, oldStr, "str4")
 	hupTestWithRotation(t, aStatic, tmpFile, "str4", "str5")
+
+	mu.Lock()
+	defer mu.Unlock()
+	// Delete registered Auth servers.
+	for k, v := range authServers {
+		if s, ok := v.(*AuthServerStatic); ok {
+			s.close()
+		}
+		delete(authServers, k)
+	}
 }
 
 func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {

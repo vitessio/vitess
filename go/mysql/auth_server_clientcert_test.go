@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"context"
 	"crypto/tls"
 	"net"
 	"path"
@@ -27,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -34,6 +34,7 @@ import (
 const clientCertUsername = "Client Cert"
 
 func TestValidCert(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := newAuthServerClientCert(string(MysqlClearPassword))
@@ -52,21 +53,6 @@ func TestValidCert(t *testing.T) {
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", clientCertUsername)
 	tlstest.CreateCRL(root, tlstest.CA)
 
-	// Create the server with TLS config.
-	serverConfig, err := vttls.ServerConfig(
-		path.Join(root, "server-cert.pem"),
-		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"),
-		path.Join(root, "ca-crl.pem"),
-		"",
-		tls.VersionTLS12)
-	require.NoError(t, err, "TLSServerConfig failed: %v", err)
-
-	l.TLSConfig.Store(serverConfig)
-	go func() {
-		l.Accept()
-	}()
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -81,7 +67,25 @@ func TestValidCert(t *testing.T) {
 		ServerName: "server.example.com",
 	}
 
-	ctx := context.Background()
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"),
+		path.Join(root, "ca-crl.pem"),
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err, "TLSServerConfig failed: %v", err)
+
+	l.TLSConfig.Store(serverConfig)
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
+
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err, "Connect failed: %v", err)
 
@@ -103,6 +107,7 @@ func TestValidCert(t *testing.T) {
 }
 
 func TestNoCert(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := newAuthServerClientCert(string(MysqlClearPassword))
@@ -120,21 +125,6 @@ func TestNoCert(t *testing.T) {
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateCRL(root, tlstest.CA)
 
-	// Create the server with TLS config.
-	serverConfig, err := vttls.ServerConfig(
-		path.Join(root, "server-cert.pem"),
-		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"),
-		path.Join(root, "ca-crl.pem"),
-		"",
-		tls.VersionTLS12)
-	require.NoError(t, err, "TLSServerConfig failed: %v", err)
-
-	l.TLSConfig.Store(serverConfig)
-	go func() {
-		l.Accept()
-	}()
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:       host,
@@ -146,7 +136,25 @@ func TestNoCert(t *testing.T) {
 		ServerName: "server.example.com",
 	}
 
-	ctx := context.Background()
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"),
+		path.Join(root, "ca-crl.pem"),
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err, "TLSServerConfig failed: %v", err)
+
+	l.TLSConfig.Store(serverConfig)
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
+
 	conn, err := Connect(ctx, params)
 	assert.Error(t, err, "Connect() should have errored due to no client cert")
 

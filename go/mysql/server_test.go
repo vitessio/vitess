@@ -267,6 +267,7 @@ func getHostPort(t *testing.T, a net.Addr) (string, int) {
 }
 
 func TestConnectionFromListener(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -282,9 +283,6 @@ func TestConnectionFromListener(t *testing.T) {
 
 	l, err := NewFromListener(listener, authServer, th, 0, 0, false, 0, 0)
 	require.NoError(t, err, "NewListener failed")
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
 	fmt.Printf("host: %s, port: %d\n", host, port)
 	// Setup the right parameters.
@@ -294,13 +292,21 @@ func TestConnectionFromListener(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
-	c, err := Connect(context.Background(), params)
+	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
 }
 
 func TestConnectionWithoutSourceHost(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -309,13 +315,10 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
+
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed")
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -323,13 +326,21 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
-	c, err := Connect(context.Background(), params)
+	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
 }
 
 func TestConnectionWithSourceHost(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -344,11 +355,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed")
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -356,13 +363,21 @@ func TestConnectionWithSourceHost(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
-	_, err = Connect(context.Background(), params)
+	_, err = Connect(ctx, params)
 	// target is localhost, should not work from tcp connection
 	require.EqualError(t, err, "Access denied for user 'user1' (errno 1045) (sqlstate 28000)", "Should not be able to connect to server")
 }
 
 func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -377,11 +392,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed")
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -389,13 +400,21 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 		Uname: "user1",
 		Pass:  "mysql_password",
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
-	_, err = Connect(context.Background(), params)
+	_, err = Connect(ctx, params)
 	// target is localhost, should not work from tcp connection
 	require.EqualError(t, err, "Access denied for user 'user1' (errno 1045) (sqlstate 28000)", "Should not be able to connect to server")
 }
 
 func TestConnectionUnixSocket(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -415,22 +434,27 @@ func TestConnectionUnixSocket(t *testing.T) {
 
 	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed")
-	defer l.Close()
-	go l.Accept()
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		UnixSocket: unixSocket.Name(),
 		Uname:      "user1",
 		Pass:       "password1",
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
-	c, err := Connect(context.Background(), params)
+	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
 }
 
 func TestClientFoundRows(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -439,13 +463,10 @@ func TestClientFoundRows(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
+
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed")
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -453,9 +474,16 @@ func TestClientFoundRows(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
 	// Test without flag.
-	c, err := Connect(context.Background(), params)
+	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Connect failed")
 	foundRows := th.LastConn().Capabilities & CapabilityClientFoundRows
 	assert.Equal(t, uint32(0), foundRows, "FoundRows flag: %x, second bit must be 0", th.LastConn().Capabilities)
@@ -464,7 +492,7 @@ func TestClientFoundRows(t *testing.T) {
 
 	// Test with flag.
 	params.Flags |= CapabilityClientFoundRows
-	c, err = Connect(context.Background(), params)
+	c, err = Connect(ctx, params)
 	require.NoError(t, err, "Connect failed")
 	foundRows = th.LastConn().Capabilities & CapabilityClientFoundRows
 	assert.NotZero(t, foundRows, "FoundRows flag: %x, second bit must be set", th.LastConn().Capabilities)
@@ -472,6 +500,7 @@ func TestClientFoundRows(t *testing.T) {
 }
 
 func TestConnCounts(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	user := "anotherNotYetConnectedUser1"
@@ -483,13 +512,10 @@ func TestConnCounts(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
+
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed")
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Test with one new connection.
 	params := &ConnParams{
 		Host:  host,
@@ -497,14 +523,21 @@ func TestConnCounts(t *testing.T) {
 		Uname: user,
 		Pass:  passwd,
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
-	c, err := Connect(context.Background(), params)
+	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Connect failed")
 
 	checkCountsForUser(t, user, 1)
 
 	// Test with a second new connection.
-	c2, err := Connect(context.Background(), params)
+	c2, err := Connect(ctx, params)
 	require.NoError(t, err)
 	checkCountsForUser(t, user, 2)
 
@@ -529,6 +562,7 @@ func checkCountsForUser(t assert.TestingT, user string, expected int64) {
 }
 
 func TestServer(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -537,14 +571,10 @@ func TestServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
+
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
-	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -552,6 +582,14 @@ func TestServer(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
 	// Run a 'select rows' command with results.
 	output, err := runMysqlWithErr(t, params, "select rows")
@@ -629,6 +667,7 @@ func TestServer(t *testing.T) {
 }
 
 func TestServerStats(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -637,14 +676,10 @@ func TestServerStats(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
+
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
-	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -652,6 +687,14 @@ func TestServerStats(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
 	timings.Reset()
 	connAccept.Reset()
@@ -703,6 +746,7 @@ func TestServerStats(t *testing.T) {
 // TestClearTextServer creates a Server that needs clear text
 // passwords from the client.
 func TestClearTextServer(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
@@ -711,16 +755,10 @@ func TestClearTextServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
+
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
-	version, _ := runMysql(t, nil, "--version")
-	isMariaDB := strings.Contains(version, "MariaDB")
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -728,6 +766,16 @@ func TestClearTextServer(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
+
+	version, _ := runMysql(t, nil, "--version")
+	isMariaDB := strings.Contains(version, "MariaDB")
 
 	// Run a 'select rows' command with results.  This should fail
 	// as clear text is not enabled by default on the client
@@ -776,6 +824,7 @@ func TestClearTextServer(t *testing.T) {
 
 // TestDialogServer creates a Server that uses the dialog plugin on the client.
 func TestDialogServer(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlDialog)
@@ -784,14 +833,11 @@ func TestDialogServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
+
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
 	l.AllowClearTextWithoutTLS.Store(true)
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:    host,
@@ -800,6 +846,14 @@ func TestDialogServer(t *testing.T) {
 		Pass:    "password1",
 		SslMode: vttls.Disabled,
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
+
 	sql := "select rows"
 	output, ok := runMysql(t, params, sql)
 	if strings.Contains(output, "No such file or directory") || strings.Contains(output, "Authentication plugin 'dialog' cannot be loaded") {
@@ -815,6 +869,7 @@ func TestDialogServer(t *testing.T) {
 // TestTLSServer creates a Server with TLS support, then uses mysql
 // client to connect to it.
 func TestTLSServer(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -823,46 +878,20 @@ func TestTLSServer(t *testing.T) {
 	}}
 	defer authServer.close()
 
-	// Create the listener, so we can get its host.
-	// Below, we are enabling --ssl-verify-server-cert, which adds
-	// a check that the common name of the certificate matches the
-	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
-	require.NoError(t, err)
-	defer l.Close()
-
-	host := l.Addr().(*net.TCPAddr).IP.String()
-	port := l.Addr().(*net.TCPAddr).Port
-
 	// Create the certs.
 	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
-	// Create the server with TLS config.
-	serverConfig, err := vttls.ServerConfig(
-		path.Join(root, "server-cert.pem"),
-		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"),
-		"",
-		"",
-		tls.VersionTLS12)
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
-	l.TLSConfig.Store(serverConfig)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(l *Listener) {
-		wg.Done()
-		l.Accept()
-	}(l)
-	// This is ensure the listener is called
-	wg.Wait()
-	// Sleep so that the Accept function is called as well.'
-	time.Sleep(3 * time.Second)
-
-	connCountByTLSVer.ResetAll()
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -876,9 +905,28 @@ func TestTLSServer(t *testing.T) {
 		SslKey:     path.Join(root, "client-key.pem"),
 		ServerName: "server.example.com",
 	}
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"),
+		"",
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+	l.TLSConfig.Store(serverConfig)
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
+
+	connCountByTLSVer.ResetAll()
 
 	// Run a 'select rows' command with results.
-	conn, err := Connect(context.Background(), params)
+	conn, err := Connect(ctx, params)
 	// output, ok := runMysql(t, params, "select rows")
 	require.NoError(t, err)
 	results, err := conn.ExecuteFetch("select rows", 1000, true)
@@ -913,24 +961,8 @@ func TestTLSServer(t *testing.T) {
 // TestTLSRequired creates a Server with TLS required, then tests that an insecure mysql
 // client is rejected
 func TestTLSRequired(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
-
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-	}}
-	defer authServer.close()
-
-	// Create the listener, so we can get its host.
-	// Below, we are enabling --ssl-verify-server-cert, which adds
-	// a check that the common name of the certificate matches the
-	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
-	require.NoError(t, err)
-	defer l.Close()
-
-	host := l.Addr().(*net.TCPAddr).IP.String()
-	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
 	root := t.TempDir()
@@ -939,6 +971,13 @@ func TestTLSRequired(t *testing.T) {
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 	tlstest.CreateSignedCert(root, tlstest.CA, "03", "revoked-client", "Revoked Client Cert")
 	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, "revoked-client")
+
+	params := &ConnParams{
+		Uname:      "user1",
+		Pass:       "password1",
+		SslMode:    vttls.Disabled, // TLS is disabled at first
+		ServerName: "server.example.com",
+	}
 
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(
@@ -949,34 +988,55 @@ func TestTLSRequired(t *testing.T) {
 		"",
 		tls.VersionTLS12)
 	require.NoError(t, err)
-	l.TLSConfig.Store(serverConfig)
-	l.RequireSecureTransport = true
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(l *Listener) {
-		wg.Done()
-		l.Accept()
-	}(l)
-	// This is ensure the listener is called
-	wg.Wait()
-	// Sleep so that the Accept function is called as well.'
-	time.Sleep(3 * time.Second)
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+	}}
+	defer authServer.close()
 
-	// Setup conn params without SSL.
-	params := &ConnParams{
-		Host:       host,
-		Port:       port,
-		Uname:      "user1",
-		Pass:       "password1",
-		SslMode:    vttls.Disabled,
-		ServerName: "server.example.com",
+	var l *Listener
+	setupServer := func() {
+		// Create the listener, so we can get its host.
+		// Below, we are enabling --ssl-verify-server-cert, which adds
+		// a check that the common name of the certificate matches the
+		// server host name we connect to.
+		l, err = NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
+		require.NoError(t, err)
+		host := l.Addr().(*net.TCPAddr).IP.String()
+		port := l.Addr().(*net.TCPAddr).Port
+		l.TLSConfig.Store(serverConfig)
+		l.RequireSecureTransport = true
+		go l.Accept()
+		params.Host = host
+		params.Port = port
 	}
-	conn, err := Connect(context.Background(), params)
-	require.NotNil(t, err)
-	require.Contains(t, err.Error(), "Code: UNAVAILABLE")
-	require.Contains(t, err.Error(), "server does not allow insecure connections, client must use SSL/TLS")
-	require.Contains(t, err.Error(), "(errno 1105) (sqlstate HY000)")
+	setupServer()
+
+	cleanup := func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}
+	defer cleanup()
+
+	// This test calls Connect multiple times so we add handling for when the
+	// listener goes away for any reason.
+	connectWithGoneServerHandling := func() (*Conn, error) {
+		conn, err := Connect(ctx, params)
+		if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok && sqlErr.Num == sqlerror.CRConnHostError {
+			cleanup()
+			setupServer()
+			conn, err = Connect(ctx, params)
+		}
+		return conn, err
+	}
+
+	conn, err := connectWithGoneServerHandling()
+	require.ErrorContains(t, err, "Code: UNAVAILABLE")
+	require.ErrorContains(t, err, "server does not allow insecure connections, client must use SSL/TLS")
+	require.ErrorContains(t, err, "(errno 1105) (sqlstate HY000)")
 	if conn != nil {
 		conn.Close()
 	}
@@ -987,7 +1047,7 @@ func TestTLSRequired(t *testing.T) {
 	params.SslCert = path.Join(root, "client-cert.pem")
 	params.SslKey = path.Join(root, "client-key.pem")
 
-	conn, err = Connect(context.Background(), params)
+	conn, err = connectWithGoneServerHandling()
 	require.NoError(t, err)
 	if conn != nil {
 		conn.Close()
@@ -996,15 +1056,15 @@ func TestTLSRequired(t *testing.T) {
 	// setup conn params with TLS, but with a revoked client certificate
 	params.SslCert = path.Join(root, "revoked-client-cert.pem")
 	params.SslKey = path.Join(root, "revoked-client-key.pem")
-	conn, err = Connect(context.Background(), params)
-	require.NotNil(t, err)
-	require.Contains(t, err.Error(), "remote error: tls: bad certificate")
+	conn, err = connectWithGoneServerHandling()
+	require.ErrorContains(t, err, "remote error: tls: bad certificate")
 	if conn != nil {
 		conn.Close()
 	}
 }
 
 func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, CachingSha2Password)
@@ -1013,19 +1073,17 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	}
 	defer authServer.close()
 
-	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
-	require.NoError(t, err, "NewListener failed: %v", err)
-	defer l.Close()
-	host := l.Addr().(*net.TCPAddr).IP.String()
-	port := l.Addr().(*net.TCPAddr).Port
-
 	// Create the certs.
 	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
+	// Create the listener, so we can get its host.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
+	require.NoError(t, err, "NewListener failed: %v", err)
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
@@ -1035,12 +1093,6 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 		"",
 		tls.VersionTLS12)
 	require.NoError(t, err, "TLSServerConfig failed: %v", err)
-
-	l.TLSConfig.Store(serverConfig)
-	go func() {
-		l.Accept()
-	}()
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -1054,10 +1106,16 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 		SslKey:     path.Join(root, "client-key.pem"),
 		ServerName: "server.example.com",
 	}
+	l.TLSConfig.Store(serverConfig)
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
-	ctx := context.Background()
-
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err, "unexpected connection error: %v", err)
 
@@ -1093,12 +1151,11 @@ func newAuthServerAlwaysFallback(file, jsonConfig string, reloadInterval time.Du
 	authMethod := NewSha2CachingAuthMethod(&alwaysFallbackAuth{}, a, a)
 	a.methods = []AuthMethod{authMethod}
 
-	a.reload()
-	a.installSignalHandlers()
 	return a
 }
 
 func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := newAuthServerAlwaysFallback("", "", 0)
@@ -1107,19 +1164,17 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 	}
 	defer authServer.close()
 
-	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
-	require.NoError(t, err, "NewListener failed: %v", err)
-	defer l.Close()
-	host := l.Addr().(*net.TCPAddr).IP.String()
-	port := l.Addr().(*net.TCPAddr).Port
-
 	// Create the certs.
 	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
+	// Create the listener, so we can get its host.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
+	require.NoError(t, err, "NewListener failed: %v", err)
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
@@ -1129,12 +1184,6 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 		"",
 		tls.VersionTLS12)
 	require.NoError(t, err, "TLSServerConfig failed: %v", err)
-
-	l.TLSConfig.Store(serverConfig)
-	go func() {
-		l.Accept()
-	}()
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -1148,10 +1197,16 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 		SslKey:     path.Join(root, "client-key.pem"),
 		ServerName: "server.example.com",
 	}
+	l.TLSConfig.Store(serverConfig)
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
-	ctx := context.Background()
-
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err, "unexpected connection error: %v", err)
 
@@ -1168,6 +1223,7 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 }
 
 func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, CachingSha2Password)
@@ -1179,13 +1235,8 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 	// Create the listener.
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
-	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
-	go func() {
-		l.Accept()
-	}()
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:    host,
@@ -1194,9 +1245,15 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 		Pass:    "password1",
 		SslMode: vttls.Disabled,
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
-	ctx := context.Background()
 	_, err = Connect(ctx, params)
 	if err == nil || !strings.Contains(err.Error(), "No authentication methods available for authentication") {
 		t.Fatalf("unexpected connection error: %v", err)
@@ -1211,6 +1268,7 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 }
 
 func TestErrorCodes(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -1219,13 +1277,10 @@ func TestErrorCodes(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
+
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -1233,8 +1288,14 @@ func TestErrorCodes(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
-	ctx := context.Background()
 	client, err := Connect(ctx, params)
 	require.NoError(t, err)
 
@@ -1390,6 +1451,7 @@ func binaryPath(root, binary string) (string, error) {
 }
 
 func TestListenerShutdown(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 	authServer := NewAuthServerStatic("", "", 0)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{{
@@ -1397,13 +1459,10 @@ func TestListenerShutdown(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
+
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -1411,9 +1470,17 @@ func TestListenerShutdown(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
+
 	connRefuse.Reset()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	conn, err := Connect(ctx, params)
@@ -1424,7 +1491,7 @@ func TestListenerShutdown(t *testing.T) {
 
 	l.Shutdown()
 
-	waitForConnRefuse(t, 1)
+	waitForConnRefuse(t, ctx, 1)
 
 	err = conn.Ping()
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
@@ -1436,8 +1503,8 @@ func TestListenerShutdown(t *testing.T) {
 	require.Equal(t, "Server shutdown in progress", sqlErr.Message)
 }
 
-func waitForConnRefuse(t *testing.T, valWanted int64) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func waitForConnRefuse(t *testing.T, ctx context.Context, valWanted int64) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
@@ -1483,21 +1550,26 @@ func TestParseConnAttrs(t *testing.T) {
 }
 
 func TestServerFlush(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	mysqlServerFlushDelay := 10 * time.Millisecond
 	th := &testHandler{}
 
 	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0, mysqlServerFlushDelay)
 	require.NoError(t, err)
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
 	params := &ConnParams{
 		Host: host,
 		Port: port,
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
-	c, err := Connect(context.Background(), params)
+	c, err := Connect(ctx, params)
 	require.NoError(t, err)
 	defer c.Close()
 
@@ -1531,20 +1603,26 @@ func TestServerFlush(t *testing.T) {
 }
 
 func TestTcpKeepAlive(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
+
 	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
-	defer l.Close()
-	go l.Accept()
-
 	host, port := getHostPort(t, l.Addr())
 	params := &ConnParams{
 		Host: host,
 		Port: port,
 	}
+	go l.Accept()
+	defer func() {
+		l.Close()
+		// The accept loop actually only ends on a connection error, which will
+		// occur when trying to connect after the listener has been closed.
+		_, _ = Connect(ctx, params)
+	}()
 
 	// on connect, the tcp method should be called.
-	c, err := Connect(context.Background(), params)
+	c, err := Connect(ctx, params)
 	require.NoError(t, err)
 	defer c.Close()
 	require.True(t, th.lastConn.keepAliveOn, "tcp property method not called")
