@@ -61,12 +61,7 @@ func TestClearTextClientAuth(t *testing.T) {
 		SslMode: vttls.Disabled,
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	// Connection should fail, as server requires SSL for clear text auth.
 	_, err = Connect(ctx, params)
@@ -140,12 +135,7 @@ func TestSSLConnection(t *testing.T) {
 	}
 	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	t.Run("Basics", func(t *testing.T) {
 		testSSLConnectionBasics(t, ctx, params)

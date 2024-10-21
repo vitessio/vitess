@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"path"
@@ -32,6 +33,16 @@ import (
 )
 
 const clientCertUsername = "Client Cert"
+
+// The listener's accept loop actually only ends on a connection
+// error, which will occur when trying to connect after the listener
+// has been closed. So this function closes the listener and then
+// calls Connect to trigger the error which ends that conneciton
+// request handler goroutine.
+var cleanupListener = func(ctx context.Context, l *Listener, params *ConnParams) {
+	l.Close()
+	_, _ = Connect(ctx, params)
+}
 
 func TestValidCert(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
@@ -79,12 +90,7 @@ func TestValidCert(t *testing.T) {
 
 	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err, "Connect failed: %v", err)
@@ -148,12 +154,7 @@ func TestNoCert(t *testing.T) {
 
 	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	conn, err := Connect(ctx, params)
 	assert.Error(t, err, "Connect() should have errored due to no client cert")

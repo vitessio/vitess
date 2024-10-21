@@ -293,12 +293,7 @@ func TestConnectionFromListener(t *testing.T) {
 		Pass:  "password1",
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
@@ -327,12 +322,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 		Pass:  "password1",
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
@@ -364,12 +354,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 		Pass:  "password1",
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	_, err = Connect(ctx, params)
 	// target is localhost, should not work from tcp connection
@@ -401,12 +386,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 		Pass:  "mysql_password",
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	_, err = Connect(ctx, params)
 	// target is localhost, should not work from tcp connection
@@ -441,12 +421,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 		Pass:       "password1",
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
@@ -475,12 +450,7 @@ func TestClientFoundRows(t *testing.T) {
 		Pass:  "password1",
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	// Test without flag.
 	c, err := Connect(ctx, params)
@@ -524,12 +494,7 @@ func TestConnCounts(t *testing.T) {
 		Pass:  passwd,
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Connect failed")
@@ -584,12 +549,7 @@ func TestServer(t *testing.T) {
 	}
 	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	// Run a 'select rows' command with results.
 	output, err := runMysqlWithErr(t, params, "select rows")
@@ -689,12 +649,7 @@ func TestServerStats(t *testing.T) {
 	}
 	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	timings.Reset()
 	connAccept.Reset()
@@ -767,12 +722,7 @@ func TestClearTextServer(t *testing.T) {
 		Pass:  "password1",
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	version, _ := runMysql(t, nil, "--version")
 	isMariaDB := strings.Contains(version, "MariaDB")
@@ -847,12 +797,7 @@ func TestDialogServer(t *testing.T) {
 		SslMode: vttls.Disabled,
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	sql := "select rows"
 	output, ok := runMysql(t, params, sql)
@@ -916,12 +861,7 @@ func TestTLSServer(t *testing.T) {
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	connCountByTLSVer.ResetAll()
 
@@ -1013,20 +953,14 @@ func TestTLSRequired(t *testing.T) {
 	}
 	setupServer()
 
-	cleanup := func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}
-	defer cleanup()
+	defer cleanupListener(ctx, l, params)
 
 	// This test calls Connect multiple times so we add handling for when the
 	// listener goes away for any reason.
 	connectWithGoneServerHandling := func() (*Conn, error) {
 		conn, err := Connect(ctx, params)
 		if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok && sqlErr.Num == sqlerror.CRConnHostError {
-			cleanup()
+			cleanupListener(ctx, l, params)
 			setupServer()
 			conn, err = Connect(ctx, params)
 		}
@@ -1108,12 +1042,7 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	}
 	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
 	conn, err := Connect(ctx, params)
@@ -1199,12 +1128,7 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 	}
 	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
 	conn, err := Connect(ctx, params)
@@ -1246,12 +1170,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 		SslMode: vttls.Disabled,
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
 	_, err = Connect(ctx, params)
@@ -1289,12 +1208,7 @@ func TestErrorCodes(t *testing.T) {
 		Pass:  "password1",
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	client, err := Connect(ctx, params)
 	require.NoError(t, err)
@@ -1471,12 +1385,7 @@ func TestListenerShutdown(t *testing.T) {
 		Pass:  "password1",
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	connRefuse.Reset()
 
@@ -1562,12 +1471,7 @@ func TestServerFlush(t *testing.T) {
 		Port: port,
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	c, err := Connect(ctx, params)
 	require.NoError(t, err)
@@ -1614,12 +1518,7 @@ func TestTcpKeepAlive(t *testing.T) {
 		Port: port,
 	}
 	go l.Accept()
-	defer func() {
-		l.Close()
-		// The accept loop actually only ends on a connection error, which will
-		// occur when trying to connect after the listener has been closed.
-		_, _ = Connect(ctx, params)
-	}()
+	defer cleanupListener(ctx, l, params)
 
 	// on connect, the tcp method should be called.
 	c, err := Connect(ctx, params)
