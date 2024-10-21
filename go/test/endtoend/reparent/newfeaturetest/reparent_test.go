@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -201,8 +202,8 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 	// We simulate start of external reparent or a PRS where the healthcheck update from the tablet gets lost in transit
 	// to vtgate by just setting the primary read only. This is also why we needed to shutdown all VTOrcs, so that they don't
 	// fix this.
-	//utils.RunSQL(context.Background(), t, "set global read_only=1", shards[0].Vttablets[0])
-	//utils.RunSQL(context.Background(), t, "set global read_only=1", shards[1].Vttablets[0])
+	utils.RunSQL(context.Background(), t, "set global read_only=1", shards[0].Vttablets[0])
+	utils.RunSQL(context.Background(), t, "set global read_only=1", shards[1].Vttablets[0])
 
 	wg := sync.WaitGroup{}
 	rowCount := 10
@@ -218,6 +219,7 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 			if err != nil {
 				return
 			}
+			defer conn.Close()
 			_, err = conn.ExecuteFetch(utils.GetInsertQuery(i), 0, false)
 			require.NoError(t, err)
 		}(i)
@@ -228,10 +230,10 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 	err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shards[2].Name, shards[2].Vttablets[1].Alias)
 	require.NoError(t, err)
 	// We wait a second just to make sure the PRS changes are processed by the buffering logic in vtgate.
-	//time.Sleep(1 * time.Second)
+	time.Sleep(1 * time.Second)
 	// Finally, we'll now simulate the 2 shards being healthy again by setting them back to read-write.
-	//utils.RunSQL(context.Background(), t, "set global read_only=0", shards[0].Vttablets[0])
-	//utils.RunSQL(context.Background(), t, "set global read_only=0", shards[1].Vttablets[0])
+	utils.RunSQL(context.Background(), t, "set global read_only=0", shards[0].Vttablets[0])
+	utils.RunSQL(context.Background(), t, "set global read_only=0", shards[1].Vttablets[0])
 	// Wait for all the writes to have succeeded.
 	wg.Wait()
 }
