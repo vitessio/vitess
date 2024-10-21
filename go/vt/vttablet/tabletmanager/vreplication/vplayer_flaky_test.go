@@ -1602,7 +1602,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b,f,l,q,s,v,z')",
-		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c',_binary'd\\0\\0\\0\\0',_binary'e',_binary'f','g','h','a','a,b,f,l,q,s,v,z')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values (_binary'a','b','c',_binary'd\\0\\0\\0\\0',_binary'e',_binary'f','g','h','a','a,b,f,l,q,s,v,z')",
 		table:  "vitess_strings",
 		data: [][]string{
 			{"a", "b", "c", "d\000\000\000\000", "e", "f", "g", "h", "a", "a,b,f,l,q,s,v,z"},
