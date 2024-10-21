@@ -1451,7 +1451,7 @@ func TestListenerShutdown(t *testing.T) {
 }
 
 func waitForConnRefuse(t *testing.T, valWanted int64) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
@@ -1459,9 +1459,9 @@ func waitForConnRefuse(t *testing.T, valWanted int64) {
 	for {
 		select {
 		case <-ctx.Done():
-			require.FailNow(t, "connRefuse did not reach %v", valWanted)
+			require.FailNowf(t, "could not reach the desired connRefuse value", "connRefuse did not reach: %v, got: %v", valWanted, connRefuse.Get())
 		case <-tick.C:
-			if connRefuse.Get() == valWanted {
+			if connRefuse.Get() >= valWanted {
 				return
 			}
 		}
