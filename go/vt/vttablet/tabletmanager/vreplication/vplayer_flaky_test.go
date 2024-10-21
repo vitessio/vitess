@@ -340,14 +340,14 @@ func TestCharPK(t *testing.T) {
 		data   [][]string
 	}{{ // binary(2)
 		input:  "insert into t1 values(1, 'a')",
-		output: "insert into t1(id,val) values (1,X'6100')",
+		output: "insert into t1(id,val) values (1,_binary'a\\0')",
 		table:  "t1",
 		data: [][]string{
 			{"1", "a\000"},
 		},
 	}, {
 		input:  "update t1 set id = 2 where val = 'a\000'",
-		output: "update t1 set id=2 where val=X'6100'",
+		output: "update t1 set id=2 where val=_binary'a\\0'",
 		table:  "t1",
 		data: [][]string{
 			{"2", "a\000"},
@@ -368,14 +368,14 @@ func TestCharPK(t *testing.T) {
 		},
 	}, { // varbinary(2)
 		input:  "insert into t3 values(1, 'a')",
-		output: "insert into t3(id,val) values (1,X'61')",
+		output: "insert into t3(id,val) values (1,_binary'a')",
 		table:  "t3",
 		data: [][]string{
 			{"1", "a"},
 		},
 	}, {
 		input:  "update t3 set id = 2 where val = 'a'",
-		output: "update t3 set id=2 where val=X'61'",
+		output: "update t3 set id=2 where val=_binary'a'",
 		table:  "t3",
 		data: [][]string{
 			{"2", "a"},
@@ -772,7 +772,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src1 values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst1(id,val) values (1,X'616161')",
+			"insert into dst1(id,val) values (1,_binary'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -782,7 +782,7 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		logs: []LogExpectation{
 			{"FIELD", "/src1.*id.*INT32.*val.*VARBINARY.*"},
-			{"ROWCHANGE", "insert into dst1(id,val) values (1,X'616161')"},
+			{"ROWCHANGE", "insert into dst1(id,val) values (1,_binary'aaa')"},
 			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
@@ -790,7 +790,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update src1 set val='bbb'",
 		output: qh.Expect(
 			"begin",
-			"update dst1 set val=X'626262' where id=1",
+			"update dst1 set val=_binary'bbb' where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -799,7 +799,7 @@ func TestPlayerFilters(t *testing.T) {
 			{"1", "bbb"},
 		},
 		logs: []LogExpectation{
-			{"ROWCHANGE", "update dst1 set val=X'626262' where id=1"},
+			{"ROWCHANGE", "update dst1 set val=_binary'bbb' where id=1"},
 			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
@@ -869,7 +869,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src3 values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert ignore into dst3(id,val) values (1,X'616161')",
+			"insert ignore into dst3(id,val) values (1,_binary'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -882,7 +882,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update src3 set val='bbb'",
 		output: qh.Expect(
 			"begin",
-			"insert ignore into dst3(id,val) values (1,X'626262')",
+			"insert ignore into dst3(id,val) values (1,_binary'bbb')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -907,7 +907,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into yes values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert into yes(id,val) values (1,X'616161')",
+			"insert into yes(id,val) values (1,_binary'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -920,7 +920,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update yes set val='bbb'",
 		output: qh.Expect(
 			"begin",
-			"update yes set val=X'626262' where id=1",
+			"update yes set val=_binary'bbb' where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -937,7 +937,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into nopk values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert into nopk(id,val) values (1,X'616161')",
+			"insert into nopk(id,val) values (1,_binary'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -950,8 +950,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update nopk set val='bbb' where id=1",
 		output: qh.Expect(
 			"begin",
-			"delete from nopk where id=1 and val=X'616161'",
-			"insert into nopk(id,val) values (1,X'626262')",
+			"delete from nopk where id=1 and val=_binary'aaa'",
+			"insert into nopk(id,val) values (1,_binary'bbb')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -964,7 +964,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "delete from nopk where id=1",
 		output: qh.Expect(
 			"begin",
-			"delete from nopk where id=1 and val=X'626262'",
+			"delete from nopk where id=1 and val=_binary'bbb'",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -975,8 +975,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src4 values (1,100,'aaa'),(2,200,'bbb'),(3,100,'ccc')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst4(id1,val) values (1,X'616161')",
-			"insert into dst4(id1,val) values (3,X'636363')",
+			"insert into dst4(id1,val) values (1,_binary'aaa')",
+			"insert into dst4(id1,val) values (3,_binary'ccc')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -987,8 +987,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src5 values (1,100,'abc'),(2,200,'xyz'),(3,100,'xyz'),(4,300,'abc'),(5,200,'xyz')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst5(id1,val) values (1,X'616263')",
-			"insert into dst5(id1,val) values (4,X'616263')",
+			"insert into dst5(id1,val) values (1,_binary'abc')",
+			"insert into dst5(id1,val) values (4,_binary'abc')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -999,7 +999,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src_charset values (1,'木元')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst_charset(id1,val,val2) values (1,concat(substr(_utf8mb4 X'E69CA8E58583' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 X'E69CA8E58583' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
+			"insert into dst_charset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1257,7 +1257,7 @@ func TestPlayerKeyspaceID(t *testing.T) {
 		input: "insert into src1 values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst1(id,val) values (1,X'166B40B44ABA4BD6')",
+			"insert into dst1(id,val) values (1,_binary'\x16k@\xb4J\xbaK\xd6')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1602,7 +1602,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b,f,l,q,s,v,z')",
-		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values (X'61','b','c',X'6400000000',X'65',X'66','g','h','a','a,b,f,l,q,s,v,z')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c',_binary'd\\0\\0\\0\\0',_binary'e',_binary'f','g','h','a','a,b,f,l,q,s,v,z')",
 		table:  "vitess_strings",
 		data: [][]string{
 			{"a", "b", "c", "d\000\000\000\000", "e", "f", "g", "h", "a", "a,b,f,l,q,s,v,z"},
@@ -1623,7 +1623,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into binary_pk values('a', 'aaa')",
-		output: "insert into binary_pk(b,val) values (X'61000000',X'616161')",
+		output: "insert into binary_pk(b,val) values (_binary'a\\0\\0\\0',_binary'aaa')",
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\000\000\000", "aaa"},
@@ -1638,7 +1638,7 @@ func TestPlayerTypes(t *testing.T) {
 	}, {
 		// Binary pk is a special case: https://github.com/vitessio/vitess/issues/3984
 		input:  "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
-		output: "update binary_pk set val=X'626262' where b=X'61000000'",
+		output: "update binary_pk set val=_binary'bbb' where b=_binary'a\\0\\0\\0'",
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\000\000\000", "bbb"},

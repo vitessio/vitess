@@ -44,7 +44,7 @@ func TestEncodable(t *testing.T) {
 			sqltypes.NewInt64(2),
 			sqltypes.NewVarBinary("bar(`b`)"),
 		}},
-		out: "(1, X'666F6F2827612729'), (2, X'6261722860626029')",
+		out: "(1, _binary'foo(\\'a\\')'), (2, _binary'bar(`b`)')",
 	}, {
 		// Single column.
 		in: &TupleEqualityList{
