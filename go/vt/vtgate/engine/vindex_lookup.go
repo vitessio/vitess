@@ -252,7 +252,7 @@ func (vr *VindexLookup) generateIds(ctx context.Context, vcursor VCursor, bindVa
 	switch vr.Opcode {
 	case Equal, EqualUnique:
 		return []sqltypes.Value{value.Value(vcursor.ConnCollation())}, nil
-	case IN:
+	case IN, MultiEqual:
 		return value.TupleValues(), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "opcode %s not supported for VindexLookup", vr.Opcode.String())
