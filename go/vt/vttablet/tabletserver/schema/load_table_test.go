@@ -149,6 +149,7 @@ func TestLoadTableMessage(t *testing.T) {
 			BatchSize:          1,
 			CacheSize:          10,
 			PollInterval:       30 * time.Second,
+			IDType:             sqltypes.Int64,
 		},
 	}
 	assert.Equal(t, want, table)

@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -200,7 +199,7 @@ func TestHighNumberOfParams(t *testing.T) {
 	var vals []any
 	var params []string
 	for i := 0; i < paramCount; i++ {
-		vals = append(vals, strconv.Itoa(i))
+		vals = append(vals, i)
 		params = append(params, "?")
 	}
 
