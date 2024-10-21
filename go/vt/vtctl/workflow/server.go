@@ -1197,25 +1197,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		return nil, err
 	}
 
-	// Create a parallelizer function.
-	forAllTargets := func(f func(*topo.ShardInfo) error) error {
-		var wg sync.WaitGroup
-		allErrors := &concurrency.AllErrorRecorder{}
-		for _, targetShard := range targetShards {
-			wg.Add(1)
-			go func(targetShard *topo.ShardInfo) {
-				defer wg.Done()
-
-				if err := f(targetShard); err != nil {
-					allErrors.RecordError(err)
-				}
-			}(targetShard)
-		}
-		wg.Wait()
-		return allErrors.AggrError(vterrors.Aggregate)
-	}
-
-	err = forAllTargets(func(targetShard *topo.ShardInfo) error {
+	err = forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
 		targetPrimary, err := s.ts.GetTablet(ctx, targetShard.PrimaryAlias)
 		if err != nil {
 			return err
