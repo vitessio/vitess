@@ -137,6 +137,7 @@ func TestStaticConfigHUP(t *testing.T) {
 }
 
 func TestStaticConfigHUPWithRotation(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	tmpFile, err := os.CreateTemp("", "mysql_auth_server_static_file.json")
 	require.NoError(t, err, "couldn't create temp file: %v", err)
 	defer os.Remove(tmpFile.Name())
