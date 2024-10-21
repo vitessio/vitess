@@ -136,6 +136,7 @@ service TabletManager {
 
   // VReplication API
   rpc CreateVReplicationWorkflow(tabletmanagerdata.CreateVReplicationWorkflowRequest) returns (tabletmanagerdata.CreateVReplicationWorkflowResponse) {};
+  rpc DeleteTableData(tabletmanagerdata.DeleteTableDataRequest) returns(tabletmanagerdata.DeleteTableDataResponse) {}
   rpc DeleteVReplicationWorkflow(tabletmanagerdata.DeleteVReplicationWorkflowRequest) returns(tabletmanagerdata.DeleteVReplicationWorkflowResponse) {};
   rpc HasVReplicationWorkflows(tabletmanagerdata.HasVReplicationWorkflowsRequest) returns(tabletmanagerdata.HasVReplicationWorkflowsResponse) {};
   rpc ReadVReplicationWorkflow(tabletmanagerdata.ReadVReplicationWorkflowRequest) returns(tabletmanagerdata.ReadVReplicationWorkflowResponse) {};

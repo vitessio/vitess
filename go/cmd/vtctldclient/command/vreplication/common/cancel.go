@@ -21,6 +21,8 @@ import (
 	"sort"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 
@@ -31,6 +33,7 @@ var CancelOptions = struct {
 	KeepData         bool
 	KeepRoutingRules bool
 	Shards           []string
+	DeleteBatchSize  int64
 }{}
 
 func GetCancelCommand(opts *SubCommandsOpts) *cobra.Command {
@@ -60,9 +63,13 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 		KeepData:         CancelOptions.KeepData,
 		KeepRoutingRules: CancelOptions.KeepRoutingRules,
 		Shards:           CancelOptions.Shards,
+		DeleteBatchSize:  CancelOptions.DeleteBatchSize,
 	}
 	resp, err := GetClient().WorkflowDelete(GetCommandCtx(), req)
 	if err != nil {
+		if grpcerr, ok := status.FromError(err); ok && (grpcerr.Code() == codes.DeadlineExceeded) {
+			return fmt.Errorf("Cancel action timed out. Please try again and the work will pick back up where it left off. Note that you can control the timeout using the --action_timeout flag and the delete batch size with --delete-batch-size.")
+		}
 		return err
 	}
 
