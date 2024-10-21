@@ -50,8 +50,10 @@ type AuthServerStatic struct {
 	// entries contains the users, passwords and user data.
 	entries map[string][]*AuthServerStaticEntry
 
+	// Signal handling related fields.
 	sigChan chan os.Signal
 	ticker  *time.Ticker
+	done    chan struct{} // Tell the signal related goroutines to stop
 }
 
 // AuthServerStaticEntry stores the values for a given user.
@@ -267,11 +269,17 @@ func (a *AuthServerStatic) installSignalHandlers() {
 		return
 	}
 
+	a.done = make(chan struct{})
 	a.sigChan = make(chan os.Signal, 1)
 	signal.Notify(a.sigChan, syscall.SIGHUP)
 	go func() {
-		for range a.sigChan {
-			a.reload()
+		for {
+			select {
+			case <-a.done:
+				return
+			case <-a.sigChan:
+				a.reload()
+			}
 		}
 	}()
 
@@ -279,14 +287,22 @@ func (a *AuthServerStatic) installSignalHandlers() {
 	if a.reloadInterval > 0 {
 		a.ticker = time.NewTicker(a.reloadInterval)
 		go func() {
-			for range a.ticker.C {
-				a.sigChan <- syscall.SIGHUP
+			for {
+				select {
+				case <-a.done:
+					return
+				case <-a.ticker.C:
+					a.sigChan <- syscall.SIGHUP
+				}
 			}
 		}()
 	}
 }
 
 func (a *AuthServerStatic) close() {
+	if a.done != nil {
+		close(a.done)
+	}
 	if a.ticker != nil {
 		a.ticker.Stop()
 	}
