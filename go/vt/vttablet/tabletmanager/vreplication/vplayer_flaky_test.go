@@ -748,7 +748,7 @@ func TestPlayerFilters(t *testing.T) {
 			Filter: "select id1, val from src5 where val = 'abc'",
 		}, {
 			Match:  "dst_charset",
-			Filter: "select id1, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val2 from src_charset",
+			Filter: "select id1, concat(substr(CONVERT(val USING utf8mb4) COLLATE utf8mb4_bin,1,1),'abcxyz') val, concat(substr(CONVERT(val USING utf8mb4) COLLATE utf8mb4_bin,1,1),'abcxyz') val2 from src_charset",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -999,7 +999,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src_charset values (1,'木元')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst_charset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
+			"insert into dst_charset(id1,val,val2) values (1,concat(substr(convert(_binary'木元' using utf8mb4) collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(convert(_binary'木元' using utf8mb4) collate utf8mb4_bin, 1, 1), 'abcxyz'))",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
