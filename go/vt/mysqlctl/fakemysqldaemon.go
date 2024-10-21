@@ -81,9 +81,6 @@ type FakeMysqlDaemon struct {
 	// and ReplicationStatus.
 	CurrentPrimaryPosition replication.Position
 
-	// CurrentRelayLogPosition is returned by ReplicationStatus.
-	CurrentRelayLogPosition replication.Position
-
 	// CurrentSourceFilePosition is used to determine the executed
 	// file based positioning of the replication source.
 	CurrentSourceFilePosition replication.Position
@@ -312,7 +309,6 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 	return replication.ReplicationStatus{
 		Position:                               fmd.CurrentPrimaryPosition,
 		FilePosition:                           fmd.CurrentSourceFilePosition,
-		RelayLogPosition:                       fmd.CurrentRelayLogPosition,
 		RelayLogSourceBinlogEquivalentPosition: fmd.CurrentSourceFilePosition,
 		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// Implemented as AND to avoid changing all tests that were

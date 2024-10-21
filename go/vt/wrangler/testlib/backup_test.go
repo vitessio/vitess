@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -687,6 +688,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		"FAKE RESET REPLICA ALL",
 		"FAKE RESET BINARY LOGS AND GTIDS",
 		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
@@ -710,16 +714,13 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	// stop primary so that it is unreachable
 	primary.StopActionLoop(t)
 
-	// Attempt to fix the test, but its still failing :man_shrugging.
-	ctx, cancel = context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	// Restore will return an error while trying to contact the primary for its position, but otherwise will succeed.
-	// The replication won't be running however, since we can't run errant GTID detection without the primary being online.
-	err = destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout)
-	require.ErrorContains(t, err, "DeadlineExceeded")
+	// set a short timeout so that we don't have to wait 30 seconds
+	topo.RemoteOperationTimeout = 2 * time.Second
+	// Restore should still succeed
+	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "" /* restoreToPos */, []string{} /* ignoreBackupEngines */, mysqlShutdownTimeout))
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
-	assert.False(t, destTablet.FakeMysqlDaemon.Replicating)
+	assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
 	assert.True(t, destTablet.FakeMysqlDaemon.Running)
 }
 
