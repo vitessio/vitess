@@ -24,6 +24,7 @@
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
     - **[Current Errant GTIDs Count Metric](#errant-gtid-metric)**
     - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
+    - **[Support for specifying expected primary in reparents](#reparents-expectedprimary)**
 
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -236,10 +237,14 @@ This metric shows the current count of the errant GTIDs in the tablets.
 
 The `vtctldclient` command `ChangeTabletTags` was added to allow the tags of a tablet to be changed dynamically.
 
+### <a id="reparents-expectedprimary"/>Support specifying expected primary in reparents
+
+The `EmergencyReparentShard` and `PlannedReparentShard` commands and RPCs now support specifying a primary we expect to still be the current primary in order for a reparent operation to be processed. This allows reparents to be conditional on a specific state being true.
+
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/21.0/21.0.0/changelog.md).
 
-The release includes 338 merged Pull Requests.
+The release includes 354 merged Pull Requests.
 
 Thanks to all our contributors: @GrahamCampbell, @GuptaManan100, @Utkar5hM, @anshikavashistha, @app/dependabot, @app/vitess-bot, @arthurschreiber, @beingnoble03, @brendar, @cameronmccord2, @chrism1001, @cuishuang, @dbussink, @deepthi, @demmer, @frouioui, @harshit-gangal, @harshitasao, @icyflame, @kirtanchandak, @mattlord, @mattrobenolt, @maxenglander, @mcrauwel, @notfelineit, @perminov, @rafer, @rohit-nayak-ps, @runewake2, @rvrangel, @shanth96, @shlomi-noach, @systay, @timvaillancourt, @vitess-bot
 
