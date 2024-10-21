@@ -49,6 +49,7 @@ import (
 	"github.com/patrickmn/go-cache"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 // MetricsQueryType indicates the type of metrics query on MySQL backend. See following.
@@ -142,13 +143,13 @@ func (metric *ThrottleMetric) WithError(err error) *ThrottleMetric {
 
 // ReadThrottleMetrics returns a metric for the given probe. Either by explicit query
 // or via SHOW REPLICA STATUS
-func ReadThrottleMetrics(ctx context.Context, probe *Probe, metricsFunc func(context.Context) ThrottleMetrics) ThrottleMetrics {
+func ReadThrottleMetrics(ctx context.Context, probe *Probe, tmClient tmclient.TabletManagerClient, metricsFunc func(context.Context, tmclient.TabletManagerClient) ThrottleMetrics) ThrottleMetrics {
 	if metrics := getCachedThrottleMetrics(probe); metrics != nil {
 		return metrics
 	}
 
 	started := time.Now()
-	throttleMetrics := metricsFunc(ctx)
+	throttleMetrics := metricsFunc(ctx, tmClient)
 
 	go func(metrics ThrottleMetrics, started time.Time) {
 		stats.GetOrNewGauge("ThrottlerProbesLatency", "probes latency").Set(time.Since(started).Nanoseconds())

@@ -779,16 +779,16 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		}
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 	})
-	t.Run("assigning 'loadavg' metrics to 'test' app", func(t *testing.T) {
+	t.Run("assigning 'threads_running' metrics to 'test' app", func(t *testing.T) {
 		{
-			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "loadavg", Threshold: 7777}
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.ThreadsRunningMetricName.String(), Threshold: 7777}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 			assert.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
 			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
-				testAppName.String(): {Names: []string{"loadavg"}},
+				testAppName.String(): {Names: []string{base.ThreadsRunningMetricName.String()}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
 			assert.NoError(t, err)
@@ -802,18 +802,18 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
 			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
-		t.Run("validating OK response from throttler since it's checking loadavg", func(t *testing.T) {
+		t.Run("validating OK response from throttler since it's checking threads_running", func(t *testing.T) {
 			if !waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK) {
 				t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
 				t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
 			}
 		})
 	})
-	t.Run("assigning 'loadavg,lag' metrics to 'test' app", func(t *testing.T) {
+	t.Run("assigning 'threads_running,lag' metrics to 'test' app", func(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
 			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
-				testAppName.String(): {Names: []string{"loadavg,lag"}},
+				testAppName.String(): {Names: []string{base.ThreadsRunningMetricName.String(), base.LagMetricName.String()}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
 			assert.NoError(t, err)
@@ -833,7 +833,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 	})
 	t.Run("removing assignment from 'test' app and restoring defaults", func(t *testing.T) {
 		{
-			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "loadavg", Threshold: 0}
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.ThreadsRunningMetricName.String(), Threshold: 0}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 			assert.NoError(t, err)
 		}

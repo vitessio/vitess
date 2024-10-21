@@ -23,15 +23,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-)
-
-var (
-	loadavgOnlyAvailableOnLinuxMetric = &ThrottleMetric{
-		Scope: SelfScope,
-		Err:   fmt.Errorf("loadavg metric is only available on Linux"),
-	}
 )
 
 var _ SelfMetric = registerSelfMetric(&LoadAvgSelfMetric{})
@@ -55,12 +46,12 @@ func (m *LoadAvgSelfMetric) RequiresConn() bool {
 	return false
 }
 
-func (m *LoadAvgSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
-	if runtime.GOOS != "linux" {
-		return loadavgOnlyAvailableOnLinuxMetric
-	}
+func (m *LoadAvgSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
 	metric := &ThrottleMetric{
 		Scope: SelfScope,
+	}
+	if runtime.GOOS != "linux" {
+		return metric
 	}
 	{
 		content, err := os.ReadFile("/proc/loadavg")
