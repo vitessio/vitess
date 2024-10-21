@@ -126,7 +126,6 @@ type (
 		queryTimeout        time.Duration
 
 		warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
-		pv       plancontext.PlannerVersion
 
 		warmingReadsPercent int
 		warmingReadsChannel chan bool
@@ -137,6 +136,8 @@ type (
 		// if this field is nil, it means that we are not logging operator traffic
 		interOpStats map[engine.Primitive]engine.RowsReceived
 		shardsStats  map[engine.Primitive]engine.ShardsQueried
+
+		config *Config
 	}
 )
 
@@ -154,9 +155,9 @@ func newVCursorImpl(
 	resolver *srvtopo.Resolver,
 	serv srvtopo.Server,
 	warnShardedOnly bool,
-	pv plancontext.PlannerVersion,
+	config *Config,
 ) (*vcursorImpl, error) {
-	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
+	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema, defaultTabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -202,10 +203,10 @@ func newVCursorImpl(
 		vm:                  vm,
 		topoServer:          ts,
 		warnShardedOnly:     warnShardedOnly,
-		pv:                  pv,
 		warmingReadsPercent: warmingReadsPct,
 		warmingReadsChannel: warmingReadsChan,
 		resultsObserver:     nullResultsObserver{},
+		config:              config,
 	}, nil
 }
 
@@ -508,7 +509,7 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	return vc.pv
+	return vc.config.PlannerVersion
 }
 
 // GetSemTable implements the ContextVSchema interface
@@ -817,7 +818,7 @@ func (vc *vcursorImpl) Session() engine.SessionActions {
 }
 
 func (vc *vcursorImpl) SetTarget(target string) error {
-	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, defaultTabletType)
+	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.config.DefaultTabletType)
 	if err != nil {
 		return err
 	}
@@ -1200,7 +1201,11 @@ func (vc *vcursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.Mirro
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
+func parseDestinationTarget(
+	targetString string,
+	vschema *vindexes.VSchema,
+	defaultTabletType topodatapb.TabletType,
+) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
 	// Set default keyspace
 	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
@@ -1403,8 +1408,8 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 		vm:              vc.vm,
 		topoServer:      vc.topoServer,
 		warnShardedOnly: vc.warnShardedOnly,
-		pv:              vc.pv,
 		resultsObserver: vc.resultsObserver,
+		config:          vc.config,
 	}
 }
 
@@ -1476,7 +1481,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		semTable:            vc.semTable,
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
-		pv:                  vc.pv,
+		config:              vc.config,
 		resultsObserver:     nullResultsObserver{},
 	}
 
@@ -1508,8 +1513,8 @@ func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		semTable:            vc.semTable,
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
-		pv:                  vc.pv,
 		resultsObserver:     nullResultsObserver{},
+		config:              vc.config,
 	}
 
 	v.marginComments.Trailing += "/* mirror query */"
