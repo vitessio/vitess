@@ -111,8 +111,7 @@ func TestVtGateVExplain(t *testing.T) {
 	utils.Exec(t, conn, "begin")
 	expected = `[
 		[VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]
-		[VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 4, _binary'\xd2\xfd\x88g\xd5\\r-\xfe'), ('apa', 5, _binary'p\xbb\x02<\x81\f\xa8z') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = va
-lues(keyspace_id)")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 4, _binary'\xd2\xfd\x88g\xd5\\r-\xfe'), ('apa', 5, _binary'p\xbb\x02<\x81\f\xa8z') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]
 		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]
 		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 6, _binary'\xf0\x98H\\n\xc4ľq') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]
 		[VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]
