@@ -654,8 +654,8 @@ func TestServerStats(t *testing.T) {
 	}
 
 	timings.Reset()
-	connAccept.Reset()
 	connCount.Reset()
+	connAccept.Reset()
 	connSlow.Reset()
 	connRefuse.Reset()
 
@@ -667,9 +667,23 @@ func TestServerStats(t *testing.T) {
 	assert.Contains(t, output, "ERROR 1047 (08S01)")
 	assert.Contains(t, output, "forced query error", "Unexpected output for 'error': %v", output)
 
-	assert.EqualValues(t, 0, connCount.Get(), "connCount")
+	// Accept starts a goroutine to handle each incoming connection.
+	// It's in that goroutine where live stats/gauges such as the
+	// current connection counts are updated when the handle function
+	// ends (e.g. connCount.Add(-1)).
+	// So we wait for the expected value to avoid races and flakiness.
+	// 1 second should be enough, but no reason to fail the test or
+	// a CI workflow if the test is CPU starved.
+	conditionWait := 10 * time.Second
+	conditionTick := 10 * time.Millisecond
+	assert.Eventually(t, func() bool {
+		return connCount.Get() == int64(0)
+	}, conditionWait, conditionTick, "connCount")
+	assert.Eventually(t, func() bool {
+		return connSlow.Get() == int64(1)
+	}, conditionWait, conditionTick, "connSlow")
+
 	assert.EqualValues(t, 1, connAccept.Get(), "connAccept")
-	assert.EqualValues(t, 1, connSlow.Get(), "connSlow")
 	assert.EqualValues(t, 0, connRefuse.Get(), "connRefuse")
 
 	expectedTimingDeltas := map[string]int64{
@@ -1424,7 +1438,7 @@ func TestListenerShutdown(t *testing.T) {
 
 	l.Shutdown()
 
-	assert.EqualValues(t, 1, connRefuse.Get(), "connRefuse")
+	waitForConnRefuse(t, 1)
 
 	err = conn.Ping()
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
@@ -1434,6 +1448,24 @@ func TestListenerShutdown(t *testing.T) {
 	require.Equal(t, sqlerror.ERServerShutdown, sqlErr.Number())
 	require.Equal(t, sqlerror.SSNetError, sqlErr.SQLState())
 	require.Equal(t, "Server shutdown in progress", sqlErr.Message)
+}
+
+func waitForConnRefuse(t *testing.T, valWanted int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			require.FailNow(t, "connRefuse did not reach %v", valWanted)
+		case <-tick.C:
+			if connRefuse.Get() == valWanted {
+				return
+			}
+		}
+	}
 }
 
 func TestParseConnAttrs(t *testing.T) {

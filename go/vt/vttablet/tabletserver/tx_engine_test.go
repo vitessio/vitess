@@ -62,11 +62,11 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.AcceptReadWrite()
-	c, beginSQL, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, beginSQL, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
-	c, beginSQL, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, beginSQL, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
@@ -78,7 +78,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.AcceptReadOnly()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.AcceptReadWrite()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
@@ -101,7 +101,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.AcceptReadWrite()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	go func() {
@@ -117,7 +117,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.AcceptReadOnly()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -138,7 +138,7 @@ func TestTxEngineClose(t *testing.T) {
 	te.AcceptReadWrite()
 	_, err = te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, nil)
 	require.NoError(t, err)
-	_, _, err = te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil, nil)
+	_, _, err = te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	start = time.Now()
 	te.Close()
@@ -159,11 +159,11 @@ func TestTxEngineBegin(t *testing.T) {
 
 	for _, exec := range []func() (int64, string, error){
 		func() (int64, string, error) {
-			tx, _, schemaStateChanges, err := te.Begin(ctx, nil, 0, nil, &querypb.ExecuteOptions{})
+			tx, _, schemaStateChanges, err := te.Begin(ctx, 0, nil, &querypb.ExecuteOptions{})
 			return tx, schemaStateChanges, err
 		},
 		func() (int64, string, error) {
-			return te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil, nil)
+			return te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil)
 		},
 	} {
 		te.AcceptReadOnly()
@@ -204,7 +204,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 	te.AcceptReadOnly()
 	options := &querypb.ExecuteOptions{}
-	connID, _, err := te.ReserveBegin(ctx, options, nil, nil)
+	connID, _, err := te.ReserveBegin(ctx, options, nil)
 	require.NoError(t, err)
 
 	conn, err := te.txPool.GetAndLock(connID, "for test")
@@ -559,7 +559,7 @@ func startTx(te *TxEngine, writeTransaction bool) error {
 	} else {
 		options.TransactionIsolation = querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
 	}
-	_, _, _, err := te.Begin(context.Background(), nil, 0, nil, options)
+	_, _, _, err := te.Begin(context.Background(), 0, nil, options)
 	return err
 }
 
@@ -577,7 +577,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	_, err := te.Reserve(ctx, options, 0, nil)
 	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
-	_, _, err = te.ReserveBegin(ctx, options, nil, nil)
+	_, _, err = te.ReserveBegin(ctx, options, nil)
 	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
 	te.AcceptReadOnly()
@@ -586,14 +586,14 @@ func TestTxEngineFailReserve(t *testing.T) {
 	_, err = te.Reserve(ctx, options, 0, []string{"dummy_query"})
 	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
-	_, _, err = te.ReserveBegin(ctx, options, []string{"dummy_query"}, nil)
+	_, _, err = te.ReserveBegin(ctx, options, []string{"dummy_query"})
 	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	nonExistingID := int64(42)
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
 	assert.EqualError(t, err, "transaction 42: not found (potential transaction timeout)")
 
-	txID, _, _, err := te.Begin(ctx, nil, 0, nil, options)
+	txID, _, _, err := te.Begin(ctx, 0, nil, options)
 	require.NoError(t, err)
 	conn, err := te.txPool.GetAndLock(txID, "for test")
 	require.NoError(t, err)
@@ -718,6 +718,93 @@ func TestIsTwoPCAllowed(t *testing.T) {
 			tsv.SetTwoPCAllowed(TwoPCAllowed_SemiSync, tt.semiSyncAllowed)
 			tsv.SetTwoPCAllowed(TwoPCAllowed_TabletControls, tt.tabletControllsAllowed)
 			require.Equal(t, tt.wantAllowed, te.IsTwoPCAllowed())
+		})
+	}
+}
+
+// TestPrepareTx tests prepareTx function in transaction engine.
+func TestPrepareTx(t *testing.T) {
+	testcases := []struct {
+		name           string
+		preparedTx     *tx.PreparedTx
+		requireFailure bool
+		errWanted      string
+		queryLogWanted string
+	}{
+		{
+			name: "Success",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"insert into vitess_test (intval) values(40)",
+					"set @@time_zone='+10:30'",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: false,
+			errWanted:      "",
+			queryLogWanted: "use `fakesqldb`;begin;insert into vitess_test (intval) values(40);set @@time_zone='+10:30';insert into vitess_test (intval) values(20)",
+		},
+		{
+			name: "Unretryable failure during query",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"insert into vitess_test (intval) values(40)",
+					"failing query",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: true,
+			errWanted:      "(errno 1105) (sqlstate HY000)",
+		},
+		{
+			name: "Retryable failure during query",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"insert into vitess_test (intval) values(40)",
+					"retryable query",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: false,
+			errWanted:      "Retryable error (errno 2002) (sqlstate HY000)",
+		},
+		{
+			name: "Success - Settings query in the beginning",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"set @@time_zone='+10:30'",
+					"insert into vitess_test (intval) values(40)",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: false,
+			errWanted:      "",
+			queryLogWanted: "use `fakesqldb`;set @@time_zone='+10:30';begin;insert into vitess_test (intval) values(40);insert into vitess_test (intval) values(20)",
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			db.AddQueryPattern(".*", &sqltypes.Result{})
+			db.AddRejectedQuery("failing query", assert.AnError)
+			db.AddRejectedQuery("retryable query", sqlerror.NewSQLError(sqlerror.CRConnectionError, "", "Retryable error"))
+			cfg := tabletenv.NewDefaultConfig()
+			cfg.DB = newDBConfigs(db)
+			cfg.TwoPCEnable = true
+			cfg.TwoPCAbandonAge = 200
+			te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
+			te.AcceptReadWrite()
+			db.ResetQueryLog()
+			failed, err := te.prepareTx(context.Background(), tt.preparedTx)
+			require.EqualValues(t, tt.requireFailure, failed)
+			if tt.errWanted != "" {
+				require.ErrorContains(t, err, tt.errWanted)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, 1, len(te.preparedPool.conns))
+			require.EqualValues(t, tt.queryLogWanted, db.QueryLog())
 		})
 	}
 }

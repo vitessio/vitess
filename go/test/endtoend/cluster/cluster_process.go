@@ -170,6 +170,17 @@ func (shard *Shard) PrimaryTablet() *Vttablet {
 	return shard.Vttablets[0]
 }
 
+// FindPrimaryTablet finds the primary tablet in the shard.
+func (shard *Shard) FindPrimaryTablet() *Vttablet {
+	for _, vttablet := range shard.Vttablets {
+		tabletType := vttablet.VttabletProcess.GetTabletType()
+		if tabletType == "primary" {
+			return vttablet
+		}
+	}
+	return nil
+}
+
 // Rdonly get the last tablet which is rdonly
 func (shard *Shard) Rdonly() *Vttablet {
 	for idx, tablet := range shard.Vttablets {

@@ -185,6 +185,9 @@ type FakeMysqlDaemon struct {
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
 
+	// GlobalReadLock is used to test if a lock has been acquired already or not
+	GlobalReadLock bool
+
 	// TimeoutHook is a func that can be called at the beginning of
 	// any method to fake a timeout.
 	// All a test needs to do is make it { return context.DeadlineExceeded }.
@@ -299,13 +302,6 @@ func (fmd *FakeMysqlDaemon) GetServerUUID(ctx context.Context) (string, error) {
 	return "000000", nil
 }
 
-// CurrentPrimaryPositionLocked is thread-safe.
-func (fmd *FakeMysqlDaemon) CurrentPrimaryPositionLocked(pos replication.Position) {
-	fmd.mu.Lock()
-	defer fmd.mu.Unlock()
-	fmd.CurrentPrimaryPosition = pos
-}
-
 // ReplicationStatus is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
 	if fmd.ReplicationStatusError != nil {
@@ -330,6 +326,8 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 
 // PrimaryStatus is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	if fmd.PrimaryStatusError != nil {
 		return replication.PrimaryStatus{}, fmd.PrimaryStatusError
 	}
@@ -399,7 +397,21 @@ func (fmd *FakeMysqlDaemon) GetPreviousGTIDs(ctx context.Context, binlog string)
 
 // PrimaryPosition is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) PrimaryPosition(ctx context.Context) (replication.Position, error) {
-	return fmd.CurrentPrimaryPosition, nil
+	return fmd.GetPrimaryPositionLocked(), nil
+}
+
+// GetPrimaryPositionLocked gets the primary position while holding the lock.
+func (fmd *FakeMysqlDaemon) GetPrimaryPositionLocked() replication.Position {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	return fmd.CurrentPrimaryPosition
+}
+
+// SetPrimaryPositionLocked is thread-safe.
+func (fmd *FakeMysqlDaemon) SetPrimaryPositionLocked(pos replication.Position) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.CurrentPrimaryPosition = pos
 }
 
 // IsReadOnly is part of the MysqlDaemon interface.
@@ -763,10 +775,20 @@ func (fmd *FakeMysqlDaemon) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysql
 
 // AcquireGlobalReadLock is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
-	return errors.New("not implemented")
+	if fmd.GlobalReadLock {
+		return errors.New("lock already acquired")
+	}
+
+	fmd.GlobalReadLock = true
+	return nil
 }
 
 // ReleaseGlobalReadLock is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
-	return errors.New("not implemented")
+	if fmd.GlobalReadLock {
+		fmd.GlobalReadLock = false
+		return nil
+	}
+
+	return errors.New("no read locks acquired yet")
 }

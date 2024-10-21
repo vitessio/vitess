@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -107,10 +108,24 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 		twopc = txc.mode == vtgatepb.TransactionMode_TWOPC
 	}
 
+	defer recordCommitTime(session, twopc, time.Now())
 	if twopc {
 		return txc.commit2PC(ctx, session)
 	}
 	return txc.commitNormal(ctx, session)
+}
+
+func recordCommitTime(session *SafeSession, twopc bool, startTime time.Time) {
+	switch {
+	case len(session.ShardSessions) == 0:
+		// No-op
+	case len(session.ShardSessions) == 1:
+		commitMode.Record("Single", startTime)
+	case twopc:
+		commitMode.Record("TwoPC", startTime)
+	default:
+		commitMode.Record("Multi", startTime)
+	}
 }
 
 func (txc *TxConn) queryService(ctx context.Context, alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
@@ -280,12 +295,6 @@ func (txc *TxConn) checkValidCondition(session *SafeSession) error {
 	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
 		return vterrors.VT12001("atomic distributed transaction commit with consistent lookup vindex")
 	}
-	if len(session.GetSavepoints()) != 0 {
-		return vterrors.VT12001("atomic distributed transaction commit with savepoint")
-	}
-	if session.GetInReservedConn() {
-		return vterrors.VT12001("atomic distributed transaction commit with system settings")
-	}
 	return nil
 }
 
@@ -301,6 +310,8 @@ func (txc *TxConn) errActionAndLogWarn(ctx context.Context, session *SafeSession
 		if resumeErr := txc.rollbackTx(ctx, dtid, mmShard, rmShards, session.logging); resumeErr != nil {
 			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
 		}
+	case Commit2pcStartCommit, Commit2pcPrepareCommit:
+		commitUnresolved.Add(1)
 	}
 	session.RecordWarning(&querypb.QueryWarning{
 		Code:    uint32(sqlerror.ERInAtomicRecovery),

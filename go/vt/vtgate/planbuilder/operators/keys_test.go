@@ -32,7 +32,7 @@ func TestMarshalUnmarshal(t *testing.T) {
 		StatementType: "SELECT",
 		TableName:     []string{"users", "orders"},
 		GroupingColumns: []Column{
-			{Table: "", Name: "category"},
+			{Table: "orders", Name: "category"},
 			{Table: "users", Name: "department"},
 		},
 		JoinColumns: []ColumnUse{
@@ -40,12 +40,13 @@ func TestMarshalUnmarshal(t *testing.T) {
 			{Column: Column{Table: "orders", Name: "user_id"}, Uses: sqlparser.EqualOp},
 		},
 		FilterColumns: []ColumnUse{
-			{Column: Column{Table: "", Name: "age"}, Uses: sqlparser.GreaterThanOp},
+			{Column: Column{Table: "users", Name: "age"}, Uses: sqlparser.GreaterThanOp},
 			{Column: Column{Table: "orders", Name: "total"}, Uses: sqlparser.LessThanOp},
+			{Column: Column{Table: "orders", Name: "`tricky name not`"}, Uses: sqlparser.InOp},
 		},
 		SelectColumns: []Column{
 			{Table: "users", Name: "name"},
-			{Table: "", Name: "email"},
+			{Table: "users", Name: "email"},
 			{Table: "orders", Name: "amount"},
 		},
 	}

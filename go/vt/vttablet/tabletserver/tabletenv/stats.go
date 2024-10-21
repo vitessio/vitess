@@ -34,7 +34,6 @@ type Stats struct {
 	ErrorCounters          *stats.CountersWithSingleLabel
 	InternalErrors         *stats.CountersWithSingleLabel
 	Warnings               *stats.CountersWithSingleLabel
-	Unresolved             *stats.GaugesWithSingleLabel   // For now, only Prepares are tracked
 	UserTableQueryCount    *stats.CountersWithMultiLabels // Per CallerID/table counts
 	UserTableQueryTimesNs  *stats.CountersWithMultiLabels // Per CallerID/table latencies
 	UserTransactionCount   *stats.CountersWithMultiLabels // Per CallerID transaction counts
@@ -49,6 +48,11 @@ type Stats struct {
 	UserReservedTimesNs     *stats.CountersWithSingleLabel // Per CallerID reserved connection duration
 
 	QueryTimingsByTabletType *servenv.TimingsWrapper // Query timings split by current tablet type
+
+	// Atomic Transactions
+	Unresolved         *stats.GaugesWithSingleLabel
+	CommitPreparedFail *stats.CountersWithSingleLabel
+	RedoPreparedFail   *stats.CountersWithSingleLabel
 }
 
 // NewStats instantiates a new set of stats scoped by exporter.
@@ -83,7 +87,6 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		),
 		InternalErrors:         exporter.NewCountersWithSingleLabel("InternalErrors", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages"),
 		Warnings:               exporter.NewCountersWithSingleLabel("Warnings", "Warnings", "type", "ResultsExceeded"),
-		Unresolved:             exporter.NewGaugesWithSingleLabel("Unresolved", "Unresolved items", "item_type", "Prepares"),
 		UserTableQueryCount:    exporter.NewCountersWithMultiLabels("UserTableQueryCount", "Queries received for each CallerID/table combination", []string{"TableName", "CallerID", "Type"}),
 		UserTableQueryTimesNs:  exporter.NewCountersWithMultiLabels("UserTableQueryTimesNs", "Total latency for each CallerID/table combination", []string{"TableName", "CallerID", "Type"}),
 		UserTransactionCount:   exporter.NewCountersWithMultiLabels("UserTransactionCount", "transactions received for each CallerID", []string{"CallerID", "Conclusion"}),
@@ -98,6 +101,10 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		UserReservedTimesNs:     exporter.NewCountersWithSingleLabel("UserReservedTimesNs", "Total reserved connection latency for each CallerID", "CallerID"),
 
 		QueryTimingsByTabletType: exporter.NewTimings("QueryTimingsByTabletType", "Query timings broken down by active tablet type", "TabletType"),
+
+		Unresolved:         exporter.NewGaugesWithSingleLabel("UnresolvedTransaction", "Current unresolved transactions", "ManagerType"),
+		CommitPreparedFail: exporter.NewCountersWithSingleLabel("CommitPreparedFail", "failed prepared transactions commit", "FailureType"),
+		RedoPreparedFail:   exporter.NewCountersWithSingleLabel("RedoPreparedFail", "failed prepared transactions on redo", "FailureType"),
 	}
 	stats.QPSRates = exporter.NewRates("QPS", stats.QueryTimings, 15*60/5, 5*time.Second)
 	return stats

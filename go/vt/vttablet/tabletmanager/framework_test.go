@@ -116,8 +116,8 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 	tmclienttest.SetProtocol(fmt.Sprintf("go.vt.vttablet.tabletmanager.framework_test_%s", t.Name()), tenv.protoName)
 
 	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
-	var err error
-	tenv.mysqld.CurrentPrimaryPosition, err = replication.ParsePosition(gtidFlavor, gtidPosition)
+	curPosition, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+	tenv.mysqld.SetPrimaryPositionLocked(curPosition)
 	require.NoError(t, err)
 
 	return tenv
@@ -420,8 +420,6 @@ func (tmc *fakeTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tab
 }
 
 func (tmc *fakeTMClient) schemaRequested(uid int) {
-	tmc.mu.Lock()
-	defer tmc.mu.Unlock()
 	key := strconv.Itoa(int(uid))
 	n, ok := tmc.getSchemaCounts[key]
 	if !ok {
@@ -439,6 +437,8 @@ func (tmc *fakeTMClient) getSchemaRequestCount(uid int) int {
 }
 
 func (tmc *fakeTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	tmc.schemaRequested(int(tablet.Alias.Uid))
 	// Return the schema for the tablet if it exists.
 	if schema, ok := tmc.tabletSchemas[int(tablet.Alias.Uid)]; ok {
@@ -466,6 +466,8 @@ func (tmc *fakeTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodata
 // and their results. You can specify exact strings or strings prefixed with
 // a '/', in which case they will be treated as a valid regexp.
 func (tmc *fakeTMClient) setVReplicationExecResults(tablet *topodatapb.Tablet, query string, result *sqltypes.Result) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	queries, ok := tmc.vreQueries[int(tablet.Alias.Uid)]
 	if !ok {
 		queries = make(map[string]*querypb.QueryResult)
@@ -475,13 +477,15 @@ func (tmc *fakeTMClient) setVReplicationExecResults(tablet *topodatapb.Tablet, q
 }
 
 func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	if result, ok := tmc.vreQueries[int(tablet.Alias.Uid)][query]; ok {
 		return result, nil
 	}
 	for qry, res := range tmc.vreQueries[int(tablet.Alias.Uid)] {
 		if strings.HasPrefix(qry, "/") {
-			re := regexp.MustCompile(qry)
-			if re.MatchString(qry) {
+			re := regexp.MustCompile(qry[1:])
+			if re.MatchString(query) {
 				return res, nil
 			}
 		}
@@ -514,6 +518,8 @@ func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 }
 
 func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.CreateVReplicationWorkflow(ctx, req)
 }
 
@@ -529,17 +535,25 @@ func (tmc *fakeTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet 
 }
 
 func (tmc *fakeTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.HasVReplicationWorkflows(ctx, req)
 }
 
 func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.ReadVReplicationWorkflow(ctx, req)
 }
 
 func (tmc *fakeTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.ReadVReplicationWorkflows(ctx, req)
 }
 
 func (tmc *fakeTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.UpdateVReplicationWorkflow(ctx, req)
 }
