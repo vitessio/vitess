@@ -46554,6 +46554,9 @@ export namespace replicationdata {
 
         /** PrimaryStatus file_position */
         file_position?: (string|null);
+
+        /** PrimaryStatus server_uuid */
+        server_uuid?: (string|null);
     }
 
     /** Represents a PrimaryStatus. */
@@ -46570,6 +46573,9 @@ export namespace replicationdata {
 
         /** PrimaryStatus file_position. */
         public file_position: string;
+
+        /** PrimaryStatus server_uuid. */
+        public server_uuid: string;
 
         /**
          * Creates a new PrimaryStatus instance using the specified properties.
