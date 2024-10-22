@@ -2700,7 +2700,7 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 	}()
 }
 
-// DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard
+// dropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard
 // is canceled.
 func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
 	var err error
