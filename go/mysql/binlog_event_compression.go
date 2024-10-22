@@ -19,13 +19,13 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -96,16 +96,7 @@ func init() {
 	var err error
 	statelessDecoder, err = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 	if err != nil { // Should only happen e.g. due to ENOMEM
-		log.Errorf("Error creating stateless decoder: %v", err)
-	}
-	statefulDecoderPool.pool = sync.Pool{
-		New: func() any {
-			d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
-			if err != nil { // Should only happen e.g. due to ENOMEM
-				log.Errorf("Error creating stateful decoder: %v", err)
-			}
-			return d
-		},
+		panic(fmt.Errorf("failed to create stateless decoder: %v", err))
 	}
 }
 
@@ -314,9 +305,6 @@ func (tp *TransactionPayload) decompress() error {
 	}
 
 	// Process smaller payloads using only in-memory buffers.
-	if statelessDecoder == nil { // Should never happen
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateless decoder")
-	}
 	decompressedBytes := make([]byte, 0, tp.uncompressedSize) // Perform a single pre-allocation
 	decompressedBytes, err := statelessDecoder.DecodeAll(tp.payload, decompressedBytes[:0])
 	if err != nil {
@@ -371,20 +359,24 @@ type decoderPool struct {
 	pool sync.Pool
 }
 
-// Get gets a new *zstd.Decoder.
-func (dp *decoderPool) Get(r io.Reader) (*zstd.Decoder, error) {
-	decoder, ok := dp.pool.Get().(*zstd.Decoder)
-	if !ok || decoder == nil {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateful stream decoder")
+// Get gets a pooled OR new *zstd.Decoder.
+func (dp *decoderPool) Get(reader io.Reader) (*zstd.Decoder, error) {
+	decoder := dp.pool.Get().(*zstd.Decoder)
+	if decoder == nil {
+		d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
+		if err != nil { // Should only happen e.g. due to ENOMEM
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateful stream decoder")
+		}
+		decoder = d
 	}
-	if err := decoder.Reset(r); err != nil {
+	if err := decoder.Reset(reader); err != nil {
 		return nil, vterrors.Wrap(err, "error resetting stateful stream decoder")
 	}
 	return decoder, nil
 }
 
-func (dp *decoderPool) Put(sd *zstd.Decoder) {
-	if err := sd.Reset(nil); err == nil || err == io.EOF {
-		dp.pool.Put(sd)
+func (dp *decoderPool) Put(decoder *zstd.Decoder) {
+	if err := decoder.Reset(nil); err == nil || err == io.EOF {
+		dp.pool.Put(decoder)
 	}
 }
