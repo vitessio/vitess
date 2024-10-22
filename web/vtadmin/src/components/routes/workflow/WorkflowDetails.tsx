@@ -276,7 +276,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name, refetchInterval }: 
                 renderRows={renderSummaryRows}
                 pageSize={1}
                 title="Summary"
-                pageKey='summary'
+                pageKey="summary"
             />
             <span id="workflowStreams"></span>
             <DataTable
@@ -285,7 +285,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name, refetchInterval }: 
                 renderRows={renderStreamRows}
                 pageSize={10}
                 title="Streams"
-                pageKey='streams'
+                pageKey="streams"
             />
             {tableCopyStates && (
                 <DataTable
@@ -294,7 +294,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name, refetchInterval }: 
                     renderRows={renderTableCopyStateRows}
                     pageSize={1000}
                     title="Table Copy State"
-                    pageKey='tableCopyState'
+                    pageKey="tableCopyState"
                 />
             )}
             <h3 className="mt-8 mb-4">Recent Logs</h3>

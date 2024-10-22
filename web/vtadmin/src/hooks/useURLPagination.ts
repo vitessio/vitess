@@ -36,7 +36,7 @@ const FIRST_PAGE = 1;
  * 	- use pagination in some way
  * 	- encode pagination state in the URL (e.g., /some/route?page=123)
  */
-export const useURLPagination = ({ totalPages, pageQueryKey = "page" }: PaginationOpts): PaginationParams => {
+export const useURLPagination = ({ totalPages, pageQueryKey = 'page' }: PaginationOpts): PaginationParams => {
     const history = useHistory();
     const location = useLocation();
     const { query, replaceQuery } = useURLQuery({ parseNumbers: true });

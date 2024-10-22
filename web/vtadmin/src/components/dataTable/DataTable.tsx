@@ -47,7 +47,7 @@ export const DataTable = <T extends object>({
     pageSize = DEFAULT_PAGE_SIZE,
     renderRows,
     title,
-    pageKey = "",
+    pageKey = '',
 }: Props<T>) => {
     const { pathname } = useLocation();
     const urlQuery = useURLQuery();
