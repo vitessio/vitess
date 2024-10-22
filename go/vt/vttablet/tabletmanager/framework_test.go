@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -54,6 +55,7 @@ import (
 
 const (
 	gtidFlavor   = "MySQL56"
+	serverUUID   = "16b1039f-22b6-11ed-b765-0a43f95f28a3"
 	gtidPosition = "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-220"
 )
 
@@ -495,6 +497,15 @@ func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 
 func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), nil
+}
+
+func (tmc *fakeTMClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	pos, _ := tmc.PrimaryPosition(ctx, tablet)
+	return &replicationdatapb.PrimaryStatus{
+		Position:     pos,
+		FilePosition: pos,
+		ServerUuid:   serverUUID,
+	}, nil
 }
 
 func (tmc *fakeTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {

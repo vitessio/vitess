@@ -67,6 +67,9 @@ type FakeMysqlDaemon struct {
 	// return an error.
 	MysqlPort atomic.Int32
 
+	// ServerUUID is the server's UUID.
+	ServerUUID string
+
 	// Replicating is updated when calling StartReplication /
 	// StopReplication (it is not used at all when calling
 	// ReplicationStatus, it is the test owner responsibility
@@ -299,7 +302,10 @@ func (fmd *FakeMysqlDaemon) GetServerID(ctx context.Context) (uint32, error) {
 
 // GetServerUUID is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetServerUUID(ctx context.Context) (string, error) {
-	return "000000", nil
+	if fmd.ServerUUID != "" {
+		return fmd.ServerUUID, nil
+	}
+	return "00000000-0000-0000-0000-000000000000", nil
 }
 
 // ReplicationStatus is part of the MysqlDaemon interface.
@@ -331,9 +337,11 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 	if fmd.PrimaryStatusError != nil {
 		return replication.PrimaryStatus{}, fmd.PrimaryStatusError
 	}
+	serverUUID, _ := fmd.GetServerUUID(ctx)
 	return replication.PrimaryStatus{
 		Position:     fmd.CurrentPrimaryPosition,
 		FilePosition: fmd.CurrentSourceFilePosition,
+		ServerUUID:   serverUUID,
 	}, nil
 }
 
