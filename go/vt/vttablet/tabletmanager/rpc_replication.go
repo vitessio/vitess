@@ -772,7 +772,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if err != nil {
 			return err
 		}
-		// If we don't have the server UUID so we can't run errant GTID detection.
+		// If we don't have the server UUID, we can't run errant GTID detection.
 		// This happens if the primary vttablet is on an older release of Vitess
 		// where we didn't send server uuid in the response of PrimaryStatus.
 		if primaryStatus.ServerUuid != "" {
