@@ -305,7 +305,7 @@ func (fmd *FakeMysqlDaemon) GetServerUUID(ctx context.Context) (string, error) {
 	if fmd.ServerUUID != "" {
 		return fmd.ServerUUID, nil
 	}
-	return "000000", nil
+	return "00000000-0000-0000-0000-000000000000", nil
 }
 
 // ReplicationStatus is part of the MysqlDaemon interface.
@@ -337,10 +337,11 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 	if fmd.PrimaryStatusError != nil {
 		return replication.PrimaryStatus{}, fmd.PrimaryStatusError
 	}
+	serverUUID, _ := fmd.GetServerUUID(ctx)
 	return replication.PrimaryStatus{
 		Position:     fmd.CurrentPrimaryPosition,
 		FilePosition: fmd.CurrentSourceFilePosition,
-		ServerUUID:   fmd.ServerUUID,
+		ServerUUID:   serverUUID,
 	}, nil
 }
 
