@@ -434,7 +434,15 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	}
 	defer conn.Recycle()
 
-	return conn.Conn.ShowPrimaryStatus()
+	primaryStatus, err := conn.Conn.ShowPrimaryStatus()
+	if err != nil {
+		return replication.PrimaryStatus{}, err
+	}
+	primaryStatus.ServerUUID, err = conn.Conn.GetServerUUID()
+	if err != nil {
+		return replication.PrimaryStatus{}, err
+	}
+	return primaryStatus, nil
 }
 
 func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
