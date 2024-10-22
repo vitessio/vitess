@@ -29,6 +29,7 @@ import (
 )
 
 func TestComBinlogDump(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
 		listener.Close()

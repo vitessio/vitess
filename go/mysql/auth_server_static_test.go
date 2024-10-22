@@ -37,6 +37,7 @@ func (a *AuthServerStatic) getEntries() map[string][]*AuthServerStaticEntry {
 }
 
 func TestJsonConfigParser(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	// works with legacy format
 	config := make(map[string][]*AuthServerStaticEntry)
 	jsonConfig := "{\"mysql_user\":{\"Password\":\"123\", \"UserData\":\"dummy\"}, \"mysql_user_2\": {\"Password\": \"123\", \"UserData\": \"mysql_user_2\"}}"
@@ -69,6 +70,7 @@ func TestJsonConfigParser(t *testing.T) {
 }
 
 func TestValidateHashGetter(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	jsonConfig := `{"mysql_user": [{"Password": "password", "UserData": "user.name", "Groups": ["user_group"]}]}`
 
 	auth := NewAuthServerStatic("", jsonConfig, 0)
@@ -92,6 +94,7 @@ func TestValidateHashGetter(t *testing.T) {
 }
 
 func TestHostMatcher(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	ip := net.ParseIP("192.168.0.1")
 	addr := &net.TCPAddr{IP: ip, Port: 9999}
 	match := MatchSourceHost(net.Addr(addr), "")
@@ -195,6 +198,7 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 }
 
 func TestStaticPasswords(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	jsonConfig := `
 {
 	"user01": [{ "Password": "user01" }],
