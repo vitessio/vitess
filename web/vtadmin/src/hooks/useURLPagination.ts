@@ -20,6 +20,7 @@ import { useURLQuery } from './useURLQuery';
 
 export interface PaginationOpts {
     totalPages: number;
+    pageQueryKey?: string;
 }
 
 export interface PaginationParams {
@@ -35,7 +36,7 @@ const FIRST_PAGE = 1;
  * 	- use pagination in some way
  * 	- encode pagination state in the URL (e.g., /some/route?page=123)
  */
-export const useURLPagination = ({ totalPages }: PaginationOpts): PaginationParams => {
+export const useURLPagination = ({ totalPages, pageQueryKey = "page" }: PaginationOpts): PaginationParams => {
     const history = useHistory();
     const location = useLocation();
     const { query, replaceQuery } = useURLQuery({ parseNumbers: true });
@@ -43,7 +44,7 @@ export const useURLPagination = ({ totalPages }: PaginationOpts): PaginationPara
     // A slight nuance here -- if `page` is not in the URL at all, then we can assume
     // it's the first page. This makes for slightly nicer URLs for the first/default page:
     // "/foo" instead of "/foo?page=1". No redirect required.
-    const page = !('page' in query) || query.page === null ? FIRST_PAGE : query.page;
+    const page = !(pageQueryKey in query) || query[pageQueryKey] === null ? FIRST_PAGE : query[pageQueryKey];
 
     useEffect(() => {
         // If the value in the URL *is* defined but is negative, non-numeric,
@@ -53,9 +54,9 @@ export const useURLPagination = ({ totalPages }: PaginationOpts): PaginationPara
 
         if (isPageTooBig || isPageTooSmall || typeof page !== 'number') {
             // Replace history so the invalid value is not persisted in browser history
-            replaceQuery({ page: FIRST_PAGE });
+            replaceQuery({ [pageQueryKey]: FIRST_PAGE });
         }
-    }, [page, totalPages, history, location.pathname, query, replaceQuery]);
+    }, [page, pageQueryKey, totalPages, history, location.pathname, query, replaceQuery]);
 
     return {
         page,
