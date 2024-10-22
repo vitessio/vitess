@@ -762,7 +762,7 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 		if ok && backingUp {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it is running a backup", tabletAliasStr)
 			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
-				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s will not be able to make forward progress on being promoted", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s is taking backup, refusing to promote it", topoproto.TabletAliasString(opts.NewPrimaryAlias))
 			}
 			continue
 		}
