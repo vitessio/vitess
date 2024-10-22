@@ -325,11 +325,8 @@ func (tp *TransactionPayload) decompress() error {
 func (tp *TransactionPayload) Close() {
 	switch reader := tp.reader.(type) {
 	case *zstd.Decoder:
-		if err := reader.Reset(nil); err == nil || err == io.EOF {
-			statefulDecoderPool.Put(reader)
-		}
+		statefulDecoderPool.Put(reader)
 	default:
-		reader = nil
 	}
 	tp.iterator = nil
 }
@@ -361,8 +358,10 @@ type decoderPool struct {
 
 // Get gets a pooled OR new *zstd.Decoder.
 func (dp *decoderPool) Get(reader io.Reader) (*zstd.Decoder, error) {
-	decoder := dp.pool.Get().(*zstd.Decoder)
-	if decoder == nil {
+	var decoder *zstd.Decoder
+	if pooled := dp.pool.Get(); pooled != nil {
+		decoder = pooled.(*zstd.Decoder)
+	} else {
 		d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
 		if err != nil { // Should only happen e.g. due to ENOMEM
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateful stream decoder")
