@@ -1335,9 +1335,9 @@ func TestSourceShardSelection(t *testing.T) {
 			}
 
 			for uid, streams := range tt.streams {
-				ttab := targetTablets[uid]
-				ttab.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-				ttab.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
+				targetTablet := targetTablets[uid]
+				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 				for _, table := range tt.schema.TableDefinitions {
 					tenv.db.AddQuery(fmt.Sprintf(getNonEmptyTableQuery, table.Name), &sqltypes.Result{})
 				}
@@ -1349,18 +1349,18 @@ func TestSourceShardSelection(t *testing.T) {
 						// everything we wanted to in the test.
 						err = errShortCircuit
 					}
-					ttab.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-					ttab.vrdbClient.ExpectRequest(
+					targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+					targetTablet.vrdbClient.ExpectRequest(
 						fmt.Sprintf(`%s values ('%s', 'keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0, '{}')`,
-							insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, ttab.tablet.Shard, tenv.cells[0], tenv.dbName),
+							insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, targetTablet.tablet.Shard, tenv.cells[0], tenv.dbName),
 						&sqltypes.Result{InsertID: uint64(i + 1)},
 						err,
 					)
 					if errors.Is(err, errShortCircuit) {
 						break
 					}
-					ttab.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
-					ttab.vrdbClient.ExpectRequest(
+					targetTablet.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+					targetTablet.vrdbClient.ExpectRequest(
 						fmt.Sprintf("select * from _vt.vreplication where id = %d", uint64(i+1)),
 						sqltypes.MakeTestResult(
 							sqltypes.MakeTestFields(
@@ -1368,7 +1368,7 @@ func TestSourceShardSelection(t *testing.T) {
 								"int64|varchar|varchar|varchar",
 							),
 							fmt.Sprintf("%d|%s|Stopped|{}", uint64(i+1), fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1 where in_keyrange(id, '%s.hash', '%s')"}}`,
-								sourceKs, sourceShard, targetKs, ttab.tablet.Shard)),
+								sourceKs, sourceShard, targetKs, targetTablet.tablet.Shard)),
 						),
 						nil,
 					)
