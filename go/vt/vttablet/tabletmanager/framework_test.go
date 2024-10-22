@@ -520,9 +520,10 @@ func (tmc *fakeTMClient) VReplicationWaitForPos(ctx context.Context, tablet *top
 	return nil
 }
 
+// TODO (mlord): Implement this so that we can also test the work from
+// https://github.com/vitessio/vitess/pull/16874 with tests in this package.
 func (tmc *fakeTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
-	// Reuse VReplicationExec
-	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
+	return &querypb.QueryResult{}, nil
 }
 
 func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
