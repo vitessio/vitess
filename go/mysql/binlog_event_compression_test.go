@@ -26,8 +26,10 @@ import (
 )
 
 func TestDecoderPool(t *testing.T) {
-	type args struct {
-		r io.Reader
+	validateDecoder := func(t *testing.T, err error, decoder *zstd.Decoder) {
+		require.NoError(t, err)
+		require.NotNil(t, decoder)
+		require.IsType(t, &zstd.Decoder{}, decoder)
 	}
 	tests := []struct {
 		name    string
@@ -39,6 +41,7 @@ func TestDecoderPool(t *testing.T) {
 			reader: bytes.NewReader([]byte{0x68, 0x61, 0x70, 0x70, 0x79}),
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// It's not guaranteed that we get the same decoder back from the pool
@@ -48,24 +51,18 @@ func TestDecoderPool(t *testing.T) {
 
 			for i := 0; i < 20; i++ {
 				decoder, err := statefulDecoderPool.Get(tt.reader)
-				require.NoError(t, err)
-				require.NotNil(t, decoder)
-				require.IsType(t, &zstd.Decoder{}, decoder)
+				validateDecoder(t, err, decoder)
 				statefulDecoderPool.Put(decoder)
 
 				decoder2, err := statefulDecoderPool.Get(tt.reader)
-				require.NoError(t, err)
-				require.NotNil(t, decoder2)
-				require.IsType(t, &zstd.Decoder{}, decoder2)
+				validateDecoder(t, err, decoder2)
 				if decoder2 == decoder {
 					poolingUsed = true
 				}
 				statefulDecoderPool.Put(decoder2)
 
 				decoder3, err := statefulDecoderPool.Get(tt.reader)
-				require.NoError(t, err)
-				require.NotNil(t, &zstd.Decoder{}, decoder3)
-				require.IsType(t, &zstd.Decoder{}, decoder3)
+				validateDecoder(t, err, decoder3)
 				if decoder3 == decoder || decoder3 == decoder2 {
 					poolingUsed = true
 				}
