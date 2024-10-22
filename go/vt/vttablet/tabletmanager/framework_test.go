@@ -48,12 +48,14 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
 	gtidFlavor   = "MySQL56"
+	serverUUID   = "16b1039f-22b6-11ed-b765-0a43f95f28a3"
 	gtidPosition = "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-220"
 )
 
@@ -492,8 +494,8 @@ func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 	}
 	for qry, res := range tmc.vreQueries[int(tablet.Alias.Uid)] {
 		if strings.HasPrefix(qry, "/") {
-			re := regexp.MustCompile(qry)
-			if re.MatchString(qry) {
+			re := regexp.MustCompile(qry[1:])
+			if re.MatchString(query) {
 				return res, nil
 			}
 		}
@@ -503,6 +505,15 @@ func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 
 func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), nil
+}
+
+func (tmc *fakeTMClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	pos, _ := tmc.PrimaryPosition(ctx, tablet)
+	return &replicationdatapb.PrimaryStatus{
+		Position:     pos,
+		FilePosition: pos,
+		ServerUuid:   serverUUID,
+	}, nil
 }
 
 func (tmc *fakeTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {

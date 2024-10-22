@@ -33,19 +33,21 @@ import (
 
 // DTExecutor is used for executing a distributed transactional request.
 type DTExecutor struct {
-	ctx      context.Context
-	logStats *tabletenv.LogStats
-	te       *TxEngine
-	qe       *QueryEngine
+	ctx       context.Context
+	logStats  *tabletenv.LogStats
+	te        *TxEngine
+	qe        *QueryEngine
+	shardFunc func() string
 }
 
 // NewDTExecutor creates a new distributed transaction executor.
-func NewDTExecutor(ctx context.Context, te *TxEngine, qe *QueryEngine, logStats *tabletenv.LogStats) *DTExecutor {
+func NewDTExecutor(ctx context.Context, logStats *tabletenv.LogStats, te *TxEngine, qe *QueryEngine, shardFunc func() string) *DTExecutor {
 	return &DTExecutor{
-		ctx:      ctx,
-		te:       te,
-		qe:       qe,
-		logStats: logStats,
+		ctx:       ctx,
+		logStats:  logStats,
+		te:        te,
+		qe:        qe,
+		shardFunc: shardFunc,
 	}
 }
 
@@ -159,10 +161,21 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	defer func() {
 		if err != nil {
 			log.Warningf("failed to commit the prepared transaction '%s' with error: %v", dtid, err)
-			dte.te.checkErrorAndMarkFailed(ctx, dtid, err, "TwopcCommit")
+			fail := dte.te.checkErrorAndMarkFailed(ctx, dtid, err, "TwopcCommit")
+			if fail {
+				dte.te.env.Stats().CommitPreparedFail.Add("NonRetryable", 1)
+			} else {
+				dte.te.env.Stats().CommitPreparedFail.Add("Retryable", 1)
+			}
 		}
 		dte.te.txPool.RollbackAndRelease(ctx, conn)
 	}()
+	if DebugTwoPc {
+		if err := checkTestFailure(dte.ctx, dte.shardFunc()); err != nil {
+			log.Errorf("failing test on commit prepared: %v", err)
+			return err
+		}
+	}
 	if err = dte.te.twoPC.DeleteRedo(ctx, conn, dtid); err != nil {
 		return err
 	}

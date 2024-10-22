@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -49,6 +48,19 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+)
+
+var (
+	allTabletTypes = []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
+
+	roTabletTypes = []topodatapb.TabletType{
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
 )
 
 type fakeTMC struct {
@@ -183,9 +195,17 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 // to ensure that it behaves as expected given a specific request.
 func TestVDiffCreate(t *testing.T) {
 	ctx := context.Background()
-	ts := memorytopo.NewServer(ctx, "cell")
-	tmc := &fakeTMC{}
-	s := NewServer(vtenv.NewTestEnv(), ts, tmc)
+	workflowName := "wf1"
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "source",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "target",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
 
 	tests := []struct {
 		name    string
@@ -198,17 +218,32 @@ func TestVDiffCreate(t *testing.T) {
 			// We did not provide any keyspace or shard.
 			wantErr: "FindAllShardsInKeyspace() invalid keyspace name: UnescapeID err: invalid input identifier ''",
 		},
+		{
+			name: "generated UUID",
+			req: &vtctldatapb.VDiffCreateRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflowName,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := s.VDiffCreate(ctx, tt.req)
+			if tt.wantErr == "" {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspace.KeyspaceName, &queryResult{
+					query:  "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)",
+					result: &querypb.QueryResult{},
+				})
+			}
+			got, err := env.ws.VDiffCreate(ctx, tt.req)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
 			require.NotNil(t, got)
-			require.NotEmpty(t, got.UUID)
+			// Ensure that we always use a valid UUID.
+			err = uuid.Validate(got.UUID)
+			require.NoError(t, err)
 		})
 	}
 }
@@ -1233,12 +1268,6 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 	targetKeyspaceName := "targetks"
 	vrID := 1
 
-	tabletTypes := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
-	}
-
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
 		tableName: {
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -1328,7 +1357,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 			},
 			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
 				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
@@ -1350,11 +1379,33 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionBackward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 			},
 			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
 				Summary:      fmt.Sprintf("ReverseTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
 				StartState:   "All Reads Switched. Writes Switched",
+				CurrentState: "Reads Not Switched. Writes Not Switched",
+			},
+		},
+		{
+			name: "backward for read-only tablets",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionBackward),
+				TabletTypes: roTabletTypes,
+			},
+			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:      fmt.Sprintf("ReverseTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
+				StartState:   "All Reads Switched. Writes Not Switched",
 				CurrentState: "Reads Not Switched. Writes Not Switched",
 			},
 		},
@@ -1372,7 +1423,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 			},
 			preFunc: func(env *testEnv) {
 				env.tmc.SetRefreshStateError(env.tablets[sourceKeyspaceName][startingSourceTabletUID], errors.New("tablet refresh error"))
@@ -1394,7 +1445,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 				Force:       true,
 			},
 			preFunc: func(env *testEnv) {
@@ -1434,22 +1485,28 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.updateTableRoutingRules(t, ctx, tabletTypes, []string{tableName},
+				env.updateTableRoutingRules(t, ctx, tc.req.TabletTypes, []string{tableName},
 					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
+				if !slices.Contains(tc.req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, journalQR)
+					}
+				} else {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
+					}
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
+					}
+					for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, deleteWFQR)
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createWFQR)
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createJournalQR)
+					}
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, freezeReverseWFQR)
 				}
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
-				}
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
-				}
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, deleteWFQR)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createWFQR)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, createJournalQR)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, freezeReverseWFQR)
 			}
 			if tc.preFunc != nil {
 				tc.preFunc(env)
@@ -1465,29 +1522,47 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			// Confirm that we have the expected routing rules.
 			rr, err := env.ts.GetRoutingRules(ctx)
 			require.NoError(t, err)
-			to := fmt.Sprintf("%s.%s", tc.targetKeyspace.KeyspaceName, tableName)
-			if tc.req.Direction == int32(DirectionBackward) {
-				to = fmt.Sprintf("%s.%s", tc.sourceKeyspace.KeyspaceName, tableName)
-			}
 			for _, rr := range rr.Rules {
+				_, rrTabletType, found := strings.Cut(rr.FromTable, "@")
+				if !found { // No @<tablet_type> is primary
+					rrTabletType = topodatapb.TabletType_PRIMARY.String()
+				}
+				tabletType, err := topoproto.ParseTabletType(rrTabletType)
+				require.NoError(t, err)
+
+				var to string
+				if slices.Contains(tc.req.TabletTypes, tabletType) {
+					to = fmt.Sprintf("%s.%s", tc.targetKeyspace.KeyspaceName, tableName)
+					if tc.req.Direction == int32(DirectionBackward) {
+						to = fmt.Sprintf("%s.%s", tc.sourceKeyspace.KeyspaceName, tableName)
+					}
+				} else {
+					to = fmt.Sprintf("%s.%s", tc.sourceKeyspace.KeyspaceName, tableName)
+					if tc.req.Direction == int32(DirectionBackward) {
+						to = fmt.Sprintf("%s.%s", tc.targetKeyspace.KeyspaceName, tableName)
+					}
+				}
 				for _, tt := range rr.ToTables {
-					require.Equal(t, to, tt)
+					require.Equal(t, to, tt, "Additional info: tablet type: %s, rr.FromTable: %s, rr.ToTables: %v, to string: %s",
+						tabletType.String(), rr.FromTable, rr.ToTables, to)
 				}
 			}
 			// Confirm that we have the expected denied tables entries.
-			for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
-				for _, shardName := range keyspace.ShardNames {
-					si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
-					require.NoError(t, err)
-					switch {
-					case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionForward):
-						require.True(t, hasDeniedTableEntry(si))
-					case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionBackward):
-						require.False(t, hasDeniedTableEntry(si))
-					case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionForward):
-						require.False(t, hasDeniedTableEntry(si))
-					case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionBackward):
-						require.True(t, hasDeniedTableEntry(si))
+			if slices.Contains(tc.req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
+					for _, shardName := range keyspace.ShardNames {
+						si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
+						require.NoError(t, err)
+						switch {
+						case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionForward):
+							require.True(t, hasDeniedTableEntry(si))
+						case keyspace == tc.sourceKeyspace && tc.req.Direction == int32(DirectionBackward):
+							require.False(t, hasDeniedTableEntry(si))
+						case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionForward):
+							require.False(t, hasDeniedTableEntry(si))
+						case keyspace == tc.targetKeyspace && tc.req.Direction == int32(DirectionBackward):
+							require.True(t, hasDeniedTableEntry(si))
+						}
 					}
 				}
 			}
@@ -1508,11 +1583,6 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 	sourceKeyspaceName := "sourceks"
 	targetKeyspaceName := "targetks"
 	vrID := 1
-	tabletTypes := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
-	}
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
 		table1Name: {
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -1565,7 +1635,7 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionForward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 				DryRun:      true,
 			},
 			want: []string{
@@ -1606,13 +1676,13 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				Keyspace:    targetKeyspaceName,
 				Workflow:    workflowName,
 				Direction:   int32(DirectionBackward),
-				TabletTypes: tabletTypes,
+				TabletTypes: allTabletTypes,
 				DryRun:      true,
 			},
 			want: []string{
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", targetKeyspaceName, sourceKeyspaceName),
-				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
+				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
@@ -1631,6 +1701,32 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 					sourceKeyspaceName, startingSourceTabletUID, ReverseWorkflowName(workflowName), sourceKeyspaceName, sourceKeyspaceName, startingSourceTabletUID+tabletUIDStep, ReverseWorkflowName(workflowName), sourceKeyspaceName),
 				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Unlock keyspace %s", targetKeyspaceName),
+			},
+		},
+		{
+			name: "backward for read-only tablets",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionBackward),
+				TabletTypes: roTabletTypes,
+				DryRun:      true,
+			},
+			want: []string{
+				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
+				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, sourceKeyspaceName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", sourceKeyspaceName),
+				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
 			},
 		},
 	}
@@ -1653,14 +1749,20 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				env.updateTableRoutingRules(t, ctx, tabletTypes, tables,
+				env.updateTableRoutingRules(t, ctx, tc.req.TabletTypes, tables,
 					tc.sourceKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName, tc.targetKeyspace.KeyspaceName)
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
-				}
-				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
-					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
+				if !slices.Contains(tc.req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+					for i := 0; i < len(tc.sourceKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, journalQR)
+					}
+				} else {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
+					for i := 0; i < len(tc.sourceKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
+					}
+					for i := 0; i < len(tc.sourceKeyspace.ShardNames); i++ { // Per stream
+						env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, lockTableQR)
+					}
 				}
 			}
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
@@ -2094,4 +2196,63 @@ func createReadVReplicationWorkflowFunc(t *testing.T, workflowType binlogdatapb.
 			Streams:      streams,
 		}, nil
 	}
+}
+
+// Test checks that we don't include logs from non-existent streams in the result.
+// Ensures that we just skip the logs from non-existent streams and include the rest.
+func TestGetWorkflowsStreamLogs(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := "source_keyspace"
+	targetKeyspace := "target_keyspace"
+	workflow := "test_workflow"
+
+	sourceShards := []string{"-"}
+	targetShards := []string{"-"}
+
+	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: sourceKeyspace,
+		TargetKeyspace: targetKeyspace,
+		Workflow:       workflow,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "table1",
+				SourceExpression: fmt.Sprintf("select * from %s", "table1"),
+			},
+			{
+				TargetTable:      "table2",
+				SourceExpression: fmt.Sprintf("select * from %s", "table2"),
+			},
+		},
+	}, sourceShards, targetShards)
+
+	logResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|vrepl_id|type|state|message|created_at|updated_at|`count`", "int64|int64|varchar|varchar|varchar|varchar|varchar|int64"),
+		"1|0|State Change|Running|test message for non-existent 1|2006-01-02 15:04:05|2006-01-02 15:04:05|1",
+		"2|0|State Change|Stopped|test message for non-existent 2|2006-01-02 15:04:06|2006-01-02 15:04:06|1",
+		"3|1|State Change|Running|log message|2006-01-02 15:04:07|2006-01-02 15:04:07|1",
+	)
+
+	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
+	te.tmc.expectVRQuery(200, "select id from _vt.vreplication where db_name = 'vt_target_keyspace' and workflow = 'test_workflow'", &sqltypes.Result{})
+	te.tmc.expectVRQuery(200, "select id, vrepl_id, type, state, message, created_at, updated_at, `count` from _vt.vreplication_log where vrepl_id in (1) order by vrepl_id asc, id asc", logResult)
+
+	res, err := te.ws.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
+		Keyspace:    targetKeyspace,
+		Workflow:    workflow,
+		IncludeLogs: true,
+	})
+	require.NoError(t, err)
+
+	assert.Len(t, res.Workflows, 1)
+	assert.NotNil(t, res.Workflows[0].ShardStreams["-/cell-0000000200"])
+	assert.Len(t, res.Workflows[0].ShardStreams["-/cell-0000000200"].Streams, 1)
+
+	gotLogs := res.Workflows[0].ShardStreams["-/cell-0000000200"].Streams[0].Logs
+
+	// The non-existent stream logs shouldn't be part of the result
+	assert.Len(t, gotLogs, 1)
+	assert.Equal(t, gotLogs[0].Message, "log message")
+	assert.Equal(t, gotLogs[0].State, "Running")
+	assert.Equal(t, gotLogs[0].Id, int64(3))
 }

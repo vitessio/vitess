@@ -172,6 +172,28 @@ func (sbc *SandboxConn) GetQueries() []*querypb.BoundQuery {
 	return sbc.Queries
 }
 
+// GetFinalQueries gets the final queries as strings from sandboxconn.
+func (sbc *SandboxConn) GetFinalQueries() ([]string, error) {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	var queries []string
+	for _, q := range sbc.Queries {
+		stmt, err := sbc.parser.Parse(q.Sql)
+		if err != nil {
+			return nil, err
+		}
+		pq := sqlparser.NewParsedQuery(stmt)
+		query, err := pq.GenerateQuery(q.BindVariables, nil)
+		if err != nil {
+			return nil, err
+		}
+		queries = append(queries, query)
+	}
+	return queries, nil
+}
+
 // ClearQueries clears the Queries in sandboxconn.
 func (sbc *SandboxConn) ClearQueries() {
 	if sbc.queriesRequireLocking {

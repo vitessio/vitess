@@ -607,9 +607,17 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+	ts.Logger().Infof("switchShardReads: workflow: %s, direction: %s, cells: %v, tablet types: %v",
+		ts.workflow, direction.String(), cells, servedTypes)
+
+	var fromShards, toShards []*topo.ShardInfo
+	if direction == DirectionForward {
+		fromShards, toShards = ts.SourceShards(), ts.TargetShards()
+	} else {
+		fromShards, toShards = ts.TargetShards(), ts.SourceShards()
+	}
+
 	cellsStr := strings.Join(cells, ",")
-	ts.Logger().Infof("switchShardReads: cells: %s, tablet types: %+v, direction %d", cellsStr, servedTypes, direction)
-	fromShards, toShards := ts.SourceShards(), ts.TargetShards()
 	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.TargetKeyspaceName(), cellsStr)
@@ -638,7 +646,9 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 }
 
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {
-	ts.Logger().Infof("switchTableReads: cells: %s, tablet types: %+v, direction: %s", strings.Join(cells, ","), servedTypes, direction)
+	ts.Logger().Infof("switchTableReads: workflow: %s, direction: %s, cells: %v, tablet types: %v",
+		ts.workflow, direction.String(), cells, servedTypes)
+
 	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
@@ -652,13 +662,19 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet type specified when switching reads: %v", servedType)
 		}
-
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.Tables() {
-			toTarget := []string{ts.TargetKeyspaceName() + "." + table}
-			rules[table+"@"+tt] = toTarget
-			rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
-			rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toTarget
+			if direction == DirectionForward {
+				toTarget := []string{ts.TargetKeyspaceName() + "." + table}
+				rules[table+"@"+tt] = toTarget
+				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
+				rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toTarget
+			} else {
+				toSource := []string{ts.SourceKeyspaceName() + "." + table}
+				rules[table+"@"+tt] = toSource
+				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toSource
+				rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toSource
+			}
 		}
 	}
 	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
