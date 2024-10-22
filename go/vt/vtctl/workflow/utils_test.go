@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
@@ -243,4 +244,40 @@ func startEtcd(t *testing.T) string {
 	})
 
 	return clientAddr
+}
+
+func TestValidateSourceTablesExist(t *testing.T) {
+	ctx := context.Background()
+	ks := "source_keyspace"
+	ksTables := []string{"table1", "table2"}
+
+	testCases := []struct {
+		name        string
+		tables      []string
+		errContains string
+	}{
+		{
+			name:   "no error",
+			tables: []string{"table2"},
+		},
+		{
+			name:   "ignore internal table",
+			tables: []string{"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", "table1", "table2"},
+		},
+		{
+			name:        "table not found error",
+			tables:      []string{"table3", "table1", "table2"},
+			errContains: "table3",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateSourceTablesExist(ctx, ks, ksTables, tc.tables)
+			if tc.errContains != "" {
+				assert.ErrorContains(t, err, tc.errContains)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
