@@ -970,7 +970,7 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 
 // initializeReplication is used to initialize the replication when the tablet starts.
 // It returns the current primary tablet for use externally
-func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (primaryPosStr string, err error) {
+func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (string, error) {
 	// If active reparents are disabled, we do not touch replication.
 	// There is nothing to do
 	if mysqlctl.DisableActiveReparents {
@@ -1045,27 +1045,29 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", err
 	}
 
-	primaryPosStr, err = tm.tmc.PrimaryPosition(ctx, currentPrimary.Tablet)
+	primaryStatus, err := tm.tmc.PrimaryStatus(ctx, currentPrimary.Tablet)
 	if err != nil {
 		return "", err
 	}
-
-	primaryPosition, err := replication.DecodePosition(primaryPosStr)
+	primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
 	if err != nil {
 		return "", err
 	}
-
-	errantGTIDs, err := replication.ErrantGTIDsOnReplica(replicaPos, primaryPosition)
+	primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
 	if err != nil {
 		return "", err
 	}
-	if errantGTIDs != "" {
-		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s", errantGTIDs))
+	errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPos, primaryPosition, primarySid)
+	if err != nil {
+		return "", err
+	}
+	if errantGtid != "" {
+		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
 	}
 
 	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, 0, true, true); err != nil {
 		return "", vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 
-	return primaryPosStr, nil
+	return primaryStatus.Position, nil
 }

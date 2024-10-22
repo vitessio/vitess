@@ -756,6 +756,7 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 		name             string
 		replicaPosition  string
 		primaryPosition  string
+		primarySID       string
 		errantGtidWanted string
 		wantErr          string
 	}{
@@ -763,27 +764,43 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 			name:             "Empty replica position",
 			replicaPosition:  "MySQL56/",
 			primaryPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			primarySID:       "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
 			errantGtidWanted: "",
 		}, {
 			name:             "Empty primary position",
 			replicaPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
 			primaryPosition:  "MySQL56/",
+			primarySID:       "8bc65cca-3fe4-11ed-bbfb-091034d48b3e",
 			errantGtidWanted: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+		}, {
+			name:            "Primary seen as lagging for its own writes",
+			replicaPosition: "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-33",
+			primaryPosition: "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-29",
+			primarySID:      "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
 		}, {
 			name:             "Empty primary position - with multiple errant gtids",
 			replicaPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 			primaryPosition:  "MySQL56/",
+			primarySID:       "8bc65cca-3fe4-11ed-bbfb-091034d49c4f",
 			errantGtidWanted: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 		}, {
 			name:             "Single errant GTID",
 			replicaPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
 			primaryPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-50,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-30",
+			primarySID:       "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
 			errantGtidWanted: "8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
 		}, {
 			name:             "Multiple errant GTID",
 			replicaPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-32,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-35",
 			primaryPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-50,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-30,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
+			primarySID:       "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9",
 			errantGtidWanted: "8bc65cca-3fe4-11ed-bbfb-091034d48b3e:31-32,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-33:35",
+		}, {
+			name:             "Multiple errant GTID after discounting primary writes",
+			replicaPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-10,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-32,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-35",
+			primaryPosition:  "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1-30,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:34",
+			primarySID:       "8bc65cca-3fe4-11ed-bbfb-091034d48b3e",
+			errantGtidWanted: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:9-10,8bc65cca-3fe4-11ed-bbfb-091034d48bd3:3-33:35",
 		},
 	}
 	for _, tt := range tests {
@@ -792,7 +809,9 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 			require.NoError(t, err)
 			primaryPos, err := DecodePosition(tt.primaryPosition)
 			require.NoError(t, err)
-			errantGTIDs, err := ErrantGTIDsOnReplica(replPos, primaryPos)
+			primarySID, err := ParseSID(tt.primarySID)
+			require.NoError(t, err)
+			errantGTIDs, err := ErrantGTIDsOnReplica(replPos, primaryPos, primarySID)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 			} else {

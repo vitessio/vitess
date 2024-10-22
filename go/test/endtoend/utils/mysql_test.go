@@ -233,6 +233,13 @@ func TestPrimaryStatus(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, res.Position.Equal(r.Position), "primary replication status should be same as replication status here")
+
+	suuid, err := mysqld.GetServerUUID(context.Background())
+	assert.NoError(t, err)
+	assert.NotEmpty(t, suuid)
+
+	// The server UUID read from primary status and GetServerUUID should match
+	assert.Equal(t, suuid, res.ServerUUID)
 }
 
 func TestReplicationConfiguration(t *testing.T) {
