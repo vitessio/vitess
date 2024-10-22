@@ -768,20 +768,29 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// We will then compare our own position against it to verify that we don't
 		// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
 		// we will not enter the replication graph and instead fail replication.
-		primaryPositionStr, err := tm.tmc.PrimaryPosition(ctx, parent.Tablet)
+		primaryStatus, err := tm.tmc.PrimaryStatus(ctx, parent.Tablet)
 		if err != nil {
 			return err
 		}
-		primaryPosition, err := replication.DecodePosition(primaryPositionStr)
-		if err != nil {
-			return err
-		}
-		errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition)
-		if err != nil {
-			return err
-		}
-		if errantGtid != "" {
-			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
+		// If we don't have the server UUID so we can't run errant GTID detection.
+		// This happens if the primary vttablet is on an older release of Vitess
+		// where we didn't send server uuid in the response of PrimaryStatus.
+		if primaryStatus.ServerUuid != "" {
+			primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
+			if err != nil {
+				return err
+			}
+			primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
+			if err != nil {
+				return err
+			}
+			errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition, primarySid)
+			if err != nil {
+				return err
+			}
+			if errantGtid != "" {
+				return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
+			}
 		}
 	}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
