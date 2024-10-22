@@ -19,7 +19,6 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"sync"
 
@@ -91,14 +90,6 @@ var (
 	// usage.
 	statefulDecoderPool = &decoderPool{}
 )
-
-func init() {
-	var err error
-	statelessDecoder, err = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
-	if err != nil { // Should only happen e.g. due to ENOMEM
-		panic(fmt.Errorf("failed to create stateless decoder: %v", err))
-	}
-}
 
 type TransactionPayload struct {
 	size             uint64
@@ -305,6 +296,13 @@ func (tp *TransactionPayload) decompress() error {
 	}
 
 	// Process smaller payloads using only in-memory buffers.
+	if statelessDecoder == nil { // Should only need to be done once
+		var err error
+		statelessDecoder, err = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+		if err != nil { // Should only happen e.g. due to ENOMEM
+			return vterrors.Wrap(err, "failed to create stateless decoder")
+		}
+	}
 	decompressedBytes := make([]byte, 0, tp.uncompressedSize) // Perform a single pre-allocation
 	decompressedBytes, err := statelessDecoder.DecodeAll(tp.payload, decompressedBytes[:0])
 	if err != nil {
