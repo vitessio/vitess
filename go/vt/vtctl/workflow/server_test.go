@@ -1894,67 +1894,6 @@ func TestGetWorkflowsStreamLogs(t *testing.T) {
 	assert.Equal(t, gotLogs[0].Id, int64(3))
 }
 
-// func TestVDiffShow(t *testing.T) {
-// 	ctx := context.Background()
-
-// 	sourceKeyspace := "source_keyspace"
-// 	targetKeyspace := "target_keyspace"
-// 	workflow := "test_workflow"
-
-// 	sourceShards := []string{"-"}
-// 	targetShards := []string{"-"}
-
-// 	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
-// 		SourceKeyspace: sourceKeyspace,
-// 		TargetKeyspace: targetKeyspace,
-// 		Workflow:       workflow,
-// 		TableSettings: []*vtctldatapb.TableMaterializeSettings{
-// 			{
-// 				TargetTable:      "table1",
-// 				SourceExpression: fmt.Sprintf("select * from %s", "table1"),
-// 			},
-// 			{
-// 				TargetTable:      "table2",
-// 				SourceExpression: fmt.Sprintf("select * from %s", "table2"),
-// 			},
-// 		},
-// 	}, sourceShards, targetShards)
-
-// 	res, err := te.ws.VDiffShow(ctx, &vtctldatapb.VDiffShowRequest{
-// 		Workflow:       workflow,
-// 		TargetKeyspace: targetKeyspace,
-// 		Arg:            "last",
-// 	})
-// 	assert.NoError(t, err)
-// 	// Expect 1 key-value pair in tablet responses as there's only a single shard.
-// 	require.Len(t, res.TabletResponses, 1)
-
-// 	// As there's no VDiff created for the workflow, VDiff UUID should be empty.
-// 	status := res.TabletResponses["-"]
-// 	assert.Empty(t, status.VdiffUuid)
-// 	// copyStateResult := sqltypes.MakeTestResult(
-// 	// 	sqltypes.MakeTestFields("vrepl_id|table_name|lastpk", "int64|varchar|int64"),
-// 	// )
-// 	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
-
-// 	res2, err := te.ws.VDiffCreate(ctx, &vtctldatapb.VDiffCreateRequest{
-// 		Workflow:       workflow,
-// 		TargetKeyspace: targetKeyspace,
-// 	})
-// 	fmt.Println(res2, err)
-// 	require.NoError(t, err)
-// 	assert.NotNil(t, res2)
-// 	uuid := res2.UUID
-
-// 	// te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
-// 	res, err = te.ws.VDiffShow(ctx, &vtctldatapb.VDiffShowRequest{
-// 		Workflow:       workflow,
-// 		TargetKeyspace: targetKeyspace,
-// 		Arg:            uuid,
-// 	})
-// 	fmt.Println(res, err)
-// }
-
 func TestLookupVindexExternalize(t *testing.T) {
 	ctx := context.Background()
 

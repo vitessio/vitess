@@ -1393,7 +1393,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 	if len(tables) > 0 {
-		err = s.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, tables)
+		err = validateSourceTablesExist(ctx, sourceKeyspace, ksTables, tables)
 		if err != nil {
 			return nil, err
 		}
@@ -1405,7 +1405,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 	if len(req.ExcludeTables) > 0 {
-		err = s.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, req.ExcludeTables)
+		err = validateSourceTablesExist(ctx, sourceKeyspace, ksTables, req.ExcludeTables)
 		if err != nil {
 			return nil, err
 		}
@@ -2444,32 +2444,6 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	return response, nil
 }
 
-// validateSourceTablesExist validates that tables provided are present
-// in the source keyspace.
-func (s *Server) validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
-	var missingTables []string
-	for _, table := range tables {
-		if schema.IsInternalOperationTableName(table) {
-			continue
-		}
-		found := false
-
-		for _, ksTable := range ksTables {
-			if table == ksTable {
-				found = true
-				break
-			}
-		}
-		if !found {
-			missingTables = append(missingTables, table)
-		}
-	}
-	if len(missingTables) > 0 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table(s) not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
-	}
-	return nil
-}
-
 // addTablesToVSchema adds tables to an (unsharded) vschema if they are not already defined.
 // If copyVSchema is true then we copy over the vschema table definitions from the source,
 // otherwise we create empty ones.
@@ -2508,7 +2482,7 @@ func (s *Server) addTablesToVSchema(ctx context.Context, sourceKeyspace string, 
 func (s *Server) collectTargetStreams(ctx context.Context, mz *materializer) ([]string, error) {
 	var shardTablets []string
 	var mu sync.Mutex
-	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+	err := forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		var err error
 		targetPrimary, err := s.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
@@ -2534,30 +2508,13 @@ func (s *Server) collectTargetStreams(ctx context.Context, mz *materializer) ([]
 }
 
 func (s *Server) checkIfPreviousJournalExists(ctx context.Context, mz *materializer, migrationID int64) (bool, []string, error) {
-	forAllSources := func(f func(*topo.ShardInfo) error) error {
-		var wg sync.WaitGroup
-		allErrors := &concurrency.AllErrorRecorder{}
-		for _, sourceShard := range mz.sourceShards {
-			wg.Add(1)
-			go func(sourceShard *topo.ShardInfo) {
-				defer wg.Done()
-
-				if err := f(sourceShard); err != nil {
-					allErrors.RecordError(err)
-				}
-			}(sourceShard)
-		}
-		wg.Wait()
-		return allErrors.AggrError(vterrors.Aggregate)
-	}
-
 	var (
 		mu      sync.Mutex
 		exists  bool
 		tablets []string
 	)
 
-	err := forAllSources(func(si *topo.ShardInfo) error {
+	err := forAllShards(mz.sourceShards, func(si *topo.ShardInfo) error {
 		tablet, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
 			return err
