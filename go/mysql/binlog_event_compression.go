@@ -358,9 +358,15 @@ type decoderPool struct {
 
 // Get gets a pooled OR new *zstd.Decoder.
 func (dp *decoderPool) Get(reader io.Reader) (*zstd.Decoder, error) {
-	var decoder *zstd.Decoder
+	var (
+		decoder *zstd.Decoder
+		ok      bool
+	)
 	if pooled := dp.pool.Get(); pooled != nil {
-		decoder = pooled.(*zstd.Decoder)
+		decoder, ok = pooled.(*zstd.Decoder)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected *zstd.Decoder but got %T", pooled)
+		}
 	} else {
 		d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
 		if err != nil { // Should only happen e.g. due to ENOMEM

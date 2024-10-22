@@ -44,7 +44,7 @@ func TestDecoderPool(t *testing.T) {
 			// It's not guaranteed that we get the same decoder back from the pool
 			// that we just put in, so we use a loop and ensure that it worked at
 			// least one of the times. Without doing this the test would be flaky.
-			used := false
+			poolingUsed := false
 
 			for i := 0; i < 20; i++ {
 				decoder, err := statefulDecoderPool.Get(tt.reader)
@@ -56,9 +56,9 @@ func TestDecoderPool(t *testing.T) {
 				decoder2, err := statefulDecoderPool.Get(tt.reader)
 				require.NoError(t, err)
 				require.NotNil(t, decoder2)
-				require.IsType(t, &zstd.Decoder{}, decoder)
+				require.IsType(t, &zstd.Decoder{}, decoder2)
 				if decoder2 == decoder {
-					used = true
+					poolingUsed = true
 				}
 				statefulDecoderPool.Put(decoder2)
 
@@ -67,12 +67,12 @@ func TestDecoderPool(t *testing.T) {
 				require.NotNil(t, &zstd.Decoder{}, decoder3)
 				require.IsType(t, &zstd.Decoder{}, decoder3)
 				if decoder3 == decoder || decoder3 == decoder2 {
-					used = true
+					poolingUsed = true
 				}
-				statefulDecoderPool.Put(decoder)
+				statefulDecoderPool.Put(decoder3)
 			}
 
-			require.True(t, used)
+			require.True(t, poolingUsed)
 		})
 	}
 }
