@@ -1850,6 +1850,9 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 
 	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
 
+	if req.Limit == 0 { // This would produce no useful results
+		req.Limit = math.MaxInt64
+	}
 	// This is a pointer so there's no ZeroValue in the message
 	// and an older v18 client will not provide it.
 	if req.MaxDiffDuration == nil {
@@ -1859,7 +1862,10 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	// client should always provide them, but we check anyway to
 	// be safe.
 	if req.FilteredReplicationWaitTime == nil {
-		req.FilteredReplicationWaitTime = &vttimepb.Duration{}
+		// A value of 0 is not valid as the vdiff will never succeed.
+		req.FilteredReplicationWaitTime = &vttimepb.Duration{
+			Seconds: int64(DefaultTimeout.Seconds()),
+		}
 	}
 	if req.WaitUpdateInterval == nil {
 		req.WaitUpdateInterval = &vttimepb.Duration{}
