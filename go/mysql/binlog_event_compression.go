@@ -89,7 +89,7 @@ var (
 	// allocations and GC overhead so this pool allows us to handle
 	// concurrent cases better while still scaling to 0 when there's no
 	// usage.
-	statefulDecoderPool sync.Pool
+	statefulDecoderPool = &decoderPool{}
 )
 
 func init() {
@@ -98,7 +98,7 @@ func init() {
 	if err != nil { // Should only happen e.g. due to ENOMEM
 		log.Errorf("Error creating stateless decoder: %v", err)
 	}
-	statefulDecoderPool = sync.Pool{
+	statefulDecoderPool.pool = sync.Pool{
 		New: func() any {
 			d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
 			if err != nil { // Should only happen e.g. due to ENOMEM
@@ -304,12 +304,9 @@ func (tp *TransactionPayload) decompress() error {
 	// larger payloads.
 	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
 		in := bytes.NewReader(tp.payload)
-		streamDecoder := statefulDecoderPool.Get().(*zstd.Decoder)
-		if streamDecoder == nil {
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateful stream decoder")
-		}
-		if err := streamDecoder.Reset(in); err != nil {
-			return vterrors.Wrap(err, "error resetting stateful stream decoder")
+		streamDecoder, err := statefulDecoderPool.Get(in)
+		if err != nil {
+			return err
 		}
 		compressedTrxPayloadsUsingStream.Add(1)
 		tp.reader = streamDecoder
@@ -341,7 +338,7 @@ func (tp *TransactionPayload) Close() {
 	switch reader := tp.reader.(type) {
 	case *zstd.Decoder:
 		if err := reader.Reset(nil); err == nil || err == io.EOF {
-			readersPool.Put(reader)
+			statefulDecoderPool.Put(reader)
 		}
 	default:
 		reader = nil
@@ -368,3 +365,26 @@ func (tp *TransactionPayload) GetNextEvent() (BinlogEvent, error) {
 //func (tp *TransactionPayload) Events() iter.Seq[BinlogEvent] {
 //	return tp.iterator
 //}
+
+// decoderPool manages a sync.Pool of *zstd.Decoders.
+type decoderPool struct {
+	pool sync.Pool
+}
+
+// Get gets a new *zstd.Decoder.
+func (dp *decoderPool) Get(r io.Reader) (*zstd.Decoder, error) {
+	decoder, ok := dp.pool.Get().(*zstd.Decoder)
+	if !ok || decoder == nil {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "failed to create stateful stream decoder")
+	}
+	if err := decoder.Reset(r); err != nil {
+		return nil, vterrors.Wrap(err, "error resetting stateful stream decoder")
+	}
+	return decoder, nil
+}
+
+func (dp *decoderPool) Put(sd *zstd.Decoder) {
+	if err := sd.Reset(nil); err == nil || err == io.EOF {
+		dp.pool.Put(sd)
+	}
+}
