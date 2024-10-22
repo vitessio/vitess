@@ -726,7 +726,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	wasReplicating := false
 	shouldbeReplicating := false
 	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
-	replicaPosition := status.RelayLogPosition
 	if err == mysql.ErrNotReplica {
 		// This is a special error that means we actually succeeded in reading
 		// the status, but the status is empty because replication is not
@@ -736,12 +735,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// Since we continue in the case of this error, make sure 'status' is
 		// in a known, empty state.
 		status = replication.ReplicationStatus{}
-		// The replica position we use for the errant GTID detection should be the executed
-		// GTID set since this tablet is not running replication at all.
-		replicaPosition, err = tm.MysqlDaemon.PrimaryPosition(ctx)
-		if err != nil {
-			return err
-		}
 	} else if err != nil {
 		// Abort on any other non-nil error.
 		return err
@@ -773,34 +766,11 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if err != nil {
 		return err
 	}
-
 	host := parent.Tablet.MysqlHostname
 	port := parent.Tablet.MysqlPort
 	// If host is empty, then we shouldn't even attempt the reparent. That tablet has already shutdown.
 	if host == "" {
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
-	}
-	// Errant GTID detection.
-	{
-		// Find the executed GTID set of the tablet that we are reparenting to.
-		// We will then compare our own position against it to verify that we don't
-		// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
-		// we will not enter the replication graph and instead fail replication.
-		primaryPositionStr, err := tm.tmc.PrimaryPosition(ctx, parent.Tablet)
-		if err != nil {
-			return err
-		}
-		primaryPosition, err := replication.DecodePosition(primaryPositionStr)
-		if err != nil {
-			return err
-		}
-		errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition)
-		if err != nil {
-			return err
-		}
-		if errantGtid != "" {
-			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
-		}
 	}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
