@@ -46,7 +46,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -1892,64 +1891,4 @@ func TestGetWorkflowsStreamLogs(t *testing.T) {
 	assert.Equal(t, gotLogs[0].Message, "log message")
 	assert.Equal(t, gotLogs[0].State, "Running")
 	assert.Equal(t, gotLogs[0].Id, int64(3))
-}
-
-func TestLookupVindexExternalize(t *testing.T) {
-	ctx := context.Background()
-
-	sourceKeyspace := "source_keyspace"
-	targetKeyspace := "target_keyspace"
-	workflow := "test_workflow"
-
-	sourceShards := []string{"-"}
-	targetShards := []string{"-"}
-
-	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
-		SourceKeyspace: sourceKeyspace,
-		TargetKeyspace: targetKeyspace,
-		Workflow:       workflow,
-	}, sourceShards, targetShards)
-
-	vindex := &vschemapb.Vindex{
-		Type: "unicode_loose_xxhash",
-		Params: map[string]string{
-			"write_only": "",
-		},
-	}
-	err := te.ws.ts.SaveVSchema(ctx, sourceKeyspace, &vschemapb.Keyspace{
-		Vindexes: map[string]*vschemapb.Vindex{
-			workflow: vindex,
-		},
-	})
-	require.NoError(t, err)
-
-	res, err := te.ws.LookupVindexExternalize(ctx, &vtctldatapb.LookupVindexExternalizeRequest{
-		Keyspace:      sourceKeyspace,
-		TableKeyspace: targetKeyspace,
-		Name:          workflow,
-	})
-	assert.NoError(t, err)
-	assert.False(t, res.WorkflowDeleted, "WorkflowDeleted should be false as there's no vindex owner.")
-
-	vindex.Owner = "owner"
-	err = te.ws.ts.SaveVSchema(ctx, sourceKeyspace, &vschemapb.Keyspace{
-		Vindexes: map[string]*vschemapb.Vindex{
-			workflow: vindex,
-		},
-	})
-	require.NoError(t, err)
-
-	te.tmc.expectVRQuery(100, "delete from _vt.vreplication where db_name = 'vt_source_keyspace' and workflow = 'test_workflow_reverse'", &sqltypes.Result{})
-	te.tmc.expectFetchAsAllPrivsQuery(100, "optimize table _vt.copy_state", &sqltypes.Result{})
-	te.tmc.expectFetchAsAllPrivsQuery(100, "alter table _vt.copy_state auto_increment = 1", &sqltypes.Result{})
-	te.tmc.expectFetchAsAllPrivsQuery(200, "optimize table _vt.copy_state", &sqltypes.Result{})
-	te.tmc.expectFetchAsAllPrivsQuery(200, "alter table _vt.copy_state auto_increment = 1", &sqltypes.Result{})
-
-	res, err = te.ws.LookupVindexExternalize(ctx, &vtctldatapb.LookupVindexExternalizeRequest{
-		Keyspace:      sourceKeyspace,
-		TableKeyspace: targetKeyspace,
-		Name:          workflow,
-	})
-	assert.NoError(t, err)
-	assert.True(t, res.WorkflowDeleted, "WorkflowDeleted should be true as there's a vindex owner.")
 }

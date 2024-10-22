@@ -303,7 +303,6 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Contex
 					Rules: rules,
 				},
 			},
-			State: binlogdatapb.VReplicationWorkflowState_Running,
 		}
 	}
 	return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
