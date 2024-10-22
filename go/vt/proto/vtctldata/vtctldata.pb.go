@@ -14580,28 +14580,86 @@ type VDiffCreateRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Workflow                    string                                      `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
-	TargetKeyspace              string                                      `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
-	Uuid                        string                                      `protobuf:"bytes,3,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	SourceCells                 []string                                    `protobuf:"bytes,4,rep,name=source_cells,json=sourceCells,proto3" json:"source_cells,omitempty"`
-	TargetCells                 []string                                    `protobuf:"bytes,5,rep,name=target_cells,json=targetCells,proto3" json:"target_cells,omitempty"`
-	TabletTypes                 []topodata.TabletType                       `protobuf:"varint,6,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
-	TabletSelectionPreference   tabletmanagerdata.TabletSelectionPreference `protobuf:"varint,7,opt,name=tablet_selection_preference,json=tabletSelectionPreference,proto3,enum=tabletmanagerdata.TabletSelectionPreference" json:"tablet_selection_preference,omitempty"`
-	Tables                      []string                                    `protobuf:"bytes,8,rep,name=tables,proto3" json:"tables,omitempty"`
-	Limit                       int64                                       `protobuf:"varint,9,opt,name=limit,proto3" json:"limit,omitempty"`
-	FilteredReplicationWaitTime *vttime.Duration                            `protobuf:"bytes,10,opt,name=filtered_replication_wait_time,json=filteredReplicationWaitTime,proto3" json:"filtered_replication_wait_time,omitempty"`
-	DebugQuery                  bool                                        `protobuf:"varint,11,opt,name=debug_query,json=debugQuery,proto3" json:"debug_query,omitempty"`
-	OnlyPKs                     bool                                        `protobuf:"varint,12,opt,name=only_p_ks,json=onlyPKs,proto3" json:"only_p_ks,omitempty"`
-	UpdateTableStats            bool                                        `protobuf:"varint,13,opt,name=update_table_stats,json=updateTableStats,proto3" json:"update_table_stats,omitempty"`
-	MaxExtraRowsToCompare       int64                                       `protobuf:"varint,14,opt,name=max_extra_rows_to_compare,json=maxExtraRowsToCompare,proto3" json:"max_extra_rows_to_compare,omitempty"`
-	Wait                        bool                                        `protobuf:"varint,15,opt,name=wait,proto3" json:"wait,omitempty"`
-	WaitUpdateInterval          *vttime.Duration                            `protobuf:"bytes,16,opt,name=wait_update_interval,json=waitUpdateInterval,proto3" json:"wait_update_interval,omitempty"`
-	AutoRetry                   bool                                        `protobuf:"varint,17,opt,name=auto_retry,json=autoRetry,proto3" json:"auto_retry,omitempty"`
-	Verbose                     bool                                        `protobuf:"varint,18,opt,name=verbose,proto3" json:"verbose,omitempty"`
-	MaxReportSampleRows         int64                                       `protobuf:"varint,19,opt,name=max_report_sample_rows,json=maxReportSampleRows,proto3" json:"max_report_sample_rows,omitempty"`
-	MaxDiffDuration             *vttime.Duration                            `protobuf:"bytes,20,opt,name=max_diff_duration,json=maxDiffDuration,proto3" json:"max_diff_duration,omitempty"`
-	RowDiffColumnTruncateAt     int64                                       `protobuf:"varint,21,opt,name=row_diff_column_truncate_at,json=rowDiffColumnTruncateAt,proto3" json:"row_diff_column_truncate_at,omitempty"`
-	AutoStart                   *bool                                       `protobuf:"varint,22,opt,name=auto_start,json=autoStart,proto3,oneof" json:"auto_start,omitempty"`
+	// The name of the workflow that we're diffing tables for.
+	Workflow string `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	// The keyspace where the vreplication workflow is running.
+	TargetKeyspace string `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
+	// A unique identifier for the vdiff.
+	// If empty, a new UUID will be generated.
+	Uuid string `protobuf:"bytes,3,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	// The cells to look for source tablets in.
+	// If empty, all cells are used.
+	SourceCells []string `protobuf:"bytes,4,rep,name=source_cells,json=sourceCells,proto3" json:"source_cells,omitempty"`
+	// The cells to look for target tablets in.
+	// If empty, all cells are used.
+	TargetCells []string `protobuf:"bytes,5,rep,name=target_cells,json=targetCells,proto3" json:"target_cells,omitempty"`
+	// The tablet types to use when searching for tablets to use when streaming
+	// results.
+	// A default value of "replica,rdonly,primary" is used by the tablet picker.
+	TabletTypes []topodata.TabletType `protobuf:"varint,6,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
+	// When performing source tablet selection, look for candidates in the type
+	// order as they are listed in the tablet_types value (or the default of
+	// "replica,rdonly,primary" that the tablet picker uses).
+	// The default is ANY (0) and you can use INORDER (1) to e.g. ensure that a
+	// primary tablet is only used if there are no available replica or rdonly
+	// tablets.
+	TabletSelectionPreference tabletmanagerdata.TabletSelectionPreference `protobuf:"varint,7,opt,name=tablet_selection_preference,json=tabletSelectionPreference,proto3,enum=tabletmanagerdata.TabletSelectionPreference" json:"tablet_selection_preference,omitempty"`
+	// The tables to compare. If empty, all tables in the workflow are compared.
+	Tables []string `protobuf:"bytes,8,rep,name=tables,proto3" json:"tables,omitempty"`
+	// The maximum number of rows to compare for each table on each shard.
+	// The default is a max int64 value: 2^63 - 1 or 9,223,372,036,854,775,807.
+	Limit int64 `protobuf:"varint,9,opt,name=limit,proto3" json:"limit,omitempty"`
+	// How long to wait for the relevant vreplication stream(s) to catch up when
+	// attempting to setup the table snapshots on the source and target to use for
+	// the diff on each shard.
+	// The default is 30s.
+	FilteredReplicationWaitTime *vttime.Duration `protobuf:"bytes,10,opt,name=filtered_replication_wait_time,json=filteredReplicationWaitTime,proto3" json:"filtered_replication_wait_time,omitempty"`
+	// Include the MySQL query used for the diff in the report that is stored on
+	// each shard primary tablet in the _vt.vdiff_table records.
+	DebugQuery bool `protobuf:"varint,11,opt,name=debug_query,json=debugQuery,proto3" json:"debug_query,omitempty"`
+	// Only show the Primary Key columns in any row diff output. You would
+	// typically want to use this if you set the max_sample_rows very high.
+	OnlyPKs bool `protobuf:"varint,12,opt,name=only_p_ks,json=onlyPKs,proto3" json:"only_p_ks,omitempty"`
+	// Update the table statistics, using ANALYZE TABLE, on each table involved
+	// in the vdiff during initialization on each target shard. This will ensure
+	// that progress estimates are as accurate as possible -- but it does involve
+	// locks and can potentially impact query processing on the target keyspace.
+	UpdateTableStats bool `protobuf:"varint,13,opt,name=update_table_stats,json=updateTableStats,proto3" json:"update_table_stats,omitempty"`
+	// If there are collation differences between the source and target, you can
+	// have rows that are identical but simply returned in a different order from
+	// MySQL. We will do a second pass to compare the rows for any actual
+	// differences in this case and this flag allows you to control the resources
+	// used for this operation.
+	// The default is 0, comparing no extra rows.
+	MaxExtraRowsToCompare int64 `protobuf:"varint,14,opt,name=max_extra_rows_to_compare,json=maxExtraRowsToCompare,proto3" json:"max_extra_rows_to_compare,omitempty"`
+	// Wait for the vdiff to complete before returning (making the call synchronous
+	// vs asynchronous by default).
+	Wait bool `protobuf:"varint,15,opt,name=wait,proto3" json:"wait,omitempty"`
+	// When wait is true, this is how frequently the vdiff progress will be shown.
+	WaitUpdateInterval *vttime.Duration `protobuf:"bytes,16,opt,name=wait_update_interval,json=waitUpdateInterval,proto3" json:"wait_update_interval,omitempty"`
+	// Automatically retry the vdiff if we encounter an error. This should almost
+	// always be set to true (default is false).
+	AutoRetry bool `protobuf:"varint,17,opt,name=auto_retry,json=autoRetry,proto3" json:"auto_retry,omitempty"`
+	// Include additional information in the vdiff report that is produced and
+	// stored on each target shard primary's _vt sidecar database.
+	Verbose bool `protobuf:"varint,18,opt,name=verbose,proto3" json:"verbose,omitempty"`
+	// The maximum number of rows to include in the row diff report (when
+	// differences are found) for each table on each shard.
+	// The default is 0, which will include no sample rows that differed.
+	MaxReportSampleRows int64 `protobuf:"varint,19,opt,name=max_report_sample_rows,json=maxReportSampleRows,proto3" json:"max_report_sample_rows,omitempty"`
+	// The maximum time that a diff of a single table can run on each target shard
+	// before it is stopped and then later resumed from where we left off. This
+	// can be helpful in limiting the impact of holding open that large transaction
+	// where we scan up to every row in the table.
+	// The default is 0 or no limit.
+	MaxDiffDuration *vttime.Duration `protobuf:"bytes,20,opt,name=max_diff_duration,json=maxDiffDuration,proto3" json:"max_diff_duration,omitempty"`
+	// At what length should we truncate the column values in the row diff report
+	// generated for each table on each shard when differences are detected.
+	// The default is 0, meaning do not truncate.
+	RowDiffColumnTruncateAt int64 `protobuf:"varint,21,opt,name=row_diff_column_truncate_at,json=rowDiffColumnTruncateAt,proto3" json:"row_diff_column_truncate_at,omitempty"`
+	// Auto start the vdiff after creating it.
+	// The default is true if no value is specified.
+	AutoStart *bool `protobuf:"varint,22,opt,name=auto_start,json=autoStart,proto3,oneof" json:"auto_start,omitempty"`
 }
 
 func (x *VDiffCreateRequest) Reset() {
