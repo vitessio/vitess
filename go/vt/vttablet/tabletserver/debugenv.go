@@ -144,11 +144,11 @@ func handlePost(tsv *TabletServer, w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	switch varname {
-	case "PoolSize":
+	case "ReadPoolSize":
 		err = setIntValCtx(tsv.SetPoolSize)
 	case "StreamPoolSize":
 		err = setIntValCtx(tsv.SetStreamPoolSize)
-	case "TxPoolSize":
+	case "TransactionPoolSize":
 		err = setIntValCtx(tsv.SetTxPoolSize)
 	case "MaxResultSize":
 		err = setIntVal(tsv.SetMaxResultSize)
@@ -177,10 +177,9 @@ func handlePost(tsv *TabletServer, w http.ResponseWriter, r *http.Request) {
 
 func handleGet(tsv *TabletServer, w http.ResponseWriter, r *http.Request) {
 	var vars []envValue
-	vars = addVar(vars, "PoolSize", tsv.PoolSize)
+	vars = addVar(vars, "ReadPoolSize", tsv.PoolSize)
 	vars = addVar(vars, "StreamPoolSize", tsv.StreamPoolSize)
-	vars = addVar(vars, "TxPoolSize", tsv.TxPoolSize)
-	vars = addVar(vars, "QueryEnginePlanCacheCapacity", tsv.QueryPlanCacheCap)
+	vars = addVar(vars, "TransactionPoolSize", tsv.TxPoolSize)
 	vars = addVar(vars, "MaxResultSize", tsv.MaxResultSize)
 	vars = addVar(vars, "WarnResultSize", tsv.WarnResultSize)
 	vars = addVar(vars, "RowStreamerMaxInnoDBTrxHistLen", func() int64 { return tsv.Config().RowStreamer.MaxInnoDBTrxHistLen })
