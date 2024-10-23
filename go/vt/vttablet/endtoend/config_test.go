@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -37,7 +36,7 @@ import (
 )
 
 func TestPoolSize(t *testing.T) {
-	revert := changeVar(t, "PoolSize", "1")
+	revert := changeVar(t, "ReadPoolSize", "1")
 	defer revert()
 
 	vstart := framework.DebugVars()
@@ -71,6 +70,39 @@ func TestStreamPoolSize(t *testing.T) {
 
 	vstart := framework.DebugVars()
 	verifyIntValue(t, vstart, "StreamConnPoolCapacity", 1)
+}
+
+func TestTxPoolSize(t *testing.T) {
+	// tabletenvtest.LoadTabletEnvFlags()
+
+	vstart := framework.DebugVars()
+
+	client1 := framework.NewClient()
+	err := client1.Begin(false)
+	require.NoError(t, err)
+	defer client1.Rollback()
+	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
+
+	revert := changeVar(t, "TxPoolSize", "1")
+	defer revert()
+	vend := framework.DebugVars()
+	verifyIntValue(t, vend, "TransactionPoolAvailable", 0)
+	verifyIntValue(t, vend, "TransactionPoolCapacity", 1)
+	verifyIntValue(t, vend, "FoundRowsPoolAvailable", 0)
+	verifyIntValue(t, vend, "FoundRowsPoolCapacity", 1)
+
+	// tx pool - normal
+	client2 := framework.NewClient()
+	err = client2.Begin( /* found rows pool*/ false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "connection limit exceeded")
+	compareIntDiff(t, framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1)
+
+	// tx pool - found rows
+	err = client2.Begin( /* found rows pool*/ true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "connection limit exceeded")
+	compareIntDiff(t, framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 2)
 }
 
 func TestDisableConsolidator(t *testing.T) {
