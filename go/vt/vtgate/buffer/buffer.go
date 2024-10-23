@@ -175,7 +175,7 @@ func (b *Buffer) GetConfig() *Config {
 // It returns an error if buffering failed (e.g. buffer full).
 // If it does not return an error, it may return a RetryDoneFunc which must be
 // called after the request was retried.
-func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
+func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string, kev *discovery.KeyspaceEventWatcher, err error) (RetryDoneFunc, error) {
 	// If an err is given, it must be related to a failover.
 	// We never buffer requests with other errors.
 	if err != nil && !CausedByFailover(err) {
@@ -192,7 +192,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 		requestsSkipped.Add([]string{keyspace, shard, skippedDisabled}, 1)
 		return nil, nil
 	}
-	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
+	return sb.waitForFailoverEnd(ctx, keyspace, shard, kev, err)
 }
 
 func (b *Buffer) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {

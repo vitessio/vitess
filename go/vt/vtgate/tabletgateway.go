@@ -310,8 +310,9 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		// b) no transaction was created yet.
 		if gw.buffer != nil && !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
-			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
+			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, gw.kev, err)
 
+			log.Errorf("AFTER WAIT FOR FAILOVER END - %v %v", retryDone, bufferErr)
 			// Request may have been buffered.
 			if retryDone != nil {
 				// We're going to retry this request as part of a buffer drain.
@@ -379,6 +380,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		} else {
 			gw.shuffleTablets(gw.localCell, tablets)
 
+			log.Errorf("TABLETS - %+v, INVALID TABLETS - %+v", tablets, invalidTablets)
 			// skip tablets we tried before
 			for _, t := range tablets {
 				if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
@@ -388,6 +390,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			}
 		}
 
+		log.Errorf("TABLET HEALTH - %v", th)
 		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {

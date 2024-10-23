@@ -281,6 +281,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 	// means the availability event is still ongoing
 	for _, shard := range primary.ShardReferences {
 		sstate := kss.shards[shard.Name]
+		log.Errorf("shard: %v, sstate: %+v", shard, sstate)
 		if sstate == nil || !sstate.serving {
 			return
 		}
@@ -368,6 +369,7 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 	// if the shard went from serving to not serving, or the other way around, the keyspace
 	// is undergoing an availability event
 	if sstate.serving != th.Serving {
+		log.Errorf("Changing SERVING STATE - %+v", th)
 		sstate.serving = th.Serving
 		kss.consistent = false
 	}
@@ -783,4 +785,21 @@ func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context,
 		case <-time.After(waitConsistentKeyspacesCheck):
 		}
 	}
+}
+
+// MarkShardNotServing marks the given shard not serving.
+func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspace string, shard string) bool {
+	kss := kew.getKeyspaceStatus(ctx, keyspace)
+	if kss == nil {
+		return false
+	}
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	sstate := kss.shards[shard]
+	if sstate == nil {
+		return false
+	}
+	kss.consistent = false
+	sstate.serving = false
+	return true
 }
