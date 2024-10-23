@@ -454,6 +454,18 @@ func TestSchemaDiff(t *testing.T) {
 			expectDeps:       1,
 			conflictingDiffs: 2,
 		},
+		{
+			name: "two identical tables, one with explicit charset, one without",
+			fromQueries: []string{
+				"create table t1 (id int primary key, foo varchar(64) character set utf8mb3 collate utf8mb3_bin)",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, foo varchar(64) collate utf8mb3_bin)",
+			},
+			// This isn't strictly correct. We have a diff even though there shouldn't be one.
+			expectDiffs: 1,
+			entityOrder: []string{"t1"},
+		},
 
 		// FKs
 		{
