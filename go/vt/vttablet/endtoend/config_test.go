@@ -72,16 +72,25 @@ func TestStreamPoolSize(t *testing.T) {
 	verifyIntValue(t, vstart, "StreamConnPoolCapacity", 1)
 }
 
+// TestTxPoolSize starts 2 transactions, one in normal pool and one in found rows pool of transaction pool.
+// Changing the pool size to 1, we verify that the pool size is updated and the pool is full when we try to acquire next transaction.
 func TestTxPoolSize(t *testing.T) {
-	// tabletenvtest.LoadTabletEnvFlags()
-
 	vstart := framework.DebugVars()
 
+	verifyIntValue(t, vstart, "TransactionPoolCapacity", 20)
+	verifyIntValue(t, vstart, "FoundRowsPoolCapacity", 20)
+
 	client1 := framework.NewClient()
-	err := client1.Begin(false)
+	err := client1.Begin( /* found rows pool*/ false)
 	require.NoError(t, err)
 	defer client1.Rollback()
 	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
+
+	client2 := framework.NewClient()
+	err = client2.Begin( /* found rows pool*/ true)
+	require.NoError(t, err)
+	defer client2.Rollback()
+	verifyIntValue(t, framework.DebugVars(), "FoundRowsPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
 
 	revert := changeVar(t, "TxPoolSize", "1")
 	defer revert()
@@ -91,17 +100,16 @@ func TestTxPoolSize(t *testing.T) {
 	verifyIntValue(t, vend, "FoundRowsPoolAvailable", 0)
 	verifyIntValue(t, vend, "FoundRowsPoolCapacity", 1)
 
+	client3 := framework.NewClient()
+
 	// tx pool - normal
-	client2 := framework.NewClient()
-	err = client2.Begin( /* found rows pool*/ false)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "connection limit exceeded")
+	err = client3.Begin( /* found rows pool*/ false)
+	require.ErrorContains(t, err, "connection limit exceeded")
 	compareIntDiff(t, framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1)
 
 	// tx pool - found rows
-	err = client2.Begin( /* found rows pool*/ true)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "connection limit exceeded")
+	err = client3.Begin( /* found rows pool*/ true)
+	require.ErrorContains(t, err, "connection limit exceeded")
 	compareIntDiff(t, framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 2)
 }
 
