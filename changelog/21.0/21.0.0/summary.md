@@ -18,7 +18,6 @@
     - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
     - **[Reference Table Materialization](#reference-table-materialization)**
     - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
-    - **[Errant GTID Detection on VTTablets](#errant-gtid-vttablet)**
     - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
     - **[Current Errant GTIDs Count Metric](#errant-gtid-metric)**
@@ -207,14 +206,6 @@ filter columns (potential candidates for indexes, primary keys, or sharding keys
 
 These new `VEXPLAIN` modes enhance Vitess's query analysis capabilities, allowing for more informed decisions about sharding 
 strategies and query optimization.
-
-### <a id="errant-gtid-vttablet"/>Errant GTID Detection on VTTablets</a>
-
-VTTablets now run an errant GTID detection logic before they join the replication stream. So, if a replica has an errant GTID, it will
-not start replicating from the primary. This protects us from running into situations which are very difficult to recover from.
-
-For users running with the vitess-operator on Kubernetes, this change means that replica tablets with errant GTIDs will have broken 
-replication and will report as unready. Users will need to manually replace and clean up these errant replica tablets.
 
 ### <a id="auto-replace-mysql-autoinc-with-seq"/>Automatically Replace MySQL auto_increment Clauses with Vitess Sequences</a>
 
