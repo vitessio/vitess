@@ -67,6 +67,9 @@ type FakeMysqlDaemon struct {
 	// return an error.
 	MysqlPort atomic.Int32
 
+	// ServerUUID is the server's UUID.
+	ServerUUID string
+
 	// Replicating is updated when calling StartReplication /
 	// StopReplication (it is not used at all when calling
 	// ReplicationStatus, it is the test owner responsibility
@@ -185,6 +188,9 @@ type FakeMysqlDaemon struct {
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
 
+	// GlobalReadLock is used to test if a lock has been acquired already or not
+	GlobalReadLock bool
+
 	// TimeoutHook is a func that can be called at the beginning of
 	// any method to fake a timeout.
 	// All a test needs to do is make it { return context.DeadlineExceeded }.
@@ -296,7 +302,10 @@ func (fmd *FakeMysqlDaemon) GetServerID(ctx context.Context) (uint32, error) {
 
 // GetServerUUID is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetServerUUID(ctx context.Context) (string, error) {
-	return "000000", nil
+	if fmd.ServerUUID != "" {
+		return fmd.ServerUUID, nil
+	}
+	return "00000000-0000-0000-0000-000000000000", nil
 }
 
 // ReplicationStatus is part of the MysqlDaemon interface.
@@ -328,9 +337,11 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 	if fmd.PrimaryStatusError != nil {
 		return replication.PrimaryStatus{}, fmd.PrimaryStatusError
 	}
+	serverUUID, _ := fmd.GetServerUUID(ctx)
 	return replication.PrimaryStatus{
 		Position:     fmd.CurrentPrimaryPosition,
 		FilePosition: fmd.CurrentSourceFilePosition,
+		ServerUUID:   serverUUID,
 	}, nil
 }
 
@@ -772,10 +783,20 @@ func (fmd *FakeMysqlDaemon) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysql
 
 // AcquireGlobalReadLock is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
-	return errors.New("not implemented")
+	if fmd.GlobalReadLock {
+		return errors.New("lock already acquired")
+	}
+
+	fmd.GlobalReadLock = true
+	return nil
 }
 
 // ReleaseGlobalReadLock is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
-	return errors.New("not implemented")
+	if fmd.GlobalReadLock {
+		fmd.GlobalReadLock = false
+		return nil
+	}
+
+	return errors.New("no read locks acquired yet")
 }

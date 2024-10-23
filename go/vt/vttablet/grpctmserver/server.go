@@ -444,6 +444,13 @@ func (s *server) CreateVReplicationWorkflow(ctx context.Context, request *tablet
 	return s.tm.CreateVReplicationWorkflow(ctx, request)
 }
 
+func (s *server) DeleteTableData(ctx context.Context, request *tabletmanagerdatapb.DeleteTableDataRequest) (response *tabletmanagerdatapb.DeleteTableDataResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "DeleteTableData", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.DeleteTableDataResponse{}
+	return s.tm.DeleteTableData(ctx, request)
+}
+
 func (s *server) DeleteVReplicationWorkflow(ctx context.Context, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "DeleteVReplicationWorkflow", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

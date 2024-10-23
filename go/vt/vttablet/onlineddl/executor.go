@@ -60,6 +60,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -3484,6 +3485,28 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 	}
 	if err := prototext.Unmarshal([]byte(s.source), s.bls); err != nil {
 		return nil, err
+	}
+	{
+		// It's possible that an earlier error was overshadowed by a new non-error `message` values.
+		// Let's read _vt.vreplication_log to see whether there's any terminal errors in vreplication's history.
+		query, err := sqlparser.ParseAndBind(sqlReadVReplLogErrors,
+			sqltypes.Int32BindVariable(s.id),
+			sqltypes.StringBindVariable(vreplication.TerminalErrorIndicator),
+		)
+		if err != nil {
+			return nil, err
+		}
+		r, err := e.execQuery(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		// The query has LIMIT 1, ie returns at most one row
+		if row := r.Named().Row(); row != nil {
+			s.state = binlogdatapb.VReplicationWorkflowState_Error
+			if message := row.AsString("message", ""); message != "" {
+				s.message = "vreplication: " + message
+			}
+		}
 	}
 	return s, nil
 }
