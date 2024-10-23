@@ -4116,6 +4116,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select * from foo where b <=> any (select id from t1)",
 		err:   "syntax error at position 42",
+	}, {
+		input: "select _binary foo",
+		err:   "syntax error at position 19 near 'foo'",
 	},
 	}
 
