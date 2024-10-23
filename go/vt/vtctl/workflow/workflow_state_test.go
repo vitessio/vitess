@@ -82,8 +82,10 @@ func setupMoveTables(t *testing.T, ctx context.Context) *testEnv {
 	for _, resp := range workflowResponses {
 		te.tmc.AddVReplicationWorkflowsResponse(workflowKey, resp)
 	}
-	te.tmc.readVReplicationWorkflowRequests[200] = &tabletmanagerdata.ReadVReplicationWorkflowRequest{
-		Workflow: "wf1",
+	te.tmc.readVReplicationWorkflowRequests[200] = &readVReplicationWorkflowRequestResponse{
+		req: &tabletmanagerdata.ReadVReplicationWorkflowRequest{
+			Workflow: "wf1",
+		},
 	}
 	te.updateTableRoutingRules(t, ctx, nil, []string{"t1"},
 		"source", te.targetKeyspace.KeyspaceName, "source")
