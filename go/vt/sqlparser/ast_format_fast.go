@@ -1768,7 +1768,7 @@ func (node *AssignmentExpr) FormatFast(buf *TrackedBuffer) {
 func (node *Literal) FormatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
 		buf.WriteString(node.Val)
 	case HexVal:
