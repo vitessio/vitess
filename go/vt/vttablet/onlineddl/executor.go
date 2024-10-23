@@ -3784,8 +3784,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if err := e.cutOverVReplMigration(ctx, s, shouldForceCutOver); err != nil {
 					_ = e.updateMigrationMessage(ctx, uuid, err.Error())
 					log.Errorf("cutOverVReplMigration failed: err=%v", err)
-					if merr, ok := err.(*sqlerror.SQLError); ok {
-						switch merr.Num {
+
+					if sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); isSQLErr && sqlErr != nil {
+						// let's see if this error is actually acceptable
+						switch sqlErr.Num {
 						case sqlerror.ERTooLongIdent:
 							go e.CancelMigration(ctx, uuid, err.Error(), false)
 						}
