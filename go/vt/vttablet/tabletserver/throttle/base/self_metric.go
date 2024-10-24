@@ -21,15 +21,24 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
+
+type SelfMetricReadParams struct {
+	Throttler  metricsPublisher
+	Conn       *connpool.Conn
+	TmClient   tmclient.TabletManagerClient
+	TabletInfo *topo.TabletInfo
+}
 
 type SelfMetric interface {
 	Name() MetricName
 	DefaultScope() Scope
 	DefaultThreshold() float64
 	RequiresConn() bool
-	Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric
+	Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric
 }
 
 var (
