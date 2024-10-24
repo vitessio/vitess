@@ -244,3 +244,14 @@ func ReadMycnf(mycnf *Mycnf, waitTime time.Duration) (*Mycnf, error) {
 
 	return mycnf, nil
 }
+
+// SetServerParam can be used *after* ReadMycnf() is called to
+// customize the base configuration in the file with additional
+// settings that are applicable to a specific scenario such as
+// doing a backup restore.
+// This is NOT concurrent safe with, together with ReadMycnf() or
+// alone.
+func (cnf *Mycnf) SetServerParam(key, val string) {
+	key = normKey([]byte(key))
+	cnf.mycnfMap[key] = val
+}

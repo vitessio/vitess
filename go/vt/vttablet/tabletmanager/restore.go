@@ -218,8 +218,17 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		startTime = protoutil.TimeFromProto(keyspaceInfo.SnapshotTime).UTC()
 	}
 
+	// Customize our base config specifically for backup restores.
+	backupCnf := *tm.Cnf
+	// We only care that we are eventually consistent when the restore
+	// process ends, we do not care about intermediate states as the
+	// tablet is not serving during the restore process.
+	backupCnf.SetServerParam("replica_preserve_commit_order", "OFF")
+	backupCnf.SetServerParam("sync_relay_log", "0")
+	backupCnf.SetServerParam("relay_log_recovery", "ON")
+
 	params := mysqlctl.RestoreParams{
-		Cnf:                  tm.Cnf,
+		Cnf:                  &backupCnf,
 		Mysqld:               tm.MysqlDaemon,
 		Logger:               logger,
 		Concurrency:          restoreConcurrency,
