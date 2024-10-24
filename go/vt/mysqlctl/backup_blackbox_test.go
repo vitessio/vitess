@@ -411,7 +411,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 // this scenario, files no longer try to acquire the semaphore and thus the backup cannot fail
 // because of context deadline when acquiring it. At this point, the only place where the backup
 // can fail, is if the return of be.backupFiles fails, and we record the error correctly.
-// This test specifically test this scenario and arose because of issue ..
+// This test specifically test this scenario and arose because of issue https://github.com/vitessio/vitess/issues/17063
 // The test does:
 //  1. Create the backup and data directory
 //  2. Create a keyspace and shard
