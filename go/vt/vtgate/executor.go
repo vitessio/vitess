@@ -83,8 +83,6 @@ var (
 	commitUnresolved = stats.NewCounter("CommitUnresolved", "Atomic Commit failed to conclude after commit decision is made")
 
 	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
-
-	errorTransform errorTransformer = nullErrorTransformer{}
 )
 
 const (
@@ -102,6 +100,13 @@ func init() {
 	servenv.OnParseFor("vtexplain", registerTabletTypeFlag)
 }
 
+// Config contains the shared global configuration of the vtgate server.
+type Config struct {
+	DefaultTabletType topodatapb.TabletType
+	PlannerVersion    plancontext.PlannerVersion
+	ErrorTransform    errorTransformer
+}
+
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type Executor struct {
@@ -111,7 +116,6 @@ type Executor struct {
 	resolver    *Resolver
 	scatterConn *ScatterConn
 	txConn      *TxConn
-	pv          plancontext.PlannerVersion
 
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
@@ -135,6 +139,8 @@ type Executor struct {
 
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
+
+	config *Config
 }
 
 var executorOnce sync.Once
@@ -164,8 +170,8 @@ func NewExecutor(
 	plans *PlanCache,
 	schemaTracker SchemaInfo,
 	noScatter bool,
-	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
+	config *Config,
 ) *Executor {
 	e := &Executor{
 		env:                 env,
@@ -179,10 +185,10 @@ func NewExecutor(
 		streamSize:          streamSize,
 		schemaTracker:       schemaTracker,
 		allowScatter:        !noScatter,
-		pv:                  pv,
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
+		config:              config,
 	}
 
 	vschemaacl.Init()
@@ -254,7 +260,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	logStats.SaveEndTime()
 	e.queryLogger.Send(logStats)
 
-	err = errorTransform.TransformError(err)
+	err = e.config.ErrorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
 
 	return result, err
@@ -396,7 +402,7 @@ func (e *Executor) StreamExecute(
 	logStats.SaveEndTime()
 	e.queryLogger.Send(logStats)
 
-	err = errorTransform.TransformError(err)
+	err = e.config.ErrorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
 
 	return err
@@ -1078,7 +1084,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := topoproto.ParseDestination(targetString, defaultTabletType)
+	destKeyspace, destTabletType, dest, err := topoproto.ParseDestination(targetString, e.config.DefaultTabletType)
 	// Set default keyspace
 	if destKeyspace == "" && len(e.VSchema().Keyspaces) == 1 {
 		for k := range e.VSchema().Keyspaces {
@@ -1367,7 +1373,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 		e.queryLogger.Send(logStats)
 	}
 
-	err = errorTransform.TransformError(err)
+	err = e.config.ErrorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
 
 	return fld, err
@@ -1411,7 +1417,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.config)
 
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
@@ -1637,9 +1643,9 @@ type (
 	errorTransformer interface {
 		TransformError(err error) error
 	}
-	nullErrorTransformer struct{}
+	NullErrorTransformer struct{}
 )
 
-func (nullErrorTransformer) TransformError(err error) error {
+func (NullErrorTransformer) TransformError(err error) error {
 	return err
 }
