@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -144,7 +143,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 
-	return mz.forAllTargets(func(target *topo.ShardInfo) error {
+	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
@@ -638,29 +637,12 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 	})
 }
 
-func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	for _, target := range mz.targetShards {
-		wg.Add(1)
-		go func(target *topo.ShardInfo) {
-			defer wg.Done()
-
-			if err := f(target); err != nil {
-				allErrors.RecordError(err)
-			}
-		}(target)
-	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
 // checkTZConversion is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
 // that the current primary has the time zone loaded in order to run the convert_tz() function used by VReplication to do the
 // datetime conversions. We only check the current primaries on each shard and note here that it is possible a new primary
 // gets elected: in this case user will either see errors during vreplication or vdiff will report mismatches.
 func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error {
-	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+	err := forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)

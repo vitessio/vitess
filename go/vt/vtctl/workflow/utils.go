@@ -1019,3 +1019,29 @@ func applyTargetShards(ts *trafficSwitcher, targetShards []string) error {
 	}
 	return nil
 }
+
+// validateSourceTablesExist validates that tables provided are present
+// in the source keyspace.
+func validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
+	var missingTables []string
+	for _, table := range tables {
+		if schema.IsInternalOperationTableName(table) {
+			continue
+		}
+		found := false
+
+		for _, ksTable := range ksTables {
+			if table == ksTable {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missingTables = append(missingTables, table)
+		}
+	}
+	if len(missingTables) > 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table(s) not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
+	}
+	return nil
+}
