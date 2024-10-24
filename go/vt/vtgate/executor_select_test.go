@@ -2874,6 +2874,197 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 	assert.Equal(t, `type:INT64 value:"100"`, sbc2.Queries[1].BindVariables["__upper_limit"].String())
 }
 
+func TestSelectUsingLookupColumn(t *testing.T) {
+	t.Run("using multi value tuple", func(t *testing.T) {
+		ctx := utils.LeakCheckContext(t)
+
+		// Special setup: Don't use createExecutorEnv.
+		cell := "aa"
+		hc := discovery.NewFakeHealthCheck(nil)
+
+		u := createSandbox(KsTestUnsharded)
+		s := createSandbox(KsTestSharded)
+
+		s.VSchema = executorVSchema
+		u.VSchema = unshardedVSchema
+
+		serv := newSandboxForCells(ctx, []string{cell})
+		resolver := newTestResolver(ctx, hc, serv, cell)
+
+		shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+		sbcs := []*sandboxconn.SandboxConn{}
+		for _, shard := range shards {
+			sbcs = append(sbcs, hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil))
+		}
+
+		sbclookup := hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+
+		executor := createExecutor(ctx, serv, cell, resolver)
+		defer executor.Close()
+		logChan := executor.queryLogger.Subscribe("Test")
+		defer executor.queryLogger.Unsubscribe(logChan)
+
+		// Only lookup results on shard `40-60` (`sbc[2]`)
+		sbclookup.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+				{Name: "keyspace_id", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			},
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(2),
+				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("\x45")),
+			}},
+		}})
+
+		sbcs[2].SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "nv_lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+				{Name: "other", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
+			},
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(2),
+				sqltypes.NewVarChar("baz"),
+			}},
+		}})
+
+		result, err := exec(executor, NewSafeSession(&vtgatepb.Session{
+			TargetString: KsTestSharded,
+		}), "select nv_lu_col, other from t2_lookup WHERE (nv_lu_col, other) IN ((1, 'bar'), (2, 'baz'), (3, 'qux'), (4, 'brz'), (5, 'brz'))")
+
+		require.NoError(t, err)
+
+		require.Len(t, sbclookup.Queries, 1)
+		require.Len(t, sbcs[0].Queries, 0)
+		require.Len(t, sbcs[1].Queries, 0)
+		require.Len(t, sbcs[2].Queries, 1)
+		require.Len(t, sbcs[3].Queries, 0)
+		require.Len(t, sbcs[4].Queries, 0)
+		require.Len(t, sbcs[5].Queries, 0)
+		require.Len(t, sbcs[6].Queries, 0)
+		require.Len(t, sbcs[7].Queries, 0)
+
+		require.Equal(t, []*querypb.BoundQuery{{
+			Sql:           "select nv_lu_col, other from t2_lookup where (nv_lu_col, other) in ((1, 'bar'), (2, 'baz'), (3, 'qux'), (4, 'brz'), (5, 'brz'))",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}}, sbcs[2].Queries)
+
+		wantResult := &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Name: "nv_lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+				{Name: "other", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
+			},
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(2),
+				sqltypes.NewVarChar("baz"),
+			}},
+		}
+		require.Equal(t, wantResult, result)
+	})
+
+	t.Run("using disjunction of conjunctions", func(t *testing.T) {
+		ctx := utils.LeakCheckContext(t)
+
+		// Special setup: Don't use createExecutorEnv.
+		cell := "aa"
+		hc := discovery.NewFakeHealthCheck(nil)
+
+		u := createSandbox(KsTestUnsharded)
+		s := createSandbox(KsTestSharded)
+
+		s.VSchema = executorVSchema
+		u.VSchema = unshardedVSchema
+
+		serv := newSandboxForCells(ctx, []string{cell})
+		resolver := newTestResolver(ctx, hc, serv, cell)
+
+		shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+		sbcs := []*sandboxconn.SandboxConn{}
+		for _, shard := range shards {
+			sbcs = append(sbcs, hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil))
+		}
+
+		sbclookup := hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+
+		executor := createExecutor(ctx, serv, cell, resolver)
+		defer executor.Close()
+		logChan := executor.queryLogger.Subscribe("Test")
+		defer executor.queryLogger.Unsubscribe(logChan)
+
+		// Only lookup results on shard `40-60` (`sbc[2]`)
+		sbclookup.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+				{Name: "keyspace_id", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			},
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(2),
+				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("\x45")),
+			}},
+		}})
+
+		emptyResult := []*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "nv_lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+				{Name: "other", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
+			},
+			Rows: [][]sqltypes.Value{},
+		}}
+
+		sbcs[0].SetResults(emptyResult)
+		sbcs[1].SetResults(emptyResult)
+		sbcs[2].SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "nv_lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+				{Name: "other", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
+			},
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(2),
+				sqltypes.NewVarChar("baz"),
+			}},
+		}})
+		sbcs[3].SetResults(emptyResult)
+		sbcs[4].SetResults(emptyResult)
+		sbcs[5].SetResults(emptyResult)
+		sbcs[6].SetResults(emptyResult)
+		sbcs[7].SetResults(emptyResult)
+
+		result, err := exec(executor, NewSafeSession(&vtgatepb.Session{
+			TargetString: KsTestSharded,
+		}), "select nv_lu_col, other from t2_lookup WHERE (nv_lu_col = 1 AND other = 'bar') OR (nv_lu_col = 2 AND other = 'baz') OR (nv_lu_col = 3 AND other = 'qux') OR (nv_lu_col = 4 AND other = 'brz') OR (nv_lu_col = 5 AND other = 'brz')")
+
+		require.NoError(t, err)
+
+		// We end up doing a scatter query here, so no queries are sent to the lookup table
+		require.Len(t, sbclookup.Queries, 0)
+		require.Len(t, sbcs[0].Queries, 1)
+		require.Len(t, sbcs[1].Queries, 1)
+		require.Len(t, sbcs[2].Queries, 1)
+		require.Len(t, sbcs[3].Queries, 1)
+		require.Len(t, sbcs[4].Queries, 1)
+		require.Len(t, sbcs[5].Queries, 1)
+		require.Len(t, sbcs[6].Queries, 1)
+		require.Len(t, sbcs[7].Queries, 1)
+
+		for _, sbc := range sbcs {
+			require.Equal(t, []*querypb.BoundQuery{{
+				Sql:           "select nv_lu_col, other from t2_lookup where nv_lu_col = 1 and other = 'bar' or nv_lu_col = 2 and other = 'baz' or nv_lu_col = 3 and other = 'qux' or nv_lu_col = 4 and other = 'brz' or nv_lu_col = 5 and other = 'brz'",
+				BindVariables: map[string]*querypb.BindVariable{},
+			}}, sbc.Queries)
+		}
+		wantResult := &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Name: "nv_lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+				{Name: "other", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
+			},
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(2),
+				sqltypes.NewVarChar("baz"),
+			}},
+		}
+		require.Equal(t, wantResult, result)
+	})
+}
+
 func TestCrossShardSubqueryStream(t *testing.T) {
 	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
 	result1 := []*sqltypes.Result{{
