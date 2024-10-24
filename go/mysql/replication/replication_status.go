@@ -187,7 +187,7 @@ func FindErrantGTIDs(position Position, sourceUUID SID, otherPositions []Positio
 		return nil, nil
 	}
 
-	relayLogSet, ok := position.GTIDSet.(Mysql56GTIDSet)
+	gtidSet, ok := position.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
 		return nil, fmt.Errorf("errant GTIDs can only be computed on the MySQL flavor")
 	}
@@ -202,8 +202,8 @@ func FindErrantGTIDs(position Position, sourceUUID SID, otherPositions []Positio
 	}
 
 	// Copy set for final diffSet so we don't mutate receiver.
-	diffSet := make(Mysql56GTIDSet, len(relayLogSet))
-	for sid, intervals := range relayLogSet {
+	diffSet := make(Mysql56GTIDSet, len(gtidSet))
+	for sid, intervals := range gtidSet {
 		if sid == sourceUUID {
 			continue
 		}

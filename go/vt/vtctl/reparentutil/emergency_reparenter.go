@@ -772,6 +772,8 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 }
 
 // findErrantGTIDs tries to find errant GTIDs for the valid candidates and returns the updated list of valid candidates.
+// This function does not actually return the identities of errant GTID tablets, if any. It only returns the identities of non-errant GTID tablets, which are eligible for promotion.
+// The caller of this function (ERS) will then choose from among the list of candidate tablets, based on higher-level criteria.
 func (erp *EmergencyReparenter) findErrantGTIDs(
 	ctx context.Context,
 	validCandidates map[string]replication.Position,
@@ -781,7 +783,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 ) (map[string]replication.Position, error) {
 	// First we need to collect the reparent journal length for all the candidates.
 	// This will tell us, which of the tablets are severly lagged, and haven't even seen all the primary promotions.
-	// These tablets cannot be trusted for errant GTID detection.
+	// Such severely lagging tablets cannot be used to find errant GTIDs in other tablets, seeing that they themselves don't have enough information.
 	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout)
 	if err != nil {
 		return nil, err
@@ -808,7 +810,15 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		status, ok := statusMap[candidate]
 		if !ok {
 			// If the tablet is not in the status map, and has the maximum length of the reparent journal,
-			// then it is probably the latest primary and we don't need to run any errant GTID detection on it!
+			// then it should be the latest primary and we don't need to run any errant GTID detection on it!
+			// There is a very unlikely niche case that can happen where we see two tablets report themselves as having
+			// the maximum reparent journal length and also be primaries. Here is the outline of it -
+			// 1. Tablet A is the primary and reparent journal length is 3.
+			// 2. It gets network partitioned, and we promote tablet B as the new primary.
+			// 3. tablet B gets network partitioned before it has written to the reparent journal, and a new ERS call ensues.
+			// 4. During this ERS call, both A and B are seen online. They would both report being primary tablets with the same reparent journal length.
+			// Even in this case, the best we can do is not run errant GTID detection on either, and let the split brain detection code
+			// deal with it, if A in fact has errant GTIDs.
 			maxLenPositions = append(maxLenPositions, validCandidates[candidate])
 			updatedValidCandidates[candidate] = validCandidates[candidate]
 			continue
@@ -844,6 +854,19 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		}
 		// Here we don't want to send the source UUID. The reason is that all of these tablets are lagged,
 		// so we don't need to use the source UUID to discount any GTIDs.
+		// To explain this point further, let me use an example. Consider the following situation -
+		// 1. Tablet A is the primary and B is a rdonly replica.
+		// 2. They both get network partitioned, and then a new ERS call ensues, and we promote tablet C.
+		// 3. Tablet C also fails, and we run a new ERS call.
+		// 4. During this ERS, B comes back online and is visible. Since it hasn't seen the last reparent journal entry
+		//    it will be considered lagged.
+		// 5. If it has an errant GTID that was written by A, then we want to find that errant GTID. Since B hasn't reparented to a
+		//    different tablet, it would still be replicating from A. This means its server UUID would be A.
+		// 6. Because we don't want to discount the writes from tablet A, when we're doing the errant GTID detection on B, we
+		//    choose not to pass in the server UUID.
+		// This exact scenario outlined above, can be found in the test for this function, subtest `Case 5a`.
+		// The idea is that if the tablet is lagged, then even the server UUID that it is replicating from
+		// should not be considered a valid source of writes that no other tablet has.
 		errantGTIDs, err := replication.FindErrantGTIDs(validCandidates[alias], replication.SID{}, maxLenPositions)
 		if err != nil {
 			return nil, err
